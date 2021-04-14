@@ -1072,7 +1072,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		checksDisabled := isForeignKeyChecksDisabled(ctx)
 		if !ok {
 			if checksDisabled {
-				return addEmptyForeignKeyToCollection(ctx, t, fkName, tableIndex.Name(), colTags, refTblName, onUpdate, onDelete)
+				return t.addEmptyForeignKeyToCollection(ctx, root, fkName, tableIndex.Name(), colTags, refTblName, onUpdate, onDelete)
 			}
 			return fmt.Errorf("referenced table `%s` does not exist", refTblName)
 		}
@@ -1187,7 +1187,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func addEmptyForeignKeyToCollection(ctx *sql.Context, t *AlterableDoltTable, fkName string, tableIndexName string, colTags []uint64, refTblName string, onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
+func (t* AlterableDoltTable) addEmptyForeignKeyToCollection(ctx *sql.Context, root *doltdb.RootValue, fkName string, tableIndexName string, colTags []uint64, refTblName string, onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
 	onUpdateRefOp, err := parseFkReferenceOption(onUpdate)
 	if err != nil {
 		return err
@@ -1207,11 +1207,6 @@ func addEmptyForeignKeyToCollection(ctx *sql.Context, t *AlterableDoltTable, fkN
 		ReferencedTableColumns: nil,
 		OnUpdate:               onUpdateRefOp,
 		OnDelete:               onDeleteRefOp,
-	}
-
-	root, err := t.db.GetRoot(ctx)
-	if err != nil {
-		return err
 	}
 
 	foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)

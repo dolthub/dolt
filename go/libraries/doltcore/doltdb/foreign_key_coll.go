@@ -143,10 +143,16 @@ func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 			return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` has unexpected schema", fk.Name, fk.TableName)
 		}
 	}
+
+	// attempt to resolve here
 	if !sch.Indexes().Contains(fk.TableIndex) {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` is missing the index `%s`",
 			fk.Name, fk.TableName, fk.TableIndex)
 	}
+	return nil
+}
+
+func (fk ForeignKey) resolveReferencedTblIndex() error {
 	return nil
 }
 

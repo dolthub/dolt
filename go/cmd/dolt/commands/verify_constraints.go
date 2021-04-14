@@ -124,5 +124,10 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		dErr = dErr.AddCause(errors.New(strings.Join(accumulatedConstraintErrors, "\n")))
 		return HandleVErrAndExitCode(dErr.Build(), nil)
 	}
+
 	return 0
+}
+
+func tryResolvingIndexes() {
+
 }

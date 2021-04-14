@@ -1661,3 +1661,52 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ '{"rows": [{"id":2,"v1":2}]}' ]] || false
 }
+
+@test "foreign-keys: Can create tables that references table that doesn't exist when foreign_key_checks=0" {
+    run dolt sql <<SQL
+SET foreign_key_checks = 0;
+CREATE TABLE objects (
+  id int NOT NULL,
+  name VARCHAR(64) NOT NULL,
+  color VARCHAR(32),
+
+  PRIMARY KEY(id),
+  FOREIGN KEY (color) REFERENCES colors(color)
+);
+SQL
+
+    [ "$status" -eq "0" ]
+    run dolt ls
+    [[ "$output" =~ 'objects' ]] || false
+}
+
+@test "foreign-keys: Can insert into table ignoring foreign key evaluation when foreign_key_checks=0" {
+        run dolt sql <<SQL
+SET foreign_key_checks = 0;
+CREATE TABLE objects (
+  id int NOT NULL,
+  name VARCHAR(64) NOT NULL,
+  color VARCHAR(32),
+
+  PRIMARY KEY(id),
+  FOREIGN KEY (color) REFERENCES colors(color)
+);
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+SQL
+
+    [ "$status" -eq "0" ]
+    run dolt ls
+    [[ "$output" =~ 'objects' ]] || false
+    [[ "$output" =~ 'colors' ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) from objects;"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "3" ]] || false
+}

@@ -971,6 +971,7 @@ func (root *RootValue) PutForeignKeyCollection(ctx context.Context, fkc *Foreign
 // ValidateForeignKeysOnSchemas ensures that all foreign keys' tables are present, removing any foreign keys where the declared
 // table is missing, and returning an error if a key is in an invalid state or a referenced table is missing. Does not
 // check any tables' row data.
+// TODO: Nail down validation here.
 func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootValue, error) {
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -1001,6 +1002,7 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 	for _, foreignKey := range allForeignKeys {
 		tblSch, existsInRoot := allTablesSet[foreignKey.TableName]
 		if existsInRoot {
+			// Check that the foreign key table has a valid schema
 			if err := foreignKey.ValidateTableSchema(tblSch); err != nil {
 				return nil, err
 			}
