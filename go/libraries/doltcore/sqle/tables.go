@@ -875,7 +875,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, indexName string, usi
 		return fmt.Errorf("indexes on keyless tables are not supported")
 	}
 
-	ret, err := createIndexForTable(ctx, t.table, indexName, using, constraint, columns, true, comment)
+	ret, err := CreateIndexForTable(ctx, t.table, indexName, using, constraint, columns, true, comment)
 	if err != nil {
 		return err
 	}
@@ -883,7 +883,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, indexName string, usi
 	if err != nil {
 		return err
 	}
-	if ret.oldIndex != nil && ret.oldIndex != ret.newIndex { // old index was replaced, so we update foreign keys
+	if ret.oldIndex != nil && ret.oldIndex != ret.NewIndex { // old index was replaced, so we update foreign keys
 		fkc, err := root.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return err
@@ -891,10 +891,10 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, indexName string, usi
 		for _, fk := range fkc.AllKeys() {
 			newFk := fk
 			if t.name == fk.TableName && fk.TableIndex == ret.oldIndex.Name() {
-				newFk.TableIndex = ret.newIndex.Name()
+				newFk.TableIndex = ret.NewIndex.Name()
 			}
 			if t.name == fk.ReferencedTableName && fk.ReferencedTableIndex == ret.oldIndex.Name() {
-				newFk.ReferencedTableIndex = ret.newIndex.Name()
+				newFk.ReferencedTableIndex = ret.NewIndex.Name()
 			}
 			fkc.RemoveKeys(fk)
 			err = fkc.AddKeys(newFk)
@@ -907,7 +907,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, indexName string, usi
 			return err
 		}
 	}
-	newRoot, err := root.PutTable(ctx, t.name, ret.newTable)
+	newRoot, err := root.PutTable(ctx, t.name, ret.NewTable)
 	if err != nil {
 		return err
 	}
@@ -1045,12 +1045,12 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	tableIndex, ok := t.sch.Indexes().GetIndexByTags(colTags...)
 	if !ok {
 		// if child index doesn't exist, create it
-		ret, err := createIndexForTable(ctx, t.table, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, false, "")
+		ret, err := CreateIndexForTable(ctx, t.table, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, false, "")
 		if err != nil {
 			return err
 		}
-		t.table = ret.newTable
-		tableIndex = ret.newIndex
+		t.table = ret.NewTable
+		tableIndex = ret.NewIndex
 		root, err = root.PutTable(ctx, t.name, t.table)
 		if err != nil {
 			return err
@@ -1072,7 +1072,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		checksDisabled := isForeignKeyChecksDisabled(ctx)
 		if !ok {
 			if checksDisabled {
-				return t.addEmptyForeignKeyToCollection(ctx, root, fkName, tableIndex.Name(), colTags, refTblName, onUpdate, onDelete)
+				return t.addEmptyForeignKeyToCollection(ctx, root, fkName, tableIndex.Name(), colTags, refTblName, refColumns, onUpdate, onDelete)
 			}
 			return fmt.Errorf("referenced table `%s` does not exist", refTblName)
 		}
@@ -1127,12 +1127,12 @@ func (t *AlterableDoltTable) CreateForeignKey(
 				c, _ := refSch.GetAllCols().GetByTag(t)
 				colNames = append(colNames, sql.IndexColumn{Name: c.Name})
 			}
-			ret, err := createIndexForTable(ctx, refTbl, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, false, "")
+			ret, err := CreateIndexForTable(ctx, refTbl, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, false, "")
 			if err != nil {
 				return err
 			}
-			refTbl = ret.newTable
-			refTableIndex = ret.newIndex
+			refTbl = ret.NewTable
+			refTableIndex = ret.NewIndex
 			root, err = root.PutTable(ctx, refTblName, refTbl)
 			if err != nil {
 				return err
@@ -1155,6 +1155,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		ReferencedTableName:    refTblName,
 		ReferencedTableIndex:   refTableIndex.Name(),
 		ReferencedTableColumns: refColTags,
+		ReferencedTableColumnNames: refColumns,
 		OnUpdate:               onUpdateRefOp,
 		OnDelete:               onDeleteRefOp,
 	}
@@ -1187,7 +1188,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func (t* AlterableDoltTable) addEmptyForeignKeyToCollection(ctx *sql.Context, root *doltdb.RootValue, fkName string, tableIndexName string, colTags []uint64, refTblName string, onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
+func (t* AlterableDoltTable) addEmptyForeignKeyToCollection(ctx *sql.Context, root *doltdb.RootValue, fkName string, tableIndexName string, colTags []uint64, refTblName string, refTblColNames []string, onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
 	onUpdateRefOp, err := parseFkReferenceOption(onUpdate)
 	if err != nil {
 		return err
@@ -1205,6 +1206,7 @@ func (t* AlterableDoltTable) addEmptyForeignKeyToCollection(ctx *sql.Context, ro
 		ReferencedTableName:    refTblName,
 		ReferencedTableIndex:   "",
 		ReferencedTableColumns: nil,
+		ReferencedTableColumnNames: refTblColNames,
 		OnUpdate:               onUpdateRefOp,
 		OnDelete:               onDeleteRefOp,
 	}
@@ -1343,15 +1345,15 @@ func parseFkReferenceOption(refOp sql.ForeignKeyReferenceOption) (doltdb.Foreign
 }
 
 type createIndexReturn struct {
-	newTable *doltdb.Table
+	NewTable *doltdb.Table
 	sch      schema.Schema
 	oldIndex schema.Index
-	newIndex schema.Index
+	NewIndex schema.Index
 }
 
 // createIndex creates the given index on the given table with the given schema. Returns the updated table, updated schema, and created index.
-func createIndexForTable(
-	ctx *sql.Context,
+func CreateIndexForTable(
+	ctx context.Context,
 	table *doltdb.Table,
 	indexName string,
 	using sql.IndexUsing,
@@ -1445,10 +1447,10 @@ func createIndexForTable(
 		}
 	}
 	return &createIndexReturn{
-		newTable: newTable,
+		NewTable: newTable,
 		sch:      sch,
 		oldIndex: existingIndex,
-		newIndex: index,
+		NewIndex: index,
 	}, nil
 }
 

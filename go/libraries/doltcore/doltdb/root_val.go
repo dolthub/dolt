@@ -1010,6 +1010,16 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 			if !existsInRoot {
 				return nil, fmt.Errorf("foreign key `%s` requires the referenced table `%s`", foreignKey.Name, foreignKey.ReferencedTableName)
 			}
+
+			// Check if the foreign key needs to be regenerated
+			if foreignKey.ReferencedTableColumns == nil || foreignKey.ReferencedTableIndex == "" {
+				// try regeneration
+				root, err = foreignKey.RegenerateReferencedIndexAndTags(ctx, root, foreignKey.TableName, foreignKey.ReferencedTableName)
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			if err := foreignKey.ValidateReferencedTableSchema(parentSch); err != nil {
 				return nil, err
 			}

@@ -1671,13 +1671,18 @@ CREATE TABLE objects (
   color VARCHAR(32),
 
   PRIMARY KEY(id),
-  FOREIGN KEY (color) REFERENCES colors(color)
+  CONSTRAINT color_fk FOREIGN KEY (color) REFERENCES colors(color)
 );
 SQL
 
     [ "$status" -eq "0" ]
     run dolt ls
     [[ "$output" =~ 'objects' ]] || false
+
+    # correctly errors when committing due to failing fk requirement
+    run dolt commit -am "this will fail"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key \`color_fk\` requires the referenced table \`colors\`" ]] || false
 }
 
 @test "foreign-keys: Can insert into table ignoring foreign key evaluation when foreign_key_checks=0" {
@@ -1689,7 +1694,7 @@ CREATE TABLE objects (
   color VARCHAR(32),
 
   PRIMARY KEY(id),
-  FOREIGN KEY (color) REFERENCES colors(color)
+  CONSTRAINT color_fk FOREIGN KEY (color) REFERENCES colors(color)
 );
 CREATE TABLE colors (
     id INT NOT NULL,

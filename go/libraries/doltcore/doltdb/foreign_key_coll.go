@@ -19,6 +19,9 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 	"sort"
 	"strings"
@@ -58,6 +61,7 @@ type ForeignKey struct {
 	ReferencedTableName    string                    `noms:"ref_tbl_name" json:"ref_tbl_name"`
 	ReferencedTableIndex   string                    `noms:"ref_tbl_index" json:"ref_tbl_index"`
 	ReferencedTableColumns []uint64                  `noms:"ref_tbl_cols" json:"ref_tbl_cols"`
+	ReferencedTableColumnNames  []string			 `noms:"ref_tbl_cols" json:"ref_tbl_cols_names"`
 	OnUpdate               ForeignKeyReferenceOption `noms:"on_update" json:"on_update"`
 	OnDelete               ForeignKeyReferenceOption `noms:"on_delete" json:"on_delete"`
 }
@@ -120,6 +124,26 @@ func (fk ForeignKey) IsSelfReferential() bool {
 // ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
 func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 	allSchCols := sch.GetAllCols()
+
+	//// TODO: Regenerate the Referenced Table Columns
+	//if fk.ReferencedTableColumns == nil {
+	//	refColTags := make([]uint64, allSchCols.Size())
+	//	for i, name := range allSchCols {
+	//		refCol, ok := sch.GetAllCols().GetByNameCaseInsensitive(name)
+	//		if !ok {
+	//			return fmt.Errorf("table `%s` does not have column `%s`", fk.ReferencedTableName, name)
+	//		}
+	//		if !tblCols[i].TypeInfo.Equals(refCol.TypeInfo) {
+	//			return fmt.Errorf("column type mismatch on `%s` and `%s`", fk.Name , refCol.Name)
+	//		}
+	//		sqlParserType := refCol.TypeInfo.ToSqlType().Type()
+	//		if sqlParserType == sqltypes.Blob || sqlParserType == sqltypes.Text {
+	//			return fmt.Errorf("TEXT/BLOB are not valid types for foreign keys")
+	//		}
+	//		refColTags[i] = refCol.Tag
+	//	}
+	//}
+
 	for _, colTag := range fk.ReferencedTableColumns {
 		_, ok := allSchCols.GetByTag(colTag)
 		if !ok {
@@ -132,6 +156,93 @@ func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 			fk.Name, fk.ReferencedTableName, fk.ReferencedTableIndex)
 	}
 	return nil
+}
+
+func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root *RootValue, tableName, refTableName string) (*RootValue, error) {
+	currTable, ok, err := root.GetTable(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", tableName)
+	}
+
+	refTable, ok, err := root.GetTable(ctx, refTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", refTableName)
+	}
+
+	currSch, err := currTable.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	refSch, err := refTable.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	refColTags := make([]uint64, len(fk.TableColumns))
+	for i, tag := range fk.TableColumns {
+		currCol, ok := currSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return nil, fmt.Errorf("table `%s` does not have column with tag `%d`", tableName, tag) // TODO: Is this correct?
+		}
+
+		// Step 1: Validate that referenced table has the correct tag.
+		refCol, ok := refSch.GetAllCols().GetByName(fk.ReferencedTableColumnNames[i])
+		if !ok {
+			return nil, fmt.Errorf("table `%s` does not have column `%s`", refTableName, refCol.Name)
+		}
+
+		// Step 2. Validate the same types between the two columns
+		if !currCol.TypeInfo.Equals(refCol.TypeInfo) {
+			return nil, fmt.Errorf("column type mismatch on `%s` and `%s`", currCol.Name, refCol.Name)
+		}
+
+		// Step 3: Validate the correct type.
+		sqlParserType := refCol.TypeInfo.ToSqlType().Type()
+		if sqlParserType == sqltypes.Blob || sqlParserType == sqltypes.Text {
+			return nil, fmt.Errorf("TEXT/BLOB are not valid types for foreign keys")
+		}
+
+		refColTags[i] = tag
+	}
+
+	refTableIndex, ok := refSch.Indexes().GetIndexByTags(refColTags...)
+	if !ok {
+		parentPKs := set.NewUint64Set(refSch.GetPKCols().Tags)
+		if parentPKs.ContainsAll(refColTags) {
+			// special exception for parent table primary keys
+			// todo: make clustered PK index usable as parent table FK index
+			var colNames []sql.IndexColumn
+			for _, t := range refColTags {
+				c, _ := refSch.GetAllCols().GetByTag(t)
+				colNames = append(colNames, sql.IndexColumn{Name: c.Name})
+			}
+			ret, err := sqle.CreateIndexForTable(ctx, refTable, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, false, "")
+			if err != nil {
+				return nil, err
+			}
+			refTable = ret.NewTable
+			refTableIndex = ret.NewIndex
+			root, err = root.PutTable(ctx, refTableName, refTable)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// parent index must exist
+			return nil, fmt.Errorf("missing index for constraint '%s' in the referenced table '%s'", fk.Name, refTableName)
+		}
+	}
+
+	fk.ReferencedTableColumns = refColTags
+	fk.ReferencedTableIndex = refTableIndex.Name()
+
+	return root, nil
 }
 
 // ValidateTableSchema verifies that the given schema matches the expectation of the declaring table.
@@ -149,10 +260,6 @@ func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` is missing the index `%s`",
 			fk.Name, fk.TableName, fk.TableIndex)
 	}
-	return nil
-}
-
-func (fk ForeignKey) resolveReferencedTblIndex() error {
 	return nil
 }
 
