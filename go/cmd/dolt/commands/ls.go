@@ -196,10 +196,13 @@ func listTableVerbose(ctx context.Context, tbl string, root *doltdb.RootValue) (
 
 func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {
 	perSysTbls, err := doltdb.GetPersistedSystemTables(ctx, root)
-	genSysTbls, err := doltdb.GetGeneratedSystemTables(ctx, root)
-
 	if err != nil {
-		return errhand.BuildDError("error retrieving table names").AddCause(err).Build()
+		return errhand.BuildDError("error retrieving persisted table names").AddCause(err).Build()
+	}
+
+	genSysTbls, err := doltdb.GetGeneratedSystemTables(ctx, root)
+	if err != nil {
+		return errhand.BuildDError("error retrieving generated table names").AddCause(err).Build()
 	}
 
 	cli.Println("System tables:")
