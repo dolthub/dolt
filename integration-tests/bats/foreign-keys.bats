@@ -1661,3 +1661,29 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ '{"rows": [{"id":2,"v1":2}]}' ]] || false
 }
+
+@test "foreign-keys: deleting and readding" {
+    dolt sql <<SQL
+CREATE TABLE parent2 (
+  pk BIGINT PRIMARY KEY
+);
+CREATE TABLE child2 (
+  pk BIGINT PRIMARY KEY,
+  CONSTRAINT child2_fk FOREIGN KEY (pk) references parent2 (pk)
+);
+SQL
+    dolt add -A
+    dolt commit -m "parent2 and child2"
+    dolt sql -q "DROP TABLE child2"
+    dolt sql <<SQL
+CREATE TABLE child2 (
+  pk BIGINT PRIMARY KEY,
+  CONSTRAINT child2_fk FOREIGN KEY (pk) references parent2 (pk)
+);
+SQL
+    dolt add -A
+    dolt commit -m "new child"
+    run dolt schema show child2
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'child2_fk' ]] || false
+}

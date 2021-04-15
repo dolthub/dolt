@@ -48,7 +48,11 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 			}
 
 			tblsToDrop.Add(td.FromName)
-		} else {
+			stagedFKs.RemoveKeys(td.FromFks...)
+		}
+	}
+	for _, td := range tblDeltas {
+		if !td.IsDrop() {
 			if !tblSet.Contains(td.ToName) {
 				continue
 			}
