@@ -106,6 +106,20 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 			if err != nil {
 				return HandleVErrAndExitCode(errhand.BuildDError("Unable to get schema for %s.", fk.ReferencedTableName).AddCause(err).Build(), nil)
 			}
+
+			// Try ForeignKeyRegeneration
+			if fk.ReferencedTableColumns == nil || fk.ReferencedTableIndex == "" {
+				working, fk, err = fk.RegenerateReferencedIndexAndTags(ctx, working, fk.TableName, fk.ReferencedTableName)
+				if err != nil {
+					return HandleVErrAndExitCode(errhand.BuildDError("fk regeneration gailes").AddCause(err).Build(), nil)
+				}
+
+				err = dEnv.UpdateWorkingRoot(ctx, working)
+				if err != nil {
+					return HandleVErrAndExitCode(errhand.BuildDError("failed to update roots").AddCause(err).Build(), nil)
+				}
+			}
+
 			parentIdx := parentTblSch.Indexes().GetByName(fk.ReferencedTableIndex)
 			parentIdxRowData, err := parentTbl.GetIndexRowData(ctx, fk.ReferencedTableIndex)
 			if err != nil {

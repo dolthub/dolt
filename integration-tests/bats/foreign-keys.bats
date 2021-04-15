@@ -1803,6 +1803,41 @@ SQL
     [ "$status" -eq "0" ]
 
     run dolt sql -q "INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');"
-    echo $output
     [ "$status" -eq "0" ]
 }
+
+@test "foreign-keys: Verify constraints regenerates foreign keys appropriately" {
+      run dolt sql << SQL
+SET foreign_key_checks = 0;
+CREATE TABLE objects (
+  id int NOT NULL,
+  name VARCHAR(64) NOT NULL,
+  color VARCHAR(32),
+
+  PRIMARY KEY(id),
+  CONSTRAINT color_fk FOREIGN KEY (color) REFERENCES colors(color)
+);
+CREATE TABLE colors (
+  id INT NOT NULL,
+  color VARCHAR(32) NOT NULL,
+
+  PRIMARY KEY (id),
+  INDEX color_index(color)
+);
+SQL
+
+    run dolt verify-constraints objects
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple');"
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');"
+    [ "$status" -eq "0" ]
+}
+#
+#@test "foreign-keys: Automatic Updates for Foreign keys regenerates accordingly" {
+#
+#}
+#
+#@test "foreign-e"
