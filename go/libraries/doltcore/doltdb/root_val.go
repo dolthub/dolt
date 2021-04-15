@@ -1014,10 +1014,25 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 			// Check if the foreign key needs to be regenerated
 			if foreignKey.ReferencedTableColumns == nil || foreignKey.ReferencedTableIndex == "" {
 				// try regeneration
-				root, err = foreignKey.RegenerateReferencedIndexAndTags(ctx, root, foreignKey.TableName, foreignKey.ReferencedTableName)
+				root, fk, err := foreignKey.RegenerateReferencedIndexAndTags(ctx, root, foreignKey.TableName, foreignKey.ReferencedTableName)
 				if err != nil {
 					return nil, err
 				}
+
+				foreignKey = fk
+				fkCollection, err = root.GetForeignKeyCollection(ctx)
+				if err != nil {
+					return nil, err
+				}
+
+				tbl, _, err := root.GetTable(ctx, foreignKey.ReferencedTableName)
+				if err != nil {
+					return nil, err
+				}
+
+				refSch, err := tbl.GetSchema(ctx)
+				allTablesSet[foreignKey.ReferencedTableName] = refSch
+				parentSch = refSch
 			}
 
 			if err := foreignKey.ValidateReferencedTableSchema(parentSch); err != nil {

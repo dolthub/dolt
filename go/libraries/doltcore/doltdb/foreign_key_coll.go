@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
@@ -61,7 +60,7 @@ type ForeignKey struct {
 	ReferencedTableName    string                    `noms:"ref_tbl_name" json:"ref_tbl_name"`
 	ReferencedTableIndex   string                    `noms:"ref_tbl_index" json:"ref_tbl_index"`
 	ReferencedTableColumns []uint64                  `noms:"ref_tbl_cols" json:"ref_tbl_cols"`
-	ReferencedTableColumnNames  []string			 `noms:"ref_tbl_cols" json:"ref_tbl_cols_names"`
+	ReferencedTableColumnNames  []string			 `noms:"ref_tbl_cols_names" json:"ref_tbl_cols_names"`
 	OnUpdate               ForeignKeyReferenceOption `noms:"on_update" json:"on_update"`
 	OnDelete               ForeignKeyReferenceOption `noms:"on_delete" json:"on_delete"`
 }
@@ -125,25 +124,6 @@ func (fk ForeignKey) IsSelfReferential() bool {
 func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 	allSchCols := sch.GetAllCols()
 
-	//// TODO: Regenerate the Referenced Table Columns
-	//if fk.ReferencedTableColumns == nil {
-	//	refColTags := make([]uint64, allSchCols.Size())
-	//	for i, name := range allSchCols {
-	//		refCol, ok := sch.GetAllCols().GetByNameCaseInsensitive(name)
-	//		if !ok {
-	//			return fmt.Errorf("table `%s` does not have column `%s`", fk.ReferencedTableName, name)
-	//		}
-	//		if !tblCols[i].TypeInfo.Equals(refCol.TypeInfo) {
-	//			return fmt.Errorf("column type mismatch on `%s` and `%s`", fk.Name , refCol.Name)
-	//		}
-	//		sqlParserType := refCol.TypeInfo.ToSqlType().Type()
-	//		if sqlParserType == sqltypes.Blob || sqlParserType == sqltypes.Text {
-	//			return fmt.Errorf("TEXT/BLOB are not valid types for foreign keys")
-	//		}
-	//		refColTags[i] = refCol.Tag
-	//	}
-	//}
-
 	for _, colTag := range fk.ReferencedTableColumns {
 		_, ok := allSchCols.GetByTag(colTag)
 		if !ok {
@@ -158,58 +138,58 @@ func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 	return nil
 }
 
-func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root *RootValue, tableName, refTableName string) (*RootValue, error) {
+func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root *RootValue, tableName, refTableName string) (*RootValue, ForeignKey, error) {
 	currTable, ok, err := root.GetTable(ctx, tableName)
 	if err != nil {
-		return nil, err
+		return nil, ForeignKey{}, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", tableName)
+		return nil, ForeignKey{}, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", tableName)
 	}
 
 	refTable, ok, err := root.GetTable(ctx, refTableName)
 	if err != nil {
-		return nil, err
+		return nil,  ForeignKey{}, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", refTableName)
+		return nil,  ForeignKey{}, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", refTableName)
 	}
 
 	currSch, err := currTable.GetSchema(ctx)
 	if err != nil {
-		return nil, err
+		return nil, ForeignKey{}, err
 	}
 
 	refSch, err := refTable.GetSchema(ctx)
 	if err != nil {
-		return nil, err
+		return nil, ForeignKey{},err
 	}
 
 	refColTags := make([]uint64, len(fk.TableColumns))
 	for i, tag := range fk.TableColumns {
 		currCol, ok := currSch.GetAllCols().GetByTag(tag)
 		if !ok {
-			return nil, fmt.Errorf("table `%s` does not have column with tag `%d`", tableName, tag) // TODO: Is this correct?
+			return nil, ForeignKey{}, fmt.Errorf("table `%s` does not have column with tag `%d`", tableName, tag) // TODO: Is this correct?
 		}
 
 		// Step 1: Validate that referenced table has the correct tag.
 		refCol, ok := refSch.GetAllCols().GetByName(fk.ReferencedTableColumnNames[i])
 		if !ok {
-			return nil, fmt.Errorf("table `%s` does not have column `%s`", refTableName, refCol.Name)
+			return nil, ForeignKey{}, fmt.Errorf("table `%s` does not have column `%s`", refTableName, refCol.Name)
 		}
 
 		// Step 2. Validate the same types between the two columns
 		if !currCol.TypeInfo.Equals(refCol.TypeInfo) {
-			return nil, fmt.Errorf("column type mismatch on `%s` and `%s`", currCol.Name, refCol.Name)
+			return nil, ForeignKey{}, fmt.Errorf("column type mismatch on `%s` and `%s`", currCol.Name, refCol.Name)
 		}
 
 		// Step 3: Validate the correct type.
 		sqlParserType := refCol.TypeInfo.ToSqlType().Type()
 		if sqlParserType == sqltypes.Blob || sqlParserType == sqltypes.Text {
-			return nil, fmt.Errorf("TEXT/BLOB are not valid types for foreign keys")
+			return nil, ForeignKey{}, fmt.Errorf("TEXT/BLOB are not valid types for foreign keys")
 		}
 
-		refColTags[i] = tag
+		refColTags[i] = refCol.Tag
 	}
 
 	refTableIndex, ok := refSch.Indexes().GetIndexByTags(refColTags...)
@@ -223,26 +203,46 @@ func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root 
 				c, _ := refSch.GetAllCols().GetByTag(t)
 				colNames = append(colNames, sql.IndexColumn{Name: c.Name})
 			}
-			ret, err := sqle.CreateIndexForTable(ctx, refTable, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, false, "")
+			ret, err := CreateIndexForTable(ctx, refTable, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, false, "")
 			if err != nil {
-				return nil, err
+				return nil, ForeignKey{}, err
 			}
 			refTable = ret.NewTable
 			refTableIndex = ret.NewIndex
 			root, err = root.PutTable(ctx, refTableName, refTable)
 			if err != nil {
-				return nil, err
+				return nil, ForeignKey{}, err
 			}
 		} else {
 			// parent index must exist
-			return nil, fmt.Errorf("missing index for constraint '%s' in the referenced table '%s'", fk.Name, refTableName)
+			return nil, ForeignKey{}, fmt.Errorf("missing index for constraint '%s' in the referenced table '%s'", fk.Name, refTableName)
 		}
 	}
 
 	fk.ReferencedTableColumns = refColTags
 	fk.ReferencedTableIndex = refTableIndex.Name()
 
-	return root, nil
+	foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, ForeignKey{}, err
+	}
+
+	err = foreignKeyCollection.RemoveKeyByName(fk.Name)
+	if err != nil {
+		return nil, ForeignKey{}, err
+	}
+
+	err = foreignKeyCollection.AddKeys(fk)
+	if err != nil {
+		return nil, ForeignKey{}, err
+	}
+
+	root, err = root.PutForeignKeyCollection(ctx, foreignKeyCollection)
+	if err != nil {
+		return nil, ForeignKey{}, err
+	}
+	
+	return root, fk, nil
 }
 
 // ValidateTableSchema verifies that the given schema matches the expectation of the declaring table.
