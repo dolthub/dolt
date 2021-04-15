@@ -203,7 +203,6 @@ func TestAddColumn(t *testing.T) {
 }
 
 func TestModifyColumn(t *testing.T) {
-	t.Skip("Type changes not supported")
 	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
