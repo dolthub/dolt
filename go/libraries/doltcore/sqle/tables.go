@@ -1023,8 +1023,8 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	refTblName string,
 	refColumns []string,
 	onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
-	if fkName != "" && !doltdb.IsValidTableName(fkName) {
-		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", fkName, doltdb.TableNameRegexStr)
+	if fkName != "" && !doltdb.IsValidForeignKeyName(fkName) {
+		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", fkName, doltdb.ForeignKeyNameRegexStr)
 	}
 	//TODO: move this into go-mysql-server
 	if len(columns) != len(refColumns) {
