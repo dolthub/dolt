@@ -158,8 +158,18 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 		return "", err
 	}
 
+	fkc, err := srt.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	wrt, err := env.WorkingRoot(ctx, ddb, rsr)
 
+	if err != nil {
+		return "", err
+	}
+
+	wrt, err = wrt.PutForeignKeyCollection(ctx, fkc)
 	if err != nil {
 		return "", err
 	}

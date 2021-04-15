@@ -1715,3 +1715,58 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "3" ]] || false
 }
+
+@test "foreign-keys: Create table with bad fk reference, regenerate it at commit time." {
+    run dolt sql <<SQL
+SET foreign_key_checks = 0;
+CREATE TABLE objects (
+  id int NOT NULL,
+  name VARCHAR(64) NOT NULL,
+  color VARCHAR(32),
+
+  PRIMARY KEY(id),
+  CONSTRAINT color_fk FOREIGN KEY (color) REFERENCES colors(color)
+);
+SQL
+
+    [ "$status" -eq "0" ]
+    run dolt ls
+    [[ "$output" =~ 'objects' ]] || false
+
+    # correctly errors when committing due to failing fk requirement
+    run dolt commit -am "this will fail"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key \`color_fk\` requires the referenced table \`colors\`" ]] || false
+
+    run dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=1;
+CREATE TABLE colors (
+  id INT NOT NULL,
+  color VARCHAR(32) NOT NULL,
+
+  PRIMARY KEY (id),
+  INDEX color_index(color)
+);
+SQL
+
+    [ "$status" -eq "0" ]
+
+    run dolt commit -am "this should pass"
+    [ "$status" -eq "0" ]
+
+    # Verify everything works and continue
+    run dolt verify-constraints objects
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple');"
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');"
+    [ "$status" -eq "0" ]
+
+    run dolt verify-constraints objects
+    [ "$status" -eq "0" ]
+
+    run dolt verify-constraints colors
+    [ "$status" -eq "0" ]
+}
