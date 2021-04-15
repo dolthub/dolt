@@ -22,7 +22,12 @@ INSERT INTO abc VALUES (0, 'asdf', 1.1, 0, 0);
 INSERT INTO abc VALUES (1, 'asdf', 1.1, 0, 0);
 INSERT INTO abc VALUES (2, 'asdf', 1.1, 0, 0);
 CREATE VIEW view1 AS SELECT 2+2 FROM dual;
+CREATE TABLE big (
+  pk int PRIMARY KEY,
+  str longtext
+);
 SQL
+dolt sql < "../../test_files/big_table.sql"  # inserts 1K rows to `big`
 dolt add .
 dolt commit -m "initialized data"
 dolt branch init
