@@ -1511,6 +1511,27 @@ SQL
   [[ "$output" =~ "Warning" ]] || false
 }
 
+@test "foreign-keys: extended names supported" {
+    dolt sql <<SQL
+CREATE TABLE parent2 (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  INDEX idx_v1 (v1)
+);
+CREATE TABLE child2 (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  INDEX idx_v1 (v1),
+  CONSTRAINT circuits_123abc4d_fk_circuits_ FOREIGN KEY (pk) REFERENCES parent2 (pk)
+);
+ALTER TABLE child2 ADD CONSTRAINT \`\$not-possible-before_\` FOREIGN KEY (v1) REFERENCES parent2 (v1);
+SQL
+    run dolt schema show child2
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "circuits_123abc4d_fk_circuits_" ]] || false
+    [[ "$output" =~ '`$not-possible-before_`' ]] || false
+}
+
 @test "foreign-keys: self-referential same column(s)" {
     dolt sql <<SQL
 CREATE INDEX v1v2 ON parent(v1, v2);
