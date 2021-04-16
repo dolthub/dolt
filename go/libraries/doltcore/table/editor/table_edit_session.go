@@ -281,11 +281,6 @@ func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEdit
 		}
 	}
 
-	// check if any foreign keys need to be restored. Only do so if foreign key checks is enable
-	if tes.Props.ForeignKeyChecksDisabled {
-		return nil
-	}
-
 	// Try to Regenerate if Possible
 	for _, foreignKey := range localTableEditor.referencedTables {
 		if foreignKey.ReferencedTableColumns == nil || foreignKey.ReferencedTableIndex == "" {

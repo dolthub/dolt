@@ -111,7 +111,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 			if fk.ReferencedTableColumns == nil || fk.ReferencedTableIndex == "" {
 				working, fk, err = fk.RegenerateReferencedIndexAndTags(ctx, working, fk.TableName, fk.ReferencedTableName)
 				if err != nil {
-					return HandleVErrAndExitCode(errhand.BuildDError("fk regeneration gailes").AddCause(err).Build(), nil)
+					return HandleVErrAndExitCode(errhand.BuildDError("fk regeneration failed").AddCause(err).Build(), nil)
 				}
 
 				err = dEnv.UpdateWorkingRoot(ctx, working)

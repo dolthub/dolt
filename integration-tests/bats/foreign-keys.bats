@@ -709,6 +709,7 @@ UPDATE one SET v1 = v1 + v2;
 DELETE FROM one WHERE pk = 3;
 UPDATE two SET v2 = v1 - 2;
 SQL
+    dolt verify-constraints two
 
     run dolt schema show two
     [ "$status" -eq "0" ]
@@ -1836,7 +1837,9 @@ SQL
     [ "$status" -eq "0" ]
 }
 
-@test "foreign-keys: Auto updates for cascades works when forign_key_checks are turned back on" {
+## TODO: Add a test on missing index
+
+@test "foreign-keys: Auto updates for cascades works when foreign_key_checks are turned back on" {
     dolt sql << SQL
 SET FOREIGN_KEY_CHECKS=0;
 CREATE TABLE three (
@@ -1856,16 +1859,16 @@ CREATE TABLE two (
   CONSTRAINT fk_name_1 FOREIGN KEY (v1)
     REFERENCES one(v1)
     ON DELETE CASCADE
-    ON UPDATE CASCADE
+    ON UPDATE CASCADE,
+    INDEX (v1, v2)
 );
-ALTER TABLE two ADD INDEX v1v2 (v1, v2);
 
 CREATE TABLE one (
   pk BIGINT PRIMARY KEY,
   v1 BIGINT,
-  v2 BIGINT
+  v2 BIGINT,
+  INDEX (v1)
 );
-ALTER TABLE one ADD INDEX v1 (v1);
 
 INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
 INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
@@ -1874,12 +1877,18 @@ UPDATE one SET v1 = v1 + v2;
 DELETE FROM one WHERE pk = 3;
 UPDATE two SET v2 = v1 - 2;
 
-SET FOREIGN_KEY_CHECKS=1
 SQL
+    run dolt verify-constraints one
+    [ "$status" -eq "0" ]
+
+    run dolt verify-constraints two
+    [ "$status" -eq "0" ]
+
+    run dolt verify-constraints three
+    [ "$status" -eq "0" ]
 
     run dolt schema show two
     [ "$status" -eq "0" ]
-    echo $output
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`) ON DELETE CASCADE ON UPDATE CASCADE' ]] || false
     run dolt schema show three
     [ "$status" -eq "0" ]
@@ -1905,6 +1914,6 @@ SQL
     [[ "$output" =~ "4,7,5" ]] || false
     [[ "${#lines[@]}" = "3" ]] || false
 
-    run dolt veryify-constraints two
+    run dolt verify-constraints two
     [ "$status" -eq "0" ]
 }
