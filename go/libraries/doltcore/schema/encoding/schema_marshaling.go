@@ -17,6 +17,7 @@ package encoding
 import (
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -278,16 +279,33 @@ func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sc
 	return types.EmptyStruct(vrw.Format()), errors.New("Table Schema could not be converted to types.Struct")
 }
 
+var unmarshalledSchemaCache = map[hash.Hash]schema.Schema{}
+
 // UnmarshalSchemaNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
 func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
+	h, err := schemaVal.Hash(nbf)
+	if err != nil {
+		return nil, err
+	}
+
+	if sch, ok := unmarshalledSchemaCache[h]; ok {
+		return sch, nil
+	}
+
 	var sd schemaData
-	err := marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
+	err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return sd.decodeSchema()
+	sch, err := sd.decodeSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	unmarshalledSchemaCache[h] = sch
+	return sch, nil
 }
 
 type superSchemaData struct {
