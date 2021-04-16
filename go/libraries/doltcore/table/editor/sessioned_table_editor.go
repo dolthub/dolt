@@ -144,6 +144,10 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		return err
 	}
 
+	if ste.indexSchemaCache == nil {
+		ste.indexSchemaCache = make(map[string]schema.Schema)
+	}
+
 	for _, foreignKey := range ste.referencingTables {
 		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
 		if !ok {
@@ -156,7 +160,12 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		if hasNulls {
 			continue
 		}
-		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex)
+		idxSch, ok := ste.indexSchemaCache[foreignKey.TableIndex]
+		if !ok {
+			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
+			ste.indexSchemaCache[foreignKey.TableIndex] = idxSch
+		}
+		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
 			return err
 		}
@@ -218,6 +227,9 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	if ste.indexSchemaCache == nil {
+		ste.indexSchemaCache = make(map[string]schema.Schema)
+	}
 
 	for _, foreignKey := range ste.referencingTables {
 		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
@@ -231,7 +243,12 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 		if hasNulls {
 			continue
 		}
-		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex)
+		idxSch, ok := ste.indexSchemaCache[foreignKey.TableIndex]
+		if !ok {
+			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
+			ste.indexSchemaCache[foreignKey.TableIndex] = idxSch
+		}
+		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
 			return err
 		}

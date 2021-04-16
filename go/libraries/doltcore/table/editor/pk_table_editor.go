@@ -249,19 +249,18 @@ func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, in
 
 // GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
 // expected of the index, similar to searching on the index map itself.
-func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexName string) ([]row.Row, error) {
+func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
 	tbl, err := te.Table(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	idxSch := te.Schema().Indexes().GetByName(indexName)
 	idxMap, err := tbl.GetIndexRowData(ctx, indexName)
 	if err != nil {
 		return nil, err
 	}
 
-	indexIter := noms.NewNomsRangeReader(idxSch.Schema(), idxMap,
+	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
 		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 			return tuple.StartsWith(key), nil
 		}}},
