@@ -1916,9 +1916,10 @@ SQL
     [ "$status" -eq "0" ]
 }
 
-# TODO: Add a test on missing index
 @test "foreign-keys: Even with foreign_key_checks=0 missing indexes throw an error" {
-    run dolt sql << SQL
+  skip "Behavior needs to be implemented"
+
+  run dolt sql << SQL
 SET FOREIGN_KEY_CHECKS=0;
 CREATE TABLE three (
   pk BIGINT PRIMARY KEY,
@@ -1942,5 +1943,6 @@ CREATE TABLE two (
 SQL
      echo $output
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "ERROR 1822 (HY000): Failed to add the foreign key constraint. Missing index for constraint 'fk_name_2' in the referenced table 'two'" ]] || false
 }
 
