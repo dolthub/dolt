@@ -25,10 +25,11 @@ import (
 	"context"
 	"crypto/sha512"
 	"errors"
-	"github.com/dolthub/dolt/go/store/chunks"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/chunks"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
