@@ -61,7 +61,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 			if execErr == nil {
 				execErr = drainIter(ctx, rowIter)
 			}
-		case *sqlparser.DDL:
+		case *sqlparser.DDL, *sqlparser.MultiAlterDDL:
 			var rowIter sql.RowIter
 			_, rowIter, execErr = engine.Query(ctx, query)
 			if execErr == nil {

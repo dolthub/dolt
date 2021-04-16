@@ -77,7 +77,7 @@ func (jsonw *JSONWriter) GetSchema() schema.Schema {
 func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := jsonw.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
-	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val, ok := r.GetColVal(tag)
 		if !ok || types.IsNull(val) {
 			return false, nil
@@ -112,7 +112,9 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 		colValMap[col.Name] = val
 
 		return false, nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	data, err := marshalToJson(colValMap)
 	if err != nil {

@@ -190,6 +190,8 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		if key.Name == "" {
 			// assign a name based on the hash
 			// 8 char = 5 base32 bytes, should be collision resistant
+			// TODO: constraint names should be unique, and this isn't guaranteed to be.
+			//  This logic needs to live at the table / DB level.
 			key.Name = key.HashOf().String()[:8]
 		}
 
