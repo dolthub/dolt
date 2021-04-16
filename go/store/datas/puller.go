@@ -367,10 +367,12 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 				}
 
 				refs := make(map[hash.Hash]int)
-				err = types.WalkRefs(chnk, p.fmt, func(r types.Ref) error {
+				if err := types.WalkRefs(chnk, p.fmt, func(r types.Ref) error {
 					refs[r.TargetHash()] = int(r.Height())
 					return nil
-				})
+				}); ae.SetIfError(err) {
+					return
+				}
 
 				processed <- CmpChnkAndRefs{cmpChnk: cmpChnk, refs: refs}
 			}
