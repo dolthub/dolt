@@ -1835,9 +1835,76 @@ SQL
     run dolt sql -q "INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');"
     [ "$status" -eq "0" ]
 }
-#
-#@test "foreign-keys: Automatic Updates for Foreign keys regenerates accordingly" {
-#
-#}
-#
-#@test "foreign-e"
+
+@test "foreign-keys: Auto updates for cascades works when forign_key_checks are turned back on" {
+    dolt sql << SQL
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE three (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name_2 FOREIGN KEY (v1, v2)
+    REFERENCES two(v1, v2)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+CREATE TABLE two (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name_1 FOREIGN KEY (v1)
+    REFERENCES one(v1)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+ALTER TABLE two ADD INDEX v1v2 (v1, v2);
+
+CREATE TABLE one (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+ALTER TABLE one ADD INDEX v1 (v1);
+
+INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
+INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
+UPDATE one SET v1 = v1 + v2;
+DELETE FROM one WHERE pk = 3;
+UPDATE two SET v2 = v1 - 2;
+
+SET FOREIGN_KEY_CHECKS=1
+SQL
+
+    run dolt schema show two
+    [ "$status" -eq "0" ]
+    echo $output
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`) ON DELETE CASCADE ON UPDATE CASCADE' ]] || false
+    run dolt schema show three
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_2` FOREIGN KEY (`v1`,`v2`) REFERENCES `two` (`v1`,`v2`) ON DELETE CASCADE ON UPDATE CASCADE' ]] || false
+
+    run dolt sql -q "SELECT * FROM one" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "1,5,4" ]] || false
+    [[ "$output" =~ "2,7,5" ]] || false
+    [[ "$output" =~ "4,9,5" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "SELECT * FROM two" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "2,5,3" ]] || false
+    [[ "$output" =~ "3,7,5" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    run dolt sql -q "SELECT * FROM three" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "3,5,3" ]] || false
+    [[ "$output" =~ "4,7,5" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt veryify-constraints two
+    [ "$status" -eq "0" ]
+}
