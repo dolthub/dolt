@@ -9,6 +9,9 @@ on:
 jobs:
   test:
     name: Go tests
+    defaults:
+      run:
+        shell: bash
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -23,4 +26,24 @@ jobs:
     - uses: actions/checkout@v2
     - name: Test All
       working-directory: ./go
-      run: go test -timeout 30m ./...
+      run: |
+        files=$(go list ./...)
+
+        SAVEIFS=$IFS
+        IFS=$'\n'
+
+        file_arr=($files)
+
+        IFS=$SAVEIFS
+
+        file_list=
+        for (( i=0; i<${#file_arr[@]}; i++ ))
+        do
+          echo "Testing Package: ${file_arr[$i]}"
+          go test -timeout 30m -race "${file_arr[$i]}"
+          succeeded=$(echo "$?")
+          if [ "$succeeded" -ne 0 ]; then
+            echo "Testing failed in package ${file_arr[$i]}"
+            exit 1;
+          fi
+        done

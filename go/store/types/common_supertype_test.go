@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TESTING GO TESTS WORKFLOW
+
 func TestContainCommonSupertype(t *testing.T) {
 	cases := []struct {
 		a, b *Type
