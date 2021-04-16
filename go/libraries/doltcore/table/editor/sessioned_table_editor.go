@@ -135,9 +135,9 @@ func (ste *sessionedTableEditor) Close() error {
 // handleReferencingRowsOnDelete handles updating referencing foreign keys on delete operations
 func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Context, dRow row.Row) error {
 	//TODO: all self referential logic assumes non-composite keys
-	//if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
-	//	return nil
-	//}
+	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
+		return nil
+	}
 	dRowTaggedVals, err := dRow.TaggedValues()
 	if err != nil {
 		return err
@@ -210,9 +210,9 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 
 func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
 	//TODO: all self referential logic assumes non-composite keys
-	//if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
-	//	return nil
-	//}
+	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
+		return nil
+	}
 	dOldRowTaggedVals, err := dOldRow.TaggedValues()
 	if err != nil {
 		return err
@@ -404,9 +404,9 @@ func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row,
 
 // validateForInsert returns whether the given row is able to be inserted into the target table.
 func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVals row.TaggedValues) error {
-	//if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
-	//	return nil
-	//}
+	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
+		return nil
+	}
 	for _, foreignKey := range ste.referencedTables {
 		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, taggedVals)
 		if err != nil {

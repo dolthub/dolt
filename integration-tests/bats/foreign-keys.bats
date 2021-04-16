@@ -1837,9 +1837,7 @@ SQL
     [ "$status" -eq "0" ]
 }
 
-## TODO: Add a test on missing index
-
-@test "foreign-keys: Auto updates for cascades works when foreign_key_checks are turned back on" {
+@test "foreign-keys: Auto updates for cascades still work when foreign_key_checks are turned on and when foreign keys are regenerated" {
     dolt sql << SQL
 SET FOREIGN_KEY_CHECKS=0;
 CREATE TABLE three (
@@ -1860,7 +1858,7 @@ CREATE TABLE two (
     REFERENCES one(v1)
     ON DELETE CASCADE
     ON UPDATE CASCADE,
-    INDEX (v1, v2)
+  INDEX (v1, v2)
 );
 
 CREATE TABLE one (
@@ -1870,13 +1868,13 @@ CREATE TABLE one (
   INDEX (v1)
 );
 
+SET FOREIGN_KEY_CHECKS=1;
 INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
 INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
 INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
 UPDATE one SET v1 = v1 + v2;
 DELETE FROM one WHERE pk = 3;
 UPDATE two SET v2 = v1 - 2;
-
 SQL
     run dolt verify-constraints one
     [ "$status" -eq "0" ]
@@ -1917,3 +1915,32 @@ SQL
     run dolt verify-constraints two
     [ "$status" -eq "0" ]
 }
+
+# TODO: Add a test on missing index
+@test "foreign-keys: Even with foreign_key_checks=0 missing indexes throw an error" {
+    run dolt sql << SQL
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE three (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name_2 FOREIGN KEY (v1, v2)
+    REFERENCES two(v1, v2)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+CREATE TABLE two (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name_1 FOREIGN KEY (v1)
+    REFERENCES one(v1)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+SQL
+     echo $output
+    [ "$status" -eq "1" ]
+}
+
