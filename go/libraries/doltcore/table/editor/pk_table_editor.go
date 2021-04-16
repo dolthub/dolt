@@ -220,19 +220,18 @@ func (tea *tableEditAccumulator) Has(ctx context.Context, keyHash hash.Hash, key
 
 // ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
 // format expected of the index, similar to searching on the index map itself.
-func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, indexName string) (bool, error) {
+func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) (bool, error) {
 	tbl, err := te.Table(ctx)
 	if err != nil {
 		return false, err
 	}
 
-	idxSch := te.Schema().Indexes().GetByName(indexName)
 	idxMap, err := tbl.GetIndexRowData(ctx, indexName)
 	if err != nil {
 		return false, err
 	}
 
-	indexIter := noms.NewNomsRangeReader(idxSch.Schema(), idxMap,
+	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
 		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 			return tuple.StartsWith(key), nil
 		}}},
