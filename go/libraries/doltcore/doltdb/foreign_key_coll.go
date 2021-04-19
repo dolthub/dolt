@@ -209,6 +209,7 @@ func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root 
 			}
 			refTable = ret.NewTable
 			refTableIndex = ret.NewIndex
+			refSch = ret.Sch
 			root, err = root.PutTable(ctx, refTableName, refTable)
 			if err != nil {
 				return nil, ForeignKey{}, err
@@ -241,7 +242,7 @@ func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root 
 	if err != nil {
 		return nil, ForeignKey{}, err
 	}
-	
+
 	return root, fk, nil
 }
 

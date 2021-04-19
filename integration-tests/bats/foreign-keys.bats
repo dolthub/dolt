@@ -1706,7 +1706,6 @@ CREATE TABLE colors (
 );
 INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
 SQL
-
     [ "$status" -eq "0" ]
     run dolt ls
     [[ "$output" =~ 'objects' ]] || false
@@ -1804,6 +1803,7 @@ SQL
     [ "$status" -eq "0" ]
 
     run dolt sql -q "INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');"
+    echo $output
     [ "$status" -eq "0" ]
 }
 
@@ -1913,6 +1913,33 @@ SQL
     [[ "${#lines[@]}" = "3" ]] || false
 
     run dolt verify-constraints two
+    [ "$status" -eq "0" ]
+}
+
+@test "foreign-keys: regeneration works with foreign keys that are also primary keys" {
+    run dolt sql << SQL
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE person (
+    id INT NOT NULL,
+    clothing_id INT NOT NULL,
+
+    PRIMARY KEY (id),
+    CONSTRAINT clothing_fk FOREIGN KEY (clothing_id) REFERENCES clothes(id)
+);
+CREATE TABLE clothes (
+    id INT NOT NULL,
+    color VARCHAR(32),
+    type  VARCHAR(32),
+
+    PRIMARY KEY(id)
+);
+
+INSERT INTO person VALUES (1,1);
+INSERT INTO clothes VALUES (1, 'blue', 'shirt');
+SQL
+    [ "$status" -eq "0" ]
+
+    run dolt verify-constraints person
     [ "$status" -eq "0" ]
 }
 
