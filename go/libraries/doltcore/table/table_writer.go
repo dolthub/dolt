@@ -16,6 +16,7 @@ package table
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -33,5 +34,5 @@ type TableWriter interface {
 // TableWriteCloser is an interface for writing rows to a table, that can be closed
 type TableWriteCloser interface {
 	TableWriter
-	TableCloser
+	doltdb.TableCloser
 }

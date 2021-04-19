@@ -49,7 +49,7 @@ func GetRow(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, key types
 //
 // Returns a tuple: (number of rows written, number of errors ignored, error). In the case that err is non-nil, the
 // row counter fields in the tuple will be set to -1.
-func PipeRows(ctx context.Context, rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, error) {
+func PipeRows(ctx context.Context, rd doltdb.TableReader, wr TableWriter, contOnBadRow bool) (int, int, error) {
 	var numBad, numGood int
 	for {
 		r, err := rd.ReadRow(ctx)
@@ -82,7 +82,7 @@ func PipeRows(ctx context.Context, rd TableReader, wr TableWriter, contOnBadRow 
 
 // ReadAllRows reads all rows from a TableReader and returns a slice containing those rows.  Usually this is used
 // for testing, or with very small data sets.
-func ReadAllRows(ctx context.Context, rd TableReader, contOnBadRow bool) ([]row.Row, int, error) {
+func ReadAllRows(ctx context.Context, rd doltdb.TableReader, contOnBadRow bool) ([]row.Row, int, error) {
 	var rows []row.Row
 	var err error
 

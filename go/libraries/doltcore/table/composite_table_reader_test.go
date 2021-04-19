@@ -16,6 +16,7 @@ package table
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"io"
 	"testing"
 
@@ -42,7 +43,7 @@ func TestCompositeTableReader(t *testing.T) {
 	sch, err := schema.SchemaFromCols(coll)
 	require.NoError(t, err)
 
-	var readers []TableReadCloser
+	var readers []doltdb.TableReadCloser
 	var expectedKeys []uint64
 	var expectedVals []int64
 	for i := 0; i < numReaders; i++ {

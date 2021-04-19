@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -291,7 +290,7 @@ func (cp commitPartitioner) Close(*sql.Context) error {
 
 type rowItrForTableAtCommit struct {
 	ctx            context.Context
-	rd             table.TableReadCloser
+	rd             doltdb.TableReadCloser
 	sch            schema.Schema
 	toSuperSchConv *rowconv.RowConverter
 	extraVals      map[uint64]types.Value

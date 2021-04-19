@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
@@ -54,7 +53,7 @@ type InferenceArgs interface {
 }
 
 // InferColumnTypesFromTableReader will infer a data types from a table reader.
-func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
+func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd doltdb.TableReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
 	inferrer := newInferrer(rd.GetSchema(), args)
 
 	var rowFailure *pipeline.TransformRowFailure

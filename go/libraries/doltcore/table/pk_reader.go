@@ -33,7 +33,7 @@ type pkTableReader struct {
 }
 
 var _ SqlTableReader = pkTableReader{}
-var _ TableReadCloser = pkTableReader{}
+var _ doltdb.TableReadCloser = pkTableReader{}
 
 // GetSchema implements the TableReader interface.
 func (rdr pkTableReader) GetSchema() schema.Schema {

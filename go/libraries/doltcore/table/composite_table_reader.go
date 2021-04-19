@@ -16,6 +16,7 @@ package table
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -26,12 +27,12 @@ import (
 // of multiple TableReader instances into a single set of results.
 type CompositeTableReader struct {
 	sch     schema.Schema
-	readers []TableReadCloser
+	readers []doltdb.TableReadCloser
 	idx     int
 }
 
 // NewCompositeTableReader creates a new CompositeTableReader instance from a slice of TableReadClosers.
-func NewCompositeTableReader(readers []TableReadCloser) (*CompositeTableReader, error) {
+func NewCompositeTableReader(readers []doltdb.TableReadCloser) (*CompositeTableReader, error) {
 	if len(readers) == 0 {
 		panic("nothing to iterate")
 	}

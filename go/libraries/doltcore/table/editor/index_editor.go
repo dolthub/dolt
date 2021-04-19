@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -198,7 +197,7 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 				if err != nil {
 					return err
 				}
-				var mapIter table.TableReadCloser = noms.NewNomsRangeReader(indexEd.idxSch, indexEd.data,
+				var mapIter doltdb.TableReadCloser = noms.NewNomsRangeReader(indexEd.idxSch, indexEd.data,
 					[]*noms.ReadRange{{Start: partialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 						return tuple.StartsWith(partialKey), nil
 					}}})

@@ -65,7 +65,7 @@ type DataMoverCloser interface {
 }
 
 type DataMover struct {
-	Rd         table.TableReadCloser
+	Rd         doltdb.TableReadCloser
 	Transforms *pipeline.TransformCollection
 	Wr         table.TableWriteCloser
 	ContOnErr  bool
@@ -306,7 +306,7 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 	}
 }
 
-func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, tableName string, pks []string, args actions.InferenceArgs) (schema.Schema, error) {
+func InferSchema(ctx context.Context, root *doltdb.RootValue, rd doltdb.TableReadCloser, tableName string, pks []string, args actions.InferenceArgs) (schema.Schema, error) {
 	var err error
 
 	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, args)

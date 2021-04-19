@@ -21,33 +21,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-// TableReader is an interface for reading rows from a table
-type TableReader interface {
-	// GetSchema gets the schema of the rows that this reader will return
-	GetSchema() schema.Schema
-
-	// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and calling
-	// IsBadRow(err) will be return true. This is a potentially non-fatal error and callers can decide if they want to
-	// continue on a bad row, or fail.
-	ReadRow(ctx context.Context) (row.Row, error)
-}
-
-// TableCloser is an interface for a table stream that can be closed to release resources
-type TableCloser interface {
-	// Close should release resources being held
-	Close(ctx context.Context) error
-}
-
-// TableReadCloser is an interface for reading rows from a table, that can be closed.
-type TableReadCloser interface {
-	TableReader
-	TableCloser
-}
 
 // SqlTableReader is a  TableReader that can read rows as sql.Row.
 type SqlTableReader interface {
@@ -72,7 +48,7 @@ func NewTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableReader, err
 }
 
 // NewDoltTableReader creates a SqlTableReader from |tbl| starting from the first record.
-func NewDoltTableReader(ctx context.Context, tbl *doltdb.Table) (TableReadCloser, error) {
+func NewDoltTableReader(ctx context.Context, tbl *doltdb.Table) (doltdb.TableReadCloser, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err

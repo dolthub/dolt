@@ -16,6 +16,7 @@ package table
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"io"
 	"testing"
 
@@ -90,7 +91,7 @@ func TestInMemTable(t *testing.T) {
 	}()
 
 	func() {
-		var r TableReadCloser
+		var r doltdb.TableReadCloser
 		r = NewInMemTableReader(imt)
 		defer r.Close(context.Background())
 
