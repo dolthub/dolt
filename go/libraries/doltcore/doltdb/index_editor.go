@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package editor
+package doltdb
 
 import (
 	"context"
@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
@@ -30,12 +29,35 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// TableReader is an interface for reading rows from a table
+type TableReader interface {
+	// GetSchema gets the schema of the rows that this reader will return
+	GetSchema() schema.Schema
+
+	// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and calling
+	// IsBadRow(err) will be return true. This is a potentially non-fatal error and callers can decide if they want to
+	// continue on a bad row, or fail.
+	ReadRow(ctx context.Context) (row.Row, error)
+}
+
+// TableCloser is an interface for a table stream that can be closed to release resources
+type TableCloser interface {
+	// Close should release resources being held
+	Close(ctx context.Context) error
+}
+
+// TableReadCloser is an interface for reading rows from a table, that can be closed.
+type TableReadCloser interface {
+	TableReader
+	TableCloser
+}
+
 // IndexEditor takes in changes to an index map and returns the updated map if changes have been made.
 //
 // This type is thread-safe, and may be used in a multi-threaded environment.
 type IndexEditor struct {
 	keyCount            map[hash.Hash]int64
-	ed                  types.EditAccumulator
+	Ed                  types.EditAccumulator
 	data                types.Map
 	idx                 schema.Index
 	idxSch              schema.Schema // idx.Schema() builds the schema every call, so we cache it here
@@ -65,7 +87,7 @@ func init() {
 func NewIndexEditor(index schema.Index, indexData types.Map) *IndexEditor {
 	return &IndexEditor{
 		keyCount:            make(map[hash.Hash]int64),
-		ed:                  types.CreateEditAccForMapEdits(indexData.Format()),
+		Ed:                  types.CreateEditAccForMapEdits(indexData.Format()),
 		data:                indexData,
 		idx:                 index,
 		idxSch:              index.Schema(),
@@ -83,7 +105,7 @@ func (indexEd *IndexEditor) Flush(ctx context.Context) error {
 	defer indexEd.flushMutex.Unlock()
 
 	// We have to ensure that the edit accumulator is closed, otherwise it will cause a memory leak
-	defer indexEd.ed.Close() // current edit accumulator is captured by defer
+	defer indexEd.Ed.Close() // current edit accumulator is captured by defer
 
 	if indexEd.idx.IsUnique() {
 		for _, numOfKeys := range indexEd.keyCount {
@@ -94,7 +116,7 @@ func (indexEd *IndexEditor) Flush(ctx context.Context) error {
 		}
 	}
 
-	accEdits, err := indexEd.ed.FinishedEditing()
+	accEdits, err := indexEd.Ed.FinishedEditing()
 	if err != nil {
 		indexEd.reset(indexEd.data)
 		return err
@@ -175,7 +197,7 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 			}
 		}
 		indexEd.mapMutex.Lock()
-		indexEd.ed.AddEdit(indexKey, nil)
+		indexEd.Ed.AddEdit(indexKey, nil)
 		indexEd.updated = true
 		indexEd.numOutstandingEdits++
 		indexEd.mapMutex.Unlock()
@@ -197,7 +219,7 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 				if err != nil {
 					return err
 				}
-				var mapIter doltdb.TableReadCloser = noms.NewNomsRangeReader(indexEd.idxSch, indexEd.data,
+				var mapIter TableReadCloser = noms.NewNomsRangeReader(indexEd.idxSch, indexEd.data,
 					[]*noms.ReadRange{{Start: partialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 						return tuple.StartsWith(partialKey), nil
 					}}})
@@ -215,7 +237,7 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 			}
 		}
 		indexEd.mapMutex.Lock()
-		indexEd.ed.AddEdit(indexKey, updatedIndexRow.NomsMapValue(indexEd.idxSch))
+		indexEd.Ed.AddEdit(indexKey, updatedIndexRow.NomsMapValue(indexEd.idxSch))
 		indexEd.updated = true
 		indexEd.numOutstandingEdits++
 		indexEd.mapMutex.Unlock()
@@ -247,12 +269,12 @@ func (indexEd *IndexEditor) autoFlush(ctx context.Context, err *error) {
 
 func (indexEd *IndexEditor) reset(indexData types.Map) {
 	indexEd.keyCount = make(map[hash.Hash]int64)
-	indexEd.ed = types.CreateEditAccForMapEdits(indexData.Format())
+	indexEd.Ed = types.CreateEditAccForMapEdits(indexData.Format())
 	indexEd.data = indexData
 	indexEd.numOutstandingEdits++
 }
 
-func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string) (types.Map, error) {
+func RebuildIndex(ctx context.Context, tbl *Table, indexName string) (types.Map, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return types.EmptyMap, err
@@ -275,7 +297,7 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string) (typ
 	return rebuiltIndexData, nil
 }
 
-func RebuildAllIndexes(ctx context.Context, t *doltdb.Table) (*doltdb.Table, error) {
+func RebuildAllIndexes(ctx context.Context, t *Table) (*Table, error) {
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -300,7 +322,7 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table) (*doltdb.Table, err
 		if err != nil {
 			return nil, err
 		}
-		rebuiltIndexRowDataRef, err := doltdb.WriteValAndGetRef(ctx, t.ValueReadWriter(), rebuiltIndexRowData)
+		rebuiltIndexRowDataRef, err := WriteValAndGetRef(ctx, t.ValueReadWriter(), rebuiltIndexRowData)
 		if err != nil {
 			return nil, err
 		}

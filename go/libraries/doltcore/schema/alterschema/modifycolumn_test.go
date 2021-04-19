@@ -16,6 +16,7 @@ package alterschema
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -212,7 +212,7 @@ func TestModifyColumn(t *testing.T) {
 
 			updatedIndexRows, err := updatedTable.GetIndexRowData(context.Background(), index.Name())
 			require.NoError(t, err)
-			expectedIndexRows, err := editor.RebuildIndex(context.Background(), updatedTable, index.Name())
+			expectedIndexRows, err := doltdb.RebuildIndex(context.Background(), updatedTable, index.Name())
 			require.NoError(t, err)
 			if uint64(len(foundRows)) != updatedIndexRows.Len() || !updatedIndexRows.Equals(expectedIndexRows) {
 				t.Error("index contents are incorrect")

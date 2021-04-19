@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -163,7 +162,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		// touched ones.
 		if modifiedCol.IsPartOfPK {
 			for _, index := range newSch.Indexes().AllIndexes() {
-				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name())
+				indexRowData, err := doltdb.RebuildIndex(ctx, updatedTable, index.Name())
 				if err != nil {
 					return nil, err
 				}
@@ -174,7 +173,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 			}
 		} else {
 			for _, index := range newSch.Indexes().IndexesWithTag(modifiedCol.Tag) {
-				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name())
+				indexRowData, err := doltdb.RebuildIndex(ctx, updatedTable, index.Name())
 				if err != nil {
 					return nil, err
 				}

@@ -12,19 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package editor
+package doltdb
 
 import (
 	"context"
 	"sync"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -37,22 +35,7 @@ const (
 
 	// The number of rows we expect the test to end up with
 	indexEditorConcurrencyFinalCount = 100
-
-	idTag        = 0
-	firstTag     = 1
-	lastTag      = 2
-	isMarriedTag = 3
-	ageTag       = 4
-	emptyTag     = 5
-
-	testSchemaIndexName = "idx_name"
-	testSchemaIndexAge  = "idx_age"
 )
-
-var id0, _ = uuid.NewRandom()
-var id1, _ = uuid.NewRandom()
-var id2, _ = uuid.NewRandom()
-var id3, _ = uuid.NewRandom()
 
 func TestIndexEditorConcurrency(t *testing.T) {
 	format := types.Format_Default
@@ -776,19 +759,6 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 	require.Error(t, err)
 }
 
-func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
-	return createTestRowDataFromTaggedValues(t, vrw, sch,
-		row.TaggedValues{
-			idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
-		row.TaggedValues{
-			idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
-		row.TaggedValues{
-			idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
-		row.TaggedValues{
-			idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
-	)
-}
-
 func createUpdatedTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
 	return createTestRowDataFromTaggedValues(t, vrw, sch,
 		row.TaggedValues{
@@ -802,48 +772,9 @@ func createUpdatedTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schem
 	)
 }
 
-func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema, vals ...row.TaggedValues) (types.Map, []row.Row) {
-	var err error
-	rows := make([]row.Row, len(vals))
-
-	m, err := types.NewMap(context.Background(), vrw)
-	assert.NoError(t, err)
-	ed := m.Edit()
-
-	for i, val := range vals {
-		r, err := row.New(types.Format_Default, sch, val)
-		require.NoError(t, err)
-		rows[i] = r
-		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
-	}
-
-	m, err = ed.Map(context.Background())
-	assert.NoError(t, err)
-
-	return m, rows
-}
-
-func createTestSchema(t *testing.T) schema.Schema {
-	colColl := schema.NewColCollection(
-		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
-		schema.NewColumn("age", ageTag, types.UintKind, false),
-		schema.NewColumn("empty", emptyTag, types.IntKind, false),
-	)
-	sch, err := schema.SchemaFromCols(colColl)
-	require.NoError(t, err)
-	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
-	require.NoError(t, err)
-	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
-	require.NoError(t, err)
-	return sch
-}
-
-func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map) (*doltdb.Table, error) {
+func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map) (*Table, error) {
 	empty, _ := types.NewMap(ctx, vrw)
-	return doltdb.NewTable(ctx, vrw, schemaVal, rowData, empty, nil)
+	return NewTable(ctx, vrw, schemaVal, rowData, empty, nil)
 }
 
 func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, indexAge schema.Index) (indexNameExpectedRows []row.Row, indexAgeExpectedRows []row.Row) {

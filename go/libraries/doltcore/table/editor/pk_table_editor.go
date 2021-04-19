@@ -83,7 +83,7 @@ type pkTableEditor struct {
 	tea      *tableEditAccumulator
 	aq       *async.ActionExecutor
 	nbf      *types.NomsBinFormat
-	indexEds []*IndexEditor
+	indexEds []*doltdb.IndexEditor
 
 	hasAutoInc bool
 	autoIncCol schema.Column
@@ -122,7 +122,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		tSch:       tableSch,
 		name:       name,
 		nbf:        t.Format(),
-		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
+		indexEds:   make([]*doltdb.IndexEditor, tableSch.Indexes().Count()),
 		writeMutex: &sync.Mutex{},
 		flushMutex: &sync.RWMutex{},
 	}
@@ -141,7 +141,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		if err != nil {
 			return nil, err
 		}
-		te.indexEds[i] = NewIndexEditor(index, indexData)
+		te.indexEds[i] = doltdb.NewIndexEditor(index, indexData)
 	}
 
 	err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -553,7 +553,7 @@ func (te *pkTableEditor) Format() *types.NomsBinFormat {
 func (te *pkTableEditor) Close() error {
 	te.tea.ed.Close()
 	for _, indexEd := range te.indexEds {
-		indexEd.ed.Close()
+		indexEd.Ed.Close()
 	}
 	return nil
 }

@@ -353,17 +353,17 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 
 	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows, emptyMap, nil)
 	require.NoError(t, err)
-	tbl, err = editor.RebuildAllIndexes(context.Background(), tbl)
+	tbl, err = doltdb.RebuildAllIndexes(context.Background(), tbl)
 	require.NoError(t, err)
 
 	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows, emptyMap, nil)
 	require.NoError(t, err)
-	updatedTbl, err = editor.RebuildAllIndexes(context.Background(), updatedTbl)
+	updatedTbl, err = doltdb.RebuildAllIndexes(context.Background(), updatedTbl)
 	require.NoError(t, err)
 
 	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows, emptyMap, nil)
 	require.NoError(t, err)
-	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl)
+	mergeTbl, err = doltdb.RebuildAllIndexes(context.Background(), mergeTbl)
 	require.NoError(t, err)
 
 	mRoot, err := masterHead.GetRootValue()
@@ -441,7 +441,7 @@ func TestMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	expected, err := doltdb.NewTable(context.Background(), vrw, targVal, expectedRows, emptyMap, nil)
 	assert.NoError(t, err)
-	expected, err = editor.RebuildAllIndexes(context.Background(), expected)
+	expected, err = doltdb.RebuildAllIndexes(context.Background(), expected)
 	assert.NoError(t, err)
 	expected, err = expected.SetConflicts(context.Background(), doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)
 	assert.NoError(t, err)
