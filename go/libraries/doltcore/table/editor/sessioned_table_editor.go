@@ -160,10 +160,13 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		if hasNulls {
 			continue
 		}
-		idxSch, ok := ste.indexSchemaCache[foreignKey.TableIndex]
+
+		tblName := referencingSte.tableEditor.Name()
+		cacheKey := tblName + "->" + foreignKey.TableIndex
+		idxSch, ok := ste.indexSchemaCache[cacheKey]
 		if !ok {
 			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
-			ste.indexSchemaCache[foreignKey.TableIndex] = idxSch
+			ste.indexSchemaCache[cacheKey] = idxSch
 		}
 		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
@@ -243,10 +246,12 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 		if hasNulls {
 			continue
 		}
-		idxSch, ok := ste.indexSchemaCache[foreignKey.TableIndex]
+		tblName := referencingSte.tableEditor.Name()
+		cacheKey := tblName + "->" + foreignKey.TableIndex
+		idxSch, ok := ste.indexSchemaCache[cacheKey]
 		if !ok {
 			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
-			ste.indexSchemaCache[foreignKey.TableIndex] = idxSch
+			ste.indexSchemaCache[cacheKey] = idxSch
 		}
 		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
@@ -443,10 +448,12 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVa
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.ReferencedTableName)
 		}
 
-		idxSch, ok := ste.indexSchemaCache[foreignKey.ReferencedTableIndex]
+		tblName := referencingSte.tableEditor.Name()
+		cacheKey := tblName + "->" + foreignKey.ReferencedTableIndex
+		idxSch, ok := ste.indexSchemaCache[cacheKey]
 		if !ok {
 			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.ReferencedTableIndex).Schema()
-			ste.indexSchemaCache[foreignKey.ReferencedTableIndex] = idxSch
+			ste.indexSchemaCache[cacheKey] = idxSch
 		}
 
 		exists, err := ContainsIndexedKey(ctx, referencingSte.tableEditor, indexKey, foreignKey.ReferencedTableIndex, idxSch)
