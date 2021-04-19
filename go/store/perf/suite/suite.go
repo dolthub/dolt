@@ -108,6 +108,7 @@ import (
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	testifySuite "github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -281,6 +282,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 			"testdataRevision": types.String(suite.getGitHead(suite.Testdata)),
 			"reps":             l,
 		})
+		require.NoError(t, err)
 
 		ds, err := db.GetDataset(context.Background(), *perfPrefixFlag+datasetID)
 		assert.NoError(err)
