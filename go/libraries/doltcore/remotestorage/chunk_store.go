@@ -27,13 +27,16 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/sync/errgroup"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -91,14 +94,16 @@ type HTTPFetcher interface {
 }
 
 type DoltChunkStore struct {
-	org         string
-	repoName    string
-	host        string
-	csClient    remotesapi.ChunkStoreServiceClient
-	cache       chunkCache
-	metadata    *remotesapi.GetRepoMetadataResponse
-	nbf         *types.NomsBinFormat
-	httpFetcher HTTPFetcher
+	org                 string
+	repoName            string
+	host                string
+	csClient            remotesapi.ChunkStoreServiceClient
+	cache               ChunkCache
+	metadata            *remotesapi.GetRepoMetadataResponse
+	nbf                 *types.NomsBinFormat
+	httpFetcher         HTTPFetcher
+	downloadConcurrency int
+	stats               cacheStats
 }
 
 func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
@@ -131,15 +136,23 @@ func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoN
 		return nil, err
 	}
 
-	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, nbf, globalHttpFetcher}, nil
+	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, nbf, globalHttpFetcher, defaultDownloadConcurrency, cacheStats{}}, nil
 }
 
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, fetcher}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, fetcher, dcs.downloadConcurrency, dcs.stats}
 }
 
 func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, noopChunkCache, dcs.metadata, dcs.nbf, dcs.httpFetcher}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, noopChunkCache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.downloadConcurrency, dcs.stats}
+}
+
+func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, cache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.downloadConcurrency, dcs.stats}
+}
+
+func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency int) *DoltChunkStore {
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, dcs.httpFetcher, concurrency, dcs.stats}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -147,6 +160,18 @@ func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
 		Org:      dcs.org,
 		RepoName: dcs.repoName,
 	}
+}
+
+type cacheStats struct {
+	Hits uint32
+}
+
+func (s cacheStats) CacheHits() uint32 {
+	return s.Hits
+}
+
+type CacheStats interface {
+	CacheHits() uint32
 }
 
 // Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
@@ -166,6 +191,7 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 
 func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
 	ae := atomicerr.New()
+	decompressedSize := uint64(0)
 	err := dcs.GetManyCompressed(ctx, hashes, func(cc nbs.CompressedChunk) {
 		if ae.IsSet() {
 			return
@@ -174,8 +200,12 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		if ae.SetIfErrAndCheck(err) {
 			return
 		}
+		atomic.AddUint64(&decompressedSize, uint64(len(c.Data())))
 		found(&c)
 	})
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span.LogKV("decompressed_bytes", decompressedSize)
+	}
 	if err != nil {
 		return err
 	}
@@ -188,7 +218,13 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
 func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(nbs.CompressedChunk)) error {
+	span, ctx := tracing.StartSpan(ctx, "remotestorage.GetManyCompressed")
+	defer span.Finish()
+
 	hashToChunk := dcs.cache.Get(hashes)
+
+	span.LogKV("num_hashes", len(hashes), "cache_hits", len(hashToChunk))
+	atomic.AddUint32(&dcs.stats.Hits, uint32(len(hashToChunk)))
 
 	notCached := make([]hash.Hash, 0, len(hashes))
 	for h := range hashes {
@@ -254,7 +290,7 @@ func (gr *GetRange) SplitAtGaps(maxGapBytes uint64) []*GetRange {
 	for i < len(gr.Ranges) {
 		j := i + 1
 		for j < len(gr.Ranges) {
-			if gr.GapBetween(i, j) > maxGapBytes {
+			if gr.GapBetween(j-1, j) > maxGapBytes {
 				break
 			}
 			j++
@@ -271,6 +307,15 @@ func (gr *GetRange) NumChunks() int {
 
 func (gr *GetRange) RangeLen() uint64 {
 	return gr.ChunkEndOffset(gr.NumChunks()-1) - gr.ChunkStartOffset(0)
+}
+
+func (gr *GetRange) NumBytesInRanges() uint64 {
+	res := uint64(0)
+	for i := 0; i < len(gr.Ranges); i++ {
+		start, end := gr.ChunkByteRange(i)
+		res += start - end
+	}
+	return res
 }
 
 func (gr *GetRange) ChunkByteRange(i int) (uint64, uint64) {
@@ -362,6 +407,10 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 		return false
 	})
 
+	span, ctx := tracing.StartSpan(ctx, "remotestorage.getDLLocs")
+	span.LogKV("num_batches", len(work), "num_hashes", len(hashes))
+	defer span.Finish()
+
 	// execute the work and close the channel after as no more results will come in
 	eg.Go(func() error {
 		defer close(dlLocChan)
@@ -388,17 +437,21 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 	// channel to receive chunks on
 	chunkChan := make(chan nbs.CompressedChunk, 128)
 
+	toSend := make(map[hash.Hash]struct{}, len(notCached))
+	for _, h := range notCached {
+		toSend[h] = struct{}{}
+	}
+
 	// start a go routine to receive the downloaded chunks on
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for chunk := range chunkChan {
-			if !dcs.cache.PutChunk(chunk) {
-				continue
-			}
+			dcs.cache.PutChunk(chunk)
 
 			h := chunk.Hash()
-			if _, ok := hashes[h]; ok {
+
+			if _, send := toSend[h]; send {
 				found(chunk)
 			}
 		}
@@ -605,14 +658,14 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 // ChunkStore instance. The type is implementation-dependent, and impls
 // may return nil
 func (dcs *DoltChunkStore) Stats() interface{} {
-	return nil
+	return cacheStats{atomic.LoadUint32(&dcs.stats.Hits)}
 }
 
 // StatsSummary may return a string containing summarized statistics for
 // this ChunkStore. It must return "Unsupported" if this operation is not
 // supported.
 func (dcs *DoltChunkStore) StatsSummary() string {
-	return "Unsupported"
+	return fmt.Sprintf("CacheHits: %v", dcs.Stats().(CacheStats).CacheHits())
 }
 
 // Close tears down any resources in use by the implementation. After
@@ -703,6 +756,10 @@ type Sizer interface {
 }
 
 func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostTableFile, rd io.Reader, contentHash []byte) error {
+	return HttpPostUpload(ctx, dcs.httpFetcher, post, rd, contentHash)
+}
+
+func HttpPostUpload(ctx context.Context, httpFetcher HTTPFetcher, post *remotesapi.HttpPostTableFile, rd io.Reader, contentHash []byte) error {
 	req, err := http.NewRequest(http.MethodPut, post.Url, rd)
 	if err != nil {
 		return err
@@ -717,10 +774,15 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 		req.Header.Set("Content-MD5", md5s)
 	}
 
+	fetcher := globalHttpFetcher
+	if httpFetcher != nil {
+		fetcher = httpFetcher
+	}
+
 	var resp *http.Response
 	op := func() error {
 		var err error
-		resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
+		resp, err = fetcher.Do(req.WithContext(ctx))
 
 		if err == nil {
 			defer func() {
@@ -753,14 +815,32 @@ func aggregateDownloads(aggDistance uint64, resourceGets map[string]*GetRange) [
 }
 
 const (
-	chunkAggDistance       = 8 * 1024
-	maxDownloadConcurrency = 16
+	chunkAggDistance           = 8 * 1024
+	defaultDownloadConcurrency = 16
 )
+
+func logDownloadStats(span opentracing.Span, originalGets map[string]*GetRange, computedGets []*GetRange) {
+	chunkCount := 0
+	originalBytes := uint64(0)
+	for _, r := range originalGets {
+		chunkCount += r.NumChunks()
+		originalBytes += r.NumBytesInRanges()
+	}
+	downloadBytes := uint64(0)
+	for _, r := range computedGets {
+		downloadBytes += r.RangeLen()
+	}
+	span.LogKV("num_files", len(originalGets), "num_chunks", chunkCount, "num_batches", len(computedGets), "original_bytes", originalBytes, "download_bytes", downloadBytes)
+}
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
 // to chunkChan
 func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[string]*GetRange, chunkChan chan nbs.CompressedChunk) error {
+	span, ctx := tracing.StartSpan(ctx, "remotestorage.downloadChunks")
+	defer span.Finish()
+
 	gets := aggregateDownloads(chunkAggDistance, resourceGets)
+	logDownloadStats(span, resourceGets, gets)
 
 	// loop over all the gets that need to be downloaded and create a work function for each
 	work := make([]func() error, len(gets))
@@ -769,7 +849,7 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[
 	}
 
 	// execute the work
-	err := concurrentExec(work, maxDownloadConcurrency)
+	err := concurrentExec(work, dcs.downloadConcurrency)
 
 	return err
 }

@@ -141,7 +141,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 	verbose := apr.Contains(verboseFlag)
 	printRemote := apr.Contains(remoteParam)
-	printAll := apr.Contains(allParam)
+	printAll := apr.Contains(allFlag)
 
 	branches, err := dEnv.DoltDB.GetRefs(ctx)
 
@@ -320,30 +320,12 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		startPt = apr.Arg(1)
 	}
 
-	verr := createBranchWithStartPt(ctx, dEnv, newBranch, startPt, apr.Contains(forceFlag))
-	return HandleVErrAndExitCode(verr, usage)
-}
-
-func createBranchWithStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string, force bool) errhand.VerboseError {
-	err := actions.CreateBranch(ctx, dEnv, newBranch, startPt, force)
-
+	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(forceFlag))
 	if err != nil {
-		if err == actions.ErrAlreadyExists {
-			return errhand.BuildDError("fatal: A branch named '%s' already exists.", newBranch).Build()
-		} else if err == doltdb.ErrInvBranchName {
-			bdr := errhand.BuildDError("fatal: '%s' is an invalid branch name.", newBranch)
-			return bdr.Build()
-		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
-			bdr := errhand.BuildDError("fatal: '%s' is not a commit and a branch '%s' cannot be created from it", startPt, newBranch)
-			return bdr.Build()
-		} else {
-			bdr := errhand.BuildDError("fatal: Unexpected error creating branch '%s'", newBranch)
-			bdr.AddCause(err)
-			return bdr.Build()
-		}
+		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
 	}
 
-	return nil
+	return 0
 }
 
 func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) int {

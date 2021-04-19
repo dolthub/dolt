@@ -24,6 +24,11 @@ package types
 import (
 	"encoding/binary"
 	"math"
+	"time"
+	"unsafe"
+
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -97,6 +102,12 @@ type binaryNomsReader struct {
 }
 
 func (b *binaryNomsReader) readBytes(count uint32) []byte {
+	v := b.buff[b.offset : b.offset+count]
+	b.offset += count
+	return v
+}
+
+func (b *binaryNomsReader) readCopyOfBytes(count uint32) []byte {
 	v := make([]byte, count)
 	copy(v, b.buff[b.offset:b.offset+count])
 	b.offset += count
@@ -131,11 +142,11 @@ func (b *binaryNomsReader) readUint16() uint16 {
 	return v
 }
 
-func (b *binaryNomsReader) peekKind() NomsKind {
+func (b *binaryNomsReader) PeekKind() NomsKind {
 	return NomsKind(b.peekUint8())
 }
 
-func (b *binaryNomsReader) readKind() NomsKind {
+func (b *binaryNomsReader) ReadKind() NomsKind {
 	return NomsKind(b.readUint8())
 }
 
@@ -144,22 +155,39 @@ func (b *binaryNomsReader) skipKind() {
 }
 
 func (b *binaryNomsReader) readCount() uint64 {
-	return b.readUint()
+	return b.ReadUint()
 }
 
 func (b *binaryNomsReader) skipCount() {
 	b.skipUint()
 }
 
-func (b *binaryNomsReader) readFloat(nbf *NomsBinFormat) float64 {
+func (b *binaryNomsReader) ReadFloat(nbf *NomsBinFormat) float64 {
 	if isFormat_7_18(nbf) {
-		i := b.readInt()
-		exp := b.readInt()
+		i := b.ReadInt()
+		exp := b.ReadInt()
 		return fracExpToFloat(i, int(exp))
 	} else {
 		floatbits := binary.BigEndian.Uint64(b.readBytes(8))
 		return math.Float64frombits(floatbits)
 	}
+}
+
+func (b *binaryNomsReader) ReadDecimal() (decimal.Decimal, error) {
+	size := uint32(b.readUint16())
+	db := b.readBytes(size)
+
+	var dec decimal.Decimal
+	err := dec.GobDecode(db)
+	return dec, err
+}
+
+func (b *binaryNomsReader) ReadTimestamp() (time.Time, error) {
+	data := b.readBytes(timestampNumBytes)
+
+	var t time.Time
+	err := t.UnmarshalBinary(data)
+	return t, err
 }
 
 func (b *binaryNomsReader) skipFloat(nbf *NomsBinFormat) {
@@ -172,28 +200,110 @@ func (b *binaryNomsReader) skipFloat(nbf *NomsBinFormat) {
 }
 
 func (b *binaryNomsReader) skipInt() {
-	_, count := binary.Varint(b.buff[b.offset:])
-	b.offset += uint32(count)
+	maxOffset := b.offset + 10
+	for ; b.offset < maxOffset; b.offset++ {
+		if b.buff[b.offset]&0x80 == 0 {
+			b.offset++
+			return
+		}
+	}
 }
 
-func (b *binaryNomsReader) readInt() int64 {
-	v, count := binary.Varint(b.buff[b.offset:])
+func (b *binaryNomsReader) ReadInt() int64 {
+	v, count := unrolledDecodeVarint(b.buff[b.offset:])
 	b.offset += uint32(count)
 	return v
 }
 
-func (b *binaryNomsReader) readUint() uint64 {
-	v, count := binary.Uvarint(b.buff[b.offset:])
+func (b *binaryNomsReader) ReadUint() uint64 {
+	v, count := unrolledDecodeUVarint(b.buff[b.offset:])
 	b.offset += uint32(count)
 	return v
+}
+
+func unrolledDecodeUVarint(buf []byte) (uint64, int) {
+	b := uint64(buf[0])
+	if b < 0x80 {
+		return b, 1
+	}
+
+	x := b & 0x7f
+	b = uint64(buf[1])
+	if b < 0x80 {
+		return x | (b << 7), 2
+	}
+
+	x |= (b & 0x7f) << 7
+	b = uint64(buf[2])
+	if b < 0x80 {
+		return x | (b << 14), 3
+	}
+
+	x |= (b & 0x7f) << 14
+	b = uint64(buf[3])
+	if b < 0x80 {
+		return x | (b << 21), 4
+	}
+
+	x |= (b & 0x7f) << 21
+	b = uint64(buf[4])
+	if b < 0x80 {
+		return x | (b << 28), 5
+	}
+
+	x |= (b & 0x7f) << 28
+	b = uint64(buf[5])
+	if b < 0x80 {
+		return x | (b << 35), 6
+	}
+
+	x |= (b & 0x7f) << 35
+	b = uint64(buf[6])
+	if b < 0x80 {
+		return x | (b << 42), 7
+	}
+
+	x |= (b & 0x7f) << 42
+	b = uint64(buf[7])
+	if b < 0x80 {
+		return x | (b << 49), 8
+	}
+
+	x |= (b & 0x7f) << 49
+	b = uint64(buf[8])
+	if b < 0x80 {
+		return x | (b << 56), 9
+	}
+
+	x |= (b & 0x7f) << 56
+	b = uint64(buf[9])
+	if b == 1 {
+		return x | (1 << 63), 10
+	}
+
+	return 0, -10
+}
+
+func unrolledDecodeVarint(buf []byte) (int64, int) {
+	ux, n := unrolledDecodeUVarint(buf) // ok to continue in presence of error
+	x := int64(ux >> 1)
+	if ux&1 != 0 {
+		x = ^x
+	}
+	return x, n
 }
 
 func (b *binaryNomsReader) skipUint() {
-	_, count := binary.Uvarint(b.buff[b.offset:])
-	b.offset += uint32(count)
+	maxOffset := b.offset + 10
+	for ; b.offset < maxOffset; b.offset++ {
+		if b.buff[b.offset]&0x80 == 0 {
+			b.offset++
+			return
+		}
+	}
 }
 
-func (b *binaryNomsReader) readBool() bool {
+func (b *binaryNomsReader) ReadBool() bool {
 	return b.readUint8() == 1
 }
 
@@ -201,12 +311,24 @@ func (b *binaryNomsReader) skipBool() {
 	b.skipUint8()
 }
 
-func (b *binaryNomsReader) readString() string {
+func (b *binaryNomsReader) ReadString() string {
 	size := uint32(b.readCount())
-
-	v := string(b.buff[b.offset : b.offset+size])
+	strBytes := b.buff[b.offset : b.offset+size]
 	b.offset += size
-	return v
+	return *(*string)(unsafe.Pointer(&strBytes))
+}
+
+func (b *binaryNomsReader) ReadInlineBlob() []byte {
+	size := uint32(b.readUint16())
+	bytes := b.buff[b.offset : b.offset+size]
+	b.offset += size
+	return bytes
+}
+
+func (b *binaryNomsReader) ReadUUID() uuid.UUID {
+	id := uuid.UUID{}
+	copy(id[:uuidNumBytes], b.readBytes(uuidNumBytes))
+	return id
 }
 
 func (b *binaryNomsReader) skipString() {
@@ -234,6 +356,17 @@ type binaryNomsWriter struct {
 	offset uint32
 }
 
+func newBinaryNomsWriterWithSizeHint(sizeHint uint64) binaryNomsWriter {
+	size := uint32(initialBufferSize)
+	if sizeHint >= math.MaxUint32 {
+		size = math.MaxUint32
+	} else if sizeHint > uint64(size) {
+		size = uint32(sizeHint)
+	}
+
+	return binaryNomsWriter{make([]byte, size), 0}
+}
+
 func newBinaryNomsWriter() binaryNomsWriter {
 	return binaryNomsWriter{make([]byte, initialBufferSize), 0}
 }
@@ -246,19 +379,43 @@ func (b *binaryNomsWriter) reset() {
 	b.offset = 0
 }
 
+const (
+	GigsHalf = 1 << 29
+	Gigs2    = 1 << 31
+)
+
 func (b *binaryNomsWriter) ensureCapacity(n uint32) {
-	length := uint32(len(b.buff))
-	if b.offset+n <= length {
+	length := uint64(len(b.buff))
+	minLength := uint64(b.offset) + uint64(n)
+	if length >= minLength {
 		return
 	}
 
 	old := b.buff
 
-	for b.offset+n > length {
-		length = length * 2
+	if minLength > math.MaxUint32 {
+		panic("overflow")
 	}
-	b.buff = make([]byte, length)
 
+	for minLength > length {
+		length = length * 2
+
+		if length >= Gigs2 {
+			length = Gigs2
+			break
+		}
+	}
+
+	for minLength > length {
+		length += GigsHalf
+
+		if length >= math.MaxUint32 {
+			length = math.MaxUint32
+			break
+		}
+	}
+
+	b.buff = make([]byte, length)
 	copy(b.buff, old)
 }
 

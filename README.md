@@ -1,6 +1,6 @@
 # Dolt
 
-<img align="left" height="300" src="./dolt_hi.svg"/>
+<img align="left" height="300" src="./docs/dolt_hi.svg"/>
 
 ### Dolt is Git for Data!
 
@@ -20,7 +20,23 @@ Dolt databases. We host public data for free!
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
 ask questions!
 
+### What's it for?
+
+Lots of things! Dolt is a generally useful tool with countless 
+applications. But if you want some ideas, [here's how people are using 
+it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
+
+### How do I use it?
+
+Check out our [quick-start guide](docs/quickstart.md) to skip the docs
+and get started as fast as humanly possible! Or keep reading for a
+high level overview of how to use the command line tool.
+
+Having problems? Read the [FAQ](docs/faq.md) to find answers.
+
 # Dolt CLI
+
+The `dolt` CLI has the same commands as `git`, with some extras.
 
 ```
 $ dolt
@@ -85,7 +101,7 @@ Download the latest Microsoft Installer (`.msi` file) in
 [releases](https://github.com/dolthub/dolt/releases) and run
 it. Package manager releases coming soon!
 
-For information on running on Windows, see [here](windows.md).
+For information on running on Windows, see [here](./docs/windows.md).
 
 ## From Source
 
@@ -235,9 +251,9 @@ Date:   Wed Nov 11 13:42:27 -0800 2020
 commit 9hgk7jb7hlkvvkbornpldcopqh2gn6jo
 Author: Zach Musgrave <zach@dolthub.com>
 Date:   Wed Nov 11 13:40:53 -0800 2020
-        
+
     initial data
-                
+
 commit 8o8ldh58pjovn8uvqvdq2olf7dm63dj9
 Author: Zach Musgrave <zach@dolthub.com>
 Date:   Wed Nov 11 13:36:24 -0800 2020
@@ -313,7 +329,7 @@ And then push to it.
 $ dolt push origin master
 ```
 
-## Other remotes 
+## Other remotes
 
 `dolt` also supports directory, aws, and gcs based remotes:
 
@@ -340,7 +356,8 @@ dolt remote add <remote> gs://gcs-bucket/database
 [DoltHub](https://dolthub.com) has lots of interesting datasets to
 explore and clone. Here are some of our favorites.
 
-- Coronavirus: https://www.dolthub.com/repositories/dolthub/corona-virus
+- Hospital Price Transparency: https://www.dolthub.com/repositories/dolthub/hospital-price-transparency
+- US Presidential Election Precinct Results: https://www.dolthub.com/repositories/dolthub/us-president-precinct-results
 - WordNet: https://www.dolthub.com/repositories/dolthub/word-net
 - ImageNet: https://www.dolthub.com/repositories/dolthub/image-net
 - Google Open Images: https://www.dolthub.com/repositories/dolthub/open-images
@@ -352,17 +369,17 @@ explore and clone. Here are some of our favorites.
 
 There's a lot more to Dolt than can fit in a README file! For full
 documentation, check out the [docs on
-DoltHub](https://www.dolthub.com/docs/). Some of the topics we didn't
+DoltHub](https://docs.dolthub.com/). Some of the topics we didn't
 cover here:
 
 * [Querying past revisions of your
-  tables](https://www.dolthub.com/docs/reference/sql/#querying-non-head-revisions-of-a-database)
+  tables](https://docs.dolthub.com/interfaces/sql#querying-non-head-revisions-of-a-database)
 * [Starting a SQL
-  server](https://www.dolthub.com/docs/tutorials/using-sql/#getting-started_mysql-server)
+  server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
 * [Selecting the diff between two
-  commits](https://www.dolthub.com/docs/reference/sql/#dolt-system-tables)
+  commits](https://docs.dolthub.com/interfaces/sql/dolt-system-tables#dolt_diff_usdtablename)
 * [Documentation for all CLI
-  commands](https://www.dolthub.com/docs/reference/cli/)
+  commands](https://docs.dolthub.com/reference/cli)
 
 # Credits and License
 

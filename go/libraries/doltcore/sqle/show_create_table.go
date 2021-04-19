@@ -20,6 +20,8 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
@@ -29,7 +31,8 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Conte
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(dsess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()))
+		sql.WithViewRegistry(sql.NewViewRegistry()),
+		sql.WithTracer(tracing.Tracer(ctx)))
 	engine := sqle.NewDefault()
 	engine.AddDatabase(sqlDb)
 	dsess.SetCurrentDatabase(sqlDb.Name())
@@ -41,7 +44,7 @@ func GetCreateTableStmt(ctx *sql.Context, engine *sqle.Engine, tableName string)
 	if err != nil {
 		return "", err
 	}
-	rows, err := sql.RowIterToRows(rowIter)
+	rows, err := sql.RowIterToRows(ctx, rowIter)
 	if err != nil {
 		return "", err
 	}

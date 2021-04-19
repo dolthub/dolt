@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -157,7 +158,7 @@ func TestRepoDirNoLocal(t *testing.T) {
 
 func TestInitRepo(t *testing.T) {
 	dEnv := createTestEnv(false, false)
-	err := dEnv.InitRepo(context.Background(), types.Format_7_18, "aoeu aoeu", "aoeu@aoeu.org")
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
 
 	if err != nil {
 		t.Error("Failed to init repo.", err.Error())
@@ -175,8 +176,8 @@ func TestInitRepo(t *testing.T) {
 		t.Error("Failed to get staged root value.")
 	}
 
-	for _, doc := range *AllValidDocDetails {
-		docPath := getDocFile(doc.File)
+	for _, doc := range doltdocs.SupportedDocs {
+		docPath := doltdocs.GetDocFilePath(doc.File)
 		if len(docPath) > 0 && !strings.Contains(doc.File, docPath) {
 			t.Error("Doc file path should exist: ", doc.File)
 		}

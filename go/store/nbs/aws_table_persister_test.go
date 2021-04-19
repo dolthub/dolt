@@ -61,7 +61,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, indexCache: ic, ns: ns, parseIndex: parseIndexF}
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-				assert.NoError(err)
+				require.NoError(t, err)
 				assert.NotNil(ic.get(mustAddr(src.hash())))
 
 				if assert.True(mustUint32(src.count()) > 0) {
@@ -80,18 +80,18 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				// Persist and wait until tc.store() has completed
 				tc.storeWG.Add(1)
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				tc.storeWG.Wait()
 
 				// Now, open the table that should have been cached by the above Persist() and read out all the chunks. All the reads should be serviced from tc.
 				rdr, err := s3p.Open(context.Background(), mustAddr(src.hash()), mustUint32(src.count()), &Stats{})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				baseline := s3svc.getCount
 				ch := make(chan extractRecord)
 				go func() {
 					defer close(ch)
 					err := rdr.extract(context.Background(), ch)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}()
 				for range ch {
 				}
@@ -106,7 +106,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, parseIndex: parseIndexF}
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-				assert.NoError(err)
+				require.NoError(t, err)
 				if assert.True(mustUint32(src.count()) > 0) {
 					if r, err := s3svc.readerForTableWithNamespace(ns, mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 						assertChunksInReader(testChunks, r, assert)
@@ -130,7 +130,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, parseIndex: parseIndexF}
 
 				src, err := s3p.Persist(context.Background(), mt, existingTable, &Stats{})
-				assert.NoError(err)
+				require.NoError(t, err)
 				assert.True(mustUint32(src.count()) == 0)
 
 				_, present := s3svc.data[mustAddr(src.hash()).String()]
@@ -168,7 +168,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", parseIndex: parseIndexF}
 
 			src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-			assert.NoError(err)
+			require.NoError(t, err)
 			if assert.True(mustUint32(src.count()) > 0) {
 				if r, err := ddb.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(testChunks, r, assert)
@@ -188,11 +188,11 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", parseIndex: parseIndexF}
 
 			tableData, name, err := buildTable(testChunks)
-			assert.NoError(err)
+			require.NoError(t, err)
 			ddb.putData(fmtTableName(name), tableData)
 
 			src, err := s3p.Open(context.Background(), name, uint32(len(testChunks)), &Stats{})
-			assert.NoError(err)
+			require.NoError(t, err)
 			if assert.True(mustUint32(src.count()) > 0) {
 				if r, err := ddb.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(testChunks, r, assert)
@@ -213,7 +213,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", parseIndex: parseIndexF}
 
 			src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-			assert.NoError(err)
+			require.NoError(t, err)
 			if assert.True(mustUint32(src.count()) > 0) {
 				if r, err := ddb.readerForTable(mustAddr(src.hash())); assert.Nil(r) && assert.NoError(err) {
 					if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
@@ -233,7 +233,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: "", parseIndex: parseIndexF}
 
 			src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-			assert.NoError(err)
+			require.NoError(t, err)
 			if assert.True(mustUint32(src.count()) > 0) {
 				if r, err := ddb.readerForTable(mustAddr(src.hash())); assert.Nil(r) && assert.NoError(err) {
 					if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
@@ -301,9 +301,9 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 
 	sources := chunkSources{justRight, tooBig, tooSmall}
 	plan, err := planConjoin(sources, &Stats{})
-	assert.NoError(err)
+	require.NoError(t, err)
 	copies, manuals, _, err := dividePlan(context.Background(), plan, minPartSize, maxPartSize)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	perTableDataSize := map[string]int64{}
 	for _, c := range copies {
@@ -317,15 +317,15 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 	assert.Contains(perTableDataSize, mustAddr(justRight.hash()).String())
 	assert.Contains(perTableDataSize, mustAddr(tooBig.hash()).String())
 	ti, err := justRight.index()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.EqualValues(calcChunkDataLen(ti), perTableDataSize[mustAddr(justRight.hash()).String()])
 	ti, err = tooBig.index()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.EqualValues(calcChunkDataLen(ti), perTableDataSize[mustAddr(tooBig.hash()).String()])
 
 	assert.Len(manuals, 1)
 	ti, err = tooSmall.index()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.EqualValues(calcChunkDataLen(ti), manuals[0].dstEnd-manuals[0].dstStart)
 }
 
@@ -381,7 +381,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		src := bytesToChunkSource(t, small)
 		smallChunks = append(smallChunks, small)
 		ti, err := src.index()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		smallChunkTotal += calcChunkDataLen(ti)
 	}
 
@@ -391,7 +391,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 				mt := newMemTable(uint64(2 * targetPartSize))
 				mt.addChunk(computeAddr(chunks[i]), chunks[i])
 				cs, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				sources = append(sources, cs)
 			}
 			return
@@ -405,7 +405,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			chunks := smallChunks[:len(smallChunks)-1]
 			sources := makeSources(s3p, chunks)
 			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.NotNil(ic.get(mustAddr(src.hash())))
 
 			if assert.True(mustUint32(src.count()) > 0) {
@@ -422,7 +422,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 			sources := makeSources(s3p, smallChunks)
 			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.NotNil(ic.get(mustAddr(src.hash())))
 
 			if assert.True(mustUint32(src.count()) > 0) {
@@ -456,11 +456,10 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 			var err error
 			sources[i], err = s3p.Persist(context.Background(), mt, nil, &Stats{})
-
-			assert.NoError(err)
+			require.NoError(t, err)
 		}
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.NotNil(ic.get(mustAddr(src.hash())))
 
 		if assert.True(mustUint32(src.count()) > 0) {
@@ -491,13 +490,13 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			mt.addChunk(computeAddr(medChunks[i]), medChunks[i])
 		}
 		cs1, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		cs2, err := s3p.Persist(context.Background(), mtb, nil, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		sources := chunkSources{cs1, cs2}
 
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.NotNil(ic.get(mustAddr(src.hash())))
 
 		if assert.True(mustUint32(src.count()) > 0) {
@@ -520,7 +519,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			mt.addChunk(computeAddr(smallChunks[i]), smallChunks[i])
 			var err error
 			sources[i], err = s3p.Persist(context.Background(), mt, nil, &Stats{})
-			assert.NoError(err)
+			require.NoError(t, err)
 		}
 
 		// Now, add a table with big chunks that will require more than one upload copy part.
@@ -531,7 +530,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 		var err error
 		cs, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		sources = append(sources, cs)
 
 		// Last, some tables that should be directly upload-copyable
@@ -544,11 +543,11 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		}
 
 		cs, err = s3p.Persist(context.Background(), mt, nil, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		sources = append(sources, cs)
 
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.NotNil(ic.get(mustAddr(src.hash())))
 
 		if assert.True(mustUint32(src.count()) > 0) {
@@ -573,7 +572,7 @@ func bytesToChunkSource(t *testing.T, bs ...[]byte) chunkSource {
 		tw.addChunk(computeAddr(b), b)
 	}
 	tableSize, name, err := tw.finish()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	data := buff[:tableSize]
 	ti, err := parseTableIndex(data)
 	require.NoError(t, err)

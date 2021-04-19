@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSimplifyStructFields(t *testing.T) {
@@ -27,7 +28,7 @@ func TestSimplifyStructFields(t *testing.T) {
 	test := func(in []structTypeFields, exp structTypeFields) {
 		// simplifier := newSimplifier(false)
 		act, err := simplifyStructFields(in, typeset{}, false)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(act, exp)
 	}
 
@@ -78,7 +79,7 @@ func TestSimplifyType(t *testing.T) {
 	run := func(intersectStructs bool) {
 		test := func(in, exp *Type) {
 			act, err := simplifyType(in, intersectStructs)
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.True(exp.Equals(act), "Expected: %s\nActual: %s", mustString(exp.Describe(context.Background())), mustString(act.Describe(context.Background())))
 		}
 		testSame := func(t *Type) {

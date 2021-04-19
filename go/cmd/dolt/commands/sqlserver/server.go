@@ -35,6 +35,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -98,8 +99,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 	if len(dbNamesAndPaths) == 0 {
 		var err error
-		mrEnv = env.DoltEnvAsMultiEnv(dEnv)
-
+		mrEnv, err = env.DoltEnvAsMultiEnv(dEnv)
 		if err != nil {
 			return err, nil
 		}
@@ -176,7 +176,8 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 			ctx,
 			sql.WithIndexRegistry(ir),
 			sql.WithViewRegistry(vr),
-			sql.WithSession(doltSess))
+			sql.WithSession(doltSess),
+			sql.WithTracer(tracing.Tracer(ctx)))
 
 		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		for _, db := range dbs {

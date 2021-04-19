@@ -208,7 +208,7 @@ func (itr *SliceOfPartitionsItr) Next() (sql.Partition, error) {
 	return next, nil
 }
 
-func (itr *SliceOfPartitionsItr) Close() error {
+func (itr *SliceOfPartitionsItr) Close(*sql.Context) error {
 	return nil
 }
 

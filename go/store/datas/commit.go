@@ -159,10 +159,13 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 		}
 		if ok {
 			p := ps.(types.List)
-			err = p.IterAll(ctx, func(v types.Value, _ uint64) error {
+			err = p.Iter(ctx, func(v types.Value, _ uint64) (stop bool, err error) {
 				q.PushBack(v.(types.Ref))
-				return nil
+				return
 			})
+			if err != nil {
+				return err
+			}
 		} else {
 			ps, ok, err := c.MaybeGet(ParentsField)
 			if err != nil {
@@ -170,10 +173,13 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 			}
 			if ok {
 				p := ps.(types.Set)
-				err = p.IterAll(ctx, func(v types.Value) error {
+				err = p.Iter(ctx, func(v types.Value) (stop bool, err error) {
 					q.PushBack(v.(types.Ref))
-					return nil
+					return
 				})
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

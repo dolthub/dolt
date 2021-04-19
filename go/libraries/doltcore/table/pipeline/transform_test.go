@@ -85,7 +85,7 @@ func TestPipeline(t *testing.T) {
 
 	func() {
 		csvInfo := &csv.CSVFileInfo{Delim: ",", HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
-		rd, _ := csv.NewCSVReader(types.Format_7_18, ioutil.NopCloser(buf), csvInfo)
+		rd, _ := csv.NewCSVReader(types.Format_Default, ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 
 		tc := NewTransformCollection(
@@ -123,7 +123,7 @@ func TestAddingStages(t *testing.T) {
 
 	func() {
 		csvInfo := &csv.CSVFileInfo{Delim: ",", HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
-		rd, _ := csv.NewCSVReader(types.Format_7_18, ioutil.NopCloser(buf), csvInfo)
+		rd, _ := csv.NewCSVReader(types.Format_Default, ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 
 		tc := NewTransformCollection(
@@ -193,7 +193,7 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 
 	func() {
 		csvInfo := &csv.CSVFileInfo{Delim: ",", HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
-		rd, _ := csv.NewCSVReader(types.Format_7_18, ioutil.NopCloser(buf), csvInfo)
+		rd, _ := csv.NewCSVReader(types.Format_Default, ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 
 		addedStages := []NamedTransform{
@@ -227,7 +227,7 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 			4: "true",
 			5: "0",
 		}
-		injectedRow, err := untyped.NewRowFromTaggedStrings(types.Format_7_18, schOut, injectedColumns)
+		injectedRow, err := untyped.NewRowFromTaggedStrings(types.Format_Default, schOut, injectedColumns)
 		assert.NoError(t, err)
 		p.InjectRow("append", injectedRow)
 
@@ -240,7 +240,7 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 			4: "true",
 			5: "1",
 		}
-		injectedRow, err = untyped.NewRowFromTaggedStrings(types.Format_7_18, schOut, injectedColumns)
+		injectedRow, err = untyped.NewRowFromTaggedStrings(types.Format_Default, schOut, injectedColumns)
 		assert.NoError(t, err)
 		p.InjectRow("append", injectedRow)
 
@@ -281,7 +281,7 @@ func TestAbort(t *testing.T) {
 
 	func() {
 		csvInfo := &csv.CSVFileInfo{Delim: ",", HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
-		rd, _ := csv.NewCSVReader(types.Format_7_18, ioutil.NopCloser(buf), csvInfo)
+		rd, _ := csv.NewCSVReader(types.Format_Default, ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 
 		var wg = sync.WaitGroup{}

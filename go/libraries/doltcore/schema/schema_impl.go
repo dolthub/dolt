@@ -32,6 +32,7 @@ var EmptySchema = &schemaImpl{
 type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
 	indexCollection            IndexCollection
+	checkCollection            CheckCollection
 }
 
 // SchemaFromCols creates a Schema from a collection of columns
@@ -51,14 +52,15 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 		return nil, ErrNoPrimaryKeyColumns
 	}
 
-	pkColColl, _ := NewColCollection(pkCols...)
-	nonPKColColl, _ := NewColCollection(nonPKCols...)
+	pkColColl := NewColCollection(pkCols...)
+	nonPKColColl := NewColCollection(nonPKCols...)
 
 	return &schemaImpl{
 		pkCols:          pkColColl,
 		nonPKCols:       nonPKColColl,
 		allCols:         allCols,
 		indexCollection: NewIndexCollection(allCols),
+		checkCollection: NewCheckCollection(),
 	}, nil
 }
 
@@ -93,7 +95,7 @@ func ValidateForInsert(allCols *ColCollection) error {
 		}
 		colTags[tag] = true
 
-		if _, ok := colNames[col.Name]; ok {
+		if _, ok := colNames[strings.ToLower(col.Name)]; ok {
 			return true, ErrColNameCollision
 		}
 		colNames[col.Name] = true
@@ -115,14 +117,15 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 		nonPKCols = append(nonPKCols, c)
 	}
 
-	pkColColl, _ := NewColCollection()
-	nonPKColColl, _ := NewColCollection(nonPKCols...)
+	pkColColl := NewColCollection()
+	nonPKColColl := NewColCollection(nonPKCols...)
 
 	return &schemaImpl{
 		pkCols:          pkColColl,
 		nonPKCols:       nonPKColColl,
 		allCols:         nonPKColColl,
 		indexCollection: NewIndexCollection(nil),
+		checkCollection: NewCheckCollection(),
 	}
 }
 
@@ -149,17 +152,14 @@ func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) 
 		i++
 	}
 
-	allColColl, err := NewColCollection(allCols...)
-
-	if err != nil {
-		return nil, err
-	}
+	allColColl := NewColCollection(allCols...)
 
 	return &schemaImpl{
 		pkCols:          pkCols,
 		nonPKCols:       nonPKCols,
 		allCols:         allColColl,
 		indexCollection: NewIndexCollection(allColColl),
+		checkCollection: NewCheckCollection(),
 	}, nil
 }
 
@@ -210,4 +210,8 @@ func (si *schemaImpl) String() string {
 
 func (si *schemaImpl) Indexes() IndexCollection {
 	return si.indexCollection
+}
+
+func (si *schemaImpl) Checks() CheckCollection {
+	return si.checkCollection
 }

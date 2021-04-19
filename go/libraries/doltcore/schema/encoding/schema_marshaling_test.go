@@ -42,7 +42,7 @@ func createTestSchema() schema.Schema {
 		schema.NewColumn("age", 3, types.UintKind, false),
 	}
 
-	colColl, _ := schema.NewColCollection(columns...)
+	colColl := schema.NewColCollection(columns...)
 	sch := schema.MustSchemaFromCols(colColl)
 	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	return sch
@@ -50,7 +50,7 @@ func createTestSchema() schema.Schema {
 
 func TestNomsMarshalling(t *testing.T) {
 	tSchema := createTestSchema()
-	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
+	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_Default, nil, nil)
 
 	if err != nil {
 		t.Fatal("Could not create in mem noms db.")
@@ -62,7 +62,7 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Fatal("Failed to marshal Schema as a types.Value.")
 	}
 
-	unMarshalled, err := UnmarshalSchemaNomsValue(context.Background(), types.Format_7_18, val)
+	unMarshalled, err := UnmarshalSchemaNomsValue(context.Background(), types.Format_Default, val)
 
 	if err != nil {
 		t.Fatal("Failed to unmarshal types.Value as Schema")
@@ -72,7 +72,7 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Error("Value different after marshalling and unmarshalling.")
 	}
 
-	validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_7_18, val)
+	validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_Default, val)
 
 	if err != nil {
 		t.Fatal(fmt.Sprintf("Failed compatibility test. Schema could not be unmarshalled with mirror type, error: %s", err.Error()))
@@ -88,7 +88,7 @@ func TestNomsMarshalling(t *testing.T) {
 	ssVal, err := MarshalSuperSchemaAsNomsValue(context.Background(), db, tSuperSchema)
 	require.NoError(t, err)
 
-	unMarshalledSS, err := UnmarshalSuperSchemaNomsValue(context.Background(), types.Format_7_18, ssVal)
+	unMarshalledSS, err := UnmarshalSuperSchemaNomsValue(context.Background(), types.Format_Default, ssVal)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(tSuperSchema, unMarshalledSS) {
@@ -148,8 +148,7 @@ func TestTypeInfoMarshalling(t *testing.T) {
 			require.NoError(t, err)
 			col, err := schema.NewColumnWithTypeInfo("pk", 1, ti, true, "", false, "")
 			require.NoError(t, err)
-			colColl, err := schema.NewColCollection(col)
-			require.NoError(t, err)
+			colColl := schema.NewColCollection(col)
 			originalSch, err := schema.SchemaFromCols(colColl)
 			require.NoError(t, err)
 
@@ -161,8 +160,7 @@ func TestTypeInfoMarshalling(t *testing.T) {
 			require.NoError(t, err)
 			unmarshalledSch, err := UnmarshalSchemaNomsValue(context.Background(), nbf, val)
 			require.NoError(t, err)
-			ok, err := schema.SchemasAreEqual(originalSch, unmarshalledSch)
-			assert.NoError(t, err)
+			ok := schema.SchemasAreEqual(originalSch, unmarshalledSch)
 			assert.True(t, ok)
 		})
 	}
@@ -257,11 +255,7 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 		}
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	sch, err := schema.SchemaFromCols(colColl)
 	if err != nil {

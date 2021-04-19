@@ -133,6 +133,10 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	return te, nil
 }
 
+func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error {
+	panic("not implemented")
+}
+
 // InsertRow implements TableEditor.
 func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row) (err error) {
 	kte.mu.Lock()
@@ -243,7 +247,7 @@ func (kte *keylessTableEditor) Close() error {
 func (kte *keylessTableEditor) autoFlush(ctx context.Context) error {
 	// work is proportional to number of deltas
 	// not the number of row operations
-	if len(kte.acc.deltas) >= tableEditorMaxOps {
+	if len(kte.acc.deltas) >= int(tableEditorMaxOps) {
 		return kte.flush(ctx)
 	}
 	return nil
@@ -281,13 +285,13 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 	}
 
 	idx := 0
-	keys := make([]types.Value, len(acc.deltas))
+	keys := make([]types.Tuple, len(acc.deltas))
 	for _, vd := range acc.deltas {
 		keys[idx] = vd.key
 		idx++
 	}
 
-	err = types.SortWithErroringLess(types.ValueSort{Values: keys, Nbf: acc.nbf})
+	err = types.SortWithErroringLess(types.TupleSort{Tuples: keys, Nbf: acc.nbf})
 	if err != nil {
 		return nil, err
 	}
@@ -296,25 +300,26 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 	iter := table.NewMapPointReader(rowData, keys...)
 
 	for {
-		k, v, err := iter.Next(ctx)
+		k, v, err := iter.NextTuple(ctx)
 		if err == io.EOF {
 			break
 		}
+
 		if err != nil {
 			return nil, err
 		}
 
-		delta, err := acc.getRowDelta(k.(types.Tuple))
+		delta, err := acc.getRowDelta(k)
 		if err != nil {
 			return nil, err
 		}
 
 		var ok bool
-		if v == nil {
+		if v.Empty() {
 			// row does not yet exist
 			v, ok, err = initializeCardinality(delta.val, delta.delta)
 		} else {
-			v, ok, err = modifyCardinalityWithDelta(v.(types.Tuple), delta.delta)
+			v, ok, err = modifyCardinalityWithDelta(v, delta.delta)
 		}
 		if err != nil {
 			return nil, err

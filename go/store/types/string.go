@@ -90,7 +90,7 @@ func (s String) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 }
 
 func (s String) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	return String(b.readString()), nil
+	return String(b.ReadString()), nil
 }
 
 func (s String) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

@@ -56,8 +56,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	var h hash.Hash
+	var tblSchema schema.Schema
 	if ok {
 		h, err = tbl.HashOf()
+		if err != nil {
+			return nil, nil, err
+		}
+		tblSchema, err = tbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -69,8 +74,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	var mh hash.Hash
+	var mergeTblSchema schema.Schema
 	if mergeOk {
 		mh, err = mergeTbl.HashOf()
+		if err != nil {
+			return nil, nil, err
+		}
+		mergeTblSchema, err = mergeTbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -83,12 +93,17 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 
 	var anch hash.Hash
 	var ancTblSchema schema.Schema
+	var ancRows types.Map
 	if ancOk {
 		anch, err = ancTbl.HashOf()
 		if err != nil {
 			return nil, nil, err
 		}
 		ancTblSchema, err = ancTbl.GetSchema(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		ancRows, err = ancTbl.GetRowData(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -107,7 +122,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 
 		if !ancOk {
 			if mergeOk && ok {
-				return nil, nil, ErrSameTblAddedTwice
+				if schema.SchemasAreEqual(tblSchema, mergeTblSchema) {
+					// hackity hack
+					ancTblSchema, ancTbl = tblSchema, tbl
+					ancRows, _ = types.NewMap(ctx, merger.vrw)
+				} else {
+					return nil, nil, ErrSameTblAddedTwice
+				}
 			} else if ok {
 				// fast-forward
 				return tbl, &MergeStats{Operation: TableUnmodified}, nil
@@ -122,6 +143,9 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 			ms := MergeStats{Operation: TableModified}
 			if h != mh {
 				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 			// force load the table editor since this counts as a change
 			_, err := sess.GetTableEditor(ctx, tblName, nil)
@@ -133,16 +157,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 			// fast-forward
 			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
-	}
-
-	tblSchema, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeTblSchema, err := mergeTbl.GetSchema(ctx)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	postMergeSchema, schConflicts, err := SchemaMerge(tblSchema, mergeTblSchema, ancTblSchema, tblName)
@@ -164,11 +178,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 		return nil, nil, err
 	}
 
-	ancRows, err := ancTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	updatedTbl, err := tbl.UpdateSchema(ctx, postMergeSchema)
 	if err != nil {
 		return nil, nil, err
@@ -177,6 +186,9 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	err = sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 		return root.PutTable(ctx, tblName, updatedTbl)
 	})
+	if err != nil {
+		return nil, nil, err
+	}
 
 	updatedTblEditor, err := sess.GetTableEditor(ctx, tblName, nil)
 	if err != nil {
@@ -338,7 +350,8 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 
 				if mkNilOrKeyLess {
 					// change will already be in the map
-					// TODO(andy) apply changes to ancestor instead of "ours"
+					// we apply changes directly to "ours"
+					// instead of to ancestor
 					change = types.ValueChanged{}
 					processed = true
 				}
@@ -387,11 +400,6 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 					if err != nil {
 						return err
 					}
-				}
-
-				_, err = sess.Flush(ctx)
-				if err != nil {
-					return err
 				}
 
 				change = types.ValueChanged{}
@@ -540,6 +548,9 @@ func applyKeylessChange(ctx context.Context, sch schema.Schema, tableEditor edit
 
 	var card uint64
 	change, card, err = convertValueChanged(change)
+	if err != nil {
+		return err
+	}
 
 	for card > 0 {
 		if err = apply(change); err != nil {
@@ -761,7 +772,6 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	tableEditSession := editor.CreateTableEditSession(ourRoot, editor.TableEditSessionProps{
 		ForeignKeyChecksDisabled: true,
 	})
-	var unconflicted []string
 	// need to validate merges can be done on all tables before starting the actual merges.
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, tableEditSession)
@@ -772,10 +782,6 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
-
-			if stats.Conflicts == 0 {
-				unconflicted = append(unconflicted, tblName)
-			}
 
 			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 				return root.PutTable(ctx, tblName, mergedTable)
@@ -794,6 +800,9 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 				return root.RemoveTables(ctx, tblName)
 			})
+			if err != nil {
+				return nil, nil, err
+			}
 			newRoot, err = tableEditSession.Flush(ctx)
 			if err != nil {
 				return nil, nil, err
@@ -811,16 +820,19 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		if len(conflicts) > 0 {
 			return nil, fmt.Errorf("foreign key conflicts")
 		}
-		return root.PutForeignKeyCollection(ctx, mergedFKColl)
-	})
 
-	err = tableEditSession.ValidateForeignKeys(ctx)
+		root, err = root.PutForeignKeyCollection(ctx, mergedFKColl)
+		if err != nil {
+			return nil, err
+		}
+
+		return root.UpdateSuperSchemasFromOther(ctx, tblNames, theirRoot)
+	})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, unconflicted, theirRoot)
-
+	newRoot, err = tableEditSession.Flush(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -828,22 +840,22 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	return newRoot, tblToStats, nil
 }
 
-func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
+func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
 	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
 
-	headRoot, err = dEnv.HeadRoot(ctx)
+	headRoot, err = env.HeadRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	stagedRoot, err = dEnv.StagedRoot(ctx)
+	stagedRoot, err = env.StagedRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	workingRoot, err = dEnv.WorkingRoot(ctx)
+	workingRoot, err = env.WorkingRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return nil, nil, nil, err
@@ -870,16 +882,16 @@ func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConfl
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
 
-func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*diff.DocDiffs, error) {
-	docDetails, err := dEnv.GetAllValidDocDetails()
+func GetDocsInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
+	docs, err := drw.GetDocsOnDisk()
 	if err != nil {
 		return nil, err
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, err
 	}
 
-	return diff.NewDocDiffs(ctx, workingRoot, nil, docDetails)
+	return diff.NewDocDiffs(ctx, workingRoot, nil, docs)
 }

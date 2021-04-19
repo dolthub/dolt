@@ -94,6 +94,10 @@ func convertNamedRow(rows map[string]row.Row, name string, rc *rowconv.RowConver
 // into 2 row diffs.
 func (ds *DiffSplitter) SplitDiffIntoOldAndNew(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 	rows, err := ds.joiner.Split(inRow)
+	if err != nil {
+		return nil, err.Error()
+	}
+
 	mappedOld, err := convertNamedRow(rows, From, ds.oldConv)
 
 	if err != nil {

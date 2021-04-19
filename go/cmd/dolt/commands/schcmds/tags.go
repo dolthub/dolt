@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -82,7 +83,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("unable to get table names.").AddCause(err).Build(), usage)
 		}
 
-		tables = commands.RemoveDocsTbl(tables)
+		tables = actions.RemoveDocsTable(tables)
 		if len(tables) == 0 {
 			cli.Println("No tables in working set")
 			return 0
@@ -136,7 +137,8 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	err = commands.PrettyPrintResults(ctx, outputFmt, headerSchema, sql.RowsToRowIter(rows...))
+	sqlCtx := sql.NewContext(ctx)
+	err = commands.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...))
 
 	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }

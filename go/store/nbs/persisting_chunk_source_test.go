@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPersistingChunkStoreEmpty(t *testing.T) {
@@ -33,7 +34,7 @@ func TestPersistingChunkStoreEmpty(t *testing.T) {
 	ccs := newPersistingChunkSource(context.Background(), mt, nil, newFakeTablePersister(), make(chan struct{}, 1), &Stats{})
 
 	h, err := ccs.hash()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, addr{}, h)
 	assert.Zero(t, mustUint32(ccs.count()))
 }

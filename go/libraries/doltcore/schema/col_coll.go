@@ -63,11 +63,12 @@ type ColCollection struct {
 	TagToIdx map[uint64]int
 }
 
-// NewColCollection creates a new collection from a list of columns. All columns must have unique tags or this method
-// returns an error. If any columns have the same name, by-name lookups from this collection will not function
-// correctly, and this column collection cannot be used to create a schema. If any columns have the same case-
-// insensitive name, case-insensitive lookups will be unable to return the correct column in all cases.
-func NewColCollection(cols ...Column) (*ColCollection, error) {
+// NewColCollection creates a new collection from a list of columns. If any columns have the same tag, by-tag lookups in
+// this collection will not function correctly. If any columns have the same name, by-name lookups from this collection
+// will not function correctly. If any columns have the same case-insensitive name, case-insensitive lookups will be
+// unable to return the correct column in all cases.
+// For this collection to be used as a Dolt schema, it must pass schema.ValidateForInsert.
+func NewColCollection(cols ...Column) *ColCollection {
 	var tags []uint64
 	var sortedTags []uint64
 
@@ -76,37 +77,36 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 	lowerNameToCol := make(map[string]Column, len(cols))
 	tagToIdx := make(map[uint64]int, len(cols))
 
-	var uniqueCols []Column
+	var columns []Column
 	for i, col := range cols {
-		if val, ok := tagToCol[col.Tag]; !ok {
-			uniqueCols = append(uniqueCols, col)
-			tagToCol[col.Tag] = col
-			tagToIdx[col.Tag] = i
-			tags = append(tags, col.Tag)
-			sortedTags = append(sortedTags, col.Tag)
-			nameToCol[col.Name] = cols[i]
+		// If multiple columns have the same tag, the last one is used for tag lookups.
+		// Columns must have unique tags to pass schema.ValidateForInsert.
+		columns = append(columns, col)
+		tagToCol[col.Tag] = col
+		tagToIdx[col.Tag] = i
+		tags = append(tags, col.Tag)
+		sortedTags = append(sortedTags, col.Tag)
+		nameToCol[col.Name] = cols[i]
 
-			// If multiple columns have the same lower case name, the first one is used for case-insensitive matching.
-			lowerCaseName := strings.ToLower(col.Name)
-			if _, ok := lowerNameToCol[lowerCaseName]; !ok {
-				lowerNameToCol[lowerCaseName] = cols[i]
-			}
-		} else if !val.Equals(col) {
-			return nil, ErrColTagCollision
+		// If multiple columns have the same lower case name, the first one is used for case-insensitive matching.
+		// Column names must all be case-insensitive different to pass schema.ValidateForInsert.
+		lowerCaseName := strings.ToLower(col.Name)
+		if _, ok := lowerNameToCol[lowerCaseName]; !ok {
+			lowerNameToCol[lowerCaseName] = cols[i]
 		}
 	}
 
 	sort.Slice(sortedTags, func(i, j int) bool { return sortedTags[i] < sortedTags[j] })
 
 	return &ColCollection{
-		cols:           uniqueCols,
+		cols:           columns,
 		Tags:           tags,
 		SortedTags:     sortedTags,
 		TagToCol:       tagToCol,
 		NameToCol:      nameToCol,
 		LowerNameToCol: lowerNameToCol,
 		TagToIdx:       tagToIdx,
-	}, nil
+	}
 }
 
 // GetColumns returns the underlying list of columns. The list returned is a copy.
@@ -130,30 +130,15 @@ func (cc *ColCollection) GetColumnNames() []string {
 }
 
 // AppendColl returns a new collection with the additional ColCollection's columns appended
-func (cc *ColCollection) AppendColl(colColl *ColCollection) (*ColCollection, error) {
+func (cc *ColCollection) AppendColl(colColl *ColCollection) *ColCollection {
 	return cc.Append(colColl.cols...)
 }
 
 // Append returns a new collection with the additional columns appended
-func (cc *ColCollection) Append(cols ...Column) (*ColCollection, error) {
+func (cc *ColCollection) Append(cols ...Column) *ColCollection {
 	allCols := make([]Column, 0, len(cols)+len(cc.cols))
 	allCols = append(allCols, cc.cols...)
 	allCols = append(allCols, cols...)
-
-	return NewColCollection(allCols...)
-}
-
-// Replace will replace one column of the schema with another.
-func (cc *ColCollection) Replace(old, new Column) (*ColCollection, error) {
-	allCols := make([]Column, 0, len(cc.cols))
-
-	for _, curr := range cc.cols {
-		if curr.Tag == old.Tag {
-			allCols = append(allCols, new)
-		} else {
-			allCols = append(allCols, curr)
-		}
-	}
 
 	return NewColCollection(allCols...)
 }
@@ -249,29 +234,43 @@ func ColCollsAreEqual(cc1, cc2 *ColCollection) bool {
 	return areEqual
 }
 
+// ColCollsAreCompatible determines whether two ColCollections are compatible with each other. Compatible columns have
+// the same tags and storage types, but may have different names, constraints or SQL type parameters.
+func ColCollsAreCompatible(cc1, cc2 *ColCollection) bool {
+	if cc1.Size() != cc2.Size() {
+		return false
+	}
+
+	areCompatible := true
+	_ = cc1.Iter(func(tag uint64, col1 Column) (stop bool, err error) {
+		col2, ok := cc2.GetByTag(tag)
+
+		if !ok || !col1.Compatible(col2) {
+			areCompatible = false
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	return areCompatible
+}
+
 // MapColCollection applies a function to each column in a ColCollection and creates a new ColCollection from the results.
-func MapColCollection(cc *ColCollection, cb func(col Column) (Column, error)) (*ColCollection, error) {
+func MapColCollection(cc *ColCollection, cb func(col Column) Column) *ColCollection {
 	mapped := make([]Column, cc.Size())
 	for i, c := range cc.cols {
-		mc, err := cb(c)
-		if err != nil {
-			return nil, err
-		}
-		mapped[i] = mc
+		mapped[i] = cb(c)
 	}
 	return NewColCollection(mapped...)
 }
 
 // FilterColCollection applies a boolean function to column in a ColCollection, it creates a new ColCollection from the
 // set of columns for which the function returned true.
-func FilterColCollection(cc *ColCollection, cb func(col Column) (bool, error)) (*ColCollection, error) {
+func FilterColCollection(cc *ColCollection, cb func(col Column) bool) *ColCollection {
 	filtered := make([]Column, 0, cc.Size())
 	for _, c := range cc.cols {
-		keep, err := cb(c)
-		if err != nil {
-			return nil, err
-		}
-		if keep {
+		if cb(c) {
 			filtered = append(filtered, c)
 		}
 	}
@@ -280,7 +279,6 @@ func FilterColCollection(cc *ColCollection, cb func(col Column) (bool, error)) (
 
 func ColCollUnion(colColls ...*ColCollection) (*ColCollection, error) {
 	var allCols []Column
-	// TODO: error on tag collision
 	for _, sch := range colColls {
 		err := sch.Iter(func(tag uint64, col Column) (stop bool, err error) {
 			allCols = append(allCols, col)
@@ -292,14 +290,14 @@ func ColCollUnion(colColls ...*ColCollection) (*ColCollection, error) {
 		}
 	}
 
-	return NewColCollection(allCols...)
+	return NewColCollection(allCols...), nil
 }
 
 // ColCollectionSetDifference returns the set difference leftCC - rightCC.
 func ColCollectionSetDifference(leftCC, rightCC *ColCollection) (d *ColCollection) {
-	d, _ = FilterColCollection(leftCC, func(col Column) (b bool, err error) {
+	d = FilterColCollection(leftCC, func(col Column) bool {
 		_, ok := rightCC.GetByTag(col.Tag)
-		return !ok, nil
+		return !ok
 	})
 	return d
 }

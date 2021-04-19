@@ -51,7 +51,7 @@ const (
 	IndexName = "idx_name"
 )
 
-var typedColColl, _ = schema.NewColCollection(
+var typedColColl = schema.NewColCollection(
 	schema.NewColumn("id", IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn("name", NameTag, types.StringKind, false, schema.NotNullConstraint{}),
 	schema.NewColumn("age", AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
@@ -78,7 +78,7 @@ func init() {
 			IsMarriedTag: types.Bool(MaritalStatus[i]),
 		}
 
-		r, err := row.New(types.Format_7_18, TypedSchema, taggedVals)
+		r, err := row.New(types.Format_Default, TypedSchema, taggedVals)
 
 		if err != nil {
 			panic(err)
@@ -94,7 +94,7 @@ func init() {
 			IsMarriedTag: types.Bool(MaritalStatus[i]),
 		}
 
-		r, err = row.New(types.Format_7_18, TypedSchema, taggedVals)
+		r, err = row.New(types.Format_Default, TypedSchema, taggedVals)
 
 		if err != nil {
 			panic(err)
@@ -127,7 +127,7 @@ func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *str
 		TitleTag:     titleVal,
 	}
 
-	r, err := row.New(types.Format_7_18, TypedSchema, taggedVals)
+	r, err := row.New(types.Format_Default, TypedSchema, taggedVals)
 
 	if err != nil {
 		panic(err)
@@ -163,11 +163,11 @@ func AddColToRows(t *testing.T, rs []row.Row, tag uint64, val types.Value) []row
 		return rs
 	}
 
-	colColl, err := schema.NewColCollection(schema.NewColumn("unused", tag, val.Kind(), false))
-	require.NoError(t, err)
+	colColl := schema.NewColCollection(schema.NewColumn("unused", tag, val.Kind(), false))
 	fakeSch := schema.UnkeyedSchemaFromCols(colColl)
 
 	newRows := make([]row.Row, len(rs))
+	var err error
 	for i, r := range rs {
 		newRows[i], err = r.SetColVal(tag, val, fakeSch)
 		require.NoError(t, err)
@@ -191,7 +191,7 @@ func ConvertToSchema(sch schema.Schema, rs ...row.Row) []row.Row {
 			panic(err)
 		}
 
-		newRows[i], err = row.New(types.Format_7_18, sch, taggedVals)
+		newRows[i], err = row.New(types.Format_Default, sch, taggedVals)
 
 		if err != nil {
 			panic(err)

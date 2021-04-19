@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -293,8 +293,8 @@ var BasicUpdateTests = []UpdateTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:        "update multiple rows pk increment order by asc",
-		UpdateQuery: `update people set id = id + 1 order by id asc`,
+		Name:        "update multiple rows pk increment order by desc",
+		UpdateQuery: `update people set id = id + 1 order by id desc`,
 		SelectQuery: `select * from people order by id`,
 		ExpectedRows: ToSqlRows(PeopleTestSchema,
 			MutateRow(PeopleTestSchema, Homer, IdTag, HomerId+1),
@@ -305,6 +305,11 @@ var BasicUpdateTests = []UpdateTest{
 			MutateRow(PeopleTestSchema, Barney, IdTag, BarneyId+1),
 		),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update multiple rows pk increment order by asc",
+		UpdateQuery: `update people set id = id + 1 order by id asc`,
+		ExpectedErr: "duplicate primary key",
 	},
 	{
 		Name:        "update primary key col",
@@ -373,7 +378,7 @@ var systemTableUpdateTests = []UpdateTest{
 	{
 		Name: "update dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			env.DoltDocsSchema,
+			doltdocs.Schema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		UpdateQuery: "update dolt_docs set doc_text = 'Some text')",
 		ExpectedErr: "cannot insert into table",

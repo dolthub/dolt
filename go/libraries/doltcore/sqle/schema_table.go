@@ -38,15 +38,12 @@ func SchemasTableSqlSchema() sql.Schema {
 
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, types.StringKind, false),
 		schema.NewColumn(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, types.StringKind, false),
 		schema.NewColumn(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, types.StringKind, false),
 		schema.NewColumn(doltdb.SchemasTablesIdCol, schema.DoltSchemasIdTag, types.IntKind, true, schema.NotNullConstraint{}),
 	)
-	if err != nil {
-		panic(err) // should never happen
-	}
 	return schema.MustSchemaFromCols(colColl)
 }
 
@@ -206,11 +203,12 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 	if err != nil {
 		return nil, false, err
 	}
-	rowIter, err := indexLookup.(*doltIndexLookup).RowIter(ctx)
+	dil := indexLookup.(*doltIndexLookup)
+	rowIter, err := dil.RowIter(ctx, dil.IndexRowData(), nil)
 	if err != nil {
 		return nil, false, err
 	}
-	defer rowIter.Close()
+	defer rowIter.Close(ctx)
 	sqlRow, err := rowIter.Next()
 	if err == nil {
 		return sqlRow, true, nil

@@ -15,6 +15,7 @@
 package typeinfo
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -60,7 +61,7 @@ func TestEnumConvertNomsValueToValue(t *testing.T) {
 			generateEnumType(t, 2),
 			0,
 			"",
-			true,
+			false,
 		},
 		{
 			generateEnumType(t, 3),
@@ -130,7 +131,8 @@ func TestEnumConvertValueToNomsValue(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			output, err := test.typ.ConvertValueToNomsValue(test.input)
+			vrw := types.NewMemoryValueStore()
+			output, err := test.typ.ConvertValueToNomsValue(context.Background(), vrw, test.input)
 			if !test.expectedErr {
 				require.NoError(t, err)
 				assert.Equal(t, test.output, output)
@@ -176,7 +178,7 @@ func TestEnumFormatValue(t *testing.T) {
 			generateEnumType(t, 2),
 			0,
 			"",
-			true,
+			false,
 		},
 		{
 			generateEnumType(t, 3),
@@ -246,7 +248,8 @@ func TestEnumParseValue(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf(`%v %v`, test.typ.String(), test.input), func(t *testing.T) {
-			output, err := test.typ.ParseValue(&test.input)
+			vrw := types.NewMemoryValueStore()
+			output, err := test.typ.ParseValue(context.Background(), vrw, &test.input)
 			if !test.expectedErr {
 				require.NoError(t, err)
 				assert.Equal(t, test.output, output)

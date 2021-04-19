@@ -31,6 +31,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFDCache(t *testing.T) {
@@ -42,12 +43,12 @@ func TestFDCache(t *testing.T) {
 		name := fmt.Sprintf("file%d", i)
 		paths[i] = filepath.Join(dir, name)
 		err := ioutil.WriteFile(paths[i], []byte(name), 0644)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 
 	refNoError := func(fc *fdCache, p string, assert *assert.Assertions) *os.File {
 		f, err := fc.RefFile(p)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.NotNil(f)
 		return f
 	}
@@ -110,7 +111,7 @@ func TestFDCache(t *testing.T) {
 
 		// Unreffing f1 now should evict it
 		err := fc.UnrefFile(paths[1])
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.EqualValues(paths[:1], fc.reportEntries())
 
 		// Bring f1 back so we can test multiple evictions in a row
@@ -123,11 +124,11 @@ func TestFDCache(t *testing.T) {
 		assert.NotEqual(f1, f2)
 
 		err = fc.UnrefFile(paths[0])
-		assert.NoError(err)
+		require.NoError(t, err)
 		err = fc.UnrefFile(paths[0])
-		assert.NoError(err)
+		require.NoError(t, err)
 		err = fc.UnrefFile(paths[1])
-		assert.NoError(err)
+		require.NoError(t, err)
 
 		assert.EqualValues(paths[2:], fc.reportEntries())
 	})

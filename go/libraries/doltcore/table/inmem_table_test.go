@@ -32,7 +32,7 @@ const (
 	greatTag
 )
 
-var fields, _ = schema.NewColCollection(
+var fields = schema.NewColCollection(
 	schema.Column{Name: "name", Tag: nameTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
 	schema.Column{Name: "age", Tag: ageTag, Kind: types.UintKind, IsPartOfPK: true, TypeInfo: typeinfo.Uint64Type, Constraints: nil},
 	schema.Column{Name: "title", Tag: titleTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
@@ -52,19 +52,19 @@ func mustRow(r row.Row, err error) row.Row {
 // These are in noms-key-sorted order, since InMemoryTable.AppendRow sorts its rows. This should probably be done
 // programatically instead of hard-coded.
 var rows = []row.Row{
-	mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
+	mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 		nameTag:  types.String("Bill Billerson"),
 		ageTag:   types.Uint(32),
 		titleTag: types.String("Senior Dufus"),
 		greatTag: types.Bool(true),
 	})),
-	mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
+	mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 		nameTag:  types.String("John Johnson"),
 		ageTag:   types.Uint(21),
 		titleTag: types.String("Intern Dufus"),
 		greatTag: types.Bool(true),
 	})),
-	mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
+	mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 		nameTag:  types.String("Rob Robertson"),
 		ageTag:   types.Uint(25),
 		titleTag: types.String("Dufus"),

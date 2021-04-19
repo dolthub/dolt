@@ -15,6 +15,7 @@
 package typeinfo
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -22,68 +23,73 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type unknownImpl struct{}
+type unknownType struct{}
 
-var _ TypeInfo = (*unknownImpl)(nil)
+var _ TypeInfo = (*unknownType)(nil)
 
-var UnknownType TypeInfo = &unknownImpl{}
+var UnknownType TypeInfo = &unknownType{}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *unknownImpl) ConvertNomsValueToValue(types.Value) (interface{}, error) {
+func (ti *unknownType) ConvertNomsValueToValue(types.Value) (interface{}, error) {
 	return nil, fmt.Errorf(`"Unknown" cannot convert any Noms value to a go value`)
 }
 
+// ReadFrom reads a go value from a noms types.CodecReader directly
+func (ti *unknownType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	return nil, fmt.Errorf(`"Unknown" cannot read any Noms value to a go value`)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *unknownImpl) ConvertValueToNomsValue(interface{}) (types.Value, error) {
+func (ti *unknownType) ConvertValueToNomsValue(context.Context, types.ValueReadWriter, interface{}) (types.Value, error) {
 	return nil, fmt.Errorf(`"Unknown" cannot convert any go value to a Noms value`)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *unknownImpl) Equals(TypeInfo) bool {
+func (ti *unknownType) Equals(TypeInfo) bool {
 	return false
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *unknownImpl) FormatValue(types.Value) (*string, error) {
+func (ti *unknownType) FormatValue(types.Value) (*string, error) {
 	return nil, fmt.Errorf(`"Unknown" cannot convert any Noms value to a string`)
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *unknownImpl) GetTypeIdentifier() Identifier {
+func (ti *unknownType) GetTypeIdentifier() Identifier {
 	return UnknownTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *unknownImpl) GetTypeParams() map[string]string {
+func (ti *unknownType) GetTypeParams() map[string]string {
 	panic("cannot persist unknown type")
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *unknownImpl) IsValid(types.Value) bool {
+func (ti *unknownType) IsValid(types.Value) bool {
 	return false
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *unknownImpl) NomsKind() types.NomsKind {
+func (ti *unknownType) NomsKind() types.NomsKind {
 	return types.UnknownKind
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *unknownImpl) ParseValue(*string) (types.Value, error) {
+func (ti *unknownType) ParseValue(context.Context, types.ValueReadWriter, *string) (types.Value, error) {
 	return nil, fmt.Errorf(`"Unknown" cannot convert any strings to a Noms value`)
 }
 
 // Promote implements TypeInfo interface.
-func (ti *unknownImpl) Promote() TypeInfo {
+func (ti *unknownType) Promote() TypeInfo {
 	return ti
 }
 
 // String implements TypeInfo interface.
-func (ti *unknownImpl) String() string {
+func (ti *unknownType) String() string {
 	return "Unknown"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *unknownImpl) ToSqlType() sql.Type {
+func (ti *unknownType) ToSqlType() sql.Type {
 	panic(fmt.Errorf("unknown type info does not have a relevant SQL type"))
 }

@@ -35,7 +35,7 @@ import (
 
 // CreateSchema returns a schema from the columns given, panicking on any errors.
 func CreateSchema(columns ...schema.Column) schema.Schema {
-	colColl, _ := schema.NewColCollection(columns...)
+	colColl := schema.NewColCollection(columns...)
 	return schema.MustSchemaFromCols(colColl)
 }
 
@@ -45,7 +45,7 @@ func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 	for i := range values {
 		taggedVals[uint64(i)] = values[i]
 	}
-	r, err := row.New(types.Format_7_18, sch, taggedVals)
+	r, err := row.New(types.Format_Default, sch, taggedVals)
 
 	if err != nil {
 		panic(err)
@@ -58,10 +58,7 @@ func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 // schema, e.g. tag collision.
 func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	columns := sch.GetAllCols()
-	columns, err := columns.Append(col)
-	if err != nil {
-		panic(err)
-	}
+	columns = columns.Append(col)
 	return schema.MustSchemaFromCols(columns)
 }
 
@@ -80,10 +77,7 @@ func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema
 		panic(err)
 	}
 
-	columns, err := schema.NewColCollection(newCols...)
-	if err != nil {
-		panic(err)
-	}
+	columns := schema.NewColCollection(newCols...)
 	return schema.MustSchemaFromCols(columns)
 }
 
@@ -120,7 +114,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	empty, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl)
 	require.NoError(t, err)
@@ -131,7 +125,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	indexes, err := tbl.GetIndexData(ctx)
 	require.NoError(t, err)
-	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, tableName)
+	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, tableName, nil)
 	require.NoError(t, err)
 }
 
@@ -145,11 +139,7 @@ func MustSchema(cols ...schema.Column) schema.Schema {
 		}
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		panic(err)
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	if !hasPKCols {
 		return schema.UnkeyedSchemaFromCols(colColl)

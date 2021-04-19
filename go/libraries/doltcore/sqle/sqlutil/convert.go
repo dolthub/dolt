@@ -39,11 +39,7 @@ func ToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 		cols = append(cols, convertedCol)
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-	if err != nil {
-		return nil, err
-	}
-
+	colColl := schema.NewColCollection(cols...)
 	return schema.UnkeyedSchemaFromCols(colColl), nil
 }
 
@@ -113,10 +109,7 @@ func ToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string,
 		cols = append(cols, convertedCol)
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	err = schema.ValidateForInsert(colColl)
 	if err != nil {

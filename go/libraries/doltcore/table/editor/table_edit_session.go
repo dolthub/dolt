@@ -140,7 +140,11 @@ func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
 				if err != nil {
 					return true, err
 				}
-				err = ste.validateForInsert(ctx, r)
+				rTaggedValues, err := r.TaggedValues()
+				if err != nil {
+					return true, err
+				}
+				err = ste.validateForInsert(ctx, rTaggedValues)
 				if err != nil {
 					return true, err
 				}
@@ -208,7 +212,7 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 	if ok {
 		if tableSch == nil {
 			return localTableEditor, nil
-		} else if ok, err = schema.SchemasAreEqual(tableSch, localTableEditor.tableEditor.Schema()); err == nil && ok {
+		} else if schema.SchemasAreEqual(tableSch, localTableEditor.tableEditor.Schema()) {
 			return localTableEditor, nil
 		}
 		// Any existing references to this localTableEditor should be preserved, so we just change the underlying values

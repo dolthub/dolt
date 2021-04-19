@@ -128,7 +128,7 @@ func (db *database) Datasets(ctx context.Context) (types.Map, error) {
 func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, error) {
 	// precondition checks
 	if !DatasetFullRe.MatchString(datasetID) {
-		d.Panic("Invalid dataset ID: %s", datasetID)
+		return Dataset{}, fmt.Errorf("Invalid dataset ID: %s", datasetID)
 	}
 
 	datasets, err := db.Datasets(ctx)
@@ -551,6 +551,9 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 
 	for {
 		currentDatasets, err = currentDatasets.Edit().Remove(datasetID).Map(ctx)
+		if err != nil {
+			return err
+		}
 		err = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
 		if err != ErrOptimisticLockFailed {
 			break

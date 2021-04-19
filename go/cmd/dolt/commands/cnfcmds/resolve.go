@@ -16,9 +16,12 @@ package cnfcmds
 
 import (
 	"context"
+	"strings"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -35,9 +38,9 @@ var resDocumentation = cli.CommandDocumentationContent{
 	LongDesc: `
 When a merge operation finds conflicting changes, the rows with the conflicts are added to list of conflicts that must be resolved.  Once the value for the row is resolved in the working set of tables, then the conflict should be resolved.
 		
-In it's first form {{.EmphasisLeft}}dolt conflicts resolve <table> <key>...{{.EmphasisRight}}, resolve runs in manual merge mode resolving the conflicts whose keys are provided.
+In its first form {{.EmphasisLeft}}dolt conflicts resolve <table> <key>...{{.EmphasisRight}}, resolve runs in manual merge mode resolving the conflicts whose keys are provided.
 
-In it's second form {{.EmphasisLeft}}dolt conflicts resolve --ours|--theirs <table>...{{.EmphasisRight}}, resolve runs in auto resolve mode. Where conflicts are resolved using a rule to determine which version of a row should be used.
+In its second form {{.EmphasisLeft}}dolt conflicts resolve --ours|--theirs <table>...{{.EmphasisRight}}, resolve runs in auto resolve mode. Where conflicts are resolved using a rule to determine which version of a row should be used.
 `,
 	Synopsis: []string{
 		`{{.LessThan}}table{{.GreaterThan}} [{{.LessThan}}key_definition{{.GreaterThan}}] {{.LessThan}}key{{.GreaterThan}}...`,
@@ -92,7 +95,7 @@ func (cmd ResolveCmd) createArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed. When in auto-resolve mode, '.' can be used to resolve all tables."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"key", "key(s) of rows within a table whose conflicts have been resolved"})
 	ap.SupportsFlag("ours", "", "For all conflicts, take the version from our branch and resolve the conflict")
-	ap.SupportsFlag("theirs", "", "Fol all conflicts, take the version from our branch and resolve the conflict")
+	ap.SupportsFlag("theirs", "", "For all conflicts, take the version from their branch and resolve the conflict")
 
 	return ap
 }
@@ -117,9 +120,10 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	funcFlags := apr.FlagsEqualTo(autoResolverParams, true)
 
 	if funcFlags.Size() > 1 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
+		ff := strings.Join(autoResolverParams, ", ")
+		return errhand.BuildDError("specify a resolver func from [ %s ]", ff).SetPrintUsage().Build()
 	} else if apr.NArg() == 0 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
+		return errhand.BuildDError("specify at least one table to resolve conflicts").SetPrintUsage().Build()
 	}
 
 	autoResolveFlag := funcFlags.AsSlice()[0]
@@ -149,11 +153,10 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	args := apr.Args()
 
 	if len(args) < 2 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
+		return errhand.BuildDError("at least two args are required").SetPrintUsage().Build()
 	}
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
-
 	if verr != nil {
 		return verr
 	}
@@ -167,45 +170,43 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	}
 
 	tbl, _, err := root.GetTable(ctx, tblName)
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
 	}
 
 	sch, err := tbl.GetSchema(ctx)
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
 	}
 
-	keysToResolve, err := cli.ParseKeyValues(root.VRW().Format(), sch, args[1:])
-
+	keysToResolve, err := cli.ParseKeyValues(ctx, root.VRW(), sch, args[1:])
 	if err != nil {
 		return errhand.BuildDError("error: parsing command line").AddCause(err).Build()
 	}
+	if keysToResolve == nil {
+		return errhand.BuildDError("no primary keys were given to be resolved").Build()
+	}
 
 	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(ctx, keysToResolve)
-
 	if err != nil {
 		return errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
 	}
-
 	for _, key := range invalid {
-		cli.Println(key, "is not a valid key")
+		cli.Printf("(%s) is not a valid key\n", row.TupleFmt(ctx, key.(types.Tuple)))
 	}
-
 	for _, key := range notFound {
-		cli.Println(key, "is not the primary key of a conflicting row")
+		cli.Printf("(%s) is not the primary key of a conflicting row\n", row.TupleFmt(ctx, key.(types.Tuple)))
+	}
+	if updatedTbl == nil {
+		return errhand.BuildDError("error: No changes were resolved").Build()
 	}
 
 	updatedHash, err := updatedTbl.HashOf()
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 	}
 
 	hash, err := tbl.HashOf()
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 	}

@@ -95,13 +95,13 @@ func TestHandleRow(t *testing.T) {
 func testSchema() schema.Schema {
 	col1 := schema.NewColumn("col1", 0, types.StringKind, false)
 	col2 := schema.NewColumn("col2", 1, types.StringKind, false)
-	colColl, _ := schema.NewColCollection(col1, col2)
+	colColl := schema.NewColCollection(col1, col2)
 	return schema.UnkeyedSchemaFromCols(colColl)
 }
 
 func testRow(t *testing.T, col1, col2 string) pipeline.RowWithProps {
 	taggedVals := row.TaggedValues{0: types.String(col1), 1: types.String(col2)}
-	r, err := row.New(types.Format_7_18, testSchema(), taggedVals)
+	r, err := row.New(types.Format_Default, testSchema(), taggedVals)
 	assert.NoError(t, err)
 	return pipeline.RowWithProps{Row: r, Props: pipeline.NoProps}
 }

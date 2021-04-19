@@ -101,9 +101,6 @@ func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 		parentTagMapping, found := builtTagMappings[h]
 		if !found {
 			parentTagMapping = make(TagMapping)
-			if !rootsMustBeEqual(parentRoot, rebasedParentRoot) {
-				return nil, fmt.Errorf("error rebasing, roots not equal")
-			}
 		}
 
 		tagMapping, err := buildTagMapping(ctx, root, rebasedParentRoot, parentTagMapping)
@@ -250,20 +247,20 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 
 		if !tableNeedsRebasing {
 			newRoot, err = newRoot.PutTable(ctx, tblName, tbl)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		parentTblName := tblName
 
 		// schema rebase
-		schCC, _ := schema.NewColCollection()
+		schCC := schema.NewColCollection()
 		err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			if newTag, found := tableMapping[tag]; found {
 				col.Tag = newTag
 			}
-			schCC, err = schCC.Append(col)
-			if err != nil {
-				return true, err
-			}
+			schCC = schCC.Append(col)
 			return false, nil
 		})
 
@@ -299,10 +296,17 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		}
 
 		rebasedSS, err := ss.RebaseTag(tableMapping)
+		if err != nil {
+			return nil, err
+		}
 
 		// row rebase
 		var parentRows types.Map
 		parentTbl, found, err := parentRoot.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+
 		if found && parentTbl != nil {
 			parentRows, err = parentTbl.GetRowData(ctx)
 		} else {
@@ -317,6 +321,9 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		var rebasedParentRows types.Map
 		var rebasedParentSch schema.Schema
 		rebasedParentTbl, found, err := rebasedParentRoot.GetTable(ctx, parentTblName)
+		if err != nil {
+			return nil, err
+		}
 		if found && rebasedParentTbl != nil {
 			rebasedParentRows, err = rebasedParentTbl.GetRowData(ctx)
 			if err != nil {
@@ -365,7 +372,11 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, emptyMap)
+		// migration predates AUTO_INCREMENT support
+		// so we don't need to copy the value here
+		var autoVal types.Value = nil
+
+		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, emptyMap, autoVal)
 
 		if err != nil {
 			return nil, err
@@ -739,16 +750,4 @@ func handleSystemTableMappings(ctx context.Context, tblName string, root *doltdb
 	})
 
 	return nil
-}
-
-func rootsMustBeEqual(r1, r2 *doltdb.RootValue) bool {
-	h1, err := r1.HashOf()
-	if err != nil {
-		panic(err)
-	}
-	h2, err := r2.HashOf()
-	if err != nil {
-		panic(err)
-	}
-	return h1.Equal(h2)
 }

@@ -15,6 +15,7 @@
 package typeinfo
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -88,8 +89,33 @@ func (ti *intType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+// ReadFrom reads a go value from a noms types.CodecReader directly
+func (ti *intType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.IntKind:
+		val := reader.ReadInt()
+		switch ti.sqlIntType {
+		case sql.Int8:
+			return int8(val), nil
+		case sql.Int16:
+			return int16(val), nil
+		case sql.Int24:
+			return int32(val), nil
+		case sql.Int32:
+			return int32(val), nil
+		case sql.Int64:
+			return int64(val), nil
+		}
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *intType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+func (ti *intType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	if v == nil {
 		return types.NullValue, nil
 	}
@@ -195,11 +221,11 @@ func (ti *intType) NomsKind() types.NomsKind {
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *intType) ParseValue(str *string) (types.Value, error) {
+func (ti *intType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
-	return ti.ConvertValueToNomsValue(*str)
+	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
 }
 
 // Promote implements TypeInfo interface.
@@ -228,4 +254,56 @@ func (ti *intType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *intType) ToSqlType() sql.Type {
 	return ti.sqlIntType
+}
+
+// intTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func intTypeConverter(ctx context.Context, src *intType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Int)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting int to enum: %T", v)
+			}
+			if val == 0 {
+				return types.Uint(0), nil
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, int64(val))
+		}, true, nil
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uuidType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
 }

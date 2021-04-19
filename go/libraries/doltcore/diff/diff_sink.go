@@ -35,7 +35,7 @@ const (
 	diffColName  = "__diff__"
 )
 
-type ColorFunc func(string, ...interface{}) string
+type ColorFunc func(...interface{}) string
 
 type ColorDiffSink struct {
 	sch schema.Schema
@@ -67,10 +67,10 @@ func (cds *ColorDiffSink) GetSchema() schema.Schema {
 }
 
 var colDiffColors = map[DiffChType]ColorFunc{
-	DiffAdded:       color.New(color.Bold, color.FgGreen).Sprintf,
-	DiffModifiedOld: color.RedString,
-	DiffModifiedNew: color.GreenString,
-	DiffRemoved:     color.New(color.Bold, color.FgRed).Sprintf,
+	DiffAdded:       color.New(color.Bold, color.FgGreen).Sprint,
+	DiffModifiedOld: color.New(color.FgRed).Sprint,
+	DiffModifiedNew: color.New(color.FgGreen).Sprint,
+	DiffRemoved:     color.New(color.Bold, color.FgRed).Sprint,
 }
 
 func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {

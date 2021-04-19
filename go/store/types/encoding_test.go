@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -67,12 +68,12 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	vs := newTestValueStore()
 	w := newBinaryNomsWriter()
 	err := v.writeTo(&w, Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.EqualValues(t, expectedAsByteSlice, w.data())
 
 	dec := newValueDecoder(expectedAsByteSlice, vs)
 	v2, err := dec.readValue(Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, v.Equals(v2))
 }
 
@@ -81,9 +82,9 @@ func TestRoundTrips(t *testing.T) {
 
 	assertRoundTrips := func(v Value) {
 		chnk, err := EncodeValue(v, Format_7_18)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		out, err := DecodeValue(chnk, vs)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, v.Equals(out))
 	}
 
@@ -129,26 +130,26 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(String("💩"))
 
 	st, err := NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertRoundTrips(st)
 
 	ll, err := newListLeafSequence(vs, Float(4), Float(5), Float(6), Float(7))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	listLeaf := newList(ll)
 	assertRoundTrips(listLeaf)
 
 	ref, err := NewRef(listLeaf, Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	k10, err := orderedKeyFromInt(10, Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	k20, err := orderedKeyFromInt(20, Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mt1, err := newMetaTuple(ref, k10, 10)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mt2, err := newMetaTuple(ref, k20, 20)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mseq, err := newListMetaSequence(1, []metaTuple{mt1, mt2}, vs)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertRoundTrips(newList(mseq))
 }
 
@@ -378,16 +379,16 @@ func TestWriteStruct(t *testing.T) {
 
 func TestWriteStructTooMuchData(t *testing.T) {
 	s, err := NewStruct(Format_7_18, "S", StructData{"x": Float(42), "b": Bool(true)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	c, err := EncodeValue(s, Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	data := c.Data()
 	buff := make([]byte, len(data)+1)
 	copy(buff, data)
 	buff[len(data)] = 5 // Add a bogus extrabyte
 	assert.Panics(t, func() {
 		_, err := decodeFromBytes(buff, newTestValueStore())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 
@@ -485,9 +486,9 @@ func TestWriteCompoundSet(t *testing.T) {
 	vrw := newTestValueStore()
 
 	sls, err := newSetLeafSequence(vrw, Float(0), Float(1))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	sls2, err := newSetLeafSequence(vrw, Float(2), Float(3), Float(4))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	set1 := newSet(sls)
 	set2 := newSet(sls2)
 
@@ -568,7 +569,7 @@ func TestWriteListOfUnionWithType(t *testing.T) {
 	vrw := newTestValueStore()
 
 	structType, err := MakeStructType("S", StructField{"x", PrimitiveTypeMap[FloatKind], false})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assertEncoding(t,
 		[]interface{}{

@@ -97,6 +97,14 @@ func NewBufferedTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableRea
 	return newPkTableReader(ctx, tbl, sch, true)
 }
 
+// NewBufferedTableReader creates a buffered SqlTableReader from |tbl| starting from the first record.
+func NewBufferedReaderForRows(ctx context.Context, rowData types.Map, sch schema.Schema) (SqlTableReader, error) {
+	if schema.IsKeyless(sch) {
+		return newKeylessTableReaderForRows(ctx, rowData, sch, true)
+	}
+	return newPkTableReaderForRows(ctx, rowData, sch, true)
+}
+
 // NewBufferedTableReaderForPartition creates a SqlTableReader that reads the rows of |tbl| with indexes
 // in the half-open interval [start, end).
 func NewBufferedTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, start, end uint64) (SqlTableReader, error) {

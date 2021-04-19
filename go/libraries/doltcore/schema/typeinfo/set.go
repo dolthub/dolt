@@ -15,6 +15,7 @@
 package typeinfo
 
 import (
+	"context"
 	"encoding/gob"
 	"fmt"
 	"strings"
@@ -80,8 +81,26 @@ func (ti *setType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+// ReadFrom reads a go value from a noms types.CodecReader directly
+func (ti *setType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.UintKind:
+		val := reader.ReadUint()
+		res, err := ti.sqlSetType.Unmarshal(uint64(val))
+		if err != nil {
+			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
+		}
+		return res, nil
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *setType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+func (ti *setType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	if v == nil {
 		return types.NullValue, nil
 	}
@@ -167,7 +186,7 @@ func (ti *setType) NomsKind() types.NomsKind {
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *setType) ParseValue(str *string) (types.Value, error) {
+func (ti *setType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	if str == nil {
 		return types.NullValue, nil
 	}
@@ -191,4 +210,44 @@ func (ti *setType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *setType) ToSqlType() sql.Type {
 	return ti.sqlSetType
+}
+
+// setTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func setTypeConverter(ctx context.Context, src *setType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uuidType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
 }

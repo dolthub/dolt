@@ -21,18 +21,37 @@
 
 package types
 
-import "context"
+import (
+	"context"
+	"errors"
+	"io"
+)
+
+// MapTupleIterator is an iterator that returns map keys and values as types.Tuple instances and follow the standard go
+// convention of using io.EOF to mean that all the data has been read.
+type MapTupleIterator interface {
+	NextTuple(ctx context.Context) (k, v Tuple, err error)
+}
 
 // MapIterator is the interface used by iterators over Noms Maps.
 type MapIterator interface {
+	MapTupleIterator
 	Next(ctx context.Context) (k, v Value, err error)
+}
+
+type EmptyMapIterator struct{}
+
+func (mtItr EmptyMapIterator) Next(ctx context.Context) (k, v Value, err error) {
+	return nil, nil, nil
+}
+
+func (mtItr EmptyMapIterator) NextTuple(ctx context.Context) (k, v Tuple, err error) {
+	return Tuple{}, Tuple{}, io.EOF
 }
 
 // mapIterator can efficiently iterate through a Noms Map.
 type mapIterator struct {
 	sequenceIter sequenceIterator
-	currentKey   Value
-	currentValue Value
 }
 
 // Next returns the subsequent entries from the Map, starting with the entry at which the iterator
@@ -46,15 +65,74 @@ func (mi *mapIterator) Next(ctx context.Context) (k, v Value, err error) {
 		}
 
 		entry := item.(mapEntry)
-		mi.currentKey, mi.currentValue = entry.key, entry.value
 		_, err = mi.sequenceIter.advance(ctx)
 
 		if err != nil {
 			return nil, nil, err
 		}
+
+		return entry.key, entry.value, nil
 	} else {
-		mi.currentKey, mi.currentValue = nil, nil
+		return nil, nil, nil
+	}
+}
+
+// Next returns the subsequent entries from the Map, starting with the entry at which the iterator
+// was created. If there are no more entries, Next() returns nils.
+func (mi *mapIterator) NextTuple(ctx context.Context) (k, v Tuple, err error) {
+	if mi.sequenceIter.valid() {
+		entry, err := mi.sequenceIter.currentTuple()
+
+		if err != nil {
+			return Tuple{}, Tuple{}, err
+		}
+
+		_, err = mi.sequenceIter.advance(ctx)
+
+		if err != nil {
+			return Tuple{}, Tuple{}, err
+		}
+
+		return entry.key, entry.value, nil
+	} else {
+		return Tuple{}, Tuple{}, io.EOF
+	}
+}
+
+var errClosed = errors.New("closed")
+
+type mapRangeIter struct {
+	collItr *collTupleRangeIter
+}
+
+func (itr *mapRangeIter) NextTuple(ctx context.Context) (k, v Tuple, err error) {
+	if itr.collItr == nil {
+		// only happens if there is nothing to iterate over
+		return Tuple{}, Tuple{}, io.EOF
 	}
 
-	return mi.currentKey, mi.currentValue, nil
+	k, err = itr.collItr.Next()
+
+	if err != nil {
+		return Tuple{}, Tuple{}, err
+	}
+
+	v, err = itr.collItr.Next()
+
+	if err != nil {
+		return Tuple{}, Tuple{}, err
+	}
+
+	return k, v, nil
+}
+
+func (m Map) RangeIterator(ctx context.Context, startIdx, endIdx uint64) (MapTupleIterator, error) {
+	// newCollRangeItr returns nil if the number of elements being iterated over is 0
+	collItr, err := newCollRangeIter(ctx, m, startIdx, endIdx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &mapRangeIter{collItr: collItr}, nil
 }

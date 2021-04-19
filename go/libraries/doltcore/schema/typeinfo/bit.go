@@ -15,10 +15,16 @@
 package typeinfo
 
 import (
+	"context"
+	"encoding/binary"
 	"fmt"
 	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -64,8 +70,22 @@ func (ti *bitType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+// ReadFrom reads a go value from a noms types.CodecReader directly
+func (ti *bitType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.UintKind:
+		val := reader.ReadUint()
+		return val, nil
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *bitType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+func (ti *bitType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	if v == nil {
 		return types.NullValue, nil
 	}
@@ -141,7 +161,7 @@ func (ti *bitType) NomsKind() types.NomsKind {
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *bitType) ParseValue(str *string) (types.Value, error) {
+func (ti *bitType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
@@ -177,4 +197,107 @@ func (ti *bitType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *bitType) ToSqlType() sql.Type {
 	return ti.sqlBitType
+}
+
+// bitTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func bitTypeConverter(ctx context.Context, src *bitType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		if src.sqlBitType.NumberOfBits() <= dest.sqlBitType.NumberOfBits() {
+			return identityTypeConverter, false, nil
+		} else {
+			return wrapIsValid(dest.IsValid, src, dest)
+		}
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Uint)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting bit to %s: %T", strings.ToLower(dest.String()), v)
+			}
+			if val == 0 {
+				return types.Timestamp(sql.Datetime.Zero().(time.Time)), nil
+			}
+			return nil, fmt.Errorf("invalid %s value: %d", strings.ToLower(dest.String()), uint64(val))
+		}, true, nil
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *uuidType:
+		return nil, false, IncompatibleTypeConversion.New(src.String(), destTi.String())
+	case *varBinaryType:
+		return bitTypeConverterInterpretAsString(ctx, src, destTi)
+	case *varStringType:
+		if dest.sqlStringType.Type() == sqltypes.Text {
+			return bitTypeConverterInterpretAsString(ctx, src, destTi)
+		} else {
+			return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		}
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
+}
+
+func bitTypeConverterInterpretAsString(ctx context.Context, src *bitType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+		if v == nil || v == types.NullValue {
+			return types.NullValue, nil
+		}
+		val, ok := v.(types.Uint)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type interpreting bit as string: %T", v)
+		}
+		bytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bytes, uint64(val))
+
+		numOfBits := src.sqlBitType.NumberOfBits()
+		switch true {
+		case numOfBits <= 8:
+			bytes = bytes[:1]
+		case numOfBits <= 16:
+			bytes = bytes[:2]
+		case numOfBits <= 24:
+			bytes = bytes[:3]
+		case numOfBits <= 32:
+			bytes = bytes[:4]
+		case numOfBits <= 40:
+			bytes = bytes[:5]
+		case numOfBits <= 48:
+			bytes = bytes[:6]
+		case numOfBits <= 56:
+			bytes = bytes[:7]
+		}
+		// MySQL's BIT strings are reversed
+		for i, j := 0, len(bytes)-1; i < j; i, j = i+1, j-1 {
+			bytes[i], bytes[j] = bytes[j], bytes[i]
+		}
+		s := string(bytes)
+		if dest, ok := destTi.(*varStringType); ok && dest.sqlStringType.Type() == sqltypes.Text {
+			if !utf8.ValidString(s) {
+				return nil, fmt.Errorf(`invalid %s value: "%s"`, strings.ToLower(dest.String()), s)
+			}
+		}
+		return destTi.ConvertValueToNomsValue(ctx, vrw, s)
+	}, true, nil
 }

@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 )
@@ -59,17 +60,17 @@ func TestIncrementalLoadList(t *testing.T) {
 	vs := NewValueStore(cs)
 
 	expected, err := NewList(context.Background(), vs, getTestVals(vs)...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ref, err := vs.WriteValue(context.Background(), expected)
-	assert.NoError(err)
+	require.NoError(t, err)
 	hash := ref.TargetHash()
 	rt, err := vs.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	actualVar, err := vs.ReadValue(context.Background(), hash)
-	assert.NoError(err)
+	require.NoError(t, err)
 	actual := actualVar.(List)
 
 	expectedCount := cs.Reads()
@@ -78,9 +79,9 @@ func TestIncrementalLoadList(t *testing.T) {
 	chunkReads := make([]int, expected.Len())
 	for i := uint64(0); i < expected.Len(); i++ {
 		v, err := actual.Get(context.Background(), i)
-		assert.NoError(err)
+		require.NoError(t, err)
 		v2, err := expected.Get(context.Background(), i)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(v2.Equals(v))
 
 		expectedCount += isEncodedOutOfLine(v)
@@ -88,7 +89,7 @@ func TestIncrementalLoadList(t *testing.T) {
 
 		// Do it again to make sure multiple derefs don't do multiple loads.
 		_, err = actual.Get(context.Background(), i)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedCount+chunkReads[i], cs.Reads())
 	}
 }
@@ -100,12 +101,13 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	vs := NewValueStore(cs)
 
 	expected, err := NewSet(context.Background(), vs, getTestVals(vs)...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ref, err := vs.WriteValue(context.Background(), expected)
+	require.NoError(t, err)
 	refHash := ref.TargetHash()
 
 	actualVar, err := vs.ReadValue(context.Background(), refHash)
-	assert.NoError(err)
+	require.NoError(t, err)
 	actual := actualVar.(Set)
 
 	expectedCount := cs.Reads()
@@ -116,7 +118,7 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 		return false, nil
 	})
 
-	assert.NoError(err)
+	require.NoError(t, err)
 }
 
 func SkipTestIncrementalLoadMap(t *testing.T) {
@@ -126,13 +128,13 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	vs := NewValueStore(cs)
 
 	expected, err := NewMap(context.Background(), vs, getTestVals(vs)...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ref, err := vs.WriteValue(context.Background(), expected)
-	assert.NoError(err)
+	require.NoError(t, err)
 	refHash := ref.TargetHash()
 
 	actualVar, err := vs.ReadValue(context.Background(), refHash)
-	assert.NoError(err)
+	require.NoError(t, err)
 	actual := actualVar.(Map)
 
 	expectedCount := cs.Reads()
@@ -143,7 +145,7 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 		assert.Equal(expectedCount, cs.Reads())
 		return false, nil
 	})
-	assert.NoError(err)
+	require.NoError(t, err)
 }
 
 func SkipTestIncrementalAddRef(t *testing.T) {
@@ -154,27 +156,27 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 
 	expectedItem := Float(42)
 	ref, err := vs.WriteValue(context.Background(), expectedItem)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	expected, err := NewList(context.Background(), vs, ref)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ref, err = vs.WriteValue(context.Background(), expected)
-	assert.NoError(err)
+	require.NoError(t, err)
 	actualVar, err := vs.ReadValue(context.Background(), ref.TargetHash())
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Equal(1, cs.Reads())
 	assert.True(expected.Equals(actualVar))
 
 	actual := actualVar.(List)
 	actualItem, err := actual.Get(context.Background(), 0)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(2, cs.Reads())
 	assert.True(expectedItem.Equals(actualItem))
 
 	// do it again to make sure caching works.
 	actualItem, err = actual.Get(context.Background(), 0)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(2, cs.Reads())
 	assert.True(expectedItem.Equals(actualItem))
 }

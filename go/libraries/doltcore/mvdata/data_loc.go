@@ -17,27 +17,17 @@ package mvdata
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
-
-var InStream io.ReadCloser = os.Stdin
-var OutStream io.WriteCloser = os.Stdout
-
-func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
-	InStream = inStream
-	OutStream = outStream
-}
 
 // DataFormat is an enumeration of the valid data formats
 type DataFormat string
@@ -116,7 +106,7 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 	dataFmt := DFFromString(fileFmtStr)
 
 	if len(path) == 0 {
-		return StreamDataLocation{Format: dataFmt, Reader: InStream, Writer: OutStream}
+		return StreamDataLocation{Format: dataFmt, Reader: cli.InStream, Writer: cli.OutStream}
 	} else if fileFmtStr == "" {
 		if doltdb.IsValidTableName(path) {
 			return TableDataLocation{path}

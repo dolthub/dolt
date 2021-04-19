@@ -24,14 +24,13 @@ import (
 )
 
 func TestIndexCollectionAddIndex(t *testing.T) {
-	colColl, err := NewColCollection(
+	colColl := NewColCollection(
 		NewColumn("pk1", 1, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("pk2", 2, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("v1", 3, types.IntKind, false),
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	require.NoError(t, err)
 	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
 
 	testIndexes := []*indexImpl{
@@ -138,14 +137,13 @@ func TestIndexCollectionAddIndex(t *testing.T) {
 }
 
 func TestIndexCollectionAddIndexByColNames(t *testing.T) {
-	colColl, err := NewColCollection(
+	colColl := NewColCollection(
 		NewColumn("pk1", 1, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("pk2", 2, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("v1", 3, types.IntKind, false),
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	require.NoError(t, err)
 	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
 
 	testIndexes := []struct {
@@ -237,14 +235,13 @@ func TestIndexCollectionAddIndexByColNames(t *testing.T) {
 }
 
 func TestIndexCollectionAddIndexByColTags(t *testing.T) {
-	colColl, err := NewColCollection(
+	colColl := NewColCollection(
 		NewColumn("pk1", 1, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("pk2", 2, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("v1", 3, types.IntKind, false),
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	require.NoError(t, err)
 	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
 
 	testIndexes := []*indexImpl{
@@ -321,21 +318,20 @@ func TestIndexCollectionAddIndexByColTags(t *testing.T) {
 }
 
 func TestIndexCollectionAllIndexes(t *testing.T) {
-	colColl, err := NewColCollection(
+	colColl := NewColCollection(
 		NewColumn("pk1", 1, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("pk2", 2, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("v1", 3, types.IntKind, false),
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	require.NoError(t, err)
 	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
 
 	indexColl.AddIndex(&indexImpl{
 		name: "idx_z",
 		tags: []uint64{3},
 	})
-	_, err = indexColl.AddIndexByColNames("idx_a", []string{"v2"}, IndexProperties{IsUnique: false, Comment: ""})
+	_, err := indexColl.AddIndexByColNames("idx_a", []string{"v2"}, IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	_, err = indexColl.AddIndexByColTags("idx_n", []uint64{5}, IndexProperties{IsUnique: false, Comment: "hello there"})
 	require.NoError(t, err)
@@ -369,14 +365,13 @@ func TestIndexCollectionAllIndexes(t *testing.T) {
 }
 
 func TestIndexCollectionRemoveIndex(t *testing.T) {
-	colColl, err := NewColCollection(
+	colColl := NewColCollection(
 		NewColumn("pk1", 1, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("pk2", 2, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("v1", 3, types.IntKind, false),
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	require.NoError(t, err)
 	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
 
 	testIndexes := []Index{
@@ -423,14 +418,13 @@ func TestIndexCollectionRemoveIndex(t *testing.T) {
 }
 
 func TestIndexCollectionRenameIndex(t *testing.T) {
-	colColl, err := NewColCollection(
+	colColl := NewColCollection(
 		NewColumn("pk1", 1, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("pk2", 2, types.IntKind, true, NotNullConstraint{}),
 		NewColumn("v1", 3, types.IntKind, false),
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	require.NoError(t, err)
 	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
 	index := &indexImpl{
 		name:      "idx_a",

@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -103,6 +104,10 @@ func (ts testSequence) valuesSlice(from, to uint64) ([]Value, error) {
 	panic("not reached")
 }
 
+func (ts testSequence) kvTuples(from, to uint64, dest []Tuple) ([]Tuple, error) {
+	panic("not reached")
+}
+
 func (ts testSequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	panic("not reached")
 }
@@ -154,7 +159,7 @@ func TestTestCursor(t *testing.T) {
 		assert.Equal(expectOk, cur.valid())
 		if cur.valid() {
 			seq, err := cur.current()
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.Equal(expectVal, seq)
 		}
 	}

@@ -57,7 +57,7 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
 	fs.WriteFile(testSchemaFileName, []byte(testSchema))
-	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_7_18, doltdb.InMemDoltDB)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := doltdb.NewCommitSpec("master")
@@ -95,7 +95,7 @@ func TestBasics(t *testing.T) {
 	}
 }
 
-var fakeFields, _ = schema.NewColCollection(
+var fakeFields = schema.NewColCollection(
 	schema.NewColumn("a", 0, types.StringKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn("b", 1, types.StringKind, false),
 )
@@ -116,9 +116,9 @@ func init() {
 	fakeSchema = schema.MustSchemaFromCols(fakeFields)
 
 	imtRows = []row.Row{
-		mustRow(row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("a"), 1: types.String("1")})),
-		mustRow(row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("b"), 1: types.String("2")})),
-		mustRow(row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("c"), 1: types.String("3")})),
+		mustRow(row.New(types.Format_Default, fakeSchema, row.TaggedValues{0: types.String("a"), 1: types.String("1")})),
+		mustRow(row.New(types.Format_Default, fakeSchema, row.TaggedValues{0: types.String("b"), 1: types.String("2")})),
+		mustRow(row.New(types.Format_Default, fakeSchema, row.TaggedValues{0: types.String("c"), 1: types.String("3")})),
 	}
 
 	imt = table.NewInMemTableWithData(fakeSchema, imtRows)

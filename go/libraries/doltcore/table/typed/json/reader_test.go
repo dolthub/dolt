@@ -48,7 +48,7 @@ func TestReader(t *testing.T) {
 	fs := filesys.EmptyInMemFS("/")
 	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON)))
 
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.Column{
 			Name:       "id",
 			Tag:        0,
@@ -71,12 +71,12 @@ func TestReader(t *testing.T) {
 			TypeInfo:   typeinfo.StringDefaultType,
 		},
 	)
-	require.NoError(t, err)
 
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 
-	reader, err := OpenJSONReader(types.Format_LD_1, "file.json", fs, sch)
+	vrw := types.NewMemoryValueStore()
+	reader, err := OpenJSONReader(vrw, "file.json", fs, sch)
 	require.NoError(t, err)
 
 	verifySchema, err := reader.VerifySchema(sch)
@@ -128,7 +128,7 @@ func TestReaderBadJson(t *testing.T) {
 	fs := filesys.EmptyInMemFS("/")
 	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON)))
 
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.Column{
 			Name:       "id",
 			Tag:        0,
@@ -151,12 +151,12 @@ func TestReaderBadJson(t *testing.T) {
 			TypeInfo:   typeinfo.StringDefaultType,
 		},
 	)
-	require.NoError(t, err)
 
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 
-	reader, err := OpenJSONReader(types.Format_LD_1, "file.json", fs, sch)
+	vrw := types.NewMemoryValueStore()
+	reader, err := OpenJSONReader(vrw, "file.json", fs, sch)
 	require.NoError(t, err)
 
 	err = nil

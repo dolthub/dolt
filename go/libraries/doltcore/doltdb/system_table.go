@@ -120,12 +120,14 @@ func GetAllTableNames(ctx context.Context, root *RootValue) ([]string, error) {
 var writeableSystemTables = []string{
 	DoltQueryCatalogTableName,
 	SchemasTableName,
+	ProceduresTableName,
 }
 
 var persistedSystemTables = []string{
 	DocTableName,
 	DoltQueryCatalogTableName,
 	SchemasTableName,
+	ProceduresTableName,
 }
 
 var generatedSystemTables = []string{
@@ -134,6 +136,7 @@ var generatedSystemTables = []string{
 	TableOfTablesInConflictName,
 	CommitsTableName,
 	CommitAncestorsTableName,
+	StatusTableName,
 }
 
 var generatedSystemTablePrefixes = []string{
@@ -146,10 +149,6 @@ var generatedSystemTablePrefixes = []string{
 const (
 	// DocTableName is the name of the dolt table containing documents such as the license and readme
 	DocTableName = "dolt_docs"
-	// LicensePk is the key for accessing the license within the docs table
-	LicensePk = "LICENSE.md"
-	// ReadmePk is the key for accessing the readme within the docs table
-	ReadmePk = "README.md"
 	// DocPkColumnName is the name of the pk column in the docs table
 	DocPkColumnName = "doc_name"
 	//DocTextColumnName is the name of the column containing the document contents in the docs table
@@ -218,4 +217,20 @@ const (
 
 	// CommitAncestorsTableName is the commit_ancestors system table name
 	CommitAncestorsTableName = "dolt_commit_ancestors"
+
+	// StatusTableName is the status system table name.
+	StatusTableName = "dolt_status"
+)
+
+const (
+	// ProceduresTableName is the name of the dolt stored procedures table.
+	ProceduresTableName = "dolt_procedures"
+	// ProceduresTableNameCol is the name of the stored procedure. Using CREATE PROCEDURE, will always be lowercase.
+	ProceduresTableNameCol = "name"
+	// ProceduresTableCreateStmtCol is the CREATE PROCEDURE statement for this stored procedure.
+	ProceduresTableCreateStmtCol = "create_stmt"
+	// ProceduresTableCreatedAtCol is the time that the stored procedure was created at, in UTC.
+	ProceduresTableCreatedAtCol = "created_at"
+	// ProceduresTableModifiedAtCol is the time that the stored procedure was last modified, in UTC.
+	ProceduresTableModifiedAtCol = "modified_at"
 )

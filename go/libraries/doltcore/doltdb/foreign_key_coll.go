@@ -19,8 +19,13 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -107,6 +112,11 @@ func (fk ForeignKey) HashOf() hash.Hash {
 	return hash.Of(bb.Bytes())
 }
 
+// IsSelfReferential returns whether the table declaring the foreign key is also referenced by the foreign key.
+func (fk ForeignKey) IsSelfReferential() bool {
+	return strings.ToLower(fk.TableName) == strings.ToLower(fk.ReferencedTableName)
+}
+
 // ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
 func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 	allSchCols := sch.GetAllCols()
@@ -180,6 +190,8 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		if key.Name == "" {
 			// assign a name based on the hash
 			// 8 char = 5 base32 bytes, should be collision resistant
+			// TODO: constraint names should be unique, and this isn't guaranteed to be.
+			//  This logic needs to live at the table / DB level.
 			key.Name = key.HashOf().String()[:8]
 		}
 
@@ -193,9 +205,6 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		}
 		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
 			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
-		}
-		if key.TableName == key.ReferencedTableName {
-			return fmt.Errorf("inter-table foreign keys are not yet supported")
 		}
 
 		fkc.foreignKeys[key.HashOf().String()] = key
@@ -285,11 +294,12 @@ func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err err
 // all foreign keys in which this table is the referenced table. If the table contains a self-referential foreign key,
 // it will be present in both declaresFk and referencedByFk. Each array is sorted by name ascending.
 func (fkc *ForeignKeyCollection) KeysForTable(tableName string) (declaredFk, referencedByFk []ForeignKey) {
+	lowercaseTblName := strings.ToLower(tableName)
 	for _, foreignKey := range fkc.foreignKeys {
-		if foreignKey.TableName == tableName {
+		if strings.ToLower(foreignKey.TableName) == lowercaseTblName {
 			declaredFk = append(declaredFk, foreignKey)
 		}
-		if foreignKey.ReferencedTableName == tableName {
+		if strings.ToLower(foreignKey.ReferencedTableName) == lowercaseTblName {
 			referencedByFk = append(referencedByFk, foreignKey)
 		}
 	}
@@ -422,4 +432,92 @@ func (fkc *ForeignKeyCollection) copy() *ForeignKeyCollection {
 		copiedForeignKeys[hashOf] = key
 	}
 	return &ForeignKeyCollection{copiedForeignKeys}
+}
+
+// ValidateData ensures that the foreign key is valid by comparing the index data from the given table
+// against the index data from the referenced table.
+func (fk ForeignKey) ValidateData(ctx context.Context, childIdx, parentIdx types.Map, childDef, parentDef schema.Index) error {
+	if fk.ReferencedTableIndex != parentDef.Name() {
+		return fmt.Errorf("cannot validate data as wrong referenced index was given: expected `%s` but received `%s`",
+			fk.ReferencedTableIndex, parentDef.Name())
+	}
+
+	tagMap := make(map[uint64]uint64, len(fk.TableColumns))
+	for i, childTag := range fk.TableColumns {
+		tagMap[childTag] = fk.ReferencedTableColumns[i]
+	}
+
+	// FieldMappings ignore columns not in the tagMap
+	fm, err := rowconv.NewFieldMapping(childDef.Schema(), parentDef.Schema(), tagMap)
+	if err != nil {
+		return err
+	}
+
+	vrw := types.NewMemoryValueStore() // We are checking fks rather than persisting any values, so an internal VRW can be used
+	rc, err := rowconv.NewRowConverter(ctx, vrw, fm)
+	if err != nil {
+		return err
+	}
+
+	rdr, err := noms.NewNomsMapReader(ctx, childIdx, childDef.Schema())
+	if err != nil {
+		return err
+	}
+
+	for {
+		childIdxRow, err := rdr.ReadRow(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		// Check if there are any NULL values, as they should be skipped
+		hasNulls := false
+		_, err = childIdxRow.IterSchema(childDef.Schema(), func(tag uint64, val types.Value) (stop bool, err error) {
+			if types.IsNull(val) {
+				hasNulls = true
+				return true, nil
+			}
+			return false, nil
+		})
+		if err != nil {
+			return err
+		}
+		if hasNulls {
+			continue
+		}
+
+		parentIdxRow, err := rc.Convert(childIdxRow)
+		if err != nil {
+			return err
+		}
+		if row.IsEmpty(parentIdxRow) {
+			continue
+		}
+
+		partial, err := row.ReduceToIndexPartialKey(parentDef, parentIdxRow)
+		if err != nil {
+			return err
+		}
+
+		indexIter := noms.NewNomsRangeReader(parentDef.Schema(), parentIdx,
+			[]*noms.ReadRange{{Start: partial, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+				return tuple.StartsWith(partial), nil
+			}}},
+		)
+
+		switch _, err = indexIter.ReadRow(ctx); err {
+		case nil:
+			continue // parent table contains child key
+		case io.EOF:
+			indexKeyStr, _ := types.EncodedValue(ctx, partial)
+			return fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", fk.Name, fk.TableName, indexKeyStr)
+		default:
+			return err
+		}
+	}
+
+	return nil
 }

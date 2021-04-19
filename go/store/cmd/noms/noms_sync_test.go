@@ -154,6 +154,7 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir2, "dest")
 	sout, _ := s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize)
+	s.NoError(err)
 	db := datas.NewDatabase(cs)
 	dest, err := db.GetDataset(context.Background(), "dest")
 	s.NoError(err)

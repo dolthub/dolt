@@ -25,11 +25,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
+
+type ValueInRange func(Value) (bool, error)
 
 var ErrKeysNotOrdered = errors.New("streaming map keys not ordered")
 
@@ -189,26 +192,35 @@ func (m Map) Diff(ctx context.Context, last Map, changes chan<- ValueChanged) er
 	if m.Equals(last) {
 		return nil
 	}
-	return orderedSequenceDiffTopDown(ctx, last.orderedSequence, m.orderedSequence, changes)
-}
-
-// DiffHybrid computes the diff from |last| to |m| using a hybrid algorithm
-// which balances returning results early vs completing quickly, if possible.
-func (m Map) DiffHybrid(ctx context.Context, last Map, changes chan<- ValueChanged) error {
-	if m.Equals(last) {
-		return nil
-	}
-	return orderedSequenceDiffBest(ctx, last.orderedSequence, m.orderedSequence, changes)
+	return orderedSequenceDiffLeftRight(ctx, last.orderedSequence, m.orderedSequence, changes)
 }
 
 // DiffLeftRight computes the diff from |last| to |m| using a left-to-right
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
 func (m Map) DiffLeftRight(ctx context.Context, last Map, changes chan<- ValueChanged) error {
+	trueFunc := func(Value) (bool, error) {
+		return true, nil
+	}
+	return m.DiffLeftRightInRange(ctx, last, nil, trueFunc, changes)
+}
+
+func (m Map) DiffLeftRightInRange(ctx context.Context, last Map, start Value, inRange ValueInRange, changes chan<- ValueChanged) error {
 	if m.Equals(last) {
 		return nil
 	}
-	return orderedSequenceDiffLeftRight(ctx, last.orderedSequence, m.orderedSequence, changes)
+
+	startKey := emptyKey
+	if !IsNull(start) {
+		var err error
+		startKey, err = newOrderedKey(start, m.Format())
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return orderedSequenceDiffLeftRightInRange(ctx, last.orderedSequence, m.orderedSequence, startKey, inRange, changes)
 }
 
 // Collection interface
@@ -308,6 +320,17 @@ func (m Map) MaybeGet(ctx context.Context, key Value) (v Value, ok bool, err err
 	}
 
 	return entry.value, true, nil
+}
+
+func (m Map) MaybeGetTuple(ctx context.Context, key Tuple) (v Tuple, ok bool, err error) {
+	var val Value
+	val, ok, err = m.MaybeGet(ctx, key)
+
+	if val != nil {
+		return val.(Tuple), ok, err
+	}
+
+	return Tuple{}, ok, err
 }
 
 func (m Map) Has(ctx context.Context, key Value) (bool, error) {
@@ -419,7 +442,33 @@ type mapIterAllCallback func(key, value Value) error
 
 func (m Map) IterAll(ctx context.Context, cb mapIterAllCallback) error {
 	var k Value
-	err := iterAll(ctx, m, func(v Value, idx uint64) error {
+	err := iterAll(ctx, m, func(v Value, _ uint64) error {
+		if k != nil {
+			err := cb(k, v)
+
+			if err != nil {
+				return err
+			}
+
+			k = nil
+		} else {
+			k = v
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	d.PanicIfFalse(k == nil)
+	return nil
+}
+
+func (m Map) IterRange(ctx context.Context, startIdx, endIdx uint64, cb mapIterAllCallback) error {
+	var k Value
+	_, err := iterRange(ctx, m, startIdx, endIdx, func(v Value) error {
 		if k != nil {
 			err := cb(k, v)
 
@@ -568,4 +617,51 @@ func (m Map) String() string {
 
 func (m Map) HumanReadableString() string {
 	panic("unreachable")
+}
+
+// VisitMapLevelOrder writes hashes of internal node chunks to a writer
+// delimited with a newline character and returns the total number of
+// bytes written or an error if encountered
+func VisitMapLevelOrder(w io.Writer, m Map) (total int, err error) {
+	total = 0
+	curLevel := []Map{m}
+
+	for len(curLevel) > 0 {
+		nextLevel := []Map{}
+		for _, m := range curLevel {
+			if metaSeq, ok := m.orderedSequence.(metaSequence); ok {
+				ts, err := metaSeq.tuples()
+				if err != nil {
+					return 0, err
+				}
+				for _, t := range ts {
+					r, err := t.ref()
+					if err != nil {
+						return 0, err
+					}
+
+					p := []byte(r.TargetHash().String() + "\n")
+
+					n, err := w.Write(p)
+					if err != nil {
+						return 0, err
+					}
+
+					total += n
+
+					v, err := r.TargetValue(context.Background(), m.valueReadWriter())
+					if err != nil {
+						return 0, err
+					}
+
+					nextLevel = append(nextLevel, v.(Map))
+				}
+			} else if _, ok := m.orderedSequence.(mapLeafSequence); ok {
+
+			}
+		}
+		curLevel = nextLevel
+	}
+
+	return total, nil
 }

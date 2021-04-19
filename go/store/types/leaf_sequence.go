@@ -87,6 +87,32 @@ func (seq leafSequence) valuesSlice(from, to uint64) ([]Value, error) {
 	return vs, nil
 }
 
+func (seq leafSequence) kvTuples(from, to uint64, dest []Tuple) ([]Tuple, error) {
+	if l := seq.Len(); to > l {
+		to = l
+	}
+
+	dec := seq.decoderSkipToIndex(int(from))
+	numTuples := (to - from) * uint64(getValuesPerIdx(seq.Kind()))
+
+	if uint64(cap(dest)) < numTuples {
+		dest = make([]Tuple, numTuples)
+	}
+
+	dest = dest[:numTuples]
+
+	nbf := seq.format()
+	for i := uint64(0); i < numTuples; i++ {
+		var err error
+		dest[i], err = dec.readTuple(nbf)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+	return dest, nil
+}
+
 func (seq leafSequence) getCompareFnHelper(other leafSequence) compareFn {
 	dec := seq.decoder()
 	otherDec := other.decoder()
@@ -116,7 +142,7 @@ func (seq leafSequence) getCompareFn(other sequence) compareFn {
 
 func (seq leafSequence) typeOf() (*Type, error) {
 	dec := seq.decoder()
-	kind := dec.readKind()
+	kind := dec.ReadKind()
 	dec.skipCount() // level
 	count := dec.readCount()
 	ts := make(typeSlice, 0, count)

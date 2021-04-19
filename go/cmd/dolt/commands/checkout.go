@@ -21,9 +21,9 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -49,8 +49,6 @@ dolt checkout {{.LessThan}}table{{.GreaterThan}}...
 	},
 }
 
-const coBranchArg = "b"
-
 type CheckoutCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -65,14 +63,8 @@ func (cmd CheckoutCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckoutCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cli.CreateCheckoutArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
-}
-
-func (cmd CheckoutCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsString(coBranchArg, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
-	return ap
 }
 
 // EventType returns the type of the event to log
@@ -82,11 +74,11 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cli.CreateCheckoutArgParser()
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
 	apr := cli.ParseArgs(ap, args, helpPrt)
 
-	if (apr.Contains(coBranchArg) && apr.NArg() > 1) || (!apr.Contains(coBranchArg) && apr.NArg() == 0) {
+	if (apr.Contains(cli.CheckoutCoBranch) && apr.NArg() > 1) || (!apr.Contains(cli.CheckoutCoBranch) && apr.NArg() == 0) {
 		usagePrt()
 		return 1
 	}
@@ -96,7 +88,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
-	if newBranch, newBranchOk := apr.GetValue(coBranchArg); newBranchOk {
+	if newBranch, newBranchOk := apr.GetValue(cli.CheckoutCoBranch); newBranchOk {
 		var verr errhand.VerboseError
 		if len(newBranch) == 0 {
 			verr = errhand.BuildDError("error: cannot checkout empty string").Build()
@@ -113,7 +105,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
-	if isBranch, err := actions.IsBranch(ctx, dEnv, name); err != nil {
+	if isBranch, err := actions.IsBranch(ctx, dEnv.DoltDB, name); err != nil {
 		verr := errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usagePrt)
 	} else if isBranch {
@@ -121,7 +113,17 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
-	tbls, docs, err := actions.GetTblsAndDocDetails(dEnv, args)
+	// Check if the user executed `dolt checkout .`
+	if apr.NArg() == 1 && name == "." {
+		working, staged, head, err := getAllRoots(ctx, dEnv)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
+		}
+		verr := actions.ResetHard(ctx, dEnv, "HEAD", working, staged, head)
+		return handleResetError(verr, usagePrt)
+	}
+
+	tbls, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), args)
 	if err != nil {
 		verr := errhand.BuildDError("error: unable to parse arguments.").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usagePrt)
@@ -138,7 +140,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 }
 
 func checkoutRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	if ref, refExists, err := getRemoteBranchRef(ctx, dEnv, name); err != nil {
+	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name); err != nil {
 		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
 	} else if refExists {
 		return checkoutNewBranchFromStartPt(ctx, dEnv, name, ref.String())
@@ -147,28 +149,11 @@ func checkoutRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, name string) e
 	}
 }
 
-func getRemoteBranchRef(ctx context.Context, dEnv *env.DoltEnv, name string) (ref.DoltRef, bool, error) {
-	remoteRefFilter := map[ref.RefType]struct{}{ref.RemoteRefType: {}}
-	refs, err := dEnv.DoltDB.GetRefsOfType(ctx, remoteRefFilter)
+func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
+	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
 
 	if err != nil {
-		return nil, false, err
-	}
-
-	for _, rf := range refs {
-		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
-			return rf, true, nil
-		}
-	}
-
-	return nil, false, err
-}
-
-func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
-	verr := createBranchWithStartPt(ctx, dEnv, newBranch, startPt, false)
-
-	if verr != nil {
-		return verr
+		return errhand.BuildDError(err.Error()).Build()
 	}
 
 	return checkoutBranch(ctx, dEnv, newBranch)
@@ -180,20 +165,20 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 		startPt = apr.Arg(0)
 	}
 
-	verr := createBranchWithStartPt(ctx, dEnv, newBranch, startPt, false)
+	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
 
-	if verr != nil {
-		return verr
+	if err != nil {
+		return errhand.BuildDError(err.Error()).Build()
 	}
 
 	return checkoutBranch(ctx, dEnv, newBranch)
 }
 
-func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs []doltdb.DocDetails) errhand.VerboseError {
-	err := actions.CheckoutTablesAndDocs(ctx, dEnv, tables, docs)
+func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs doltdocs.Docs) errhand.VerboseError {
+	err := actions.CheckoutTablesAndDocs(ctx, dEnv.DbData(), tables, docs)
 
 	if err != nil {
-		if actions.IsRootValUnreachable(err) {
+		if doltdb.IsRootValUnreachable(err) {
 			return unreadableRootToVErr(err)
 		} else if actions.IsTblNotExist(err) {
 			badTbls := actions.GetTablesForError(err)
@@ -218,7 +203,7 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
 			return errhand.BuildDError("fatal: Branch '%s' not found.", name).Build()
-		} else if actions.IsRootValUnreachable(err) {
+		} else if doltdb.IsRootValUnreachable(err) {
 			return unreadableRootToVErr(err)
 		} else if actions.IsCheckoutWouldOverwrite(err) {
 			tbls := actions.CheckoutWouldOverwriteTables(err)
@@ -245,7 +230,7 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand
 }
 
 func unreadableRootToVErr(err error) errhand.VerboseError {
-	rt := actions.GetUnreachableRootType(err)
+	rt := doltdb.GetUnreachableRootType(err)
 	bdr := errhand.BuildDError("error: unable to read the %s", rt.String())
-	return bdr.AddCause(actions.GetUnreachableRootCause(err)).Build()
+	return bdr.AddCause(doltdb.GetUnreachableRootCause(err)).Build()
 }

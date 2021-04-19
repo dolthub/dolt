@@ -15,6 +15,8 @@ package dtables
 // limitations under the License.
 
 import (
+	"errors"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -88,7 +90,7 @@ func (ct ConflictsTable) Schema() sql.Schema {
 
 // Partitions returns a PartitionIter which can be used to get all the data partitions
 func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
 }
 
 // PartitionRows returns a RowIter for the given partition
@@ -120,7 +122,7 @@ func (itr conflictRowIter) Next() (sql.Row, error) {
 }
 
 // Close the iterator.
-func (itr conflictRowIter) Close() error {
+func (itr conflictRowIter) Close(*sql.Context) error {
 	return itr.rd.Close()
 }
 
@@ -137,7 +139,8 @@ type conflictDeleter struct {
 // Close is called.
 func (cd *conflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	cnfSch := cd.ct.rd.GetSchema()
-	cnfRow, err := sqlutil.SqlRowToDoltRow(cd.ct.tbl.Format(), r, cnfSch)
+	// We could use a test VRW, but as any values which use VRWs will already exist, we can potentially save on memory usage
+	cnfRow, err := sqlutil.SqlRowToDoltRow(ctx, cd.ct.tbl.ValueReadWriter(), r, cnfSch)
 
 	if err != nil {
 		return err
@@ -158,6 +161,10 @@ func (cd *conflictDeleter) Close(ctx *sql.Context) error {
 	_, _, updatedTbl, err := cd.ct.tbl.ResolveConflicts(ctx, cd.pks)
 
 	if err != nil {
+		if errors.Is(err, doltdb.ErrNoConflictsResolved) {
+			return nil
+		}
+
 		return err
 	}
 

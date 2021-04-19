@@ -18,10 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -38,6 +36,12 @@ const (
 	featureVersKey  = "feature_ver"
 )
 
+type FeatureVersion int64
+
+// DoltFeatureVersion is described in feature_version.md.
+// only variable for testing.
+var DoltFeatureVersion FeatureVersion = 1 // last bumped for CHECK constraint storage
+
 // RootValue defines the structure used inside all Dolthub noms dbs
 type RootValue struct {
 	vrw     types.ValueReadWriter
@@ -45,87 +49,43 @@ type RootValue struct {
 	fkc     *ForeignKeyCollection // cache the first load
 }
 
-type DocDetails struct {
-	NewerText []byte
-	DocPk     string
-	Value     types.Value
-	File      string
-}
-
-func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, ssMap types.Map, fkMap types.Map) (*RootValue, error) {
-	values := make([]types.Value, 2*len(tables))
-
-	index := 0
-	for k, v := range tables {
-		values[index] = types.String(k)
-		valForHash, err := vrw.ReadValue(ctx, v)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if valForHash == nil {
-			return nil, ErrHashNotFound
-		}
-
-		values[index+1], err = types.NewRef(valForHash, vrw.Format())
-
-		if err != nil {
-			return nil, err
-		}
-
-		index += 2
-	}
-
-	tblMap, err := types.NewMap(ctx, vrw, values...)
-
+func newRootValue(vrw types.ValueReadWriter, st types.Struct) (*RootValue, error) {
+	v, ok, err := st.MaybeGet(featureVersKey)
 	if err != nil {
 		return nil, err
 	}
+	if ok {
+		ver := FeatureVersion(v.(types.Int))
+		if DoltFeatureVersion < ver {
+			return nil, ErrClientOutOfDate{
+				ClientVer: DoltFeatureVersion,
+				RepoVer:   ver,
+			}
+		}
+	}
 
-	return newRootFromMaps(vrw, tblMap, ssMap, fkMap)
-}
-
-func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
-	return &RootValue{vrw, st, nil}
+	return &RootValue{vrw, st, nil}, nil
 }
 
 func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
-	m, err := types.NewMap(ctx, vrw)
-
+	empty, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return nil, err
 	}
 
-	mm, err := types.NewMap(ctx, vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	mmm, err := types.NewMap(ctx, vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return newRootFromMaps(vrw, m, mm, mmm)
-}
-
-func newRootFromMaps(vrw types.ValueReadWriter, tblMap types.Map, ssMap types.Map, fkMap types.Map) (*RootValue, error) {
 	sd := types.StructData{
-		tablesKey:       tblMap,
-		superSchemasKey: ssMap,
-		foreignKeyKey:   fkMap,
+		tablesKey:       empty,
+		superSchemasKey: empty,
+		foreignKeyKey:   empty,
+		featureVersKey:  types.Int(DoltFeatureVersion),
 	}
 
 	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return newRootValue(vrw, st), err
+	return newRootValue(vrw, st)
 }
 
 func (root *RootValue) VRW() types.ValueReadWriter {
@@ -133,12 +93,12 @@ func (root *RootValue) VRW() types.ValueReadWriter {
 }
 
 // GetFeatureVersion returns the feature version of this root, if one is written
-func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver int64, ok bool, err error) {
+func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersion, ok bool, err error) {
 	v, ok, err := root.valueSt.MaybeGet(featureVersKey)
 	if err != nil || !ok {
 		return ver, ok, err
 	}
-	ver = int64(v.(types.Int))
+	ver = FeatureVersion(v.(types.Int))
 	return ver, ok, err
 }
 
@@ -180,7 +140,6 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	}
 
 	t, tblFound, err := root.GetTable(ctx, tName)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -192,13 +151,11 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 
 	if tblFound {
 		sch, err := t.GetSchema(ctx)
-
 		if err != nil {
 			return nil, false, err
 		}
 
 		err = ss.AddSchemas(sch)
-
 		if err != nil {
 			return nil, false, err
 		}
@@ -222,11 +179,11 @@ func (root *RootValue) GenerateTagsForNewColColl(ctx context.Context, tableName 
 	}
 
 	idx := 0
-	return schema.MapColCollection(cc, func(col schema.Column) (column schema.Column, err error) {
+	return schema.MapColCollection(cc, func(col schema.Column) schema.Column {
 		col.Tag = newTags[idx]
 		idx++
-		return col, nil
-	})
+		return col
+	}), nil
 }
 
 // GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
@@ -277,13 +234,11 @@ func (root *RootValue) GetSuperSchemaMap(ctx context.Context) (types.Map, error)
 // SuperSchemas are only persisted on commit.
 func (root *RootValue) getSuperSchemaAtLastCommit(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
 	ssm, err := root.getOrCreateSuperSchemaMap(ctx)
-
 	if err != nil {
 		return nil, false, err
 	}
 
 	v, found, err := ssm.MaybeGet(ctx, types.String(tName))
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -294,13 +249,11 @@ func (root *RootValue) getSuperSchemaAtLastCommit(ctx context.Context, tName str
 
 	ssValRef := v.(types.Ref)
 	ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
-
 	if err != nil {
 		return nil, false, err
 	}
 
 	ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -321,7 +274,7 @@ func (root *RootValue) getOrCreateSuperSchemaMap(ctx context.Context) (types.Map
 	} else {
 		ssm, err = types.NewMap(ctx, root.vrw)
 	}
-	return ssm, nil
+	return ssm, err
 }
 
 func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Struct, bool, error) {
@@ -332,6 +285,9 @@ func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Str
 	}
 
 	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
+	if err != nil {
+		return nil, false, err
+	}
 
 	if tVal == nil || !found {
 		return nil, false, nil
@@ -339,7 +295,6 @@ func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Str
 
 	tValRef := tVal.(types.Ref)
 	val, err := tValRef.TargetValue(ctx, root.vrw)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -364,12 +319,14 @@ func (root *RootValue) GetAllSchemas(ctx context.Context) (map[string]schema.Sch
 
 func (root *RootValue) GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error) {
 	tableMap, err := root.getTableMap()
-
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
 
 	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
 
 	if tVal == nil || !found {
 		return hash.Hash{}, false, nil
@@ -464,7 +421,7 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 		return nil, "", false, err
 	}
 
-	_ = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (bool, error) {
+	err = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (bool, error) {
 		_, found = ss.GetByTag(tag)
 		if found {
 			name = tn
@@ -472,6 +429,9 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 
 		return found, nil
 	})
+	if err != nil {
+		return nil, "", false, err
+	}
 
 	return tbl, name, found, nil
 }
@@ -613,6 +573,9 @@ func (root *RootValue) iterSuperSchemas(ctx context.Context, cb func(name string
 
 		// use GetSuperSchema() to pickup uncommitted SuperSchemas
 		ss, _, err := root.GetSuperSchema(ctx, name)
+		if err != nil {
+			return false, err
+		}
 
 		return cb(name, ss)
 	})
@@ -652,7 +615,7 @@ func (root *RootValue) PutSuperSchema(ctx context.Context, tName string, ss *sch
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, newRootSt), nil
+	return newRootValue(root.vrw, newRootSt)
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
@@ -699,7 +662,7 @@ func putTable(ctx context.Context, root *RootValue, tName string, tableRef types
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, rootValSt), nil
+	return newRootValue(root.vrw, rootValSt)
 }
 
 // CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
@@ -734,7 +697,7 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	tbl, err := NewTable(ctx, root.VRW(), schVal, empty, indexes)
+	tbl, err := NewTable(ctx, root.VRW(), schVal, empty, indexes, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -750,79 +713,6 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 // HashOf gets the hash of the root value
 func (root *RootValue) HashOf() (hash.Hash, error) {
 	return root.valueSt.Hash(root.vrw.Format())
-}
-
-// UpdateTablesFromOther takes the tables from the given root and applies them to the calling root, along with any
-// foreign keys and other table-related data.
-func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []string, other *RootValue) (*RootValue, error) {
-	tableMap, err := root.getTableMap()
-	if err != nil {
-		return nil, err
-	}
-	fkCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	otherMap, err := other.getTableMap()
-	if err != nil {
-		return nil, err
-	}
-	otherFkCollection, err := other.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var fksToAdd []ForeignKey
-	var fksToRemove []ForeignKey
-
-	me := tableMap.Edit()
-	for _, tblName := range tblNames {
-		key := types.String(tblName)
-		if val, ok, err := otherMap.MaybeGet(ctx, key); err != nil {
-			return nil, err
-		} else if ok {
-			me = me.Set(key, val)
-			newFks, _ := otherFkCollection.KeysForTable(tblName)
-			fksToAdd = append(fksToAdd, newFks...)
-			// must remove deleted fks too
-			currentFks, _ := fkCollection.KeysForTable(tblName)
-			newFksSet := make(map[string]struct{})
-			for _, newFk := range newFks {
-				newFksSet[newFk.Name] = struct{}{}
-			}
-			for _, currentFk := range currentFks {
-				_, ok := newFksSet[currentFk.Name]
-				if !ok {
-					fksToRemove = append(fksToRemove, currentFk)
-				}
-			}
-		} else if _, ok, err := tableMap.MaybeGet(ctx, key); err != nil {
-			return nil, err
-		} else if ok {
-			me = me.Remove(key)
-			fks, _ := fkCollection.KeysForTable(tblName)
-			fksToRemove = append(fksToRemove, fks...)
-		}
-	}
-
-	m, err := me.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rootValSt, err := root.valueSt.Set(tablesKey, m)
-	if err != nil {
-		return nil, err
-	}
-
-	newRoot := newRootValue(root.vrw, rootValSt)
-	fkCollection.Stage(ctx, fksToAdd, fksToRemove)
-	newRoot, err = newRoot.PutForeignKeyCollection(ctx, fkCollection)
-	if err != nil {
-		return nil, err
-	}
-
-	return newRoot, nil
 }
 
 // UpdateSuperSchemasFromOther updates SuperSchemas of tblNames using SuperSchemas from other.
@@ -895,7 +785,7 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, newRootSt), nil
+	return newRootValue(root.vrw, newRootSt)
 }
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
@@ -969,10 +859,10 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 		if err != nil {
 			return nil, err
 		}
-		return newRootValue(root.vrw, rootValSt), nil
+		return newRootValue(root.vrw, rootValSt)
 	}
 
-	return newRootValue(root.vrw, rootValSt), nil
+	return newRootValue(root.vrw, rootValSt)
 }
 
 func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*RootValue, error) {
@@ -1007,7 +897,10 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 		return nil, err
 	}
 
-	newRoot := newRootValue(root.vrw, rootValSt)
+	newRoot, err := newRootValue(root.vrw, rootValSt)
+	if err != nil {
+		return nil, err
+	}
 
 	fkc, err := newRoot.GetForeignKeyCollection(ctx)
 
@@ -1022,54 +915,6 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 	}
 
 	return newRoot.PutForeignKeyCollection(ctx, fkc)
-}
-
-// DocDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
-// is not provided, then we compare the docs on the root value to the docDetails provided.
-func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails []DocDetails) (added, modified, removed []string, err error) {
-	oldTbl, oldTblFound, err := root.GetTable(ctx, DocTableName)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	var oldSch schema.Schema
-	if oldTblFound {
-		sch, err := oldTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		oldSch = sch
-	}
-
-	if other == nil {
-		detailsWithValues, err := addValuesToDocs(ctx, oldTbl, &oldSch, docDetails)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		a, m, r := GetDocDiffsFromDocDetails(ctx, detailsWithValues)
-		return a, m, r, nil
-	}
-
-	newTbl, newTblFound, err := other.GetTable(ctx, DocTableName)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	var newSch schema.Schema
-	if newTblFound {
-		sch, err := newTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		newSch = sch
-	}
-
-	docDetailsBtwnRoots, err := getDocDetailsBtwnRoots(ctx, newTbl, newSch, newTblFound, oldTbl, oldSch, oldTblFound)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	a, m, r := GetDocDiffsFromDocDetails(ctx, docDetailsBtwnRoots)
-	return a, m, r, nil
 }
 
 // GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
@@ -1122,10 +967,10 @@ func (root *RootValue) PutForeignKeyCollection(ctx context.Context, fkc *Foreign
 	return &RootValue{root.vrw, rootValSt, fkc.copy()}, nil
 }
 
-// ValidateForeignKeys ensures that all foreign keys' tables are present, removing any foreign keys where the declared
-// table is missing, and returning an error if a key is in an invalid state or a referenced table is missing.
-//TODO: validate that rows that were not modified still adhere to the foreign key constraints
-func (root *RootValue) ValidateForeignKeys(ctx context.Context) (*RootValue, error) {
+// ValidateForeignKeysOnSchemas ensures that all foreign keys' tables are present, removing any foreign keys where the declared
+// table is missing, and returning an error if a key is in an invalid state or a referenced table is missing. Does not
+// check any tables' row data.
+func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootValue, error) {
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -1176,189 +1021,6 @@ func (root *RootValue) ValidateForeignKeys(ctx context.Context) (*RootValue, err
 	return root.PutForeignKeyCollection(ctx, fkCollection)
 }
 
-func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Schema, newTblFound bool, oldTbl *Table, oldSch schema.Schema, oldTblFound bool) ([]DocDetails, error) {
-	var docDetailsBtwnRoots []DocDetails
-	if newTblFound {
-		newRows, err := newTbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-		err = newRows.IterAll(ctx, func(key, val types.Value) error {
-			newRow, err := row.FromNoms(newSch, key.(types.Tuple), val.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			doc := DocDetails{}
-			updated, err := addDocPKToDocFromRow(newRow, &doc)
-			if err != nil {
-				return err
-			}
-			updated, err = addNewerTextToDocFromRow(ctx, newRow, &updated)
-			if err != nil {
-				return err
-			}
-			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, updated)
-			if err != nil {
-				return err
-			}
-			docDetailsBtwnRoots = append(docDetailsBtwnRoots, updated)
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if oldTblFound {
-		oldRows, err := oldTbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-		err = oldRows.IterAll(ctx, func(key, val types.Value) error {
-			oldRow, err := row.FromNoms(oldSch, key.(types.Tuple), val.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			doc := DocDetails{}
-			updated, err := addDocPKToDocFromRow(oldRow, &doc)
-			if err != nil {
-				return err
-			}
-			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, updated)
-			if err != nil {
-				return err
-			}
-			updated, err = AddNewerTextToDocFromTbl(ctx, newTbl, &newSch, updated)
-			if err != nil {
-				return err
-			}
-
-			if updated.Value != nil && updated.NewerText == nil {
-				docDetailsBtwnRoots = append(docDetailsBtwnRoots, updated)
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	return docDetailsBtwnRoots, nil
-}
-
-func GetDocDiffsFromDocDetails(ctx context.Context, docDetails []DocDetails) (added, modified, removed []string) {
-	added = []string{}
-	modified = []string{}
-	removed = []string{}
-	for _, doc := range docDetails {
-		added, modified, removed = appendDocDiffs(added, modified, removed, doc.Value, doc.NewerText, doc.DocPk)
-	}
-	return added, modified, removed
-}
-
-func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDetails []DocDetails) ([]DocDetails, error) {
-	if tbl != nil && sch != nil {
-		for i, details := range docDetails {
-			newDetails, err := AddValueToDocFromTbl(ctx, tbl, sch, details)
-			if err != nil {
-				return nil, err
-			}
-			docDetails[i] = newDetails
-		}
-	}
-	return docDetails, nil
-}
-
-// AddValueToDocFromTbl updates the Value field of a docDetail using the provided table and schema.
-func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail DocDetails) (DocDetails, error) {
-	if tbl != nil && sch != nil {
-		key, err := DocTblKeyFromName(tbl.Format(), docDetail.DocPk)
-		if err != nil {
-			return DocDetails{}, err
-		}
-
-		docRow, ok, err := getDocRow(ctx, tbl, *sch, key)
-		if err != nil {
-			return DocDetails{}, err
-		}
-
-		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
-			docDetail.Value = docValue
-		} else {
-			docDetail.Value = nil
-		}
-	} else {
-		docDetail.Value = nil
-	}
-	return docDetail, nil
-}
-
-// AddNewerTextToDocFromTbl updates the NewerText field of a docDetail using the provided table and schema.
-func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc DocDetails) (DocDetails, error) {
-	if tbl != nil && sch != nil {
-		key, err := DocTblKeyFromName(tbl.Format(), doc.DocPk)
-		if err != nil {
-			return DocDetails{}, err
-		}
-
-		docRow, ok, err := getDocRow(ctx, tbl, *sch, key)
-		if err != nil {
-			return DocDetails{}, err
-		}
-		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
-			doc.NewerText = []byte(docValue.(types.String))
-		} else {
-			doc.NewerText = nil
-		}
-	} else {
-		doc.NewerText = nil
-	}
-	return doc, nil
-}
-
-func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (DocDetails, error) {
-	docValue, ok := r.GetColVal(schema.DocTextTag)
-	if !ok {
-		doc.NewerText = nil
-	} else {
-		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
-		if err != nil {
-			return DocDetails{}, err
-		}
-		doc.NewerText = []byte(docValStr)
-	}
-	return *doc, nil
-}
-
-func addDocPKToDocFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
-	colVal, _ := r.GetColVal(schema.DocNameTag)
-	if colVal == nil {
-		doc.DocPk = ""
-	} else {
-		docName, err := strconv.Unquote(colVal.HumanReadableString())
-		if err != nil {
-			return DocDetails{}, err
-		}
-		doc.DocPk = docName
-	}
-
-	return *doc, nil
-}
-
-func appendDocDiffs(added, modified, removed []string, olderVal types.Value, newerVal []byte, docPk string) (add, mod, rem []string) {
-	if olderVal == nil && newerVal != nil {
-		added = append(added, docPk)
-	} else if olderVal != nil {
-		if newerVal == nil {
-			removed = append(removed, docPk)
-		} else if olderVal.HumanReadableString() != strconv.Quote(string(newerVal)) {
-			modified = append(modified, docPk)
-		}
-	}
-	return added, modified, removed
-}
-
 // RootNeedsUniqueTagsMigration determines if this root needs to be migrated to uniquify its tags.
 func RootNeedsUniqueTagsMigration(root *RootValue) (bool, error) {
 	// SuperSchemas were added in the same update that required unique tags. If a root does not have a
@@ -1403,14 +1065,12 @@ func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.Supe
 	}
 
 	rootSuperSchema, err := schema.SuperSchemaUnion(sss...)
-
 	if err != nil {
 		return nil, err
 	}
 
 	// super schemas are only persisted on commit, so add in working schemas
 	tblMap, err := root.getTableMap()
-
 	if err != nil {
 		return nil, err
 	}
@@ -1430,6 +1090,9 @@ func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.Supe
 		}
 		return false, nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return rootSuperSchema, nil
 }
@@ -1452,26 +1115,50 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 
 // validateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
 func validateTagUniqueness(ctx context.Context, root *RootValue, tableName string, table *Table) error {
+	prev, ok, err := root.GetTable(ctx, tableName)
+	if err != nil {
+		return err
+	}
+	if ok {
+		prevRef, err := prev.GetSchemaRef()
+		if err != nil {
+			return err
+		}
+
+		newRef, err := table.GetSchemaRef()
+		if err != nil {
+			return err
+		}
+
+		// short-circuit if schema unchanged
+		if prevRef.Equals(newRef) {
+			return nil
+		}
+	}
+
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return err
 	}
 
 	var ee []string
-	_ = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (stop bool, err error) {
+	err = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (stop bool, err error) {
 		if tn == tableName {
 			return false, nil
 		}
 
-		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			_, ok := ss.GetByTag(tag)
 			if ok {
 				ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, tn).Error())
 			}
 			return false, nil
 		})
-		return false, nil
+		return false, err
 	})
+	if err != nil {
+		return err
+	}
 
 	if len(ee) > 0 {
 		return fmt.Errorf(strings.Join(ee, "\n"))

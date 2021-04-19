@@ -79,6 +79,11 @@ func (cur *bufferedSequenceIterator) current() (sequenceItem, error) {
 	return cur.seq.getItem(cur.idx)
 }
 
+func (cur *bufferedSequenceIterator) currentTuple() (tupleMapEntry, error) {
+	d.PanicIfFalse(cur.valid())
+	return cur.seq.(mapLeafSequence).getTupleMapEntry(cur.idx)
+}
+
 func (cur *bufferedSequenceIterator) valid() bool {
 	return cur.idx >= 0 && cur.idx < cur.length()
 }

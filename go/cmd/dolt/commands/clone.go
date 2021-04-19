@@ -370,12 +370,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		}
 	}
 
-	h, err := rootVal.HashOf()
-	if err != nil {
-		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
-	}
-
-	_, err = dEnv.DoltDB.WriteRootValue(ctx, rootVal)
+	h, err := dEnv.DoltDB.WriteRootValue(ctx, rootVal)
 	if err != nil {
 		return errhand.BuildDError("error: could not write root value").AddCause(err).Build()
 	}

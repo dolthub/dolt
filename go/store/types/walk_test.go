@@ -229,6 +229,7 @@ func (suite *WalkTestSuite) TestSkipMapValue() {
 	shouldAlsoSee, err := NewSet(context.Background(), suite.vs, shouldAlsoSeeItem)
 	suite.NoError(err)
 	wholeMap, err := NewMap(context.Background(), suite.vs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
+	suite.NoError(err)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.shouldSee, suite.shouldSeeItem, suite.mustSkip, shouldAlsoSee, shouldAlsoSeeItem} {
 		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)

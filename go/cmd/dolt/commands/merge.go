@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -31,13 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
-)
-
-const (
-	abortParam  = "abort"
-	squashParam = "squash"
-	noFFParam   = "no-ff"
 )
 
 var mergeDocs = cli.CommandDocumentationContent{
@@ -56,10 +52,9 @@ The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be 
 	},
 }
 
-var abortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
-
-If there were uncommitted working set changes present when the merge started, {{.EmphasisLeft}}dolt merge --abort{{.EmphasisRight}} will be unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before running dolt merge.
-`
+var fkWarningMessage = "Warning: This merge is being applied to tables that have foreign key constraints. These constraints " +
+	"will not be enforced during the merge process to allow you to fix constraint issues that arise from merge conflicts. " +
+	"to check for foreign key constraint violations run `dolt verify-constraints` on this repo after merging."
 
 type MergeCmd struct{}
 
@@ -75,17 +70,8 @@ func (cmd MergeCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cli.CreateMergeArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
-}
-
-func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(abortParam, "", abortDetails)
-	ap.SupportsFlag(squashParam, "", "Merges changes to the working set without updating the commit history")
-	ap.SupportsFlag(noFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
-	ap.SupportsString(cli.CommitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
-	return ap
 }
 
 // EventType returns the type of the event to log
@@ -95,17 +81,17 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cli.CreateMergeArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	if apr.ContainsAll(squashParam, noFFParam) {
-		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", squashParam, noFFParam)
+	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
+		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 		return 1
 	}
 
 	var verr errhand.VerboseError
-	if apr.Contains(abortParam) {
+	if apr.Contains(cli.AbortParam) {
 		if !dEnv.IsMergeActive() {
 			cli.PrintErrln("fatal: There is no merge to abort")
 			return 1
@@ -134,7 +120,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return 1
 			} else if dEnv.IsMergeActive() {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
-				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using {{.EmphasisLeft}}dolt commit -m <msg>{{.EmphasisRight}}")
+				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using 'dolt commit -m <msg>'")
 				cli.Println("fatal: Exiting because of active merge")
 				return 1
 			}
@@ -149,10 +135,10 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.CheckoutAllTables(ctx, doltEnv)
+	err := actions.CheckoutAllTables(ctx, doltEnv.DbData())
 
 	if err == nil {
-		err = doltEnv.RepoState.ClearMerge(doltEnv.FS)
+		err = doltEnv.RepoState.AbortMerge(doltEnv.FS)
 
 		if err == nil {
 			return nil
@@ -194,12 +180,12 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
-	squash := apr.Contains(squashParam)
+	squash := apr.Contains(cli.SquashParam)
 	if squash {
 		cli.Println("Squash commit -- not updating HEAD")
 	}
 
-	tblNames, workingDiffs, err := dEnv.MergeWouldStompChanges(ctx, cm2)
+	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, cm2, dEnv.DbData())
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
@@ -215,7 +201,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	}
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		if apr.Contains(noFFParam) {
+		if apr.Contains(cli.NoFFParam) {
 			return execNoFFMerge(ctx, apr, dEnv, cm2, verr, workingDiffs)
 		} else {
 			return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
@@ -322,7 +308,7 @@ func executeFFMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm2 *do
 		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv.DbData())
 	if err != nil {
 		return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
 	}
@@ -359,6 +345,12 @@ and take the hash for your current branch and use it for the value for "staged" 
 }
 
 func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+	verr := fkConstraintWarning(ctx, cm1, cm2)
+
+	if verr != nil {
+		return verr
+	}
+
 	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, cm1, cm2)
 
 	if err != nil {
@@ -373,6 +365,98 @@ func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 
 	}
 
 	return mergedRootToWorking(ctx, squash, dEnv, mergedRoot, workingDiffs, cm2, tblToStats)
+}
+
+func fkConstraintWarning(ctx context.Context, cm1, cm2 *doltdb.Commit) errhand.VerboseError {
+	verrBuild := errhand.BuildDError("failed to read from database.")
+	r1, err := cm1.GetRootValue()
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	r2, err := cm2.GetRootValue()
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	fks1, err := r1.GetForeignKeyCollection(ctx)
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	fks2, err := r2.GetForeignKeyCollection(ctx)
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	tblNames1, err := r1.GetTableNames(ctx)
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	tblNames2, err := r2.GetTableNames(ctx)
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	allNames := set.NewStrSet(tblNames1)
+	allNames.Add(tblNames2...)
+
+	var warnTables []string
+	for _, name := range allNames.AsSlice() {
+		tbl1, ok1, err := r1.GetTable(ctx, name)
+
+		if err != nil {
+			return verrBuild.AddCause(err).Build()
+		}
+
+		tbl2, ok2, err := r2.GetTable(ctx, name)
+
+		if err != nil {
+			return verrBuild.AddCause(err).Build()
+		}
+
+		var h1, h2 hash.Hash
+		var fkOnTbl1, fkOnTbl2 bool
+		if ok1 {
+			h1, err = tbl1.HashOf()
+
+			if err != nil {
+				return verrBuild.AddCause(err).Build()
+			}
+
+			decl, refd := fks1.KeysForTable(name)
+			fkOnTbl1 = (len(decl) + len(refd)) > 0
+		}
+
+		if ok2 {
+			h2, err = tbl2.HashOf()
+
+			if err != nil {
+				return verrBuild.AddCause(err).Build()
+			}
+
+			decl, refd := fks2.KeysForTable(name)
+			fkOnTbl2 = (len(decl) + len(refd)) > 0
+		}
+
+		if h1 != h2 && (fkOnTbl1 || fkOnTbl2) {
+			warnTables = append(warnTables, name)
+		}
+	}
+
+	if len(warnTables) > 0 {
+		cli.Println(color.YellowString(fkWarningMessage))
+		cli.Println(color.YellowString("You are seeing this message due to changes in the following table(s): " + strings.Join(warnTables, ",")))
+	}
+
+	return nil
 }
 
 func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, mergedRoot *doltdb.RootValue, workingDiffs map[string]hash.Hash, cm2 *doltdb.Commit, tblToStats map[string]*merge.MergeStats) errhand.VerboseError {
@@ -401,7 +485,7 @@ func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, me
 		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv.DbData())
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine unstaged docs").AddCause(err).Build()
 	}
@@ -418,7 +502,7 @@ func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, me
 			if err != nil {
 				return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
 			}
-			verr = UpdateStagedWithVErr(dEnv, mergedRoot)
+			verr = UpdateStagedWithVErr(dEnv.DoltDB, dEnv.RepoStateWriter(), mergedRoot)
 			if verr != nil {
 				// Log a new message here to indicate that merge was successful, only staging failed.
 				cli.Println("Unable to stage changes: add and commit to finish merge")

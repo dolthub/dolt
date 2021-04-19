@@ -43,7 +43,7 @@ func (v Null) Value(ctx context.Context) (Value, error) {
 }
 
 func (v Null) Equals(other Value) bool {
-	return other.Kind() == NullKind
+	return other == nil || other.Kind() == NullKind
 }
 
 func (v Null) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {

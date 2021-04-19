@@ -27,6 +27,9 @@ type Schema interface {
 
 	// Indexes returns a collection of all indexes on the table that this schema belongs to.
 	Indexes() IndexCollection
+
+	// Checks returns a collection of all check constraints on the table that this schema belongs to.
+	Checks() CheckCollection
 }
 
 // ColFromTag returns a schema.Column from a schema and a tag
@@ -59,19 +62,29 @@ func IsKeyless(sch Schema) bool {
 		sch.GetAllCols().Size() != 0
 }
 
-// TODO: this function never returns an error
+func HasAutoIncrement(sch Schema) (ok bool) {
+	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			ok = true
+			stop = true
+		}
+		return
+	})
+	return
+}
+
 // SchemasAreEqual tests equality of two schemas.
-func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {
+func SchemasAreEqual(sch1, sch2 Schema) bool {
 	if sch1 == nil && sch2 == nil {
-		return true, nil
+		return true
 	} else if sch1 == nil || sch2 == nil {
-		return false, nil
+		return false
 	}
 	colCollIsEqual := ColCollsAreEqual(sch1.GetAllCols(), sch2.GetAllCols())
 	if !colCollIsEqual {
-		return false, nil
+		return false
 	}
-	return sch1.Indexes().Equals(sch2.Indexes()), nil
+	return sch1.Indexes().Equals(sch2.Indexes())
 }
 
 // TODO: this function never returns an error

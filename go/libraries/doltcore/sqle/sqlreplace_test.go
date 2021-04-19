@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -58,7 +58,7 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name:           "replace no columns",
 		ReplaceQuery:   "replace into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)",
-		SelectQuery:    "select * from people where id = 2",
+		SelectQuery:    "select * from people where id = 2 ORDER BY id",
 		ExpectedRows:   ToSqlRows(PeopleTestSchema, Bart),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
@@ -66,7 +66,7 @@ var BasicReplaceTests = []ReplaceTest{
 		Name: "replace set",
 		ReplaceQuery: "replace into people set id = 2, first_name = 'Bart', last_name = 'Simpson'," +
 			"is_married = false, age = 10, rating = 9, uuid = '00000000-0000-0000-0000-000000000002', num_episodes = 222",
-		SelectQuery:    "select * from people where id = 2",
+		SelectQuery:    "select * from people where id = 2 ORDER BY id",
 		ExpectedRows:   ToSqlRows(PeopleTestSchema, Bart),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
@@ -83,14 +83,14 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name:           "replace full columns",
 		ReplaceQuery:   "replace into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222)",
-		SelectQuery:    "select * from people where id = 2",
+		SelectQuery:    "select * from people where id = 2 ORDER BY id",
 		ExpectedRows:   ToSqlRows(PeopleTestSchema, Bart),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "replace full columns mixed order",
 		ReplaceQuery:   "replace into people (num_episodes, uuid, rating, age, is_married, last_name, first_name, id) values (222, '00000000-0000-0000-0000-000000000002', 9, 10, false, 'Simpson', 'Bart', 2)",
-		SelectQuery:    "select * from people where id = 2",
+		SelectQuery:    "select * from people where id = 2 ORDER BY id",
 		ExpectedRows:   ToSqlRows(PeopleTestSchema, Bart),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
@@ -98,21 +98,21 @@ var BasicReplaceTests = []ReplaceTest{
 		Name: "replace full columns negative values",
 		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					    (-7, "Maggie", "Simpson", false, -1, -5.1, '00000000-0000-0000-0000-000000000005', 677)`,
-		SelectQuery:    "select * from people where id = -7",
+		SelectQuery:    "select * from people where id = -7 ORDER BY id",
 		ExpectedRows:   ToSqlRows(PeopleTestSchema, NewPeopleRowWithOptionalFields(-7, "Maggie", "Simpson", false, -1, -5.1, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 677)),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "replace full columns null values",
 		ReplaceQuery:   "replace into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values (2, 'Bart', 'Simpson', null, null, null, null, null)",
-		SelectQuery:    "select * from people where id = 2",
+		SelectQuery:    "select * from people where id = 2 ORDER BY id",
 		ExpectedRows:   ToSqlRows(CompressSchema(PeopleTestSchema), NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson"))),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:         "replace partial columns",
 		ReplaceQuery: "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson')",
-		SelectQuery:  "select id, first_name, last_name from people where id = 2",
+		SelectQuery:  "select id, first_name, last_name from people where id = 2 ORDER BY id",
 		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson")),
@@ -122,7 +122,7 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name:         "replace partial columns mixed order",
 		ReplaceQuery: "replace into people (last_name, first_name, id) values ('Simpson', 'Bart', 2)",
-		SelectQuery:  "select id, first_name, last_name from people where id = 2",
+		SelectQuery:  "select id, first_name, last_name from people where id = 2 ORDER BY id",
 		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson")),
@@ -157,7 +157,7 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name:         "replace partial columns functions",
 		ReplaceQuery: "replace into people (id, first_name, last_name) values (2, UPPER('Bart'), 'Simpson')",
-		SelectQuery:  "select id, first_name, last_name from people where id = 2",
+		SelectQuery:  "select id, first_name, last_name from people where id = 2 ORDER BY id",
 		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(2), types.String("BART"), types.String("Simpson")),
@@ -183,7 +183,7 @@ var BasicReplaceTests = []ReplaceTest{
 					(9, "Jacqueline", "Bouvier", true, 80, 2),
 					(10, "Patty", "Bouvier", false, 40, 7),
 					(11, "Selma", "Bouvier", false, 40, 7)`,
-		SelectQuery: "select id, first_name, last_name, is_married, age, rating from people where id > 6",
+		SelectQuery: "select id, first_name, last_name, is_married, age, rating from people where id > 6 ORDER BY id",
 		ExpectedRows: ToSqlRows(SubsetSchema(PeopleTestSchema, "id", "first_name", "last_name", "is_married", "age", "rating"),
 			NewPeopleRow(7, "Maggie", "Simpson", false, 1, 5.1),
 			NewPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
@@ -202,7 +202,7 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name:         "replace partial columns multiple rows duplicate",
 		ReplaceQuery: "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson'), (2, 'Bart', 'Simpson')",
-		SelectQuery:  "select id, first_name, last_name from people where id = 2",
+		SelectQuery:  "select id, first_name, last_name from people where id = 2 ORDER BY id",
 		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson")),
@@ -215,7 +215,7 @@ var BasicReplaceTests = []ReplaceTest{
 			NewSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
 			NewRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(44))),
 		ReplaceQuery: "replace into temppeople (id, first_name, last_name, num) values (2, 'Bart', 'Simpson', 88)",
-		SelectQuery:  "select id, first_name, last_name, num from temppeople where id = 2",
+		SelectQuery:  "select id, first_name, last_name, num from temppeople where id = 2 ORDER BY id",
 		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
 			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(88))),
@@ -256,7 +256,7 @@ var systemTableReplaceTests = []ReplaceTest{
 	{
 		Name: "replace into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			env.DoltDocsSchema,
+			doltdocs.Schema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
 		ExpectedErr:  "cannot insert into table",

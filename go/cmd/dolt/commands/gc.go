@@ -114,11 +114,13 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
-		w := dEnv.RepoState.WorkingHash()
-		s := dEnv.RepoState.StagedHash()
+		keepers, err := env.GetGCKeepers(ctx, dEnv.RepoStateReader(), dEnv.DoltDB)
+		if err != nil {
+			verr = errhand.BuildDError("an error occurred while saving working set").AddCause(err).Build()
+			return HandleVErrAndExitCode(verr, usage)
+		}
 
-		err = dEnv.DoltDB.GC(ctx, w, s)
-
+		err = dEnv.DoltDB.GC(ctx, keepers...)
 		if err != nil {
 			verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
 		}

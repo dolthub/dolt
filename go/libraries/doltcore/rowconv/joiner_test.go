@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -31,7 +32,7 @@ const (
 	cityTag
 )
 
-var peopleCols, _ = schema.NewColCollection(
+var peopleCols = schema.NewColCollection(
 	schema.NewColumn("last", lastTag, types.StringKind, true),
 	schema.NewColumn("first", firstTag, types.StringKind, true),
 	schema.NewColumn("age", ageTag, types.IntKind, false),
@@ -123,20 +124,20 @@ func TestJoiner(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			j, err := NewJoiner(test.namedSchemas, test.namers)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			for _, tj := range test.toJoin {
 				rows := map[string]row.Row{}
 
 				for _, namedSch := range test.namedSchemas {
 					r, err := row.New(types.Format_Default, namedSch.Sch, tj.toJoinVals[namedSch.Name])
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					rows[namedSch.Name] = r
 				}
 
 				joinedRow, err := j.Join(rows)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				joinedSch := j.GetSchema()
 				_, err = joinedRow.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
@@ -149,10 +150,10 @@ func TestJoiner(t *testing.T) {
 					return false, nil
 				})
 
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				splitRows, err := j.Split(joinedRow)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assert.Equal(t, len(tj.toJoinVals), len(splitRows))
 
@@ -169,7 +170,7 @@ func TestJoiner(t *testing.T) {
 					assert.False(t, actual == nil || expectedVals == nil)
 
 					expected, err := row.New(types.Format_Default, sch, expectedVals)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.True(t, row.AreEqual(actual, expected, sch))
 				}
 			}

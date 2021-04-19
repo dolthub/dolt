@@ -115,7 +115,7 @@ func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 
 	db = datas.NewDatabase(cs)
 
-	return db, err
+	return db, nil
 }
 
 func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {

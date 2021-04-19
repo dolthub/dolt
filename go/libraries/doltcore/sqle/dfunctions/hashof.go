@@ -58,7 +58,6 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	name, as, err := doltdb.SplitAncestorSpec(paramStr)
-
 	if err != nil {
 		return nil, err
 	}
@@ -73,29 +72,28 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if strings.ToUpper(name) == "HEAD" {
 		sess := sqle.DSessFromSess(ctx.Session)
 
-		cm, _, err = sess.GetParentCommit(ctx, dbName)
+		cm, _, err = sess.GetHeadCommit(ctx, dbName)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		branchRef, err := getBranchInsensitive(ctx, name, ddb)
-
 		if err != nil {
 			return nil, err
 		}
 
 		cm, err = ddb.ResolveRef(ctx, branchRef)
-	}
-
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	cm, err = cm.GetAncestor(ctx, as)
-
 	if err != nil {
 		return nil, err
 	}
 
 	h, err := cm.HashOf()
-
 	if err != nil {
 		return nil, err
 	}

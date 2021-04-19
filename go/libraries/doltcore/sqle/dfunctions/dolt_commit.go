@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -27,6 +28,8 @@ import (
 )
 
 const DoltCommitFuncName = "dolt_commit"
+
+var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
 type DoltCommitFunc struct {
 	children []sql.Expression
@@ -65,11 +68,6 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	allFlag := apr.Contains(cli.AllFlag)
 	allowEmpty := apr.Contains(cli.AllowEmptyFlag)
 
-	// Check if there are no changes in the working set but the -a flag is true
-	if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty {
-		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
-	}
-
 	// Check if there are no changes in the staged set but the -a flag is false
 	hasStagedChanges, err := hasStagedSetChanges(ctx, ddb, rsr)
 	if err != nil {
@@ -77,6 +75,12 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	if !allFlag && !hasStagedChanges && !allowEmpty {
+		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
+	}
+
+	// Check if there are no changes in the working set but the -a flag is true.
+	// The -a flag is fine when a merge is active or there are staged changes as result of a merge or an add.
+	if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty && !rsr.IsMergeActive() && !hasStagedChanges {
 		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
 	}
 
@@ -125,8 +129,21 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		Name:             name,
 		Email:            email,
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return h, err
+	if allFlag {
+		err = setHeadAndWorkingSessionRoot(ctx, h)
+	} else {
+		err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return h, nil
 }
 
 func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
@@ -203,4 +220,21 @@ func (d DoltCommitFunc) Resolved() bool {
 
 func (d DoltCommitFunc) Children() []sql.Expression {
 	return d.children
+}
+
+// setHeadAndWorkingSessionRoot takes in a ctx and the new head hashstring and updates the session head and working hashes.
+func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
+	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
+	dsess := sqle.DSessFromSess(ctx.Session)
+
+	return dsess.Set(ctx, key, hashType, headHashStr)
+}
+
+// setSessionRootExplicit sets a session variable (either HEAD or WORKING) to a hash string. For HEAD, the hash string
+// should come from the commit string. For working the commit string needs to come from the root.
+func setSessionRootExplicit(ctx *sql.Context, hashString string, suffix string) error {
+	key := ctx.GetCurrentDatabase() + suffix
+	dsess := sqle.DSessFromSess(ctx.Session)
+
+	return dsess.SetSessionVarDirectly(ctx, key, hashType, hashString)
 }

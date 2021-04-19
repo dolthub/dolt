@@ -285,7 +285,7 @@ func (cp commitPartitioner) Next() (sql.Partition, error) {
 }
 
 // Close closes the partitioner
-func (cp commitPartitioner) Close() error {
+func (cp commitPartitioner) Close(*sql.Context) error {
 	return nil
 }
 
@@ -341,7 +341,9 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	toSuperSchConv, err := rowConvForSchema(ss, tblSch)
+	vrw := types.NewMemoryValueStore() // We're displaying here, so all values that require a VRW will use an internal one
+
+	toSuperSchConv, err := rowConvForSchema(ctx, vrw, ss, tblSch)
 
 	if err != nil {
 		return nil, err
@@ -424,7 +426,7 @@ func (tblItr *rowItrForTableAtCommit) Next() (sql.Row, error) {
 }
 
 // Close the iterator.
-func (tblItr *rowItrForTableAtCommit) Close() error {
+func (tblItr *rowItrForTableAtCommit) Close(*sql.Context) error {
 	if tblItr.rd != nil {
 		return tblItr.rd.Close(tblItr.ctx)
 	}

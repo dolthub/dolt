@@ -90,7 +90,7 @@ func executeModify(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 		}
 	}
 
-	err = iter.Close()
+	err = iter.Close(sqlCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 			cols = append(cols, col)
 		}
 	}
-	colColl, _ := schema.NewColCollection(cols...)
+	colColl := schema.NewColCollection(cols...)
 	return schema.UnkeyedSchemaFromCols(colColl)
 }
 

@@ -17,8 +17,11 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -27,24 +30,29 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
+	CWBHeadHash(ctx context.Context) (hash.Hash, error)
 	WorkingHash() hash.Hash
 	StagedHash() hash.Hash
 	IsMergeActive() bool
 	GetMergeCommit() string
+	GetPreMergeWorking() string
 }
 
 type RepoStateWriter interface {
-	// SetCWBHeadRef(context.Context, ref.DoltRef) error
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
 	SetStagedHash(context.Context, hash.Hash) error
 	SetWorkingHash(context.Context, hash.Hash) error
+	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
+	AbortMerge() error
 	ClearMerge() error
+	StartMerge(commitStr string) error
 }
 
 type DocsReadWriter interface {
-	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
-	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
-	ResetWorkingDocsToStagedDocs(ctx context.Context) error
+	// GetDocsOnDisk returns the docs in the filesytem optionally filtered by docNames.
+	GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error)
+	// WriteDocsToDisk updates the documents stored in the filesystem with the contents in docs.
+	WriteDocsToDisk(docs doltdocs.Docs) error
 }
 
 type DbData struct {
@@ -247,4 +255,175 @@ func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWrit
 	}
 
 	return h, nil
+}
+
+func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
+	_, err := UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
+
+	switch err {
+	case doltdb.ErrNomsIO:
+		return errhand.BuildDError("fatal: failed to write value").Build()
+	case ErrStateUpdate:
+		return errhand.BuildDError("fatal: failed to update the staged root state").Build()
+	}
+
+	return nil
+}
+
+func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (working *doltdb.RootValue, staged *doltdb.RootValue, head *doltdb.RootValue, err error) {
+	working, err = WorkingRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	staged, err = StagedRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	head, err = HeadRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return working, staged, head, nil
+}
+
+func MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
+	headRoot, err := HeadRoot(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	workingRoot, err := WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeRoot, err := mergeCommit.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	headTableHashes, err := mapTableHashes(ctx, headRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	workingTableHashes, err := mapTableHashes(ctx, workingRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeTableHashes, err := mapTableHashes(ctx, mergeRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
+	mergeWorkingDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
+
+	stompedTables := make([]string, 0, len(headWorkingDiffs))
+	for tName, _ := range headWorkingDiffs {
+		if _, ok := mergeWorkingDiffs[tName]; ok {
+			// even if the working changes match the merge changes, don't allow (matches git behavior).
+			stompedTables = append(stompedTables, tName)
+		}
+	}
+
+	return stompedTables, headWorkingDiffs, nil
+}
+
+// GetGCKeepers queries |rsr| to find a list of values that need to be temporarily saved during GC.
+func GetGCKeepers(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) ([]hash.Hash, error) {
+	keepers := []hash.Hash{
+		rsr.WorkingHash(),
+		rsr.StagedHash(),
+	}
+
+	if rsr.IsMergeActive() {
+		spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
+		if err != nil {
+			return nil, err
+		}
+
+		cm, err := ddb.Resolve(ctx, spec, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		ch, err := cm.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		pmw := hash.Parse(rsr.GetPreMergeWorking())
+		val, err := ddb.ValueReadWriter().ReadValue(ctx, pmw)
+		if err != nil {
+			return nil, err
+		}
+		if val == nil {
+			return nil, fmt.Errorf("MergeState.PreMergeWorking is a dangling hash")
+		}
+
+		keepers = append(keepers, ch, pmw)
+	}
+
+	return keepers, nil
+}
+
+func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {
+	names, err := root.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	nameToHash := make(map[string]hash.Hash)
+	for _, name := range names {
+		h, ok, err := root.GetTableHash(ctx, name)
+
+		if err != nil {
+			return nil, err
+		} else if !ok {
+			panic("GetTableNames returned a table that GetTableHash says isn't there.")
+		} else {
+			nameToHash[name] = h
+		}
+	}
+
+	return nameToHash, nil
+}
+
+func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map[string]hash.Hash {
+	diffs := make(map[string]hash.Hash)
+	for tName, hh := range headTableHashes {
+		if h, ok := otherTableHashes[tName]; ok {
+			if h != hh {
+				// modification
+				diffs[tName] = h
+			}
+		} else {
+			// deletion
+			diffs[tName] = hash.Hash{}
+		}
+	}
+
+	for tName, h := range otherTableHashes {
+		if _, ok := headTableHashes[tName]; !ok {
+			// addition
+			diffs[tName] = h
+		}
+	}
+
+	return diffs
 }

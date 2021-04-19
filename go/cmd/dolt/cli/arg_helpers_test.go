@@ -53,7 +53,7 @@ func TestParseKeyValues(t *testing.T) {
 		mnColTag  = 2
 	)
 
-	testKeyColColl, _ := schema.NewColCollection(
+	testKeyColColl := schema.NewColCollection(
 		schema.NewColumn(lnColName, lnColTag, types.StringKind, true),
 		schema.NewColumn(fnColName, fnColTag, types.StringKind, true),
 		schema.NewColumn(mnColName, mnColTag, types.StringKind, true),
@@ -62,7 +62,7 @@ func TestParseKeyValues(t *testing.T) {
 	sch, err := schema.SchemaFromCols(testKeyColColl)
 	require.NoError(t, err)
 
-	singleKeyColColl, _ := schema.NewColCollection(
+	singleKeyColColl := schema.NewColCollection(
 		schema.NewColumn(lnColName, lnColTag, types.StringKind, true),
 	)
 
@@ -143,7 +143,8 @@ func TestParseKeyValues(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		actual, err := ParseKeyValues(types.Format_7_18, test.sch, test.args)
+		vrw := types.NewMemoryValueStore()
+		actual, err := ParseKeyValues(ctx, vrw, test.sch, test.args)
 
 		if test.expectErr != (err != nil) {
 			t.Error(test.args, "produced an unexpected error")

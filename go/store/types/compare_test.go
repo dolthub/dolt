@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -139,9 +140,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return bytes.Compare(a, b)
 	case IntKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := Int(reader.readInt())
+		aNum := Int(reader.ReadInt())
 		reader.buff, reader.offset = b[1:], 0
-		bNum := Int(reader.readInt())
+		bNum := Int(reader.ReadInt())
 		if aNum == bNum {
 			return 0
 		}
@@ -151,9 +152,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return 1
 	case UintKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := Uint(reader.readUint())
+		aNum := Uint(reader.ReadUint())
 		reader.buff, reader.offset = b[1:], 0
-		bNum := Uint(reader.readUint())
+		bNum := Uint(reader.ReadUint())
 		if aNum == bNum {
 			return 0
 		}
@@ -163,9 +164,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return 1
 	case FloatKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := Float(reader.readFloat(Format_7_18))
+		aNum := Float(reader.ReadFloat(Format_7_18))
 		reader.buff, reader.offset = b[1:], 0
-		bNum := Float(reader.readFloat(Format_7_18))
+		bNum := Float(reader.ReadFloat(Format_7_18))
 		if aNum == bNum {
 			return 0
 		}
@@ -322,11 +323,11 @@ func TestCompareTotalOrdering(t *testing.T) {
 				assert.True(vi.Equals(vj))
 			} else if i < j {
 				x, err := vi.Less(Format_7_18, vj)
-				assert.NoError(err)
+				require.NoError(t, err)
 				assert.True(x)
 			} else {
 				x, err := vi.Less(Format_7_18, vj)
-				assert.NoError(err)
+				require.NoError(t, err)
 				assert.False(x)
 			}
 		}
@@ -342,30 +343,30 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	words := ValueSlice{String("k1"), String("v1")}
 
 	blob, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{1, 2, 3}))
-	assert.NoError(err)
+	require.NoError(t, err)
 	nList, err := NewList(context.Background(), vrw, nums...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	nMap, err := NewMap(context.Background(), vrw, words...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	nRef, err := NewRef(blob, Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	nSet, err := NewSet(context.Background(), vrw, nums...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	nStruct, err := NewStruct(Format_7_18, "teststruct", map[string]Value{"f1": Float(1)})
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	vals := ValueSlice{Bool(true), Float(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
 	err = SortWithErroringLess(ValueSort{vals, Format_7_18})
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for i, v1 := range vals {
 		for j, v2 := range vals {
 			iBytes := [1024]byte{}
 			jBytes := [1024]byte{}
 			bytes1, err := encodeGraphKey(iBytes[:0], v1)
-			assert.NoError(err)
+			require.NoError(t, err)
 			bytes2, err := encodeGraphKey(jBytes[:0], v2)
-			assert.NoError(err)
+			require.NoError(t, err)
 			res := compareEncodedKey(bytes1, bytes2)
 			expectedRes := compareInts(i, j)
 
@@ -414,9 +415,9 @@ func TestCompareEncodedKeys(t *testing.T) {
 	bs2 := [initialBufferSize]byte{}
 
 	e1, _, err := encodeKeys(bs1[:0], 0x01020304, MapKind, k1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	e2, _, err := encodeKeys(bs2[:0], 0x01020304, MapKind, k2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(-1, compareEncodedKeys(e1, e2))
 }
 

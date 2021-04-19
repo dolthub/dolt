@@ -23,24 +23,24 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var fieldsA, _ = schema.NewColCollection(
+var fieldsA = schema.NewColCollection(
 	schema.NewColumn("a", 0, types.StringKind, true),
 	schema.NewColumn("b", 1, types.StringKind, false),
 	schema.NewColumn("c", 2, types.StringKind, false))
 
-var fieldsB, _ = schema.NewColCollection(
+var fieldsB = schema.NewColCollection(
 	schema.NewColumn("a", 0, types.StringKind, true),
 	schema.NewColumn("b", 1, types.StringKind, false))
 
-var fieldsC, _ = schema.NewColCollection(
+var fieldsC = schema.NewColCollection(
 	schema.NewColumn("key", 3, types.UUIDKind, true),
 	schema.NewColumn("value", 4, types.StringKind, false))
 
-var fieldsCNoPK, _ = schema.NewColCollection(
+var fieldsCNoPK = schema.NewColCollection(
 	schema.NewColumn("key", 3, types.UUIDKind, true),
 	schema.NewColumn("value", 4, types.StringKind, false))
 
-var fieldsD, _ = schema.NewColCollection(
+var fieldsD = schema.NewColCollection(
 	schema.NewColumn("key", 3, types.StringKind, true),
 	schema.NewColumn("value", 4, types.StringKind, false))
 

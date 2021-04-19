@@ -146,9 +146,16 @@ type encodedIndex struct {
 	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
 }
 
+type encodedCheck struct {
+	Name       string `noms:"name" json:"name"`
+	Expression string `noms:"expression" json:"expression"`
+	Enforced   bool   `noms:"enforced" json:"enforced"`
+}
+
 type schemaData struct {
-	Columns         []encodedColumn `noms:"columns" json:"columns"`
-	IndexCollection []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
+	Columns          []encodedColumn `noms:"columns" json:"columns"`
+	IndexCollection  []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
+	CheckConstraints []encodedCheck  `noms:"checks,omitempty" json:"checks,omitempty"`
 }
 
 func toSchemaData(sch schema.Schema) (schemaData, error) {
@@ -178,7 +185,21 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		}
 	}
 
-	return schemaData{encCols, encodedIndexes}, nil
+	encodedChecks := make([]encodedCheck, sch.Checks().Count())
+	checks := sch.Checks()
+	for i, check := range checks.AllChecks() {
+		encodedChecks[i] = encodedCheck{
+			Name:       check.Name(),
+			Expression: check.Expression(),
+			Enforced:   check.Enforced(),
+		}
+	}
+
+	return schemaData{
+		Columns:          encCols,
+		IndexCollection:  encodedIndexes,
+		CheckConstraints: encodedChecks,
+	}, nil
 }
 
 func (sd schemaData) decodeSchema() (schema.Schema, error) {
@@ -193,11 +214,7 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		}
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	sch, err := schema.SchemaFromCols(colColl)
 	if err != nil {
@@ -219,11 +236,29 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		}
 	}
 
+	for _, encodedCheck := range sd.CheckConstraints {
+		_, err = sch.Checks().AddCheck(
+			encodedCheck.Name,
+			encodedCheck.Expression,
+			encodedCheck.Enforced,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return sch, nil
 }
 
 // MarshalSchemaAsNomsValue takes a Schema and converts it to a types.Value
 func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
+	// Anyone calling this is going to serialize this to disk, so it's our last line of defense against defective schemas.
+	// Business logic should catch errors before this point, but this is a failsafe.
+	err := schema.ValidateForInsert(sch.GetAllCols())
+	if err != nil {
+		return nil, err
+	}
+
 	sd, err := toSchemaData(sch)
 
 	if err != nil {
@@ -292,11 +327,7 @@ func (ssd superSchemaData) decodeSuperSchema() (*schema.SuperSchema, error) {
 		cols[i] = c
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	if ssd.TagNames == nil {
 		ssd.TagNames = make(map[uint64][]string)

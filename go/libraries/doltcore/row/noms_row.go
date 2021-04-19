@@ -152,6 +152,18 @@ func (nr nomsRow) Format() *types.NomsBinFormat {
 	return nr.nbf
 }
 
+// TaggedValues implements the Row interface.
+func (nr nomsRow) TaggedValues() (TaggedValues, error) {
+	tv := make(TaggedValues)
+	for k, v := range nr.key {
+		tv[k] = v
+	}
+	for k, v := range nr.value {
+		tv[k] = v
+	}
+	return tv, nil
+}
+
 func pkRowFromTaggedValues(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) (Row, error) {
 	allCols := sch.GetAllCols()
 

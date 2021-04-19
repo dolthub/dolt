@@ -86,7 +86,7 @@ var untypedAppearacesSch, _ = untyped.UntypeUnkeySchema(AppearancesTestSchema)
 var AppearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
-	colColl, _ := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -100,7 +100,7 @@ func createPeopleTestSchema() schema.Schema {
 }
 
 func createEpisodesTestSchema() schema.Schema {
-	colColl, _ := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("id", EpisodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("name", EpNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		newColumnWithTypeInfo("air_date", EpAirDateTag, typeinfo.DatetimeType, false),
@@ -110,7 +110,7 @@ func createEpisodesTestSchema() schema.Schema {
 }
 
 func createAppearancesTestSchema() schema.Schema {
-	colColl, _ := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("character_id", AppCharacterTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("episode_id", AppEpTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("comments", AppCommentsTag, types.StringKind, false),
@@ -136,7 +136,7 @@ func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 		RatingTag:    types.Float(rating),
 	}
 
-	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_Default, PeopleTestSchema, vals)
 
 	if err != nil {
 		panic(err)
@@ -153,7 +153,7 @@ func newEpsRow(id int, name string, airdate string, rating float64) row.Row {
 		EpRatingTag:  types.Float(rating),
 	}
 
-	r, err := row.New(types.Format_7_18, EpisodesTestSchema, vals)
+	r, err := row.New(types.Format_Default, EpisodesTestSchema, vals)
 
 	if err != nil {
 		panic(err)
@@ -177,7 +177,7 @@ func newAppsRow(charId, epId int, comment string) row.Row {
 		AppCommentsTag:  types.String(comment),
 	}
 
-	r, err := row.New(types.Format_7_18, AppearancesTestSchema, vals)
+	r, err := row.New(types.Format_Default, AppearancesTestSchema, vals)
 
 	if err != nil {
 		panic(err)
@@ -199,7 +199,7 @@ func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, 
 		NumEpisodesTag: types.Uint(numEpisodes),
 	}
 
-	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_Default, PeopleTestSchema, vals)
 
 	if err != nil {
 		panic(err)

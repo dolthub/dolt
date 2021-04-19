@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/test"
@@ -77,7 +78,7 @@ func TestWriteHumanReadableRef(t *testing.T) {
 
 	x := Float(42)
 	rv, err := vs.WriteValue(context.Background(), x)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "#0123456789abcdefghijklmnopqrstuv", rv)
 }
 
@@ -85,23 +86,23 @@ func TestWriteHumanReadableCollections(t *testing.T) {
 	vrw := newTestValueStore()
 
 	l, err := NewList(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "[  // 4 items\n  0,\n  1,\n  2,\n  3,\n]", l)
 
 	s, err := NewSet(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "set {  // 4 items\n  0,\n  1,\n  2,\n  3,\n}", s)
 
 	m, err := NewMap(context.Background(), vrw, Float(0), Bool(false), Float(1), Bool(true))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "map {\n  0: false,\n  1: true,\n}", m)
 
 	l2, err := NewList(context.Background(), vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "[]", l2)
 
 	l3, err := NewList(context.Background(), vrw, Float(0))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "[\n  0,\n]", l3)
 
 	nums := make([]Value, 2000)
@@ -109,7 +110,7 @@ func TestWriteHumanReadableCollections(t *testing.T) {
 		nums[i] = Float(0)
 	}
 	l4, err := NewList(context.Background(), vrw, nums...)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "[  // 2,000 items\n"+strings.Repeat("  0,\n", 2000)+"]", l4)
 }
 
@@ -117,17 +118,17 @@ func TestWriteHumanReadableNested(t *testing.T) {
 	vrw := newTestValueStore()
 
 	l, err := NewList(context.Background(), vrw, Float(0), Float(1))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, Float(2), Float(3))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	s, err := NewSet(context.Background(), vrw, String("a"), String("b"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	s2, err := NewSet(context.Background(), vrw, String("c"), String("d"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	m, err := NewMap(context.Background(), vrw, s, l, s2, l2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, `map {
   set {
     "c",
@@ -185,18 +186,18 @@ func TestWriteHumanReadableBlob(t *testing.T) {
 	assertWriteHRSEqual(t, "blob {}", mustValue(NewEmptyBlob(vrw)))
 
 	b1, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x01}))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "blob {01}", b1)
 
 	b2, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x01, 0x02}))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "blob {01 02}", b2)
 
 	b3, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{
 		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 	}))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "blob {00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f}", b3)
 
 	b4, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{
@@ -204,7 +205,7 @@ func TestWriteHumanReadableBlob(t *testing.T) {
 		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 		0x10,
 	}))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "blob {  // 17 B\n  00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n  10\n}", b4)
 
 	bs := make([]byte, 256)
@@ -213,11 +214,11 @@ func TestWriteHumanReadableBlob(t *testing.T) {
 	}
 
 	b5, err := NewBlob(context.Background(), vrw, bytes.NewBuffer(bs))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "blob {  // 256 B\n  00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n  10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f\n  20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f\n  30 31 32 33 34 35 36 37 38 39 3a 3b 3c 3d 3e 3f\n  40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f\n  50 51 52 53 54 55 56 57 58 59 5a 5b 5c 5d 5e 5f\n  60 61 62 63 64 65 66 67 68 69 6a 6b 6c 6d 6e 6f\n  70 71 72 73 74 75 76 77 78 79 7a 7b 7c 7d 7e 7f\n  80 81 82 83 84 85 86 87 88 89 8a 8b 8c 8d 8e 8f\n  90 91 92 93 94 95 96 97 98 99 9a 9b 9c 9d 9e 9f\n  a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 aa ab ac ad ae af\n  b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 ba bb bc bd be bf\n  c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 ca cb cc cd ce cf\n  d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 da db dc dd de df\n  e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 ea eb ec ed ee ef\n  f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 fa fb fc fd fe ff\n}", b5)
 
 	b6, err := NewBlob(context.Background(), vrw, bytes.NewBuffer(make([]byte, 16*100)))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	row := "  " + strings.Repeat("00 ", 15) + "00\n"
 	s := strings.Repeat(row, 100)
 	assertWriteHRSEqual(t, "blob {  // 1.6 kB\n"+s+"}", b6)
@@ -227,17 +228,17 @@ func TestWriteHumanReadableListOfBlob(t *testing.T) {
 	vrw := newTestValueStore()
 
 	b1, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x01}))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	b2, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x02}))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	b3, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{
 		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 		0x10,
 	}))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	l, err := NewList(context.Background(), vrw, b1, mustValue(NewEmptyBlob(vrw)), b2, b3)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "[  // 4 items\n  blob {01},\n  blob {},\n  blob {02},\n  blob {  // 17 B\n    00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n    10\n  },\n]", l)
 }
 
@@ -340,22 +341,22 @@ func TestEmptyCollections(t *testing.T) {
 	vrw := newTestValueStore()
 
 	a, err := MakeStructType("Nothing")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "Struct Nothing {}", a)
 	b, err := NewStruct(Format_7_18, "Rien", StructData{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "struct Rien {}", b)
 	c, err := MakeMapType(PrimitiveTypeMap[BlobKind], PrimitiveTypeMap[FloatKind])
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "Map<Blob, Float>", c)
 	d, err := NewMap(context.Background(), vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "map {}", d)
 	e, err := MakeSetType(PrimitiveTypeMap[StringKind])
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "Set<String>", e)
 	f, err := NewSet(context.Background(), vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "set {}", f)
 }
 
@@ -364,7 +365,7 @@ func TestEncodedValueMaxLines(t *testing.T) {
 	vrw := newTestValueStore()
 
 	l1, err := NewList(context.Background(), vrw, generateNumbersAsValues(11)...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	expected := strings.Join(strings.SplitAfterN(mustString(EncodedValue(context.Background(), l1)), "\n", 6)[:5], "")
 	actual, err := EncodedValueMaxLines(context.Background(), l1, 5)
 	assert.True(err == writers.MaxLinesErr)
@@ -380,7 +381,7 @@ func TestWriteHumanReadableStructOptionalFields(t *testing.T) {
 	typ, err := MakeStructType("S1",
 		StructField{"a", PrimitiveTypeMap[BoolKind], false},
 		StructField{"b", PrimitiveTypeMap[BoolKind], true})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assertWriteHRSEqual(t, "Struct S1 {\n  a: Bool,\n  b?: Bool,\n}", typ)
 }
 

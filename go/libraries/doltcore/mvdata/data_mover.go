@@ -15,12 +15,15 @@
 package mvdata
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -29,10 +32,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type CsvOptions struct {
@@ -90,23 +95,50 @@ func (dmce *DataMoverCreationError) String() string {
 	return string(dmce.ErrType) + ": " + dmce.Cause.Error()
 }
 
+type GCTableWriteCloser interface {
+	table.TableWriteCloser
+	GC(ctx context.Context) error
+}
+
 // Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
-func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
+func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount int64, err error) {
 	defer imp.Rd.Close(ctx)
 	defer func() {
 		closeErr := imp.Wr.Close(ctx)
-		if closeErr != nil {
+		if err == nil {
 			err = closeErr
+		}
+
+		if err == nil {
+			if gcTWC, ok := imp.Wr.(GCTableWriteCloser); ok {
+				err = gcTWC.GC(ctx)
+			}
 		}
 	}()
 
 	var badCount int64
 	var rowErr error
+	var printStarted bool
+	var b bytes.Buffer
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
 			rowErr = trf
 			return true
+		}
+
+		if !printStarted {
+			cli.PrintErrln("The following rows were skipped:")
+			printStarted = true
+		}
+
+		r := pipeline.GetTransFailureRow(trf)
+
+		if r != nil {
+			err = writeBadRowToCli(ctx, r, sch, &b)
+			if err != nil {
+				return true
+			}
 		}
 
 		atomic.AddInt64(&badCount, 1)
@@ -121,7 +153,6 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	p.Start()
 
 	err = p.Wait()
-
 	if err != nil {
 		return 0, err
 	}
@@ -133,12 +164,48 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	return badCount, nil
 }
 
+// writeBadRowToCli prints a bad row in a csv form to STDERR.
+func writeBadRowToCli(ctx context.Context, r row.Row, sch schema.Schema, b *bytes.Buffer) error {
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
+	if err != nil {
+		return err
+	}
+
+	wr := bufio.NewWriter(b)
+
+	colValStrs := make([]*string, len(sqlRow))
+
+	for colNum, col := range sqlRow {
+		if col != nil {
+			str := sqlutil.SqlColToStr(ctx, col)
+			colValStrs[colNum] = &str
+		} else {
+			colValStrs[colNum] = nil
+		}
+	}
+
+	err = csv.WriteCSVRow(wr, colValStrs, ",", false)
+	if err != nil {
+		return err
+	}
+
+	err = wr.Flush()
+	if err != nil {
+		return err
+	}
+
+	str := b.String()
+	cli.PrintErr(str)
+
+	return nil
+}
+
 func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptions, root *doltdb.RootValue, updateRoot func(c context.Context, r *doltdb.RootValue) error) (*doltdb.RootValue, int64, errhand.VerboseError) {
 	var badCount int64
 	var err error
 	newRoot := &doltdb.RootValue{}
 
-	badCount, err = mover.Move(ctx)
+	badCount, err = mover.Move(ctx, mover.Wr.GetSchema())
 
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
@@ -146,7 +213,7 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 
 			r := pipeline.GetTransFailureRow(err)
 			if r != nil {
-				bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, mover.Rd.GetSchema()))
+				bdr.AddDetails("Bad Row: " + row.Fmt(ctx, r, mover.Wr.GetSchema()))
 			}
 
 			details := pipeline.GetTransFailureDetails(err)
@@ -196,14 +263,14 @@ func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts D
 }
 
 // NameMapTransform creates a pipeline transform that converts rows from inSch to outSch based on a name mapping.
-func NameMapTransform(inSch schema.Schema, outSch schema.Schema, mapper rowconv.NameMapper) (*pipeline.TransformCollection, error) {
+func NameMapTransform(ctx context.Context, vrw types.ValueReadWriter, inSch schema.Schema, outSch schema.Schema, mapper rowconv.NameMapper) (*pipeline.TransformCollection, error) {
 	mapping, err := rowconv.NameMapping(inSch, outSch, mapper)
 
 	if err != nil {
 		return nil, err
 	}
 
-	rconv, err := rowconv.NewImportRowConverter(mapping)
+	rconv, err := rowconv.NewImportRowConverter(ctx, vrw, mapping)
 
 	if err != nil {
 		return nil, err
@@ -248,7 +315,7 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 	}
 
 	pkSet := set.NewStrSet(pks)
-	newCols, _ := schema.MapColCollection(infCols, func(col schema.Column) (schema.Column, error) {
+	newCols := schema.MapColCollection(infCols, func(col schema.Column) schema.Column {
 		col.IsPartOfPK = pkSet.Contains(col.Name)
 		if col.IsPartOfPK {
 			hasNotNull := false
@@ -262,7 +329,7 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 				col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
 			}
 		}
-		return col, nil
+		return col
 	})
 
 	// check that all provided primary keys are being used
@@ -276,6 +343,11 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 	newCols, err = root.GenerateTagsForNewColColl(ctx, tableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
+	}
+
+	err = schema.ValidateForInsert(newCols)
+	if err != nil {
+		return nil, errhand.BuildDError("invalid schema").AddCause(err).Build()
 	}
 
 	return schema.SchemaFromCols(newCols)

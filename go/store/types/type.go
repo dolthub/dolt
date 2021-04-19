@@ -72,12 +72,12 @@ func (t *Type) Equals(other Value) (res bool) {
 	}
 
 	if otherType, ok := other.(*Type); ok {
-		h, err := t.Hash(Format_7_18)
+		h, err := t.Hash(Format_Default)
 
 		// TODO - fix panics
 		d.PanicIfError(err)
 
-		oh, err := other.Hash(Format_7_18)
+		oh, err := other.Hash(Format_Default)
 
 		// TODO - fix panics
 		d.PanicIfError(err)

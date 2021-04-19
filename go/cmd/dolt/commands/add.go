@@ -24,11 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-)
-
-const (
-	allParam = "all"
 )
 
 var addDocs = cli.CommandDocumentationContent{
@@ -58,20 +53,13 @@ func (cmd AddCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd AddCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cli.CreateAddArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, addDocs, ap))
-}
-
-func (cmd AddCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
-	ap.SupportsFlag(allParam, "A", "Stages any and all changes (adds, deletes, and modifications).")
-	return ap
 }
 
 // Exec executes the command
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cli.CreateAddArgParser()
 	helpPr, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, addDocs, ap))
 	apr := cli.ParseArgs(ap, args, helpPr)
 
@@ -83,7 +71,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	allFlag := apr.Contains(allParam)
+	allFlag := apr.Contains(cli.AllFlag)
 
 	var err error
 	if apr.NArg() == 0 && !allFlag {
@@ -91,7 +79,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
 		err = actions.StageAllTables(ctx, dEnv.DbData())
 	} else {
-		err = actions.StageTables(ctx, dEnv, apr.Args())
+		err = actions.StageTables(ctx, dEnv.DbData(), apr.Args())
 	}
 
 	if err != nil {
@@ -104,10 +92,10 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func toAddVErr(err error) errhand.VerboseError {
 	switch {
-	case actions.IsRootValUnreachable(err):
-		rt := actions.GetUnreachableRootType(err)
+	case doltdb.IsRootValUnreachable(err):
+		rt := doltdb.GetUnreachableRootType(err)
 		bdr := errhand.BuildDError("Unable to read %s.", rt.String())
-		bdr.AddCause(actions.GetUnreachableRootCause(err))
+		bdr.AddCause(doltdb.GetUnreachableRootCause(err))
 		return bdr.Build()
 
 	case actions.IsTblNotExist(err):

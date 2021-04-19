@@ -164,13 +164,14 @@ func (ix *indexImpl) Schema() Schema {
 			Constraints: nil,
 		}
 	}
-	allCols, _ := NewColCollection(cols...)
-	nonPkCols, _ := NewColCollection()
+	allCols := NewColCollection(cols...)
+	nonPkCols := NewColCollection()
 	return &schemaImpl{
 		pkCols:          allCols,
 		nonPKCols:       nonPkCols,
 		allCols:         allCols,
 		indexCollection: NewIndexCollection(nil),
+		checkCollection: NewCheckCollection(),
 	}
 }
 

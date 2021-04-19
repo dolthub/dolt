@@ -336,6 +336,7 @@ func TestPuller(t *testing.T) {
 			wg.Wait()
 
 			sinkDS, err := sinkdb.GetDataset(ctx, "ds")
+			require.NoError(t, err)
 			sinkDS, err = sinkdb.FastForward(ctx, sinkDS, rootRef)
 			require.NoError(t, err)
 
@@ -382,9 +383,19 @@ func pullerRefEquality(ctx context.Context, expectad, actual types.Ref, srcDB, s
 	}
 
 	actualVal, err := actual.TargetValue(ctx, sinkDB)
+	if err != nil {
+		return false, err
+	}
 
 	exPs, exTbls, err := parentsAndTables(expectedVal.(types.Struct))
+	if err != nil {
+		return false, err
+	}
+
 	actPs, actTbls, err := parentsAndTables(actualVal.(types.Struct))
+	if err != nil {
+		return false, err
+	}
 
 	if !exPs.Equals(actPs) {
 		return false, nil

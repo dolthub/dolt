@@ -15,6 +15,7 @@
 package typeinfo
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -104,6 +106,8 @@ func verifyTypeInfoArrays(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]type
 
 // assuming valid data, verifies that the To-From interface{} functions can round trip
 func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]types.Value) {
+	nbf := types.Format_Default
+
 	for rowIndex, tiArray := range tiArrays {
 		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
 			for _, ti := range tiArray {
@@ -115,7 +119,8 @@ func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays 
 							if ti.IsValid(val) {
 								atLeastOneValid = true
 								require.NoError(t, err)
-								outVal, err := ti.ConvertValueToNomsValue(vInterface)
+								vrw := types.NewMemoryValueStore()
+								outVal, err := ti.ConvertValueToNomsValue(context.Background(), vrw, vInterface)
 								require.NoError(t, err)
 								if ti == DateType { // Special case as DateType removes the hh:mm:ss
 									val = types.Timestamp(time.Time(val.(types.Timestamp)).Truncate(24 * time.Hour))
@@ -123,6 +128,19 @@ func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays 
 								} else if ti.GetTypeIdentifier() != DecimalTypeIdentifier { // Any Decimal's on-disk representation varies by precision/scale
 									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)
 								}
+
+								tup, err := types.NewTuple(nbf, outVal)
+								require.NoError(t, err)
+
+								itr, err := tup.Iterator()
+								require.NoError(t, err)
+
+								reader, n := itr.CodecReader()
+								require.Equal(t, uint64(1), n)
+
+								readVal, err := ti.ReadFrom(nbf, reader)
+								require.NoError(t, err)
+								require.Equal(t, readVal, vInterface)
 							}
 						})
 					}
@@ -213,7 +231,8 @@ func testTypeInfoFormatParseRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArr
 							if ti.IsValid(val) {
 								atLeastOneValid = true
 								require.NoError(t, err)
-								outVal, err := ti.ParseValue(str)
+								vrw := types.NewMemoryValueStore()
+								outVal, err := ti.ParseValue(context.Background(), vrw, str)
 								require.NoError(t, err)
 								if ti == DateType { // special case as DateType removes the hh:mm:ss
 									val = types.Timestamp(time.Time(val.(types.Timestamp)).Truncate(24 * time.Hour))
@@ -261,7 +280,8 @@ func testTypeInfoNullHandling(t *testing.T, tiArrays [][]TypeInfo) {
 						require.Nil(t, val)
 					})
 					t.Run("ConvertValueToNomsValue", func(t *testing.T) {
-						tVal, err := ti.ConvertValueToNomsValue(nil)
+						vrw := types.NewMemoryValueStore()
+						tVal, err := ti.ConvertValueToNomsValue(context.Background(), vrw, nil)
 						require.NoError(t, err)
 						require.Equal(t, types.NullValue, tVal)
 					})
@@ -278,7 +298,8 @@ func testTypeInfoNullHandling(t *testing.T, tiArrays [][]TypeInfo) {
 						require.True(t, ti.IsValid(nil))
 					})
 					t.Run("ParseValue", func(t *testing.T) {
-						tVal, err := ti.ParseValue(nil)
+						vrw := types.NewMemoryValueStore()
+						tVal, err := ti.ParseValue(context.Background(), vrw, nil)
 						require.NoError(t, err)
 						require.Equal(t, types.NullValue, tVal)
 					})
@@ -329,8 +350,9 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			generateDecimalTypes(t, 16),
 			generateEnumTypes(t, 16),
 			{Float32Type, Float64Type},
-			{InlineBlobType},
+			{DefaultInlineBlobType},
 			{Int8Type, Int16Type, Int24Type, Int32Type, Int64Type},
+			{JSONType},
 			generateSetTypes(t, 16),
 			{TimeType},
 			{Uint8Type, Uint16Type, Uint24Type, Uint32Type, Uint64Type},
@@ -356,10 +378,12 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 				types.Decimal(decimal.RequireFromString("4723245")),
 				types.Decimal(decimal.RequireFromString("-1076416.875")),
 				types.Decimal(decimal.RequireFromString("198728394234798423466321.27349757"))},
-			{types.Uint(1), types.Uint(3), types.Uint(5), types.Uint(7), types.Uint(8)},                                                                                                    //Enum
-			{types.Float(1.0), types.Float(65513.75), types.Float(4293902592), types.Float(4.58e71), types.Float(7.172e285)},                                                               //Float
-			{types.InlineBlob{0}, types.InlineBlob{21}, types.InlineBlob{1, 17}, types.InlineBlob{72, 42}, types.InlineBlob{21, 122, 236}},                                                 //InlineBlob
-			{types.Int(20), types.Int(215), types.Int(237493), types.Int(2035753568), types.Int(2384384576063)},                                                                            //Int
+			{types.Uint(1), types.Uint(3), types.Uint(5), types.Uint(7), types.Uint(8)},                                                    //Enum
+			{types.Float(1.0), types.Float(65513.75), types.Float(4293902592), types.Float(4.58e71), types.Float(7.172e285)},               //Float
+			{types.InlineBlob{0}, types.InlineBlob{21}, types.InlineBlob{1, 17}, types.InlineBlob{72, 42}, types.InlineBlob{21, 122, 236}}, //InlineBlob
+			{types.Int(20), types.Int(215), types.Int(237493), types.Int(2035753568), types.Int(2384384576063)},                            //Int
+			{json.MustTypesJSON(`null`), json.MustTypesJSON(`[]`), json.MustTypesJSON(`"lorem ipsum"`), json.MustTypesJSON(`2.71`),
+				json.MustTypesJSON(`false`), json.MustTypesJSON(`{"a": 1, "b": []}`)}, //JSON
 			{types.Uint(1), types.Uint(5), types.Uint(64), types.Uint(42), types.Uint(192)},                                                                                                //Set
 			{types.Int(0), types.Int(1000000 /*"00:00:01"*/), types.Int(113000000 /*"00:01:53"*/), types.Int(247019000000 /*"68:36:59"*/), types.Int(458830485214 /*"127:27:10.485214"*/)}, //Time
 			{types.Uint(20), types.Uint(275), types.Uint(328395), types.Uint(630257298), types.Uint(93897259874)},                                                                          //Uint

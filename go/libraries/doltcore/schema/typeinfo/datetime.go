@@ -15,6 +15,7 @@
 package typeinfo
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -62,6 +63,9 @@ func CreateDatetimeTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *datetimeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Timestamp); ok {
+		if ti.Equals(DateType) {
+			return time.Time(val).Truncate(24 * time.Hour).UTC(), nil
+		}
 		return time.Time(val).UTC(), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -70,8 +74,30 @@ func (ti *datetimeType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+// ReadFrom reads a go value from a noms types.CodecReader directly
+func (ti *datetimeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.TimestampKind:
+		t, err := reader.ReadTimestamp()
+
+		if err != nil {
+			return nil, err
+		}
+
+		if ti.Equals(DateType) {
+			return t.Truncate(24 * time.Hour).UTC(), nil
+		}
+		return t.UTC(), nil
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *datetimeType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+func (ti *datetimeType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	//TODO: handle the zero value as a special case that is valid for all ranges
 	if v == nil {
 		return types.NullValue, nil
@@ -162,7 +188,7 @@ func (ti *datetimeType) NomsKind() types.NomsKind {
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *datetimeType) ParseValue(str *string) (types.Value, error) {
+func (ti *datetimeType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
@@ -189,4 +215,44 @@ func (ti *datetimeType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *datetimeType) ToSqlType() sql.Type {
 	return ti.sqlDatetimeType
+}
+
+// datetimeTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func datetimeTypeConverter(ctx context.Context, src *datetimeType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uuidType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
 }

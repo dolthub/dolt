@@ -22,34 +22,61 @@ import (
 )
 
 type PointReader struct {
-	m    types.Map
-	keys []types.Value
-	idx  int
+	m          types.Map
+	emptyTuple types.Tuple
+	keys       []types.Tuple
+	idx        int
 }
 
 var _ types.MapIterator = &PointReader{}
 
 // read the map values for a set of map keys
-func NewMapPointReader(m types.Map, keys ...types.Value) types.MapIterator {
+func NewMapPointReader(m types.Map, keys ...types.Tuple) types.MapIterator {
 	return &PointReader{
-		m:    m,
-		keys: keys,
+		m:          m,
+		emptyTuple: types.EmptyTuple(m.Format()),
+		keys:       keys,
 	}
 }
 
 // Next implements types.MapIterator.
 func (pr *PointReader) Next(ctx context.Context) (k, v types.Value, err error) {
-	if pr.idx >= len(pr.keys) {
-		return nil, nil, io.EOF
-	}
+	kt, vt, err := pr.NextTuple(ctx)
 
-	k = pr.keys[pr.idx]
-	// todo: optimize by implementing MapIterator.Seek()
-	v, _, err = pr.m.MaybeGet(ctx, k)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	if !kt.Empty() {
+		k = kt
+	}
+
+	if !vt.Empty() {
+		v = vt
+	}
+
+	return k, v, nil
+}
+
+// NextTuple implements types.MapIterator.
+func (pr *PointReader) NextTuple(ctx context.Context) (k, v types.Tuple, err error) {
+	if pr.idx >= len(pr.keys) {
+		return types.Tuple{}, types.Tuple{}, io.EOF
+	}
+
+	k = pr.keys[pr.idx]
+	v = pr.emptyTuple
+
+	var ok bool
+	// todo: optimize by implementing MapIterator.Seek()
+	v, ok, err = pr.m.MaybeGetTuple(ctx, k)
 	pr.idx++
 
-	return k, v, err
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, err
+	} else if !ok {
+		return k, pr.emptyTuple, nil
+	}
+
+	return k, v, nil
 }

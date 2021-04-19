@@ -184,6 +184,60 @@ func TaggedValuesFromTupleValueSlice(vals types.TupleValueSlice) (TaggedValues, 
 	return taggedTuple, nil
 }
 
+func TaggedValuesFromTupleKeyAndValue(key, value types.Tuple) (TaggedValues, error) {
+	tv := make(TaggedValues)
+	err := AddToTaggedVals(tv, key)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = AddToTaggedVals(tv, value)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tv, nil
+}
+
+func AddToTaggedVals(tv TaggedValues, t types.Tuple) error {
+	return IterDoltTuple(t, func(tag uint64, val types.Value) error {
+		tv[tag] = val
+		return nil
+	})
+}
+
+func IterDoltTuple(t types.Tuple, cb func(tag uint64, val types.Value) error) error {
+	itr, err := t.Iterator()
+
+	if err != nil {
+		return err
+	}
+
+	for itr.HasMore() {
+		_, tag, err := itr.NextUint64()
+
+		if err != nil {
+			return err
+		}
+
+		_, currVal, err := itr.Next()
+
+		if err != nil {
+			return err
+		}
+
+		err = cb(tag, currVal)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (tt TaggedValues) String() string {
 	str := "{"
 	for k, v := range tt {
@@ -205,8 +259,11 @@ func (tt TaggedValues) String() string {
 func CountCellDiffs(from, to types.Tuple) (uint64, error) {
 	changed := 0
 	f, err := ParseTaggedValues(from)
-	t, err := ParseTaggedValues(to)
+	if err != nil {
+		return 0, err
+	}
 
+	t, err := ParseTaggedValues(to)
 	if err != nil {
 		return 0, err
 	}

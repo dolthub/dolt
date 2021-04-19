@@ -19,6 +19,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -41,21 +42,20 @@ const (
 )
 
 func TestTableEditorConcurrency(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
-	require.NoError(t, err)
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
@@ -123,7 +123,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 			_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 				dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 				require.NoError(t, err)
-				dReadVals, err := row.GetTaggedVals(dReadRow)
+				dReadVals, err := dReadRow.TaggedValues()
 				require.NoError(t, err)
 				assert.Equal(t, row.TaggedValues{
 					0: types.Int(iterIndex),
@@ -138,21 +138,20 @@ func TestTableEditorConcurrency(t *testing.T) {
 }
 
 func TestTableEditorConcurrencyPostInsert(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
-	require.NoError(t, err)
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName)
@@ -218,7 +217,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 			_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 				dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 				require.NoError(t, err)
-				dReadVals, err := row.GetTaggedVals(dReadRow)
+				dReadVals, err := dReadRow.TaggedValues()
 				require.NoError(t, err)
 				assert.Equal(t, row.TaggedValues{
 					0: types.Int(iterIndex),
@@ -233,21 +232,20 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 }
 
 func TestTableEditorWriteAfterFlush(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
-	require.NoError(t, err)
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName)
@@ -285,7 +283,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 		_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 			dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 			require.NoError(t, err)
-			dReadVals, err := row.GetTaggedVals(dReadRow)
+			dReadVals, err := dReadRow.TaggedValues()
 			require.NoError(t, err)
 			assert.Equal(t, row.TaggedValues{
 				0: types.Int(iterIndex),
@@ -305,21 +303,20 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 }
 
 func TestTableEditorDuplicateKeyHandling(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
-	require.NoError(t, err)
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName)
@@ -345,11 +342,10 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
+		err = tableEditor.InsertRow(context.Background(), dRow)
+		require.True(t, sql.ErrPrimaryKeyViolation.Is(err))
 	}
 
-	_, err = tableEditor.Table(context.Background())
-	require.Error(t, err)
 	_, err = tableEditor.Table(context.Background())
 	require.NoError(t, err)
 
@@ -372,7 +368,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 			dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 			require.NoError(t, err)
-			dReadVals, err := row.GetTaggedVals(dReadRow)
+			dReadVals, err := dReadRow.TaggedValues()
 			require.NoError(t, err)
 			assert.Equal(t, row.TaggedValues{
 				0: types.Int(iterIndex),

@@ -100,6 +100,15 @@ type ChunkStoreGarbageCollector interface {
 	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error
 }
 
+// ChunkStoreVersionGetter is a ChunkStore that supports getting the manifest's
+// storage version
+type ChunkStoreVersionGetter interface {
+	ChunkStore
+
+	// GetManifestStorageVersion returns the storage version of the Chunkstore's manifest
+	GetManifestStorageVersion(ctx context.Context) (string, error)
+}
+
 var ErrUnsupportedOperation = errors.New("operation not supported")
 
 var ErrGCGenerationExpired = errors.New("garbage collection generation expired")

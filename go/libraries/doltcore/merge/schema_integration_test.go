@@ -33,8 +33,15 @@ import (
 
 type testCommand struct {
 	cmd  cli.Command
-	args []string
+	args args
 }
+
+func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) {
+	exitCode := tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv)
+	require.Equal(t, 0, exitCode)
+}
+
+type args []string
 
 func TestMergeSchemas(t *testing.T) {
 	for _, test := range mergeSchemaTests {
@@ -421,11 +428,7 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 }
 
 func colCollection(cols ...schema.Column) *schema.ColCollection {
-	pcc, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err)
-	}
-	return pcc
+	return schema.NewColCollection(cols...)
 }
 
 // SchemaFromColsAndIdxs creates a Schema from a ColCollection and an IndexCollection.
@@ -455,12 +458,10 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 	for _, c := range setupCommon {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-		require.Equal(t, 0, exitCode)
+		c.exec(t, ctx, dEnv)
 	}
 	for _, c := range test.setup {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-		require.Equal(t, 0, exitCode)
+		c.exec(t, ctx, dEnv)
 	}
 
 	// assert that we're on master
@@ -499,15 +500,13 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 	for _, c := range setupCommon {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-		require.Equal(t, 0, exitCode)
+		c.exec(t, ctx, dEnv)
 	}
 
 	ancSch := getSchema(t, dEnv)
 
 	for _, c := range test.setup {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-		require.Equal(t, 0, exitCode)
+		c.exec(t, ctx, dEnv)
 	}
 
 	// assert that we're on master
@@ -544,16 +543,14 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 	for _, c := range setupForeignKeyTests {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-		assert.Equal(t, 0, exitCode)
+		c.exec(t, ctx, dEnv)
 	}
 
 	ancRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
 	for _, c := range test.setup {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-		require.Equal(t, 0, exitCode)
+		c.exec(t, ctx, dEnv)
 	}
 
 	// assert that we're on master
@@ -582,4 +579,5 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 		assert.Equal(t, expFK, actFK)
 		return false, nil
 	})
+	assert.NoError(t, err)
 }

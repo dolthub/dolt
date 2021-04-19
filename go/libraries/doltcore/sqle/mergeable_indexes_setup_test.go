@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *testMergeableIndexDb, *indexTuple, *indexTuple) {
+func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *testMergeableIndexDb, []*indexTuple) {
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -47,11 +47,11 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 		INDEX idxv2v1 (v2,v1)
 	)`, tableName))
 	require.NoError(t, err)
-	require.NoError(t, drainIter(iter))
+	require.NoError(t, drainIter(sqlCtx, iter))
 
 	_, iter, err = engine.Query(sqlCtx, insertQuery)
 	require.NoError(t, err)
-	require.NoError(t, drainIter(iter))
+	require.NoError(t, drainIter(sqlCtx, iter))
 
 	sqlTbl, ok, err := db.GetTableInsensitive(sqlCtx, tableName)
 	require.NoError(t, err)
@@ -91,7 +91,14 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	}
 	engine = sqle.NewDefault()
 	engine.AddDatabase(mergeableDb)
-	return engine, mergeableDb, idxv1ToTuple, idxv2v1ToTuple
+	return engine, mergeableDb, []*indexTuple{
+		idxv1ToTuple,
+		idxv2v1ToTuple,
+		{
+			nbf:  idxv2v1RowData.Format(),
+			cols: idxv2v1Cols[:len(idxv2v1Cols)-1],
+		},
+	}
 }
 
 // Database made to test mergeable indexes while using the full SQL engine.
@@ -142,6 +149,7 @@ func (tbl *testMergeableIndexTable) GetIndexes(ctx *sql.Context) ([]sql.Index, e
 	}
 	return indexes, nil
 }
+
 func (tbl *testMergeableIndexTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	il, ok := lookup.(*testMergeableIndexLookup)
 	require.True(tbl.t, ok)
@@ -152,11 +160,23 @@ func (tbl *testMergeableIndexTable) WithIndexLookup(lookup sql.IndexLookup) sql.
 		finalRanges:        tbl.finalRanges,
 	}
 }
-func (tbl *testMergeableIndexTable) Partitions(_ *sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(), nil
+
+type testProjectedMergableIndexTable struct {
+	*testMergeableIndexTable
+	cols []string
 }
-func (tbl *testMergeableIndexTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return tbl.il.RowIter(ctx)
+
+func (tbl *testMergeableIndexTable) WithProjection(colNames []string) sql.Table {
+	return &testProjectedMergableIndexTable{tbl, colNames}
+}
+
+func (tbl *testMergeableIndexTable) Partitions(_ *sql.Context) (sql.PartitionIter, error) {
+	rowData := tbl.il.IndexRowData()
+	return sqlutil.NewSinglePartitionIter(rowData), nil
+}
+
+func (tbl *testMergeableIndexTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	return tbl.il.RowIter(ctx, part.(sqlutil.SinglePartition).RowData)
 }
 
 // Index made to test mergeable indexes by intercepting all calls that return lookups and returning modified lookups.
@@ -271,9 +291,9 @@ func (il *testMergeableIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.
 		finalRanges:     il.finalRanges,
 	}, nil
 }
-func (il *testMergeableIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
+func (il *testMergeableIndexLookup) RowIter(ctx *sql.Context, rowData types.Map) (sql.RowIter, error) {
 	il.finalRanges(il.ranges) // this is where the ranges turn into noms.ReadRanges, so we return the final slice here
-	return il.doltIndexLookup.RowIter(ctx)
+	return il.doltIndexLookup.RowIter(ctx, rowData, nil)
 }
 
 // indexTuple converts integers into the appropriate tuple for comparison against ranges

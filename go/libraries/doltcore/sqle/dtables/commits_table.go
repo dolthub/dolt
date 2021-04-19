@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var _ sql.Table = (*CommitsTable)(nil)
@@ -61,7 +62,7 @@ func (dt *CommitsTable) Schema() sql.Schema {
 // Partitions is a sql.Table interface function that returns a partition
 // of the data. Currently the data is unpartitioned.
 func (dt *CommitsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition.
@@ -102,6 +103,6 @@ func (itr CommitsRowItr) Next() (sql.Row, error) {
 }
 
 // Close closes the iterator.
-func (itr CommitsRowItr) Close() error {
+func (itr CommitsRowItr) Close(*sql.Context) error {
 	return nil
 }

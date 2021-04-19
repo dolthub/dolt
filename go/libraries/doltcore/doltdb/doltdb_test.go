@@ -52,7 +52,7 @@ var id2, _ = uuid.NewRandom()
 var id3, _ = uuid.NewRandom()
 
 func createTestSchema(t *testing.T) schema.Schema {
-	colColl, _ := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -69,7 +69,7 @@ func createTestSchema(t *testing.T) schema.Schema {
 	return sch
 }
 
-func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
+func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
 	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, tSchema)
 
 	if err != nil {
@@ -77,7 +77,7 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 	}
 
 	empty, _ := types.NewMap(context.Background(), vrw)
-	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData, empty)
+	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData, empty, nil)
 
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 	ed := m.Edit()
 
 	for i, val := range vals {
-		r, err := row.New(types.Format_7_18, sch, val)
+		r, err := row.New(types.Format_Default, sch, val)
 		require.NoError(t, err)
 		rows[i] = r
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
@@ -177,7 +177,7 @@ func TestSystemTableTags(t *testing.T) {
 }
 
 func TestEmptyInMemoryRepoCreation(t *testing.T) {
-	ddb, err := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_Default, InMemDoltDB)
 
 	if err != nil {
 		t.Fatal("Failed to load db")
@@ -213,7 +213,7 @@ func TestLoadNonExistentLocalFSRepo(t *testing.T) {
 		panic("Couldn't change the working directory to the test directory.")
 	}
 
-	ddb, err := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB)
 	assert.Nil(t, ddb, "Should return nil when loading a non-existent data dir")
 	assert.Error(t, err, "Should see an error here")
 }
@@ -228,7 +228,7 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	contents := []byte("not a directory")
 	ioutil.WriteFile(filepath.Join(testDir, dbfactory.DoltDataDir), contents, 0644)
 
-	ddb, err := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB)
 	assert.Nil(t, ddb, "Should return nil when loading a non-directory data dir file")
 	assert.Error(t, err, "Should see an error here")
 }
@@ -251,7 +251,7 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create noms directory")
 		}
 
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB)
 		err = ddb.WriteEmptyRepo(context.Background(), committerName, committerEmail)
 
 		if err != nil {
@@ -263,7 +263,7 @@ func TestLDNoms(t *testing.T) {
 	var valHash hash.Hash
 	var tbl *Table
 	{
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB)
 		cs, _ := NewCommitSpec("master")
 		commit, err := ddb.Resolve(context.Background(), cs, nil)
 
@@ -290,7 +290,7 @@ func TestLDNoms(t *testing.T) {
 
 		tSchema := createTestSchema(t)
 		rowData, _ := createTestRowData(t, ddb.db, tSchema)
-		tbl, err = createTestTable(ddb.db, tSchema, rowData)
+		tbl, err = CreateTestTable(ddb.db, tSchema, rowData)
 
 		if err != nil {
 			t.Fatal("Failed to create test table with data")
@@ -305,15 +305,15 @@ func TestLDNoms(t *testing.T) {
 
 	// reopen the db and commit the value.  Perform a couple checks for
 	{
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB)
 		meta, err := NewCommitMeta(committerName, committerEmail, "Sample data")
 		if err != nil {
-			t.Error("Failled to commit")
+			t.Error("Failed to commit")
 		}
 
 		commit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef("master"), meta)
 		if err != nil {
-			t.Error("Failled to commit")
+			t.Error("Failed to commit")
 		}
 
 		numParents, err := commit.NumParents()

@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'SemVer format release tag, i.e. 0.23.4'
+        description: 'SemVer format release tag, i.e. 0.24.5'
         required: true
 
 jobs:
   bump-version:
     name: Bump Version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -20,21 +20,18 @@ jobs:
           git config --global user.name dolt-release-bot
           git config --global user.email dolt-release-bot@dolthub.com
           ./go/utils/publishrelease/bump-version.sh ${{ github.event.inputs.version }}
-      - name: Discord Notify
-        if: always()
-        uses: dolthub/ga-discord-notify@master
-        with:
-          job-status: ${{ job.status }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          notify-on-success: false
 
   create-release:
     needs: bump-version
     name: Create Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.15
       - name: Checkout release tag
         run: |
           git fetch --tags --all
@@ -92,33 +89,25 @@ jobs:
           asset_path: go/out/install.sh
           asset_name: install.sh
           asset_content_type: text/plain
-      - name: Discord Notify
-        if: always()
-        uses: dolthub/ga-discord-notify@master
-        with:
-          job-status: ${{ job.status }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          notify-on-success: false
 
   homebrew-bump:
     needs: create-release
-    name: Bump Dolt Homebrew formula
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
-      - name: Create Homebrew PR
-        uses: mislav/bump-homebrew-formula-action@v1
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
         with:
-          formula-name: dolt
-          homebrew-tap: Homebrew/homebrew-core
-          base-branch: master
-          download-url: ${{format('https://github.com/dolthub/dolt/archive/v{0}.tar.gz', github.event.inputs.version)}}
-          commit-message: ${{format('dolt v{0}', github.event.inputs.version)}}
-        env:
-          COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
-      - name: Discord Notify
-        if: always()
-        uses: dolthub/ga-discord-notify@master
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: bump-homebrew
+          client-payload: '{"version": "${{ github.event.inputs.version }}"}'
+
+  trigger-performance-benchmark-email:
+    needs: create-release
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
         with:
-          job-status: ${{ job.status }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          notify-on-success: false
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: release-dolt
+          client-payload: '{"version": "${{ github.event.inputs.version }}", "actor": "${{ github.actor }}"}'

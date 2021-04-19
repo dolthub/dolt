@@ -23,6 +23,7 @@ package types
 
 import (
 	"context"
+	"io"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
@@ -196,7 +197,7 @@ func (l List) isPrimitive() bool {
 
 // Iter iterates over the list and calls f for every element in the list. If f returns true then the
 // iteration stops.
-func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool)) error {
+func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool, err error)) error {
 	idx := uint64(0)
 	cur, err := newSequenceIteratorAtIndex(ctx, l.sequence, idx)
 
@@ -205,11 +206,9 @@ func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool
 	}
 
 	err = cur.iter(ctx, func(v interface{}) (bool, error) {
-		if f(v.(Value), uint64(idx)) {
-			return true, nil
-		}
+		stop, err := f(v.(Value), idx)
 		idx++
-		return false, nil
+		return stop, err
 	})
 
 	return err
@@ -309,6 +308,79 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64) 
 	}
 
 	return ae.Get()
+}
+
+type collTupleRangeIter struct {
+	leaves         []Collection
+	currLeaf       int
+	startIdx       uint64
+	endIdx         uint64
+	valsPerIdx     uint64
+	currLeafValues []Tuple
+	leafValPos     int
+	nbf            *NomsBinFormat
+	tupleBuffer    []Tuple
+}
+
+func (itr *collTupleRangeIter) Next() (Tuple, error) {
+	var err error
+	if itr.currLeafValues == nil {
+		if itr.currLeaf >= len(itr.leaves) {
+			// reached the end
+			return Tuple{}, io.EOF
+		}
+
+		currLeaf := itr.leaves[itr.currLeaf]
+		itr.currLeaf++
+
+		seq := currLeaf.asSequence()
+		itr.tupleBuffer, err = seq.kvTuples(itr.startIdx, itr.endIdx, itr.tupleBuffer)
+
+		if err != nil {
+			return Tuple{}, err
+		}
+
+		itr.currLeafValues = itr.tupleBuffer
+		itr.leafValPos = 0
+	}
+
+	v := itr.currLeafValues[itr.leafValPos]
+	itr.leafValPos++
+
+	if itr.leafValPos >= len(itr.currLeafValues) {
+		itr.endIdx = itr.endIdx - uint64(len(itr.currLeafValues))/itr.valsPerIdx - itr.startIdx
+		itr.startIdx = 0
+		itr.currLeafValues = nil
+	}
+
+	return v, nil
+}
+
+func newCollRangeIter(ctx context.Context, col Collection, startIdx, endIdx uint64) (*collTupleRangeIter, error) {
+	l := col.Len()
+	d.PanicIfTrue(startIdx > endIdx || endIdx > l)
+	if startIdx == endIdx {
+		return nil, nil
+	}
+
+	leaves, localStart, err := LoadLeafNodes(ctx, []Collection{col}, startIdx, endIdx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	endIdx = localStart + endIdx - startIdx
+	startIdx = localStart
+	valuesPerIdx := uint64(getValuesPerIdx(col.Kind()))
+
+	return &collTupleRangeIter{
+		leaves:      leaves,
+		startIdx:    startIdx,
+		endIdx:      endIdx,
+		valsPerIdx:  valuesPerIdx,
+		tupleBuffer: make([]Tuple, 32),
+		nbf:         col.asSequence().format(),
+	}, nil
 }
 
 func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb func(v Value) error) (uint64, error) {

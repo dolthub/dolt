@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPlanCompaction(t *testing.T) {
@@ -43,16 +44,16 @@ func TestPlanCompaction(t *testing.T) {
 			totalUnc += uint64(len(chnk))
 		}
 		data, name, err := buildTable(content)
-		assert.NoError(err)
+		require.NoError(t, err)
 		ti, err := parseTableIndex(data)
-		assert.NoError(err)
+		require.NoError(t, err)
 		src := chunkSourceAdapter{newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize), name}
 		dataLens = append(dataLens, uint64(len(data))-indexSize(mustUint32(src.count()))-footerSize)
 		sources = append(sources, src)
 	}
 
 	plan, err := planConjoin(sources, &Stats{})
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	var totalChunks uint32
 	for i, src := range sources {
@@ -61,7 +62,7 @@ func TestPlanCompaction(t *testing.T) {
 	}
 
 	idx, err := parseTableIndex(plan.mergedIndex)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Equal(totalChunks, idx.chunkCount)
 	assert.Equal(totalUnc, idx.totalUncompressedData)

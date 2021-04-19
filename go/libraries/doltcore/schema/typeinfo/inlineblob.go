@@ -15,13 +15,22 @@
 package typeinfo
 
 import (
+	"context"
 	"fmt"
-	"math"
+	"strconv"
+	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
+)
+
+const (
+	inlineBlobTypeParam_Length        = "length"
+	inlineBlobTypeParam_SQL           = "sql"
+	inlineBlobTypeParam_SQL_Binary    = "bin"
+	inlineBlobTypeParam_SQL_VarBinary = "varbin"
 )
 
 type inlineBlobType struct {
@@ -30,12 +39,40 @@ type inlineBlobType struct {
 
 var _ TypeInfo = (*inlineBlobType)(nil)
 
-var InlineBlobType = &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
+func CreateInlineBlobTypeFromParams(params map[string]string) (TypeInfo, error) {
+	var length int64
+	var err error
+	if lengthStr, ok := params[inlineBlobTypeParam_Length]; ok {
+		length, err = strconv.ParseInt(lengthStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, fmt.Errorf(`create inlineblob type info is missing param "%v"`, inlineBlobTypeParam_Length)
+	}
+	if sqlStr, ok := params[inlineBlobTypeParam_SQL]; ok {
+		var sqlType sql.StringType
+		switch sqlStr {
+		case inlineBlobTypeParam_SQL_Binary:
+			sqlType, err = sql.CreateBinary(sqltypes.Binary, length)
+		case inlineBlobTypeParam_SQL_VarBinary:
+			sqlType, err = sql.CreateBinary(sqltypes.VarBinary, length)
+		default:
+			return nil, fmt.Errorf(`create inlineblob type info has "%v" param with value "%v"`, inlineBlobTypeParam_SQL, sqlStr)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return &inlineBlobType{sqlType}, nil
+	} else {
+		return nil, fmt.Errorf(`create inlineblob type info is missing param "%v"`, inlineBlobTypeParam_SQL)
+	}
+}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *inlineBlobType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.InlineBlob); ok {
-		return string(val), nil
+		return *(*string)(unsafe.Pointer(&val)), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -43,8 +80,22 @@ func (ti *inlineBlobType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+// ReadFrom reads a go value from a noms types.CodecReader directly
+func (ti *inlineBlobType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.InlineBlobKind:
+		bytes := reader.ReadInlineBlob()
+		return *(*string)(unsafe.Pointer(&bytes)), nil
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *inlineBlobType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+func (ti *inlineBlobType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	if v == nil {
 		return types.NullValue, nil
 	}
@@ -54,7 +105,7 @@ func (ti *inlineBlobType) ConvertValueToNomsValue(v interface{}) (types.Value, e
 	}
 	val, ok := strVal.(string)
 	if ok {
-		return types.InlineBlob(val), nil
+		return *(*types.InlineBlob)(unsafe.Pointer(&val)), nil
 	}
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
@@ -64,8 +115,11 @@ func (ti *inlineBlobType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*inlineBlobType)
-	return ok
+	if ti2, ok := other.(*inlineBlobType); ok {
+		return ti.sqlBinaryType.MaxCharacterLength() == ti2.sqlBinaryType.MaxCharacterLength() &&
+			ti.sqlBinaryType.Type() == ti2.sqlBinaryType.Type()
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.
@@ -94,13 +148,24 @@ func (ti *inlineBlobType) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *inlineBlobType) GetTypeParams() map[string]string {
-	return nil
+	typeParams := map[string]string{
+		inlineBlobTypeParam_Length: strconv.FormatInt(ti.sqlBinaryType.MaxCharacterLength(), 10),
+	}
+	switch ti.sqlBinaryType.Type() {
+	case sqltypes.Binary:
+		typeParams[inlineBlobTypeParam_SQL] = inlineBlobTypeParam_SQL_Binary
+	case sqltypes.VarBinary:
+		typeParams[inlineBlobTypeParam_SQL] = inlineBlobTypeParam_SQL_VarBinary
+	default:
+		panic(fmt.Errorf(`unknown inlineblob type info sql type "%v"`, ti.sqlBinaryType.Type().String()))
+	}
+	return typeParams
 }
 
 // IsValid implements TypeInfo interface.
 func (ti *inlineBlobType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.InlineBlob); ok {
-		return true
+	if val, ok := v.(types.InlineBlob); ok {
+		return int64(len(val)) <= ti.sqlBinaryType.MaxByteLength()
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return true
@@ -114,7 +179,7 @@ func (ti *inlineBlobType) NomsKind() types.NomsKind {
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *inlineBlobType) ParseValue(str *string) (types.Value, error) {
+func (ti *inlineBlobType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
@@ -123,7 +188,7 @@ func (ti *inlineBlobType) ParseValue(str *string) (types.Value, error) {
 		return nil, err
 	}
 	if val, ok := strVal.(string); ok {
-		return types.InlineBlob(val), nil
+		return *(*types.InlineBlob)(unsafe.Pointer(&val)), nil
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
 }
@@ -135,10 +200,59 @@ func (ti *inlineBlobType) Promote() TypeInfo {
 
 // String implements TypeInfo interface.
 func (ti *inlineBlobType) String() string {
-	return "InlineBlob"
+	sqlType := ""
+	switch ti.sqlBinaryType.Type() {
+	case sqltypes.Binary:
+		sqlType = "Binary"
+	case sqltypes.VarBinary:
+		sqlType = "VarBinary"
+	default:
+		panic(fmt.Errorf(`unknown inlineblob type info sql type "%v"`, ti.sqlBinaryType.Type().String()))
+	}
+	return fmt.Sprintf(`InlineBlob(%v, SQL: %v)`, ti.sqlBinaryType.MaxCharacterLength(), sqlType)
 }
 
 // ToSqlType implements TypeInfo interface.
 func (ti *inlineBlobType) ToSqlType() sql.Type {
 	return ti.sqlBinaryType
+}
+
+// inlineBlobTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func inlineBlobTypeConverter(ctx context.Context, src *inlineBlobType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uuidType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
 }

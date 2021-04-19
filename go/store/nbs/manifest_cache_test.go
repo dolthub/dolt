@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSizeCache(t *testing.T) {
@@ -40,9 +41,9 @@ func TestSizeCache(t *testing.T) {
 		dbB, contentsB := "dbB", manifestContents{lock: computeAddr([]byte("lockB"))}
 
 		err := c.Put(dbA, contentsA, t1)
-		assert.NoError(err)
+		require.NoError(t, err)
 		err = c.Put(dbB, contentsB, t1)
-		assert.NoError(err)
+		require.NoError(t, err)
 
 		cont, _, present := c.Get(dbA)
 		assert.True(present)
@@ -61,7 +62,7 @@ func TestSizeCache(t *testing.T) {
 		keys := []string{"db1", "db2", "db3", "db4", "db5", "db6", "db7", "db8", "db9"}
 		for i, v := range keys {
 			err := c.Put(v, manifestContents{}, time.Now())
-			assert.NoError(err)
+			require.NoError(t, err)
 			expected := uint64(i + 1)
 			if expected >= capacity {
 				expected = capacity
@@ -84,7 +85,7 @@ func TestSizeCache(t *testing.T) {
 		assert.True(ok)
 		lru++
 		err := c.Put("novel", manifestContents{}, time.Now())
-		assert.NoError(err)
+		require.NoError(t, err)
 		_, _, ok = c.Get(keys[lru])
 		assert.False(ok)
 		// |keys[lru]| is gone, so |keys[lru+1]| is next
@@ -92,7 +93,7 @@ func TestSizeCache(t *testing.T) {
 
 		// Putting a bigger value will dump multiple existing entries
 		err = c.Put("big", manifestContents{vers: "big version"}, time.Now())
-		assert.NoError(err)
+		require.NoError(t, err)
 		_, _, ok = c.Get(keys[lru])
 		assert.False(ok)
 		lru++
@@ -114,7 +115,7 @@ func TestSizeCache(t *testing.T) {
 	t.Run("TooLargeValue", func(t *testing.T) {
 		c := newManifestCache(16)
 		err := c.Put("db", manifestContents{}, time.Now())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, _, ok := c.Get("db")
 		assert.False(t, ok)
 	})
@@ -122,7 +123,7 @@ func TestSizeCache(t *testing.T) {
 	t.Run("ZeroSizeCache", func(t *testing.T) {
 		c := newManifestCache(0)
 		err := c.Put("db", manifestContents{}, time.Now())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, _, ok := c.Get("db")
 		assert.False(t, ok)
 	})

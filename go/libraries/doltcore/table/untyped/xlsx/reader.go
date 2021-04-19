@@ -39,7 +39,7 @@ type XLSXReader struct {
 	rows   []row.Row
 }
 
-func OpenXLSXReaderFromBinary(nbf *types.NomsBinFormat, r io.ReadCloser, info *XLSXFileInfo) (*XLSXReader, error) {
+func OpenXLSXReaderFromBinary(ctx context.Context, vrw types.ValueReadWriter, r io.ReadCloser, info *XLSXFileInfo) (*XLSXReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 
 	contents, err := ioutil.ReadAll(r)
@@ -59,7 +59,7 @@ func OpenXLSXReaderFromBinary(nbf *types.NomsBinFormat, r io.ReadCloser, info *X
 
 	_, sch := untyped.NewUntypedSchema(colStrs...)
 
-	decodedRows, err := decodeXLSXRows(nbf, data, sch)
+	decodedRows, err := decodeXLSXRows(ctx, vrw, data, sch)
 	if err != nil {
 		r.Close()
 		return nil, err
@@ -68,7 +68,7 @@ func OpenXLSXReaderFromBinary(nbf *types.NomsBinFormat, r io.ReadCloser, info *X
 	return &XLSXReader{r, br, info, sch, 0, decodedRows}, nil
 }
 
-func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *XLSXFileInfo) (*XLSXReader, error) {
+func OpenXLSXReader(ctx context.Context, vrw types.ValueReadWriter, path string, fs filesys.ReadableFS, info *XLSXFileInfo) (*XLSXReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
@@ -78,6 +78,9 @@ func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS
 	br := bufio.NewReaderSize(r, ReadBufSize)
 
 	colStrs, err := getColHeadersFromPath(path, info.SheetName)
+	if err != nil {
+		return nil, err
+	}
 
 	data, err := getXlsxRowsFromPath(path, info.SheetName)
 	if err != nil {
@@ -86,7 +89,7 @@ func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS
 
 	_, sch := untyped.NewUntypedSchema(colStrs...)
 
-	decodedRows, err := decodeXLSXRows(nbf, data, sch)
+	decodedRows, err := decodeXLSXRows(ctx, vrw, data, sch)
 	if err != nil {
 		r.Close()
 		return nil, err

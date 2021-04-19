@@ -176,6 +176,7 @@ message ClientRepoFormat {
 
 message ListTableFilesRequest  {
   RepoId repo_id = 1;
+  bool appendix_only = 2;
 }
 
 message TableFileInfo {
@@ -189,10 +190,23 @@ message ListTableFilesResponse {
   repeated TableFileInfo table_file_info = 2;
 }
 
+enum ManifestAppendixOption {
+  MANIFEST_APPENDIX_OPTION_UNSPECIFIED = 0;
+  MANIFEST_APPENDIX_OPTION_SET = 1;
+  MANIFEST_APPENDIX_OPTION_APPEND = 2;
+}
+
 message AddTableFilesRequest {
   RepoId repo_id = 1;
   ClientRepoFormat client_repo_format = 2;
   repeated ChunkTableInfo chunk_table_info = 3;
+  // If set, this is a write for the manifest appendix, not just the manifest table file specs.
+  // The table files appearing in `chunk_table_info` are added to `specs` and are also set
+  // in the manifest appendix. If `appendix_option` is `SET`, then the value of the appendix
+  // becomes the full list provided in `chunk_table_info` and any prior specs in the appendix
+  // are removed from the manifest specs. If `append_option` is `APPEND`, then the
+  // supplied table files are added to the appendix and to specs.
+  ManifestAppendixOption appendix_option = 4;
 }
 
 message AddTableFilesResponse {

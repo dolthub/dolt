@@ -113,7 +113,7 @@ DELETE FROM onepk WHERE v2 = 222;
 INSERT INTO onepk VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 DELETE FROM onepk WHERE pk1 % 2 = 1;
 REPLACE INTO onepk VALUES (3, 6, 2), (-1, 4, -3);
-UPDATE onepk SET pk1 = v1 + pk1;
+UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 `,
 			[]sql.Row{{2, 4}, {4, 3}, {6, 9}},
 			[]sql.Row{},

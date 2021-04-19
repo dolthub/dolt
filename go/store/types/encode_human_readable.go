@@ -210,31 +210,22 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 		w.writeSize(v)
 		w.indent()
 
-		var err error
-		iterErr := v.(List).Iter(ctx, func(v Value, i uint64) bool {
+		err := v.(List).Iter(ctx, func(v Value, i uint64) (bool, error) {
 			if i == 0 {
 				w.newLine()
 			}
 
-			err = w.Write(ctx, v)
-
-			if err != nil {
-				return true
+			if err := w.Write(ctx, v); err != nil {
+				return true, err
 			}
 
 			w.write(",")
 			w.newLine()
-			err = w.err
 
-			return err != nil
+			return false, w.err
 		})
-
 		if err != nil {
 			return err
-		}
-
-		if iterErr != nil {
-			return iterErr
 		}
 
 		w.outdent()
@@ -299,6 +290,22 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 			return false, nil
 		})
 
+		if err != nil {
+			return err
+		}
+
+		w.outdent()
+		w.write("}")
+
+	case JSONKind:
+		w.write("json {")
+		w.indent()
+		vv, err := v.(JSON).Inner()
+		if err != nil {
+			return err
+		}
+
+		err = w.Write(ctx, vv)
 		if err != nil {
 			return err
 		}
@@ -434,7 +441,7 @@ func (w *hrsWriter) writeSize(v Value) {
 
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
-	case ListKind, RefKind, SetKind, MapKind, TupleKind:
+	case ListKind, RefKind, SetKind, MapKind, TupleKind, JSONKind:
 		w.write(t.TargetKind().String())
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {

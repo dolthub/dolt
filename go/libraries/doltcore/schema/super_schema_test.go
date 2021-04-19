@@ -178,7 +178,7 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 		require.NoError(t, err)
 		assert.Equal(t, test.ExpectedGeneratedSchema, gs)
 
-		eq, err := SchemasAreEqual(test.ExpectedGeneratedSchema, gs)
+		eq := SchemasAreEqual(test.ExpectedGeneratedSchema, gs)
 		require.NoError(t, err)
 		assert.True(t, eq)
 	}
@@ -230,11 +230,7 @@ func mustSchema(cols []Column) Schema {
 }
 
 func mustColColl(cols []Column) *ColCollection {
-	cc, err := NewColCollection(cols...)
-	if err != nil {
-		panic(err)
-	}
-	return cc
+	return NewColCollection(cols...)
 }
 
 func strCol(name string, tag uint64, isPK bool) Column {

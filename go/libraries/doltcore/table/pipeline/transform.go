@@ -79,7 +79,12 @@ func newRowTransformer(name string, transRowFunc TransformRowFunc) TransformFunc
 						}
 
 						outRow := RowWithProps{outRowData[i].RowData, outProps}
-						outChan <- outRow
+
+						select {
+						case outChan <- outRow:
+						case <-stopChan:
+							return
+						}
 					}
 
 					if badRowDetails != "" {

@@ -20,7 +20,19 @@ var DoltFunctions = []sql.Function{
 	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},
 	sql.FunctionN{Name: CommitFuncName, Fn: NewCommitFunc},
 	sql.FunctionN{Name: MergeFuncName, Fn: NewMergeFunc},
-	sql.Function1{Name: resetFuncName, Fn: NewDoltResetFunc},
+	sql.Function1{Name: resetFuncName, Fn: NewResetFunc},
+	sql.Function1{Name: SquashFuncName, Fn: NewSquashFunc},
 	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
 	sql.FunctionN{Name: DoltCommitFuncName, Fn: NewDoltCommitFunc},
+	sql.FunctionN{Name: DoltAddFuncName, Fn: NewDoltAddFunc},
+	sql.FunctionN{Name: DoltResetFuncName, Fn: NewDoltResetFunc},
+	sql.FunctionN{Name: DoltCheckoutFuncName, Fn: NewDoltCheckoutFunc},
+	sql.FunctionN{Name: DoltMergeFuncName, Fn: NewDoltMergeFunc},
+	sql.Function0{Name: ActiveBranchFuncName, Fn: NewActiveBranchFunc},
+}
+
+// These are the DoltFunctions that get exposed to Dolthub Api.
+var DolthubApiFunctions = []sql.Function{
+	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},
+	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
 }

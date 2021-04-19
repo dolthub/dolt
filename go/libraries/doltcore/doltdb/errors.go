@@ -20,6 +20,7 @@ import (
 )
 
 var ErrInvBranchName = errors.New("not a valid user branch name")
+var ErrInvWorkspaceName = errors.New("not a valid user workspace name")
 var ErrInvTagName = errors.New("not a valid user tag name")
 var ErrInvTableName = errors.New("not a valid table name")
 var ErrInvHash = errors.New("not a valid hash")
@@ -32,9 +33,11 @@ var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is no
 var ErrHashNotFound = errors.New("could not find a value for this hash")
 var ErrBranchNotFound = errors.New("branch not found")
 var ErrTagNotFound = errors.New("tag not found")
+var ErrWorkspaceNotFound = errors.New("workspace not found")
 var ErrTableNotFound = errors.New("table not found")
 var ErrTableExists = errors.New("table already exists")
 var ErrAlreadyOnBranch = errors.New("Already on branch")
+var ErrAlreadyOnWorkspace = errors.New("Already on workspace")
 
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 
@@ -44,13 +47,13 @@ var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b a
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")
 
 type ErrClientOutOfDate struct {
-	repoVer   featureVersion
-	clientVer featureVersion
+	RepoVer   FeatureVersion
+	ClientVer FeatureVersion
 }
 
 func (e ErrClientOutOfDate) Error() string {
 	return fmt.Sprintf(`client (version: %d) is out of date and must upgrade to read this repo (version: %d).
-	visit https://github.com/dolthub/dolt/releases/latest/`, e.clientVer, e.repoVer)
+	visit https://github.com/dolthub/dolt/releases/latest/`, e.ClientVer, e.RepoVer)
 }
 
 func IsInvalidFormatErr(err error) bool {
@@ -78,4 +81,95 @@ func IsNotACommit(err error) bool {
 	default:
 		return false
 	}
+}
+
+type RootType int
+
+const (
+	WorkingRoot RootType = iota
+	StagedRoot
+	CommitRoot
+	HeadRoot
+	InvalidRoot
+)
+
+func (rt RootType) String() string {
+	switch rt {
+	case WorkingRoot:
+		return "working root"
+	case StagedRoot:
+		return "staged root"
+	case CommitRoot:
+		return "root value for commit"
+	case HeadRoot:
+		return "HEAD commit root value"
+	}
+
+	return "unknown"
+}
+
+type RootTypeSet map[RootType]struct{}
+
+func NewRootTypeSet(rts ...RootType) RootTypeSet {
+	mp := make(map[RootType]struct{})
+
+	for _, rt := range rts {
+		mp[rt] = struct{}{}
+	}
+
+	return RootTypeSet(mp)
+}
+
+func (rts RootTypeSet) Contains(rt RootType) bool {
+	_, ok := rts[rt]
+	return ok
+}
+
+func (rts RootTypeSet) First(rtList []RootType) RootType {
+	for _, rt := range rtList {
+		if _, ok := rts[rt]; ok {
+			return rt
+		}
+	}
+
+	return InvalidRoot
+}
+
+func (rts RootTypeSet) IsEmpty() bool {
+	return len(rts) == 0
+}
+
+type RootValueUnreadable struct {
+	RootType RootType
+	Cause    error
+}
+
+func (rvu RootValueUnreadable) Error() string {
+	rs, es := rvu.RootType.String(), rvu.Cause.Error()
+	return fmt.Sprintf("unable to read %s: %s", rs, es)
+}
+
+func IsRootValUnreachable(err error) bool {
+	_, ok := err.(RootValueUnreadable)
+	return ok
+}
+
+func GetUnreachableRootType(err error) RootType {
+	rvu, ok := err.(RootValueUnreadable)
+
+	if !ok {
+		panic("Must validate with IsRootValUnreachable before calling GetUnreachableRootType")
+	}
+
+	return rvu.RootType
+}
+
+func GetUnreachableRootCause(err error) error {
+	rvu, ok := err.(RootValueUnreadable)
+
+	if !ok {
+		panic("Must validate with IsRootValUnreachable before calling GetUnreachableRootCause")
+	}
+
+	return rvu.Cause
 }

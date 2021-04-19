@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -65,7 +66,7 @@ func TestPathStruct(t *testing.T) {
 		"baz": Float(203),
 	})
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	assertResolvesTo(assert, String("foo"), v, `.foo`)
 	assertResolvesTo(assert, Bool(false), v, `.bar`)
 	assertResolvesTo(assert, Float(203), v, `.baz`)
@@ -75,7 +76,7 @@ func TestPathStruct(t *testing.T) {
 		"v1": v,
 	})
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	assertResolvesTo(assert, String("foo"), v2, `.v1.foo`)
 	assertResolvesTo(assert, Bool(false), v2, `.v1.bar`)
 	assertResolvesTo(assert, Float(203), v2, `.v1.baz`)
@@ -92,7 +93,7 @@ func TestPathStructType(t *testing.T) {
 		StructField{Name: "baz", Type: PrimitiveTypeMap[FloatKind]},
 	)
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	assertResolvesTo(assert, PrimitiveTypeMap[StringKind], typ, `.foo`)
 	assertResolvesTo(assert, PrimitiveTypeMap[BoolKind], typ, `.bar`)
 	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], typ, `.baz`)
@@ -102,7 +103,7 @@ func TestPathStructType(t *testing.T) {
 		StructField{Name: "typ", Type: typ},
 	)
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	assertResolvesTo(assert, typ, typ2, `.typ`)
 	assertResolvesTo(assert, PrimitiveTypeMap[StringKind], typ2, `.typ.foo`)
 	assertResolvesTo(assert, PrimitiveTypeMap[BoolKind], typ2, `.typ.bar`)
@@ -123,7 +124,7 @@ func TestPathIndex(t *testing.T) {
 
 	var err error
 	v, err = NewList(context.Background(), vs, Float(1), Float(3), String("foo"), Bool(false))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	resolvesTo(Float(1), Float(0), "[0]")
 	resolvesTo(Float(3), Float(1), "[1]")
@@ -143,7 +144,7 @@ func TestPathIndex(t *testing.T) {
 		String("two"), String("bar"),
 	)
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	resolvesTo(String("foo"), Float(1), "[1]")
 	resolvesTo(String("bar"), String("two"), `["two"]`)
 	resolvesTo(Float(23), Bool(false), "[false]")
@@ -155,13 +156,13 @@ func TestPathIndexType(t *testing.T) {
 	assert := assert.New(t)
 
 	st, err := MakeSetType(PrimitiveTypeMap[FloatKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 	lt, err := MakeListType(st)
-	assert.NoError(err)
+	require.NoError(t, err)
 	mt, err := MakeMapType(st, lt)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ut, err := MakeUnionType(lt, mt, st)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], st, "[0]")
 	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], st, "[-1]")
@@ -204,13 +205,13 @@ func TestPathHashIndex(t *testing.T) {
 
 	b := Bool(true)
 	br, err := NewRef(b, Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	i := Float(0)
 	str := String("foo")
 	l, err := NewList(context.Background(), vs, b, i, str)
-	assert.NoError(err)
+	require.NoError(t, err)
 	lr, err := NewRef(l, Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	m, err := NewMap(context.Background(), vs,
 		b, br,
 		br, i,
@@ -218,9 +219,9 @@ func TestPathHashIndex(t *testing.T) {
 		l, lr,
 		lr, b,
 	)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err := NewSet(context.Background(), vs, b, br, i, str, l, lr)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	resolvesTo := func(col, key, expVal, expKey Value) {
 		assertResolvesTo(assert, expVal, col, hashIdx(key))
@@ -273,7 +274,7 @@ func TestPathMulti(t *testing.T) {
 		String("c"), String("car"),
 	)
 
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	m2, err := NewMap(context.Background(), vs,
 		Bool(false), String("earth"),
@@ -281,17 +282,17 @@ func TestPathMulti(t *testing.T) {
 		m1, String("fire"),
 	)
 
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	l, err := NewList(context.Background(), vs, m1, m2)
 
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	s, err := NewStruct(Format_7_18, "", StructData{
 		"foo": l,
 	})
 
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assertResolvesTo(assert, l, s, `.foo`)
 	assertResolvesTo(assert, m1, s, `.foo[0]`)
@@ -324,7 +325,7 @@ func TestPathParseSuccess(t *testing.T) {
 
 	test := func(str string) {
 		p, err := ParsePath(str)
-		assert.NoError(err)
+		require.NoError(t, err)
 		expectStr := str
 		switch expectStr { // Human readable serialization special cases.
 		case "[1e4]":
@@ -338,7 +339,7 @@ func TestPathParseSuccess(t *testing.T) {
 	}
 
 	h, err := Float(42).Hash(Format_7_18) // arbitrary hash
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	test(".foo")
 	test(".foo@type")
@@ -454,19 +455,19 @@ func TestPathEquals(t *testing.T) {
 	assert.True(Path{}.Equals(Path{}))
 	for _, s := range equalPaths {
 		p, err := ParsePath(s)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(p.Equals(p))
 	}
 
 	simple, err := ParsePath(`["one"].two`)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(Path{}.Equals(simple))
 	for _, a := range notEqualPaths {
 		s0, s1 := a[0], a[1]
 		p0, err := ParsePath(s0)
-		assert.NoError(err)
+		require.NoError(t, err)
 		p1, err := ParsePath(s1)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.False(p0.Equals(p1))
 	}
 }
@@ -496,12 +497,12 @@ func TestCopyPath(t *testing.T) {
 
 	for _, s1 := range testCases {
 		expected, err := ParsePath(s1 + `["anIndex"]`)
-		assert.NoError(err)
+		require.NoError(t, err)
 		var p Path
 		if s1 != "" {
 			p, err = ParsePath(s1)
 		}
-		assert.NoError(err)
+		require.NoError(t, err)
 		p1 := p.Append(NewIndexPath(String("anIndex")))
 		if len(p) > 0 {
 			p[0] = expected[1] // if p1 really is a copy, this shouldn't be noticed
@@ -530,7 +531,7 @@ func TestPathType(t *testing.T) {
 		String("number"), Float(42),
 		String("List<number|string>"), mustList(NewList(context.Background(), vs, Float(42), String("foo"))),
 		String("Map<Bool, Bool>"), mustMap(NewMap(context.Background(), vs, Bool(true), Bool(false))))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	err = m.IterAll(context.Background(), func(k, cv Value) error {
 		ks := k.(String)
@@ -544,20 +545,20 @@ func TestPathType(t *testing.T) {
 		return nil
 	})
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	assertResolvesTo(assert, PrimitiveTypeMap[StringKind], m, `["string"]@key@type`)
 	assertResolvesTo(assert, mustType(TypeOf(m)), m, `@type`)
 	s, err := NewStruct(Format_7_18, "", StructData{
 		"str": String("foo"),
 		"num": Float(42),
 	})
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	str, ok, err := s.MaybeGet("str")
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	num, ok, err := s.MaybeGet("num")
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assertResolvesTo(assert, mustType(TypeOf(str)), s, ".str@type")
 	assertResolvesTo(assert, mustType(TypeOf(num)), s, ".num@type")
@@ -569,15 +570,15 @@ func TestPathTarget(t *testing.T) {
 	s, err := NewStruct(Format_7_18, "", StructData{
 		"foo": String("bar"),
 	})
-	assert.NoError(err)
+	require.NoError(t, err)
 	vs := newTestValueStore()
 	r, err := vs.WriteValue(context.Background(), s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := NewStruct(Format_7_18, "", StructData{
 		"ref": r,
 	})
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	assertResolvesToWithVR(assert, nil, String("notref"), `@target`, vs)
 	assertResolvesToWithVR(assert, s, r, `@target`, vs)
 	assertResolvesToWithVR(assert, String("bar"), r, `@target.foo`, vs)
@@ -597,7 +598,7 @@ func TestPathAtAnnotation(t *testing.T) {
 
 	var err error
 	v, err = NewList(context.Background(), vs, Float(1), Float(3), String("foo"), Bool(false))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	resolvesTo(Float(1), nil, "@at(0)")
 	resolvesTo(Float(3), nil, "@at(1)")
@@ -616,7 +617,7 @@ func TestPathAtAnnotation(t *testing.T) {
 		Float(2.3),
 		String("two"),
 	)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	resolvesTo(Bool(false), Bool(false), "@at(0)")
 	resolvesTo(Float(1), Float(1), "@at(1)")
@@ -635,7 +636,7 @@ func TestPathAtAnnotation(t *testing.T) {
 		Float(2.3), Float(4.5),
 		String("two"), String("bar"),
 	)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	resolvesTo(Float(23), Bool(false), "@at(0)")
 	resolvesTo(String("foo"), Float(1), "@at(1)")

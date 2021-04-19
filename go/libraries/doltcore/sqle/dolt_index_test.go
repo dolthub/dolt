@@ -16,13 +16,15 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -223,6 +225,16 @@ func TestDoltIndexEqual(t *testing.T) {
 			[]interface{}{4, 3},
 			[]sql.Row{{1, 2, 3, 4}},
 		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		},
 	}
 
 	for _, typesTest := range typesTests {
@@ -333,6 +345,16 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 			"twopk:idx_v2v1",
 			[]interface{}{4, 3},
 			[]sql.Row{{2, 1, 4, 4}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			nil,
 		},
 	}
 
@@ -453,6 +475,16 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{4, 3},
+			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
 			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
 		},
 	}
@@ -582,6 +614,16 @@ func TestDoltIndexLessThan(t *testing.T) {
 			[]interface{}{4, 3},
 			[]sql.Row{{2, 2, 4, 3}, {1, 1, 3, 3}},
 		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			nil,
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			[]sql.Row{{2, 2, 4, 3}, {1, 1, 3, 3}},
+		},
 	}
 
 	for _, typesTest := range typesTests {
@@ -702,6 +744,16 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 			"twopk:idx_v2v1",
 			[]interface{}{4, 3},
 			[]sql.Row{{1, 2, 3, 4}, {2, 2, 4, 3}, {1, 1, 3, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 	}
 
@@ -848,6 +900,24 @@ func TestDoltIndexBetween(t *testing.T) {
 			[]interface{}{4, 4},
 			[]sql.Row{{2, 2, 4, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}},
 		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]interface{}{3},
+			[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			[]interface{}{4},
+			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]interface{}{4},
+			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+		},
 	}
 
 	for _, typesTest := range typesTests {
@@ -922,7 +992,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			require.NoError(t, err)
 			dil, ok := indexLookup.(*doltIndexLookup)
 			require.True(t, ok)
-			indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()))
+			indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()), dil.IndexRowData(), nil)
 			require.NoError(t, err)
 
 			var readRows []sql.Row
@@ -932,13 +1002,13 @@ func TestDoltIndexBetween(t *testing.T) {
 			}
 			require.Equal(t, io.EOF, err)
 
-			assert.Equal(t, expectedRows, readRows)
+			requireUnorderedRowsEqual(t, expectedRows, readRows)
 
 			indexLookup, err = index.DescendRange(test.lessThanOrEqual, test.greaterThanOrEqual)
 			require.NoError(t, err)
 			dil, ok = indexLookup.(*doltIndexLookup)
 			require.True(t, ok)
-			indexIter, err = dil.RowIter(NewTestSQLCtx(context.Background()))
+			indexIter, err = dil.RowIter(NewTestSQLCtx(context.Background()), dil.IndexRowData(), nil)
 			require.NoError(t, err)
 
 			readRows = nil
@@ -947,9 +1017,188 @@ func TestDoltIndexBetween(t *testing.T) {
 			}
 			require.Equal(t, io.EOF, err)
 
-			assert.Equal(t, expectedRows, readRows)
+			requireUnorderedRowsEqual(t, expectedRows, readRows)
 		})
 	}
+}
+
+type rowSlice struct {
+	rows    []sql.Row
+	sortErr error
+}
+
+func (r *rowSlice) setSortErr(err error) {
+	if err == nil || r.sortErr != nil {
+		return
+	}
+
+	r.sortErr = err
+}
+
+func (r *rowSlice) Len() int {
+	return len(r.rows)
+}
+
+func (r *rowSlice) Less(i, j int) bool {
+	r1 := r.rows[i]
+	r2 := r.rows[j]
+
+	longerLen := len(r1)
+	if len(r2) > longerLen {
+		longerLen = len(r2)
+	}
+
+	for pos := 0; pos < longerLen; pos++ {
+		if pos == len(r1) {
+			return true
+		}
+
+		if pos == len(r2) {
+			return false
+		}
+
+		c1, c2 := r1[pos], r2[pos]
+
+		var cmp int
+		var err error
+		switch typedVal := c1.(type) {
+		case int:
+			cmp, err = signedCompare(int64(typedVal), c2)
+		case int64:
+			cmp, err = signedCompare(typedVal, c2)
+		case int32:
+			cmp, err = signedCompare(int64(typedVal), c2)
+		case int16:
+			cmp, err = signedCompare(int64(typedVal), c2)
+		case int8:
+			cmp, err = signedCompare(int64(typedVal), c2)
+
+		case uint:
+			cmp, err = unsignedCompare(uint64(typedVal), c2)
+		case uint64:
+			cmp, err = unsignedCompare(typedVal, c2)
+		case uint32:
+			cmp, err = unsignedCompare(uint64(typedVal), c2)
+		case uint16:
+			cmp, err = unsignedCompare(uint64(typedVal), c2)
+		case uint8:
+			cmp, err = unsignedCompare(uint64(typedVal), c2)
+
+		case float64:
+			cmp, err = floatCompare(float64(typedVal), c2)
+		case float32:
+			cmp, err = floatCompare(float64(typedVal), c2)
+
+		case string:
+			cmp, err = stringCompare(typedVal, c2)
+
+		default:
+			panic("not implemented please add")
+		}
+
+		if err != nil {
+			r.setSortErr(err)
+			return false
+		}
+
+		if cmp != 0 {
+			return cmp < 0
+		}
+	}
+
+	// equal
+	return false
+}
+
+func signedCompare(n1 int64, c interface{}) (int, error) {
+	var n2 int64
+	switch typedVal := c.(type) {
+	case int:
+		n2 = int64(typedVal)
+	case int64:
+		n2 = typedVal
+	case int32:
+		n2 = int64(typedVal)
+	case int16:
+		n2 = int64(typedVal)
+	case int8:
+		n2 = int64(typedVal)
+	default:
+		return 0, errors.New("comparing rows with different schemas")
+	}
+
+	return int(n1 - n2), nil
+}
+
+func unsignedCompare(n1 uint64, c interface{}) (int, error) {
+	var n2 uint64
+	switch typedVal := c.(type) {
+	case uint:
+		n2 = uint64(typedVal)
+	case uint64:
+		n2 = typedVal
+	case uint32:
+		n2 = uint64(typedVal)
+	case uint16:
+		n2 = uint64(typedVal)
+	case uint8:
+		n2 = uint64(typedVal)
+	default:
+		return 0, errors.New("comparing rows with different schemas")
+	}
+
+	if n1 == n2 {
+		return 0, nil
+	} else if n1 < n2 {
+		return -1, nil
+	} else {
+		return 1, nil
+	}
+}
+
+func floatCompare(n1 float64, c interface{}) (int, error) {
+	var n2 float64
+	switch typedVal := c.(type) {
+	case float32:
+		n2 = float64(typedVal)
+	case float64:
+		n2 = typedVal
+	default:
+		return 0, errors.New("comparing rows with different schemas")
+	}
+
+	if n1 == n2 {
+		return 0, nil
+	} else if n1 < n2 {
+		return -1, nil
+	} else {
+		return 1, nil
+	}
+}
+
+func stringCompare(s1 string, c interface{}) (int, error) {
+	s2, ok := c.(string)
+	if !ok {
+		return 0, errors.New("comparing rows with different schemas")
+	}
+
+	return strings.Compare(s1, s2), nil
+}
+
+func (r *rowSlice) Swap(i, j int) {
+	r.rows[i], r.rows[j] = r.rows[j], r.rows[i]
+}
+
+func requireUnorderedRowsEqual(t *testing.T, rows1, rows2 []sql.Row) {
+	slice1 := &rowSlice{rows: rows1}
+	sort.Stable(slice1)
+	require.NoError(t, slice1.sortErr)
+
+	slice2 := &rowSlice{rows: rows2}
+	sort.Stable(slice2)
+	require.NoError(t, slice2.sortErr)
+
+	require.Equal(t, rows1, rows2)
 }
 
 func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, indexLookupFn func(keys ...interface{}) (sql.IndexLookup, error)) {
@@ -957,7 +1206,7 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, ind
 	require.NoError(t, err)
 	dil, ok := indexLookup.(*doltIndexLookup)
 	require.True(t, ok)
-	indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()))
+	indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()), dil.IndexRowData(), nil)
 	require.NoError(t, err)
 
 	var readRows []sql.Row
@@ -967,7 +1216,7 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, ind
 	}
 	require.Equal(t, io.EOF, err)
 
-	assert.Equal(t, convertSqlRowToInt64(expectedRows), readRows)
+	requireUnorderedRowsEqual(t, convertSqlRowToInt64(expectedRows), readRows)
 }
 
 func doltIndexSetup(t *testing.T) map[string]DoltIndex {
@@ -1157,6 +1406,21 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 			tableData:    tableDataMap[indexDetails.tableName],
 			tableName:    indexDetails.tableName,
 			tableSch:     tableSchemaMap[indexDetails.tableName],
+		}
+		for i := 1; i < len(indexCols); i++ {
+			indexId := fmt.Sprintf("%s:%s_PARTIAL_%d", indexDetails.tableName, index.Name(), i)
+			indexMap[indexId] = &doltIndex{
+				cols:         indexCols[:i],
+				db:           db,
+				id:           indexId,
+				indexRowData: indexData,
+				indexSch:     index.Schema(),
+				table:        tableMap[indexDetails.tableName],
+				tableData:    tableDataMap[indexDetails.tableName],
+				tableName:    indexDetails.tableName,
+				tableSch:     tableSchemaMap[indexDetails.tableName],
+				generated:    true,
+			}
 		}
 	}
 

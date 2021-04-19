@@ -38,14 +38,28 @@ const (
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
+	// ForeignKeyNameRegexStr is the regular expression that valid foreign keys must match.
+	// From the unquoted identifiers: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
+	ForeignKeyNameRegexStr = `^[-$_0-9a-zA-Z]+$`
 )
 
-var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
+var (
+	tableNameRegex      = regexp.MustCompile(TableNameRegexStr)
+	foreignKeyNameRegex = regexp.MustCompile(ForeignKeyNameRegexStr)
+
+	ErrNoConflictsResolved  = errors.New("no conflicts resolved")
+	ErrNoAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
+)
 
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
 // Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
 func IsValidTableName(name string) bool {
 	return tableNameRegex.MatchString(name)
+}
+
+// IsValidForeignKeyName returns true if the name matches the regular expression ForeignKeyNameRegexStr.
+func IsValidForeignKeyName(name string) bool {
+	return foreignKeyNameRegex.MatchString(name)
 }
 
 // Table is a struct which holds row data, as well as a reference to it's schema.
@@ -55,7 +69,7 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map) (*Table, error) {
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map, autoIncVal types.Value) (*Table, error) {
 	schemaRef, err := WriteValAndGetRef(ctx, vrw, schemaVal)
 	if err != nil {
 		return nil, err
@@ -75,6 +89,10 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Va
 		schemaRefKey: schemaRef,
 		tableRowsKey: rowDataRef,
 		indexesKey:   indexesRef,
+	}
+
+	if autoIncVal != nil {
+		sd[autoIncrementKey] = autoIncVal
 	}
 
 	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)
@@ -293,19 +311,18 @@ func (t *Table) UpdateSchema(ctx context.Context, sch schema.Schema) (*Table, er
 	if err != nil {
 		return nil, err
 	}
-	rowData, err := t.GetRowData(ctx)
+
+	schRef, err := WriteValAndGetRef(ctx, t.vrw, newSchemaVal)
 	if err != nil {
 		return nil, err
 	}
-	indexData, err := t.GetIndexData(ctx)
+
+	newTableStruct, err := t.tableStruct.Set(schemaRefKey, schRef)
 	if err != nil {
 		return nil, err
 	}
-	newTable, err := NewTable(ctx, t.vrw, newSchemaVal, rowData, indexData)
-	if err != nil {
-		return nil, err
-	}
-	return newTable, nil
+
+	return &Table{t.vrw, newTableStruct}, nil
 }
 
 // HasTheSameSchema tests the schema within 2 tables for equality
@@ -393,7 +410,7 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 	}
 
 	if removed == 0 {
-		return invalid, notFound, tbl, nil
+		return invalid, notFound, tbl, ErrNoConflictsResolved
 	}
 
 	conflicts, err := confEdit.Map(ctx)
@@ -612,7 +629,7 @@ func (t *Table) GetAutoIncrementValue(ctx context.Context) (types.Value, error) 
 	case types.FloatKind:
 		return types.Float(1), nil
 	default:
-		return nil, fmt.Errorf("auto increment set for non-numeric column type")
+		return nil, ErrNoAutoIncrementValue
 	}
 }
 

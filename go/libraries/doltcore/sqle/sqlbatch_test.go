@@ -70,7 +70,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	for _, stmt := range insertStatements {
 		_, rowIter, err := engine.Query(sqlCtx, stmt)
 		require.NoError(t, err)
-		require.NoError(t, drainIter(rowIter))
+		require.NoError(t, drainIter(sqlCtx, rowIter))
 	}
 
 	// Before committing the batch, the database should be unchanged from its original state
@@ -158,7 +158,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	for _, stmt := range insertStatements {
 		_, rowIter, err := engine.Query(sqlCtx, stmt)
 		require.NoError(t, err)
-		drainIter(rowIter)
+		drainIter(sqlCtx, rowIter)
 	}
 
 	// Before committing the batch, the database should be unchanged from its original state
@@ -195,18 +195,16 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 
 	_, rowIter, err := engine.Query(sqlCtx, `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`)
-	// This won't generate an error until we commit the batch (duplicate key)
 	assert.NoError(t, err)
-	assert.NoError(t, drainIter(rowIter))
+	assert.Error(t, drainIter(sqlCtx, rowIter))
 
 	// This generates an error at insert time because of the bad type for the uuid column
 	_, rowIter, err = engine.Query(sqlCtx, `insert into people values
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, true, 677)`)
 	assert.NoError(t, err)
-	assert.Error(t, drainIter(rowIter))
+	assert.Error(t, drainIter(sqlCtx, rowIter))
 
-	// Error from the first statement appears here
-	assert.Error(t, db.Flush(sqlCtx))
+	assert.NoError(t, db.Flush(sqlCtx))
 }
 
 func assertRowSetsEqual(t *testing.T, expected, actual []row.Row) {
@@ -276,7 +274,7 @@ func newPeopleRow(id int, firstName, lastName string) row.Row {
 		LastNameTag:  types.String(lastName),
 	}
 
-	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_Default, PeopleTestSchema, vals)
 
 	if err != nil {
 		panic(err)
@@ -291,7 +289,7 @@ func newEpsRow(id int, name string) row.Row {
 		EpNameTag:    types.String(name),
 	}
 
-	r, err := row.New(types.Format_7_18, EpisodesTestSchema, vals)
+	r, err := row.New(types.Format_Default, EpisodesTestSchema, vals)
 
 	if err != nil {
 		panic(err)
@@ -306,7 +304,7 @@ func newAppsRow(charId int, epId int) row.Row {
 		AppEpTag:        types.Int(epId),
 	}
 
-	r, err := row.New(types.Format_7_18, AppearancesTestSchema, vals)
+	r, err := row.New(types.Format_Default, AppearancesTestSchema, vals)
 
 	if err != nil {
 		panic(err)

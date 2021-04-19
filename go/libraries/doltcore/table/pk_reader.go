@@ -77,6 +77,11 @@ func newPkTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema,
 		return pkTableReader{}, err
 	}
 
+	return newPkTableReaderForRows(ctx, rows, sch, buffered)
+}
+
+func newPkTableReaderForRows(ctx context.Context, rows types.Map, sch schema.Schema, buffered bool) (pkTableReader, error) {
+	var err error
 	var iter types.MapIterator
 	if buffered {
 		iter, err = rows.Iterator(ctx)

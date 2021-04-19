@@ -165,7 +165,7 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		}
 	}
 
-	err = iter.Close()
+	err = iter.Close(sqlCtx)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (b Branch) CommandString() string { return fmt.Sprintf("branch: %s", b.Bran
 // Exec executes a Branch command on a test dolt environment.
 func (b Branch) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
 	cwb := dEnv.RepoState.Head.Ref.String()
-	return actions.CreateBranch(context.Background(), dEnv, b.BranchName, cwb, false)
+	return actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(), b.BranchName, cwb, false)
 }
 
 type Checkout struct {
@@ -225,7 +225,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	assert.NoError(t, err)
 	assert.NotEqual(t, h1, h2)
 
-	tblNames, _, err := dEnv.MergeWouldStompChanges(context.Background(), cm2)
+	tblNames, _, err := env.MergeWouldStompChanges(context.Background(), cm2, dEnv.DbData())
 	if err != nil {
 		return err
 	}
