@@ -349,8 +349,6 @@ SQL
     [[ "$output" =~ "\`c1\` bigint DEFAULT 5 COMMENT 'hi'" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
-<<<<<<< HEAD:bats/sql-create-tables.bats
-=======
 
 @test "sql-create-tables: create like from other database" {
     mkdir otherdb

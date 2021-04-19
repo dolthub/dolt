@@ -1081,13 +1081,13 @@ SQL
     [[ "$output" =~ "constraint" ]] || false
 }
 
-@test "sql select current_user returns mysql syntax" {
+@test "sql: sql select current_user returns mysql syntax" {
     run dolt sql -q "select current_user" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "current_user" ]
 }
 
-@test "sql show grants" {
+@test "sql: sql show grants" {
     run dolt sql -q "show grants for current_user" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "Grants for root@%" ]
