@@ -144,6 +144,8 @@ type fileManifestV5 struct {
 	dir string
 }
 
+var _ manifestVersionGetter = &fileManifestV5{}
+
 func newLock(dir string) *fslock.Lock {
 	lockPath := filepath.Join(dir, lockFileName)
 	return fslock.New(lockPath)
@@ -180,6 +182,10 @@ func openIfExists(path string) (*os.File, error) {
 
 func (fm5 fileManifestV5) Name() string {
 	return fm5.dir
+}
+
+func (fm5 fileManifestV5) GetManifestVersion() string {
+	return "5"
 }
 
 // ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
@@ -287,8 +293,14 @@ type fileManifestV4 struct {
 	dir string
 }
 
+var _ manifestVersionGetter = &fileManifestV4{}
+
 func (fm4 fileManifestV4) Name() string {
 	return fm4.dir
+}
+
+func (fm4 fileManifestV4) GetManifestVersion() string {
+	return "4"
 }
 
 func (fm4 fileManifestV4) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
