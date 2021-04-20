@@ -1,0 +1,950 @@
+?   	github.com/dolthub/dolt/go/cmd/dolt	[no test files]
+ok  	github.com/dolthub/dolt/go/cmd/dolt/cli	0.591s
+ok  	github.com/dolthub/dolt/go/cmd/dolt/commands	1.884s
+?   	github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds	[no test files]
+?   	github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds	[no test files]
+?   	github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds	[no test files]
+?   	github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds	[no test files]
+Starting server with Config HP="localhost:15200"|U="username"|P="password"|T="5000"|R="true"|L="info"
+Starting server with Config HP="localhost:15200"|U="username"|P="password"|T="5000"|R="true"|L="info"
+Starting server with Config HP="127.0.0.0.1:3306"|U="root"|P=""|T="28800000"|R="false"|L="info"
+address is not a valid IP: 127.0.0.0.1
+Starting server with Config HP="loclahost:3306"|U="root"|P=""|T="28800000"|R="false"|L="info"
+address is not a valid IP: loclahost
+Starting server with Config HP="localhost:300"|U="root"|P=""|T="28800000"|R="false"|L="info"
+port is not in the range between 1024-65535: 300
+
+Starting server with Config HP="localhost:90000"|U="root"|P=""|T="28800000"|R="false"|L="info"
+port is not in the range between 1024-65535: 90000
+
+Starting server with Config HP="localhost:3306"|U=""|P=""|T="28800000"|R="false"|L="info"
+user cannot be empty
+Starting server with Config HP="localhost:3306"|U="root"|P=""|T="28800000"|R="false"|L="unknown"
+loglevel is invalid: everything
+
+listen tcp 127.0.0.1:3306: bind: address already in use--- FAIL: TestServerGoodParams (0.02s)
+    --- FAIL: TestServerGoodParams/HP="localhost:3306"|U="root"|P=""|T="28800000"|R="false"|L="info" (0.00s)
+        server_test.go:157: 
+            	Error Trace:	server_test.go:157
+            	Error:      	Received unexpected error:
+            	            	listen tcp 127.0.0.1:3306: bind: address already in use
+            	Test:       	TestServerGoodParams/HP="localhost:3306"|U="root"|P=""|T="28800000"|R="false"|L="info"
+FAIL
+FAIL	github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver	1.800s
+?   	github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds	[no test files]
+ok  	github.com/dolthub/dolt/go/cmd/dolt/errhand	(cached)
+?   	github.com/dolthub/dolt/go/cmd/git-dolt	[no test files]
+?   	github.com/dolthub/dolt/go/cmd/git-dolt/commands	[no test files]
+ok  	github.com/dolthub/dolt/go/cmd/git-dolt/config	(cached)
+?   	github.com/dolthub/dolt/go/cmd/git-dolt/doltops	[no test files]
+?   	github.com/dolthub/dolt/go/cmd/git-dolt/env	[no test files]
+ok  	github.com/dolthub/dolt/go/cmd/git-dolt/utils	(cached)
+?   	github.com/dolthub/dolt/go/cmd/git-dolt-smudge	[no test files]
+?   	github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1	[no test files]
+?   	github.com/dolthub/dolt/go/libraries	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/creds	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/dbfactory	0.587s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/diff	0.494s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/doltdb	32.486s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/doltdocs	1.220s
+?   	github.com/dolthub/dolt/go/libraries/doltcore/dtestutils	[no test files]
+?   	github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/env	2.848s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/env/actions	3.538s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk	1.933s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/envtestutils	3.780s
+?   	github.com/dolthub/dolt/go/libraries/doltcore/fkconstrain	[no test files]
+?   	github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint	[no test files]
+commit nd946j3n1rrhtj50bgn882gbdq7pptqb
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:38 -0400 2021
+
+	created table test
+
+commit d9dm8jueokl12ov81698vjubo756rfbs
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	created table test
+
+Switched to branch 'other'
+Query OK, 2 rows affected
+commit suagttupqp9k5tulo692rde7k2nlac4b
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Updating d9dm8jueokl12ov81698vjubo756rfbs..suagttupqp9k5tulo692rde7k2nlac4b
+Fast-forward
+commit qglmet7ep5jm2dmo7knaqr9p9vsh5l10
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	created table test
+
+Query OK, 2 rows affected
+commit sca4mn8oqieceg7kq0fvnbuc9e0er1pg
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on master
+
+Switched to branch 'other'
+Query OK, 2 rows affected
+commit 6s37vqulavjuvd23qrb5f70ua6jh9ph4
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Updating sca4mn8oqieceg7kq0fvnbuc9e0er1pg..6s37vqulavjuvd23qrb5f70ua6jh9ph4
+test | 2 ++
+1 tables changed, 2 rows added(+), 0 rows modified(*), 0 rows deleted(-)
+commit 5csg9srffq9mfnrhvpj21imor4fsn0r1
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	created table test
+
+Query OK, 3 rows affected
+commit sv9e9rnivjm290cd6e30pr6mviv5t4j8
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on master
+
+Switched to branch 'other'
+Query OK, 3 rows affected
+commit p0tr7qbqbq4um1bppbe2t4mie028drb4
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Updating sv9e9rnivjm290cd6e30pr6mviv5t4j8..p0tr7qbqbq4um1bppbe2t4mie028drb4
+quiz | 3 +++
+1 tables changed, 3 rows added(+), 0 rows modified(*), 0 rows deleted(-)
+commit uako90nv7jrn22ojd65s42spkpf14j44
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	created table test
+
+Switched to branch 'other'
+Query OK, 2 rows affected
+commit c1rjvib90ikksa004igpg62v72c1ciol
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+commit q4tburasv7afp962gj01gu76q6b7b92v
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added the same rows on master
+
+Updating q4tburasv7afp962gj01gu76q6b7b92v..c1rjvib90ikksa004igpg62v72c1ciol
+Auto-merging test
+CONFLICT (content): Merge conflict in test
+Automatic merge failed; fix conflicts and then commit the result.
+commit av7loki4rtab13oa9gk7dubjocjmmgf6
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	created table test
+
+Switched to branch 'other'
+Query OK, 2 rows affected
+commit smmcactmal2128jj79k53t5flohssv7h
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+commit 3th75e4ltrse7fjq3sh39ebttkgq7um2
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added the same rows on master
+
+Updating 3th75e4ltrse7fjq3sh39ebttkgq7um2..smmcactmal2128jj79k53t5flohssv7h
+Auto-merging test
+CONFLICT (content): Merge conflict in test
+Automatic merge failed; fix conflicts and then commit the result.
+commit kdco1er0f2ou15rtvisqaibe1jhtebma
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	created table test
+
+Switched to branch 'other'
+Query OK, 2 rows affected
+commit 74295fcii96jl22cthd2jsaic2bfmeil
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+commit k8b76boc2dqk3aqmcds2j2s78n18sq7l
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added the same rows on master
+
+Updating k8b76boc2dqk3aqmcds2j2s78n18sq7l..74295fcii96jl22cthd2jsaic2bfmeil
+Auto-merging quiz
+CONFLICT (content): Merge conflict in quiz
+Automatic merge failed; fix conflicts and then commit the result.
+commit 0513roi302itl34dsjkhgv7hl3ro61ce
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	created table test
+
+Switched to branch 'other'
+Query OK, 2 rows affected
+commit tp5ep6lp9cj17ipniiokvi82spe1f9ak
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+commit p1l0nh2pj6l2k1q9j0di3l52a6g8023k
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added the same rows on master
+
+Updating p1l0nh2pj6l2k1q9j0di3l52a6g8023k..tp5ep6lp9cj17ipniiokvi82spe1f9ak
+Auto-merging quiz
+CONFLICT (content): Merge conflict in quiz
+Automatic merge failed; fix conflicts and then commit the result.
+Query OK, 2 rows affected
+commit dj224bmb0r0bt2o549fnfimf3a03fhpi
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+commit qkfomqbuqk4m20u19rigfqnjakad4281
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Updating dj224bmb0r0bt2o549fnfimf3a03fhpi..qkfomqbuqk4m20u19rigfqnjakad4281
+Fast-forward
+Query OK, 2 rows affected
+commit n15qcn3odibs10jqplpqgik2jks0ofgn
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+commit ucnclshj2ap5cscp11b45jqa4m4f2cq6
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Query OK, 1 row affected
+commit pdmkh13b87gjb3u1hpu9l82dvr4j7h59
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on master
+
+Updating pdmkh13b87gjb3u1hpu9l82dvr4j7h59..ucnclshj2ap5cscp11b45jqa4m4f2cq6
+noKey | 1 +
+1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)
+Query OK, 2 rows affected
+commit de8a7smuionk81fgv8gic4j7d18lk2ik
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 2 rows affected
+commit cn8gjbq15943s8kgk08jl1fdp2l0sv2n
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+commit b0q3cd6gkl2kanrftbivbv2rrk5lga61
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on master
+
+Updating b0q3cd6gkl2kanrftbivbv2rrk5lga61..cn8gjbq15943s8kgk08jl1fdp2l0sv2n
+noKey | 2 ++
+1 tables changed, 2 rows added(+), 0 rows modified(*), 0 rows deleted(-)
+Query OK, 2 rows affected
+commit tamp1k00h078ufm3960pl65jce90lj8p
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+commit h61uiknresvn0shg8cghs4o9utp8tt0b
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Query OK, 1 row affected
+commit 32bkpmomigudfhij5ejfh4undepphst7
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows on master
+
+Updating 32bkpmomigudfhij5ejfh4undepphst7..h61uiknresvn0shg8cghs4o9utp8tt0b
+Auto-merging noKey
+CONFLICT (content): Merge conflict in noKey
+Automatic merge failed; fix conflicts and then commit the result.
+Query OK, 2 rows affected
+commit 801qe29f88ufvaimeis5cm392tn8tgpg
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:39 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+commit vfk1hro5qep135utao5teek92tfela67
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Query OK, 1 row affected
+commit nkssjrcnk27infvne990hb3e0hq8g50u
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows on master
+
+Updating nkssjrcnk27infvne990hb3e0hq8g50u..vfk1hro5qep135utao5teek92tfela67
+Auto-merging noKey
+CONFLICT (content): Merge conflict in noKey
+Automatic merge failed; fix conflicts and then commit the result.
+Query OK, 2 rows affected
+commit 312auc1mhcs032f7a8g40r4c1tftkcvu
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+commit 7v1jrde1ngq3b8hq2mvk8tguubgir9r7
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows on other
+
+Switched to branch 'master'
+Query OK, 1 row affected
+commit bt2cjh1es4iq2om0ferpd9qmg1lq5fot
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows on master
+
+Updating bt2cjh1es4iq2om0ferpd9qmg1lq5fot..7v1jrde1ngq3b8hq2mvk8tguubgir9r7
+Auto-merging noKey
+CONFLICT (content): Merge conflict in noKey
+Automatic merge failed; fix conflicts and then commit the result.
+Query OK, 4 rows affected
+commit ivp7ha7lnjsaam9o81a632mn69i84ea5
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+commit 7l1vgj75ct77t8emb0nlfh5smcnhka8u
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 1 row on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+commit cc8m4af9kes66rnec3av3ljemcdbkdhp
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 2 rows on master
+
+Updating cc8m4af9kes66rnec3av3ljemcdbkdhp..7l1vgj75ct77t8emb0nlfh5smcnhka8u
+Auto-merging noKey
+CONFLICT (content): Merge conflict in noKey
+Automatic merge failed; fix conflicts and then commit the result.
+Query OK, 4 rows affected
+commit 6p80lj1ibltitvdkfj65i1anc0l6n8ti
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+commit n0jr86ae47340ahpelor3pjdugbgq94j
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 1 row on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+commit fjl7ftrnmitgl961fjbt1h3lsajjqcmt
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 2 rows on master
+
+Updating fjl7ftrnmitgl961fjbt1h3lsajjqcmt..n0jr86ae47340ahpelor3pjdugbgq94j
+Auto-merging noKey
+CONFLICT (content): Merge conflict in noKey
+Automatic merge failed; fix conflicts and then commit the result.
+Query OK, 4 rows affected
+commit 9bp7hgcq1n3b2q3sv5k0dgvhin4n7joq
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+commit vvdv167mv8kg4ssi4v28c4i2kgtoh0nb
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 1 row on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+commit scsg4mj4qj67i4d8rubd4u39po1medjj
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 2 rows on master
+
+Updating scsg4mj4qj67i4d8rubd4u39po1medjj..vvdv167mv8kg4ssi4v28c4i2kgtoh0nb
+Auto-merging noKey
+CONFLICT (content): Merge conflict in noKey
+Automatic merge failed; fix conflicts and then commit the result.
+Query OK, 4 rows affected
+commit ae3ius13ra20halpefbuce63kgrma76q
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+Rows matched: 1  Changed: 1  Warnings: 0
+commit 4flumthhmcckgd7pcigod285ijgmv9ar
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 1 row on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+Rows matched: 2  Changed: 2  Warnings: 0
+commit em4qsdfqnpgmc8olueeqcglaasnc5at0
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 2 rows on master
+
+Updating em4qsdfqnpgmc8olueeqcglaasnc5at0..4flumthhmcckgd7pcigod285ijgmv9ar
+Auto-merging noKey
+CONFLICT (content): Merge conflict in noKey
+Automatic merge failed; fix conflicts and then commit the result.
+Query OK, 4 rows affected
+commit rclovq0v62835i7r4f44537ummjajb7d
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+Rows matched: 1  Changed: 1  Warnings: 0
+commit mngonkqld74505qgkskfpjb56m7papnu
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 1 row on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+Rows matched: 2  Changed: 2  Warnings: 0
+commit ih225bv9q2d4bvmv9dst13689a3nh33o
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 2 rows on master
+
+Updating ih225bv9q2d4bvmv9dst13689a3nh33o..mngonkqld74505qgkskfpjb56m7papnu
+Auto-merging noKey
+CONFLICT (content): Merge conflict in noKey
+Automatic merge failed; fix conflicts and then commit the result.
+Query OK, 4 rows affected
+commit 6hii8luvc44itnuidb9bgr19updarree
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	added rows
+
+Switched to branch 'other'
+Query OK, 1 row affected
+Rows matched: 1  Changed: 1  Warnings: 0
+commit v0bg97lgt12orqlvr6uh7j3f6gdp5tcm
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 1 row on other
+
+Switched to branch 'master'
+Query OK, 2 rows affected
+Rows matched: 2  Changed: 2  Warnings: 0
+commit tihprdlvlmnutoof97hevb3kcglri091
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	deleted 2 rows on master
+
+Updating tihprdlvlmnutoof97hevb3kcglri091..v0bg97lgt12orqlvr6uh7j3f6gdp5tcm
+Auto-merging noKey
+CONFLICT (content): Merge conflict in noKey
+Automatic merge failed; fix conflicts and then commit the result.
+commit 8dv1b8jr87at1sptij8mdn7kqlrh39nl
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	setup common
+
+Already on branch 'master'
+Everything up-to-date
+commit 38ser330o8g9nhrhkqjfm29uemdbqvhv
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	setup common
+
+commit t9qce9llcbkhepm87ncdl3h2nuo0ip0u
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit j7437krcmhoivl094hhq59fi0roraa97
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:40 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Updating t9qce9llcbkhepm87ncdl3h2nuo0ip0u..j7437krcmhoivl094hhq59fi0roraa97
+test | 0 
+1 tables changed, 0 rows added(+), 0 rows modified(*), 0 rows deleted(-)
+commit 3ue4qo1ca2f3d1kbli5o4ko00itt1m51
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	setup common
+
+commit 5o8s9mn6unsjj9safvrtn1jrhcd5o09f
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit v9fv9k2v69ph7d65j0m44c39pf1uu1oj
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Updating 5o8s9mn6unsjj9safvrtn1jrhcd5o09f..v9fv9k2v69ph7d65j0m44c39pf1uu1oj
+test | 0 
+1 tables changed, 0 rows added(+), 0 rows modified(*), 0 rows deleted(-)
+commit s7ng62qq2pkhh2ggbns2noa902t1cs90
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	setup common
+
+commit 9s0a0a5us7vrl4elo2ksq4ggod8tj81c
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit ohc7fj83iv0et367mdg2525cpjt8bdmb
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Updating 9s0a0a5us7vrl4elo2ksq4ggod8tj81c..ohc7fj83iv0et367mdg2525cpjt8bdmb
+test | 0 
+1 tables changed, 0 rows added(+), 0 rows modified(*), 0 rows deleted(-)
+commit 7jss4blfrqqqihe79ibfr3676rdef3g2
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	setup common
+
+commit dd079pd7cb8g8tleuh97dc2m6g2i9q35
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit jhhmr28r6nmfomm94kht1vfrhb7vnk8c
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Updating dd079pd7cb8g8tleuh97dc2m6g2i9q35..jhhmr28r6nmfomm94kht1vfrhb7vnk8c
+test | 0 
+1 tables changed, 0 rows added(+), 0 rows modified(*), 0 rows deleted(-)
+commit srtmp90l8ues6sfeh88j7ej90lvd74ke
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	setup common
+
+commit q6cjcr7a7au6s2mpb49c905g4sq3jric
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch master
+
+Already on branch 'master'
+Updating q6cjcr7a7au6s2mpb49c905g4sq3jric..srtmp90l8ues6sfeh88j7ej90lvd74ke
+Already up to date.
+commit cpdffib8mljp6e67gumat72rrm9agp16
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	setup common
+
+commit i9mqeggua7lg22s4ftfldplgmlr1dt46
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit cg7ji4fo8ra7g1d5op3jttuqlsgvvsl6
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Updating i9mqeggua7lg22s4ftfldplgmlr1dt46..cg7ji4fo8ra7g1d5op3jttuqlsgvvsl6
+commit 020ajsl20hg8pqgog8oi8q4evmuiscal
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	setup common
+
+commit ngabo68r6vv7ql0b11hdhvvqe78ghfot
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit ml5qan4kqfggdg95drtooj7m6c2jg4r9
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Updating ngabo68r6vv7ql0b11hdhvvqe78ghfot..ml5qan4kqfggdg95drtooj7m6c2jg4r9
+commit in0cvaluug129ka9qkhfnfusl27ovi5u
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	setup common
+
+Already on branch 'master'
+Switched to branch 'other'
+commit 9tsji63bs32jtjlat4fsluteho47co00
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	setup common
+
+commit 3kumfgpq3927m6p08mjn6utge2nr1fuc
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit r69rhqdqhv0s1kvvmf9i4invhgo6f8e6
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Switched to branch 'other'
+commit n4s4fkggi4fhctv8beecd0974snsp48u
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	setup common
+
+commit cevhvel8fgajgkkug2q0p5ism64a5a19
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:41 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit oba634olflqdsj2sp3cbntffvmi0a7ob
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:42 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Switched to branch 'other'
+commit bqv0g1jqotgnlt651682ilun1ngd2la6
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:42 -0400 2021
+
+	setup common
+
+commit upup8647jdcdvod0j6vujrvrulvpb2dp
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:42 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit qiqbqsac6fqchsaqbg1mnkln9v5e8fa4
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:42 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Switched to branch 'other'
+commit 1aef4bg809lcjmctsri1mvp892q2mpqj
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:42 -0400 2021
+
+	setup common
+
+commit 1ucahfgesiqlv5fvpqg66tk3qve0uker
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:42 -0400 2021
+
+	modified branch master
+
+Switched to branch 'other'
+commit jt3t6l7tj4jkhiddn4ct5po62t6jpjep
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:42 -0400 2021
+
+	modified branch other
+
+Switched to branch 'master'
+Already on branch 'master'
+Switched to branch 'other'
+commit 1np1ccr3epdoatmv0plhosj283thmf7l
+Author: billy bob <bigbillieb@fake.horse>
+Date:   Mon Apr 19 21:57:42 -0400 2021
+
+	setup common
+
+Already on branch 'master'
+Switched to branch 'other'
+--- FAIL: TestMergeSchemas (1.58s)
+    --- FAIL: TestMergeSchemas/no_changes#01 (0.07s)
+        schema_integration_test.go:579: 
+            	Error Trace:	schema_integration_test.go:579
+            	            				foreign_key_coll.go:402
+            	            				schema_integration_test.go:576
+            	            				schema_integration_test.go:59
+            	Error:      	Not equal: 
+            	            	expected: doltdb.ForeignKey{Name:"q1_fk", TableName:"quiz", TableIndex:"q1", TableColumns:[]uint64{0x32c9}, ReferencedTableName:"test", ReferencedTableIndex:"t1_idx", ReferencedTableColumns:[]uint64{0x2f4f}, ReferencedTableColumnNames:[]string(nil), OnUpdate:0x0, OnDelete:0x0}
+            	            	actual  : doltdb.ForeignKey{Name:"q1_fk", TableName:"quiz", TableIndex:"q1", TableColumns:[]uint64{0x32c9}, ReferencedTableName:"test", ReferencedTableIndex:"t1_idx", ReferencedTableColumns:[]uint64{0x2f4f}, ReferencedTableColumnNames:[]string{"t1"}, OnUpdate:0x0, OnDelete:0x0}
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -12,3 +12,5 @@
+            	            	  },
+            	            	- ReferencedTableColumnNames: ([]string) <nil>,
+            	            	+ ReferencedTableColumnNames: ([]string) (len=1) {
+            	            	+  (string) (len=2) "t1"
+            	            	+ },
+            	            	  OnUpdate: (doltdb.ForeignKeyReferenceOption) 0,
+            	Test:       	TestMergeSchemas/no_changes#01
+FAIL
+FAIL	github.com/dolthub/dolt/go/libraries/doltcore/merge	4.919s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/mvdata	2.030s
+?   	github.com/dolthub/dolt/go/libraries/doltcore/rebase	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/ref	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/remotestorage	4.149s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/row	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/rowconv	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/schema	1.348s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema	2.411s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding	1.212s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo	(cached)
+?   	github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle	13.334s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle/altertests	105.662s
+?   	github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables	1.633s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle/enginetest	53.113s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle/integration_test	32.272s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle/json	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle/logictest/dolt	2.604s
+?   	github.com/dolthub/dolt/go/libraries/doltcore/sqle/logictest/main	[no test files]
+?   	github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle/setalgebra	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt	1.911s
+?   	github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table	2.976s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/editor	21.769s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline	1.985s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms	4.069s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/untyped	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv	4.064s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt	1.357s
+?   	github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/nullprinter	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport	1.097s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular	0.723s
+ok  	github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/xlsx	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/events	0.675s
+ok  	github.com/dolthub/dolt/go/libraries/utils/argparser	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/async	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/config	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/earl	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/editor	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/filesys	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/funcitr	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/iohelp	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/mathutil	(cached)
+?   	github.com/dolthub/dolt/go/libraries/utils/osutil	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/utils/pantoerr	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/pipeline	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/set	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/strhelp	(cached)
+ok  	github.com/dolthub/dolt/go/libraries/utils/test	(cached)
+?   	github.com/dolthub/dolt/go/libraries/utils/tracing	[no test files]
+ok  	github.com/dolthub/dolt/go/libraries/utils/valutil	(cached)
+?   	github.com/dolthub/dolt/go/performance/benchmarks	[no test files]
+ok  	github.com/dolthub/dolt/go/store	0.487s [no tests to run]
+?   	github.com/dolthub/dolt/go/store/atomicerr	[no test files]
+ok  	github.com/dolthub/dolt/go/store/blobstore	(cached)
+ok  	github.com/dolthub/dolt/go/store/chunks	(cached)
+ok  	github.com/dolthub/dolt/go/store/cmd/noms	(cached)
+?   	github.com/dolthub/dolt/go/store/cmd/noms/util	[no test files]
+ok  	github.com/dolthub/dolt/go/store/config	(cached)
+?   	github.com/dolthub/dolt/go/store/constants	[no test files]
+ok  	github.com/dolthub/dolt/go/store/d	(cached)
+ok  	github.com/dolthub/dolt/go/store/datas	(cached)
+ok  	github.com/dolthub/dolt/go/store/diff	(cached)
+ok  	github.com/dolthub/dolt/go/store/hash	(cached)
+ok  	github.com/dolthub/dolt/go/store/marshal	(cached)
+ok  	github.com/dolthub/dolt/go/store/merge	(cached)
+ok  	github.com/dolthub/dolt/go/store/metrics	(cached)
+ok  	github.com/dolthub/dolt/go/store/nbs	(cached)
+?   	github.com/dolthub/dolt/go/store/nbs/benchmarks	[no test files]
+?   	github.com/dolthub/dolt/go/store/nbs/benchmarks/cachedrop	[no test files]
+?   	github.com/dolthub/dolt/go/store/nbs/benchmarks/chunker	[no test files]
+?   	github.com/dolthub/dolt/go/store/nbs/benchmarks/gen	[no test files]
+?   	github.com/dolthub/dolt/go/store/nbs/frag	[no test files]
+?   	github.com/dolthub/dolt/go/store/nbs/test	[no test files]
+ok  	github.com/dolthub/dolt/go/store/nomdl	(cached)
+?   	github.com/dolthub/dolt/go/store/perf/codec-perf-rig	[no test files]
+?   	github.com/dolthub/dolt/go/store/perf/hash-perf-rig	[no test files]
+ok  	github.com/dolthub/dolt/go/store/perf/suite	(cached)
+ok  	github.com/dolthub/dolt/go/store/sloppy	(cached)
+ok  	github.com/dolthub/dolt/go/store/spec	(cached)
+ok  	github.com/dolthub/dolt/go/store/types	(cached)
+ok  	github.com/dolthub/dolt/go/store/types/edits	(cached)
+ok  	github.com/dolthub/dolt/go/store/types/perf	(cached)
+?   	github.com/dolthub/dolt/go/store/util/clienttest	[no test files]
+ok  	github.com/dolthub/dolt/go/store/util/datetime	(cached)
+?   	github.com/dolthub/dolt/go/store/util/exit	[no test files]
+ok  	github.com/dolthub/dolt/go/store/util/functions	(cached)
+?   	github.com/dolthub/dolt/go/store/util/outputpager	[no test files]
+?   	github.com/dolthub/dolt/go/store/util/profile	[no test files]
+?   	github.com/dolthub/dolt/go/store/util/progressreader	[no test files]
+ok  	github.com/dolthub/dolt/go/store/util/random	(cached)
+ok  	github.com/dolthub/dolt/go/store/util/sizecache	(cached)
+?   	github.com/dolthub/dolt/go/store/util/status	[no test files]
+?   	github.com/dolthub/dolt/go/store/util/tempfiles	[no test files]
+?   	github.com/dolthub/dolt/go/store/util/test	[no test files]
+ok  	github.com/dolthub/dolt/go/store/util/verbose	(cached)
+ok  	github.com/dolthub/dolt/go/store/util/writers	(cached)
+ok  	github.com/dolthub/dolt/go/store/valuefile	(cached)
+?   	github.com/dolthub/dolt/go/utils/3pdeps	[no test files]
+?   	github.com/dolthub/dolt/go/utils/copyrightshdrs	[no test files]
+?   	github.com/dolthub/dolt/go/utils/remotesrv	[no test files]
+FAIL

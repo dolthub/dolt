@@ -891,6 +891,16 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 		return sch, nil, err
 	case *sqlparser.Delete:
 		return se.query(ctx, query)
+	case *sqlparser.MultiAlterDDL:
+		_, ri, err := se.query(ctx, query)
+		if err != nil {
+			return nil, nil, err
+		}
+		_, err = sql.RowIterToRows(ctx, ri)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, nil
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {

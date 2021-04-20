@@ -178,7 +178,8 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 
 	case *sqlparser.Delete:
 		_, itr, err = eng.query(sqlCtx, query)
-
+	case *sqlparser.MultiAlterDDL:
+		_, itr, err = eng.query(sqlCtx, query)
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if se, ok := vterrors.AsSyntaxError(err); ok {

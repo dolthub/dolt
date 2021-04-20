@@ -307,6 +307,10 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 		}
 
 		tableRow, err := row.FromNoms(te.Schema(), pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple))
+		if err != nil {
+			return nil, err
+		}
+
 		rows = append(rows, tableRow)
 	}
 

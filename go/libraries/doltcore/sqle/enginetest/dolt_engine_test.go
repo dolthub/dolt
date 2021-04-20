@@ -203,7 +203,6 @@ func TestAddColumn(t *testing.T) {
 }
 
 func TestModifyColumn(t *testing.T) {
-	t.Skip("Type changes aren't supported")
 	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
@@ -212,12 +211,31 @@ func TestDropColumn(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
-	t.Skipf("Unsupported")
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 
 func TestDropForeignKeys(t *testing.T) {
 	enginetest.TestDropForeignKeys(t, newDoltHarness(t))
+}
+
+func TestCreateCheckConstraints(t *testing.T) {
+	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
+}
+
+func TestChecksOnInsert(t *testing.T) {
+	enginetest.TestChecksOnInsert(t, newDoltHarness(t))
+}
+
+func TestChecksOnUpdate(t *testing.T) {
+	enginetest.TestChecksOnUpdate(t, enginetest.NewDefaultMemoryHarness())
+}
+
+func TestTestDisallowedCheckConstraints(t *testing.T) {
+	enginetest.TestDisallowedCheckConstraints(t, newDoltHarness(t))
+}
+
+func TestDropCheckConstraints(t *testing.T) {
+	enginetest.TestDropCheckConstraints(t, newDoltHarness(t))
 }
 
 func TestExplode(t *testing.T) {

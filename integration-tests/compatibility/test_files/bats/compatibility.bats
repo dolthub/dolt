@@ -14,9 +14,6 @@ teardown() {
 }
 
 @test "dolt version" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     run dolt version
     [ "$status" -eq 0 ]
     regex='dolt version [0-9]+.[0-9]+.[0-9]+'
@@ -24,7 +21,6 @@ teardown() {
 }
 
 @test "dolt status" {
-    skip "These compatibility tests fail now due to a backwards incompatibility with the dolt_docs table. Before v0.16.0 dolt_docs used tags 0 and 1, and these values were hard coded in the logic that syncs the docs table with the file system."
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
@@ -32,32 +28,22 @@ teardown() {
 }
 
 @test "dolt ls" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "Tables in working set:" ]] || false
 }
 
 @test "dolt branch" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     run dolt branch
     [ "$status" -eq 0 ]
 }
 
 @test "dolt diff" {
-    skip "These compatibility tests fail now due to a backwards incompatibility with the dolt_docs table. Before v0.16.0 dolt_docs used tags 0 and 1, and these values were hard coded in the logic that syncs the docs table with the file system."
     run dolt diff
     [ "$status" -eq 0 ]
 }
 
 @test "dolt schema show on branch init" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     dolt checkout init
     run dolt schema show abc
     [ "$status" -eq 0 ]
@@ -73,9 +59,6 @@ teardown() {
 }
 
 @test "dolt sql 'select * from abc' on branch init" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     dolt checkout init
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
@@ -89,9 +72,6 @@ teardown() {
 }
 
 @test "dolt schema show on branch master" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     run dolt schema show abc
     [ "$status" -eq 0 ]
     output=`echo $output | tr '[:upper:]' '[:lower:]'` # lowercase the output
@@ -107,9 +87,6 @@ teardown() {
 
 
 @test "dolt sql 'select * from abc' on branch master" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| pk | a    | b   | x | y   |" ]] || false
@@ -120,9 +97,6 @@ teardown() {
 }
 
 @test "dolt schema show on branch other" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     dolt checkout other
     run dolt schema show abc
     [ "$status" -eq 0 ]
@@ -139,9 +113,6 @@ teardown() {
 }
 
 @test "dolt sql 'select * from abc' on branch other" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     dolt checkout other
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
@@ -154,10 +125,61 @@ teardown() {
     dolt checkout master
 }
 
-@test "dolt table import" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
+@test "dolt diff other" {
+    run dolt diff other
+    [ "$status" -eq 0 ]
+    [[ "${lines[3]}"  =~ "  CREATE TABLE abc ("       ]] || false
+    [[ "${lines[4]}"  =~ "    \`pk\` BIGINT NOT NULL" ]] || false
+    [[ "${lines[5]}"  =~ "    \`a\` LONGTEXT"         ]] || false
+    [[ "${lines[6]}"  =~ "    \`b\` DOUBLE"           ]] || false
+    [[ "${lines[7]}"  =~ "-   \`w\` BIGINT"           ]] || false
+    [[ "${lines[8]}"  =~ "-   \`z\` BIGINT"           ]] || false
+    [[ "${lines[9]}"  =~ "+   \`x\` BIGINT"           ]] || false
+    [[ "${lines[10]}" =~ "+   \`y\` BIGINT"           ]] || false
+    [[ "${lines[11]}" =~ "     PRIMARY KEY (pk)"      ]] || false
+    [[ "${lines[12]}" =~ "  );"                       ]] || false
+    [[ "${lines[13]}" =~ "+-----+----+------+-----+------+------+------+------+" ]] || false
+    [[ "${lines[14]}" =~ "|  <  | pk | a    | b   |      |      | w    | z    |" ]] || false
+    [[ "${lines[15]}" =~ "|  >  | pk | a    | b   | x    | y    |      |      |" ]] || false
+    [[ "${lines[16]}" =~ "+-----+----+------+-----+------+------+------+------+" ]] || false
+    [[ "${lines[17]}" =~ "|  <  | 0  | asdf | 1.1 | NULL | NULL | 0    | 122  |" ]] || false
+    [[ "${lines[18]}" =~ "|  >  | 0  | asdf | 1.1 | 0    | 121  | NULL | NULL |" ]] || false
+    [[ "${lines[19]}" =~ "|  -  | 1  | asdf | 1.1 | NULL | NULL | 0    | 122  |" ]] || false
+    [[ "${lines[20]}" =~ "|  +  | 2  | asdf | 1.1 | 0    | 121  | NULL | NULL |" ]] || false
+    [[ "${lines[21]}" =~ "|  +  | 3  | data | 1.1 | 0    | 121  | NULL | NULL |" ]] || false
+    [[ "${lines[22]}" =~ "|  -  | 4  | data | 1.1 | NULL | NULL | 0    | 122  |" ]] || false
+}
 
+@test "big table" {
+    run dolt sql -q "SELECT count(*) FROM big;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "1000" ]] || false
+
+    dolt sql -q "DELETE FROM big WHERE pk IN (71, 331, 881)"
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "|  -  | 71  |" ]] || false
+    [[ "$output" =~ "|  -  | 331 |" ]] || false
+    [[ "$output" =~ "|  -  | 881 |" ]] || false
+
+    run dolt sql -q "SELECT count(*) FROM big;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "997" ]] || false
+
+    dolt sql -q "INSERT INTO big VALUES (1001, 'foo'), (1002, 'bar'), (1003, 'baz');"
+    run dolt sql -q "SELECT count(*) FROM big;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "1000" ]] || false
+
+    dolt commit -am "inserted, deleted some rows"
+}
+
+@test "dolt merge other into master" {
+    # throws a conflict
+    dolt merge other
+}
+
+@test "dolt table import" {
     run dolt table import -c -pk=pk abc2 abc.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -165,24 +187,7 @@ teardown() {
     dolt sql -q 'drop table abc2'
 }
 
-
-@test "dolt migrate no-data" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
-    dolt checkout no-data
-    run dolt sql -q 'show tables;'
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "+-------+" ]] || false
-    [[ "$output" =~ "| Table |" ]] || false
-    [[ "$output" =~ "+-------+" ]] || false
-    [[ "$output" =~ "+-------+" ]] || false
-}
-
 @test "dolt_schemas" {
-    # this will fail for older dolt versions but BATS will swallow the error
-    run dolt migrate
-
     run dolt sql -q "select * from dolt_schemas"
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| type | name  | fragment             |" ]] || false
