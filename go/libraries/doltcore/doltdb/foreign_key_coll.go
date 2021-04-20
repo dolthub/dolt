@@ -176,7 +176,7 @@ func (fk ForeignKey) ResolveReferencedIndexAndTags(ctx context.Context, root *Ro
 	for i, tag := range fk.TableColumns {
 		currCol, ok := currSch.GetAllCols().GetByTag(tag)
 		if !ok {
-			return nil, ForeignKey{}, fmt.Errorf("table `%s` does not have column with tag `%d`", fk.TableName, tag) // TODO: Is this correct?
+			return nil, ForeignKey{}, fmt.Errorf("table `%s` does not have column with tag `%d`", fk.TableName, tag)
 		}
 
 		// Step 1: Validate that referenced table has the correct tag.

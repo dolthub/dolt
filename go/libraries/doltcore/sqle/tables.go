@@ -1185,7 +1185,9 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func (t *AlterableDoltTable) addEmptyForeignKeyToCollection(ctx *sql.Context, root *doltdb.RootValue, fkName string, tableIndexName string, colTags []uint64, refTblName string, refTblColNames []string, onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
+// addEmptyForeignKeyToCollection creates a foreign key with delayed resolution. A FK with delayed resolution
+// does not have a referencedTableIndex nor a ReferencesTable Column.
+func (t *AlterableDoltTable) addEmptyForeignKeyToCollection(ctx *sql.Context, root *doltdb.RootValue, fkName, tableIndexName string, colTags []uint64, refTblName string, refTblColNames []string, onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
 	onUpdateRefOp, err := parseFkReferenceOption(onUpdate)
 	if err != nil {
 		return err
