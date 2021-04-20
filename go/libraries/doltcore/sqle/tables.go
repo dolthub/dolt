@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -36,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -155,7 +157,24 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 			tableName:    t.Name(),
 			tableSch:     sch,
 			unique:       true,
+			generated:    false,
 		})
+		for i := 1; i < len(cols); i++ {
+			sqlIndexes = append(sqlIndexes, &doltIndex{
+				cols:         cols[:i],
+				db:           t.db,
+				id:           fmt.Sprintf("PRIMARY_PARTIAL_%d", i),
+				indexRowData: rowData,
+				indexSch:     sch,
+				table:        tbl,
+				tableData:    rowData,
+				tableName:    t.Name(),
+				tableSch:     sch,
+				unique:       false,
+				comment:      fmt.Sprintf("partial of PRIMARY multi-column index on %d column(s)", i),
+				generated:    true,
+			})
+		}
 	}
 
 	for _, index := range sch.Indexes().AllIndexes() {
@@ -179,7 +198,24 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 			tableSch:     sch,
 			unique:       index.IsUnique(),
 			comment:      index.Comment(),
+			generated:    false,
 		})
+		for i := 1; i < len(cols); i++ {
+			sqlIndexes = append(sqlIndexes, &doltIndex{
+				cols:         cols[:i],
+				db:           t.db,
+				id:           fmt.Sprintf("%s_PARTIAL_%d", index.Name(), i),
+				indexRowData: indexRowData,
+				indexSch:     index.Schema(),
+				table:        tbl,
+				tableData:    rowData,
+				tableName:    t.Name(),
+				tableSch:     sch,
+				unique:       false,
+				comment:      fmt.Sprintf("prefix of %s multi-column index on %d column(s)", index.Name(), i),
+				generated:    true,
+			})
+		}
 	}
 
 	return sqlIndexes, nil
@@ -275,6 +311,42 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return newDoltTablePartitionIter(rowData, partitions...), nil
 }
 
+func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
+	schema := t.Schema()
+	var numBytesPerRow uint64 = 0
+	for _, col := range schema {
+		switch n := col.Type.(type) {
+		case sql.NumberType:
+			numBytesPerRow += 8
+		case sql.StringType:
+			numBytesPerRow += uint64(n.MaxByteLength())
+		case sql.BitType:
+			numBytesPerRow += 1
+		case sql.DatetimeType:
+			numBytesPerRow += 8
+		case sql.DecimalType:
+			numBytesPerRow += uint64(n.MaximumScale())
+		case sql.EnumType:
+			numBytesPerRow += 2
+		case sql.JsonType:
+			numBytesPerRow += 20
+		case sql.NullType:
+			numBytesPerRow += 1
+		case sql.TimeType:
+			numBytesPerRow += 16
+		case sql.YearType:
+			numBytesPerRow += 8
+		}
+	}
+
+	numRows, err := t.NumRows(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return numBytesPerRow * numRows, nil
+}
+
 type emptyRowIterator struct{}
 
 func (itr emptyRowIterator) Next() (sql.Row, error) {
@@ -318,6 +390,7 @@ var _ sql.InsertableTable = (*WritableDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
 var _ sql.AutoIncrementTable = (*WritableDoltTable)(nil)
 var _ sql.TruncateableTable = (*WritableDoltTable)(nil)
+var _ sql.CheckTable = (*WritableDoltTable)(nil)
 
 func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
@@ -407,6 +480,9 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
+	if err != nil {
+		return 0, err
+	}
 
 	root, err := t.db.GetRoot(ctx)
 	if err != nil {
@@ -445,12 +521,30 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
 func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if !t.autoIncCol.AutoIncrement {
-		return nil, fmt.Errorf("this table has no AUTO_INCREMENT columns")
+		return nil, sql.ErrNoAutoIncrementCol
 	}
 	if t.ed != nil {
 		return t.ed.GetAutoIncrementValue()
 	}
 	return t.DoltTable.GetAutoIncrementValue(ctx)
+}
+
+func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
+	sch, err := t.table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	checks := make([]sql.CheckDefinition, sch.Checks().Count())
+	for i, check := range sch.Checks().AllChecks() {
+		checks[i] = sql.CheckDefinition{
+			Name:            check.Name(),
+			CheckExpression: check.Expression(),
+			Enforced:        check.Enforced(),
+		}
+	}
+
+	return checks, nil
 }
 
 // GetForeignKeys implements sql.ForeignKeyTable
@@ -604,6 +698,7 @@ var _ sql.AlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.IndexAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyTable = (*AlterableDoltTable)(nil)
+var _ sql.CheckAlterableTable = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
@@ -928,12 +1023,18 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	refTblName string,
 	refColumns []string,
 	onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
-	if fkName != "" && !doltdb.IsValidTableName(fkName) {
-		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", fkName, doltdb.TableNameRegexStr)
+	if fkName != "" && !doltdb.IsValidForeignKeyName(fkName) {
+		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", fkName, doltdb.ForeignKeyNameRegexStr)
 	}
 	//TODO: move this into go-mysql-server
 	if len(columns) != len(refColumns) {
 		return fmt.Errorf("the foreign key must reference an equivalent number of columns")
+	}
+	isSelfFk := strings.ToLower(t.name) == strings.ToLower(refTblName)
+	if isSelfFk {
+		if len(columns) > 1 {
+			return fmt.Errorf("support for self referential composite foreign keys is not yet implemented")
+		}
 	}
 
 	tblCols := make([]schema.Column, len(columns))
@@ -961,16 +1062,24 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
-	refTbl, _, ok, err := root.GetTableInsensitive(ctx, refTblName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("referenced table `%s` does not exist", refTblName)
-	}
-	refSch, err := refTbl.GetSchema(ctx)
-	if err != nil {
-		return err
+	var refTbl *doltdb.Table
+	var ok bool
+	var refSch schema.Schema
+	if isSelfFk {
+		refTbl = t.table
+		refSch = t.sch
+	} else {
+		refTbl, _, ok, err = root.GetTableInsensitive(ctx, refTblName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("referenced table `%s` does not exist", refTblName)
+		}
+		refSch, err = refTbl.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	refColTags := make([]uint64, len(refColumns))
@@ -987,6 +1096,14 @@ func (t *AlterableDoltTable) CreateForeignKey(
 			return fmt.Errorf("TEXT/BLOB are not valid types for foreign keys")
 		}
 		refColTags[i] = refCol.Tag
+	}
+
+	if isSelfFk {
+		for i := range colTags {
+			if colTags[i] == refColTags[i] {
+				return fmt.Errorf("the same column `%s` cannot be used in self referential foreign keys", tblCols[i].Name)
+			}
+		}
 	}
 
 	onUpdateRefOp, err := parseFkReferenceOption(onUpdate)
@@ -1099,6 +1216,9 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 		return err
 	}
 	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return err
+	}
 
 	err = t.db.SetRoot(ctx, newRoot)
 	if err != nil {
@@ -1323,4 +1443,131 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 	}
 	t.WritableDoltTable.DoltTable = updatedTable.WritableDoltTable.DoltTable
 	return nil
+}
+
+func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) error {
+	sch, err := t.table.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	check = &(*check)
+	if check.Name == "" {
+		check.Name, err = t.generateCheckName(ctx, check)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
+	if err != nil {
+		return err
+	}
+
+	newTable, err := t.table.UpdateSchema(ctx, sch)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return err
+	}
+
+	err = t.db.SetRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
+	sch, err := t.table.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = sch.Checks().DropCheck(chName)
+	if err != nil {
+		return err
+	}
+
+	newTable, err := t.table.UpdateSchema(ctx, sch)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return err
+	}
+
+	err = t.db.SetRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) generateCheckName(ctx *sql.Context, check *sql.CheckDefinition) (string, error) {
+	var bb bytes.Buffer
+	bb.Write([]byte(check.CheckExpression))
+	hash := hash.Of(bb.Bytes())
+
+	hashedName := fmt.Sprintf("chk_%s", hash.String()[:8])
+	name := hashedName
+
+	var i int
+	for {
+		exists, err := t.constraintNameExists(ctx, name)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			break
+		}
+
+		name = fmt.Sprintf("%s_%d", hashedName, i)
+		i++
+	}
+
+	return name, nil
+}
+
+func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string) (bool, error) {
+	keys, err := t.GetForeignKeys(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for _, key := range keys {
+		if strings.ToLower(key.Name) == strings.ToLower(name) {
+			return true, nil
+		}
+	}
+
+	checks, err := t.GetChecks(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for _, check := range checks {
+		if strings.ToLower(check.Name) == strings.ToLower(name) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

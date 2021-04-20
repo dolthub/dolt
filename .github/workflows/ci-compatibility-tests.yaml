@@ -41,11 +41,4 @@ jobs:
           dolt config --global --add user.email 'actions@liquidata.co'
       - name: Test all
         run: ./runner.sh
-        working-directory: ./bats/compatibility
-      - name: Discord Notify
-        if: always()
-        uses: dolthub/ga-discord-notify@master
-        with:
-          job-status: ${{ job.status }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          notify-on-success: false
+        working-directory: ./integration-tests/compatibility

@@ -87,7 +87,7 @@ type CommitSpec struct {
 // * remotes/origin/master~~
 // * refs/heads/my-feature-branch^2~
 //
-// Constructing a |CommitSpec| does not mean the sepcified branch or commit
+// Constructing a |CommitSpec| does not mean the specified branch or commit
 // exists. This carries a description of how to find the specified commit. See
 // |doltdb.Resolve| for resolving a |CommitSpec| to a |Commit|.
 func NewCommitSpec(cSpecStr string) (*CommitSpec, error) {

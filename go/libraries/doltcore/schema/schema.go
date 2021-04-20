@@ -27,6 +27,9 @@ type Schema interface {
 
 	// Indexes returns a collection of all indexes on the table that this schema belongs to.
 	Indexes() IndexCollection
+
+	// Checks returns a collection of all check constraints on the table that this schema belongs to.
+	Checks() CheckCollection
 }
 
 // ColFromTag returns a schema.Column from a schema and a tag

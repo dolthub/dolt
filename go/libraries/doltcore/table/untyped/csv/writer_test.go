@@ -45,19 +45,19 @@ func getSampleRows() (rows []row.Row) {
 	colColl := schema.NewColCollection(inCols...)
 	rowSch := schema.MustSchemaFromCols(colColl)
 	return []row.Row{
-		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
+		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 			nameColTag:  types.String("Bill Billerson"),
 			ageColTag:   types.Uint(32),
 			titleColTag: types.String("Senior Dufus")})),
-		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
+		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 			nameColTag:  types.String("Rob Robertson"),
 			ageColTag:   types.Uint(25),
 			titleColTag: types.String("Dufus")})),
-		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
+		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 			nameColTag:  types.String("John Johnson"),
 			ageColTag:   types.Uint(21),
 			titleColTag: types.String("")})),
-		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
+		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 			nameColTag: types.String("Andy Anderson"),
 			ageColTag:  types.Uint(27),
 			/* title = NULL */})),
@@ -101,6 +101,9 @@ Andy Anderson,27,
 	writeToCSV(csvWr, rows, t)
 
 	results, err := fs.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(results) != expected {
 		t.Errorf(`%s != %s`, results, expected)
 	}
@@ -130,6 +133,9 @@ Andy Anderson|27|
 	writeToCSV(csvWr, rows, t)
 
 	results, err := fs.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(results) != expected {
 		t.Errorf(`%s != %s`, results, expected)
 	}

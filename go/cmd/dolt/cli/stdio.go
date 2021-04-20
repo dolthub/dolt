@@ -16,10 +16,10 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 
 	"github.com/fatih/color"
@@ -31,6 +31,14 @@ var CliErr = color.Error
 
 var ExecuteWithStdioRestored func(userFunc func())
 
+var InStream io.ReadCloser = os.Stdin
+var OutStream io.WriteCloser = os.Stdout
+
+func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
+	InStream = inStream
+	OutStream = outStream
+}
+
 func InitIO() (restoreIO func()) {
 	stdOut, stdErr := os.Stdout, os.Stderr
 
@@ -40,7 +48,7 @@ func InitIO() (restoreIO func()) {
 	if err == nil {
 		os.Stdout = f
 		os.Stderr = f
-		mvdata.SetIOStreams(os.Stdin, iohelp.NopWrCloser(CliOut))
+		SetIOStreams(os.Stdin, iohelp.NopWrCloser(CliOut))
 	}
 
 	restoreIO = func() {
@@ -50,7 +58,7 @@ func InitIO() (restoreIO func()) {
 
 		os.Stdout = stdOut
 		os.Stderr = stdErr
-		mvdata.SetIOStreams(os.Stdin, os.Stdout)
+		SetIOStreams(os.Stdin, os.Stdout)
 	}
 
 	ExecuteWithStdioRestored = func(userFunc func()) {
@@ -58,14 +66,14 @@ func InitIO() (restoreIO func()) {
 		color.NoColor = true
 		os.Stdout = stdOut
 		os.Stderr = stdErr
-		mvdata.SetIOStreams(os.Stdin, os.Stdout)
+		SetIOStreams(os.Stdin, os.Stdout)
 
 		userFunc()
 
 		os.Stdout = f
 		os.Stderr = f
 		color.NoColor = initialNoColor
-		mvdata.SetIOStreams(os.Stdin, iohelp.NopWrCloser(CliOut))
+		SetIOStreams(os.Stdin, iohelp.NopWrCloser(CliOut))
 	}
 
 	return restoreIO

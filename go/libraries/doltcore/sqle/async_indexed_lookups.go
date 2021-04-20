@@ -37,6 +37,7 @@ type toLookup struct {
 	t          types.Tuple
 	tupleToRow func(types.Tuple) (sql.Row, error)
 	resBuf     *async.RingBuffer
+	epoch      int
 }
 
 // asyncLookups is a pool of worker routines reading from a channel doing table lookups
@@ -71,9 +72,9 @@ func (art *asyncLookups) workerFunc() {
 			if r := recover(); r != nil {
 				// Attempt to write a failure to the channel and discard any additional errors
 				if err, ok := r.(error); ok {
-					_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: nil, err: err})
+					_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: nil, err: err}, curr.epoch)
 				} else {
-					_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: nil, err: fmt.Errorf("%v", r)})
+					_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: nil, err: fmt.Errorf("%v", r)}, curr.epoch)
 				}
 			}
 
@@ -91,7 +92,7 @@ func (art *asyncLookups) workerFunc() {
 			}
 
 			r, err := curr.tupleToRow(curr.t)
-			_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: r, err: err})
+			_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: r, err: err}, curr.epoch)
 		}
 	}
 

@@ -99,8 +99,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 	if len(dbNamesAndPaths) == 0 {
 		var err error
-		mrEnv = env.DoltEnvAsMultiEnv(dEnv)
-
+		mrEnv, err = env.DoltEnvAsMultiEnv(dEnv)
 		if err != nil {
 			return err, nil
 		}

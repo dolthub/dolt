@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/atomicerr"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -128,7 +129,7 @@ func newRandomTestSet(length int, gen genValueFn) testSet {
 
 func validateSet(t *testing.T, vrw ValueReadWriter, s Set, values ValueSlice) {
 	s, err := NewSet(context.Background(), vrw, values...)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, s.Equals(s))
 	out := ValueSlice{}
 	_ = s.IterAll(context.Background(), func(v Value) error {
@@ -333,22 +334,22 @@ func TestNewSet(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(MakeSetType(mustType(MakeUnionType()))).Equals(mustType(TypeOf(s))))
 	assert.Equal(uint64(0), s.Len())
 
 	s, err = NewSet(context.Background(), vs, Float(0))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(MakeSetType(PrimitiveTypeMap[FloatKind])).Equals(mustType(TypeOf(s))))
 
 	s, err = NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.IsType(mustType(MakeSetType(PrimitiveTypeMap[FloatKind])), mustType(TypeOf(s)))
 
 	se, err := s.Edit().Remove(Float(1))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.IsType(mustType(TypeOf(s)), mustType(TypeOf(s2)))
 }
 
@@ -358,18 +359,18 @@ func TestSetLen(t *testing.T) {
 	vs := newTestValueStore()
 
 	s0, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(0), s0.Len())
 	s1, err := NewSet(context.Background(), vs, Bool(true), Float(1), String("hi"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(3), s1.Len())
 	diffSetTest(assert, s0, s1, 0, 3)
 	diffSetTest(assert, s1, s0, 3, 0)
 
 	se2, err := s1.Edit().Insert(Bool(false))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := se2.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(4), s2.Len())
 	diffSetTest(assert, s0, s2, 0, 4)
 	diffSetTest(assert, s2, s0, 4, 0)
@@ -377,9 +378,9 @@ func TestSetLen(t *testing.T) {
 	diffSetTest(assert, s2, s1, 1, 0)
 
 	se3, err := s2.Edit().Remove(Bool(true))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s3, err := se3.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(3), s3.Len())
 	diffSetTest(assert, s2, s3, 1, 0)
 	diffSetTest(assert, s3, s2, 0, 1)
@@ -390,7 +391,7 @@ func TestSetEmpty(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s.Empty())
 	assert.Equal(uint64(0), s.Len())
 }
@@ -400,12 +401,12 @@ func TestSetEmptyInsert(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s.Empty())
 	se, err := s.Edit().Insert(Bool(false))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(s.Empty())
 	assert.Equal(uint64(1), s.Len())
 }
@@ -415,18 +416,18 @@ func TestSetEmptyInsertRemove(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s.Empty())
 	se, err := s.Edit().Insert(Bool(false))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(s.Empty())
 	assert.Equal(uint64(1), s.Len())
 	se, err = s.Edit().Remove(Bool(false))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s.Empty())
 	assert.Equal(uint64(0), s.Len())
 }
@@ -437,7 +438,7 @@ func TestSetDuplicateInsert(t *testing.T) {
 	vs := newTestValueStore()
 
 	s1, err := NewSet(context.Background(), vs, Bool(true), Float(42), Float(42))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(2), s1.Len())
 }
 
@@ -446,7 +447,7 @@ func TestSetUniqueKeysString(t *testing.T) {
 	vs := newTestValueStore()
 
 	s1, err := NewSet(context.Background(), vs, String("hello"), String("world"), String("hello"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(2), s1.Len())
 	assert.True(s1.Has(context.Background(), String("hello")))
 	assert.True(s1.Has(context.Background(), String("world")))
@@ -458,7 +459,7 @@ func TestSetUniqueKeysNumber(t *testing.T) {
 	vs := newTestValueStore()
 
 	s1, err := NewSet(context.Background(), vs, Float(4), Float(1), Float(0), Float(0), Float(1), Float(3))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(4), s1.Len())
 	assert.True(s1.Has(context.Background(), Float(4)))
 	assert.True(s1.Has(context.Background(), Float(1)))
@@ -472,7 +473,7 @@ func TestSetHas(t *testing.T) {
 	vs := newTestValueStore()
 
 	s1, err := NewSet(context.Background(), vs, Bool(true), Float(1), String("hi"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s1.Has(context.Background(), Bool(true)))
 	assert.False(s1.Has(context.Background(), Bool(false)))
 	assert.True(s1.Has(context.Background(), Float(1)))
@@ -481,9 +482,9 @@ func TestSetHas(t *testing.T) {
 	assert.False(s1.Has(context.Background(), String("ho")))
 
 	se2, err := s1.Edit().Insert(Bool(false))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := se2.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s2.Has(context.Background(), Bool(false)))
 	assert.True(s2.Has(context.Background(), Bool(true)))
 
@@ -505,13 +506,13 @@ func TestSetHas2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set, err := ts.toSet(vrw)
-		assert.NoError(err)
+		require.NoError(t, err)
 		ref, err := vrw.WriteValue(context.Background(), set)
-		assert.NoError(err)
+		require.NoError(t, err)
 		val2, err := vrw.ReadValue(context.Background(), ref.TargetHash())
-		assert.NoError(err)
+		require.NoError(t, err)
 		set2 := val2.(Set)
-		assert.NoError(err)
+		require.NoError(t, err)
 		for _, v := range ts {
 			assert.True(set.Has(context.Background(), v))
 			assert.True(set2.Has(context.Background(), v))
@@ -527,12 +528,12 @@ func TestSetHas2(t *testing.T) {
 
 func validateSetInsertion(t *testing.T, vrw ValueReadWriter, values ValueSlice) {
 	s, err := NewSet(context.Background(), vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	for i, v := range values {
 		se, err := s.Edit().Insert(v)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		s, err = se.Set(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		validateSet(t, vrw, s, values[0:i+1])
 	}
 }
@@ -555,27 +556,27 @@ func TestSetInsert(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	v1 := Bool(false)
 	v2 := Bool(true)
 	v3 := Float(0)
 
 	assert.False(s.Has(context.Background(), v1))
 	se, err := s.Edit().Insert(v1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s.Has(context.Background(), v1))
 	se, err = s.Edit().Insert(v2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s.Has(context.Background(), v1))
 	assert.True(s.Has(context.Background(), v2))
 	se2, err := s.Edit().Insert(v3)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := se2.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s.Has(context.Background(), v1))
 	assert.True(s.Has(context.Background(), v2))
 	assert.False(s.Has(context.Background(), v3))
@@ -598,14 +599,14 @@ func TestSetInsert2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		expected, err := ts.toSet(vrw)
-		assert.NoError(err)
+		require.NoError(t, err)
 		run := func(from, to int) {
 			s, err := ts.Remove(from, to).toSet(vrw)
-			assert.NoError(err)
+			require.NoError(t, err)
 			se, err := s.Edit().Insert(ts[from:to]...)
-			assert.NoError(err)
+			require.NoError(t, err)
 			actual, err := se.Set(context.Background())
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffSetTest(assert, expected, actual, 0, 0)
@@ -633,11 +634,11 @@ func TestSetInsertExistingValue(t *testing.T) {
 
 	ts := getTestNativeOrderSet(2, vs)
 	original, err := ts.toSet(vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	se, err := original.Edit().Insert(ts[0])
-	assert.NoError(err)
+	require.NoError(t, err)
 	actual, err := se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -651,21 +652,21 @@ func TestSetRemove(t *testing.T) {
 	v2 := Bool(true)
 	v3 := Float(0)
 	s, err := NewSet(context.Background(), vs, v1, v2, v3)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s.Has(context.Background(), v1))
 	assert.True(s.Has(context.Background(), v2))
 	assert.True(s.Has(context.Background(), v3))
 	se, err := s.Edit().Remove(v1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(s.Has(context.Background(), v1))
 	assert.True(s.Has(context.Background(), v2))
 	assert.True(s.Has(context.Background(), v3))
 	se2, err := s.Edit().Remove(v2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := se2.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(s.Has(context.Background(), v1))
 	assert.True(s.Has(context.Background(), v2))
 	assert.True(s.Has(context.Background(), v3))
@@ -688,14 +689,14 @@ func TestSetRemove2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		whole, err := ts.toSet(vrw)
-		assert.NoError(err)
+		require.NoError(t, err)
 		run := func(from, to int) {
 			expected, err := ts.Remove(from, to).toSet(vrw)
-			assert.NoError(err)
+			require.NoError(t, err)
 			se, err := whole.Edit().Remove(ts[from:to]...)
-			assert.NoError(err)
+			require.NoError(t, err)
 			actual, err := se.Set(context.Background())
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffSetTest(assert, expected, actual, 0, 0)
@@ -719,11 +720,11 @@ func TestSetRemoveNonexistentValue(t *testing.T) {
 
 	ts := getTestNativeOrderSet(2, vs)
 	original, err := ts.toSet(vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	se, err := original.Edit().Remove(Float(-1))
-	assert.NoError(err)
+	require.NoError(t, err)
 	actual, err := se.Set(context.Background()) // rand.Int63 returns non-negative values.
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -734,27 +735,27 @@ func TestSetFirst(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Nil(s.First(context.Background()))
 	se, err := s.Edit().Insert(Float(1))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.NotNil(s.First(context.Background()))
 	se, err = s.Edit().Insert(Float(2))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.NotNil(s.First(context.Background()))
 	se2, err := s.Edit().Remove(Float(1))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := se2.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.NotNil(s2.First(context.Background()))
 	se2, err = s2.Edit().Remove(Float(2))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err = se2.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Nil(s2.First(context.Background()))
 }
 
@@ -765,12 +766,12 @@ func TestSetOfStruct(t *testing.T) {
 	elems := []Value{}
 	for i := 0; i < 200; i++ {
 		st, err := NewStruct(Format_7_18, "S1", StructData{"o": Float(i)})
-		assert.NoError(err)
+		require.NoError(t, err)
 		elems = append(elems, st)
 	}
 
 	s, err := NewSet(context.Background(), vs, elems...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	for i := 0; i < 200; i++ {
 		assert.True(s.Has(context.Background(), elems[i]))
 	}
@@ -781,21 +782,23 @@ func TestSetIter(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3), Float(4))
-	assert.NoError(err)
+	require.NoError(t, err)
 	acc, err := NewSet(context.Background(), vs)
+	require.NoError(t, err)
 	err = s.Iter(context.Background(), func(v Value) (bool, error) {
 		_, ok := v.(Float)
 		assert.True(ok)
 		se, err := acc.Edit().Insert(v)
-		assert.NoError(err)
+		require.NoError(t, err)
 		acc, err = se.Set(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		return false, nil
 	})
+	require.NoError(t, err)
 	assert.True(s.Equals(acc))
 
 	acc, err = NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	_ = s.Iter(context.Background(), func(v Value) (bool, error) {
 		return true, nil
 	})
@@ -812,9 +815,9 @@ func TestSetIter2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set, err := ts.toSet(vrw)
-		assert.NoError(err)
+		require.NoError(t, err)
 		err = SortWithErroringLess(ValueSort{ts, Format_7_18})
-		assert.NoError(err)
+		require.NoError(t, err)
 		idx := uint64(0)
 		endAt := uint64(64)
 
@@ -841,16 +844,16 @@ func TestSetIterAll(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3), Float(4))
-	assert.NoError(err)
+	require.NoError(t, err)
 	acc, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	_ = s.IterAll(context.Background(), func(v Value) error {
 		_, ok := v.(Float)
 		assert.True(ok)
 		se, err := acc.Edit().Insert(v)
-		assert.NoError(err)
+		require.NoError(t, err)
 		acc, err = se.Set(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		return nil
 	})
 	assert.True(s.Equals(acc))
@@ -866,9 +869,9 @@ func TestSetIterAll2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set, err := ts.toSet(vrw)
-		assert.NoError(err)
+		require.NoError(t, err)
 		err = SortWithErroringLess(ValueSort{ts, Format_7_18})
-		assert.NoError(err)
+		require.NoError(t, err)
 		idx := uint64(0)
 
 		_ = set.IterAll(context.Background(), func(v Value) error {
@@ -1024,34 +1027,34 @@ func TestSetType(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(mustType(MakeUnionType())))))
 
 	s, err = NewSet(context.Background(), vs, Float(0))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))))
 
 	se2, err := s.Edit().Remove(Float(1))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := se2.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(TypeOf(s2)).Equals(mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))))
 
 	se2, err = s.Edit().Insert(Float(0), Float(1))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err = se2.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(TypeOf(s)).Equals(mustType(TypeOf(s2))))
 
 	se3, err := s.Edit().Insert(Bool(true))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s3, err := se3.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(TypeOf(s3)).Equals(mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind]))))))
 	se4, err := s.Edit().Insert(Float(3), Bool(true))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s4, err := se4.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(TypeOf(s4)).Equals(mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind]))))))
 }
 
@@ -1060,13 +1063,14 @@ func TestSetChunks(t *testing.T) {
 	vs := newTestValueStore()
 
 	l1, err := NewSet(context.Background(), vs, Float(0))
-	assert.NoError(err)
+	require.NoError(t, err)
 	c1 := getChunks(l1)
 	assert.Len(c1, 0)
 
 	ref, err := NewRef(Float(0), Format_7_18)
+	require.NoError(t, err)
 	l2, err := NewSet(context.Background(), vs, ref)
-	assert.NoError(err)
+	require.NoError(t, err)
 	c2 := getChunks(l2)
 	assert.Len(c2, 1)
 }
@@ -1081,11 +1085,11 @@ func TestSetChunks2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set, err := ts.toSet(vrw)
-		assert.NoError(err)
+		require.NoError(t, err)
 		ref, err := vrw.WriteValue(context.Background(), set)
-		assert.NoError(err)
+		require.NoError(t, err)
 		val, err := vrw.ReadValue(context.Background(), ref.TargetHash())
-		assert.NoError(err)
+		require.NoError(t, err)
 		set2chunks := getChunks(val)
 		for i, r := range getChunks(set) {
 			assert.True(mustType(TypeOf(r)).Equals(mustType(TypeOf(set2chunks[i]))), "%s != %s", mustString(mustType(TypeOf(r)).Describe(context.Background())), mustString(mustType(TypeOf(set2chunks[i])).Describe(context.Background())))
@@ -1104,7 +1108,7 @@ func TestSetFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsValues(testSetSize)
 	s, err := NewSet(context.Background(), vs, nums...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(deriveCollectionHeight(s), getRefHeightOfCollection(s))
 }
 
@@ -1117,7 +1121,7 @@ func TestSetRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsRefOfStructs(vs, testSetSize)
 	s, err := NewSet(context.Background(), vs, nums...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(s)+1, getRefHeightOfCollection(s))
 }
@@ -1129,29 +1133,29 @@ func TestSetModifyAfterRead(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 	set, err := getTestNativeOrderSet(2, vs).toSet(vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	// Drop chunk values.
 	ref, err := vs.WriteValue(context.Background(), set)
-	assert.NoError(err)
+	require.NoError(t, err)
 	val, err := vs.ReadValue(context.Background(), ref.TargetHash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	set = val.(Set)
-	assert.NoError(err)
+	require.NoError(t, err)
 	// Modify/query. Once upon a time this would crash.
 	fst, err := set.First(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	se, err := set.Edit().Remove(fst)
-	assert.NoError(err)
+	require.NoError(t, err)
 	set, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(set.Has(context.Background(), fst))
 	val, err = set.First(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(set.Has(context.Background(), val))
 	se, err = set.Edit().Insert(fst)
-	assert.NoError(err)
+	require.NoError(t, err)
 	set, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(set.Has(context.Background(), fst))
 }
 
@@ -1166,22 +1170,23 @@ func TestSetTypeAfterMutations(t *testing.T) {
 		values := generateNumbersAsValues(n)
 
 		s, err := NewSet(context.Background(), vs, values...)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.asSequence())
 		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))))
 
 		se, err := s.Edit().Insert(String("a"))
-		assert.NoError(err)
+		require.NoError(t, err)
 		s, err = se.Set(context.Background())
+		require.NoError(t, err)
 		assert.Equal(s.Len(), uint64(n+1))
 		assert.IsType(c, s.asSequence())
 		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind]))))))
 
 		se, err = s.Edit().Remove(String("a"))
-		assert.NoError(err)
+		require.NoError(t, err)
 		s, err = se.Set(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.asSequence())
 		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))))
@@ -1220,14 +1225,14 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 	}
 
 	s, err := NewSet(context.Background(), vs, vals...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	for i := 1; s.asSequence().isLeaf(); i++ {
 		v := Float(i)
 		vals = append(vals, v)
 		se, err := s.Edit().Insert(v)
-		assert.NoError(err)
+		require.NoError(t, err)
 		s, err = se.Set(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 	}
 
 	assert.Equal(len(vals), int(s.Len()))
@@ -1241,9 +1246,9 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		v := vals[0]
 		vals = vals[1:]
 		se, err := s.Edit().Remove(v)
-		assert.NoError(err)
+		require.NoError(t, err)
 		s, err = se.Set(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.False(s.Has(context.Background(), v))
 		assert.Equal(len(vals), int(s.Len()))
 	}
@@ -1258,23 +1263,23 @@ func TestSetRemoveLastWhenNotLoaded(t *testing.T) {
 	vs := newTestValueStore()
 	reload := func(s Set) Set {
 		ref, err := vs.WriteValue(context.Background(), s)
-		assert.NoError(err)
+		require.NoError(t, err)
 		v, err := vs.ReadValue(context.Background(), ref.TargetHash())
-		assert.NoError(err)
+		require.NoError(t, err)
 		return v.(Set)
 	}
 
 	ts := getTestNativeOrderSet(8, vs)
 	ns, err := ts.toSet(vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for len(ts) > 0 {
 		last := ts[len(ts)-1]
 		ts = ts[:len(ts)-1]
 		se, err := ns.Edit().Remove(last)
-		assert.NoError(err)
+		require.NoError(t, err)
 		s, err := se.Set(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		ns = reload(s)
 		assert.True(mustSet(ts.toSet(vs)).Equals(ns))
 	}
@@ -1286,11 +1291,11 @@ func TestSetAt(t *testing.T) {
 
 	values := []Value{Bool(false), Float(42), String("a"), String("b"), String("c")}
 	s, err := NewSet(context.Background(), vs, values...)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for i, v := range values {
 		valAt, err := s.At(context.Background(), uint64(i))
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(v, valAt)
 	}
 
@@ -1312,7 +1317,7 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 			"b": String("bar"),
 		})),
 	)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(
 		mustType(MakeSetType(mustType(MakeStructType("Foo",
 			StructField{"a", PrimitiveTypeMap[FloatKind], false},

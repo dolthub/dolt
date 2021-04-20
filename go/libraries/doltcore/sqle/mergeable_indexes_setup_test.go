@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *testMergeableIndexDb, *indexTuple, *indexTuple) {
+func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *testMergeableIndexDb, []*indexTuple) {
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -91,7 +91,14 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	}
 	engine = sqle.NewDefault()
 	engine.AddDatabase(mergeableDb)
-	return engine, mergeableDb, idxv1ToTuple, idxv2v1ToTuple
+	return engine, mergeableDb, []*indexTuple{
+		idxv1ToTuple,
+		idxv2v1ToTuple,
+		{
+			nbf:  idxv2v1RowData.Format(),
+			cols: idxv2v1Cols[:len(idxv2v1Cols)-1],
+		},
+	}
 }
 
 // Database made to test mergeable indexes while using the full SQL engine.

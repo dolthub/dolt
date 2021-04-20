@@ -31,7 +31,7 @@ import (
 // they're converted into a format that Noms understands to verify that they were handled correctly. Lastly, we ensure
 // that the final output is as expected.
 func TestMergeableIndexes(t *testing.T) {
-	engine, db, idxv1, idxv2v1 := setupMergeableIndexes(t, "test", `INSERT INTO test VALUES
+	engine, db, indexTuples := setupMergeableIndexes(t, "test", `INSERT INTO test VALUES
 		(-3, NULL, NULL),
 		(-2, NULL, NULL),
 		(-1, NULL, NULL),
@@ -45,6 +45,7 @@ func TestMergeableIndexes(t *testing.T) {
 		(7, 17, 27),
 		(8, 18, 28),
 		(9, 19, 29);`)
+	idxv1, idxv2v1, idxv2v1Gen := indexTuples[0], indexTuples[1], indexTuples[2]
 
 	tests := []struct {
 		whereStmt   string
@@ -1244,6 +1245,104 @@ func TestMergeableIndexes(t *testing.T) {
 			},
 			[]int64{2, 3, 4},
 		},
+		{
+			"v2 = 21",
+			[]lookup.Range{
+				lookup.MustClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+			},
+			[]int64{1},
+		},
+		{
+			"v2 = 21 OR v2 = 25",
+			[]lookup.Range{
+				lookup.MustClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+				lookup.MustClosedRange(idxv2v1Gen.tuple(25), idxv2v1Gen.tuple(25)),
+			},
+			[]int64{1, 5},
+		},
+		{
+			"v2 = 21 AND v2 = 25",
+			[]lookup.Range{
+				lookup.EmptyRange(),
+			},
+			[]int64{},
+		},
+		{
+			"v2 = 21 OR v2 = 25 OR v2 = 29",
+			[]lookup.Range{
+				lookup.MustClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+				lookup.MustClosedRange(idxv2v1Gen.tuple(25), idxv2v1Gen.tuple(25)),
+				lookup.MustClosedRange(idxv2v1Gen.tuple(29), idxv2v1Gen.tuple(29)),
+			},
+			[]int64{1, 5, 9},
+		},
+		{
+			"v2 = 21 OR v2 = 25 AND v2 = 29",
+			[]lookup.Range{
+				lookup.MustClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+			},
+			[]int64{1},
+		},
+		{
+			"v2 = 21 AND v2 = 25 AND v2 = 29",
+			[]lookup.Range{
+				lookup.EmptyRange(),
+			},
+			[]int64{},
+		},
+		{
+			"v2 = 21 OR v2 != 21",
+			[]lookup.Range{
+				lookup.AllRange(),
+			},
+			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		},
+		{
+			"v2 = 21 OR v2 != 25",
+			[]lookup.Range{
+				lookup.LessThanRange(idxv2v1Gen.tuple(25)),
+				lookup.MustGreaterThanRange(idxv2v1Gen.tuple(25)),
+			},
+			[]int64{0, 1, 2, 3, 4, 6, 7, 8, 9},
+		},
+		{
+			"v2 = 21 AND v2 != 25",
+			[]lookup.Range{
+				lookup.MustClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+			},
+			[]int64{1},
+		},
+		{
+			"v2 = 21 OR v2 = 25 OR v2 != 29",
+			[]lookup.Range{
+				lookup.LessThanRange(idxv2v1Gen.tuple(29)),
+				lookup.MustGreaterThanRange(idxv2v1Gen.tuple(29)),
+			},
+			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8},
+		},
+		{
+			"v2 = 21 OR v2 = 25 AND v2 != 29",
+			[]lookup.Range{
+				lookup.MustClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+				lookup.MustClosedRange(idxv2v1Gen.tuple(25), idxv2v1Gen.tuple(25)),
+			},
+			[]int64{1, 5},
+		},
+		{
+			"v2 = 21 AND v2 = 25 OR v2 != 29",
+			[]lookup.Range{
+				lookup.LessThanRange(idxv2v1Gen.tuple(29)),
+				lookup.MustGreaterThanRange(idxv2v1Gen.tuple(29)),
+			},
+			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8},
+		},
+		{
+			"v2 = 21 AND v2 = 25 AND v2 != 29",
+			[]lookup.Range{
+				lookup.EmptyRange(),
+			},
+			[]int64{},
+		},
 	}
 
 	for _, test := range tests {
@@ -1286,7 +1385,7 @@ func TestMergeableIndexes(t *testing.T) {
 // ranges may be incorrect.
 // TODO: disassociate NULL ranges from value ranges and fix the intermediate ranges (finalRanges).
 func TestMergeableIndexesNulls(t *testing.T) {
-	engine, db, idxv1, _ := setupMergeableIndexes(t, "test", `INSERT INTO test VALUES
+	engine, db, indexTuples := setupMergeableIndexes(t, "test", `INSERT INTO test VALUES
 		(0, 10, 20),
 		(1, 11, 21),
 		(2, NULL, NULL),
@@ -1297,6 +1396,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		(7, 17, 27),
 		(8, 18, 28),
 		(9, 19, 29);`)
+	idxv1 := indexTuples[0]
 
 	tests := []struct {
 		whereStmt   string

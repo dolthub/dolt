@@ -236,6 +236,8 @@ func inlineBlobTypeConverter(ctx context.Context, src *inlineBlobType, destTi Ty
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *timeType:

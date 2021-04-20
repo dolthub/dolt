@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -57,7 +58,7 @@ func newTestValueStore() *types.ValueStore {
 func assertParseType(t *testing.T, code string, expected *types.Type) {
 	t.Run(code, func(t *testing.T) {
 		actual, err := ParseType(code)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, expected.Equals(actual), "Expected: %s, Actual: %s", mustString(expected.Describe(context.Background())), mustString(actual.Describe(context.Background())))
 	})
 }

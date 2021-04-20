@@ -26,7 +26,7 @@ import (
 
 func TestGetFieldByName(t *testing.T) {
 	r, err := newTestRow()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	val, ok := GetFieldByName(lnColName, r, sch)
 
@@ -47,7 +47,7 @@ func TestGetFieldByName(t *testing.T) {
 
 func TestGetFieldByNameWithDefault(t *testing.T) {
 	r, err := newTestRow()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defVal := types.String("default")
 
 	val := GetFieldByNameWithDefault(lnColName, defVal, r, sch)
@@ -65,33 +65,33 @@ func TestGetFieldByNameWithDefault(t *testing.T) {
 
 func TestIsValid(t *testing.T) {
 	r, err := newTestRow()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	isv, err := IsValid(r, sch)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, isv)
 	invCol, err := GetInvalidCol(r, sch)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, invCol)
 	column, colConstraint, err := GetInvalidConstraint(r, sch)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, column)
 	assert.Nil(t, colConstraint)
 
 	updatedRow, err := r.SetColVal(lnColTag, nil, sch)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	isv, err = IsValid(updatedRow, sch)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, isv)
 
 	col, err := GetInvalidCol(updatedRow, sch)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, col)
 	assert.Equal(t, col.Tag, uint64(lnColTag))
 
 	col, cnst, err := GetInvalidConstraint(updatedRow, sch)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, col)
 	assert.Equal(t, col.Tag, uint64(lnColTag))
 	assert.Equal(t, cnst, schema.NotNullConstraint{})
@@ -106,16 +106,16 @@ func TestIsValid(t *testing.T) {
 		require.NoError(t, err)
 
 		isv, err := IsValid(r, newSch)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.False(t, isv)
 
 		col, err = GetInvalidCol(r, newSch)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		require.NotNil(t, col)
 		assert.Equal(t, col.Tag, uint64(addrColTag))
 
 		col, cnst, err = GetInvalidConstraint(r, newSch)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Nil(t, cnst)
 		assert.Equal(t, col.Tag, uint64(addrColTag))
 	})
@@ -123,10 +123,10 @@ func TestIsValid(t *testing.T) {
 
 func TestAreEqual(t *testing.T) {
 	r, err := newTestRow()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	updatedRow, err := r.SetColVal(lnColTag, types.String("new"), sch)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.True(t, AreEqual(r, r, sch))
 	assert.False(t, AreEqual(r, updatedRow, sch))

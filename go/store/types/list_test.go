@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
@@ -86,14 +87,14 @@ func newTestList(length int) testList {
 
 func validateList(t *testing.T, vrw ValueReadWriter, l List, values ValueSlice) {
 	l, err := NewList(context.Background(), vrw, values...)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, l.Equals(l))
 	out := ValueSlice{}
 	err = l.IterAll(context.Background(), func(v Value, idx uint64) error {
 		out = append(out, v)
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, out.Equals(values))
 }
 
@@ -206,12 +207,12 @@ func TestListInsert(t *testing.T) {
 
 	tl := newTestList(1024)
 	list, err := tl.toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for i := 0; i < len(tl); i += 16 {
 		tl = tl.Insert(i, Float(i))
 		list, err = list.Edit().Insert(uint64(i), Float(i)).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 	}
 
 	assert.True(mustList(tl.toList(vrw)).Equals(list))
@@ -227,12 +228,12 @@ func TestListRemove(t *testing.T) {
 
 	tl := newTestList(1024)
 	list, err := tl.toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for i := len(tl) - 16; i >= 0; i -= 16 {
 		tl = tl.Remove(i, i+4)
 		list, err = list.Edit().Remove(uint64(i), uint64(i+4)).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 	}
 
 	assert.True(mustList(tl.toList(vrw)).Equals(list))
@@ -243,14 +244,14 @@ func TestListRemoveAt(t *testing.T) {
 	vrw := newTestValueStore()
 
 	l0, err := NewList(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l0, err = l0.Edit().Append(Bool(false), Bool(true)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	l1, err := l0.Edit().RemoveAt(1).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustList(NewList(context.Background(), vrw, Bool(false))).Equals(l1))
 	l1, err = l1.Edit().RemoveAt(0).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustList(NewList(context.Background(), vrw)).Equals(l1))
 
 	assert.Panics(func() {
@@ -298,7 +299,7 @@ func TestStreamingListCreation(t *testing.T) {
 	simpleList := getTestList()
 
 	cl, err := NewList(context.Background(), vs, simpleList...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	valueChan := make(chan Value)
 
 	ae := atomicerr.New()
@@ -315,7 +316,7 @@ func TestStreamingListCreation(t *testing.T) {
 		done = !assert.True(v.Equals(mustValue(sl.Get(context.Background(), idx))))
 		return
 	})
-	assert.NoError(err)
+	require.NoError(t, err)
 }
 
 func TestListAppend(t *testing.T) {
@@ -331,7 +332,7 @@ func TestListAppend(t *testing.T) {
 
 	newList := func(items testList) List {
 		l, err := NewList(context.Background(), vrw, items...)
-		assert.NoError(err)
+		require.NoError(t, err)
 		return l
 	}
 
@@ -340,21 +341,21 @@ func TestListAppend(t *testing.T) {
 			simple = append(simple, v)
 			return nil
 		})
-		assert.NoError(err)
+		require.NoError(t, err)
 		return
 	}
 
 	cl := newList(getTestList())
 	cl2, err := cl.Edit().Append(Float(42)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl3, err := cl2.Edit().Append(Float(43)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl4, err := cl3.Edit().Append(getTestList().AsValuables()...).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl5, err := cl4.Edit().Append(Float(44), Float(45)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl6, err := cl5.Edit().Append(getTestList().AsValuables()...).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	expected := getTestList()
 	assert.Equal(expected, listToSimple(cl))
@@ -400,10 +401,10 @@ func TestListValidateInsertAscending(t *testing.T) {
 	values := generateNumbersAsValues(1000)
 
 	s, err := NewList(context.Background(), vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	for i, v := range values {
 		s, err = s.Edit().Insert(uint64(i), v).List(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		validateList(t, vrw, s, values[0:i+1])
 	}
 }
@@ -420,13 +421,13 @@ func TestListValidateInsertAtZero(t *testing.T) {
 
 	values := generateNumbersAsValues(1000)
 	s, err := NewList(context.Background(), vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	count := len(values)
 	for count > 0 {
 		count--
 		v := values[count]
 		s, err = s.Edit().Insert(uint64(0), v).List(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		validateList(t, vrw, s, values[count:])
 	}
 }
@@ -440,7 +441,7 @@ func TestListInsertNothing(t *testing.T) {
 	vrw := newTestValueStore()
 
 	cl, err := getTestList().toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.True(cl.Equals(mustList(cl.Edit().Insert(0).List(context.Background()))))
 	for i := uint64(1); i < getTestListLen(); i *= 2 {
@@ -462,17 +463,17 @@ func TestListInsertStart(t *testing.T) {
 	vrw := newTestValueStore()
 
 	cl, err := getTestList().toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl2, err := cl.Edit().Insert(0, Float(42)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl3, err := cl2.Edit().Insert(0, Float(43)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl4, err := cl3.Edit().Insert(0, getTestList().AsValuables()...).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl5, err := cl4.Edit().Insert(0, Float(44), Float(45)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl6, err := cl5.Edit().Insert(0, getTestList().AsValuables()...).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	expected := getTestList()
 	assert.Equal(expected, testListFromNomsList(cl))
@@ -517,19 +518,19 @@ func TestListInsertMiddle(t *testing.T) {
 	vrw := newTestValueStore()
 
 	cl, err := getTestList().toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl2, err := cl.Edit().Insert(100, Float(42)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl3, err := cl2.Edit().Insert(200, Float(43)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl4, err := cl3.Edit().Insert(300, getTestList().AsValuables()...).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl5, err := cl4.Edit().Insert(400, Float(44), Float(45)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl6, err := cl5.Edit().Insert(500, getTestList().AsValuables()...).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl7, err := cl6.Edit().Insert(600, Float(100)).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	expected := getTestList()
 	assert.Equal(expected, testListFromNomsList(cl))
@@ -580,16 +581,16 @@ func TestListInsertRanges(t *testing.T) {
 
 	testList := getTestList()
 	whole, err := testList.toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// Compare list equality. Increment by 256 (16^2) because each iteration requires building a new list, which is slow.
 	for incr, i := 256, 0; i < len(testList)-incr; i += incr {
 		for window := 1; window <= incr; window *= 16 {
 			testListPart := testList.Remove(i, i+window)
 			l, err := testListPart.toList(vrw)
-			assert.NoError(err)
+			require.NoError(t, err)
 			actual, err := l.Edit().Insert(uint64(i), testList[i:i+window].AsValuables()...).List(context.Background())
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.Equal(whole.Len(), actual.Len())
 			assert.True(whole.Equals(actual))
 		}
@@ -598,7 +599,7 @@ func TestListInsertRanges(t *testing.T) {
 	// Compare list length, which doesn't require building a new list every iteration, so the increment can be smaller.
 	for incr, i := 10, 0; i < len(testList); i += incr {
 		l, err := whole.Edit().Insert(uint64(i), testList[0:incr].AsValuables()...).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(len(testList)+incr, int(l.Len()))
 	}
 }
@@ -612,12 +613,12 @@ func TestListRemoveNothing(t *testing.T) {
 	vrw := newTestValueStore()
 
 	cl, err := getTestList().toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.True(cl.Equals(mustList(cl.Edit().Remove(0, 0).List(context.Background()))))
 	for i := uint64(1); i < getTestListLen(); i *= 2 {
 		l, err := cl.Edit().Remove(i, i).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(cl.Equals(l))
 	}
 	assert.True(cl.Equals(mustList(cl.Edit().Remove(cl.Len()-1, cl.Len()-1).List(context.Background()))))
@@ -633,12 +634,12 @@ func TestListRemoveEverything(t *testing.T) {
 	vrw := newTestValueStore()
 
 	l, err := getTestList().toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl, err := l.Edit().Remove(0, getTestListLen()).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	l, err = NewList(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(l.Equals(cl))
 	assert.Equal(0, int(cl.Len()))
 }
@@ -655,11 +656,11 @@ func TestListRemoveAtMiddle(t *testing.T) {
 	vrw := newTestValueStore()
 
 	cl, err := getTestList().toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl2, err := cl.Edit().RemoveAt(100).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	cl3, err := cl2.Edit().RemoveAt(200).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	expected := getTestList()
 	assert.Equal(expected, testListFromNomsList(cl))
@@ -690,16 +691,16 @@ func TestListRemoveRanges(t *testing.T) {
 
 	testList := getTestList()
 	whole, err := testList.toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// Compare list equality. Increment by 256 (16^2) because each iteration requires building a new list, which is slow.
 	for incr, i := 256, 0; i < len(testList)-incr; i += incr {
 		for window := 1; window <= incr; window *= 16 {
 			testListPart := testList.Remove(i, i+window)
 			expected, err := testListPart.toList(vrw)
-			assert.NoError(err)
+			require.NoError(t, err)
 			actual, err := whole.Edit().Remove(uint64(i), uint64(i+window)).List(context.Background())
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 		}
@@ -708,7 +709,7 @@ func TestListRemoveRanges(t *testing.T) {
 	// Compare list length, which doesn't require building a new list every iteration, so the increment can be smaller.
 	for incr, i := 10, 0; i < len(testList)-incr; i += incr {
 		l, err := whole.Edit().Remove(uint64(i), uint64(i+incr)).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(len(testList)-incr, int(l.Len()))
 	}
 }
@@ -726,13 +727,13 @@ func TestListRemoveAtEnd(t *testing.T) {
 
 	tl := getTestListWithLen(testListSize / 10)
 	cl, err := tl.toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for i := len(tl) - 1; i >= 0; i-- {
 		cl, err = cl.Edit().Remove(uint64(i), uint64(i+1)).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		expect, err := tl[0:i].toList(vrw)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(expect.Equals(cl))
 	}
 }
@@ -750,16 +751,16 @@ func TestListSet(t *testing.T) {
 
 	testList := getTestList()
 	cl, err := testList.toList(vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	testIdx := func(idx int, testEquality bool) {
 		newVal := Float(-1) // Test values are never < 0
 		cl2, err := cl.Edit().Set(uint64(idx), newVal).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.False(cl.Equals(cl2))
 		if testEquality {
 			l, err := testList.Set(idx, newVal).toList(vrw)
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.True(l.Equals(cl2))
 		}
 	}
@@ -781,7 +782,7 @@ func TestListFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsValues(testListSize)
 	_, err := NewList(context.Background(), vrw, nums...)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestListRefOfStructFirstNNumbers(t *testing.T) {
@@ -792,7 +793,7 @@ func TestListRefOfStructFirstNNumbers(t *testing.T) {
 
 	nums := generateNumbersAsRefOfStructs(vrw, testListSize)
 	_, err := NewList(context.Background(), vrw, nums...)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestListModifyAfterRead(t *testing.T) {
@@ -804,22 +805,22 @@ func TestListModifyAfterRead(t *testing.T) {
 	vs := newTestValueStore()
 
 	list, err := getTestList().toList(vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	// Drop chunk values.
 	ref, err := vs.WriteValue(context.Background(), list)
-	assert.NoError(err)
+	require.NoError(t, err)
 	v, err := vs.ReadValue(context.Background(), ref.TargetHash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	list = v.(List)
 	// Modify/query. Once upon a time this would crash.
 	llen := list.Len()
 	z, err := list.Get(context.Background(), 0)
-	assert.NoError(err)
+	require.NoError(t, err)
 	list, err = list.Edit().RemoveAt(0).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(llen-1, list.Len())
 	list, err = list.Edit().Append(z).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(llen, list.Len())
 }
 
@@ -860,9 +861,9 @@ func TestListDiffIdentical(t *testing.T) {
 	assert := assert.New(t)
 	nums := generateNumbersAsValues(5)
 	l1, err := NewList(context.Background(), vrw, nums...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums...)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -880,9 +881,9 @@ func TestListDiffVersusEmpty(t *testing.T) {
 	assert := assert.New(t)
 	nums1 := generateNumbersAsValues(5)
 	l1, err := NewList(context.Background(), vrw, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -907,9 +908,9 @@ func TestListDiffReverse(t *testing.T) {
 	nums1 := generateNumbersAsValues(5000)
 	nums2 := reverseValues(nums1)
 	l1, err := NewList(context.Background(), vrw, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums2...)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -936,14 +937,14 @@ func TestListDiffReverseWithLargerLimit(t *testing.T) {
 	nums2 := reverseValues(nums1)
 
 	l1, err := NewList(context.Background(), vrw, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums2...)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	diff1, err := accumulateDiffSplicesWithLimit(l1, l2, 27e6)
-	assert.NoError(err)
+	require.NoError(t, err)
 	diff2, err := accumulateDiffSplicesWithLimit(l2, l1, 27e6)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Equal(len(diff2), len(diff1))
 	diffExpected := []Splice{
@@ -971,9 +972,9 @@ func TestListDiffRemove5x100(t *testing.T) {
 		nums2 = spliceValues(nums2, (count-1)*1000, 100)
 	}
 	l1, err := NewList(context.Background(), vrw, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums2...)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -1006,9 +1007,9 @@ func TestListDiffAdd5x5(t *testing.T) {
 		nums2 = spliceValues(nums2, (count-1)*1000, 0, Float(0), Float(1), Float(2), Float(3), Float(4))
 	}
 	l1, err := NewList(context.Background(), vrw, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums2...)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	diff1 := accumulateDiffSplices(l1, l2)
 	diff2 := accumulateDiffSplices(l2, l1)
@@ -1042,9 +1043,9 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 		nums2 = spliceValues(nums2, (count-1)*1000, 100, out...)
 	}
 	l1, err := NewList(context.Background(), vrw, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums2...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
@@ -1072,9 +1073,9 @@ func TestListDiffString1(t *testing.T) {
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("three")}
 	l1, err := NewList(context.Background(), vrw, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums2...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	diff := accumulateDiffSplices(l2, l1)
 
 	assert.Equal(0, len(diff))
@@ -1090,9 +1091,9 @@ func TestListDiffString2(t *testing.T) {
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("three"), String("four")}
 	l1, err := NewList(context.Background(), vrw, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums2...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
@@ -1111,9 +1112,9 @@ func TestListDiffString3(t *testing.T) {
 	nums1 := []Value{String("one"), String("two"), String("three")}
 	nums2 := []Value{String("one"), String("two"), String("four")}
 	l1, err := NewList(context.Background(), vrw, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums2...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	diff := accumulateDiffSplices(l2, l1)
 
 	diffExpected := []Splice{
@@ -1135,32 +1136,33 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	vs1 := NewValueStore(cs1)
 	nums1 := generateNumbersAsValues(4000)
 	l1, err := NewList(context.Background(), vs1, nums1...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ref, err := vs1.WriteValue(context.Background(), l1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	hash1 := ref.TargetHash()
 	rt, err := vs1.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs1.Commit(context.Background(), rt, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	v, err := vs1.ReadValue(context.Background(), hash1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	refList1 := v.(List)
 
 	cs2 := storage.NewView()
 	vs2 := NewValueStore(cs2)
 	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
 	l2, err := NewList(context.Background(), vs2, nums2...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ref, err = vs2.WriteValue(context.Background(), l2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	hash2 := ref.TargetHash()
 	rt, err = vs1.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs2.Commit(context.Background(), rt, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 	v, err = vs2.ReadValue(context.Background(), hash2)
+	require.NoError(t, err)
 	refList2 := v.(List)
 
 	// diff lists without value store
@@ -1188,13 +1190,14 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 
 	newSequenceMetaTuple := func(vs ...Value) metaTuple {
 		seq, err := newListLeafSequence(vrw, vs...)
-		assert.NoError(err)
+		require.NoError(t, err)
 		list := newList(seq)
 		ref, err := vrw.WriteValue(context.Background(), list)
-		assert.NoError(err)
+		require.NoError(t, err)
 		ordKey, err := orderedKeyFromInt(len(vs), Format_7_18)
+		require.NoError(t, err)
 		mt, err := newMetaTuple(ref, ordKey, uint64(len(vs)))
-		assert.NoError(err)
+		require.NoError(t, err)
 
 		return mt
 	}
@@ -1204,10 +1207,10 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 	m3 := newSequenceMetaTuple(Float(9), Float(10), Float(11), Float(12), Float(13), Float(14), Float(15))
 
 	mseq, err := newListMetaSequence(1, []metaTuple{m1, m3}, vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l1 := newList(mseq) // [1, 2, 3][9, 10, 11, 12, 13, 14, 15]
 	mseq, err = newListMetaSequence(1, []metaTuple{m1, m2, m3}, vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2 := newList(mseq) // [1, 2, 3][4, 5, 6, 7, 8][9, 10, 11, 12, 13, 14, 15]
 
 	diff := accumulateDiffSplices(l2, l1)
@@ -1230,19 +1233,19 @@ func TestListTypeAfterMutations(t *testing.T) {
 		values := generateNumbersAsValues(n)
 
 		l, err := NewList(context.Background(), vrw, values...)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.asSequence())
 		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(PrimitiveTypeMap[FloatKind]))))
 
 		l, err = l.Edit().Append(String("a")).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(l.Len(), uint64(n+1))
 		assert.IsType(c, l.asSequence())
 		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind]))))))
 
 		l, err = l.Edit().Splice(l.Len()-1, 1).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.asSequence())
 		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(PrimitiveTypeMap[FloatKind]))))
@@ -1261,22 +1264,23 @@ func TestListRemoveLastWhenNotLoaded(t *testing.T) {
 	vs := newTestValueStore()
 	reload := func(l List) List {
 		ref, err := vs.WriteValue(context.Background(), l)
-		assert.NoError(err)
+		require.NoError(t, err)
 		v, err := vs.ReadValue(context.Background(), ref.TargetHash())
+		require.NoError(t, err)
 		return v.(List)
 	}
 
 	tl := newTestList(1024)
 	nl, err := tl.toList(vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for len(tl) > 0 {
 		tl = tl[:len(tl)-1]
 		l, err := nl.Edit().RemoveAt(uint64(len(tl))).List(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		nl = reload(l)
 		l, err = tl.toList(vs)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(l.Equals(nl))
 	}
 }
@@ -1294,9 +1298,9 @@ func TestListConcat(t *testing.T) {
 	vs := newTestValueStore()
 	reload := func(vs *ValueStore, l List) List {
 		ref, err := vs.WriteValue(context.Background(), l)
-		assert.NoError(err)
+		require.NoError(t, err)
 		val, err := vs.ReadValue(context.Background(), ref.TargetHash())
-		assert.NoError(err)
+		require.NoError(t, err)
 		return val.(List)
 	}
 
@@ -1309,13 +1313,13 @@ func TestListConcat(t *testing.T) {
 		}
 
 		list, err := listSlice.toList(vs)
-		assert.NoError(err)
+		require.NoError(t, err)
 
 		for i := from; i < to; i += by {
 			fst := reload(vs, mustList(listSlice[:i].toList(vs)))
 			snd := reload(vs, mustList(listSlice[i:].toList(vs)))
 			actual, err := fst.Concat(context.Background(), snd)
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.True(list.Equals(actual),
 				"fail at %d/%d (with expected length %d, actual %d)", i, size, list.Len(), actual.Len())
 		}
@@ -1347,11 +1351,11 @@ func TestListConcatDifferentTypes(t *testing.T) {
 	whole = append(whole, snd...)
 
 	nl, err := NewList(context.Background(), vrw, fst...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	concat, err := nl.Concat(context.Background(), mustList(NewList(context.Background(), vrw, snd...)))
-	assert.NoError(err)
+	require.NoError(t, err)
 	nl, err = NewList(context.Background(), vrw, whole...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(nl.Equals(concat))
 }
 
@@ -1368,7 +1372,7 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 			"b": String("bar"),
 		})),
 	)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(
 		mustType(MakeListType(mustType(MakeStructType("Foo",
 			StructField{"a", PrimitiveTypeMap[FloatKind], false},
@@ -1393,18 +1397,18 @@ func TestListOfListsDoesNotWriteRoots(t *testing.T) {
 	vrw := newTestValueStore()
 
 	l1, err := NewList(context.Background(), vrw, String("a"), String("b"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, String("c"), String("d"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	l3, err := NewList(context.Background(), vrw, l1, l2)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l1.Hash(Format_7_18)))))
 	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l2.Hash(Format_7_18)))))
 	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l3.Hash(Format_7_18)))))
 
 	_, err = vrw.WriteValue(context.Background(), l3)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l1.Hash(Format_7_18)))))
 	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l2.Hash(Format_7_18)))))
 }

@@ -1,0 +1,201 @@
+name: Test Bats Windows
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test-bats-head:
+    name: Bats tests part 1
+    defaults:
+      run:
+        shell: bash
+    runs-on: windows-2019
+    env:
+      use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
+    steps:
+      - name: Conditionally Set ENV VARS for AWS tests
+        run: |
+          if [[ $use_credentials == true ]]; then
+            echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV
+            echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_TABLE=dolt-ci-bats-manifests-us-west-2" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests" >> $GITHUB_ENV
+          fi
+      - name: Configure AWS Credentials
+        if: ${{ env.use_credentials == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-duration-seconds: 3600
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.15
+        id: go
+      - name: Setup Python 3.x
+        uses: actions/setup-python@v2
+        with:
+          python-version: ^3.6
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: ^12
+      - name: Create CI Bin
+        run: |
+          mkdir -p ./.ci_bin
+          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+      - name: Install Bats Windows
+        run: |
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          ./install.sh $HOME
+        working-directory: ./.ci_bin
+      - name: Install wslpath
+        run: |
+          choco install wget
+          wget 'https://raw.githubusercontent.com/laurent22/wslpath/master/wslpath'
+          chmod 755 wslpath
+          mv wslpath /usr/bin/
+          cp /c/tools/php/php /usr/bin/
+      - name: Install Doltpy
+        run: |
+          pip install doltpy
+      - name: Install Dolt
+        working-directory: ./go
+        run: |
+          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+          go build -mod=readonly -o ../.ci_bin/git-dolt ./cmd/git-dolt/.
+          go build -mod=readonly -o ../.ci_bin/git-dolt-smudge ./cmd/git-dolt-smudge/.
+          go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
+      - name: Setup Dolt Config
+        run: |
+          dolt config --global --add user.name 'Dolthub Actions'
+          dolt config --global --add user.email 'actions@dolthub.com'
+      - name: Test Bats Head
+        run: |
+          files=$(ls *.bats | sort | head -40)
+
+          SAVEIFS=$IFS
+          IFS=$'\n'
+
+          file_arr=($files)
+
+          IFS=$SAVEIFS
+
+          file_list=
+          for (( i=0; i<${#file_arr[@]}; i++ ))
+          do
+            echo "Testing file: ${file_arr[$i]}"
+            bats --tap "${file_arr[$i]}"
+            succeeded=$(echo "$?")
+            if [ "$succeeded" -ne 0 ]; then
+              echo "Test failed in ${file_arr[$i]}"
+              exit 1;
+            fi
+          done
+        working-directory: ./integration-tests/bats
+        env:
+          IS_WINDOWS: true
+          WINDOWS_BASE_DIR: "/d/a"
+  test-bats-tail:
+    name: Bats tests part 2
+    defaults:
+      run:
+        shell: bash
+    runs-on: windows-2019
+    env:
+      use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
+    steps:
+      - name: Conditionally Set ENV VARS for AWS tests
+        run: |
+          if [[ $use_credentials == true ]]; then
+            echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV
+            echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_TABLE=dolt-ci-bats-manifests-us-west-2" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests" >> $GITHUB_ENV
+          fi
+      - name: Configure AWS Credentials
+        if: ${{ env.use_credentials == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-duration-seconds: 3600
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.15
+        id: go
+      - name: Setup Python 3.x
+        uses: actions/setup-python@v2
+        with:
+          python-version: ^3.6
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: ^12
+      - name: Create CI Bin
+        run: |
+          mkdir -p ./.ci_bin
+          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+      - name: Install Bats
+        run: |
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          ./install.sh $HOME
+        working-directory: ./.ci_bin
+      - name: Install wslpath
+        run: |
+          choco install wget
+          wget 'https://raw.githubusercontent.com/laurent22/wslpath/master/wslpath'
+          chmod 755 wslpath
+          mv wslpath /usr/bin/
+          cp /c/tools/php/php /usr/bin/
+      - name: Install Doltpy
+        run: |
+          pip install doltpy
+      - name: Install Dolt
+        working-directory: ./go
+        run: |
+          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+          go build -mod=readonly -o ../.ci_bin/git-dolt ./cmd/git-dolt/.
+          go build -mod=readonly -o ../.ci_bin/git-dolt-smudge ./cmd/git-dolt-smudge/.
+          go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
+      - name: Setup Dolt Config
+        run: |
+          dolt config --global --add user.name 'Dolthub Actions'
+          dolt config --global --add user.email 'actions@dolthub.com'
+      - name: Test Bats Head
+        run: |
+          files=$(ls *.bats | sort | tail +41)
+
+          SAVEIFS=$IFS
+          IFS=$'\n'
+
+          file_arr=($files)
+
+          IFS=$SAVEIFS
+
+          file_list=
+          for (( i=0; i<${#file_arr[@]}; i++ ))
+          do
+            echo "Testing file: ${file_arr[$i]}"
+            bats --tap "${file_arr[$i]}"
+            succeeded=$(echo "$?")
+            if [ "$succeeded" -ne 0 ]; then
+              echo "Test failed in ${file_arr[$i]}"
+              exit 1;
+            fi
+          done
+        working-directory: ./integration-tests/bats
+        env:
+          IS_WINDOWS: true
+          WINDOWS_BASE_DIR: "/d/a"

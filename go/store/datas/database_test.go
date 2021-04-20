@@ -302,6 +302,7 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 	_, err = suite.db.Delete(context.Background(), ds)
 	suite.NoError(err)
 	dss, err = suite.db.Datasets(context.Background())
+	suite.NoError(err)
 	assertMapOfStringToRefOfCommit(context.Background(), dss, datasets, suite.db)
 }
 

@@ -49,6 +49,7 @@ type doltIndex struct {
 	tableSch     schema.Schema
 	unique       bool
 	comment      string
+	generated    bool
 }
 
 //TODO: have queries using IS NULL make use of indexes
@@ -222,6 +223,11 @@ func (di *doltIndex) Comment() string {
 // IndexType implements sql.Index
 func (di *doltIndex) IndexType() string {
 	return "BTREE"
+}
+
+// IsGenerated implements sql.Index
+func (di *doltIndex) IsGenerated() bool {
+	return di.generated
 }
 
 // Schema returns the dolt table schema of this index.

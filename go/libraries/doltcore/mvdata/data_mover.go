@@ -15,10 +15,15 @@
 package mvdata
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"sync/atomic"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -97,7 +102,7 @@ type GCTableWriteCloser interface {
 
 // Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
-func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
+func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount int64, err error) {
 	defer imp.Rd.Close(ctx)
 	defer func() {
 		closeErr := imp.Wr.Close(ctx)
@@ -114,10 +119,26 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 
 	var badCount int64
 	var rowErr error
+	var printStarted bool
+	var b bytes.Buffer
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
 			rowErr = trf
 			return true
+		}
+
+		if !printStarted {
+			cli.PrintErrln("The following rows were skipped:")
+			printStarted = true
+		}
+
+		r := pipeline.GetTransFailureRow(trf)
+
+		if r != nil {
+			err = writeBadRowToCli(ctx, r, sch, &b)
+			if err != nil {
+				return true
+			}
 		}
 
 		atomic.AddInt64(&badCount, 1)
@@ -132,7 +153,6 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	p.Start()
 
 	err = p.Wait()
-
 	if err != nil {
 		return 0, err
 	}
@@ -144,12 +164,48 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	return badCount, nil
 }
 
+// writeBadRowToCli prints a bad row in a csv form to STDERR.
+func writeBadRowToCli(ctx context.Context, r row.Row, sch schema.Schema, b *bytes.Buffer) error {
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
+	if err != nil {
+		return err
+	}
+
+	wr := bufio.NewWriter(b)
+
+	colValStrs := make([]*string, len(sqlRow))
+
+	for colNum, col := range sqlRow {
+		if col != nil {
+			str := sqlutil.SqlColToStr(ctx, col)
+			colValStrs[colNum] = &str
+		} else {
+			colValStrs[colNum] = nil
+		}
+	}
+
+	err = csv.WriteCSVRow(wr, colValStrs, ",", false)
+	if err != nil {
+		return err
+	}
+
+	err = wr.Flush()
+	if err != nil {
+		return err
+	}
+
+	str := b.String()
+	cli.PrintErr(str)
+
+	return nil
+}
+
 func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptions, root *doltdb.RootValue, updateRoot func(c context.Context, r *doltdb.RootValue) error) (*doltdb.RootValue, int64, errhand.VerboseError) {
 	var badCount int64
 	var err error
 	newRoot := &doltdb.RootValue{}
 
-	badCount, err = mover.Move(ctx)
+	badCount, err = mover.Move(ctx, mover.Wr.GetSchema())
 
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
@@ -157,7 +213,7 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 
 			r := pipeline.GetTransFailureRow(err)
 			if r != nil {
-				bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, mover.Rd.GetSchema()))
+				bdr.AddDetails("Bad Row: " + row.Fmt(ctx, r, mover.Wr.GetSchema()))
 			}
 
 			details := pipeline.GetTransFailureDetails(err)

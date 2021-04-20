@@ -42,7 +42,7 @@ const (
 )
 
 func TestTableEditorConcurrency(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
@@ -123,7 +123,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 			_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 				dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 				require.NoError(t, err)
-				dReadVals, err := row.GetTaggedVals(dReadRow)
+				dReadVals, err := dReadRow.TaggedValues()
 				require.NoError(t, err)
 				assert.Equal(t, row.TaggedValues{
 					0: types.Int(iterIndex),
@@ -138,7 +138,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 }
 
 func TestTableEditorConcurrencyPostInsert(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
@@ -217,7 +217,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 			_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 				dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 				require.NoError(t, err)
-				dReadVals, err := row.GetTaggedVals(dReadRow)
+				dReadVals, err := dReadRow.TaggedValues()
 				require.NoError(t, err)
 				assert.Equal(t, row.TaggedValues{
 					0: types.Int(iterIndex),
@@ -232,7 +232,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 }
 
 func TestTableEditorWriteAfterFlush(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
@@ -283,7 +283,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 		_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 			dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 			require.NoError(t, err)
-			dReadVals, err := row.GetTaggedVals(dReadRow)
+			dReadVals, err := dReadRow.TaggedValues()
 			require.NoError(t, err)
 			assert.Equal(t, row.TaggedValues{
 				0: types.Int(iterIndex),
@@ -303,7 +303,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 }
 
 func TestTableEditorDuplicateKeyHandling(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
@@ -368,7 +368,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 			dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 			require.NoError(t, err)
-			dReadVals, err := row.GetTaggedVals(dReadRow)
+			dReadVals, err := dReadRow.TaggedValues()
 			require.NoError(t, err)
 			assert.Equal(t, row.TaggedValues{
 				0: types.Int(iterIndex),

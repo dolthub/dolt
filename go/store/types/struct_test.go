@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func getChunks(v Value) (chunks []Ref) {
@@ -40,9 +41,9 @@ func TestGenericStructEquals(t *testing.T) {
 	assert := assert.New(t)
 
 	s1, err := NewStruct(Format_7_18, "S1", StructData{"s": String("hi"), "x": Bool(true)})
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := NewStruct(Format_7_18, "S1", StructData{"s": String("hi"), "x": Bool(true)})
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.True(s1.Equals(s2))
 	assert.True(s2.Equals(s1))
@@ -53,11 +54,11 @@ func TestGenericStructChunks(t *testing.T) {
 
 	b := Bool(true)
 	s1, err := NewStruct(Format_7_18, "S1", StructData{"r": mustRef(NewRef(b, Format_7_18))})
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Len(getChunks(s1), 1)
 	h, err := Bool(true).Hash(Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(h, getChunks(s1)[0].TargetHash())
 }
 
@@ -65,20 +66,21 @@ func TestGenericStructNew(t *testing.T) {
 	assert := assert.New(t)
 
 	s, err := NewStruct(Format_7_18, "S2", StructData{"b": Bool(true), "o": String("hi")})
-	assert.NoError(err)
+	require.NoError(t, err)
 	v, _, err := s.MaybeGet("b")
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(v.Equals(Bool(true)))
 	_, ok, err := s.MaybeGet("missing")
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(ok)
 
 	s2, err := NewStruct(Format_7_18, "S2", StructData{"b": Bool(false), "o": String("hi")})
+	require.NoError(t, err)
 	v2, _, err := s2.MaybeGet("b")
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(v2.Equals(Bool(false)))
 	o, ok, err := s2.MaybeGet("o")
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assert.True(String("hi").Equals(o))
 }
@@ -88,17 +90,17 @@ func TestGenericStructSet(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewStruct(Format_7_18, "S3", StructData{"b": Bool(true), "o": String("hi")})
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := s.Set("b", Bool(false))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	s3, err := s2.Set("b", Bool(true))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s.Equals(s3))
 
 	// Changes the type
 	s4, err := s.Set("b", Float(42))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(MakeStructType("S3",
 		StructField{"b", PrimitiveTypeMap[FloatKind], false},
 		StructField{"o", PrimitiveTypeMap[StringKind], false},
@@ -106,7 +108,7 @@ func TestGenericStructSet(t *testing.T) {
 
 	// Adds a new field
 	s5, err := s.Set("x", Float(42))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(MakeStructType("S3",
 		StructField{"b", PrimitiveTypeMap[BoolKind], false},
 		StructField{"o", PrimitiveTypeMap[StringKind], false},
@@ -115,44 +117,44 @@ func TestGenericStructSet(t *testing.T) {
 
 	// Subtype is not equal.
 	s6, err := NewStruct(Format_7_18, "", StructData{"l": mustList(NewList(context.Background(), vs, Float(0), Float(1), Bool(false), Bool(true)))})
-	assert.NoError(err)
+	require.NoError(t, err)
 	s7, err := s6.Set("l", mustList(NewList(context.Background(), vs, Float(2), Float(3))))
-	assert.NoError(err)
+	require.NoError(t, err)
 	t7, err := MakeStructTypeFromFields("", FieldMap{
 		"l": mustType(MakeListType(PrimitiveTypeMap[FloatKind])),
 	})
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(t7.Equals(mustType(TypeOf(s7))))
 
 	s8, err := NewStruct(Format_7_18, "S", StructData{"a": Bool(true), "c": Bool(true)})
-	assert.NoError(err)
+	require.NoError(t, err)
 	s9, err := s8.Set("b", Bool(true))
-	assert.NoError(err)
+	require.NoError(t, err)
 	st, err := NewStruct(Format_7_18, "S", StructData{"a": Bool(true), "b": Bool(true), "c": Bool(true)})
 	assert.True(s9.Equals(st))
-	assert.NoError(err)
+	require.NoError(t, err)
 }
 
 func TestGenericStructDelete(t *testing.T) {
 	assert := assert.New(t)
 
 	s1, err := NewStruct(Format_7_18, "S", StructData{"b": Bool(true), "o": String("hi")})
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	s2, err := s1.Delete("notThere")
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s1.Equals(s2))
 
 	s3, err := s1.Delete("o")
-	assert.NoError(err)
+	require.NoError(t, err)
 	s4, err := NewStruct(Format_7_18, "S", StructData{"b": Bool(true)})
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s3.Equals(s4))
 
 	s5, err := s3.Delete("b")
-	assert.NoError(err)
+	require.NoError(t, err)
 	s6, err := NewStruct(Format_7_18, "S", StructData{})
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(s5.Equals(s6))
 }
 
@@ -188,7 +190,7 @@ func TestStructDiff(t *testing.T) {
 			i++
 		}
 		assert.Equal(len(expect), i, "Wrong number of changes")
-		assert.NoError(err)
+		require.NoError(t, err)
 	}
 
 	vc := func(ct DiffChangeType, fieldName string, oldV, newV Value) ValueChanged {
@@ -196,7 +198,7 @@ func TestStructDiff(t *testing.T) {
 	}
 
 	s1, err := NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("hi"), "c": Float(4)})
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assertDiff([]ValueChanged{},
 		s1, mustStruct(NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("hi"), "c": Float(4)})))
@@ -312,7 +314,7 @@ func TestMakeStructTemplate(t *testing.T) {
 	assertValidStructName := func(n string) {
 		template := MakeStructTemplate(n, []string{})
 		str, err := template.NewStruct(Format_7_18, nil)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(n, str.Name())
 	}
 
@@ -368,7 +370,7 @@ func TestMakeStructTemplate(t *testing.T) {
 
 	template := MakeStructTemplate("A", []string{"a", "b"})
 	str, err := template.NewStruct(Format_7_18, []Value{Float(42), Bool(true)})
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustStruct(NewStruct(Format_7_18, "A", StructData{
 		"a": Float(42),
 		"b": Bool(true),

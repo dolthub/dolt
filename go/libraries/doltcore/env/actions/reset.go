@@ -24,18 +24,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-func resetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.Commit, error) {
-	if apr.NArg() > 1 {
-		return nil, errors.New("--hard supports at most one additional param")
-	}
-
+func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.Commit, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
 
 	var newHead *doltdb.Commit
-	if apr.NArg() == 1 {
-		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
+	if cSpecStr != "" {
+		cs, err := doltdb.NewCommitSpec(cSpecStr)
 		if err != nil {
 			return nil, err
 		}
@@ -104,8 +100,8 @@ func resetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 
 // ResetHardTables resets the tables in working, staged, and head based on the given parameters. Returns the commit hash
 // if head is updated.
-func ResetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (string, error) {
-	newHead, err := resetHardTables(ctx, dbData, apr, workingRoot, stagedRoot, headRoot)
+func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (string, error) {
+	newHead, err := resetHardTables(ctx, dbData, cSpecStr, workingRoot, stagedRoot, headRoot)
 
 	if err != nil {
 		return "", err
@@ -130,10 +126,10 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return "", nil
 }
 
-func ResetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) error {
+func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) error {
 	dbData := dEnv.DbData()
 
-	newHead, err := resetHardTables(ctx, dbData, apr, workingRoot, stagedRoot, headRoot)
+	newHead, err := resetHardTables(ctx, dbData, cSpecStr, workingRoot, stagedRoot, headRoot)
 
 	if err != nil {
 		return err
@@ -179,8 +175,8 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return stagedRoot, nil
 }
 
-func ResetSoft(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-	tables, err := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
+func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+	tables, err := getUnionedTables(ctx, tables, stagedRoot, headRoot)
 
 	if err != nil {
 		return nil, err
@@ -215,6 +211,38 @@ func ResetSoft(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseRe
 	return stagedRoot, nil
 }
 
+// ResetSoftToRef matches the `git reset --soft <REF>` pattern. It resets both staged and head to the previous ref
+// and leaves the working unset. The user can then choose to create a commit that contains all changes since the ref.
+func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) error {
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
+	if err != nil {
+		return err
+	}
+
+	newHead, err := dbData.Ddb.Resolve(ctx, cs, dbData.Rsr.CWBHeadRef())
+	if err != nil {
+		return err
+	}
+
+	foundRoot, err := newHead.GetRootValue()
+	if err != nil {
+		return err
+	}
+
+	// Changed the stage to old the root. Leave the working as is.
+	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, foundRoot)
+	if err != nil {
+		return err
+	}
+
+	// Update the head to this commit
+	if err = dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
+		return err
+	}
+
+	return err
+}
+
 func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot *doltdb.RootValue) ([]string, error) {
 	if len(tables) == 0 || (len(tables) == 1 && tables[0] == ".") {
 		var err error
@@ -231,6 +259,9 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 // resetDocs resets the working and staged docs with docs from head.
 func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docs doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
 	docs, err = doltdocs.GetDocsFromRoot(ctx, headRoot, doltdocs.GetDocNamesFromDocs(docs)...)
+	if err != nil {
+		return nil, err
+	}
 
 	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
 	if err != nil {
@@ -258,4 +289,19 @@ func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWrite
 	}
 
 	return updatedRoot, env.UpdateStagedRootWithVErr(ddb, rsw, updatedRoot)
+}
+
+// ValidateIsRef validates whether the input parameter is a valid cString
+func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) bool {
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
+	if err != nil {
+		return false
+	}
+
+	_, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
+	if err != nil {
+		return false
+	}
+
+	return true
 }

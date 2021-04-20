@@ -530,6 +530,10 @@ func (p *Parser) parseMap(ctx context.Context) (types.Map, error) {
 
 		p.lex.eat(':')
 		value, err := p.parseValue(ctx)
+		if err != nil {
+			return types.EmptyMap, err
+		}
+
 		me = me.Set(key, value)
 
 		if p.lex.eatIf(',') {

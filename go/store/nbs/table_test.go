@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -75,9 +76,9 @@ func TestSimple(t *testing.T) {
 	}
 
 	tableData, _, err := buildTable(chunks)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ti, err := parseTableIndex(tableData)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	assertChunksInReader(chunks, tr, assert)
@@ -121,9 +122,9 @@ func TestHasMany(t *testing.T) {
 	}
 
 	tableData, _, err := buildTable(chunks)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ti, err := parseTableIndex(tableData)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
@@ -135,7 +136,7 @@ func TestHasMany(t *testing.T) {
 	sort.Sort(hasRecordByPrefix(hasAddrs))
 
 	_, err = tr.hasMany(hasAddrs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	for _, ha := range hasAddrs {
 		assert.True(ha.has, "Nothing for prefix %d", ha.prefix)
 	}
@@ -169,11 +170,11 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	}
 
 	length, _, err := tw.finish()
-	assert.NoError(err)
+	require.NoError(t, err)
 	buff = buff[:length]
 
 	ti, err := parseTableIndex(buff)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 
 	hasAddrs := make([]hasRecord, 2)
@@ -182,7 +183,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	hasAddrs[1] = hasRecord{&addrs[2], addrs[2].Prefix(), 2, false}
 
 	_, err = tr.hasMany(hasAddrs)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for _, ha := range hasAddrs {
 		assert.True(ha.has, fmt.Sprintf("Nothing for prefix %x\n", ha.prefix))
@@ -199,9 +200,9 @@ func TestGetMany(t *testing.T) {
 	}
 
 	tableData, _, err := buildTable(data)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ti, err := parseTableIndex(tableData)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	addrs := addrSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
@@ -216,8 +217,8 @@ func TestGetMany(t *testing.T) {
 
 	got := make([]*chunks.Chunk, 0)
 	_, err = tr.getMany(ctx, eg, getBatch, func(c *chunks.Chunk) { got = append(got, c) }, &Stats{})
-	assert.NoError(err)
-	assert.NoError(eg.Wait())
+	require.NoError(t, err)
+	require.NoError(t, eg.Wait())
 
 	assert.True(len(got) == len(getBatch))
 }
@@ -232,9 +233,9 @@ func TestCalcReads(t *testing.T) {
 	}
 
 	tableData, _, err := buildTable(chunks)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ti, err := parseTableIndex(tableData)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
@@ -247,13 +248,13 @@ func TestCalcReads(t *testing.T) {
 	sort.Sort(getRecordByPrefix(getBatch))
 
 	reads, remaining, err := tr.calcReads(getBatch, 0)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(remaining)
 	assert.Equal(1, reads)
 
 	sort.Sort(getRecordByPrefix(gb2))
 	reads, remaining, err = tr.calcReads(gb2, 0)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(remaining)
 	assert.Equal(2, reads)
 }
@@ -268,9 +269,9 @@ func TestExtract(t *testing.T) {
 	}
 
 	tableData, _, err := buildTable(chunks)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ti, err := parseTableIndex(tableData)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
@@ -278,7 +279,7 @@ func TestExtract(t *testing.T) {
 	chunkChan := make(chan extractRecord)
 	go func() {
 		err := tr.extract(context.Background(), chunkChan)
-		assert.NoError(err)
+		require.NoError(t, err)
 		close(chunkChan)
 	}()
 
@@ -306,9 +307,9 @@ func Test65k(t *testing.T) {
 	}
 
 	tableData, _, err := buildTable(chunks)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ti, err := parseTableIndex(tableData)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	for i := 0; i < count; i++ {
@@ -316,7 +317,7 @@ func Test65k(t *testing.T) {
 		h := computeAddr(data)
 		assert.True(tr.has(computeAddr(data)))
 		bytes, err := tr.get(context.Background(), h, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(string(data), string(bytes))
 	}
 
@@ -325,7 +326,7 @@ func Test65k(t *testing.T) {
 		h := computeAddr(data)
 		assert.False(tr.has(computeAddr(data)))
 		bytes, err := tr.get(context.Background(), h, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.NotEqual(string(data), string(bytes))
 	}
 }
@@ -358,9 +359,9 @@ func doTestNGetMany(t *testing.T, count int) {
 	}
 
 	tableData, _, err := buildTable(data)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ti, err := parseTableIndex(tableData)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	getBatch := make([]getRecord, len(data))
@@ -375,8 +376,8 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	got := make([]*chunks.Chunk, 0)
 	_, err = tr.getMany(ctx, eg, getBatch, func(c *chunks.Chunk) { got = append(got, c) }, &Stats{})
-	assert.NoError(err)
-	assert.NoError(eg.Wait())
+	require.NoError(t, err)
+	require.NoError(t, eg.Wait())
 
 	assert.True(len(got) == len(getBatch))
 }
@@ -400,6 +401,6 @@ func TestEmpty(t *testing.T) {
 	buff := make([]byte, footerSize)
 	tw := newTableWriter(buff, nil)
 	length, _, err := tw.finish()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(length == footerSize)
 }

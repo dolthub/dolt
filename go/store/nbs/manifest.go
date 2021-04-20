@@ -29,11 +29,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var ErrCorruptManifest = errors.New("corrupt manifest")
+var ErrUnsupportedManifestAppendixOption = errors.New("unsupported manifest appendix option")
 
 type manifest interface {
 	// Name returns a stable, unique identifier for the store this manifest describes.
@@ -89,6 +91,12 @@ type manifestGCGenUpdater interface {
 	UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
+// manifestVersionGetter is an interface for retrieving the manifest version
+type manifestVersionGetter interface {
+	// GetManifestVersion returns the version of the manifest
+	GetManifestVersion() string
+}
+
 // ManifestInfo is an interface for retrieving data from a manifest outside of this package
 type ManifestInfo interface {
 	GetVersion() string
@@ -96,8 +104,18 @@ type ManifestInfo interface {
 	GetGCGen() string
 	GetRoot() hash.Hash
 	NumTableSpecs() int
+	NumAppendixSpecs() int
 	GetTableSpecInfo(i int) TableSpecInfo
+	GetAppendixTableSpecInfo(i int) TableSpecInfo
 }
+
+type ManifestAppendixOption int
+
+const (
+	ManifestAppendixOption_Unspecified ManifestAppendixOption = iota
+	ManifestAppendixOption_Set
+	ManifestAppendixOption_Append
+)
 
 type manifestContents struct {
 	vers  string
@@ -105,6 +123,13 @@ type manifestContents struct {
 	root  hash.Hash
 	gcGen addr
 	specs []tableSpec
+
+	// An appendix is a list of |tableSpecs| that track an auxillary collection of
+	// table files used _only_ for query performance optimizations. These appendix |tableSpecs| can be safely
+	// managed with nbs.UpdateManifestWithAppendix, however generation and removal of the actual table files
+	// the appendix |tableSpecs| reference is done manually. All appendix |tableSpecs| will be prepended to the
+	// manifest.specs across manifest updates.
+	appendix []tableSpec
 }
 
 func (mc manifestContents) GetVersion() string {
@@ -127,17 +152,62 @@ func (mc manifestContents) NumTableSpecs() int {
 	return len(mc.specs)
 }
 
+func (mc manifestContents) NumAppendixSpecs() int {
+	return len(mc.appendix)
+}
+
 func (mc manifestContents) GetTableSpecInfo(i int) TableSpecInfo {
 	return mc.specs[i]
+}
+
+func (mc manifestContents) GetAppendixTableSpecInfo(i int) TableSpecInfo {
+	return mc.appendix[i]
 }
 
 func (mc manifestContents) getSpec(i int) tableSpec {
 	return mc.specs[i]
 }
 
+func (mc manifestContents) getAppendixSpec(i int) tableSpec {
+	return mc.appendix[i]
+}
+
+func (mc manifestContents) removeAppendixSpecs() (manifestContents, []tableSpec) {
+	if mc.appendix == nil || len(mc.appendix) == 0 {
+		return mc, nil
+	}
+
+	appendixSet := mc.getAppendixSet()
+	filtered := make([]tableSpec, 0)
+	removed := make([]tableSpec, 0)
+	for _, s := range mc.specs {
+		if _, ok := appendixSet[s.name]; ok {
+			removed = append(removed, s)
+		} else {
+			filtered = append(filtered, s)
+		}
+	}
+
+	return manifestContents{
+		vers:  mc.vers,
+		lock:  mc.lock,
+		root:  mc.root,
+		gcGen: mc.gcGen,
+		specs: filtered,
+	}, removed
+}
+
 func (mc manifestContents) getSpecSet() (ss map[addr]struct{}) {
-	ss = make(map[addr]struct{}, len(mc.specs))
-	for _, ts := range mc.specs {
+	return toSpecSet(mc.specs)
+}
+
+func (mc manifestContents) getAppendixSet() (ss map[addr]struct{}) {
+	return toSpecSet(mc.appendix)
+}
+
+func toSpecSet(specs []tableSpec) (ss map[addr]struct{}) {
+	ss = make(map[addr]struct{}, len(specs))
+	for _, ts := range specs {
 		ss[ts.name] = struct{}{}
 	}
 	return ss
@@ -364,6 +434,15 @@ func (mm manifestManager) UpdateGCGen(ctx context.Context, lastLock addr, newCon
 
 func (mm manifestManager) Name() string {
 	return mm.m.Name()
+}
+
+// GetManifestVersion returns the manifest storage version or an error if the operation is not supported
+func (mm manifestManager) GetManifestVersion() (string, error) {
+	vg, ok := mm.m.(manifestVersionGetter)
+	if !ok {
+		return "", chunks.ErrUnsupportedOperation
+	}
+	return vg.GetManifestVersion(), nil
 }
 
 // TableSpecInfo is an interface for retrieving data from a tableSpec outside of this package

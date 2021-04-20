@@ -88,10 +88,13 @@ func loadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliCon
 	ch := config.NewConfigHierarchy()
 
 	gPath, err := getGlobalCfgPath(hdp)
+	if err != nil {
+		return nil, err
+	}
+
 	lPath := getLocalConfigPath()
 
 	gCfg, err := ensureGlobalConfig(gPath, fs)
-
 	if err != nil {
 		return nil, err
 	}

@@ -81,3 +81,8 @@ func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes has
 	atomic.AddInt32(&nbsMW.TotalChunkGets, int32(len(hashes)))
 	return nbsMW.nbs.GetManyCompressed(ctx, hashes, found)
 }
+
+// GetManifestStorageVersion returns the storage version of the manifest.
+func (nbsMW *NBSMetricWrapper) GetManifestStorageVersion(ctx context.Context) (string, error) {
+	return nbsMW.nbs.GetManifestStorageVersion(ctx)
+}

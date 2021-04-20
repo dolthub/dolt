@@ -259,6 +259,8 @@ func floatTypeConverter(ctx context.Context, src *floatType, destTi TypeInfo) (t
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return floatTypeConverterRoundToZero(ctx, src, destTi)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
 			if v == nil || v == types.NullValue {

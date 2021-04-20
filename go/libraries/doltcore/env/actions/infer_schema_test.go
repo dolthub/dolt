@@ -494,7 +494,7 @@ func TestInferSchema(t *testing.T) {
 				assert.Equal(t, expectedType, col.TypeInfo, "column: %s - expected: %s got: %s", col.Name, expectedType.String(), col.TypeInfo.String())
 				return false, nil
 			})
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			if test.nullableCols == nil {
 				test.nullableCols = set.NewStrSet(nil)
@@ -505,7 +505,7 @@ func TestInferSchema(t *testing.T) {
 				assert.True(t, idx == -1 == test.nullableCols.Contains(col.Name), "%s unexpected nullability", col.Name)
 				return false, nil
 			})
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		})
 	}
 }

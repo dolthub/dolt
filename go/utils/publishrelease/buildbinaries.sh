@@ -26,7 +26,7 @@ for os in $OSES; do
       if [ "$os" = windows ]; then
         obin="$bin.exe"
       fi
-      GOOS="$os" GOARCH="$arch" go build -o "$o/bin/$obin" "./cmd/$bin/"
+      CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -o "$o/bin/$obin" "./cmd/$bin/"
     done
     if [ "$os" = windows ]; then
       (cd out && zip -r "dolt-$os-$arch" "dolt-$os-$arch")

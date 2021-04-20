@@ -54,7 +54,7 @@ func TestCreateFileDB(t *testing.T) {
 
 func TestCreateMemDB(t *testing.T) {
 	ctx := context.Background()
-	db, err := CreateDB(ctx, types.Format_7_18, "mem://", nil)
+	db, err := CreateDB(ctx, types.Format_Default, "mem://", nil)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, db)

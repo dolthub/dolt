@@ -129,6 +129,9 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		Name:             name,
 		Email:            email,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	if allFlag {
 		err = setHeadAndWorkingSessionRoot(ctx, h)

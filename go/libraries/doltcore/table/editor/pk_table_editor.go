@@ -283,7 +283,7 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 			return nil, err
 		}
 
-		indexRowTaggedValues, err := row.GetTaggedVals(r)
+		indexRowTaggedValues, err := r.TaggedValues()
 		if err != nil {
 			return nil, err
 		}
@@ -307,6 +307,10 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 		}
 
 		tableRow, err := row.FromNoms(te.Schema(), pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple))
+		if err != nil {
+			return nil, err
+		}
+
 		rows = append(rows, tableRow)
 	}
 
@@ -615,6 +619,18 @@ func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface 
 		}
 	}
 
+	// If we encounter an error and return, then we need to remove this tea from the chain and update the next's rowData
+	encounteredErr := true
+	defer func() {
+		if encounteredErr {
+			// All tea modifications are guarded by writeMutex locks, so we have to acquire it
+			te.writeMutex.Lock()
+			futureTea.prevTea = nil
+			futureTea.rowData = tea.rowData
+			te.writeMutex.Unlock()
+		}
+	}()
+
 	accEdits, err := tea.ed.FinishedEditing()
 	if err != nil {
 		return err
@@ -632,6 +648,8 @@ func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface 
 	if err != nil {
 		return err
 	}
+	// No errors were encountered, so we set the bool to false. This should come after ALL calls that may error.
+	encounteredErr = false
 
 	te.t = newTable
 	// All tea modifications are guarded by writeMutex locks, so we have to acquire it here

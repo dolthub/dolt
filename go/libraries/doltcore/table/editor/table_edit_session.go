@@ -140,7 +140,11 @@ func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
 				if err != nil {
 					return true, err
 				}
-				err = ste.validateForInsert(ctx, r)
+				rTaggedValues, err := r.TaggedValues()
+				if err != nil {
+					return true, err
+				}
+				err = ste.validateForInsert(ctx, rTaggedValues)
 				if err != nil {
 					return true, err
 				}
