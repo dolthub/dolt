@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -158,6 +159,42 @@ type schemaData struct {
 	CheckConstraints []encodedCheck  `noms:"checks,omitempty" json:"checks,omitempty"`
 }
 
+func (sd *schemaData) Copy() *schemaData {
+	var columns []encodedColumn
+	if sd.Columns != nil {
+		columns = make([]encodedColumn, len(sd.Columns))
+		for i, column := range sd.Columns {
+			columns[i] = column
+		}
+	}
+
+	var idxCol []encodedIndex
+	if sd.IndexCollection != nil {
+		idxCol = make([]encodedIndex, len(sd.IndexCollection))
+		for i, idx := range sd.IndexCollection {
+			idxCol[i] = idx
+			idxCol[i].Tags = make([]uint64, len(idx.Tags))
+			for j, tag := range idx.Tags {
+				idxCol[i].Tags[j] = tag
+			}
+		}
+	}
+
+	var checks []encodedCheck
+	if sd.CheckConstraints != nil {
+		checks = make([]encodedCheck, len(sd.CheckConstraints))
+		for i, check := range sd.CheckConstraints {
+			checks[i] = check
+		}
+	}
+
+	return &schemaData{
+		Columns:          columns,
+		IndexCollection:  idxCol,
+		CheckConstraints: checks,
+	}
+}
+
 func toSchemaData(sch schema.Schema) (schemaData, error) {
 	allCols := sch.GetAllCols()
 	encCols := make([]encodedColumn, allCols.Size())
@@ -221,8 +258,17 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
+	err = sd.addChecksAndIndexesToSchema(sch)
+	if err != nil {
+		return nil, err
+	}
+
+	return sch, nil
+}
+
+func (sd schemaData) addChecksAndIndexesToSchema(sch schema.Schema) error {
 	for _, encodedIndex := range sd.IndexCollection {
-		_, err = sch.Indexes().UnsafeAddIndexByColTags(
+		_, err := sch.Indexes().UnsafeAddIndexByColTags(
 			encodedIndex.Name,
 			encodedIndex.Tags,
 			schema.IndexProperties{
@@ -232,22 +278,21 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 			},
 		)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	for _, encodedCheck := range sd.CheckConstraints {
-		_, err = sch.Checks().AddCheck(
+		_, err := sch.Checks().AddCheck(
 			encodedCheck.Name,
 			encodedCheck.Expression,
 			encodedCheck.Enforced,
 		)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-
-	return sch, nil
+	return nil
 }
 
 // MarshalSchemaAsNomsValue takes a Schema and converts it to a types.Value
@@ -278,16 +323,54 @@ func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sc
 	return types.EmptyStruct(vrw.Format()), errors.New("Table Schema could not be converted to types.Struct")
 }
 
+type schCacheData struct {
+	all   *schema.ColCollection
+	pk    *schema.ColCollection
+	nonPK *schema.ColCollection
+	sd    *schemaData
+}
+
+var unmarshalledSchemaCache = map[hash.Hash]schCacheData{}
+
 // UnmarshalSchemaNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
 func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
+	h, err := schemaVal.Hash(nbf)
+	if err != nil {
+		return nil, err
+	}
+
+	cachedData, ok := unmarshalledSchemaCache[h]
+
+	if ok {
+		cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
+		sd := cachedData.sd.Copy()
+		err := sd.addChecksAndIndexesToSchema(cachedSch)
+		if err != nil {
+			return nil, err
+		}
+
+		return cachedSch, nil
+	}
+
 	var sd schemaData
-	err := marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
+	err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return sd.decodeSchema()
+	sch, err := sd.decodeSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	unmarshalledSchemaCache[h] = schCacheData{
+		all:   sch.GetAllCols(),
+		pk:    sch.GetPKCols(),
+		nonPK: sch.GetNonPKCols(),
+		sd:    sd.Copy(),
+	}
+	return sch, nil
 }
 
 type superSchemaData struct {
