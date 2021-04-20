@@ -99,9 +99,17 @@ brew install dolt
 
 Download the latest Microsoft Installer (`.msi` file) in
 [releases](https://github.com/dolthub/dolt/releases) and run
-it. Package manager releases coming soon!
+it.
 
 For information on running on Windows, see [here](./docs/windows.md).
+
+#### Chocolatey
+
+You can install `dolt` using [Chocolatey](https://chocolatey.org/):
+
+```sh
+choco install dolt
+```
 
 ## From Source
 
