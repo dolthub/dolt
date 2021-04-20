@@ -264,7 +264,6 @@ func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 		}
 	}
 
-	// attempt to resolve here
 	if !sch.Indexes().Contains(fk.TableIndex) {
 		return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` is missing the index `%s`",
 			fk.Name, fk.TableName, fk.TableIndex)
@@ -325,7 +324,7 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		}
 
 		// When fk resolution is delayed this condition does not apply
-		if  !key.HasDelayedResolution() && len(key.TableColumns) != len(key.ReferencedTableColumns) {
+		if !key.HasDelayedResolution() && len(key.TableColumns) != len(key.ReferencedTableColumns) {
 			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
 		}
 

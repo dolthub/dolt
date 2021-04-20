@@ -261,10 +261,8 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		return nil, err
 	}
 
-	err = tes.setRoot(ctx, root)
-	if err != nil {
-		return nil, err
-	}
+	tes.root = root
+	localTableEditor.tableEditSession.root = root
 
 	return localTableEditor, nil
 }
@@ -340,11 +338,10 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		localTableEditor.tableEditor = newTableEditor
 		localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
 
-		root, err = tes.loadForeignKeys(ctx, localTableEditor)
+		_, err = tes.loadForeignKeys(ctx, localTableEditor)
 		if err != nil {
 			return err
 		}
-
 		tes.root = root
 	}
 	return nil
