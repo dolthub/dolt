@@ -261,13 +261,6 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 	if err != nil {
 		return nil, err
 	}
-	//
-	//tes.root = root
-
-	//tes.setRoot(ctx, root)
-
-	//tes.root = root
-	//localTableEditor.tableEditSession.root = root
 
 	return localTableEditor, nil
 }

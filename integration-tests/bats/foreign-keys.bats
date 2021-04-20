@@ -1961,7 +1961,9 @@ SQL
     [ "$status" -eq "0" ]
 
     run dolt verify-constraints person
-    echo $output
+    [ "$status" -eq "0" ]
+
+    run dolt commit -am "this is a commit"
     [ "$status" -eq "0" ]
 }
 
@@ -2014,6 +2016,8 @@ CREATE TABLE child2 (
   CONSTRAINT child2_fk FOREIGN KEY (pk) references parent2 (pk)
 );
 SQL
+    # TODO: Current dolt add . is broken for remove and add of the same table.
+    dolt add -A
     dolt add -A
     dolt commit -m "new child"
     run dolt schema show child2

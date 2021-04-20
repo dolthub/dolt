@@ -169,6 +169,7 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 		return "", err
 	}
 
+	// Make sure the Working root has the same FK collection as the Staged Root.
 	wrt, err = wrt.PutForeignKeyCollection(ctx, fkc)
 	if err != nil {
 		return "", err
