@@ -919,7 +919,6 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 
 // GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
 // in-place, each returned collection may freely be altered without affecting future returned collections from this root.
-// TODO: Track this method
 func (root *RootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error) {
 	if root.fkc == nil {
 		fkMap, err := root.GetForeignKeyCollectionMap(ctx)
@@ -971,7 +970,6 @@ func (root *RootValue) PutForeignKeyCollection(ctx context.Context, fkc *Foreign
 // ValidateForeignKeysOnSchemas ensures that all foreign keys' tables are present, removing any foreign keys where the declared
 // table is missing, and returning an error if a key is in an invalid state or a referenced table is missing. Does not
 // check any tables' row data.
-// TODO: Nail down validation here.
 func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootValue, error) {
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -1011,14 +1009,14 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 				return nil, fmt.Errorf("foreign key `%s` requires the referenced table `%s`", foreignKey.Name, foreignKey.ReferencedTableName)
 			}
 
-			// Check if the foreign key needs to be regenerated
-			if foreignKey.ReferencedTableColumns == nil || foreignKey.ReferencedTableIndex == "" {
-				// try regeneration
-				root, fk, err := foreignKey.RegenerateReferencedIndexAndTags(ctx, root, foreignKey.TableName, foreignKey.ReferencedTableName)
+			// Check if the foreign key needs to be resolved
+			if foreignKey.HasDelayedResolution() {
+				root, fk, err := foreignKey.ResolveReferencedIndexAndTags(ctx, root)
 				if err != nil {
 					return nil, err
 				}
 
+				// Update the relevant data structures with the new information
 				foreignKey = fk
 				fkCollection, err = root.GetForeignKeyCollection(ctx)
 				if err != nil {
@@ -1030,9 +1028,8 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 					return nil, err
 				}
 
-				refSch, err := tbl.GetSchema(ctx)
-				allTablesSet[foreignKey.ReferencedTableName] = refSch
-				parentSch = refSch
+				parentSch, err = tbl.GetSchema(ctx)
+				allTablesSet[foreignKey.ReferencedTableName] = parentSch
 			}
 
 			if err := foreignKey.ValidateReferencedTableSchema(parentSch); err != nil {

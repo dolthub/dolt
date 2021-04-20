@@ -278,6 +278,7 @@ func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEdit
 			return tes.root, err
 		}
 	}
+
 	// these are the tables that we reference, so we need to refer to them
 	for _, foreignKey := range localTableEditor.referencedTables {
 		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil)
@@ -290,8 +291,8 @@ func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEdit
 	root := tes.root
 	var err error
 	for _, foreignKey := range localTableEditor.referencedTables {
-		if foreignKey.ReferencedTableColumns == nil || foreignKey.ReferencedTableIndex == "" {
-			root, _, err = foreignKey.RegenerateReferencedIndexAndTags(ctx, tes.root, foreignKey.TableName, foreignKey.ReferencedTableName)
+		if foreignKey.HasDelayedResolution() {
+			root, _, err = foreignKey.ResolveReferencedIndexAndTags(ctx, tes.root)
 			if err != nil {
 				return tes.root, err
 			}
@@ -338,10 +339,12 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		}
 		localTableEditor.tableEditor = newTableEditor
 		localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
+
 		root, err = tes.loadForeignKeys(ctx, localTableEditor)
 		if err != nil {
 			return err
 		}
+
 		tes.root = root
 	}
 	return nil

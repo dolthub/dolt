@@ -1035,7 +1035,6 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		}
 	}
 
-
 	root, err := t.db.GetRoot(ctx)
 	if err != nil {
 		return err
@@ -1114,7 +1113,6 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		return err
 	}
 
-
 	refTableIndex, ok := refSch.Indexes().GetIndexByTags(refColTags...)
 	if !ok {
 		parentPKs := set.NewUint64Set(refSch.GetPKCols().Tags)
@@ -1147,16 +1145,16 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		return err
 	}
 	foreignKey := doltdb.ForeignKey{
-		Name:                   fkName,
-		TableName:              t.name,
-		TableIndex:             tableIndex.Name(),
-		TableColumns:           colTags,
-		ReferencedTableName:    refTblName,
-		ReferencedTableIndex:   refTableIndex.Name(),
-		ReferencedTableColumns: refColTags,
+		Name:                       fkName,
+		TableName:                  t.name,
+		TableIndex:                 tableIndex.Name(),
+		TableColumns:               colTags,
+		ReferencedTableName:        refTblName,
+		ReferencedTableIndex:       refTableIndex.Name(),
+		ReferencedTableColumns:     refColTags,
 		ReferencedTableColumnNames: refColumns,
-		OnUpdate:               onUpdateRefOp,
-		OnDelete:               onDeleteRefOp,
+		OnUpdate:                   onUpdateRefOp,
+		OnDelete:                   onDeleteRefOp,
 	}
 	err = foreignKeyCollection.AddKeys(foreignKey)
 	if err != nil {
@@ -1187,7 +1185,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func (t* AlterableDoltTable) addEmptyForeignKeyToCollection(ctx *sql.Context, root *doltdb.RootValue, fkName string, tableIndexName string, colTags []uint64, refTblName string, refTblColNames []string, onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
+func (t *AlterableDoltTable) addEmptyForeignKeyToCollection(ctx *sql.Context, root *doltdb.RootValue, fkName string, tableIndexName string, colTags []uint64, refTblName string, refTblColNames []string, onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
 	onUpdateRefOp, err := parseFkReferenceOption(onUpdate)
 	if err != nil {
 		return err
@@ -1198,16 +1196,16 @@ func (t* AlterableDoltTable) addEmptyForeignKeyToCollection(ctx *sql.Context, ro
 	}
 
 	foreignKey := doltdb.ForeignKey{
-		Name:                   fkName,
-		TableName:              t.name,
-		TableIndex:             tableIndexName,
-		TableColumns:           colTags,
-		ReferencedTableName:    refTblName,
-		ReferencedTableIndex:   "",
-		ReferencedTableColumns: nil,
+		Name:                       fkName,
+		TableName:                  t.name,
+		TableIndex:                 tableIndexName,
+		TableColumns:               colTags,
+		ReferencedTableName:        refTblName,
+		ReferencedTableIndex:       "",
+		ReferencedTableColumns:     nil,
 		ReferencedTableColumnNames: refTblColNames,
-		OnUpdate:               onUpdateRefOp,
-		OnDelete:               onDeleteRefOp,
+		OnUpdate:                   onUpdateRefOp,
+		OnDelete:                   onDeleteRefOp,
 	}
 
 	foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)

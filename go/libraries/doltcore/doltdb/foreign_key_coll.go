@@ -19,17 +19,17 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 	"sort"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/marshal"
@@ -53,16 +53,16 @@ const (
 // ForeignKey is the complete, internal representation of a Foreign Key.
 type ForeignKey struct {
 	// TODO: remove index names and retrieve indexes by column tags
-	Name                   string                    `noms:"name" json:"name"`
-	TableName              string                    `noms:"tbl_name" json:"tbl_name"`
-	TableIndex             string                    `noms:"tbl_index" json:"tbl_index"`
-	TableColumns           []uint64                  `noms:"tbl_cols" json:"tbl_cols"`
-	ReferencedTableName    string                    `noms:"ref_tbl_name" json:"ref_tbl_name"`
-	ReferencedTableIndex   string                    `noms:"ref_tbl_index" json:"ref_tbl_index"`
-	ReferencedTableColumns []uint64                  `noms:"ref_tbl_cols" json:"ref_tbl_cols"`
-	ReferencedTableColumnNames  []string			 `noms:"ref_tbl_cols_names" json:"ref_tbl_cols_names"`
-	OnUpdate               ForeignKeyReferenceOption `noms:"on_update" json:"on_update"`
-	OnDelete               ForeignKeyReferenceOption `noms:"on_delete" json:"on_delete"`
+	Name                       string                    `noms:"name" json:"name"`
+	TableName                  string                    `noms:"tbl_name" json:"tbl_name"`
+	TableIndex                 string                    `noms:"tbl_index" json:"tbl_index"`
+	TableColumns               []uint64                  `noms:"tbl_cols" json:"tbl_cols"`
+	ReferencedTableName        string                    `noms:"ref_tbl_name" json:"ref_tbl_name"`
+	ReferencedTableIndex       string                    `noms:"ref_tbl_index" json:"ref_tbl_index"`
+	ReferencedTableColumns     []uint64                  `noms:"ref_tbl_cols" json:"ref_tbl_cols"`
+	ReferencedTableColumnNames []string                  `noms:"ref_tbl_cols_names" json:"ref_tbl_cols_names"`
+	OnUpdate                   ForeignKeyReferenceOption `noms:"on_update" json:"on_update"`
+	OnDelete                   ForeignKeyReferenceOption `noms:"on_delete" json:"on_delete"`
 }
 
 // EqualDefs returns whether two foreign keys have the same definition over the same column sets.
@@ -138,21 +138,28 @@ func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 	return nil
 }
 
-func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root *RootValue, tableName, refTableName string) (*RootValue, ForeignKey, error) {
-	currTable, ok, err := root.GetTable(ctx, tableName)
+// HasDelayedResolution is true when a FK is created without a referenced table index and its relative tags.
+func (fk ForeignKey) HasDelayedResolution() bool {
+	return fk.ReferencedTableIndex == "" || fk.ReferencedTableColumns == nil
+}
+
+// ResolveReferencedIndexAndTags handles delayed foreign key resolution in the case that FOREIGN_KEY_CHECKS=0 when
+// a series of create table operations are done.
+func (fk ForeignKey) ResolveReferencedIndexAndTags(ctx context.Context, root *RootValue) (*RootValue, ForeignKey, error) {
+	currTable, ok, err := root.GetTable(ctx, fk.TableName)
 	if err != nil {
 		return nil, ForeignKey{}, err
 	}
 	if !ok {
-		return nil, ForeignKey{}, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", tableName)
+		return nil, ForeignKey{}, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", fk.TableName)
 	}
 
-	refTable, ok, err := root.GetTable(ctx, refTableName)
+	refTable, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
 	if err != nil {
-		return nil,  ForeignKey{}, err
+		return nil, ForeignKey{}, err
 	}
 	if !ok {
-		return nil,  ForeignKey{}, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", refTableName)
+		return nil, ForeignKey{}, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", fk.ReferencedTableName)
 	}
 
 	currSch, err := currTable.GetSchema(ctx)
@@ -162,20 +169,20 @@ func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root 
 
 	refSch, err := refTable.GetSchema(ctx)
 	if err != nil {
-		return nil, ForeignKey{},err
+		return nil, ForeignKey{}, err
 	}
 
 	refColTags := make([]uint64, len(fk.TableColumns))
 	for i, tag := range fk.TableColumns {
 		currCol, ok := currSch.GetAllCols().GetByTag(tag)
 		if !ok {
-			return nil, ForeignKey{}, fmt.Errorf("table `%s` does not have column with tag `%d`", tableName, tag) // TODO: Is this correct?
+			return nil, ForeignKey{}, fmt.Errorf("table `%s` does not have column with tag `%d`", fk.TableName, tag) // TODO: Is this correct?
 		}
 
 		// Step 1: Validate that referenced table has the correct tag.
 		refCol, ok := refSch.GetAllCols().GetByName(fk.ReferencedTableColumnNames[i])
 		if !ok {
-			return nil, ForeignKey{}, fmt.Errorf("table `%s` does not have column `%s`", refTableName, refCol.Name)
+			return nil, ForeignKey{}, fmt.Errorf("table `%s` does not have column `%s`", fk.ReferencedTableName, refCol.Name)
 		}
 
 		// Step 2. Validate the same types between the two columns
@@ -192,6 +199,7 @@ func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root 
 		refColTags[i] = refCol.Tag
 	}
 
+	// Get the existing index. If doesn't exist this must be primary key index.
 	refTableIndex, ok := refSch.Indexes().GetIndexByTags(refColTags...)
 	if !ok {
 		parentPKs := set.NewUint64Set(refSch.GetPKCols().Tags)
@@ -210,13 +218,13 @@ func (fk ForeignKey) RegenerateReferencedIndexAndTags(ctx context.Context, root 
 			refTable = ret.NewTable
 			refTableIndex = ret.NewIndex
 			refSch = ret.Sch
-			root, err = root.PutTable(ctx, refTableName, refTable)
+			root, err = root.PutTable(ctx, fk.ReferencedTableName, refTable)
 			if err != nil {
 				return nil, ForeignKey{}, err
 			}
 		} else {
 			// parent index must exist
-			return nil, ForeignKey{}, fmt.Errorf("missing index for constraint '%s' in the referenced table '%s'", fk.Name, refTableName)
+			return nil, ForeignKey{}, fmt.Errorf("missing index for constraint '%s' in the referenced table '%s'", fk.Name, fk.ReferencedTableName)
 		}
 	}
 
@@ -316,10 +324,10 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 			return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
 		}
 
-		// Todo: Gottta fix this check
-		//if len(key.TableColumns) != len(key.ReferencedTableColumns) {
-		//	return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
-		//}
+		// When fk resolution is delayed this condition does not apply
+		if  !key.HasDelayedResolution() && len(key.TableColumns) != len(key.ReferencedTableColumns) {
+			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
+		}
 
 		fkc.foreignKeys[key.HashOf().String()] = key
 	}

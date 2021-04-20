@@ -107,9 +107,9 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 				return HandleVErrAndExitCode(errhand.BuildDError("Unable to get schema for %s.", fk.ReferencedTableName).AddCause(err).Build(), nil)
 			}
 
-			// Try ForeignKeyRegeneration
-			if fk.ReferencedTableColumns == nil || fk.ReferencedTableIndex == "" {
-				working, fk, err = fk.RegenerateReferencedIndexAndTags(ctx, working, fk.TableName, fk.ReferencedTableName)
+			// Try ForeignKey Resolution
+			if fk.HasDelayedResolution() {
+				working, fk, err = fk.ResolveReferencedIndexAndTags(ctx, working)
 				if err != nil {
 					return HandleVErrAndExitCode(errhand.BuildDError("fk regeneration failed").AddCause(err).Build(), nil)
 				}
@@ -140,4 +140,3 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	}
 	return 0
 }
-
