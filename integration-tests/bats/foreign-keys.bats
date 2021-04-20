@@ -1961,6 +1961,7 @@ SQL
     [ "$status" -eq "0" ]
 
     run dolt verify-constraints person
+    echo $output
     [ "$status" -eq "0" ]
 }
 

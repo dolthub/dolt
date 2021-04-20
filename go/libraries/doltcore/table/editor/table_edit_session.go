@@ -256,48 +256,62 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		return nil, err
 	}
 	localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
-	root, err := tes.loadForeignKeys(ctx, localTableEditor)
+
+	err = tes.loadForeignKeys(ctx, localTableEditor)
 	if err != nil {
 		return nil, err
 	}
+	//
+	//tes.root = root
 
-	tes.root = root
-	localTableEditor.tableEditSession.root = root
+	//tes.setRoot(ctx, root)
+
+	//tes.root = root
+	//localTableEditor.tableEditSession.root = root
 
 	return localTableEditor, nil
 }
 
 // loadForeignKeys loads all tables mentioned in foreign keys for the given editor
-func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *sessionedTableEditor) (*doltdb.RootValue, error) {
+func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *sessionedTableEditor) error {
 	// these are the tables that reference us, so we need to update them
 	for _, foreignKey := range localTableEditor.referencingTables {
+		if foreignKey.HasDelayedResolution() {
+			root, _, err := foreignKey.ResolveReferencedIndexAndTags(ctx, tes.root)
+			if err != nil {
+				return err
+			}
+			err = tes.setRoot(ctx, root)
+			if err != nil {
+				return nil
+			}
+		}
+
 		_, err := tes.getTableEditor(ctx, foreignKey.TableName, nil)
 		if err != nil {
-			return tes.root, err
+			return err
 		}
 	}
 
 	// these are the tables that we reference, so we need to refer to them
 	for _, foreignKey := range localTableEditor.referencedTables {
-		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil)
-		if err != nil {
-			return tes.root, err
-		}
-	}
-
-	// Try to Regenerate if Possible
-	root := tes.root
-	var err error
-	for _, foreignKey := range localTableEditor.referencedTables {
 		if foreignKey.HasDelayedResolution() {
-			root, _, err = foreignKey.ResolveReferencedIndexAndTags(ctx, tes.root)
+			root, _, err := foreignKey.ResolveReferencedIndexAndTags(ctx, tes.root)
 			if err != nil {
-				return tes.root, err
+				return err
+			}
+			err = tes.setRoot(ctx, root)
+			if err != nil {
+				return nil
 			}
 		}
+		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil)
+		if err != nil {
+			return err
+		}
 	}
 
-	return root, nil
+	return nil
 }
 
 // setRoot is the inner implementation for SetRoot that does not acquire any locks
@@ -338,11 +352,10 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		localTableEditor.tableEditor = newTableEditor
 		localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
 
-		_, err = tes.loadForeignKeys(ctx, localTableEditor)
+		err = tes.loadForeignKeys(ctx, localTableEditor)
 		if err != nil {
 			return err
 		}
-		tes.root = root
 	}
 	return nil
 }
