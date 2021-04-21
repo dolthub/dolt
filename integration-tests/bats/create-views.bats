@@ -63,20 +63,6 @@ SQL
     [[ "$output" =~ "table not found: my_users" ]] || false
 }
 
-@test "create-views: can create view with escaped name" {
-    run dolt sql -q 'create table `my-users` (id int primary key);'
-    [ "$status" -eq 0 ]
-
-    dolt sql -q 'insert into `my-users` (id) values (0);'
-
-    run dolt sql -q 'create view `will-work` as select id from `my-users`;'
-    [ "$status" -eq 0 ]
-
-    run dolt sql -q 'select * from `will-work`;'
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "panic" ]] || false
-}
-
 @test "create-views: can create view referencing table" {
     run dolt sql <<SQL
 create table my_users (id int primary key);

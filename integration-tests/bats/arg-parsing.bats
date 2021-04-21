@@ -44,7 +44,7 @@ teardown() {
 pk,c1
 0,0
 DELIM
-    dolt table import -cpk=pk this-should-work ints.csv
+    dolt table import -cpk=pk this_should_work ints.csv
 }
 
 @test "arg-parsing: dolt supports chaining of modal arguments" {

@@ -1524,12 +1524,12 @@ CREATE TABLE child2 (
   INDEX idx_v1 (v1),
   CONSTRAINT circuits_123abc4d_fk_circuits_ FOREIGN KEY (pk) REFERENCES parent2 (pk)
 );
-ALTER TABLE child2 ADD CONSTRAINT \`\$not-possible-before_\` FOREIGN KEY (v1) REFERENCES parent2 (v1);
+ALTER TABLE child2 ADD CONSTRAINT _\$not_possible_before_ FOREIGN KEY (v1) REFERENCES parent2 (v1);
 SQL
     run dolt schema show child2
     [ "$status" -eq "0" ]
     [[ "$output" =~ "circuits_123abc4d_fk_circuits_" ]] || false
-    [[ "$output" =~ '`$not-possible-before_`' ]] || false
+    [[ "$output" =~ '`_$not_possible_before_`' ]] || false
 }
 
 @test "foreign-keys: self-referential same column(s)" {

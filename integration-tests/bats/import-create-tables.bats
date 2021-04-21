@@ -324,7 +324,7 @@ DELIM
 }
 
 @test "import-create-tables: specify incorrect sheet name on excel import" {
-    run dolt table import -c --pk=id bad-sheet-name `batshelper employees.xlsx`
+    run dolt table import -c --pk=id bad_sheet_name `batshelper employees.xlsx`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table name must match excel sheet name" ]] || false
     run dolt ls
