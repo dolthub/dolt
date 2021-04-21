@@ -91,7 +91,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	switch apr.NArg() {
 	case 0: // write all tables to stdout
 	case 1:
-		if doltdb.IsValidTableName(apr.Arg(0)) {
+		if doltdb.IsValidIdentifier(apr.Arg(0)) {
 			tblName = apr.Arg(0)
 		} else {
 			fileName = apr.Arg(0)

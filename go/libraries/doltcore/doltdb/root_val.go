@@ -636,8 +636,8 @@ func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table)
 }
 
 func putTable(ctx context.Context, root *RootValue, tName string, tableRef types.Ref) (*RootValue, error) {
-	if !IsValidTableName(tName) {
-		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
+	if !IsValidIdentifier(tName) {
+		panic(fmt.Sprintf("table name %s fails the IsValidIdentifier check", tName))
 	}
 
 	tableMap, err := root.getTableMap()

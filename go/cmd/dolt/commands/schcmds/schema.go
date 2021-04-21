@@ -30,9 +30,9 @@ var Commands = cli.NewSubCommandHandler("schema", "Commands for showing and impo
 // ValidateTableNameForCreate validates the given table name for creation as a user table, returning an error if the
 // table name is not valid.
 func ValidateTableNameForCreate(tableName string) errhand.VerboseError {
-	if !doltdb.IsValidTableName(tableName) {
+	if !doltdb.IsValidIdentifier(tableName) {
 		return errhand.BuildDError("'%s' is not a valid table name\ntable names must match the regular expression: %s",
-			tableName, doltdb.TableNameRegexStr).Build()
+			tableName, doltdb.UnquotedIdentifierRegexStr).Build()
 	} else if doltdb.HasDoltPrefix(tableName) {
 		return errhand.BuildDError("'%s' is not a valid table name\ntable names beginning with dolt_ are reserved for internal use", tableName).Build()
 	}

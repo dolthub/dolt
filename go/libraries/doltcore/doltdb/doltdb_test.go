@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -121,18 +122,42 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 }
 
 func TestIsValidTableName(t *testing.T) {
-	assert.True(t, IsValidTableName("a"))
-	assert.True(t, IsValidTableName("a1"))
-	assert.True(t, IsValidTableName("a1_b_c------1"))
-	assert.True(t, IsValidTableName("Add-098234_lkjasdf0p98"))
-	assert.False(t, IsValidTableName("1"))
-	assert.False(t, IsValidTableName("-"))
-	assert.False(t, IsValidTableName("-a"))
-	assert.False(t, IsValidTableName("__a"))
-	assert.False(t, IsValidTableName(""))
-	assert.False(t, IsValidTableName("1a"))
-	assert.False(t, IsValidTableName("a1-"))
-	assert.False(t, IsValidTableName("ab!!c"))
+	validTests := []struct {
+		id string
+	}{
+		{id: "a"},
+		{id: "_a"},
+		{id: "_a_"},
+		{id: "a_"},
+		{id: "_"},
+		{id: "$"},
+		{id: "1a"},
+		{id: "a1"},
+		{id: "Add098234_lkjasdf0p98"},
+	}
+	for _, test := range validTests {
+		t.Run(fmt.Sprintf("valid: '%s'", test.id), func(t *testing.T) {
+			assert.True(t, IsValidIdentifier(test.id))
+		})
+
+	}
+
+	invalidTests := []struct {
+		id string
+	}{
+		{id: ""},
+		{id: "123"},
+		{id: "-"},
+		{id: "a-a"},
+		{id: "a1-"},
+		{id: "ab!!c"},
+	}
+	for _, test := range invalidTests {
+		t.Run(fmt.Sprintf("valid: '%s'", test.id), func(t *testing.T) {
+			assert.False(t, IsValidIdentifier(test.id))
+		})
+
+	}
 }
 
 // DO NOT CHANGE THIS TEST

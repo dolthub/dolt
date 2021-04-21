@@ -97,10 +97,10 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	}
 
 	tableName := apr.Arg(0)
-	if !doltdb.IsValidTableName(tableName) {
+	if !doltdb.IsValidIdentifier(tableName) {
 		cli.PrintErrln(
 			color.RedString("'%s' is not a valid table name\n", tableName),
-			"table names must match the regular expression:", doltdb.TableNameRegexStr)
+			"table names must match the regular expression:", doltdb.UnquotedIdentifierRegexStr)
 		return "", mvdata.TableDataLocation{}, nil
 	}
 

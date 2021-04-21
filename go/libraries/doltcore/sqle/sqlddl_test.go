@@ -75,11 +75,6 @@ func TestCreateTable(t *testing.T) {
 			expectedErr:   "syntax error",
 		},
 		{
-			name:        "Test bad table name",
-			query:       "create table _testTable (id int primary key, age int)",
-			expectedErr: "Invalid table name",
-		},
-		{
 			name:        "Test reserved table name",
 			query:       "create table dolt_table (id int primary key, age int)",
 			expectedErr: "Invalid table name",

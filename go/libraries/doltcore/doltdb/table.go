@@ -36,30 +36,23 @@ const (
 	indexesKey         = "indexes"
 	autoIncrementKey   = "auto_increment"
 
-	// TableNameRegexStr is the regular expression that valid tables must match.
-	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
-	// ForeignKeyNameRegexStr is the regular expression that valid foreign keys must match.
-	// From the unquoted identifiers: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
-	ForeignKeyNameRegexStr = `^[-$_0-9a-zA-Z]+$`
+	// UnquotedIdentifierRegexStr is the regular expression that valid identifiers must match.
+	// https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
+	// TODO: move this to the engine
+	UnquotedIdentifierRegexStr = `^[a-zA-Z$_]+[0-9a-zA-Z$_]*$|^[0-9a-zA-Z$_]*[a-zA-Z$_]+$`
 )
 
 var (
-	tableNameRegex      = regexp.MustCompile(TableNameRegexStr)
-	foreignKeyNameRegex = regexp.MustCompile(ForeignKeyNameRegexStr)
+	unquotedIdentifierRegex = regexp.MustCompile(UnquotedIdentifierRegexStr)
 
 	ErrNoConflictsResolved  = errors.New("no conflicts resolved")
 	ErrNoAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
 )
 
-// IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
+// IsValidIdentifier returns true if the name matches the regular expression UnquotedIdentifierRegexStr.
 // Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
-func IsValidTableName(name string) bool {
-	return tableNameRegex.MatchString(name)
-}
-
-// IsValidForeignKeyName returns true if the name matches the regular expression ForeignKeyNameRegexStr.
-func IsValidForeignKeyName(name string) bool {
-	return foreignKeyNameRegex.MatchString(name)
+func IsValidIdentifier(name string) bool {
+	return unquotedIdentifierRegex.MatchString(name)
 }
 
 // Table is a struct which holds row data, as well as a reference to it's schema.

@@ -216,7 +216,7 @@ func TestRowMerge(t *testing.T) {
 }
 
 const (
-	tableName = "test-table"
+	tableName = "test_table"
 	name      = "billy bob"
 	email     = "bigbillieb@fake.horse"
 

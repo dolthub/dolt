@@ -43,7 +43,7 @@ import (
 
 type commitBehavior int8
 
-var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
+var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.UnquotedIdentifierRegexStr)
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
@@ -536,7 +536,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Schem
 		return ErrReservedTableName.New(tableName)
 	}
 
-	if !doltdb.IsValidTableName(tableName) {
+	if !doltdb.IsValidIdentifier(tableName) {
 		return ErrInvalidTableName.New(tableName)
 	}
 
@@ -613,7 +613,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return ErrReservedTableName.New(newName)
 	}
 
-	if !doltdb.IsValidTableName(newName) {
+	if !doltdb.IsValidIdentifier(newName) {
 		return ErrInvalidTableName.New(newName)
 	}
 

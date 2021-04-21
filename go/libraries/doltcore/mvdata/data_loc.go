@@ -108,7 +108,7 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 	if len(path) == 0 {
 		return StreamDataLocation{Format: dataFmt, Reader: cli.InStream, Writer: cli.OutStream}
 	} else if fileFmtStr == "" {
-		if doltdb.IsValidTableName(path) {
+		if doltdb.IsValidIdentifier(path) {
 			return TableDataLocation{path}
 		} else {
 			switch strings.ToLower(filepath.Ext(path)) {
