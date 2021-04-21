@@ -113,11 +113,11 @@ type Database interface {
 	// of a conflict, Delete returns an 'ErrMergeNeeded' error.
 	Delete(ctx context.Context, ds Dataset) (Dataset, error)
 
-	// SetHeadToCommit ignores any lineage constraints (e.g. the current Head being in
+	// SetHead ignores any lineage constraints (e.g. the current Head being in
 	// commit’s Parent set) and force-sets a mapping from datasetID: commit in
 	// this database.
 	// All Values that have been written to this Database are guaranteed to be
-	// persistent after SetHeadToCommit(). If the update cannot be performed, e.g.,
+	// persistent after SetHead(). If the update cannot be performed, e.g.,
 	// because another process moved the current Head out from under you,
 	// error will be non-nil.
 	// The newest snapshot of the Dataset is always returned, so the caller an

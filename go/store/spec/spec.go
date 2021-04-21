@@ -462,7 +462,7 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 		return datas.NewDatabase(cs)
 	case "mem":
 		storage := &chunks.MemoryStorage{}
-		return datas.NewDatabase(storage.NewView())
+		return datas.NewDatabase(storage.NewViewWithDefaultFormat())
 	default:
 		impl, ok := ExternalProtocols[sp.Protocol]
 		if !ok {

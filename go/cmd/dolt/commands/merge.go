@@ -113,8 +113,8 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			if has, err := root.HasConflicts(ctx); err != nil {
 				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
 			} else if has {
-				cli.Println("error: Merging is not possible because you have unmerged files.")
-				cli.Println("hint: Fix them up in the work tree, and then use 'dolt add <table>'")
+				cli.Println("error: Merging is not possible because you have unmerged tables.")
+				cli.Println("hint: Fix them up in the working tree, and then use 'dolt add <table>'")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
 				cli.Println("fatal: Exiting because of an unresolved conflict.")
 				return 1
