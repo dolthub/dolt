@@ -296,15 +296,16 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 	if !apr.Contains(dryRunFlag) {
 		tbl, tblExists, err := root.GetTable(ctx, tblName)
+		if err != nil {
+			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+		}
 
 		schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), root.VRW(), sch)
-
 		if err != nil {
 			return errhand.BuildDError("error: failed to encode schema.").AddCause(err).Build()
 		}
 
 		empty, err := types.NewMap(ctx, root.VRW())
-
 		if err != nil {
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 		}
@@ -318,19 +319,16 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		}
 
 		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, empty, indexData, nil)
-
 		if err != nil {
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 		}
 
 		root, err = root.PutTable(ctx, tblName, tbl)
-
 		if err != nil {
 			return errhand.BuildDError("error: failed to add table.").AddCause(err).Build()
 		}
 
 		err = dEnv.UpdateWorkingRoot(ctx, root)
-
 		if err != nil {
 			return errhand.BuildDError("error: failed to update the working set.").AddCause(err).Build()
 		}
