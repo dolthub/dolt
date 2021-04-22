@@ -15,9 +15,9 @@
 package sqlserver
 
 import (
+	"net/http"
 	"strings"
 	"testing"
-	"net/http"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -222,10 +222,10 @@ func TestServerSelect(t *testing.T) {
 func TestServerFailsIfPortInUse(t *testing.T) {
 	serverController := CreateServerController()
 	server := &http.Server{
-        Addr:    ":15200",
-        Handler: http.DefaultServeMux,
-    }
-    go server.ListenAndServe()
+		Addr:    ":15200",
+		Handler: http.DefaultServeMux,
+	}
+	go server.ListenAndServe()
 	go func() {
 		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",

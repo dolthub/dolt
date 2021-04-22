@@ -16,10 +16,10 @@ package sqlserver
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
-	"fmt"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
@@ -127,7 +127,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	portAsString := strconv.Itoa(serverConfig.Port())
 	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
 
-	if (IsPortInUse(hostPort)) {
+	if IsPortInUse(hostPort) {
 		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
 		return portInUseError, nil
 	}
