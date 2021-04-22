@@ -17,7 +17,6 @@ package pipeline
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"io"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // SourceFunc is a function that will return a new row for each successive call until all it's rows are exhausted, at
