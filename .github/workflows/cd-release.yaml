@@ -8,47 +8,34 @@ on:
         required: true
 
 jobs:
-  bump-version:
-    name: Bump Version
-    runs-on: ubuntu-18.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Bump Version
-        id: bump-version
-        run: |
-          git config --global user.name dolt-release-bot
-          git config --global user.email dolt-release-bot@dolthub.com
-          ./go/utils/publishrelease/bump-version.sh ${{ github.event.inputs.version }}
-
   create-release:
-    needs: bump-version
-    name: Create Release
+    name: Create release
     runs-on: ubuntu-18.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v2
+      - name: Update dolt version command
+        run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
+        env:
+          FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          NEW_VERSION: ${{ github.event.inputs.version }}
+      - uses: EndBug/add-and-commit@v7
         with:
-          go-version: ^1.15
-      - name: Checkout release tag
-        run: |
-          git fetch --tags --all
-          git checkout tags/v${{ github.event.inputs.version }} -b v${{ github.event.inputs.version }}
+          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', github.event.inputs.version) }}
+          add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          cwd: "."
       - name: Build Binaries
         run: |
-          go/utils/publishrelease/buildbinaries.sh
+          GO_BUILD_VERSION=1.15.11 go/utils/publishrelease/buildbinaries.sh
       - name: Create Release
+        uses: release-drafter/release-drafter@v5
         id: create_release
-        uses: actions/create-release@v1
+        with:
+          name: ${{ github.event.inputs.version }}
+          tag: ${{ format('v{0}', github.event.inputs.version ) }}
+          publish: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ github.event.inputs.version }}
-          release_name: ${{ github.event.inputs.version }}
-          draft: false
-          prerelease: false
       - name: Upload Linux Distro
         id: upload-linux-distro
         uses: actions/upload-release-asset@v1
