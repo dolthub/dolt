@@ -71,15 +71,15 @@ func TestReader(t *testing.T) {
 	colNames := []string{"name", "age", "title"}
 	_, sch := untyped.NewUntypedSchema(colNames...)
 	goodExpectedRows := []row.Row{
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Assistant, Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jack Jackson", "27"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"John Johnson", "21", "Intern\nDufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Rob Robertson", "25", "Assistant, Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Jack Jackson", "27"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"John Johnson", "21", "Intern\nDufus"})),
 	}
 	badExpectedRows := []row.Row{
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jack Jackson", "27"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Rob Robertson", "25", "Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Jack Jackson", "27"})),
 	}
 
 	tests := []struct {
@@ -141,7 +141,7 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, 
 	const path = "/file.csv"
 
 	fs := filesys.NewInMemFS(nil, map[string][]byte{path: []byte(inputStr)}, root)
-	csvR, err := OpenCSVReader(types.Format_7_18, path, fs, info)
+	csvR, err := OpenCSVReader(types.Format_Default, path, fs, info)
 	defer csvR.Close(context.Background())
 
 	if err != nil {

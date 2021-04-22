@@ -41,8 +41,8 @@ type fakeDDB struct {
 }
 
 type record struct {
-	lock, root  []byte
-	vers, specs string
+	lock, root            []byte
+	vers, specs, appendix string
 }
 
 func makeFakeDDB(t *testing.T) *fakeDDB {
@@ -83,6 +83,9 @@ func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInp
 			if e.specs != "" {
 				item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(e.specs)}
 			}
+			if e.appendix != "" {
+				item[appendixAttr] = &dynamodb.AttributeValue{S: aws.String(e.appendix)}
+			}
 		case []byte:
 			item[dataAttr] = &dynamodb.AttributeValue{B: e}
 		}
@@ -91,8 +94,8 @@ func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInp
 	return &dynamodb.GetItemOutput{Item: item}, nil
 }
 
-func (m *fakeDDB) putRecord(k string, l, r []byte, v string, s string) {
-	m.data[k] = record{l, r, v, s}
+func (m *fakeDDB) putRecord(k string, l, r []byte, v string, s string, a string) {
+	m.data[k] = record{l, r, v, s, a}
 }
 
 func (m *fakeDDB) putData(k string, d []byte) {
@@ -132,6 +135,12 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 		specs = *attr.S
 	}
 
+	apps := ""
+	if attr, present := input.Item[appendixAttr]; present {
+		assert.NotNil(m.t, attr.S, "appendix specs should have been a String: %+v", input.Item[appendixAttr])
+		apps = *attr.S
+	}
+
 	mustNotExist := *(input.ConditionExpression) == valueNotExistsOrEqualsExpression
 	current, present := m.data[key]
 
@@ -141,14 +150,15 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 		return nil, mockAWSError("ConditionalCheckFailedException")
 	}
 
-	m.putRecord(key, lock, root, constants.NomsVersion, specs)
-	atomic.AddInt64(&m.numPuts, 1)
+	m.putRecord(key, lock, root, constants.NomsVersion, specs, apps)
 
+	atomic.AddInt64(&m.numPuts, 1)
 	return &dynamodb.PutItemOutput{}, nil
 }
 
 func checkCondition(current record, expressionAttrVals map[string]*dynamodb.AttributeValue) bool {
-	return current.vers == *expressionAttrVals[":vers"].S && bytes.Equal(current.lock, expressionAttrVals[":prev"].B)
+	return current.vers == *expressionAttrVals[versExpressionValuesKey].S && bytes.Equal(current.lock, expressionAttrVals[prevLockExpressionValuesKey].B)
+
 }
 
 func (m *fakeDDB) NumGets() int64 {

@@ -122,8 +122,17 @@ func getRepoRootDir(path, pathSeparator string) string {
 }
 
 // DoltEnvAsMultiEnv returns a MultiRepoEnv which wraps the DoltEnv and names it based on the directory DoltEnv refers to
-func DoltEnvAsMultiEnv(dEnv *DoltEnv) MultiRepoEnv {
+func DoltEnvAsMultiEnv(dEnv *DoltEnv) (MultiRepoEnv, error) {
 	dbName := "dolt"
+
+	if dEnv.RSLoadErr != nil {
+		return nil, fmt.Errorf("error loading environment: %s", dEnv.RSLoadErr.Error())
+	} else if dEnv.DBLoadError != nil {
+		return nil, fmt.Errorf("error loading environment: %s", dEnv.DBLoadError.Error())
+	} else if dEnv.CfgLoadErr != nil {
+		return nil, fmt.Errorf("error loading environment: %s", dEnv.CfgLoadErr.Error())
+	}
+
 	u, err := earl.Parse(dEnv.urlStr)
 
 	if err == nil {
@@ -147,7 +156,7 @@ func DoltEnvAsMultiEnv(dEnv *DoltEnv) MultiRepoEnv {
 	mrEnv := make(MultiRepoEnv)
 	mrEnv.AddEnv(dbName, dEnv)
 
-	return mrEnv
+	return mrEnv, nil
 }
 
 // LoadMultiEnv takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new

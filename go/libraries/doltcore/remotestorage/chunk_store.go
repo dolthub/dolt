@@ -756,6 +756,10 @@ type Sizer interface {
 }
 
 func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostTableFile, rd io.Reader, contentHash []byte) error {
+	return HttpPostUpload(ctx, dcs.httpFetcher, post, rd, contentHash)
+}
+
+func HttpPostUpload(ctx context.Context, httpFetcher HTTPFetcher, post *remotesapi.HttpPostTableFile, rd io.Reader, contentHash []byte) error {
 	req, err := http.NewRequest(http.MethodPut, post.Url, rd)
 	if err != nil {
 		return err
@@ -770,10 +774,15 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 		req.Header.Set("Content-MD5", md5s)
 	}
 
+	fetcher := globalHttpFetcher
+	if httpFetcher != nil {
+		fetcher = httpFetcher
+	}
+
 	var resp *http.Response
 	op := func() error {
 		var err error
-		resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
+		resp, err = fetcher.Do(req.WithContext(ctx))
 
 		if err == nil {
 			defer func() {

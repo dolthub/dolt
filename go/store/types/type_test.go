@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTypes(t *testing.T) {
@@ -33,16 +34,16 @@ func TestTypes(t *testing.T) {
 	vs := newTestValueStore()
 
 	mapType, err := MakeMapType(PrimitiveTypeMap[StringKind], PrimitiveTypeMap[FloatKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 	setType, err := MakeSetType(PrimitiveTypeMap[StringKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 	mahType, err := MakeStructType("MahStruct",
 		StructField{"Field1", PrimitiveTypeMap[StringKind], false},
 		StructField{"Field2", PrimitiveTypeMap[BoolKind], false},
 	)
-	assert.NoError(err)
+	require.NoError(t, err)
 	recType, err := MakeStructType("RecursiveStruct", StructField{"self", MakeCycleType("RecursiveStruct"), false})
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	mRef := mustRef(vs.WriteValue(context.Background(), mapType)).TargetHash()
 	setRef := mustRef(vs.WriteValue(context.Background(), setType)).TargetHash()
@@ -62,9 +63,9 @@ func TestTypeType(t *testing.T) {
 func TestTypeRefDescribe(t *testing.T) {
 	assert := assert.New(t)
 	mapType, err := MakeMapType(PrimitiveTypeMap[StringKind], PrimitiveTypeMap[FloatKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 	setType, err := MakeSetType(PrimitiveTypeMap[StringKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Equal("Bool", mustString(PrimitiveTypeMap[BoolKind].Describe(context.Background())))
 	assert.Equal("Float", mustString(PrimitiveTypeMap[FloatKind].Describe(context.Background())))
@@ -81,7 +82,7 @@ func TestTypeRefDescribe(t *testing.T) {
 		StructField{"Field1", PrimitiveTypeMap[StringKind], false},
 		StructField{"Field2", PrimitiveTypeMap[BoolKind], false},
 	)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal("Struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mustString(mahType.Describe(context.Background())))
 }
 
@@ -201,9 +202,9 @@ func TestStructUnionWithCycles(tt *testing.T) {
 	vs := newTestValueStore()
 	t1, _ := inodeType.Desc.(StructDesc).Field("contents")
 	enc, err := EncodeValue(t1, Format_7_18)
-	assert.NoError(tt, err)
+	require.NoError(tt, err)
 	t2, err := DecodeValue(enc, vs)
-	assert.NoError(tt, err)
+	require.NoError(tt, err)
 
 	assert.True(tt, t1.Equals(t2))
 	// Note that we cannot ensure pointer equality between t1 and t2 because the

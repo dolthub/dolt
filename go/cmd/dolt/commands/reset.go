@@ -92,9 +92,31 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 			HandleVErrAndExitCode(verr, usage)
 		} else if apr.Contains(HardResetParam) {
-			err = actions.ResetHard(ctx, dEnv, apr, workingRoot, stagedRoot, headRoot)
+			arg := ""
+			if apr.NArg() > 1 {
+				return handleResetError(fmt.Errorf("--hard supports at most one additional param"), usage)
+			} else if apr.NArg() == 1 {
+				arg = apr.Arg(0)
+			}
+
+			err = actions.ResetHard(ctx, dEnv, arg, workingRoot, stagedRoot, headRoot)
 		} else {
-			stagedRoot, err = actions.ResetSoft(ctx, dEnv.DbData(), apr, stagedRoot, headRoot)
+			// Check whether the input argument is a ref.
+			if apr.NArg() == 1 {
+				argToCheck := apr.Arg(0)
+
+				ok := actions.ValidateIsRef(ctx, argToCheck, dEnv.DoltDB, dEnv.RepoStateReader())
+
+				// This is a valid ref
+				if ok {
+					err = actions.ResetSoftToRef(ctx, dEnv.DbData(), apr.Arg(0))
+					return handleResetError(err, usage)
+				}
+			}
+
+			tables := apr.Args()
+
+			stagedRoot, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, stagedRoot, headRoot)
 
 			if err != nil {
 				return handleResetError(err, usage)
@@ -164,7 +186,12 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 func handleResetError(err error, usage cli.UsagePrinter) int {
 	if actions.IsTblNotExist(err) {
 		tbls := actions.GetTablesForError(err)
-		bdr := errhand.BuildDError("Invalid Table(s):")
+
+		// In case the ref does not exist.
+		bdr := errhand.BuildDError("Invalid Ref or Table:")
+		if len(tbls) > 1 {
+			bdr = errhand.BuildDError("Invalid Table(s):")
+		}
 
 		for _, tbl := range tbls {
 			bdr.AddDetails("\t" + tbl)

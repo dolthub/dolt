@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -39,11 +40,11 @@ func TestValueReadWriteRead(t *testing.T) {
 	assert.Nil(vs.ReadValue(context.Background(), mustHash(s.Hash(Format_7_18)))) // nil
 	h := mustRef(vs.WriteValue(context.Background(), s)).TargetHash()
 	rt, err := vs.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 	v, err := vs.ReadValue(context.Background(), h) // non-nil
-	assert.NoError(err)
+	require.NoError(t, err)
 	if assert.NotNil(v) {
 		assert.True(s.Equals(v), "%s != %s", mustString(EncodedValue(context.Background(), s)), mustString(EncodedValue(context.Background(), v)))
 	}
@@ -57,21 +58,21 @@ func TestReadWriteCache(t *testing.T) {
 
 	var v Value = Bool(true)
 	r, err := vs.WriteValue(context.Background(), v)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.NotEqual(hash.Hash{}, r.TargetHash())
 	rt, err := vs.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(1, ts.Writes())
 
 	v, err = vs.ReadValue(context.Background(), r.TargetHash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(v.Equals(Bool(true)))
 	assert.Equal(1, ts.Reads())
 
 	v, err = vs.ReadValue(context.Background(), r.TargetHash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(v.Equals(Bool(true)))
 	assert.Equal(1, ts.Reads())
 }
@@ -86,20 +87,20 @@ func TestValueReadMany(t *testing.T) {
 		h := mustRef(vs.WriteValue(context.Background(), v)).TargetHash()
 		hashes = append(hashes, h)
 		rt, err := vs.Root(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		_, err = vs.Commit(context.Background(), rt, rt)
-		assert.NoError(err)
+		require.NoError(t, err)
 	}
 
 	// Get one Value into vs's Value cache
 	_, err := vs.ReadValue(context.Background(), mustHash(vals[0].Hash(Format_7_18)))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// Get one Value into vs's pendingPuts
 	three := Float(3)
 	vals = append(vals, three)
 	_, err = vs.WriteValue(context.Background(), three)
-	assert.NoError(err)
+	require.NoError(t, err)
 	hashes = append(hashes, mustHash(three.Hash(Format_7_18)))
 
 	// Add one Value to request that's not in vs
@@ -107,7 +108,7 @@ func TestValueReadMany(t *testing.T) {
 
 	found := map[hash.Hash]Value{}
 	readValues, err := vs.ReadManyValues(context.Background(), hashes)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for i, v := range readValues {
 		if v != nil {
@@ -133,9 +134,9 @@ func TestValueWriteFlush(t *testing.T) {
 	assert.NotZero(vs.bufferedChunkSize)
 
 	rt, err := vs.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Zero(vs.bufferedChunkSize)
 }
 
@@ -181,45 +182,45 @@ func TestFlushOrder(t *testing.T) {
 	s := String("oy")
 	n := Float(42)
 	sr, err := vs.WriteValue(context.Background(), s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	nr, err := vs.WriteValue(context.Background(), n)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ccs.expect(sr, nr)
 	ml, err := NewList(context.Background(), vs, sr, nr)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	b, err := NewEmptyBlob(vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	br, err := vs.WriteValue(context.Background(), b)
-	assert.NoError(err)
+	require.NoError(t, err)
 	mlr, err := vs.WriteValue(context.Background(), ml)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ccs.expect(br, mlr)
 	ml1, err := NewList(context.Background(), vs, br, mlr)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	f := Bool(false)
 	fr, err := vs.WriteValue(context.Background(), f)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ccs.expect(fr)
 	ml2, err := NewList(context.Background(), vs, fr)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	ml1r, err := vs.WriteValue(context.Background(), ml1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ml2r, err := vs.WriteValue(context.Background(), ml2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ccs.expect(ml1r, ml2r)
 	l, err := NewList(context.Background(), vs, ml1r, ml2r)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	r, err := vs.WriteValue(context.Background(), l)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ccs.expect(r)
 	rt, err := vs.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 }
 
 func TestFlushOverSize(t *testing.T) {
@@ -230,7 +231,7 @@ func TestFlushOverSize(t *testing.T) {
 
 	s := String("oy")
 	sr, err := vs.WriteValue(context.Background(), s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ccs.expect(sr)
 	NewList(context.Background(), vs, sr) // will write the root chunk
 }
@@ -248,44 +249,44 @@ func TestTolerateTopDown(t *testing.T) {
 	//       S
 	S := String("oy")
 	sr, err := vs.WriteValue(context.Background(), S)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ccs.expect(sr)
 
 	ML, err := NewList(context.Background(), vs, sr)
-	assert.NoError(err)
+	require.NoError(t, err)
 	mlr, err := vs.WriteValue(context.Background(), ML)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ccs.expect(mlr)
 
 	L, err := NewList(context.Background(), vs, mlr)
-	assert.NoError(err)
+	require.NoError(t, err)
 	lr, err := vs.WriteValue(context.Background(), L)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ccs.expect(lr)
 
 	rt, err := vs.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Zero(len(vs.bufferedChunks))
 
 	ST, err := NewStruct(Format_7_18, "", StructData{"r": mlr})
-	assert.NoError(err)
+	require.NoError(t, err)
 	str, err := vs.WriteValue(context.Background(), ST) // ST into bufferedChunks
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.WriteValue(context.Background(), S) // S into bufferedChunks
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.WriteValue(context.Background(), ML) // ML into bufferedChunks AND withBufferedChunks
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// At this point, ValueStore believes ST is a standalone chunk, and that ML -> S
 	// So, it'll look at ML, the one parent it knows about, first and write its child (S). Then, it'll write ML, and then it'll flush the remaining buffered chunks, which is just ST.
 	ccs.expect(sr, mlr, str)
 	rt, err = vs.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 }
 
 func TestPanicOnBadVersion(t *testing.T) {
@@ -300,14 +301,14 @@ func TestPanicOnBadVersion(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
 		assert.Panics(t, func() {
 			b, err := NewEmptyBlob(cvs)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			_, err = cvs.WriteValue(context.Background(), b)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			rt, err := cvs.Root(context.Background())
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			_, err = cvs.Commit(context.Background(), rt, rt)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		})
 	})
 }
@@ -317,17 +318,17 @@ func TestPanicIfDangling(t *testing.T) {
 	vs := newTestValueStore()
 
 	r, err := NewRef(Bool(true), Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l, err := NewList(context.Background(), vs, r)
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.WriteValue(context.Background(), l)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Panics(func() {
 		rt, err := vs.Root(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		_, err = vs.Commit(context.Background(), rt, rt)
-		assert.NoError(err)
+		require.NoError(t, err)
 	})
 }
 
@@ -336,16 +337,16 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 	vs.SetEnforceCompleteness(false)
 
 	r, err := NewRef(Bool(true), Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	l, err := NewList(context.Background(), vs, r)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vs.WriteValue(context.Background(), l)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	rt, err := vs.Root(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestGC(t *testing.T) {
@@ -361,27 +362,27 @@ func TestGC(t *testing.T) {
 	h1 := mustRef(vs.WriteValue(ctx, set1)).TargetHash()
 
 	rt, err := vs.Root(ctx)
-	assert.NoError(err)
+	require.NoError(t, err)
 	ok, err := vs.Commit(ctx, h1, rt)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	h2 := mustRef(vs.WriteValue(ctx, set2)).TargetHash()
 
 	v1, err := vs.ReadValue(ctx, h1) // non-nil
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.NotNil(v1)
 	v2, err := vs.ReadValue(ctx, h2) // non-nil
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.NotNil(v2)
 
 	err = vs.GC(ctx)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	v1, err = vs.ReadValue(ctx, h1) // non-nil
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.NotNil(v1)
 	v2, err = vs.ReadValue(ctx, h2) // nil
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Nil(v2)
 }
 

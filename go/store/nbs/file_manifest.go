@@ -144,6 +144,8 @@ type fileManifestV5 struct {
 	dir string
 }
 
+var _ manifestVersionGetter = &fileManifestV5{}
+
 func newLock(dir string) *fslock.Lock {
 	lockPath := filepath.Join(dir, lockFileName)
 	return fslock.New(lockPath)
@@ -180,6 +182,10 @@ func openIfExists(path string) (*os.File, error) {
 
 func (fm5 fileManifestV5) Name() string {
 	return fm5.dir
+}
+
+func (fm5 fileManifestV5) GetManifestVersion() string {
+	return "5"
 }
 
 // ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
@@ -245,18 +251,19 @@ func (fm5 fileManifestV5) parseManifest(r io.Reader) (manifestContents, error) {
 	}
 
 	specs, err := parseSpecs(slices[prefixLen:])
-
 	if err != nil {
 		return manifestContents{}, err
 	}
 
 	lock, err := parseAddr(slices[2])
-
 	if err != nil {
 		return manifestContents{}, err
 	}
 
 	gcGen, err := parseAddr(slices[4])
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	return manifestContents{
 		vers:  slices[1],
@@ -286,8 +293,14 @@ type fileManifestV4 struct {
 	dir string
 }
 
+var _ manifestVersionGetter = &fileManifestV4{}
+
 func (fm4 fileManifestV4) Name() string {
 	return fm4.dir
+}
+
+func (fm4 fileManifestV4) GetManifestVersion() string {
+	return "4"
 }
 
 func (fm4 fileManifestV4) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
@@ -366,18 +379,16 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 
 	// !exists(lockFileName) => unitialized store
 	if locked {
-		var f io.ReadCloser
+		var f *os.File
 		err = func() (ferr error) {
 			lck := newLock(dir)
 			ferr = lck.Lock()
-
 			if ferr != nil {
 				return ferr
 			}
 
 			defer func() {
 				unlockErr := lck.Unlock()
-
 				if ferr == nil {
 					ferr = unlockErr
 				}
@@ -395,7 +406,6 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 			if ferr != nil {
 				return ferr
 			}
-
 			return nil
 		}()
 
@@ -421,7 +431,6 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 			}
 		}
 	}
-
 	return exists, contents, nil
 }
 

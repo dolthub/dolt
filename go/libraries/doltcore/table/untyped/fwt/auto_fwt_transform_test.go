@@ -101,7 +101,7 @@ func testSchema() schema.Schema {
 
 func testRow(t *testing.T, col1, col2 string) pipeline.RowWithProps {
 	taggedVals := row.TaggedValues{0: types.String(col1), 1: types.String(col2)}
-	r, err := row.New(types.Format_7_18, testSchema(), taggedVals)
+	r, err := row.New(types.Format_Default, testSchema(), taggedVals)
 	assert.NoError(t, err)
 	return pipeline.RowWithProps{Row: r, Props: pipeline.NoProps}
 }

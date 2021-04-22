@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRefInList(t *testing.T) {
@@ -34,13 +35,13 @@ func TestRefInList(t *testing.T) {
 	vs := newTestValueStore()
 
 	l, err := NewList(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	r, err := NewRef(l, Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l, err = l.Edit().Append(r).List(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	r2, err := l.Get(context.Background(), 0)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(r.Equals(r2))
 }
 
@@ -50,15 +51,15 @@ func TestRefInSet(t *testing.T) {
 	vs := newTestValueStore()
 
 	s, err := NewSet(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	r, err := NewRef(s, Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	se, err := s.Edit().Insert(r)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s, err = se.Set(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	r2, err := s.First(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(r.Equals(r2))
 }
 
@@ -68,18 +69,18 @@ func TestRefInMap(t *testing.T) {
 	vs := newTestValueStore()
 
 	m, err := NewMap(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	r, err := NewRef(m, Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	m, err = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	r2, ok, err := m.MaybeGet(context.Background(), Float(0))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assert.True(r.Equals(r2))
 
 	i, ok, err := m.MaybeGet(context.Background(), r)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assert.Equal(int32(1), int32(i.(Float)))
 }
@@ -90,9 +91,9 @@ func TestRefChunks(t *testing.T) {
 	vs := newTestValueStore()
 
 	l, err := NewList(context.Background(), vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	r, err := NewRef(l, Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Len(getChunks(r), 1)
 	assert.Equal(r, getChunks(r)[0])
 }

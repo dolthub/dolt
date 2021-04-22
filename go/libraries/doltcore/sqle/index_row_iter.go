@@ -43,6 +43,7 @@ type indexLookupRowIterAdapter struct {
 	pkTags  map[uint64]int
 	conv    *KVToSqlRowConverter
 	ctx     *sql.Context
+	cancelF func()
 
 	read  uint64
 	count uint64
@@ -60,7 +61,9 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 	cols := idx.Schema().GetAllCols().GetColumns()
 	conv := NewKVToSqlRowConverterForCols(idx.IndexRowData().Format(), cols)
 	resBuf := resultBufferPool.Get().(*async.RingBuffer)
-	resBuf.Reset()
+	epoch := resBuf.Reset()
+
+	queueCtx, cancelF := context.WithCancel(ctx)
 
 	iter := &indexLookupRowIterAdapter{
 		idx:       idx,
@@ -68,10 +71,11 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 		conv:      conv,
 		pkTags:    pkTags,
 		ctx:       ctx,
+		cancelF:   cancelF,
 		resultBuf: resBuf,
 	}
 
-	go iter.queueRows(ctx)
+	go iter.queueRows(queueCtx, epoch)
 	return iter
 }
 
@@ -103,13 +107,14 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 }
 
 func (i *indexLookupRowIterAdapter) Close(*sql.Context) error {
+	i.cancelF()
 	resultBufferPool.Put(i.resultBuf)
 	return nil
 }
 
 // queueRows reads each key from the key iterator and writes it to lookups.toLookupCh which manages a pool of worker
 // routines which will process the requests in parallel.
-func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context) {
+func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context, epoch int) {
 	for idx := uint64(1); ; idx++ {
 		indexKey, err := i.keyIter.ReadKey(i.ctx)
 
@@ -118,7 +123,7 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context) {
 				idx: idx,
 				r:   nil,
 				err: err,
-			})
+			}, epoch)
 
 			return
 		}
@@ -128,6 +133,7 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context) {
 			t:          indexKey,
 			tupleToRow: i.processKey,
 			resBuf:     i.resultBuf,
+			epoch:      epoch,
 		}
 
 		select {
@@ -137,7 +143,7 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context) {
 				idx: idx,
 				r:   nil,
 				err: ctx.Err(),
-			})
+			}, epoch)
 
 			return
 		}

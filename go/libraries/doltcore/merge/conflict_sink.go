@@ -45,11 +45,13 @@ var diffTypeToOpLabel = map[types.DiffChangeType]string{
 }
 
 var deleteColor = color.New(color.FgRed, color.CrossedOut)
+var modifiedColor = color.New(color.FgYellow)
+var addedColor = color.New(color.FgGreen)
 
 var diffTypeToColor = map[types.DiffChangeType]diff.ColorFunc{
-	types.DiffChangeAdded:    color.GreenString,
-	types.DiffChangeModified: color.YellowString,
-	types.DiffChangeRemoved:  deleteColor.Sprintf,
+	types.DiffChangeAdded:    addedColor.Sprint,
+	types.DiffChangeModified: modifiedColor.Sprint,
+	types.DiffChangeRemoved:  deleteColor.Sprint,
 }
 
 type ConflictSink struct {
@@ -84,11 +86,11 @@ func (cs *ConflictSink) GetSchema() schema.Schema {
 	return cs.sch
 }
 
-var noColorFunc = func(s string, i ...interface{}) string {
+var noColorFunc = func(i ...interface{}) string {
 	if len(i) == 0 {
-		return s
+		return ""
 	} else {
-		return fmt.Sprintf(s)
+		return fmt.Sprint(i...)
 	}
 }
 

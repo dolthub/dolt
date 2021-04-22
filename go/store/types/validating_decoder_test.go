@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 )
@@ -32,12 +33,12 @@ import (
 func TestValidatingBatchingSinkDecode(t *testing.T) {
 	v := Float(42)
 	c, err := EncodeValue(v, Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	storage := &chunks.TestStorage{}
 	vdc := NewValidatingDecoder(storage.NewView())
 
 	dc, err := vdc.Decode(&c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, v.Equals(*dc.Value))
 }
 
@@ -47,10 +48,10 @@ func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
 	dataAsByteSlice := toBinaryNomsReaderData(data)
 	dec := newValueDecoder(dataAsByteSlice, vs)
 	v, err := dec.readValue(Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	c, err := EncodeValue(v, Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	vdc := NewValidatingDecoder(storage.NewView())
 
 	assert.Panics(t, func() {

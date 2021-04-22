@@ -35,18 +35,18 @@ func TestMapIterator(t *testing.T) {
 	vrw := newTestValueStore()
 
 	m, err := NewMap(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	me := m.Edit()
 	for i := 0; i < 5; i++ {
 		me.Set(String(string(byte(65+i))), Float(i))
 	}
 
 	m, err = me.Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	test := func(it MapIterator, start int, msg string) {
 		for i := start; i < 5; i++ {
 			k, v, err := it.Next(context.Background())
-			assert.NoError(err)
+			require.NoError(t, err)
 
 			assert.True(k.Equals(k), msg)
 			assert.True(v.Equals(v), msg)
@@ -54,7 +54,7 @@ func TestMapIterator(t *testing.T) {
 			assert.True(Float(i).Equals(v), msg)
 		}
 		k, v, err := it.Next(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Nil(k, msg)
 		assert.Nil(v, msg)
 	}
@@ -75,7 +75,7 @@ func TestReverseMapIterator(t *testing.T) {
 	ctx := context.Background()
 	vrw := newTestValueStore()
 	m, err := NewMap(ctx, vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	me := m.Edit()
 	for i := 0; i <= 100; i += 2 {
@@ -83,7 +83,7 @@ func TestReverseMapIterator(t *testing.T) {
 	}
 
 	m, err = me.Map(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	test := func(start, expected int, name string) {
 		t.Run(name, func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestReverseMapIterator(t *testing.T) {
 
 			for {
 				k, v, err := it.Next(ctx)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				if k == nil {
 					break

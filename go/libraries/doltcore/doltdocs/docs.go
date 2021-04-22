@@ -237,6 +237,9 @@ func UpdateRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) 
 
 	if errors.Is(ErrEmptyDocsTable, err) {
 		root, err = root.RemoveTables(ctx, doltdb.DocTableName)
+		if err != nil {
+			return nil, err
+		}
 	} else if err != nil {
 		return nil, err
 	}
@@ -244,6 +247,9 @@ func UpdateRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) 
 	// There might not need be a need to create docs table if not docs have been created yet so check if docTbl != nil.
 	if docTbl != nil {
 		root, err = root.PutTable(ctx, doltdb.DocTableName, docTbl)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return root, nil

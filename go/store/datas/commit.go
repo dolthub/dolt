@@ -163,6 +163,9 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 				q.PushBack(v.(types.Ref))
 				return
 			})
+			if err != nil {
+				return err
+			}
 		} else {
 			ps, ok, err := c.MaybeGet(ParentsField)
 			if err != nil {
@@ -174,6 +177,9 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 					q.PushBack(v.(types.Ref))
 					return
 				})
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

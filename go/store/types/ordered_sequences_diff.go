@@ -24,11 +24,7 @@ package types
 import (
 	"context"
 
-	"golang.org/x/sync/errgroup"
-
-	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/util/functions"
 )
 
 type DiffChangeType uint8
@@ -53,155 +49,27 @@ func sendChange(ctx context.Context, changes chan<- ValueChanged, change ValueCh
 	}
 }
 
-// Streams the diff from |last| to |current| into |changes|, using both left-right and top-down approach in parallel.
-// The left-right diff is expected to return results earlier, whereas the top-down approach is faster overall. This "best" algorithm runs both:
-// - early results from left-right are sent to |changes|.
-// - if/when top-down catches up, left-right is stopped and the rest of the changes are streamed from top-down.
-func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
-	lrChanges := make(chan ValueChanged)
-	tdChanges := make(chan ValueChanged)
-
-	eg, ctx := errgroup.WithContext(ctx)
-
-	lrCancel := async.GoWithCancel(ctx, eg, func(ctx context.Context) error {
-		defer close(lrChanges)
-		return orderedSequenceDiffLeftRight(ctx, last, current, lrChanges)
-	})
-	tdCancel := async.GoWithCancel(ctx, eg, func(ctx context.Context) error {
-		defer close(tdChanges)
-		return orderedSequenceDiffTopDown(ctx, last, current, tdChanges)
-	})
-
-	eg.Go(func() error {
-		defer lrCancel()
-		defer tdCancel()
-
-		// Stream left-right changes while the top-down diff algorithm catches up.
-		var lrChangeCount, tdChangeCount int
-		for multiplexing := true; multiplexing; {
-			select {
-			case c, ok := <-lrChanges:
-				if !ok {
-					// Left-to-right diff completed.
-					return nil
-				}
-				lrChangeCount++
-				if err := sendChange(ctx, changes, c); err != nil {
-					return err
-				}
-			case c, ok := <-tdChanges:
-				if !ok {
-					// Top-down diff completed.
-					return nil
-				}
-				tdChangeCount++
-				if tdChangeCount > lrChangeCount {
-					// Top-down diff has overtaken left-right diff.
-					if err := sendChange(ctx, changes, c); err != nil {
-						return err
-					}
-					lrCancel()
-					multiplexing = false
-				}
-			}
-		}
-
-		for c := range tdChanges {
-			if err := sendChange(ctx, changes, c); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-
-	return eg.Wait()
-}
-
-// Streams the diff from |last| to |current| into |changes|, using a top-down approach.
-// Top-down is parallel and efficiently returns the complete diff, but compared to left-right it's slow to start streaming changes.
-func orderedSequenceDiffTopDown(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
-	return orderedSequenceDiffInternalNodes(ctx, last, current, changes)
-}
-
-// TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
-func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	if last.treeLevel() > current.treeLevel() {
-		lastChild, err := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
-		if err != nil {
-			return err
-		}
-		return orderedSequenceDiffInternalNodes(ctx, lastChild.(orderedSequence), current, changes)
-	}
-
-	if current.treeLevel() > last.treeLevel() {
-		currentChild, err := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen()))
-		if err != nil {
-			return err
-		}
-		return orderedSequenceDiffInternalNodes(ctx, last, currentChild.(orderedSequence), changes)
-	}
-
-	if last.isLeaf() && current.isLeaf() {
-		return orderedSequenceDiffLeftRight(ctx, last, current, changes)
-	}
-
-	compareFn := last.getCompareFn(current)
-	initialSplices, err := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), DEFAULT_MAX_SPLICE_MATRIX_SIZE,
-		func(i uint64, j uint64) (bool, error) { return compareFn(int(i), int(j)) })
-	if err != nil {
-		return err
-	}
-
-	for _, splice := range initialSplices {
-		var lastChild, currentChild orderedSequence
-		err := functions.All(
-			func() error {
-				seq, err := last.getCompositeChildSequence(ctx, splice.SpAt, splice.SpRemoved)
-				if err != nil {
-					return err
-				}
-				lastChild = seq.(orderedSequence)
-				return nil
-			},
-			func() error {
-				seq, err := current.getCompositeChildSequence(ctx, splice.SpFrom, splice.SpAdded)
-				if err != nil {
-					return err
-				}
-				currentChild = seq.(orderedSequence)
-				return nil
-			},
-		)
-		if err != nil {
-			return err
-		}
-
-		if err := orderedSequenceDiffInternalNodes(ctx, lastChild, currentChild, changes); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
 func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
-	lastCur, err := newCursorAt(ctx, last, emptyKey, false, false)
+	trueFunc := func(Value) (bool, error) {
+		return true, nil
+	}
+	return orderedSequenceDiffLeftRightInRange(ctx, last, current, emptyKey, trueFunc, changes)
+}
+
+func orderedSequenceDiffLeftRightInRange(ctx context.Context, last orderedSequence, current orderedSequence, startKey orderedKey, inRange ValueInRange, changes chan<- ValueChanged) error {
+	lastCur, err := newCursorAt(ctx, last, startKey, false, false)
 	if err != nil {
 		return err
 	}
 
-	currentCur, err := newCursorAt(ctx, current, emptyKey, false, false)
+	currentCur, err := newCursorAt(ctx, current, startKey, false, false)
 	if err != nil {
 		return err
 	}
 
+VALIDRANGES:
 	for lastCur.valid() && currentCur.valid() {
 		err := fastForward(ctx, lastCur, currentCur)
 		if err != nil {
@@ -231,6 +99,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 			if isLess, err := currentKey.Less(last.format(), lastKey); err != nil {
 				return err
 			} else if isLess {
+				isInRange, err := inRange(currentKey.v)
+				if err != nil {
+					return err
+				} else if !isInRange {
+					break VALIDRANGES
+				}
+
 				mv, err := getMapValue(currentCur)
 				if err != nil {
 					return err
@@ -245,6 +120,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 					return err
 				}
 			} else {
+				isInRange, err := inRange(lastKey.v)
+				if !isInRange {
+					return err
+				} else if !isInRange {
+					break VALIDRANGES
+				}
+
 				if isLess, err := lastKey.Less(last.format(), currentKey); err != nil {
 					return err
 				} else if isLess {
@@ -296,6 +178,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 			return err
 		}
 
+		isInRange, err := inRange(lastKey.v)
+		if err != nil {
+			return err
+		} else if !isInRange {
+			break
+		}
+
 		mv, err := getMapValue(lastCur)
 		if err != nil {
 			return err
@@ -315,6 +204,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 		currKey, err := getCurrentKey(currentCur)
 		if err != nil {
 			return err
+		}
+
+		isInRange, err := inRange(currKey.v)
+		if err != nil {
+			return err
+		} else if !isInRange {
+			break
 		}
 
 		mv, err := getMapValue(currentCur)

@@ -62,13 +62,20 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	// Get all the needed roots.
 	working, staged, head, err := env.GetRoots(ctx, dbData.Ddb, dbData.Rsr)
-
 	if err != nil {
 		return 1, err
 	}
 
 	if apr.Contains(cli.HardResetParam) {
-		h, err := actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
+		// Get the commitSpec for the branch if it exists
+		arg := ""
+		if apr.NArg() > 1 {
+			return 1, fmt.Errorf("--hard supports at most one additional param")
+		} else if apr.NArg() == 1 {
+			arg = apr.Arg(0)
+		}
+
+		h, err := actions.ResetHardTables(ctx, dbData, arg, working, staged, head)
 		if err != nil {
 			return 1, err
 		}
@@ -81,22 +88,24 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			}
 
 			h = headHash.String()
-			err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix)
-			if err != nil {
+			if err := setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix); err != nil {
 				return 1, err
 			}
 
 			workingHash := dbData.Rsr.WorkingHash()
-			err = setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix)
+			if err := setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix); err != nil {
+				return 1, err
+			}
 		} else {
-			err = setHeadAndWorkingSessionRoot(ctx, h)
+			if err := setHeadAndWorkingSessionRoot(ctx, h); err != nil {
+				return 1, err
+			}
 		}
 	} else {
 		_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
-	}
-
-	if err != nil {
-		return 1, err
+		if err != nil {
+			return 1, err
+		}
 	}
 
 	return 0, nil

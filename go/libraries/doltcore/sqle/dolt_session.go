@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -115,20 +116,21 @@ func TableCacheFromSess(sess sql.Session, dbName string) TableCache {
 	return sess.(*DoltSession).caches[dbName]
 }
 
-func (sess *DoltSession) CommitTransaction(ctx *sql.Context) error {
-	currentDb := sess.GetCurrentDatabase()
-	if currentDb == "" {
-		return sql.ErrNoDatabaseSelected.New()
+func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) error {
+	// This is triggered when certain commands are sent to the server (ex. commit) when a database is not selected.
+	// These commands should not error.
+	if dbName == "" {
+		return nil
 	}
 
-	dbRoot, ok := sess.dbRoots[currentDb]
+	dbRoot, ok := sess.dbRoots[dbName]
 	// It's possible that this returns false if the user has created an in-Memory database. Moreover,
 	// the analyzer will check for us whether a db exists or not.
 	if !ok {
 		return nil
 	}
 
-	dbData := sess.dbDatas[currentDb]
+	dbData := sess.dbDatas[dbName]
 
 	root := dbRoot.root
 	h, err := dbData.Ddb.WriteRootValue(ctx, root)
@@ -224,8 +226,8 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	return dbRoot.root, true
 }
 
-// GetParentCommit returns the parent commit of the current session.
-func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
+// GetHeadCommit returns the parent commit of the current session.
+func (sess *DoltSession) GetHeadCommit(ctx context.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
 
 	if !dbFound {
@@ -318,12 +320,51 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 		return nil
 	}
 
+	if isWorking, dbName := IsWorkingKey(key); isWorking {
+		valStr, isStr := value.(string) // valStr represents a root val hash
+		if !isStr || !hash.IsValid(valStr) {
+			return doltdb.ErrInvalidHash
+		}
+
+		err := sess.Session.Set(ctx, key, sql.Text, valStr)
+		if err != nil {
+			return err
+		}
+
+		// If there's a Root Value that's associated with this hash update dbRoots to include it
+		dbd, dbFound := sess.dbDatas[dbName]
+		if !dbFound {
+			return sql.ErrDatabaseNotFound.New(dbName)
+		}
+
+		root, err := dbd.Ddb.ReadRootValue(ctx, hash.Parse(valStr))
+		if errors.Is(doltdb.ErrNoRootValAtHash, err) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		sess.dbRoots[dbName] = dbRoot{valStr, root}
+
+		err = sess.dbEditors[dbName].SetRoot(ctx, root)
+		if err != nil {
+			return err
+		}
+
+		sess.caches[dbName].Clear()
+
+		return nil
+	}
+
 	if key == "foreign_key_checks" {
 		convertedVal, err := sql.Int64.Convert(value)
 		if err != nil {
 			return err
 		}
-		intVal := convertedVal.(int64)
+		intVal := int64(0)
+		if convertedVal != nil {
+			intVal = convertedVal.(int64)
+		}
 		if intVal == 0 {
 			for _, tableEditSession := range sess.dbEditors {
 				tableEditSession.Props.ForeignKeyChecksDisabled = true

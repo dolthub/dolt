@@ -32,6 +32,7 @@ var EmptySchema = &schemaImpl{
 type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
 	indexCollection            IndexCollection
+	checkCollection            CheckCollection
 }
 
 // SchemaFromCols creates a Schema from a collection of columns
@@ -54,12 +55,17 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	pkColColl := NewColCollection(pkCols...)
 	nonPKColColl := NewColCollection(nonPKCols...)
 
+	return SchemaFromColCollections(allCols, pkColColl, nonPKColColl), nil
+}
+
+func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) Schema {
 	return &schemaImpl{
 		pkCols:          pkColColl,
 		nonPKCols:       nonPKColColl,
 		allCols:         allCols,
 		indexCollection: NewIndexCollection(allCols),
-	}, nil
+		checkCollection: NewCheckCollection(),
+	}
 }
 
 func MustSchemaFromCols(typedColColl *ColCollection) Schema {
@@ -123,6 +129,7 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 		nonPKCols:       nonPKColColl,
 		allCols:         nonPKColColl,
 		indexCollection: NewIndexCollection(nil),
+		checkCollection: NewCheckCollection(),
 	}
 }
 
@@ -150,13 +157,7 @@ func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) 
 	}
 
 	allColColl := NewColCollection(allCols...)
-
-	return &schemaImpl{
-		pkCols:          pkCols,
-		nonPKCols:       nonPKCols,
-		allCols:         allColColl,
-		indexCollection: NewIndexCollection(allColColl),
-	}, nil
+	return SchemaFromColCollections(allColColl, pkCols, nonPKCols), nil
 }
 
 // GetAllCols gets the collection of all columns (pk and non-pk)
@@ -206,4 +207,8 @@ func (si *schemaImpl) String() string {
 
 func (si *schemaImpl) Indexes() IndexCollection {
 	return si.indexCollection
+}
+
+func (si *schemaImpl) Checks() CheckCollection {
+	return si.checkCollection
 }

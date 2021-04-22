@@ -9,12 +9,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Copy go package
+        run: cp -r ./go ./integration-tests/go
       - name: Test mysql client integrations
         uses: ./.github/actions/mysql-client-tests
-      - name: Discord Notify
-        if: always()
-        uses: dolthub/ga-discord-notify@master
-        with:
-          job-status: ${{ job.status }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          notify-on-success: false

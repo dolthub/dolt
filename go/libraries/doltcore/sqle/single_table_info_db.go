@@ -136,6 +136,7 @@ func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, er
 			tableSch:     db.sch,
 			unique:       index.IsUnique(),
 			comment:      index.Comment(),
+			generated:    false,
 		})
 	}
 	return sqlIndexes, nil

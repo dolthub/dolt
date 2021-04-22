@@ -1,6 +1,6 @@
 # Dolt
 
-<img align="left" height="300" src="./dolt_hi.svg"/>
+<img align="left" height="300" src="./docs/dolt_hi.svg"/>
 
 ### Dolt is Git for Data!
 
@@ -20,7 +20,23 @@ Dolt databases. We host public data for free!
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
 ask questions!
 
+### What's it for?
+
+Lots of things! Dolt is a generally useful tool with countless 
+applications. But if you want some ideas, [here's how people are using 
+it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
+
+### How do I use it?
+
+Check out our [quick-start guide](docs/quickstart.md) to skip the docs
+and get started as fast as humanly possible! Or keep reading for a
+high level overview of how to use the command line tool.
+
+Having problems? Read the [FAQ](docs/faq.md) to find answers.
+
 # Dolt CLI
+
+The `dolt` CLI has the same commands as `git`, with some extras.
 
 ```
 $ dolt
@@ -83,9 +99,17 @@ brew install dolt
 
 Download the latest Microsoft Installer (`.msi` file) in
 [releases](https://github.com/dolthub/dolt/releases) and run
-it. Package manager releases coming soon!
+it.
 
-For information on running on Windows, see [here](windows.md).
+For information on running on Windows, see [here](./docs/windows.md).
+
+#### Chocolatey
+
+You can install `dolt` using [Chocolatey](https://chocolatey.org/):
+
+```sh
+choco install dolt
+```
 
 ## From Source
 
@@ -340,7 +364,8 @@ dolt remote add <remote> gs://gcs-bucket/database
 [DoltHub](https://dolthub.com) has lots of interesting datasets to
 explore and clone. Here are some of our favorites.
 
-- Coronavirus: https://www.dolthub.com/repositories/dolthub/corona-virus
+- Hospital Price Transparency: https://www.dolthub.com/repositories/dolthub/hospital-price-transparency
+- US Presidential Election Precinct Results: https://www.dolthub.com/repositories/dolthub/us-president-precinct-results
 - WordNet: https://www.dolthub.com/repositories/dolthub/word-net
 - ImageNet: https://www.dolthub.com/repositories/dolthub/image-net
 - Google Open Images: https://www.dolthub.com/repositories/dolthub/open-images

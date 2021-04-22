@@ -44,6 +44,9 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	//  Get the params associated with COMMIT.
 	ap := cli.CreateCommitArgParser()
 	args, err := getDoltArgs(ctx, row, cf.Children())
+	if err != nil {
+		return nil, err
+	}
 	apr := cli.ParseArgs(ap, args, nil)
 
 	var name, email string
@@ -63,14 +66,13 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, fmt.Errorf("Must provide commit message.")
 	}
 
-	parent, _, err := dSess.GetParentCommit(ctx, dbName)
+	parent, _, err := dSess.GetHeadCommit(ctx, dbName)
 
 	if err != nil {
 		return nil, err
 	}
 
 	root, ok := dSess.GetRoot(dbName)
-
 	if !ok {
 		return nil, fmt.Errorf("unknown database '%s'", dbName)
 	}

@@ -551,6 +551,9 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 
 	for {
 		currentDatasets, err = currentDatasets.Edit().Remove(datasetID).Map(ctx)
+		if err != nil {
+			return err
+		}
 		err = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
 		if err != ErrOptimisticLockFailed {
 			break
