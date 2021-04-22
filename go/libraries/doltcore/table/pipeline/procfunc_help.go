@@ -16,6 +16,8 @@ package pipeline
 
 import (
 	"context"
+	"errors"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"io"
 	"time"
 
@@ -100,7 +102,7 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 					err := sinkFunc(r.Row, r.Props)
 
 					if err != nil {
-						if table.IsBadRow(err) || sql.ErrPrimaryKeyViolation.Is(err) {
+						if table.IsBadRow(err) || sql.IsUniqueKeyError(err) || errors.Is(err, editor.ErrDuplicatePK) {
 							badRowChan <- &TransformRowFailure{r.Row, "writer", err.Error()}
 						} else {
 							p.StopWithErr(err)

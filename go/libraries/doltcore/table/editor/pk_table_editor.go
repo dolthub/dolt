@@ -16,14 +16,13 @@ package editor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -36,6 +35,7 @@ import (
 
 var (
 	tableEditorMaxOps uint64 = 16384
+	ErrDuplicatePK           = errors.New("duplicate key error")
 )
 
 func init() {
@@ -46,11 +46,13 @@ func init() {
 	}
 }
 
-type TableEditor interface {
-	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error
+type PKDuplicateErrFunc func(keyString string, k, v types.Tuple) error
 
-	InsertRow(ctx context.Context, r row.Row) error
-	UpdateRow(ctx context.Context, old, new row.Row) error
+type TableEditor interface {
+	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
+
+	InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateErrFunc) error
+	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
 	DeleteRow(ctx context.Context, r row.Row) error
 
 	GetAutoIncrementValue() types.Value
@@ -95,6 +97,11 @@ type pkTableEditor struct {
 	flushMutex *sync.RWMutex
 }
 
+type doltKVP struct {
+	k types.LesserValuable
+	v types.Valuable
+}
+
 var _ TableEditor = &pkTableEditor{}
 
 type tableEditAccumulator struct {
@@ -113,7 +120,7 @@ type tableEditAccumulator struct {
 	insertedKeys map[hash.Hash]types.Value
 	addedKeys    map[hash.Hash]types.Value
 	removedKeys  map[hash.Hash]types.Value
-	affectedKeys map[hash.Hash]types.Value
+	affectedKeys map[hash.Hash]*doltKVP
 }
 
 func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string) (*pkTableEditor, error) {
@@ -174,7 +181,7 @@ func createInitialTableEditAcc(nbf *types.NomsBinFormat, rowData types.Map) *tab
 		insertedKeys: make(map[hash.Hash]types.Value),
 		addedKeys:    make(map[hash.Hash]types.Value),
 		removedKeys:  make(map[hash.Hash]types.Value),
-		affectedKeys: make(map[hash.Hash]types.Value),
+		affectedKeys: make(map[hash.Hash]*doltKVP),
 	}
 }
 
@@ -188,34 +195,42 @@ func (tea *tableEditAccumulator) NewFromCurrent() *tableEditAccumulator {
 		insertedKeys: make(map[hash.Hash]types.Value),
 		addedKeys:    make(map[hash.Hash]types.Value),
 		removedKeys:  make(map[hash.Hash]types.Value),
-		affectedKeys: make(map[hash.Hash]types.Value),
+		affectedKeys: make(map[hash.Hash]*doltKVP),
 	}
 }
 
-// Has returns whether the current tableEditAccumulator contains the given key. This assumes that the given hash is for the given
-// key.
-func (tea *tableEditAccumulator) Has(ctx context.Context, keyHash hash.Hash, key types.Value) (bool, error) {
+// doltKVPIfHas returns a *doltKVP if the current tableEditAccumulator contains the given key, or it exists in the row data.
+// This assumes that the given hash is for the given key.
+func (tea *tableEditAccumulator) doltKVPIfHas(ctx context.Context, keyHash hash.Hash, key types.LesserValuable) (*doltKVP, bool, error) {
 	// No locks as all calls and modifications to tea are done from a lock that the caller handles
-	if _, ok := tea.addedKeys[keyHash]; ok {
-		return true, nil
-	}
-	if _, ok := tea.removedKeys[keyHash]; !ok {
-		// When rowData is updated, prevTea is set to nil. Therefore, if prevTea is non-nil, we use it.
-		if tea.prevTea != nil {
-			pkExists, err := tea.prevTea.Has(ctx, keyHash, key)
-			if err != nil {
-				return false, err
-			}
-			return pkExists, nil
+	if kvp, ok := tea.affectedKeys[keyHash]; ok {
+		if kvp.v == nil {
+			return nil, false, nil
 		} else {
-			pkExists, err := tea.rowData.Has(ctx, key)
-			if err != nil {
-				return false, err
-			}
-			return pkExists, nil
+			return kvp, true, nil
 		}
 	}
-	return false, nil
+
+	if tea.prevTea != nil {
+		return tea.prevTea.doltKVPIfHas(ctx, keyHash, key)
+	} else {
+		keyVal, err := key.Value(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+
+		keyTup := keyVal.(types.Tuple)
+		v, ok, err := tea.rowData.MaybeGetTuple(ctx, keyTup)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if !ok {
+			return nil, false, nil
+		}
+
+		return &doltKVP{k: keyTup, v: v}, true, err
+	}
 }
 
 // ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
@@ -317,8 +332,31 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 	return rows, nil
 }
 
+func (te *pkTableEditor) pkErrForKVP(ctx context.Context, kvp *doltKVP, errFunc PKDuplicateErrFunc) error {
+	kVal, err := kvp.k.Value(ctx)
+	if err != nil {
+		return err
+	}
+
+	vVal, err := kvp.v.Value(ctx)
+	if err != nil {
+		return err
+	}
+
+	keyStr, err := formatKey(ctx, kVal)
+	if err != nil {
+		return err
+	}
+
+	if errFunc != nil {
+		return errFunc(keyStr, kVal.(types.Tuple), vVal.(types.Tuple))
+	} else {
+		return fmt.Errorf("duplicate key '%s': %w", keyStr, ErrDuplicatePK)
+	}
+}
+
 // TODO - Deduplicate this code.  It is largely a copy of insert
-func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error {
+func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -342,18 +380,13 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
-	if pkExists, err := te.tea.Has(ctx, keyHash, key); err != nil {
+	if kvp, pkExists, err := te.tea.doltKVPIfHas(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
-		keyStr, err := formatKey(ctx, key)
-		if err != nil {
-			return err
-		}
-		return sql.ErrPrimaryKeyViolation.New(keyStr)
+		return te.pkErrForKVP(ctx, kvp, errFunc)
 	}
 	te.tea.insertedKeys[keyHash] = key
 	te.tea.addedKeys[keyHash] = key
-	te.tea.affectedKeys[keyHash] = key
 
 	if te.hasAutoInc {
 		// autoIncVal = max(autoIncVal, insertVal)
@@ -371,12 +404,14 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	}
 
 	te.tea.ed.AddEdit(key, val)
+	te.tea.affectedKeys[keyHash] = &doltKVP{k: key, v: val}
+
 	te.tea.opCount++
 	return nil
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
-func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
+func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -404,18 +439,13 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
-	if pkExists, err := te.tea.Has(ctx, keyHash, key); err != nil {
+	if kvp, pkExists, err := te.tea.doltKVPIfHas(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
-		keyStr, err := formatKey(ctx, key)
-		if err != nil {
-			return err
-		}
-		return sql.ErrPrimaryKeyViolation.New(keyStr)
+		return te.pkErrForKVP(ctx, kvp, errFunc)
 	}
 	te.tea.insertedKeys[keyHash] = key
 	te.tea.addedKeys[keyHash] = key
-	te.tea.affectedKeys[keyHash] = key
 
 	if te.hasAutoInc {
 		// autoIncVal = max(autoIncVal, insertVal)
@@ -432,7 +462,9 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 		}
 	}
 
-	te.tea.ed.AddEdit(key, dRow.NomsMapValue(te.tSch))
+	val := dRow.NomsMapValue(te.tSch)
+	te.tea.ed.AddEdit(key, val)
+	te.tea.affectedKeys[keyHash] = &doltKVP{k: key, v: val}
 	te.tea.opCount++
 	return nil
 }
@@ -453,7 +485,7 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) error {
 }
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.
-func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
+func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc PKDuplicateErrFunc) error {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -463,6 +495,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	if err != nil {
 		return err
 	}
+
 	dNewKey := dNewRow.NomsMapKey(te.tSch)
 	dNewKeyVal, err := dNewKey.Value(ctx)
 	if err != nil {
@@ -494,23 +527,23 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		}
 
 		// Check if the new primary key already exists
-		if pkExists, err := te.tea.Has(ctx, newHash, dNewKeyVal); err != nil {
+		if kvp, pkExists, err := te.tea.doltKVPIfHas(ctx, newHash, dNewKeyVal); err != nil {
 			return err
 		} else if pkExists {
-			keyStr, err := formatKey(ctx, dNewKeyVal)
-			if err != nil {
-				return err
-			}
-			return sql.ErrPrimaryKeyViolation.New(keyStr)
+			return te.pkErrForKVP(ctx, kvp, errFunc)
 		}
 		te.tea.addedKeys[newHash] = dNewKeyVal
 		te.tea.removedKeys[oldHash] = dOldKeyVal
-		te.tea.affectedKeys[oldHash] = dOldKeyVal
+		te.tea.affectedKeys[oldHash] = &doltKVP{k: dOldKeyVal}
 	}
 
-	te.tea.affectedKeys[newHash] = dNewKeyVal
+	val, err := dNewRow.NomsMapValue(te.tSch).Value(ctx)
+	if err != nil {
+		return err
+	}
 
-	te.tea.ed.AddEdit(dNewKeyVal, dNewRow.NomsMapValue(te.tSch))
+	te.tea.affectedKeys[newHash] = &doltKVP{k: dNewKeyVal, v: val}
+	te.tea.ed.AddEdit(dNewKeyVal, val)
 	te.tea.opCount++
 	return nil
 }
@@ -526,7 +559,7 @@ func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 }
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
-func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
+func (te *pkTableEditor) Table(_ context.Context) (*doltdb.Table, error) {
 	te.flush()
 	err := te.aq.WaitForEmpty()
 
@@ -599,7 +632,7 @@ func (te *pkTableEditor) delete(key types.Tuple) error {
 
 	delete(te.tea.addedKeys, keyHash)
 	te.tea.removedKeys[keyHash] = key
-	te.tea.affectedKeys[keyHash] = key
+	te.tea.affectedKeys[keyHash] = &doltKVP{k: key}
 
 	te.tea.ed.AddEdit(key, nil)
 	te.tea.opCount++
@@ -693,7 +726,7 @@ func formatKey(ctx context.Context, key types.Value) (string, error) {
 		}
 	}
 
-	return fmt.Sprintf("(%s)", strings.Join(vals, ",")), nil
+	return fmt.Sprintf("[%s]", strings.Join(vals, ",")), nil
 }
 
 func (te *pkTableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *doltdb.Table, originalRowData types.Map, updated types.Map) (*doltdb.Table, error) {
@@ -751,8 +784,8 @@ func (te *pkTableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumu
 		return nil
 	}, 4, 0)
 
-	for _, key := range tea.affectedKeys {
-		indexActionQueue.Execute(key)
+	for _, kvp := range tea.affectedKeys {
+		indexActionQueue.Execute(kvp.k)
 	}
 
 	err := indexActionQueue.WaitForEmpty()

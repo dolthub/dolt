@@ -127,7 +127,7 @@ func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *dol
 			}
 
 			if types.IsNull(cnf.Value) {
-				err = tableEditor.InsertRow(ctx, updatedRow)
+				err = tableEditor.InsertRow(ctx, updatedRow, nil)
 				if err != nil {
 					return false, err
 				}
@@ -136,7 +136,7 @@ func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *dol
 				if err != nil {
 					return false, err
 				}
-				err = tableEditor.UpdateRow(ctx, originalRow, updatedRow)
+				err = tableEditor.UpdateRow(ctx, originalRow, updatedRow, nil)
 				if err != nil {
 					return false, err
 				}

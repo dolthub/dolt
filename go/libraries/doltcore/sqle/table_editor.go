@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -36,6 +37,7 @@ import (
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type sqlTableEditor struct {
 	t           *WritableDoltTable
+	kvToSQLRow  *KVToSqlRowConverter
 	tableEditor editor.TableEditor
 	sess        *editor.TableEditSession
 }
@@ -52,11 +54,22 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		return nil, err
 	}
 
+	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
 		t:           t,
+		kvToSQLRow:  conv,
 		tableEditor: tableEditor,
 		sess:        sess,
 	}, nil
+}
+
+func (te *sqlTableEditor) duplicatePKErrFunc(keyString string, k, v types.Tuple) error {
+	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
+	if err != nil {
+		return err
+	}
+
+	return sql.NewUniqueKeyErr(keyString, true, oldRow)
 }
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
@@ -67,7 +80,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 			return err
 		}
 
-		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal)
+		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicatePKErrFunc)
 	}
 
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
@@ -76,7 +89,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	return te.tableEditor.InsertRow(ctx, dRow)
+	return te.tableEditor.InsertRow(ctx, dRow, te.duplicatePKErrFunc)
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
@@ -98,7 +111,7 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 		return err
 	}
 
-	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow)
+	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicatePKErrFunc)
 }
 
 func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {

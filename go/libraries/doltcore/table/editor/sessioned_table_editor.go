@@ -37,7 +37,7 @@ type sessionedTableEditor struct {
 
 var _ TableEditor = &sessionedTableEditor{}
 
-func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error {
+func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
@@ -47,11 +47,11 @@ func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val type
 	}
 
 	ti := ste.tableEditor
-	return ti.InsertKeyVal(ctx, key, val, tagToVal)
+	return ti.InsertKeyVal(ctx, key, val, tagToVal, errFunc)
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
-func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
+func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
@@ -64,7 +64,7 @@ func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) er
 		return err
 	}
 
-	return ste.tableEditor.InsertRow(ctx, dRow)
+	return ste.tableEditor.InsertRow(ctx, dRow, errFunc)
 }
 
 // DeleteKey removes the given key from the table.
@@ -84,11 +84,11 @@ func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, r row.Row) error
 
 // UpdateRow takes the current row and new row, and updates it accordingly. Any applicable rows from tables that have a
 // foreign key referencing this table will also be updated.
-func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
+func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc PKDuplicateErrFunc) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
-	return ste.updateRow(ctx, dOldRow, dNewRow, true)
+	return ste.updateRow(ctx, dOldRow, dNewRow, true, errFunc)
 }
 
 func (ste *sessionedTableEditor) GetAutoIncrementValue() types.Value {
@@ -191,7 +191,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 						return err
 					}
 				}
-				err = referencingSte.updateRow(ctx, unalteredNewRow, newRow, false)
+				err = referencingSte.updateRow(ctx, unalteredNewRow, newRow, false, nil)
 				if err != nil {
 					return err
 				}
@@ -280,7 +280,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 						return err
 					}
 				}
-				err = referencingSte.updateRow(ctx, rowToUpdate, newRow, false)
+				err = referencingSte.updateRow(ctx, rowToUpdate, newRow, false, nil)
 				if err != nil {
 					return err
 				}
@@ -298,7 +298,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 						return err
 					}
 				}
-				err = referencingSte.updateRow(ctx, oldRow, newRow, false)
+				err = referencingSte.updateRow(ctx, oldRow, newRow, false, nil)
 				if err != nil {
 					return err
 				}
@@ -382,7 +382,7 @@ func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, o
 	return tpl, false, nil
 }
 
-func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, checkReferences bool) error {
+func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, checkReferences bool, errFunc PKDuplicateErrFunc) error {
 	if checkReferences {
 		dNewRowTaggedVals, err := dNewRow.TaggedValues()
 		if err != nil {
@@ -399,7 +399,7 @@ func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row,
 		return err
 	}
 
-	return ste.tableEditor.UpdateRow(ctx, dOldRow, dNewRow)
+	return ste.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, errFunc)
 }
 
 // validateForInsert returns whether the given row is able to be inserted into the target table.
