@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+
+	gsql "github.com/dolthub/go-mysql-server/sql"
 )
 
 // IndexEditor takes in changes to an index map and returns the updated map if changes have been made.
@@ -90,7 +92,7 @@ func (indexEd *IndexEditor) Flush(ctx context.Context) error {
 		for _, numOfKeys := range indexEd.keyCount {
 			if numOfKeys > 1 {
 				indexEd.reset(indexEd.data)
-				return fmt.Errorf("UNIQUE constraint violation on index: %s", indexEd.idx.Name())
+				return gsql.ErrDuplicateEntry.New(indexEd.idx.Name()) // TODO: Get this to be caught earlier
 			}
 		}
 	}
