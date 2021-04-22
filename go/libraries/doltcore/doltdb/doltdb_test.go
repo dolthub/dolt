@@ -123,12 +123,12 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 func TestIsValidTableName(t *testing.T) {
 	assert.True(t, IsValidTableName("a"))
 	assert.True(t, IsValidTableName("a1"))
+	assert.True(t, IsValidTableName("_a1"))
 	assert.True(t, IsValidTableName("a1_b_c------1"))
 	assert.True(t, IsValidTableName("Add-098234_lkjasdf0p98"))
 	assert.False(t, IsValidTableName("1"))
 	assert.False(t, IsValidTableName("-"))
 	assert.False(t, IsValidTableName("-a"))
-	assert.False(t, IsValidTableName("__a"))
 	assert.False(t, IsValidTableName(""))
 	assert.False(t, IsValidTableName("1a"))
 	assert.False(t, IsValidTableName("a1-"))

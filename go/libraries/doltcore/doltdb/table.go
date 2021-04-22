@@ -37,7 +37,7 @@ const (
 	autoIncrementKey   = "auto_increment"
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
-	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
+	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z_]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
 	// ForeignKeyNameRegexStr is the regular expression that valid foreign keys must match.
 	// From the unquoted identifiers: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
 	ForeignKeyNameRegexStr = `^[-$_0-9a-zA-Z]+$`
