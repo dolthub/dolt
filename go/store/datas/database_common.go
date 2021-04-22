@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -37,6 +38,7 @@ import (
 type database struct {
 	*types.ValueStore
 	rt rootTracker
+	mu sync.Mutex
 }
 
 var (
@@ -521,6 +523,97 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 	return tryCommitErr
 }
 
+func (db *database) UpdateWorkspaceValue(ctx context.Context, ds Dataset, ref types.Ref, meta WorkspaceMeta, prevHash hash.Hash) (Dataset, error) {
+	return db.doHeadUpdate(
+		ctx,
+		ds,
+		func(ds Dataset) error {
+			workspace, err := NewWorkspace(ctx, ref, meta.Meta)
+			if err != nil {
+				return err
+			}
+
+			return db.doUpdateWorkspaceValue(ctx, ds.ID(), workspace, prevHash)
+		},
+	)
+}
+
+// doTag manages concurrent access the single logical piece of mutable state: the current Root. It uses
+// the same optimistic locking write algorithm as doCommit (see above). Unlike doCommit and other methods in this file,
+// an error is returned if the current value of the ref being written has changed.
+// Workspace updates are serialized, but all other
+func (db *database) doUpdateWorkspaceValue(ctx context.Context, datasetID string, workspace types.Struct, currHash hash.Hash) error {
+	err := db.validateWorkspace(workspace)
+	if err != nil {
+		return err
+	}
+
+	var tryCommitErr error
+	testSetFailed := false
+	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
+		tryCommitErr = func() error {
+			db.mu.Lock()
+			defer db.mu.Unlock()
+
+			currentRootHash, err := db.rt.Root(ctx)
+			if err != nil {
+				return err
+			}
+
+			currentDatasets, err := db.Datasets(ctx)
+			if err != nil {
+				return err
+			}
+
+			// Second level of locking: assert that the dataset value we read is unchanged from its expected value.
+			// This is separate than the whole-DB lock in the outer loop, as it only protects the value of this dataset
+			// entry. Other writers can update other values and writes chunks in the database and we will retry
+			// indefinitely. But if we find the expected value in the dataset has changed, we immediately abort and the
+			// caller must retry after reconciliation.
+			currVal, ok, err := currentDatasets.MaybeGet(ctx, types.String(datasetID))
+			if err != nil {
+				return err
+			}
+
+			if ok {
+				h, err := currVal.Hash(workspace.Format())
+				if err != nil {
+					return err
+				}
+
+				if h != currHash {
+					testSetFailed = true
+					return ErrOptimisticLockFailed
+				}
+			} else {
+				if !currHash.IsEmpty() {
+					panic("No ref found for workspace " + datasetID)
+				}
+			}
+
+			val, err := db.WriteValue(ctx, workspace) // will be orphaned if the tryCommitChunks() below fails
+			if err != nil {
+				return err
+			}
+
+			ref, err := types.ToRefOfValue(val, db.Format())
+			if err != nil {
+				return err
+			}
+
+			currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
+			if err != nil {
+				return err
+			}
+
+			return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
+		}()
+	}
+
+	return tryCommitErr
+}
+
+
 func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doDelete(ctx, ds.ID()) })
 }
@@ -652,6 +745,26 @@ func (db *database) validateTag(ctx context.Context, t types.Struct) error {
 
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (db *database) validateWorkspace(t types.Struct) error {
+	is, err := IsWorkspace(t)
+	if err != nil {
+		return err
+	}
+	if !is {
+		return fmt.Errorf("Workspace struct %s is malformed, IsWorkspace() == false", t.String())
+	}
+
+	_, ok, err := t.MaybeGet(WorkspaceRefField)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("workspace is missing field %s", WorkspaceRefField)
 	}
 
 	return nil
