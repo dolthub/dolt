@@ -51,6 +51,9 @@ const (
 
 	// WorkspaceRefType is a reference to a workspace
 	WorkspaceRefType RefType = "workspaces"
+
+	// WorkingSetRefType is a reference to a working set
+	WorkingSetRefType RefType = "workingSets"
 )
 
 // RefTypes is the set of all supported reference types.  External RefTypes can be added to this map in order to add

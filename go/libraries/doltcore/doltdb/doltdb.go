@@ -849,6 +849,41 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 	return err
 }
 
+// UpdateWorkingSet updates the working set with the ref given.
+func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.DoltRef, rootVal *RootValue, prevHash hash.Hash) error {
+	if !IsWorkingSetRef(workingSetRef) {
+		panic(fmt.Sprintf("invalid working set ref %s", workingSetRef.String()))
+	}
+
+	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
+	if err != nil {
+		return err
+	}
+
+	st, err := NewWorkingSetMeta().toNomsStruct(ddb.Format())
+	if err != nil {
+		return err
+	}
+
+	rootRef, err := types.NewRef(rootVal.valueSt, ddb.Format())
+	if err != nil {
+		return err
+	}
+
+	workspaceStruct, err := datas.NewWorkspace(ctx, rootRef, st)
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := types.NewRef(workspaceStruct, ddb.Format())
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.UpdateWorkspaceValue(ctx, ds, wsRef, datas.WorkspaceMeta{Meta: st}, prevHash)
+	return err
+}
+
 func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {
 	err := ddb.deleteRef(ctx, tag)
 
