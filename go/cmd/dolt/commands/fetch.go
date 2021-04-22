@@ -203,11 +203,12 @@ func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEn
 					return verr
 				}
 
+				var ok bool
 				switch mode {
 				case ref.ForceUpdate:
 					err = dEnv.DoltDB.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
 				case ref.FastForwardOnly:
-					ok, err := dEnv.DoltDB.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
+					ok, err = dEnv.DoltDB.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
 					if !ok {
 						return errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").Build()
 					}

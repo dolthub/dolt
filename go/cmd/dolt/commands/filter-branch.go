@@ -190,6 +190,9 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		}
 		// ddl returns a nil itr
 		_, _, err = eng.ddl(sqlCtx, s, query)
+		if err != nil {
+			return nil, fmt.Errorf("error executing DDL: %w", err)
+		}
 
 	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
 		return nil, fmt.Errorf("filter-branch queries must be write queries: '%s'", query)
