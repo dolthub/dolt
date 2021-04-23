@@ -84,7 +84,7 @@ jobs:
     needs: create-release
     runs-on: ubuntu-18.04
     steps:
-      - name: Repository Dispatch
+      - name: Checkout Release Notes Generator
         uses: actions/checkout@v2
         with:
           repository: dolthub/release-notes-generator
