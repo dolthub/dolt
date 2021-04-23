@@ -38,12 +38,18 @@ func ParseArgs(ap *argparser.ArgParser, args []string, usagePrinter UsagePrinter
 	if err != nil {
 		if err != argparser.ErrHelp {
 			PrintErrln(err.Error())
-			usagePrinter()
+
+			if usagePrinter != nil {
+				usagePrinter()
+			}
+
 			os.Exit(1)
 		}
 
 		// --help param
-		usagePrinter()
+		if usagePrinter != nil {
+			usagePrinter()
+		}
 		os.Exit(0)
 	}
 

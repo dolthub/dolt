@@ -48,7 +48,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	dbData, ok := dSess.GetDbData(dbName)
 
 	if !ok {
-		return nil, fmt.Errorf("Could not load %s", dbName)
+		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	ddb := dbData.Ddb
