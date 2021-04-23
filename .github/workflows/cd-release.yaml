@@ -101,8 +101,11 @@ jobs:
       - name: Create Notes
         run: |
           ./gen_release_notes.pl \
+          --token "$TOKEN" \
           -d dolthub/go-mysql-server \
           -d dolthub/vitess dolthub/dolt v${{ github.event.inputs.version }}
+        env:
+          TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
 
 #      - name: Post Changelog to Release
 #        uses: actions/github-script@v4
