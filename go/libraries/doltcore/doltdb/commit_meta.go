@@ -35,6 +35,10 @@ const (
 	commitMetaVersion = "1.0"
 )
 
+var ErrNameNotConfigured = errors.New("Aborting commit due to empty committer name. Is your config set?")
+var ErrEmailNotConfigured = errors.New("Aborting commit due to empty committer email. Is your config set?")
+var ErrEmptyCommitMessage = errors.New("Aborting commit due to empty commit message.")
+
 var CommitNowFunc = time.Now
 var CommitLoc = time.Local
 
@@ -64,15 +68,15 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	d := strings.TrimSpace(desc)
 
 	if n == "" {
-		return nil, errors.New("Aborting commit due to empty committer name. Is your config set?")
+		return nil, ErrNameNotConfigured
 	}
 
 	if e == "" {
-		return nil, errors.New("Aborting commit due to empty committer email. Is your config set?")
+		return nil, ErrEmailNotConfigured
 	}
 
 	if d == "" {
-		return nil, errors.New("aborting commit due to empty commit message")
+		return nil, ErrEmptyCommitMessage
 	}
 
 	ns := uint64(CommitNowFunc().UnixNano())

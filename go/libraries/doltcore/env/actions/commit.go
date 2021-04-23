@@ -16,7 +16,6 @@ package actions
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -29,9 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
-
-var ErrNameNotConfigured = errors.New("name not configured")
-var ErrEmailNotConfigured = errors.New("email not configured")
 
 type CommitStagedProps struct {
 	Message          string
@@ -47,7 +43,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	name, err := cfg.GetString(env.UserNameKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", ErrNameNotConfigured
+		return "", "", doltdb.ErrNameNotConfigured
 	} else if err != nil {
 		return "", "", err
 	}
@@ -55,7 +51,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	email, err := cfg.GetString(env.UserEmailKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", ErrEmailNotConfigured
+		return "", "", doltdb.ErrEmailNotConfigured
 	} else if err != nil {
 		return "", "", err
 	}
@@ -71,7 +67,7 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 	drw := dbData.Drw
 
 	if props.Message == "" {
-		return "", ErrEmptyCommitMessage
+		return "", doltdb.ErrEmptyCommitMessage
 	}
 
 	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
