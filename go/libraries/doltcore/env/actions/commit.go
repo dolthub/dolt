@@ -32,7 +32,6 @@ import (
 
 var ErrNameNotConfigured = errors.New("name not configured")
 var ErrEmailNotConfigured = errors.New("email not configured")
-var ErrEmptyCommitMessage = errors.New("commit message empty")
 
 type CommitStagedProps struct {
 	Message          string
@@ -176,10 +175,9 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 		return "", err
 	}
 
-	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
-
-	if noCommitMsgErr != nil {
-		return "", ErrEmptyCommitMessage
+	meta, err := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	if err != nil {
+		return "", err
 	}
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.

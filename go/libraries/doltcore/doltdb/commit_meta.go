@@ -72,7 +72,7 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	}
 
 	if d == "" {
-		return nil, errors.New("Aborting commit due to empty commit message.")
+		return nil, errors.New("aborting commit due to empty commit message")
 	}
 
 	ns := uint64(CommitNowFunc().UnixNano())
