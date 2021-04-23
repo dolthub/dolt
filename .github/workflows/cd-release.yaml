@@ -90,6 +90,7 @@ jobs:
         with:
           repository: dolthub/release-notes-generator
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          ref: db/add-https-opt
       #          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "DateTime::Format::ISO8601")'
       #          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "Getopt::Long")'
       #          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "JSON::Parse")'
@@ -106,6 +107,7 @@ jobs:
           -d dolthub/vitess dolthub/dolt v${{ github.event.inputs.version }}
         env:
           TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          CLONE_HTTPS: 1
 
 #      - name: Post Changelog to Release
 #        uses: actions/github-script@v4
