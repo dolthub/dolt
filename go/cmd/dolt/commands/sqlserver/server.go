@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -123,7 +124,14 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	sqlEngine.AddDatabase(information_schema.NewInformationSchemaDatabase(sqlEngine.Catalog))
 
-	hostPort := net.JoinHostPort(serverConfig.Host(), strconv.Itoa(serverConfig.Port()))
+	portAsString := strconv.Itoa(serverConfig.Port())
+	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
+
+	if portInUse(hostPort) {
+		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
+		return portInUseError, nil
+	}
+
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
 	mySQLServer, startError = server.NewServer(
@@ -153,6 +161,16 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return
 	}
 	return
+}
+
+func portInUse(hostPort string) bool {
+	timeout := time.Second
+	conn, _ := net.DialTimeout("tcp", hostPort, timeout)
+	if conn != nil {
+		defer conn.Close()
+		return true
+	}
+	return false
 }
 
 func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool) server.SessionBuilder {
