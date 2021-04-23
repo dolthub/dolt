@@ -8,47 +8,48 @@ on:
         required: true
 
 jobs:
-  create-release:
-    name: Create release
-    runs-on: ubuntu-18.04
-    outputs:
-      release_id: ${{ steps.create_release.outputs.id }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Update dolt version command
-        run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
-        env:
-          FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
-          NEW_VERSION: ${{ github.event.inputs.version }}
-      - uses: EndBug/add-and-commit@v7
-        with:
-          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', github.event.inputs.version) }}
-          add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
-          cwd: "."
-      - name: Build Binaries
-        run: |
-          GO_BUILD_VERSION=1.15.11 go/utils/publishrelease/buildbinaries.sh
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ github.event.inputs.version }}
-          release_name: ${{ github.event.inputs.version }}
-          draft: false
-          prerelease: false
-      - name: Upload Linux Distro
-        id: upload-linux-distro
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: go/out/dolt-linux-amd64.tar.gz
-          asset_name: dolt-linux-amd64.tar.gz
-          asset_content_type: application/zip
+#  create-release:
+#    name: Create release
+#    runs-on: ubuntu-18.04
+#    outputs:
+#      release_id: ${{ steps.create_release.outputs.id }}
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v2
+#      - name: Update dolt version command
+#        run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
+#        env:
+#          FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+#          NEW_VERSION: ${{ github.event.inputs.version }}
+#      - uses: EndBug/add-and-commit@v7
+#        with:
+#          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', github.event.inputs.version) }}
+#          add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+#          cwd: "."
+#      - name: Build Binaries
+#        run: |
+#          GO_BUILD_VERSION=1.15.11 go/utils/publishrelease/buildbinaries.sh
+#      - name: Create Release
+#        id: create_release
+#        uses: actions/create-release@v1
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        with:
+#          tag_name: v${{ github.event.inputs.version }}
+#          release_name: ${{ github.event.inputs.version }}
+#          draft: false
+#          prerelease: false
+#      - name: Upload Linux Distro
+#        id: upload-linux-distro
+#        uses: actions/upload-release-asset@v1
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        with:
+#          upload_url: ${{ steps.create_release.outputs.upload_url }}
+#          asset_path: go/out/dolt-linux-amd64.tar.gz
+#          asset_name: dolt-linux-amd64.tar.gz
+#          asset_content_type: application/zip
+
 #      - name: Upload OSX Distro
 #        id: upload-osx-distro
 #        uses: actions/upload-release-asset@v1
@@ -81,7 +82,7 @@ jobs:
 #          asset_content_type: text/plain
 
   create-release-notes:
-    needs: create-release
+#    needs: create-release
     runs-on: ubuntu-18.04
     steps:
       - name: Checkout Release Notes Generator
@@ -90,38 +91,42 @@ jobs:
           repository: dolthub/release-notes-generator
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
       - name: Install Dependencies
-        run: ./install-deps.sh
+        run: |
+          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "DateTime::Format::ISO8601")'
+          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "Getopt::Long")'
+          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "JSON::Parse")'
         env:
           PERL_MM_USE_DEFAULT: 1
-      - name: Create Notes
-        run: |
-          ./gen_release_notes.pl \
-          -d dolthub/go-mysql-server \
-          -d dolthub/vitess dolthub/dolt v${{ github.event.inputs.version }} > changelog.txt
-      - name: Post Changelog to Release
-        uses: actions/github-script@v4
-        with:
-          debug: true
-          github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const path = require('path')
-            try {
-              const body = fs.readFileSync(path.join(process.env.WORKSPACE, "changelog.txt"))
-              const res = await github.repos.updateRelease({
-                owner: "dolthub",
-                repo: "dolt",
-                release_id: parseInt(process.env.RELEASE_ID, 10),
-                body,
-              });
-              console.log("Successfully updated release notes", res)
-            } catch (err) {
-              console.log("Error", err);
-              process.exit(1);
-            }
-        env:
-          WORKSPACE: ${{ github.workspace }}
-          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+#      - name: Create Notes
+#        run: |
+#          ./gen_release_notes.pl \
+#          -d dolthub/go-mysql-server \
+#          -d dolthub/vitess dolthub/dolt v${{ github.event.inputs.version }}
+
+#      - name: Post Changelog to Release
+#        uses: actions/github-script@v4
+#        with:
+#          debug: true
+#          github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
+#          script: |
+#            const fs = require('fs');
+#            const path = require('path')
+#            try {
+#              const body = fs.readFileSync(path.join(process.env.WORKSPACE, "changelog.txt"))
+#              const res = await github.repos.updateRelease({
+#                owner: "dolthub",
+#                repo: "dolt",
+#                release_id: parseInt(process.env.RELEASE_ID, 10),
+#                body,
+#              });
+#              console.log("Successfully updated release notes", res)
+#            } catch (err) {
+#              console.log("Error", err);
+#              process.exit(1);
+#            }
+#        env:
+#          WORKSPACE: ${{ github.workspace }}
+#          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
 
 #  homebrew-bump:
 #    needs: create-release
