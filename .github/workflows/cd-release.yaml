@@ -90,18 +90,19 @@ jobs:
         with:
           repository: dolthub/release-notes-generator
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
+      #          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "DateTime::Format::ISO8601")'
+      #          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "Getopt::Long")'
+      #          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "JSON::Parse")'
       - name: Install Dependencies
         run: |
-          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "DateTime::Format::ISO8601")'
-          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "Getopt::Long")'
-          sudo perl -MCPAN -e 'CPAN::Shell->rematein("notest", "install", "JSON::Parse")'
+          sudo ./install-deps.sh
         env:
           PERL_MM_USE_DEFAULT: 1
-#      - name: Create Notes
-#        run: |
-#          ./gen_release_notes.pl \
-#          -d dolthub/go-mysql-server \
-#          -d dolthub/vitess dolthub/dolt v${{ github.event.inputs.version }}
+      - name: Create Notes
+        run: |
+          ./gen_release_notes.pl \
+          -d dolthub/go-mysql-server \
+          -d dolthub/vitess dolthub/dolt v${{ github.event.inputs.version }}
 
 #      - name: Post Changelog to Release
 #        uses: actions/github-script@v4
