@@ -205,6 +205,7 @@ func (tea *tableEditAccumulator) maybeGet(ctx context.Context, keyHash hash.Hash
 	// No locks as all calls and modifications to tea are done from a lock that the caller handles
 	if kvp, ok := tea.affectedKeys[keyHash]; ok {
 		if kvp.v == nil {
+			// if the row has been deleted then return that the row doesn't exist even if it's in the row data
 			return nil, false, nil
 		} else {
 			return kvp, true, nil
