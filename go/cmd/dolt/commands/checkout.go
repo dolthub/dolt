@@ -76,7 +76,7 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCheckoutArgParser()
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
-	apr := cli.ParseArgs(ap, args, helpPrt)
+	apr := cli.ParseArgsOrDie(ap, args, helpPrt)
 
 	if (apr.Contains(cli.CheckoutCoBranch) && apr.NArg() > 1) || (!apr.Contains(cli.CheckoutCoBranch) && apr.NArg() == 0) {
 		usagePrt()

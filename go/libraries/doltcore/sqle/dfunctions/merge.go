@@ -51,7 +51,10 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	apr := cli.ParseArgs(ap, args, nil)
+	apr, err := cli.ParseArgs(ap, args, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	// The fist argument should be the branch name.
 	branchName := apr.Arg(0)

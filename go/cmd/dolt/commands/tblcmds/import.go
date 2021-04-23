@@ -341,7 +341,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	ap := cmd.createArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	dEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
 

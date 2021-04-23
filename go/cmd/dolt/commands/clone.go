@@ -103,7 +103,7 @@ func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
 func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	remoteName := apr.GetValueOrDefault(remoteParam, "origin")
 	branch := apr.GetValueOrDefault(branchParam, "")

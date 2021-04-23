@@ -97,7 +97,7 @@ func (cmd FilterBranchCmd) EventType() eventsapi.ClientEventType {
 func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() < 1 || apr.NArg() > 2 {
 		args := strings.Join(apr.Args(), ", ")

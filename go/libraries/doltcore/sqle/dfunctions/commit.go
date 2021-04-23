@@ -47,7 +47,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	apr := cli.ParseArgs(ap, args, nil)
+	apr := cli.ParseArgsOrDie(ap, args, nil)
 
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {

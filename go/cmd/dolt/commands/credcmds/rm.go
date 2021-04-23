@@ -72,7 +72,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rmDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 	args = apr.Args()
 
 	credsDir, verr := actions.EnsureCredsDir(dEnv)

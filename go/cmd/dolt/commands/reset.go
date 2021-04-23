@@ -78,7 +78,7 @@ func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) 
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateResetArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.ContainsArg(doltdb.DocTableName) {
 		return HandleDocTableVErrAndExitCode()

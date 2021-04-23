@@ -32,7 +32,24 @@ var ErrEmptyDefTuple = errors.New("empty definition tuple")
 
 type UsagePrinter func()
 
-func ParseArgs(ap *argparser.ArgParser, args []string, usagePrinter UsagePrinter) *argparser.ArgParseResults {
+// ParseArgs is used for Dolt SQL functions that are run on the server and should not exit
+func ParseArgs(ap *argparser.ArgParser, args []string, usagePrinter UsagePrinter) (*argparser.ArgParseResults, error) {
+	apr, err := ap.Parse(args)
+
+	if err != nil {
+		// --help param
+		if usagePrinter != nil {
+			usagePrinter()
+		}
+
+		return nil, err
+	}
+
+	return apr, nil
+}
+
+// ParseArgsOrDie is used for CLI command that should exit after erroring.
+func ParseArgsOrDie(ap *argparser.ArgParser, args []string, usagePrinter UsagePrinter) *argparser.ArgParseResults {
 	apr, err := ap.Parse(args)
 
 	if err != nil {
