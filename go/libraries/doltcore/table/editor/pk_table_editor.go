@@ -199,9 +199,9 @@ func (tea *tableEditAccumulator) NewFromCurrent() *tableEditAccumulator {
 	}
 }
 
-// doltKVPIfHas returns a *doltKVP if the current tableEditAccumulator contains the given key, or it exists in the row data.
+// maybeGet returns a *doltKVP if the current tableEditAccumulator contains the given key, or it exists in the row data.
 // This assumes that the given hash is for the given key.
-func (tea *tableEditAccumulator) doltKVPIfHas(ctx context.Context, keyHash hash.Hash, key types.LesserValuable) (*doltKVP, bool, error) {
+func (tea *tableEditAccumulator) maybeGet(ctx context.Context, keyHash hash.Hash, key types.LesserValuable) (*doltKVP, bool, error) {
 	// No locks as all calls and modifications to tea are done from a lock that the caller handles
 	if kvp, ok := tea.affectedKeys[keyHash]; ok {
 		if kvp.v == nil {
@@ -212,7 +212,7 @@ func (tea *tableEditAccumulator) doltKVPIfHas(ctx context.Context, keyHash hash.
 	}
 
 	if tea.prevTea != nil {
-		return tea.prevTea.doltKVPIfHas(ctx, keyHash, key)
+		return tea.prevTea.maybeGet(ctx, keyHash, key)
 	} else {
 		keyVal, err := key.Value(ctx)
 		if err != nil {
@@ -380,7 +380,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
-	if kvp, pkExists, err := te.tea.doltKVPIfHas(ctx, keyHash, key); err != nil {
+	if kvp, pkExists, err := te.tea.maybeGet(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
 		return te.pkErrForKVP(ctx, kvp, errFunc)
@@ -439,7 +439,7 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
-	if kvp, pkExists, err := te.tea.doltKVPIfHas(ctx, keyHash, key); err != nil {
+	if kvp, pkExists, err := te.tea.maybeGet(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
 		return te.pkErrForKVP(ctx, kvp, errFunc)
@@ -527,7 +527,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		}
 
 		// Check if the new primary key already exists
-		if kvp, pkExists, err := te.tea.doltKVPIfHas(ctx, newHash, dNewKeyVal); err != nil {
+		if kvp, pkExists, err := te.tea.maybeGet(ctx, newHash, dNewKeyVal); err != nil {
 			return err
 		} else if pkExists {
 			return te.pkErrForKVP(ctx, kvp, errFunc)
