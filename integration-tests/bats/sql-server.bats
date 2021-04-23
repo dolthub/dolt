@@ -20,7 +20,7 @@ teardown() {
     teardown_common
 }
 
-@test "port in use" {
+@test "sql-server: port in use" {
     cd repo1
 
     let PORT="$$ % (65536-1024) + 1024"
