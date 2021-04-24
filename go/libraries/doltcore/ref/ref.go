@@ -158,6 +158,8 @@ func Parse(str string) (DoltRef, error) {
 				return NewTagRef(str), nil
 			case WorkspaceRefType:
 				return NewWorkspaceRef(str), nil
+			case WorkingSetRefType:
+				return NewWorkingSetRef(str), nil
 			default:
 				panic("unknown type " + rType)
 			}
