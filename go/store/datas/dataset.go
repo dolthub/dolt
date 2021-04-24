@@ -63,6 +63,14 @@ func newDataset(db Database, id string, head types.Value) (Dataset, error) {
 		}
 	}
 
+	if !check {
+		check, err = IsWorkspace(head)
+
+		if err != nil {
+			return Dataset{}, err
+		}
+	}
+
 	// precondition checks
 	d.PanicIfFalse(check)
 	return Dataset{db, id, head}, nil

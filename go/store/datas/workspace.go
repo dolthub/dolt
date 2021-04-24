@@ -31,13 +31,18 @@ type WorkspaceMeta struct {
 	Meta types.Struct
 }
 
-var workspaceTemplate = types.MakeStructTemplate(WorkspaceName, []string{WorkspaceMetaField, WorkspaceRefField})
+// var workspaceTemplate = types.MakeStructTemplate(WorkspaceName, []string{WorkspaceMetaField, WorkspaceRefField})
+var workspaceTemplate = types.MakeStructTemplate(WorkspaceName, []string{WorkspaceRefField})
 
 // ref is a Ref<Value>, any Value (not necessarily a commit)
-var workspaceTagType = nomdl.MustParseType(`Struct Workspace {
-        meta: Struct {},
+// var valueWorkspaceType = nomdl.MustParseType(`Struct Workspace {
+//         meta: Struct {},
+//         ref:  Ref<Value>,
+// }`)
+var valueWorkspaceType = nomdl.MustParseType(`Struct Workspace {
         ref:  Ref<Value>,
 }`)
+
 
 // NewWorkspace creates a new workspace object.
 //
@@ -50,14 +55,14 @@ var workspaceTagType = nomdl.MustParseType(`Struct Workspace {
 // }
 // ```
 // where M is a struct type and R is a ref type.
-func NewWorkspace(_ context.Context, valueRef types.Ref, meta types.Struct) (types.Struct, error) {
-	return workspaceTemplate.NewStruct(meta.Format(), []types.Value{meta, valueRef})
+func NewWorkspace(_ context.Context, valueRef types.Ref) (types.Struct, error) {
+	return workspaceTemplate.NewStruct(valueRef.Format(), []types.Value{valueRef})
 }
 
 func IsWorkspace(v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); !ok {
 		return false, nil
 	} else {
-		return types.IsValueSubtypeOf(s.Format(), v, workspaceTagType)
+		return types.IsValueSubtypeOf(s.Format(), v, valueWorkspaceType)
 	}
 }

@@ -82,8 +82,6 @@ func (db *database) StatsSummary() string {
 }
 
 func (db *database) Flush(ctx context.Context) error {
-	// TODO: This is a pretty ghetto hack - do better.
-	// See: https://github.com/attic-labs/noms/issues/3530
 	ds, err := db.GetDataset(ctx, fmt.Sprintf("-/flush/%s", random.Id()))
 
 	if err != nil {
@@ -528,7 +526,7 @@ func (db *database) UpdateWorkspaceValue(ctx context.Context, ds Dataset, ref ty
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			workspace, err := NewWorkspace(ctx, ref, meta.Meta)
+			workspace, err := NewWorkspace(ctx, ref)
 			if err != nil {
 				return err
 			}
@@ -548,67 +546,129 @@ func (db *database) doUpdateWorkspaceValue(ctx context.Context, datasetID string
 		return err
 	}
 
+	// This could loop forever, given enough simultaneous writers. BUG 2565
 	var tryCommitErr error
-	testSetFailed := false
-	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
-		tryCommitErr = func() error {
-			db.mu.Lock()
-			defer db.mu.Unlock()
+	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed; {
+		currentRootHash, err := db.rt.Root(ctx)
 
-			currentRootHash, err := db.rt.Root(ctx)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		}
 
-			currentDatasets, err := db.Datasets(ctx)
-			if err != nil {
-				return err
-			}
+		currentDatasets, err := db.Datasets(ctx)
 
-			// Second level of locking: assert that the dataset value we read is unchanged from its expected value.
-			// This is separate than the whole-DB lock in the outer loop, as it only protects the value of this dataset
-			// entry. Other writers can update other values and writes chunks in the database and we will retry
-			// indefinitely. But if we find the expected value in the dataset has changed, we immediately abort and the
-			// caller must retry after reconciliation.
-			currVal, ok, err := currentDatasets.MaybeGet(ctx, types.String(datasetID))
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		}
 
-			if ok {
-				h, err := currVal.Hash(workspace.Format())
-				if err != nil {
-					return err
-				}
+		tagRef, err := db.WriteValue(ctx, workspace) // will be orphaned if the tryCommitChunks() below fails
 
-				if h != currHash {
-					testSetFailed = true
-					return ErrOptimisticLockFailed
-				}
-			} else {
-				if !currHash.IsEmpty() {
-					panic("No ref found for workspace " + datasetID)
-				}
-			}
+		if err != nil {
+			return err
+		}
 
-			val, err := db.WriteValue(ctx, workspace) // will be orphaned if the tryCommitChunks() below fails
-			if err != nil {
-				return err
-			}
+		_, hasHead, err := currentDatasets.MaybeGet(ctx, types.String(datasetID))
 
-			ref, err := types.ToRefOfValue(val, db.Format())
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		}
 
-			currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
-			if err != nil {
-				return err
-			}
+		if hasHead {
+			return fmt.Errorf(fmt.Sprintf("tag %s already exists and cannot be altered after creation", datasetID))
+		}
 
-			return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
-		}()
+		ref, err := types.ToRefOfValue(tagRef, db.Format())
+		if err != nil {
+			return err
+		}
+
+		currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
+		if err != nil {
+			return err
+		}
+
+		tryCommitErr = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
 	}
+
+	return tryCommitErr
+
+
+	// var tryCommitErr error
+	// testSetFailed := false
+	// for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
+	// 	tryCommitErr = func() error {
+	// 		db.mu.Lock()
+	// 		defer db.mu.Unlock()
+	//
+	// 		currentRootHash, err := db.rt.Root(ctx)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	//
+	// 		currentDatasets, err := db.Datasets(ctx)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	//
+	// 		// Second level of locking: assert that the dataset value we read is unchanged from its expected value.
+	// 		// This is separate than the whole-DB lock in the outer loop, as it only protects the value of this dataset
+	// 		// entry. Other writers can update other values and writes chunks in the database and we will retry
+	// 		// indefinitely. But if we find the expected value in the dataset has changed, we immediately abort and the
+	// 		// caller must retry after reconciliation.
+	// 		ds, err := db.GetDataset(ctx, datasetID)
+	// 		currDsVal, ok, err := ds.MaybeHeadRef()
+	// 		//
+	// 		// currDsVal, ok, err := currentDatasets.MaybeGet(ctx, types.String(datasetID))
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	//
+	// 		if ok {
+	// 			h, err := currDsVal.Hash(workspace.Format())
+	// 			if err != nil {
+	// 				return err
+	// 			}
+	//
+	// 			if h != currHash {
+	// 				testSetFailed = true
+	// 				return ErrOptimisticLockFailed
+	// 			}
+	// 		} else {
+	// 			if !currHash.IsEmpty() {
+	// 				panic("No ref found for workspace " + datasetID)
+	// 			}
+	// 		}
+	//
+	// 		val, err := db.WriteValue(ctx, workspace) // will be orphaned if the tryCommitChunks() below fails
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	//
+	// 		// Like flush do
+	// 		_, err = db.CommitValue(ctx, ds, val)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	//
+	// 		h, err := val.Hash(val.Format())
+	// 		fmt.Sprintf("%v", h)
+	//
+	// 		ref, err := types.ToRefOfValue(val, db.Format())
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	//
+	// 		h, err = ref.Hash(val.Format())
+	// 		fmt.Sprintf("%v", h)
+	//
+	// 		currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	//
+	// 		return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
+	// 	}()
+	// }
 
 	return tryCommitErr
 }
