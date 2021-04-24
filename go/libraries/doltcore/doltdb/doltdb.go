@@ -860,27 +860,33 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.DoltR
 		return err
 	}
 
-	st, err := NewWorkingSetMeta().toNomsStruct(ddb.Format())
+	// st, err := NewWorkingSetMeta().toNomsStruct(ddb.Format())
+	// if err != nil {
+	// 	return err
+	// }
+
+	rootRef, err := ddb.db.WriteValue(ctx, rootVal.valueSt)
 	if err != nil {
 		return err
 	}
 
-	rootRef, err := types.NewRef(rootVal.valueSt, ddb.Format())
-	if err != nil {
-		return err
-	}
+	h, err := rootRef.Hash(rootRef.Format())
+	fmt.Sprintf("%v", h)
 
-	workspaceStruct, err := datas.NewWorkspace(ctx, rootRef, st)
-	if err != nil {
-		return err
-	}
+	// workspaceStruct, err := datas.NewWorkspace(ctx, rootRef, st)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// wsRef, err := types.NewRef(workspaceStruct, ddb.Format())
+	// if err != nil {
+	// 	return err
+	// }
 
-	wsRef, err := types.NewRef(workspaceStruct, ddb.Format())
-	if err != nil {
-		return err
-	}
+	// h, err = wsRef.Hash(wsRef.Format())
+	// fmt.Sprintf("%v", h)
 
-	_, err = ddb.db.UpdateWorkspaceValue(ctx, ds, wsRef, datas.WorkspaceMeta{Meta: st}, prevHash)
+	_, err = ddb.db.UpdateWorkspaceValue(ctx, ds, rootRef, datas.WorkspaceMeta{}, prevHash)
 	return err
 }
 
