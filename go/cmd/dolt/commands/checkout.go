@@ -216,7 +216,9 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand
 			bdr.AddDetails("Aborting")
 			return bdr.Build()
 		} else if err == doltdb.ErrAlreadyOnBranch {
-			return errhand.BuildDError("Already on branch '%s'", name).Build()
+			// Being on the same branch shouldn't be an error
+			cli.Printf("Already on branch '%s'", name)
+			return nil
 		} else {
 			bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", name)
 			bdr.AddCause(err)
