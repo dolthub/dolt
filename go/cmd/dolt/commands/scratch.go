@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type Test struct{}
@@ -40,9 +39,18 @@ func (t Test) Exec(ctx context.Context, commandStr string, args []string, dEnv *
 		return 1
 	}
 
-	wsRef := ref.NewWorkingSetRef("test-workingset4")
-	err = dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, root, hash.Hash{})
-	return HandleVErrAndExitCode(errhand.BuildDError("oopsie").AddCause(err).Build(), nil)
+	wsRef := ref.NewWorkingSetRef("test-workingset5")
+
+	hash, _, err := dEnv.DoltDB.GetRef(ctx, wsRef)
+	if err != nil {
+		return 1
+	}
+
+	err = dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, root, hash)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("oopsie").AddCause(err).Build(), nil)
+	}
+	return 0
 }
 
 func (t Test) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {

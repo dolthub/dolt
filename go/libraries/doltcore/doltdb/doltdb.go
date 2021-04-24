@@ -710,6 +710,26 @@ func (ddb *DoltDB) HasRef(ctx context.Context, doltRef ref.DoltRef) (bool, error
 	return dss.Has(ctx, types.String(doltRef.String()))
 }
 
+// GetRef returns the ref given, if it exists
+func (ddb *DoltDB) GetRef(ctx context.Context, doltRef ref.DoltRef) (hash.Hash, bool, error) {
+	ds, err := ddb.db.GetDataset(ctx, doltRef.String())
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
+
+	if !ds.HasHead() {
+		return hash.Hash{}, false, nil
+	}
+
+	head, ok := ds.MaybeHead()
+	if !ok {
+		return hash.Hash{}, false, nil
+	}
+
+	hash, err := head.Hash(ddb.Format())
+	return hash, true, err
+}
+
 var branchRefFilter = map[ref.RefType]struct{}{ref.BranchRefType: {}}
 
 // GetBranches returns a list of all branches in the database.
@@ -729,6 +749,13 @@ var workspacesRefFilter = map[ref.RefType]struct{}{ref.WorkspaceRefType: {}}
 // GetWorkspaces returns a list of all workspaces in the database.
 func (ddb *DoltDB) GetWorkspaces(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, workspacesRefFilter)
+}
+
+var workingSetsRefFilter = map[ref.RefType]struct{}{ref.WorkingSetRefType: {}}
+
+// GetWorkingSets returns a list of all workspaces in the database.
+func (ddb *DoltDB) GetWorkingSets(ctx context.Context) ([]ref.DoltRef, error) {
+	return ddb.GetRefsOfType(ctx, workingSetsRefFilter)
 }
 
 // GetRefs returns a list of all refs in the database.
