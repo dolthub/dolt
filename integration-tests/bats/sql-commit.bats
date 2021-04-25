@@ -176,6 +176,48 @@ SQL
     [[ "$output" =~ 'test2,false,new table' ]] || false
 }
 
+@test "sql-commit: The -f parameter is properly parsed and executes" {
+    run dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+CREATE TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id),
+    FOREIGN KEY (color) REFERENCES colors(color)
+);
+
+INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+
+SELECT DOLT_COMMIT('-fam', 'Commit1');
+SQL
+
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "select COUNT(*) from objects;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ '3' ]] || false
+
+    run dolt sql -r csv -q "select COUNT(*) from dolt_log;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ '2' ]] || false
+}
+
+@test "sql-commit: missing message does not panic and throws an error" {
+    run dolt sql -q "SELECT DOLT_COMMIT('--allow-empty', '-fam')"
+    [ $status -eq 1 ]
+    ! [[ "$output" =~ 'panic' ]] || false
+    ! [[ "$output" =~ 'error: no value for option `message`' ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }
