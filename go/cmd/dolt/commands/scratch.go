@@ -16,11 +16,17 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type Test struct{}
@@ -34,23 +40,85 @@ func (t Test) Description() string {
 }
 
 func (t Test) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	root, err := dEnv.WorkingRoot(ctx)
+	err := t.updateWorkingSet(ctx, dEnv)
+
 	if err != nil {
-		return 1
+		return HandleVErrAndExitCode(errhand.BuildDError("oopsie").AddCause(err).Build(), nil)
 	}
 
 	wsRef := ref.NewWorkingSetRef("test-workingset5")
 
-	hash, _, err := dEnv.DoltDB.GetRef(ctx, wsRef)
+	ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return 1
 	}
 
-	err = dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, root, hash)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("oopsie").AddCause(err).Build(), nil)
+	root := ws.RootValue()
+	verr := UpdateWorkingWithVErr(dEnv, root)
+	return HandleVErrAndExitCode(verr, nil)
+}
+
+// Gets the current working set, alters it, then tries to commit it back
+func (t Test) updateWorkingSet(ctx context.Context, dEnv *env.DoltEnv) error {
+
+	for i := 0; i < 100; i++ {
+		wsRef := ref.NewWorkingSetRef("test-workingset5")
+
+		ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, wsRef)
+		if err != nil {
+			return err
+		}
+
+		root := ws.RootValue()
+		table, _, err := root.GetTable(ctx, "test")
+		if err != nil {
+			return err
+		}
+
+		schema, err := table.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		tableEditor, err := editor.NewTableEditor(ctx, table, schema, "test")
+		if err != nil {
+			return err
+		}
+
+		r, err := row.New(dEnv.DoltDB.Format(), schema, row.TaggedValues{7493: types.Int(rand.Int63())})
+		if err != nil {
+			return err
+		}
+
+		err = tableEditor.InsertRow(ctx, r)
+		if err != nil {
+			return err
+		}
+
+		newTable, err := tableEditor.Table(ctx)
+		if err != nil {
+			return err
+		}
+
+		newRoot, err := root.PutTable(ctx, "test", newTable)
+		if err != nil {
+			return err
+		}
+
+		hash, err := ws.Struct().Hash(dEnv.DoltDB.Format())
+		if err != nil {
+			return err
+		}
+
+		err = dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, newRoot, hash)
+		if err == datas.ErrOptimisticLockFailed {
+			continue
+		}
+
+		return err
 	}
-	return 0
+
+	return fmt.Errorf("Couldn't commit")
 }
 
 func (t Test) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {

@@ -383,6 +383,27 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 	return NewTag(ctx, tagRef.GetPath(), ddb.db, tagSt)
 }
 
+// ResolveWorkingSet takes a WorkingSetRef and returns the corresponding WorkingSet object.
+func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef) (*WorkingSet, error) {
+	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
+
+	if err != nil {
+		return nil, ErrTagNotFound
+	}
+
+	wsSt, hasHead := ds.MaybeHead()
+
+	if !hasHead {
+		return nil, ErrTagNotFound
+	}
+
+	if wsSt.Name() != datas.WorkspaceName {
+		return nil, fmt.Errorf("workingSetRef head is not a workingSetRef")
+	}
+
+	return NewWorkingSet(ctx, workingSetRef.GetPath(), ddb.db, wsSt)
+}
+
 // TODO: convenience method to resolve the head commit of a branch.
 
 // WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
