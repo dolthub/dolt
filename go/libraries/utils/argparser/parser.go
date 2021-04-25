@@ -235,7 +235,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 		for _, opt := range modalOpts {
 			if _, exists := results[opt.Name]; exists {
-				return nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
+				return nil, errors.New("error: multiple values provided for `" + opt.Name + "`'")
 			}
 
 			results[opt.Name] = ""
@@ -260,13 +260,13 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 		if _, exists := results[opt.Name]; exists {
 			//already provided
-			return nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
+			return nil, errors.New("error: multiple values provided for `" + opt.Name + "`'")
 		}
 
 		if value == nil {
 			i++
 			if i >= len(args) {
-				return nil, errors.New("error: no value for option `" + opt.Name + "'")
+				return nil, errors.New("error: no value for option `" + opt.Name + "`'")
 			}
 
 			valueStr := args[i]
