@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -40,7 +42,21 @@ func (t Test) Description() string {
 }
 
 func (t Test) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	err := t.updateWorkingSet(ctx, dEnv)
+	var err error
+	wg := sync.WaitGroup{}
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		name := i
+		go func() {
+			defer wg.Done()
+			updateErr := t.updateWorkingSet(ctx, dEnv, fmt.Sprintf("%d", name))
+			if err != nil {
+				err = updateErr
+			}
+		}()
+	}
+
+	wg.Wait()
 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("oopsie").AddCause(err).Build(), nil)
@@ -59,7 +75,7 @@ func (t Test) Exec(ctx context.Context, commandStr string, args []string, dEnv *
 }
 
 // Gets the current working set, alters it, then tries to commit it back
-func (t Test) updateWorkingSet(ctx context.Context, dEnv *env.DoltEnv) error {
+func (t Test) updateWorkingSet(ctx context.Context, dEnv *env.DoltEnv, name string) error {
 
 	for i := 0; i < 100; i++ {
 		wsRef := ref.NewWorkingSetRef("test-workingset5")
@@ -85,14 +101,16 @@ func (t Test) updateWorkingSet(ctx context.Context, dEnv *env.DoltEnv) error {
 			return err
 		}
 
-		r, err := row.New(dEnv.DoltDB.Format(), schema, row.TaggedValues{7493: types.Int(rand.Int63())})
-		if err != nil {
-			return err
-		}
+		for i := 0; i < 10; i++ {
+			r, err := row.New(dEnv.DoltDB.Format(), schema, row.TaggedValues{7493: types.Int(rand.Int63())})
+			if err != nil {
+				return err
+			}
 
-		err = tableEditor.InsertRow(ctx, r)
-		if err != nil {
-			return err
+			err = tableEditor.InsertRow(ctx, r)
+			if err != nil {
+				return err
+			}
 		}
 
 		newTable, err := tableEditor.Table(ctx)
@@ -112,7 +130,12 @@ func (t Test) updateWorkingSet(ctx context.Context, dEnv *env.DoltEnv) error {
 
 		err = dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, newRoot, hash)
 		if err == datas.ErrOptimisticLockFailed {
+			cli.PrintErrf("routine %s failed to lock\n", name)
 			continue
+		}
+
+		if err == nil {
+			cli.PrintErrf("routine %s committed successfully\n", name)
 		}
 
 		return err
