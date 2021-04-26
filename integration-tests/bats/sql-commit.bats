@@ -215,7 +215,7 @@ SQL
     run dolt sql -q "SELECT DOLT_COMMIT('--allow-empty', '-fam')"
     [ $status -eq 1 ]
     ! [[ "$output" =~ 'panic' ]] || false
-    [[ "$output" =~ 'error: no value for option `message`' ]] || false
+    [[ "$output" =~ 'error: no value for option `message' ]] || false
 }
 
 get_head_commit() {
