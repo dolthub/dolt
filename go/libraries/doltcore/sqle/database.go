@@ -415,16 +415,16 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	currRoot, dbRootOk := dsess.dbRoots[db.name]
 
 	key := db.WorkingKey()
-	val, err := ctx.Session.GetSessionVariable(ctx, key)
+	workingHash, err := ctx.Session.GetSessionVariable(ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	valStr, ok := val.(string)
+	workingHashStr, ok := workingHash.(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid value for '%s'", key)
 	}
 
-	if val == "" {
+	if workingHash == "" {
 		if !dbRootOk {
 			return nil, fmt.Errorf("value for '%s' not found", key)
 		} else {
@@ -437,15 +437,14 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 			return currRoot.root, nil
 		}
 	} else {
-		hashStr := valStr
-		h, ok := hash.MaybeParse(hashStr)
+		h, ok := hash.MaybeParse(workingHashStr)
 
 		if !ok {
-			return nil, fmt.Errorf("invalid hash '%s' stored in '%s'", hashStr, key)
+			return nil, fmt.Errorf("invalid hash '%s' stored in '%s'", workingHashStr, key)
 		}
 
 		if dbRootOk {
-			if hashStr == currRoot.hashStr {
+			if workingHashStr == currRoot.hashStr {
 				return currRoot.root, nil
 			}
 		}
@@ -456,7 +455,7 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 			return nil, err
 		}
 
-		dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
+		dsess.dbRoots[db.name] = dbRoot{workingHashStr, newRoot}
 		return newRoot, nil
 	}
 }
