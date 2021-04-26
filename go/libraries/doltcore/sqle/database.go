@@ -415,9 +415,16 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	currRoot, dbRootOk := dsess.dbRoots[db.name]
 
 	key := db.WorkingKey()
-	typ, val := ctx.Session.Get(key)
+	val, err := ctx.Session.GetSessionVariable(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	valStr, ok := val.(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid value for '%s'", key)
+	}
 
-	if val == nil {
+	if val == "" {
 		if !dbRootOk {
 			return nil, fmt.Errorf("value for '%s' not found", key)
 		} else {
@@ -430,11 +437,7 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 			return currRoot.root, nil
 		}
 	} else {
-		if typ.Type() != query.Type_TEXT {
-			return nil, fmt.Errorf("invalid value for '%s'", key)
-		}
-
-		hashStr := val.(string)
+		hashStr := valStr
 		h, ok := hash.MaybeParse(hashStr)
 
 		if !ok {
@@ -458,7 +461,7 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	}
 }
 
-// Set a new root value for the database.
+// SetRoot a new root value for the database.
 // Can be used if the dolt working set value changes outside of the
 // basic SQL execution engine. If |newRoot|'s FeatureVersion is
 // out-of-date with the client, SetRoot will update it.
@@ -472,7 +475,7 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	hashStr := h.String()
 	key := db.WorkingKey()
 
-	err = ctx.Session.Set(ctx, key, hashType, hashStr)
+	err = ctx.Session.SetSessionVariable(ctx, key, hashStr)
 
 	if err != nil {
 		return err

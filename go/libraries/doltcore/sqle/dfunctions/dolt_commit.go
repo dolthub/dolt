@@ -227,7 +227,7 @@ func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
 	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
 	dsess := sqle.DSessFromSess(ctx.Session)
 
-	return dsess.Set(ctx, key, hashType, headHashStr)
+	return dsess.SetSessionVariable(ctx, key, headHashStr)
 }
 
 // setSessionRootExplicit sets a session variable (either HEAD or WORKING) to a hash string. For HEAD, the hash string
@@ -236,5 +236,5 @@ func setSessionRootExplicit(ctx *sql.Context, hashString string, suffix string) 
 	key := ctx.GetCurrentDatabase() + suffix
 	dsess := sqle.DSessFromSess(ctx.Session)
 
-	return dsess.SetSessionVarDirectly(ctx, key, hashType, hashString)
+	return dsess.SetSessionVarDirectly(ctx, key, hashString)
 }

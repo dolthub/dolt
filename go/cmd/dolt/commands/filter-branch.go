@@ -105,6 +105,25 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+		{
+			Name:              dbName + "_head",
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(dbName + "_head"),
+			Default:           "",
+		},
+		{
+			Name:              dbName + "_working",
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(dbName + "_head"),
+			Default:           "",
+		},
+	})
+
 	query := apr.Arg(0)
 	notFound := make(missingTbls)
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
@@ -237,12 +256,15 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
-	_ = sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
+	err := sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	db := dsqle.NewDatabase(dbName, dEnv.DbData())
 
 	cat := sql.NewCatalog()
-	err := cat.Register(dfunctions.DoltFunctions...)
+	err = cat.Register(dfunctions.DoltFunctions...)
 	if err != nil {
 		return nil, nil, err
 	}

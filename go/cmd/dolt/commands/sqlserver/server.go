@@ -175,14 +175,15 @@ func portInUse(hostPort string) bool {
 
 func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
+		tmpSqlCtx := sql.NewEmptyContext()
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-		doltSess, err := dsqle.NewDoltSession(ctx, mysqlSess, username, email, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
 
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		err = doltSess.Set(ctx, sql.AutoCommitSessionVar, sql.Boolean, autocommit)
+		err = doltSess.SetSessionVariable(tmpSqlCtx, sql.AutoCommitSessionVar, autocommit)
 
 		if err != nil {
 			return nil, nil, nil, err
