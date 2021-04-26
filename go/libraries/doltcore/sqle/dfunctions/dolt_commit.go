@@ -48,7 +48,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	dbData, ok := dSess.GetDbData(dbName)
 
 	if !ok {
-		return nil, fmt.Errorf("Could not load %s", dbName)
+		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	ddb := dbData.Ddb
@@ -58,12 +58,14 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 	// Get the args for DOLT_COMMIT.
 	args, err := getDoltArgs(ctx, row, d.Children())
-
 	if err != nil {
 		return nil, err
 	}
 
-	apr := cli.ParseArgs(ap, args, nil)
+	apr, err := cli.ParseArgs(ap, args, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	allFlag := apr.Contains(cli.AllFlag)
 	allowEmpty := apr.Contains(cli.AllowEmptyFlag)

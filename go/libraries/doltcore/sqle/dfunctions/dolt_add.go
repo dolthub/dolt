@@ -52,7 +52,11 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return 1, err
 	}
 
-	apr := cli.ParseArgs(ap, args, nil)
+	apr, err := cli.ParseArgs(ap, args, nil)
+	if err != nil {
+		return 1, err
+	}
+
 	allFlag := apr.Contains(cli.AllFlag)
 
 	if apr.NArg() == 0 && !allFlag {

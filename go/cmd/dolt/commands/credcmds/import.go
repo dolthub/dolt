@@ -94,7 +94,7 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	credsDir, verr := actions.EnsureCredsDir(dEnv)
 	if verr != nil {

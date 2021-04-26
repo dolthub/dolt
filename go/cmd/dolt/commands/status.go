@@ -67,7 +67,7 @@ func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
-	cli.ParseArgs(ap, args, help)
+	cli.ParseArgsOrDie(ap, args, help)
 
 	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 

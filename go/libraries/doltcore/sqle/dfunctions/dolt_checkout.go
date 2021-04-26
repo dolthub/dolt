@@ -58,7 +58,10 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 		return 1, err
 	}
 
-	apr := cli.ParseArgs(ap, args, nil)
+	apr, err := cli.ParseArgs(ap, args, nil)
+	if err != nil {
+		return 1, err
+	}
 
 	if (apr.Contains(cli.CheckoutCoBranch) && apr.NArg() > 1) || (!apr.Contains(cli.CheckoutCoBranch) && apr.NArg() == 0) {
 		return 1, errors.New("Improper usage.")

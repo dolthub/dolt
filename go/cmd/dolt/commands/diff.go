@@ -152,7 +152,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	fromRoot, toRoot, dArgs, err := parseDiffArgs(ctx, dEnv, apr)
 

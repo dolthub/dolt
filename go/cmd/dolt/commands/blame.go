@@ -122,7 +122,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, blameDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 || apr.NArg() > 2 {
 		usage()

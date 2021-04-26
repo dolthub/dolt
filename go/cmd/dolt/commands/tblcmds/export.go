@@ -138,7 +138,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 
 func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (*exportOptions, errhand.VerboseError) {
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
 
 	if fileLoc == nil || len(tableLoc.Name) == 0 {
