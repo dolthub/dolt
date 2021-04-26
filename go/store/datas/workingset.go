@@ -23,46 +23,42 @@ import (
 
 const (
 	WorkspaceMetaField = "meta"
-	WorkspaceRefField  = "ref"
-	WorkspaceName      = "Workspace"
+	WorkingSetRefField = "ref"
+	WorkingSetName     = "WorkingSet"
 )
 
-type WorkspaceMeta struct {
+type WorkingSetMeta struct {
 	Meta types.Struct
 }
 
-// var workspaceTemplate = types.MakeStructTemplate(WorkspaceName, []string{WorkspaceMetaField, WorkspaceRefField})
-var workspaceTemplate = types.MakeStructTemplate(WorkspaceName, []string{WorkspaceRefField})
+var workingSetTemplate = types.MakeStructTemplate(WorkingSetName, []string{WorkingSetRefField})
 
-// ref is a Ref<Value>, any Value (not necessarily a commit)
-// var valueWorkspaceType = nomdl.MustParseType(`Struct Workspace {
-//         meta: Struct {},
-//         ref:  Ref<Value>,
-// }`)
-var valueWorkspaceType = nomdl.MustParseType(`Struct Workspace {
+// ref is a Ref<Value>, any Value
+var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
         ref:  Ref<Value>,
 }`)
 
-
-// NewWorkspace creates a new workspace object.
+// NewWorkingSet creates a new working set object.
+// A working set is a value that has been persisted but is not necessarily referenced by a Commit. As the name implies,
+// it's storage for data changes that have not yet been incorporated into the commit graph but need durable storage.
 //
-// A workspace has the following type:
+// A working set struct has the following type:
 //
 // ```
-// struct Workspace {
+// struct WorkingSet {
 //   meta: M,
 //   ref: R,
 // }
 // ```
 // where M is a struct type and R is a ref type.
-func NewWorkspace(_ context.Context, valueRef types.Ref) (types.Struct, error) {
-	return workspaceTemplate.NewStruct(valueRef.Format(), []types.Value{valueRef})
+func NewWorkingSet(_ context.Context, valueRef types.Ref) (types.Struct, error) {
+	return workingSetTemplate.NewStruct(valueRef.Format(), []types.Value{valueRef})
 }
 
-func IsWorkspace(v types.Value) (bool, error) {
+func IsWorkingSet(v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); !ok {
 		return false, nil
 	} else {
-		return types.IsValueSubtypeOf(s.Format(), v, valueWorkspaceType)
+		return types.IsValueSubtypeOf(s.Format(), v, valueWorkingSetType)
 	}
 }

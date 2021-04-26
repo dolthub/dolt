@@ -397,7 +397,7 @@ func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.Work
 		return nil, ErrTagNotFound
 	}
 
-	if wsSt.Name() != datas.WorkspaceName {
+	if wsSt.Name() != datas.WorkingSetName {
 		return nil, fmt.Errorf("workingSetRef head is not a workingSetRef")
 	}
 
@@ -934,7 +934,7 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.DoltR
 	// h, err = wsRef.Hash(wsRef.Format())
 	// fmt.Sprintf("%v", h)
 
-	_, err = ddb.db.UpdateWorkspaceValue(ctx, ds, rootRef, datas.WorkspaceMeta{}, prevHash)
+	_, err = ddb.db.UpdateWorkingSet(ctx, ds, rootRef, datas.WorkingSetMeta{}, prevHash)
 	return err
 }
 

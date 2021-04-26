@@ -54,12 +54,12 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	// 	return nil, err
 	// }
 
-	rootRef, ok, err := workingSetSt.MaybeGet(datas.WorkspaceRefField)
+	rootRef, ok, err := workingSetSt.MaybeGet(datas.WorkingSetRefField)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("workingset struct does not have field %s", datas.WorkspaceRefField)
+		return nil, fmt.Errorf("workingset struct does not have field %s", datas.WorkingSetRefField)
 	}
 
 	rootValSt, err := rootRef.(types.Ref).TargetValue(ctx, vrw)

@@ -521,27 +521,27 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 	return tryCommitErr
 }
 
-func (db *database) UpdateWorkspaceValue(ctx context.Context, ds Dataset, ref types.Ref, meta WorkspaceMeta, prevHash hash.Hash) (Dataset, error) {
+func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, ref types.Ref, meta WorkingSetMeta, prevHash hash.Hash) (Dataset, error) {
 	return db.doHeadUpdate(
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			workspace, err := NewWorkspace(ctx, ref)
+			workspace, err := NewWorkingSet(ctx, ref)
 			if err != nil {
 				return err
 			}
 
-			return db.doUpdateWorkspaceValue(ctx, ds.ID(), workspace, prevHash)
+			return db.doUpdateWorkingSet(ctx, ds.ID(), workspace, prevHash)
 		},
 	)
 }
 
-// doTag manages concurrent access the single logical piece of mutable state: the current Root. It uses
+// doUpdateWorkingSet manages concurrent access the single logical piece of mutable state: the current Root. It uses
 // the same optimistic locking write algorithm as doCommit (see above). Unlike doCommit and other methods in this file,
 // an error is returned if the current value of the ref being written has changed.
 // Workspace updates are serialized, but all other
-func (db *database) doUpdateWorkspaceValue(ctx context.Context, datasetID string, workspace types.Struct, currHash hash.Hash) error {
-	err := db.validateWorkspace(workspace)
+func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, workingSet types.Struct, currHash hash.Hash) error {
+	err := db.validateWorkingSet(workingSet)
 	if err != nil {
 		return err
 	}
@@ -565,7 +565,7 @@ func (db *database) doUpdateWorkspaceValue(ctx context.Context, datasetID string
 				return err
 			}
 
-			workspaceRef, err := db.WriteValue(ctx, workspace) // will be orphaned if the tryCommitChunks() below fails
+			workingSetRef, err := db.WriteValue(ctx, workingSet) // will be orphaned if the tryCommitChunks() below fails
 			if err != nil {
 				return err
 			}
@@ -601,7 +601,7 @@ func (db *database) doUpdateWorkspaceValue(ctx context.Context, datasetID string
 				}
 			}
 
-			valRef, err := types.ToRefOfValue(workspaceRef, db.Format())
+			valRef, err := types.ToRefOfValue(workingSetRef, db.Format())
 			if err != nil {
 				return err
 			}
@@ -614,85 +614,6 @@ func (db *database) doUpdateWorkspaceValue(ctx context.Context, datasetID string
 			return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
 		}()
 	}
-
-	return tryCommitErr
-
-	// var tryCommitErr error
-	// testSetFailed := false
-	// for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
-	// 	tryCommitErr = func() error {
-	// 		db.mu.Lock()
-	// 		defer db.mu.Unlock()
-	//
-	// 		currentRootHash, err := db.rt.Root(ctx)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		currentDatasets, err := db.Datasets(ctx)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		// Second level of locking: assert that the dataset value we read is unchanged from its expected value.
-	// 		// This is separate than the whole-DB lock in the outer loop, as it only protects the value of this dataset
-	// 		// entry. Other writers can update other values and writes chunks in the database and we will retry
-	// 		// indefinitely. But if we find the expected value in the dataset has changed, we immediately abort and the
-	// 		// caller must retry after reconciliation.
-	// 		ds, err := db.GetDataset(ctx, datasetID)
-	// 		currDsVal, ok, err := ds.MaybeHeadRef()
-	// 		//
-	// 		// currDsVal, ok, err := currentDatasets.MaybeGet(ctx, types.String(datasetID))
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		if ok {
-	// 			h, err := currDsVal.Hash(workspace.Format())
-	// 			if err != nil {
-	// 				return err
-	// 			}
-	//
-	// 			if h != currHash {
-	// 				testSetFailed = true
-	// 				return ErrOptimisticLockFailed
-	// 			}
-	// 		} else {
-	// 			if !currHash.IsEmpty() {
-	// 				panic("No ref found for workspace " + datasetID)
-	// 			}
-	// 		}
-	//
-	// 		val, err := db.WriteValue(ctx, workspace) // will be orphaned if the tryCommitChunks() below fails
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		// Like flush do
-	// 		_, err = db.CommitValue(ctx, ds, val)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		h, err := val.Hash(val.Format())
-	// 		fmt.Sprintf("%v", h)
-	//
-	// 		ref, err := types.ToRefOfValue(val, db.Format())
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		h, err = ref.Hash(val.Format())
-	// 		fmt.Sprintf("%v", h)
-	//
-	// 		currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	//
-	// 		return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
-	// 	}()
-	// }
 
 	return tryCommitErr
 }
@@ -834,21 +755,21 @@ func (db *database) validateTag(ctx context.Context, t types.Struct) error {
 	return nil
 }
 
-func (db *database) validateWorkspace(t types.Struct) error {
-	is, err := IsWorkspace(t)
+func (db *database) validateWorkingSet(t types.Struct) error {
+	is, err := IsWorkingSet(t)
 	if err != nil {
 		return err
 	}
 	if !is {
-		return fmt.Errorf("Workspace struct %s is malformed, IsWorkspace() == false", t.String())
+		return fmt.Errorf("WorkingSet struct %s is malformed, IsWorkingSet() == false", t.String())
 	}
 
-	_, ok, err := t.MaybeGet(WorkspaceRefField)
+	_, ok, err := t.MaybeGet(WorkingSetRefField)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("workspace is missing field %s", WorkspaceRefField)
+		return fmt.Errorf("WorkingSet is missing field %s", WorkingSetRefField)
 	}
 
 	return nil

@@ -36,7 +36,8 @@ var DatasetRe = regexp.MustCompile(`[a-zA-Z0-9\-_/]+`)
 // entirely legal Dataset name.
 var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
-// Dataset is a named Commit within a Database.
+// Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
+// a commit, but other values are also supported in some cases.
 type Dataset struct {
 	db   Database
 	id   string
@@ -64,7 +65,7 @@ func newDataset(db Database, id string, head types.Value) (Dataset, error) {
 	}
 
 	if !check {
-		check, err = IsWorkspace(head)
+		check, err = IsWorkingSet(head)
 
 		if err != nil {
 			return Dataset{}, err
