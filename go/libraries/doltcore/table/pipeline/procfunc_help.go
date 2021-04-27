@@ -16,6 +16,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // SourceFunc is a function that will return a new row for each successive call until all it's rows are exhausted, at
@@ -100,7 +102,7 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 					err := sinkFunc(r.Row, r.Props)
 
 					if err != nil {
-						if table.IsBadRow(err) || sql.ErrPrimaryKeyViolation.Is(err) {
+						if table.IsBadRow(err) || sql.ErrPrimaryKeyViolation.Is(err) || errors.Is(err, editor.ErrDuplicatePK) {
 							badRowChan <- &TransformRowFailure{r.Row, "writer", err.Error()}
 						} else {
 							p.StopWithErr(err)

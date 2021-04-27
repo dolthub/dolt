@@ -223,7 +223,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 	_ = atomic.AddInt64(&te.gcOps, 1)
 
 	if te.insertOnly {
-		err := te.tableEditor.InsertRow(ctx, r)
+		err := te.tableEditor.InsertRow(ctx, r, nil)
 
 		if err != nil {
 			return err
@@ -243,7 +243,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			return err
 		}
 		if !ok {
-			err := te.tableEditor.InsertRow(ctx, r)
+			err := te.tableEditor.InsertRow(ctx, r, nil)
 
 			if err != nil {
 				return err
@@ -261,7 +261,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			te.stats.SameVal++
 			return nil
 		}
-		err = te.tableEditor.UpdateRow(ctx, oldRow, r)
+		err = te.tableEditor.UpdateRow(ctx, oldRow, r, nil)
 
 		if err != nil {
 			return err

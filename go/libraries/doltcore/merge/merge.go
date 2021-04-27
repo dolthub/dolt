@@ -465,12 +465,12 @@ func applyPkChange(ctx context.Context, sch schema.Schema, tableEditor editor.Ta
 			if err != nil {
 				return err
 			}
-			err = tableEditor.UpdateRow(ctx, oldRow, newRow)
+			err = tableEditor.UpdateRow(ctx, oldRow, newRow, nil)
 			if err != nil {
 				return err
 			}
 		} else {
-			err = tableEditor.InsertRow(ctx, newRow)
+			err = tableEditor.InsertRow(ctx, newRow, nil)
 			if err != nil {
 				return err
 			}
@@ -485,7 +485,7 @@ func applyPkChange(ctx context.Context, sch schema.Schema, tableEditor editor.Ta
 		if err != nil {
 			return err
 		}
-		err = tableEditor.UpdateRow(ctx, oldRow, newRow)
+		err = tableEditor.UpdateRow(ctx, oldRow, newRow, nil)
 		if err != nil {
 			return err
 		}
@@ -513,7 +513,7 @@ func applyKeylessChange(ctx context.Context, sch schema.Schema, tableEditor edit
 			if err != nil {
 				return err
 			}
-			err = tableEditor.InsertRow(ctx, newRow)
+			err = tableEditor.InsertRow(ctx, newRow, nil)
 			if err != nil {
 				return err
 			}
@@ -527,7 +527,7 @@ func applyKeylessChange(ctx context.Context, sch schema.Schema, tableEditor edit
 			if err != nil {
 				return err
 			}
-			err = tableEditor.UpdateRow(ctx, oldRow, newRow)
+			err = tableEditor.UpdateRow(ctx, oldRow, newRow, nil)
 			if err != nil {
 				return err
 			}
