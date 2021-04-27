@@ -61,3 +61,13 @@ DELIM
     [[ "$output" =~ "error: cannot checkout empty string" ]] || false
     [ $status -ne 0 ]
 }
+
+@test "arg-parsing: dolt checkout on the same branch does not throw an error" {
+     run dolt checkout master
+     [ $status -eq 0 ]
+     [[ "$output" =~ "Already on branch 'master'" ]] || false
+
+     run dolt checkout master && dolt checkout master
+     [ $status -eq 0 ]
+     [[ "$output" =~ "Already on branch 'master'" ]] || false
+}
