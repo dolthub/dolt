@@ -3,11 +3,23 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+
+    # Needed for dolt_branches test
+    cd $BATS_TMPDIR
+    mkdir remotes-$$
+    mkdir remotes-$$/empty
+    echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
+    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv_pid=$!
+    cd dolt-repo-$$
+    mkdir "dolt-repo-clones"
 }
 
 teardown() {
     assert_feature_version
     teardown_common
+    kill $remotesrv_pid
+    rm -rf $BATS_TMPDIR/remotes-$$
 }
 
 @test "system-tables: Show list of system tables using dolt ls --system or --all" {
@@ -346,4 +358,50 @@ teardown() {
     [[ "$output" =~ "0,commit A" ]] || false
     [[ "$output" =~ "0,commit B" ]] || false
     [[ "$output" =~ "1,commit C" ]] || false
+}
+
+@test "system-tables: dolt_branches table should include remote refs as well" {
+    skip "This functionality needs to be implemented"
+
+    # Create a remote with a test branch
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    run dolt push test-remote master
+    dolt checkout -b test-branch
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
+  PRIMARY KEY (pk)
+);
+SQL
+
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote test-branch
+
+    # Clone the branch
+    cd "dolt-repo-clones"
+    run dolt clone http://localhost:50051/test-org/test-repo
+    [ "$status" -eq 0 ]
+
+    cd test-repo
+
+    # Assert we are on master
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "master" ]] || false
+    [[ ! "$output" =~ "test-branch" ]] || false
+
+    # Validate that the dolt_branches table has the remote test-branch (this is the failing part)
+    run dolt sql -q "SELECT COUNT(*) from dolt_branches"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_branches WHERE name='test-branch'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
 }

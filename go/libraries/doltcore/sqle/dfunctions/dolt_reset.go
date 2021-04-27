@@ -53,7 +53,10 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, err
 	}
 
-	apr := cli.ParseArgs(ap, args, nil)
+	apr, err := cli.ParseArgs(ap, args, nil)
+	if err != nil {
+		return 1, err
+	}
 
 	// Check if problems with args first.
 	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {

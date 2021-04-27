@@ -70,7 +70,7 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	verr := pullFromRemote(ctx, dEnv, apr)
 

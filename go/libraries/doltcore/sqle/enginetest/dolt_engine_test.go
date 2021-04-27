@@ -275,6 +275,14 @@ func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
 }
 
+func TestVariables(t *testing.T) {
+	enginetest.TestVariables(t, newDoltHarness(t))
+}
+
+func TestVariableErrors(t *testing.T) {
+	enginetest.TestVariableErrors(t, newDoltHarness(t))
+}
+
 func TestJsonScripts(t *testing.T) {
 	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }

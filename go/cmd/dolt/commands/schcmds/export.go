@@ -74,7 +74,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 

@@ -154,7 +154,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	ap := SqlServerCmd{}.CreateArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 	serverConfig, err := GetServerConfig(dEnv, apr)
 
 	if err != nil {

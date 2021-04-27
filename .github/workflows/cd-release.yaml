@@ -11,6 +11,8 @@ jobs:
   create-release:
     name: Create release
     runs-on: ubuntu-18.04
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -28,14 +30,15 @@ jobs:
         run: |
           GO_BUILD_VERSION=1.15.11 go/utils/publishrelease/buildbinaries.sh
       - name: Create Release
-        uses: release-drafter/release-drafter@v5
         id: create_release
-        with:
-          name: ${{ github.event.inputs.version }}
-          tag: ${{ format('v{0}', github.event.inputs.version ) }}
-          publish: true
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          release_name: ${{ github.event.inputs.version }}
+          draft: false
+          prerelease: false
       - name: Upload Linux Distro
         id: upload-linux-distro
         uses: actions/upload-release-asset@v1
@@ -77,11 +80,22 @@ jobs:
           asset_name: install.sh
           asset_content_type: text/plain
 
+  create-release-notes:
+    needs: create-release
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Trigger Release Notes
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: release-notes
+          client-payload: '{"version": "${{ github.event.inputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}"}'
+
   homebrew-bump:
     needs: create-release
     runs-on: ubuntu-18.04
     steps:
-      - name: Repository Dispatch
+      - name: Trigger Bump Homebrew
         uses: peter-evans/repository-dispatch@v1
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
@@ -92,7 +106,7 @@ jobs:
     needs: create-release
     runs-on: ubuntu-18.04
     steps:
-      - name: Repository Dispatch
+      - name: Trigger Performance Benchmarks
         uses: peter-evans/repository-dispatch@v1
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}

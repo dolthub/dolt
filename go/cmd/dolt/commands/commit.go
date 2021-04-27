@@ -71,7 +71,7 @@ func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string)
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// Check if the -all param is provided. Stage all tables if so.
 	allFlag := apr.Contains(cli.AllFlag)
@@ -136,7 +136,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 		return 0
 	}
 
-	if err == actions.ErrNameNotConfigured {
+	if err == doltdb.ErrNameNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserNameKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", env.UserNameKey)
@@ -144,7 +144,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	if err == actions.ErrEmailNotConfigured {
+	if err == doltdb.ErrEmailNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserEmailKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey)
@@ -152,7 +152,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	if err == actions.ErrEmptyCommitMessage {
+	if err == doltdb.ErrEmptyCommitMessage {
 		bdr := errhand.BuildDError("Aborting commit due to empty commit message.")
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}

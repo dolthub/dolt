@@ -15,9 +15,9 @@
 package sqle
 
 import (
-	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -78,7 +78,7 @@ func DefaultDoltSession() *DoltSession {
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewDoltSession(ctx context.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
+func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
 	dbRoots := make(map[string]dbRoot)
 	dbDatas := make(map[string]env.DbData)
 	dbEditors := make(map[string]*editor.TableEditSession)
@@ -227,14 +227,18 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 }
 
 // GetHeadCommit returns the parent commit of the current session.
-func (sess *DoltSession) GetHeadCommit(ctx context.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
+func (sess *DoltSession) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
 
 	if !dbFound {
 		return nil, hash.Hash{}, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	_, value := sess.Session.Get(dbName + HeadKeySuffix)
+	value, err := sess.Session.GetSessionVariable(ctx, dbName+HeadKeySuffix)
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+
 	valStr, isStr := value.(string)
 
 	if !isStr || !hash.IsValid(valStr) {
@@ -257,7 +261,7 @@ func (sess *DoltSession) GetHeadCommit(ctx context.Context, dbName string) (*dol
 	return cm, h, nil
 }
 
-func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, value interface{}) error {
+func (sess *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
 	if isHead, dbName := IsHeadKey(key); isHead {
 		dbd, dbFound := sess.dbDatas[dbName]
 
@@ -295,14 +299,14 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 			return err
 		}
 
-		err = sess.Session.Set(ctx, key, typ, value)
+		err = sess.Session.SetSessionVariable(ctx, key, value)
 
 		if err != nil {
 			return err
 		}
 
 		hashStr := h.String()
-		err = sess.Session.Set(ctx, dbName+WorkingKeySuffix, sql.Text, hashStr)
+		err = sess.Session.SetSessionVariable(ctx, dbName+WorkingKeySuffix, hashStr)
 
 		if err != nil {
 			return err
@@ -326,7 +330,7 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 			return doltdb.ErrInvalidHash
 		}
 
-		err := sess.Session.Set(ctx, key, sql.Text, valStr)
+		err := sess.Session.SetSessionVariable(ctx, key, valStr)
 		if err != nil {
 			return err
 		}
@@ -356,7 +360,7 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 		return nil
 	}
 
-	if key == "foreign_key_checks" {
+	if strings.ToLower(key) == "foreign_key_checks" {
 		convertedVal, err := sql.Int64.Convert(value)
 		if err != nil {
 			return err
@@ -378,22 +382,16 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 		}
 	}
 
-	return sess.Session.Set(ctx, key, typ, value)
+	return sess.Session.SetSessionVariable(ctx, key, value)
 }
 
 // SetSessionVarDirectly directly updates sess.Session. This is useful in the context of the sql shell where
 // the working and head session variable may be updated at different times.
-func (sess *DoltSession) SetSessionVarDirectly(ctx context.Context, key string, typ sql.Type, value interface{}) error {
-	valStr, isStr := value.(string)
-
-	if !isStr {
-		return doltdb.ErrInvalidHash
-	}
-
-	return sess.Session.Set(ctx, key, typ, valStr)
+func (sess *DoltSession) SetSessionVarDirectly(ctx *sql.Context, key string, value interface{}) error {
+	return sess.Session.SetSessionVariable(ctx, key, value)
 }
 
-func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
+func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	name := db.Name()
 	rsr := db.GetStateReader()
 	rsw := db.GetStateWriter()
@@ -420,7 +418,36 @@ func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 		return err
 	}
 
-	return sess.Set(ctx, name+HeadKeySuffix, sql.Text, h.String())
+	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
+		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+			{
+				Name:              name + HeadKeySuffix,
+				Scope:             sql.SystemVariableScope_Session,
+				Dynamic:           true,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(name + HeadKeySuffix),
+				Default:           "",
+			},
+			{
+				Name:              name + WorkingKeySuffix,
+				Scope:             sql.SystemVariableScope_Session,
+				Dynamic:           true,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(name + WorkingKeySuffix),
+				Default:           "",
+			},
+		})
+	}
+	err = sess.Session.SetSessionVariable(ctx, name+HeadKeySuffix, h.String())
+	if err != nil {
+		return err
+	}
+	err = sess.Session.SetSessionVariable(ctx, name+WorkingKeySuffix, "")
+	if err != nil {
+		return err
+	}
+
+	return sess.SetSessionVariable(ctx, name+HeadKeySuffix, h.String())
 }
 
 func newTableCache() TableCache {

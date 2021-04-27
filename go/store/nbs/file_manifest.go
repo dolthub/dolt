@@ -55,8 +55,8 @@ type manifestChecker func(upstream, contents manifestContents) error
 
 // ParseManifest parses s a manifest file from the supplied reader
 func ParseManifest(r io.Reader) (ManifestInfo, error) {
-	fm5 := fileManifestV5{}
-	return fm5.parseManifest(r)
+	fm4 := fileManifestV4{}
+	return fm4.parseManifest(r)
 }
 
 func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
