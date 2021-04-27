@@ -17,8 +17,9 @@ package mvdata
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/store/datas"
 	"sync/atomic"
+
+	"github.com/dolthub/dolt/go/store/datas"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
