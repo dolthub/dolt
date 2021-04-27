@@ -176,9 +176,9 @@ func (t Test) updateWorkingSet(ctx context.Context, dEnv *env.DoltEnv, name stri
 
 	// Merge newRoot into working set
 	// in merge.Merger terms,
-	// |root| is the ancRoot
+	// |root| is the root
 	// |newRoot| is the mergeRoot
-	// |workingSet| is root
+	// |origRoot| is ancRoot
 	// if working set == ancRoot, attempt a fast-forward merge
 	for i := 0; i < 100; i++ {
 		ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, wsRef)
