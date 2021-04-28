@@ -145,6 +145,10 @@ func TestInsertInto(t *testing.T) {
 	enginetest.TestInsertInto(t, newDoltHarness(t))
 }
 
+func TestInsertIgnoreInto(t *testing.T) {
+	enginetest.TestInsertIgnoreInto(t, newDoltHarness(t))
+}
+
 func TestInsertIntoErrors(t *testing.T) {
 	enginetest.TestInsertIntoErrors(t, newDoltHarness(t))
 }
