@@ -83,7 +83,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.Contains(systemFlag) && apr.Contains(allFlag) {
 		verr := errhand.BuildDError("--%s and --%s are mutually exclusive", systemFlag, allFlag).SetPrintUsage().Build()

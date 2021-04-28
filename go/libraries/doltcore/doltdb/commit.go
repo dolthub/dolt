@@ -212,11 +212,6 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 	}
 
 	ancestorSt := targetVal.(types.Struct)
-
-	if err != nil {
-		return nil, err
-	}
-
 	return NewCommit(cm1.vrw, ancestorSt), nil
 }
 

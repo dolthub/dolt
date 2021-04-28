@@ -68,7 +68,7 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 	ap := argparser.NewArgParser()
 	ap.SupportsString(dirParamName, "", "dir", "The directory where the md files should be dumped")
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	dirStr := apr.GetValueOrDefault(dirParamName, ".")
 

@@ -118,7 +118,7 @@ func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
 	ap := createLogArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, logDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() > 1 {
 		usage()

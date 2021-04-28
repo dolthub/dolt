@@ -654,6 +654,7 @@ SQL
 }
 
 @test "sql-server: LOAD DATA LOCAL INFILE works" {
+	skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
      cd repo1

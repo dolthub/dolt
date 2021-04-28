@@ -75,7 +75,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
 
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
 

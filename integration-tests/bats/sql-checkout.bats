@@ -192,6 +192,12 @@ SQL
     [[ "$output" =~ "0,0,0" ]] || false
 }
 
+@test "sql-checkout: DOLT_CHECKOUT does not throw an error when checking out to the same branch" {
+  run dolt sql -q "SELECT DOLT_CHECKOUT('master')"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }

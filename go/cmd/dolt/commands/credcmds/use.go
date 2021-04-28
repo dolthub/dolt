@@ -78,7 +78,7 @@ func (cmd UseCmd) createArgParser() *argparser.ArgParser {
 func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, useDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 	args = apr.Args()
 	if len(args) != 1 {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("error: expected exactly one credential public key or key id as argument").Build(), usage)

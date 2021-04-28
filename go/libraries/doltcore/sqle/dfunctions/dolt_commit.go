@@ -48,7 +48,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	dbData, ok := dSess.GetDbData(dbName)
 
 	if !ok {
-		return nil, fmt.Errorf("Could not load %s", dbName)
+		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	ddb := dbData.Ddb
@@ -58,12 +58,14 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 	// Get the args for DOLT_COMMIT.
 	args, err := getDoltArgs(ctx, row, d.Children())
-
 	if err != nil {
 		return nil, err
 	}
 
-	apr := cli.ParseArgs(ap, args, nil)
+	apr, err := cli.ParseArgs(ap, args, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	allFlag := apr.Contains(cli.AllFlag)
 	allowEmpty := apr.Contains(cli.AllowEmptyFlag)
@@ -227,7 +229,7 @@ func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
 	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
 	dsess := sqle.DSessFromSess(ctx.Session)
 
-	return dsess.Set(ctx, key, hashType, headHashStr)
+	return dsess.SetSessionVariable(ctx, key, headHashStr)
 }
 
 // setSessionRootExplicit sets a session variable (either HEAD or WORKING) to a hash string. For HEAD, the hash string
@@ -236,5 +238,5 @@ func setSessionRootExplicit(ctx *sql.Context, hashString string, suffix string) 
 	key := ctx.GetCurrentDatabase() + suffix
 	dsess := sqle.DSessFromSess(ctx.Session)
 
-	return dsess.SetSessionVarDirectly(ctx, key, hashType, hashString)
+	return dsess.SetSessionVarDirectly(ctx, key, hashString)
 }

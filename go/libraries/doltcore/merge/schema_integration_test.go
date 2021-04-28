@@ -466,7 +466,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 
 	// assert that we're on master
 	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"master"}, dEnv)
-	require.Equal(t, 1, exitCode)
+	require.Equal(t, 0, exitCode)
 
 	// merge branches
 	exitCode = commands.MergeCmd{}.Exec(ctx, "merge", []string{"other"}, dEnv)
@@ -511,7 +511,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 
 	// assert that we're on master
 	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"master"}, dEnv)
-	require.Equal(t, 1, exitCode)
+	require.Equal(t, 0, exitCode)
 
 	masterSch := getSchema(t, dEnv)
 
@@ -555,7 +555,7 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 
 	// assert that we're on master
 	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"master"}, dEnv)
-	require.Equal(t, 1, exitCode)
+	require.Equal(t, 0, exitCode)
 
 	masterRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)

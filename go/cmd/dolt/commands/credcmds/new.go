@@ -75,7 +75,7 @@ func (cmd NewCmd) createArgParser() *argparser.ArgParser {
 func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, newDocs, ap))
-	cli.ParseArgs(ap, args, help)
+	cli.ParseArgsOrDie(ap, args, help)
 
 	_, newCreds, verr := actions.NewCredsFile(dEnv)
 

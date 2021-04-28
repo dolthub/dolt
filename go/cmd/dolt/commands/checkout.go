@@ -76,7 +76,7 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCheckoutArgParser()
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
-	apr := cli.ParseArgs(ap, args, helpPrt)
+	apr := cli.ParseArgsOrDie(ap, args, helpPrt)
 
 	if (apr.Contains(cli.CheckoutCoBranch) && apr.NArg() > 1) || (!apr.Contains(cli.CheckoutCoBranch) && apr.NArg() == 0) {
 		usagePrt()
@@ -216,7 +216,9 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand
 			bdr.AddDetails("Aborting")
 			return bdr.Build()
 		} else if err == doltdb.ErrAlreadyOnBranch {
-			return errhand.BuildDError("Already on branch '%s'", name).Build()
+			// Being on the same branch shouldn't be an error
+			cli.Printf("Already on branch '%s'", name)
+			return nil
 		} else {
 			bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", name)
 			bdr.AddCause(err)

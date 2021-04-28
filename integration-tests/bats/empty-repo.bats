@@ -128,7 +128,7 @@ teardown() {
 
 @test "empty-repo: dolt checkout master on master" {
     run dolt checkout master
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [ "$output" = "Already on branch 'master'" ]
 }
 

@@ -81,7 +81,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	ap := cmd.createArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() < 2 {
 		return HandleVErrAndExitCode(errhand.BuildDError("Missing required arguments").SetPrintUsage().Build(), usage)

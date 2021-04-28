@@ -82,7 +82,7 @@ func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
 func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	endpoint := loadEndpoint(dEnv, apr)
 
