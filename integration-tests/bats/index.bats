@@ -2487,4 +2487,7 @@ SQL
     run dolt sql -r csv -q "SELECT COUNT(*) FROM mytable"
     [ "$status" -eq "0" ]
     [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM mytable"
+    [[ "$output" =~ "1,jon" ]] || false
 }
