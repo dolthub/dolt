@@ -279,12 +279,14 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 
 func (te *tableEditorWriteCloser) GC(ctx context.Context) error {
 	if !te.useGC {
-		db, ok := te.dEnv.DoltDB.ValueReadWriter().(datas.Database)
-		if !ok {
-			return nil
+		if te.dEnv != nil && te.dEnv.DoltDB != nil {
+			db, ok := te.dEnv.DoltDB.ValueReadWriter().(datas.Database)
+			if !ok {
+				return nil
+			}
+			return datas.PruneTableFiles(ctx, db)
 		}
-
-		return datas.PruneTableFiles(ctx, db)
+		return nil
 	}
 
 	inProgressRoot, err := te.sess.Flush(ctx)
