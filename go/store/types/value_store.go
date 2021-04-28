@@ -590,18 +590,16 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 		}
 	}
 	const batchSize = 16384
-	batches := func(hs []hash.Hash) [][]hash.Hash {
-		// Return subslices of a copy, because the caller may
-		// mutate the parameter after the call.
-		copied := make([]hash.Hash, len(hs))
-		copy(copied, hs)
+	batches := func(hss [][]hash.Hash) [][]hash.Hash {
 		var res [][]hash.Hash
-		i := 0
-		for ; i+batchSize < len(copied); i += batchSize {
-			res = append(res, copied[i:i+batchSize])
-		}
-		if i < len(hs) {
-			res = append(res, copied[i:len(hs)])
+		for _, hs := range hss {
+			i := 0
+			for ; i+batchSize < len(hs); i += batchSize {
+				res = append(res, hs[i:i+batchSize])
+			}
+			if i < len(hs) {
+				res = append(res, hs[i:])
+			}
 		}
 		return res
 	}
@@ -613,12 +611,14 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 	walker := newParallelRefWalker(ctx, lvs.nbf, concurrency)
 
 	eg.Go(func() error {
-		toVisit := []hash.Hash{root}
+		toVisitCount := 1
+		toVisit := [][]hash.Hash{{root}}
 		visited := hash.NewHashSet(root)
-		for len(toVisit) > 0 {
+		for toVisitCount > 0 {
 			batches := batches(toVisit)
-			toVisit = toVisit[0:0]
-			for _, batch := range batches {
+			toVisit = make([][]hash.Hash, len(batches))
+			toVisitCount = 0
+			for i, batch := range batches {
 				if err := keepHashes(batch); err != nil {
 					return err
 				}
@@ -633,7 +633,8 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				toVisit = append(toVisit, hashes...)
+				toVisit[i] = hashes
+				toVisitCount += len(hashes)
 			}
 		}
 		close(keepChunks)
