@@ -2472,7 +2472,15 @@ SQL
     [[ "$output" =~ "duplicate unique key given: [1]" ]] || false
 
     # try with ignore
-    run dolt sql -q "INSERT IGNORE INTO mytable values (2,'jon')"
+    run dolt sql << SQL
+INSERT IGNORE INTO mytable values (2,'jon');
+SHOW WARNINGS;
+SQL
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ '1062' ]] || false # First Validate the correct code
+
+    # Now try again to assert the 0 rows affected
+    run dolt sql -q "INSERT IGNORE INTO mytable values (2,'jon');"
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'Query OK, 0 rows affected' ]] || false
 

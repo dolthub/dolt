@@ -18,14 +18,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/hash"
+	gsql "github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-
-	gsql "github.com/dolthub/go-mysql-server/sql"
 )
 
 // sessionedTableEditor represents a table editor obtained from a TableEditSession. This table editor may be shared
@@ -200,8 +199,6 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 			}
 		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
-
-
 
 			return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: cannot delete rows with value `%s`",
 				foreignKey.TableName, foreignKey.Name, indexKeyStr)

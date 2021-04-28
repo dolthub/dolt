@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-
 	//gsql "github.com/dolthub/go-mysql-server/sql"
 )
 
