@@ -1979,17 +1979,16 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "INSERT INTO onepk VALUES (6, 77, 56)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE" ]] || false
+    [[ "$output" =~ "unique" ]] || false
     run dolt sql -q "INSERT INTO onepk VALUES (6, 78, 56)"
     [ "$status" -eq "0" ]
     run dolt sql -q "UPDATE onepk SET v1 = 22 WHERE pk1 = 1"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE" ]] || false
+    [[ "$output" =~ "unique" ]] || false
     run dolt sql -q "UPDATE onepk SET v1 = 23 WHERE pk1 = 1"
     [ "$status" -eq "0" ]
     run dolt sql -q "REPLACE INTO onepk VALUES (2, 88, 55)"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE" ]] || false
+    [ "$status" -eq "0" ]
     run dolt sql -q "REPLACE INTO onepk VALUES (2, 89, 55)"
     [ "$status" -eq "0" ]
 }
@@ -2103,7 +2102,7 @@ INSERT INTO onepk VALUES (6, 11, 55);
 SQL
     run dolt table import -u onepk `batshelper index_onepk.csv`
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE" ]] || false
+    [[ "$output" =~ "duplicate key" ]] || false
 }
 
 @test "index: UNIQUE dolt table import -r" {
@@ -2135,7 +2134,7 @@ SQL
     dolt sql -q "DELETE FROM onepk"
     run dolt table import -r onepk `batshelper index_onepk_non_unique.csv`
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE" ]] || false
+    [[ "$output" =~ "duplicate key" ]] || false
 }
 
 @test "index: Merge without conflicts" {
@@ -2315,7 +2314,7 @@ SQL
     dolt checkout master
     run dolt merge other
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE" ]] || false
+    [[ "$output" =~ "duplicate key" ]] || false
 }
 
 @test "index: Merge into branch with index from branch without index" {
@@ -2444,7 +2443,7 @@ SQL
     dolt sql -q "INSERT INTO child_idx VALUES ('6', 5)"
     run dolt sql -q "INSERT INTO child_unq VALUES ('6', 5)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE constraint violation" ]] || false
+    [[ "$output" =~ "unique" ]] || false
     dolt sql -q "INSERT INTO child_non_unq VALUES ('6', 5)"
 
     # INSERT against foreign key

@@ -114,20 +114,51 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 	}
 }
 
-// ReduceToIndex creates an index record from a primary storage record.
-func ReduceToIndex(idx schema.Index, r Row) (Row, error) {
-	newRow := nomsRow{
-		key:   make(TaggedValues),
-		value: make(TaggedValues),
-		nbf:   r.Format(),
-	}
+// ReduceToIndexKeys creates a full key and a partial key from the given row (first tuple being the full key). As all
+// non-key tuples in an index map are empty, the full key is equivalent to the entire row of an index. The partial key
+// contains only the stated indexed columns, allowing for matches across duplicate values (for non-unique indexes).
+func ReduceToIndexKeys(idx schema.Index, r Row) (types.Tuple, types.Tuple, error) {
+	vals := make([]types.Value, 0, len(idx.AllTags())*2)
 	for _, tag := range idx.AllTags() {
-		if val, ok := r.GetColVal(tag); ok {
-			newRow.key[tag] = val
+		val, ok := r.GetColVal(tag)
+		if !ok {
+			val = types.NullValue
 		}
+		vals = append(vals, types.Uint(tag), val)
 	}
+	fullKey, err := types.NewTuple(r.Format(), vals...)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, err
+	}
+	partialKey, err := types.NewTuple(r.Format(), vals[:idx.Count()*2]...)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, err
+	}
+	return fullKey, partialKey, nil
+}
 
-	return newRow, nil
+// ReduceToIndexKeysFromTagMap creates a full key and a partial key from the given map of tags (first tuple being the
+// full key). As all non-key tuples in an index map are empty, the full key is equivalent to the entire row of an index.
+// The partial key contains only the stated indexed columns, allowing for matches across duplicate values (for
+// non-unique indexes).
+func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tagToVal map[uint64]types.Value) (types.Tuple, types.Tuple, error) {
+	vals := make([]types.Value, 0, len(idx.AllTags())*2)
+	for _, tag := range idx.AllTags() {
+		val, ok := tagToVal[tag]
+		if !ok {
+			val = types.NullValue
+		}
+		vals = append(vals, types.Uint(tag), val)
+	}
+	fullKey, err := types.NewTuple(nbf, vals...)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, err
+	}
+	partialKey, err := types.NewTuple(nbf, vals[:idx.Count()*2]...)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, err
+	}
+	return fullKey, partialKey, nil
 }
 
 // ReduceToIndexPartialKey creates an index record from a primary storage record.
