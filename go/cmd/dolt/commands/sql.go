@@ -883,31 +883,18 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 	}
 
 	switch s := sqlStatement.(type) {
-	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union, *sqlparser.Call:
-		return se.query(ctx, query)
-	case *sqlparser.Use, *sqlparser.Set:
-		sch, rowIter, err := se.query(ctx, query)
-
-		if rowIter != nil {
-			err = rowIter.Close(ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-
+	case *sqlparser.Use:
+		sch, ri, err := se.query(ctx, query)
 		if err != nil {
 			return nil, nil, err
 		}
-
-		switch sqlStatement.(type) {
-		case *sqlparser.Use:
-			cli.Println("Database changed")
+		_, err = sql.RowIterToRows(ctx, ri)
+		if err != nil {
+			return nil, nil, err
 		}
-
+		cli.Println("Database changed")
 		return sch, nil, err
-	case *sqlparser.Delete:
-		return se.query(ctx, query)
-	case *sqlparser.MultiAlterDDL:
+	case *sqlparser.MultiAlterDDL, *sqlparser.Set, *sqlparser.Commit:
 		_, ri, err := se.query(ctx, query)
 		if err != nil {
 			return nil, nil, err
@@ -933,10 +920,9 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 		if s.Local {
 			return nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
 		}
-
 		return se.query(ctx, query)
 	default:
-		return nil, nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
+		return se.query(ctx, query)
 	}
 }
 

@@ -401,8 +401,23 @@ func TestReduceToIndex(t *testing.T) {
 		require.NoError(t, err)
 		expectedIndex, err := New(types.Format_Default, index.Schema(), tvCombo.expectedIndex)
 		require.NoError(t, err)
-		indexRow, err := ReduceToIndex(index, row)
+		indexRow, err := reduceToIndex(index, row)
 		require.NoError(t, err)
 		assert.True(t, AreEqual(expectedIndex, indexRow, index.Schema()))
 	}
+}
+
+func reduceToIndex(idx schema.Index, r Row) (Row, error) {
+	newRow := nomsRow{
+		key:   make(TaggedValues),
+		value: make(TaggedValues),
+		nbf:   r.Format(),
+	}
+	for _, tag := range idx.AllTags() {
+		if val, ok := r.GetColVal(tag); ok {
+			newRow.key[tag] = val
+		}
+	}
+
+	return newRow, nil
 }
