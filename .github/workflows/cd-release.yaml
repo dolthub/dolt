@@ -27,7 +27,10 @@ jobs:
           add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           cwd: "."
       - name: Build Binaries
+        id: build_binaries
         run: |
+          latest=$(git rev-parse HEAD)
+          echo "::set-output name=commitish::$latest"
           GO_BUILD_VERSION=1.15.11 go/utils/publishrelease/buildbinaries.sh
       - name: Create Release
         id: create_release
@@ -39,6 +42,7 @@ jobs:
           release_name: ${{ github.event.inputs.version }}
           draft: false
           prerelease: false
+          commitish: ${{ steps.build_binaries.outputs.commitish }}
       - name: Upload Linux Distro
         id: upload-linux-distro
         uses: actions/upload-release-asset@v1
