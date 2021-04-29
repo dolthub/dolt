@@ -118,7 +118,7 @@ func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error
 		return fmt.Errorf("Expected a DoltTransaction")
 	}
 
-	return dtx.commit(ctx, root)
+	return dtx.Commit(ctx, root)
 }
 
 func (db Database) Rollback(ctx *sql.Context, transaction sql.Transaction) error {

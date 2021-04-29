@@ -40,13 +40,13 @@ func (tx DoltTransaction) String() string {
 	return ""
 }
 
-// commit attempts to merge newRoot into working set
-// in merge.Merger terms,
+// Commit attempts to merge newRoot into the working set
+// Uses the same algorithm as merge.Merger:
 // |ws.root| is the root
 // |newRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
 // if working set == ancRoot, attempt a fast-forward merge
-func (tx * DoltTransaction) commit(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+func (tx * DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	for i := 0; i < maxTxCommitRetries; i++ {
 		ws, err := tx.db.ResolveWorkingSet(ctx, tx.workingSet)
 		if err != nil {
