@@ -46,7 +46,7 @@ var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
 var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
-	session, err := sqle.NewDoltSession(context.Background(), enginetest.NewBaseSession(), "test", "email@test.com")
+	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(t, err)
 	return &DoltHarness{
 		t:              t,

@@ -853,14 +853,31 @@ SQL
 }
 
 @test "sql: insert on duplicate key inserts data by column" {
-    run dolt sql -q "CREATE TABLE test (col_a varchar(2) not null, col_b varchar(2), col_c varchar(2), primary key(col_a));"
+    dolt sql -q "CREATE TABLE test (col_a varchar(2) not null, col_b varchar(2), col_c varchar(2), primary key(col_a));"
+    dolt add test
+    dolt commit -m "created table"
+
+    dolt sql -q "INSERT INTO test (col_a,col_b) VALUES('a', 'b');"
+    dolt sql -q "INSERT INTO test (col_a,col_b,col_c) VALUES ('a','','b') ON DUPLICATE KEY UPDATE col_a = col_a, col_b = col_b, col_c = VALUES(col_c);"
+    run dolt sql -r csv -q "SELECT * from test where col_a = 'a'"
     [ $status -eq 0 ]
-    run dolt sql -q "INSERT INTO test (col_a,col_b) VALUES('a', 'b');"
+    echo $output
+    [[ "$output" =~ "a,b,b" ]] || false
+
+    dolt sql -b -q "INSERT INTO test VALUES ('b','b','b');INSERT INTO test VALUES ('b', '1', '1') ON DUPLICATE KEY UPDATE col_b = '2', col_c='2';"
+    run dolt sql -r csv -q "SELECT * from test where col_a = 'b'"
     [ $status -eq 0 ]
-    skip "on duplicate key not supported"
-    run dolt sql -q "INSERT INTO test (col_a,col_b,col_c) VALUES ('a','','b') ON DUPLICATE KEY UPDATE col_a = col_a, col_b = col_b, col_c = VALUES(col_c);"
+    [[ "$output" =~ "b,2,2" ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES ('c', 'c', 'c'), ('c', '1', '1') ON DUPLICATE KEY UPDATE col_b = '2', col_c='2'"
+    run dolt sql -r csv -q "SELECT * from test where col_a = 'c'"
     [ $status -eq 0 ]
-    [[ ! "$output" =~ 'unsupported feature' ]] || false
+    [[ "$output" =~ "c,2,2" ]] || false
+
+    dolt sql -b -q "INSERT INTO test VALUES ('d','d','d');DELETE FROM test WHERE col_a='d';INSERT INTO test VALUES ('d', '1', '1') ON DUPLICATE KEY UPDATE col_b = '2', col_c='2';"
+    run dolt sql -r csv -q "SELECT * from test where col_a = 'd'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "d,1,1" ]] || false
 }
 
 @test "sql: at commit" {
@@ -1080,3 +1097,17 @@ SQL
     [ $status -eq 1 ]
     [[ "$output" =~ "constraint" ]] || false
 }
+
+@test "sql: sql select current_user returns mysql syntax" {
+    run dolt sql -q "select current_user" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "current_user" ]
+}
+
+@test "sql: sql show grants" {
+    run dolt sql -q "show grants for current_user" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "Grants for root@%" ]
+    [ "${lines[1]}" = "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION" ]
+}
+

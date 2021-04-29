@@ -58,7 +58,10 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 		return 1, err
 	}
 
-	apr := cli.ParseArgs(ap, args, nil)
+	apr, err := cli.ParseArgs(ap, args, nil)
+	if err != nil {
+		return 1, err
+	}
 
 	if (apr.Contains(cli.CheckoutCoBranch) && apr.NArg() > 1) || (!apr.Contains(cli.CheckoutCoBranch) && apr.NArg() == 0) {
 		return 1, errors.New("Improper usage.")
@@ -167,7 +170,7 @@ func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) erro
 			}
 			return errors.New(msg)
 		} else if err == doltdb.ErrAlreadyOnBranch {
-			return fmt.Errorf("Already on branch '%s'", branchName)
+			return nil // No need to return an error if on the same branch
 		} else {
 			return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
 		}

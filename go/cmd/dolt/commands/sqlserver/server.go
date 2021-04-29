@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -123,7 +124,14 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	sqlEngine.AddDatabase(information_schema.NewInformationSchemaDatabase(sqlEngine.Catalog))
 
-	hostPort := net.JoinHostPort(serverConfig.Host(), strconv.Itoa(serverConfig.Port()))
+	portAsString := strconv.Itoa(serverConfig.Port())
+	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
+
+	if portInUse(hostPort) {
+		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
+		return portInUseError, nil
+	}
+
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
 	mySQLServer, startError = server.NewServer(
@@ -155,16 +163,27 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	return
 }
 
+func portInUse(hostPort string) bool {
+	timeout := time.Second
+	conn, _ := net.DialTimeout("tcp", hostPort, timeout)
+	if conn != nil {
+		defer conn.Close()
+		return true
+	}
+	return false
+}
+
 func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
+		tmpSqlCtx := sql.NewEmptyContext()
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-		doltSess, err := dsqle.NewDoltSession(ctx, mysqlSess, username, email, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
 
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		err = doltSess.Set(ctx, sql.AutoCommitSessionVar, sql.Boolean, autocommit)
+		err = doltSess.SetSessionVariable(tmpSqlCtx, sql.AutoCommitSessionVar, autocommit)
 
 		if err != nil {
 			return nil, nil, nil, err

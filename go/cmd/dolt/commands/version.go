@@ -67,7 +67,7 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 
 	usage := func() {}
 	ap := cmd.createArgParser()
-	apr := cli.ParseArgs(ap, args, usage)
+	apr := cli.ParseArgsOrDie(ap, args, usage)
 
 	var verr errhand.VerboseError
 	if apr.Contains(featureVersionFlag) {

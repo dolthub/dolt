@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -88,6 +89,12 @@ type manifestGCGenUpdater interface {
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
 	UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
+}
+
+// manifestVersionGetter is an interface for retrieving the manifest version
+type manifestVersionGetter interface {
+	// GetManifestVersion returns the version of the manifest
+	GetManifestVersion() string
 }
 
 // ManifestInfo is an interface for retrieving data from a manifest outside of this package
@@ -427,6 +434,15 @@ func (mm manifestManager) UpdateGCGen(ctx context.Context, lastLock addr, newCon
 
 func (mm manifestManager) Name() string {
 	return mm.m.Name()
+}
+
+// GetManifestVersion returns the manifest storage version or an error if the operation is not supported
+func (mm manifestManager) GetManifestVersion() (string, error) {
+	vg, ok := mm.m.(manifestVersionGetter)
+	if !ok {
+		return "", chunks.ErrUnsupportedOperation
+	}
+	return vg.GetManifestVersion(), nil
 }
 
 // TableSpecInfo is an interface for retrieving data from a tableSpec outside of this package

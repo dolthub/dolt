@@ -16,7 +16,6 @@ package actions
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -29,10 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
-
-var ErrNameNotConfigured = errors.New("name not configured")
-var ErrEmailNotConfigured = errors.New("email not configured")
-var ErrEmptyCommitMessage = errors.New("commit message empty")
 
 type CommitStagedProps struct {
 	Message          string
@@ -48,7 +43,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	name, err := cfg.GetString(env.UserNameKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", ErrNameNotConfigured
+		return "", "", doltdb.ErrNameNotConfigured
 	} else if err != nil {
 		return "", "", err
 	}
@@ -56,7 +51,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	email, err := cfg.GetString(env.UserEmailKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", ErrEmailNotConfigured
+		return "", "", doltdb.ErrEmailNotConfigured
 	} else if err != nil {
 		return "", "", err
 	}
@@ -72,7 +67,7 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 	drw := dbData.Drw
 
 	if props.Message == "" {
-		return "", ErrEmptyCommitMessage
+		return "", doltdb.ErrEmptyCommitMessage
 	}
 
 	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
@@ -176,10 +171,9 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 		return "", err
 	}
 
-	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
-
-	if noCommitMsgErr != nil {
-		return "", ErrEmptyCommitMessage
+	meta, err := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	if err != nil {
+		return "", err
 	}
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.

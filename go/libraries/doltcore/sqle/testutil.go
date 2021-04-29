@@ -61,7 +61,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 			if execErr == nil {
 				execErr = drainIter(ctx, rowIter)
 			}
-		case *sqlparser.DDL:
+		case *sqlparser.DDL, *sqlparser.MultiAlterDDL:
 			var rowIter sql.RowIter
 			_, rowIter, execErr = engine.Query(ctx, query)
 			if execErr == nil {
@@ -104,7 +104,7 @@ func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*s
 	engine.AddDatabase(db)
 
 	sqlCtx := NewTestSQLCtx(ctx)
-	DSessFromSess(sqlCtx.Session).AddDB(ctx, db)
+	DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, db)
 	sqlCtx.SetCurrentDatabase(db.Name())
 	err := db.SetRoot(sqlCtx, root)
 

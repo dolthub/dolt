@@ -152,7 +152,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	fromRoot, toRoot, dArgs, err := parseDiffArgs(ctx, dEnv, apr)
 
@@ -282,9 +282,16 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached bool) (from, to *doltdb.RootValue, leftover []string, err error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
-	stagedRoot, err := dEnv.StagedRoot(ctx)
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
+	stagedRoot, err := dEnv.StagedRoot(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}

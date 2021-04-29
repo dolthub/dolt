@@ -11,6 +11,7 @@ teardown() {
 }
 
 @test "sql-load-data: simple load from file into table" {
+    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > 1pk5col-ints.csv
 pk||c1||c2||c3||c4||c5
 0||1||2||3||4||5
@@ -34,6 +35,7 @@ SQL
 }
 
 @test "sql-load-data: load into unknown table throws error" {
+    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     run dolt sql << SQL
 SET secure_file_priv='./';
 LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
@@ -56,6 +58,7 @@ SQL
 }
 
 @test "sql-load-data: works with enclosed terms" {
+    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > 1pk5col-ints.csv
 pk||c1||c2||c3||c4||c5
 "0"||"1"||"2"||"3"||"4"||"5"
@@ -79,6 +82,7 @@ SQL
 }
 
 @test "sql-load-data: works with prefixed terms" {
+    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > prefixed.txt
 pk
 sssHi
@@ -105,6 +109,7 @@ SQL
 }
 
 @test "sql-load-data: works when the number of input columns in the file is less than the number of schema columns" {
+    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > 1pk2col-ints.csv
 pk,c1
 0,1
@@ -152,6 +157,7 @@ SQL
 }
 
 @test "sql-load-data: recognizes certain nulls" {
+    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > 1pk2col-ints.csv
 pk
 \N

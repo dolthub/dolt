@@ -83,7 +83,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.Contains(systemFlag) && apr.Contains(allFlag) {
 		verr := errhand.BuildDError("--%s and --%s are mutually exclusive", systemFlag, allFlag).SetPrintUsage().Build()
@@ -196,10 +196,13 @@ func listTableVerbose(ctx context.Context, tbl string, root *doltdb.RootValue) (
 
 func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {
 	perSysTbls, err := doltdb.GetPersistedSystemTables(ctx, root)
-	genSysTbls, err := doltdb.GetGeneratedSystemTables(ctx, root)
-
 	if err != nil {
-		return errhand.BuildDError("error retrieving table names").AddCause(err).Build()
+		return errhand.BuildDError("error retrieving persisted table names").AddCause(err).Build()
+	}
+
+	genSysTbls, err := doltdb.GetGeneratedSystemTables(ctx, root)
+	if err != nil {
+		return errhand.BuildDError("error retrieving generated table names").AddCause(err).Build()
 	}
 
 	cli.Println("System tables:")

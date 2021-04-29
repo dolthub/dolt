@@ -90,7 +90,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
 
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 	serverConfig, err := GetServerConfig(dEnv, apr)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Bad Configuration"))

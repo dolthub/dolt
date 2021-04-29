@@ -59,7 +59,7 @@ func (cmd LsCmd) createArgParser() *argparser.ArgParser {
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() > 1 {
 		return HandleErr(errhand.BuildDError("Only one table may be provided at a time.").Build(), usage)

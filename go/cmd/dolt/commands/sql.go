@@ -105,6 +105,19 @@ const (
 
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
+func init() {
+	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+		{
+			Name:              currentBatchModeKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemIntType(currentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
+			Default:           int64(0),
+		},
+	})
+}
+
 type SqlCmd struct {
 	VersionStr string
 }
@@ -157,7 +170,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 
-	apr := cli.ParseArgs(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 	err := validateSqlArgs(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -246,7 +259,10 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
-	_ = sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
+	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 
 	roots := make(map[string]*doltdb.RootValue)
 
@@ -891,6 +907,16 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 		return sch, nil, err
 	case *sqlparser.Delete:
 		return se.query(ctx, query)
+	case *sqlparser.MultiAlterDDL:
+		_, ri, err := se.query(ctx, query)
+		if err != nil {
+			return nil, nil, err
+		}
+		_, err = sql.RowIterToRows(ctx, ri)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, nil
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
@@ -1002,8 +1028,10 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 	}
 
 	currentBatchMode := invalidBatchMode
-	if t, v := ctx.Get(currentBatchModeKey); t == sql.Int64 {
+	if v, err := ctx.GetSessionVariable(ctx, currentBatchModeKey); err == nil {
 		currentBatchMode = batchMode(v.(int64))
+	} else {
+		return err
 	}
 
 	newBatchMode, err := canProcessAsBatchEdit(ctx, sqlStatement, se, query)
@@ -1020,7 +1048,10 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 		}
 	}
 
-	ctx.Set(ctx, currentBatchModeKey, sql.Int64, int64(newBatchMode))
+	err = ctx.SetSessionVariable(ctx, currentBatchModeKey, int64(newBatchMode))
+	if err != nil {
+		return err
+	}
 
 	if newBatchMode != invalidBatchMode {
 		err = processBatchableEditQuery(ctx, se, query, sqlStatement)

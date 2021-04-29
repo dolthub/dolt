@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 
@@ -215,4 +216,28 @@ func TestServerSelect(t *testing.T) {
 			assert.ElementsMatch(t, peoples, test.expectedRes)
 		})
 	}
+}
+
+// If a port is already in use, throw error "Port XXXX already in use."
+func TestServerFailsIfPortInUse(t *testing.T) {
+	serverController := CreateServerController()
+	server := &http.Server{
+		Addr:    ":15200",
+		Handler: http.DefaultServeMux,
+	}
+	go server.ListenAndServe()
+	go func() {
+		startServer(context.Background(), "test", "dolt sql-server", []string{
+			"-H", "localhost",
+			"-P", "15200",
+			"-u", "username",
+			"-p", "password",
+			"-t", "5",
+			"-l", "info",
+			"-r",
+		}, dtestutils.CreateEnvWithSeedData(t), serverController)
+	}()
+	err := serverController.WaitForStart()
+	require.Error(t, err)
+	server.Close()
 }

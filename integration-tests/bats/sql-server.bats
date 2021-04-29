@@ -20,6 +20,19 @@ teardown() {
     teardown_common
 }
 
+@test "sql-server: port in use" {
+    cd repo1
+
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
+    SERVER_PID=$! # will get killed by teardown_common
+    sleep 5 # not using python wait so this works on windows
+    
+    run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "in use" ]] || false
+}
+
 @test "sql-server: multi-client" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
@@ -641,6 +654,7 @@ SQL
 }
 
 @test "sql-server: LOAD DATA LOCAL INFILE works" {
+	skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
      cd repo1

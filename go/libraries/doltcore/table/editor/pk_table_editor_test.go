@@ -16,10 +16,10 @@ package editor
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -72,7 +72,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 					2: types.Int(val),
 				})
 				require.NoError(t, err)
-				require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
+				require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
 				wg.Done()
 			}(j)
 		}
@@ -93,7 +93,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 					2: types.Int(val + 1),
 				})
 				require.NoError(t, err)
-				require.NoError(t, tableEditor.UpdateRow(context.Background(), dOldRow, dNewRow))
+				require.NoError(t, tableEditor.UpdateRow(context.Background(), dOldRow, dNewRow, nil))
 				wg.Done()
 			}(j)
 		}
@@ -163,7 +163,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
 	}
 	table, err = tableEditor.Table(context.Background())
 	require.NoError(t, err)
@@ -188,7 +188,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 					2: types.Int(val + 1),
 				})
 				require.NoError(t, err)
-				require.NoError(t, tableEditor.UpdateRow(context.Background(), dOldRow, dNewRow))
+				require.NoError(t, tableEditor.UpdateRow(context.Background(), dOldRow, dNewRow, nil))
 				wg.Done()
 			}(j)
 		}
@@ -258,7 +258,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
 	}
 
 	_, err = tableEditor.Table(context.Background())
@@ -329,7 +329,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
 	}
 
 	_, err = tableEditor.Table(context.Background())
@@ -342,8 +342,8 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		err = tableEditor.InsertRow(context.Background(), dRow)
-		require.True(t, sql.ErrPrimaryKeyViolation.Is(err))
+		err = tableEditor.InsertRow(context.Background(), dRow, nil)
+		require.True(t, errors.Is(err, ErrDuplicatePK))
 	}
 
 	_, err = tableEditor.Table(context.Background())
@@ -356,7 +356,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
 	}
 
 	newTable, err := tableEditor.Table(context.Background())

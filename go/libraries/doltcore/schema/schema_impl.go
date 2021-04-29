@@ -55,13 +55,17 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	pkColColl := NewColCollection(pkCols...)
 	nonPKColColl := NewColCollection(nonPKCols...)
 
+	return SchemaFromColCollections(allCols, pkColColl, nonPKColColl), nil
+}
+
+func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) Schema {
 	return &schemaImpl{
 		pkCols:          pkColColl,
 		nonPKCols:       nonPKColColl,
 		allCols:         allCols,
 		indexCollection: NewIndexCollection(allCols),
 		checkCollection: NewCheckCollection(),
-	}, nil
+	}
 }
 
 func MustSchemaFromCols(typedColColl *ColCollection) Schema {
@@ -153,14 +157,7 @@ func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) 
 	}
 
 	allColColl := NewColCollection(allCols...)
-
-	return &schemaImpl{
-		pkCols:          pkCols,
-		nonPKCols:       nonPKCols,
-		allCols:         allColColl,
-		indexCollection: NewIndexCollection(allColColl),
-		checkCollection: NewCheckCollection(),
-	}, nil
+	return SchemaFromColCollections(allColColl, pkCols, nonPKCols), nil
 }
 
 // GetAllCols gets the collection of all columns (pk and non-pk)

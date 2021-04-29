@@ -203,7 +203,6 @@ func TestAddColumn(t *testing.T) {
 }
 
 func TestModifyColumn(t *testing.T) {
-	t.Skip("Type changes not supported")
 	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
@@ -274,6 +273,14 @@ func TestInnerNestedInNaturalJoins(t *testing.T) {
 
 func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
+}
+
+func TestVariables(t *testing.T) {
+	enginetest.TestVariables(t, newDoltHarness(t))
+}
+
+func TestVariableErrors(t *testing.T) {
+	enginetest.TestVariableErrors(t, newDoltHarness(t))
 }
 
 func TestJsonScripts(t *testing.T) {

@@ -19,6 +19,8 @@ import (
 	"errors"
 	"sync/atomic"
 
+	"github.com/dolthub/dolt/go/store/datas"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -32,9 +34,11 @@ import (
 
 const (
 	// tableWriterStatUpdateRate is the number of writes that will process before the updated stats are displayed.
-	tableWriterStatUpdateRate = 2 << 15
+	tableWriterStatUpdateRate = 64 * 1024
 
-	tableWriterGCRate = 2 << 16
+	// tableWriterGCRate is the number of rows inserted between GCs.  Should be > the frequency at which the table editor
+	// flushes to disk or there is a lot of wasted work
+	tableWriterGCRate = 2 * 1024 * 1024
 )
 
 // ErrNoPK is an error returned if a schema is missing a required primary key
@@ -223,7 +227,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 	_ = atomic.AddInt64(&te.gcOps, 1)
 
 	if te.insertOnly {
-		err := te.tableEditor.InsertRow(ctx, r)
+		err := te.tableEditor.InsertRow(ctx, r, nil)
 
 		if err != nil {
 			return err
@@ -243,7 +247,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			return err
 		}
 		if !ok {
-			err := te.tableEditor.InsertRow(ctx, r)
+			err := te.tableEditor.InsertRow(ctx, r, nil)
 
 			if err != nil {
 				return err
@@ -261,7 +265,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			te.stats.SameVal++
 			return nil
 		}
-		err = te.tableEditor.UpdateRow(ctx, oldRow, r)
+		err = te.tableEditor.UpdateRow(ctx, oldRow, r, nil)
 
 		if err != nil {
 			return err
@@ -275,6 +279,13 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 
 func (te *tableEditorWriteCloser) GC(ctx context.Context) error {
 	if !te.useGC {
+		if te.dEnv != nil && te.dEnv.DoltDB != nil {
+			db, ok := te.dEnv.DoltDB.ValueReadWriter().(datas.Database)
+			if !ok {
+				return nil
+			}
+			return datas.PruneTableFiles(ctx, db)
+		}
 		return nil
 	}
 

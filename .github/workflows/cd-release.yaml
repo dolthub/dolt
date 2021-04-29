@@ -8,37 +8,30 @@ on:
         required: true
 
 jobs:
-  bump-version:
-    name: Bump Version
-    runs-on: ubuntu-18.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Bump Version
-        id: bump-version
-        run: |
-          git config --global user.name dolt-release-bot
-          git config --global user.email dolt-release-bot@dolthub.com
-          ./go/utils/publishrelease/bump-version.sh ${{ github.event.inputs.version }}
-
   create-release:
-    needs: bump-version
-    name: Create Release
+    name: Create release
     runs-on: ubuntu-18.04
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v2
+      - name: Update dolt version command
+        run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
+        env:
+          FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          NEW_VERSION: ${{ github.event.inputs.version }}
+      - uses: EndBug/add-and-commit@v7
         with:
-          go-version: ^1.15
-      - name: Checkout release tag
-        run: |
-          git fetch --tags --all
-          git checkout tags/v${{ github.event.inputs.version }} -b v${{ github.event.inputs.version }}
+          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', github.event.inputs.version) }}
+          add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          cwd: "."
       - name: Build Binaries
+        id: build_binaries
         run: |
-          go/utils/publishrelease/buildbinaries.sh
+          latest=$(git rev-parse HEAD)
+          echo "::set-output name=commitish::$latest"
+          GO_BUILD_VERSION=1.15.11 go/utils/publishrelease/buildbinaries.sh
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -49,6 +42,7 @@ jobs:
           release_name: ${{ github.event.inputs.version }}
           draft: false
           prerelease: false
+          commitish: ${{ steps.build_binaries.outputs.commitish }}
       - name: Upload Linux Distro
         id: upload-linux-distro
         uses: actions/upload-release-asset@v1
@@ -90,11 +84,22 @@ jobs:
           asset_name: install.sh
           asset_content_type: text/plain
 
+  create-release-notes:
+    needs: create-release
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Trigger Release Notes
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: release-notes
+          client-payload: '{"version": "${{ github.event.inputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}"}'
+
   homebrew-bump:
     needs: create-release
     runs-on: ubuntu-18.04
     steps:
-      - name: Repository Dispatch
+      - name: Trigger Bump Homebrew
         uses: peter-evans/repository-dispatch@v1
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
@@ -105,7 +110,7 @@ jobs:
     needs: create-release
     runs-on: ubuntu-18.04
     steps:
-      - name: Repository Dispatch
+      - name: Trigger Performance Benchmarks
         uses: peter-evans/repository-dispatch@v1
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
