@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -88,6 +89,54 @@ type Database struct {
 	batchMode commitBehavior
 }
 
+func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
+	dsession := DSessFromSess(ctx.Session)
+
+	root, ok := dsession.GetRoot(ctx.GetCurrentDatabase())
+	if !ok {
+		// Should be impossible, the engine needs a current DB to start a transaction
+		return nil, fmt.Errorf("No currently selected database")
+	}
+
+	// TODO: get this from a session var
+	wsRef := ref.NewWorkingSetRef("branches/master")
+
+	return NewDoltTransaction(root, wsRef, db.ddb),  nil
+}
+
+func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
+	dsession := DSessFromSess(ctx.Session)
+
+	root, ok := dsession.GetRoot(ctx.GetCurrentDatabase())
+	if !ok {
+		// Should be impossible, the engine needs a current DB to start a transaction
+		return fmt.Errorf("No currently selected database")
+	}
+
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		return fmt.Errorf("Expected a DoltTransaction")
+	}
+
+	return dtx.commit(ctx, root)
+}
+
+func (db Database) Rollback(ctx *sql.Context, transaction sql.Transaction) error {
+	panic("implement me")
+}
+
+func (db Database) CreateSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
+	panic("implement me")
+}
+
+func (db Database) RollbackToSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
+	panic("implement me")
+}
+
+func (db Database) ReleaseSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
+	panic("implement me")
+}
+
 var _ SqlDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.TableDropper = Database{}
@@ -95,6 +144,7 @@ var _ sql.TableCreator = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
+var _ sql.TransactionDatabase = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, dbData env.DbData) Database {
