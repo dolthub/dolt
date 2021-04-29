@@ -2461,7 +2461,7 @@ SQL
     [[ "$output" =~ "foreign key violation" ]] || false
 }
 
-@test "INSERT IGNORE INTO with unique key violations ignores correctly" {
+@test "index: INSERT IGNORE INTO with unique key violations ignores correctly" {
     dolt sql -q "CREATE TABLE mytable(pk int PRIMARY KEY, name varchar(20) UNIQUE)"
 
     dolt sql -q "INSERT INTO mytable values (1,'jon')"
