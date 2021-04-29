@@ -140,14 +140,11 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "replace into test (pk,c1,c2,c3,c4,c5) values (0,7,7,7,7,7),(1,8,8,8,8,8)"
     [ "$status" -eq 0 ]
-    # No skip, but this is a bug in the output. Query produces the right result, but counts it incorrectly
-    [[ "$output" =~ "Query OK, 4 rows affected" ]] || false
-    ## No skip, but this should report 3 but is reporting 4 [[ "${lines[3]}" =~ "3" ]] || false
+    [[ "$output" =~ "Query OK, 3 rows affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "7" ]] || false
     [[ "$output" =~ "8" ]] || false
     [[ ! "$output" =~ "6" ]] || false
-    skip "replace into output is incorrect" 
 }
 
 @test "1pk5col-ints: dolt sql insert and dolt sql select" {

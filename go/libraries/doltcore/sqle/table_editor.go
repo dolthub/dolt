@@ -63,13 +63,13 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 	}, nil
 }
 
-func (te *sqlTableEditor) duplicatePKErrFunc(keyString string, k, v types.Tuple) error {
+func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple, isPk bool) error {
 	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
 	if err != nil {
 		return err
 	}
 
-	return sql.NewUniqueKeyErr(keyString, true, oldRow)
+	return sql.NewUniqueKeyErr(keyString, isPk, oldRow)
 }
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
@@ -80,7 +80,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 			return err
 		}
 
-		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicatePKErrFunc)
+		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
 	}
 
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
@@ -89,7 +89,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	return te.tableEditor.InsertRow(ctx, dRow, te.duplicatePKErrFunc)
+	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
@@ -111,7 +111,7 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 		return err
 	}
 
-	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicatePKErrFunc)
+	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
 }
 
 func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {

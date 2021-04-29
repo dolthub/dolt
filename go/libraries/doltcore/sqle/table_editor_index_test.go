@@ -240,6 +240,25 @@ REPLACE INTO oneuni VALUES (4, 2, 2), (5, 3, 3), (3, 1, 1);
 		},
 		{
 			`
+INSERT INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+DELETE FROM oneuni WHERE v1 < 3;
+REPLACE INTO oneuni VALUES (4, 2, 2), (5, 2, 3), (3, 1, 1);
+`,
+			[]sql.Row{{1, 3}, {2, 5}},
+			[]sql.Row{},
+			false,
+		},
+		{
+			`
+INSERT INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+REPLACE INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3);
+`,
+			[]sql.Row{{1, 1}, {2, 3}},
+			[]sql.Row{},
+			false,
+		},
+		{
+			`
 INSERT INTO oneuni VALUES (1, 1, 1), (2, 1, 2), (3, 3, 3);
 `,
 			[]sql.Row{},
@@ -250,25 +269,6 @@ INSERT INTO oneuni VALUES (1, 1, 1), (2, 1, 2), (3, 3, 3);
 			`
 INSERT INTO oneuni VALUES (1, 2, 3), (2, 1, 4);
 UPDATE oneuni SET v1 = v1 + pk1;
-`,
-			[]sql.Row{},
-			[]sql.Row{},
-			true,
-		},
-		{
-			`
-INSERT INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
-REPLACE INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3);
-`,
-			[]sql.Row{},
-			[]sql.Row{},
-			true,
-		},
-		{
-			`
-INSERT INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
-DELETE FROM oneuni WHERE v1 < 3;
-REPLACE INTO oneuni VALUES (4, 2, 2), (5, 2, 3), (3, 1, 1);
 `,
 			[]sql.Row{},
 			[]sql.Row{},
