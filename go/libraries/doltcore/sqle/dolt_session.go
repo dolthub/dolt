@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -49,22 +48,6 @@ type DoltSession struct {
 	Email    string
 }
 
-// TableCache is a caches for sql.Tables.
-// Caching schema fetches is a meaningful perf win.
-type TableCache interface {
-	// Get returns a sql.Table from the caches, if it exists for |root|.
-	Get(tableName string, root *doltdb.RootValue) (sql.Table, bool)
-
-	// Put stores a copy of |tbl| corresponding to |root|.
-	Put(tableName string, root *doltdb.RootValue, tbl sql.Table)
-
-	// AllForRoot retrieves all tables from the caches corresponding to |root|.
-	AllForRoot(root *doltdb.RootValue) (map[string]sql.Table, bool)
-
-	// Purge removes all entries from the cache.
-	Clear()
-}
-
 // DefaultDoltSession creates a DoltSession object with default values
 func DefaultDoltSession() *DoltSession {
 	sess := &DoltSession{
@@ -81,7 +64,6 @@ func DefaultDoltSession() *DoltSession {
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
 func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
-	roots := make(map[string]dbRoot)
 	dbDatas := make(map[string]env.DbData)
 	editSessions := make(map[string]*editor.TableEditSession)
 
@@ -92,9 +74,9 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 
 	sess := &DoltSession{
 		Session:      sqlSess,
-		roots:        roots,
 		dbDatas:      dbDatas,
 		editSessions: editSessions,
+		roots: 		  make(map[string]dbRoot),
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		caches:       make(map[string]TableCache),
 		Username:     username,
@@ -429,7 +411,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 		return err
 	}
 
-	h, err := cm.HashOf()
+	headCommitHash, err := cm.HashOf()
 	if err != nil {
 		return err
 	}
@@ -468,7 +450,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 		return err
 	}
 
-	err = sess.Session.SetSessionVariable(ctx, name+HeadKeySuffix, h.String())
+	err = sess.Session.SetSessionVariable(ctx, name+HeadKeySuffix, headCommitHash.String())
 	if err != nil {
 		return err
 	}
@@ -478,72 +460,5 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 		return err
 	}
 
-	return sess.SetSessionVariable(ctx, name+HeadKeySuffix, h.String())
-}
-
-func newTableCache() TableCache {
-	return tableCache{
-		mu:     &sync.Mutex{},
-		tables: make(map[*doltdb.RootValue]map[string]sql.Table),
-	}
-}
-
-type tableCache struct {
-	mu     *sync.Mutex
-	tables map[*doltdb.RootValue]map[string]sql.Table
-}
-
-var _ TableCache = tableCache{}
-
-func (tc tableCache) Get(tableName string, root *doltdb.RootValue) (sql.Table, bool) {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-
-	tablesForRoot, ok := tc.tables[root]
-
-	if !ok {
-		return nil, false
-	}
-
-	tbl, ok := tablesForRoot[tableName]
-
-	return tbl, ok
-}
-
-func (tc tableCache) Put(tableName string, root *doltdb.RootValue, tbl sql.Table) {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-
-	tablesForRoot, ok := tc.tables[root]
-
-	if !ok {
-		tablesForRoot = make(map[string]sql.Table)
-		tc.tables[root] = tablesForRoot
-	}
-
-	tablesForRoot[tableName] = tbl
-}
-
-func (tc tableCache) AllForRoot(root *doltdb.RootValue) (map[string]sql.Table, bool) {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-
-	tablesForRoot, ok := tc.tables[root]
-
-	if ok {
-		copyOf := make(map[string]sql.Table, len(tablesForRoot))
-		for name, tbl := range tablesForRoot {
-			copyOf[name] = tbl
-		}
-
-		return copyOf, true
-	}
-
-	return nil, false
-}
-
-func (tc tableCache) Clear() {
-	for rt := range tc.tables {
-		delete(tc.tables, rt)
-	}
+	return sess.SetSessionVariable(ctx, name+HeadKeySuffix, headCommitHash.String())
 }

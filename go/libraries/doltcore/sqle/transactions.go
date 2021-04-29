@@ -46,18 +46,18 @@ func (tx DoltTransaction) String() string {
 // |newRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
 // if working set == ancRoot, attempt a fast-forward merge
-func (tx * DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+func (tx * DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for i := 0; i < maxTxCommitRetries; i++ {
 		ws, err := tx.db.ResolveWorkingSet(ctx, tx.workingSet)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		root := ws.RootValue()
 
 		hash, err := ws.Struct().Hash(tx.db.Format())
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if rootsEqual(root, tx.startRoot) {
@@ -70,7 +70,7 @@ func (tx * DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) 
 
 		mergedRoot, _, err := merge.MergeRoots(ctx, root, newRoot, tx.startRoot)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		err = tx.db.UpdateWorkingSet(ctx, tx.workingSet, mergedRoot, hash)
@@ -78,11 +78,11 @@ func (tx * DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) 
 			continue
 		}
 
-		return err
+		return mergedRoot, err
 	}
 
 	// TODO: different error type for retries exhausted
-	return datas.ErrOptimisticLockFailed
+	return nil, datas.ErrOptimisticLockFailed
 }
 
 func rootsEqual(left, right *doltdb.RootValue) bool {

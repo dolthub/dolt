@@ -388,7 +388,7 @@ func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.Work
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 
 	if err != nil {
-		return nil, ErrTagNotFound
+		return nil, ErrWorkingSetNotFound
 	}
 
 	wsSt, hasHead := ds.MaybeHead()

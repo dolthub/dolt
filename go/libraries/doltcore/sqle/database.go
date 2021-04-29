@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -99,8 +98,7 @@ func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return nil, fmt.Errorf("No currently selected database")
 	}
 
-	// TODO: get this from session instead
-	wsRef := ref.NewWorkingSetRef("branches/master")
+	wsRef := dsession.workingSets[ctx.GetCurrentDatabase()]
 	return NewDoltTransaction(root, wsRef, db.ddb),  nil
 }
 
@@ -118,7 +116,12 @@ func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error
 		return fmt.Errorf("Expected a DoltTransaction")
 	}
 
-	return dtx.Commit(ctx, root)
+	mergedRoot, err := dtx.Commit(ctx, root)
+	if err != nil {
+		return err
+	}
+
+	return db.SetRoot(ctx, mergedRoot)
 }
 
 func (db Database) Rollback(ctx *sql.Context, transaction sql.Transaction) error {
