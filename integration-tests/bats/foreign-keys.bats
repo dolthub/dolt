@@ -1762,6 +1762,14 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'Query OK, 0 rows affected' ]] || false
 
+    # Validate the data is correct
+    run dolt sql -q "SELECT * FROM objects ORDER BY id" -r csv
+    [ "$status" -eq "0" ]
+    [[ $output =~ 'id,name,color' ]] || false
+    [[ "$output" =~ '1,truck,red' ]] || false
+    [[ "$output" =~ '2,ball,green' ]] || false
+    [[ "$output" =~ '3,shoe,blue' ]] || false
+
     # Run the query again and this time assert warnings
     run dolt sql  <<SQL
 INSERT IGNORE INTO objects (id,name,color) VALUES (5, 'hi', 'yellow');

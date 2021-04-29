@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	gsql "github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -199,7 +199,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 			}
 		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
-			return gsql.ErrForeignKeyChildViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
+			return sql.ErrForeignKeyChildViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
 		default:
 			return fmt.Errorf("unknown ON DELETE reference option on `%s`: `%s`", foreignKey.Name, foreignKey.OnDelete.String())
 		}
@@ -305,7 +305,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			}
 		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
-			return gsql.ErrForeignKeyParentViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
+			return sql.ErrForeignKeyParentViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
 		default:
 			return fmt.Errorf("unknown ON UPDATE reference option on `%s`: `%s`", foreignKey.Name, foreignKey.OnUpdate.String())
 		}
@@ -438,7 +438,7 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVa
 				}
 			}
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
-			return gsql.ErrForeignKeyChildViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
+			return sql.ErrForeignKeyChildViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
 		}
 	}
 	return nil
