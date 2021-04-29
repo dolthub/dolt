@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -38,10 +39,11 @@ var _ sql.Session = &DoltSession{}
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	dbRoots   map[string]dbRoot
-	dbDatas   map[string]env.DbData
-	dbEditors map[string]*editor.TableEditSession
-	caches    map[string]TableCache
+	roots        map[string]dbRoot
+	workingSets  map[string]ref.WorkingSetRef
+	dbDatas      map[string]env.DbData
+	editSessions map[string]*editor.TableEditSession
+	caches       map[string]TableCache
 
 	Username string
 	Email    string
@@ -66,13 +68,13 @@ type TableCache interface {
 // DefaultDoltSession creates a DoltSession object with default values
 func DefaultDoltSession() *DoltSession {
 	sess := &DoltSession{
-		Session:   sql.NewBaseSession(),
-		dbRoots:   make(map[string]dbRoot),
-		dbDatas:   make(map[string]env.DbData),
-		dbEditors: make(map[string]*editor.TableEditSession),
-		caches:    make(map[string]TableCache),
-		Username:  "",
-		Email:     "",
+		Session:      sql.NewBaseSession(),
+		roots:        make(map[string]dbRoot),
+		dbDatas:      make(map[string]env.DbData),
+		editSessions: make(map[string]*editor.TableEditSession),
+		caches:       make(map[string]TableCache),
+		Username:     "",
+		Email:        "",
 	}
 	return sess
 }
@@ -88,13 +90,13 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 	}
 
 	sess := &DoltSession{
-		Session:   sqlSess,
-		dbRoots:   dbRoots,
-		dbDatas:   dbDatas,
-		dbEditors: dbEditors,
-		Username:  username,
-		Email:     email,
-		caches:    make(map[string]TableCache),
+		Session:      sqlSess,
+		roots:        dbRoots,
+		dbDatas:      dbDatas,
+		editSessions: dbEditors,
+		Username:     username,
+		Email:        email,
+		caches:       make(map[string]TableCache),
 	}
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db)
@@ -123,7 +125,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) erro
 		return nil
 	}
 
-	dbRoot, ok := sess.dbRoots[dbName]
+	dbRoot, ok := sess.roots[dbName]
 	// It's possible that this returns false if the user has created an in-Memory database. Moreover,
 	// the analyzer will check for us whether a db exists or not.
 	if !ok {
@@ -217,7 +219,7 @@ func (sess *DoltSession) GetDbData(dbName string) (env.DbData, bool) {
 
 // GetRoot returns the current *RootValue for a given database associated with the session
 func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
-	dbRoot, ok := sess.dbRoots[dbName]
+	dbRoot, ok := sess.roots[dbName]
 
 	if !ok {
 		return nil, false
@@ -312,9 +314,9 @@ func (sess *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value 
 			return err
 		}
 
-		sess.dbRoots[dbName] = dbRoot{hashStr, root}
+		sess.roots[dbName] = dbRoot{hashStr, root}
 
-		err = sess.dbEditors[dbName].SetRoot(ctx, root)
+		err = sess.editSessions[dbName].SetRoot(ctx, root)
 		if err != nil {
 			return err
 		}
@@ -348,9 +350,9 @@ func (sess *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value 
 			return err
 		}
 
-		sess.dbRoots[dbName] = dbRoot{valStr, root}
+		sess.roots[dbName] = dbRoot{valStr, root}
 
-		err = sess.dbEditors[dbName].SetRoot(ctx, root)
+		err = sess.editSessions[dbName].SetRoot(ctx, root)
 		if err != nil {
 			return err
 		}
@@ -370,11 +372,11 @@ func (sess *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value 
 			intVal = convertedVal.(int64)
 		}
 		if intVal == 0 {
-			for _, tableEditSession := range sess.dbEditors {
+			for _, tableEditSession := range sess.editSessions {
 				tableEditSession.Props.ForeignKeyChecksDisabled = true
 			}
 		} else if intVal == 1 {
-			for _, tableEditSession := range sess.dbEditors {
+			for _, tableEditSession := range sess.editSessions {
 				tableEditSession.Props.ForeignKeyChecksDisabled = false
 			}
 		} else {
@@ -400,7 +402,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 
 	sess.dbDatas[db.Name()] = env.DbData{Drw: drw, Rsr: rsr, Rsw: rsw, Ddb: ddb}
 
-	sess.dbEditors[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
+	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
 	sess.caches[db.name] = newTableCache()
 

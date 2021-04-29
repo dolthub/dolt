@@ -98,9 +98,8 @@ func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return nil, fmt.Errorf("No currently selected database")
 	}
 
-	// TODO: get this from a session var
+	// TODO: get this from session instead
 	wsRef := ref.NewWorkingSetRef("branches/master")
-
 	return NewDoltTransaction(root, wsRef, db.ddb),  nil
 }
 
@@ -462,7 +461,7 @@ var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin
 
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	currRoot, dbRootOk := dsess.dbRoots[db.name]
+	currRoot, dbRootOk := dsess.roots[db.name]
 
 	key := db.WorkingKey()
 	workingHash, err := ctx.Session.GetSessionVariable(ctx, key)
@@ -505,7 +504,7 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 			return nil, err
 		}
 
-		dsess.dbRoots[db.name] = dbRoot{workingHashStr, newRoot}
+		dsess.roots[db.name] = dbRoot{workingHashStr, newRoot}
 		return newRoot, nil
 	}
 }
@@ -531,9 +530,9 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	}
 
 	dsess := DSessFromSess(ctx.Session)
-	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
+	dsess.roots[db.name] = dbRoot{hashStr, newRoot}
 
-	err = dsess.dbEditors[db.name].SetRoot(ctx, newRoot)
+	err = dsess.editSessions[db.name].SetRoot(ctx, newRoot)
 	if err != nil {
 		return err
 	}
@@ -950,7 +949,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context) *editor.TableEditSession {
-	return DSessFromSess(ctx.Session).dbEditors[db.name]
+	return DSessFromSess(ctx.Session).editSessions[db.name]
 }
 
 // RegisterSchemaFragments register SQL schema fragments that are persisted in the given
