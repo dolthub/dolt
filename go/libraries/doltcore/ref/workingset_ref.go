@@ -15,6 +15,8 @@
 package ref
 
 import (
+	"fmt"
+	"path"
 	"strings"
 )
 
@@ -24,19 +26,30 @@ type WorkingSetRef struct {
 
 var _ DoltRef = WorkingSetRef{}
 
-// NewWorkingSetRef creates a reference to a working set ref from a name
-// or a working set ref e.g. my-workspace, or refs/workingSets/my-workspace
-func NewWorkingSetRef(workspace string) WorkingSetRef {
-	if IsRef(workspace) {
+// NewWorkingSetRef creates a working set ref from a name or a working set ref e.g. my-workspace, or
+// refs/workingSets/my-workspace
+func NewWorkingSetRef(path string) WorkingSetRef {
+	if IsRef(path) {
 		prefix := PrefixForType(WorkingSetRefType)
-		if strings.HasPrefix(workspace, prefix) {
-			workspace = workspace[len(prefix):]
+		if strings.HasPrefix(path, prefix) {
+			path = path[len(prefix):]
 		} else {
-			panic(workspace + " is a ref that is not of type " + prefix)
+			panic(path + " is a ref that is not of type " + prefix)
 		}
 	}
 
-	return WorkingSetRef{workspace}
+	return WorkingSetRef{path}
+}
+
+// WorkingSetRefForHead returns a new WorkingSetRef for the head ref given, or an error if the ref given doesn't
+// represent a head.
+func WorkingSetRefForHead(ref DoltRef) (WorkingSetRef, error) {
+	switch ref.GetType() {
+	case BranchRefType, WorkspaceRefType:
+		return NewWorkingSetRef(path.Join(string(ref.GetType()), ref.GetPath())), nil
+	default:
+		return WorkingSetRef{}, fmt.Errorf("unsupported type of ref for a working set: %s", ref.GetType())
+	}
 }
 
 // GetType will return WorkingSetRefType

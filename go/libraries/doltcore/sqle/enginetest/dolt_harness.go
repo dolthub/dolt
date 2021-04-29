@@ -110,9 +110,7 @@ func (d *DoltHarness) Parallelism() int {
 func (d *DoltHarness) NewContext() *sql.Context {
 	return sql.NewContext(
 		context.Background(),
-		sql.WithSession(d.session),
-		sql.WithViewRegistry(sql.NewViewRegistry()),
-	)
+		sql.WithSession(d.session))
 }
 
 func (d *DoltHarness) SupportsNativeIndexCreation() bool {

@@ -158,7 +158,7 @@ func (t Test) updateWorkingSet(ctx context.Context, dEnv *env.DoltEnv, name stri
 			return err
 		}
 
-		err = tableEditor.InsertRow(ctx, toInsert)
+		err = tableEditor.InsertRow(ctx, toInsert, nil)
 		if err != nil {
 			return err
 		}

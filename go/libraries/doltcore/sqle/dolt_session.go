@@ -81,22 +81,24 @@ func DefaultDoltSession() *DoltSession {
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
 func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
-	dbRoots := make(map[string]dbRoot)
+	roots := make(map[string]dbRoot)
 	dbDatas := make(map[string]env.DbData)
-	dbEditors := make(map[string]*editor.TableEditSession)
+	editSessions := make(map[string]*editor.TableEditSession)
+
 	for _, db := range dbs {
 		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
-		dbEditors[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
+		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 	}
 
 	sess := &DoltSession{
 		Session:      sqlSess,
-		roots:        dbRoots,
+		roots:        roots,
 		dbDatas:      dbDatas,
-		editSessions: dbEditors,
+		editSessions: editSessions,
+		workingSets:  make(map[string]ref.WorkingSetRef),
+		caches:       make(map[string]TableCache),
 		Username:     username,
 		Email:        email,
-		caches:       make(map[string]TableCache),
 	}
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db)
@@ -401,27 +403,39 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	ddb := db.GetDoltDB()
 
 	sess.dbDatas[db.Name()] = env.DbData{Drw: drw, Rsr: rsr, Rsw: rsw, Ddb: ddb}
-
 	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
-
 	sess.caches[db.name] = newTableCache()
 
 	cs := rsr.CWBHeadSpec()
+	headRef := rsr.CWBHeadRef()
 
-	cm, err := ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
+	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
+	if err != nil {
+		return err
+	}
 
+	sess.workingSets[db.name] = workingSetRef
+
+	cm, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return err
 	}
 
 	h, err := cm.HashOf()
-
 	if err != nil {
 		return err
 	}
 
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+			{
+				Name:              name + HeadRefKeySuffix,
+				Scope:             sql.SystemVariableScope_Session,
+				Dynamic:           true,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(name + HeadRefKeySuffix),
+				Default:           "",
+			},
 			{
 				Name:              name + HeadKeySuffix,
 				Scope:             sql.SystemVariableScope_Session,
@@ -440,10 +454,17 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 			},
 		})
 	}
+
+	err = sess.Session.SetSessionVariable(ctx, name+HeadRefKeySuffix, workingSetRef.GetPath())
+	if err != nil {
+		return err
+	}
+
 	err = sess.Session.SetSessionVariable(ctx, name+HeadKeySuffix, h.String())
 	if err != nil {
 		return err
 	}
+
 	err = sess.Session.SetSessionVariable(ctx, name+WorkingKeySuffix, "")
 	if err != nil {
 		return err

@@ -55,6 +55,7 @@ const (
 
 const (
 	HeadKeySuffix    = "_head"
+	HeadRefKeySuffix = "_head_ref"
 	WorkingKeySuffix = "_working"
 )
 
