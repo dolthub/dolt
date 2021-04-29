@@ -2449,16 +2449,16 @@ SQL
     # INSERT against foreign key
     run dolt sql -q "INSERT INTO child VALUES ('9', 9)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
     run dolt sql -q "INSERT INTO child_idx VALUES ('9', 9)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
     run dolt sql -q "INSERT INTO child_unq VALUES ('9', 9)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
     run dolt sql -q "INSERT INTO child_non_unq VALUES ('9', 9)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
 }
 
 @test "index: INSERT IGNORE INTO with unique key violations ignores correctly" {
