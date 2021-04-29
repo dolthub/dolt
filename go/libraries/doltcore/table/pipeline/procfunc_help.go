@@ -102,7 +102,10 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 					err := sinkFunc(r.Row, r.Props)
 
 					if err != nil {
-						if table.IsBadRow(err) || sql.ErrPrimaryKeyViolation.Is(err) || errors.Is(err, editor.ErrDuplicatePK) {
+						if table.IsBadRow(err) ||
+							sql.ErrPrimaryKeyViolation.Is(err) ||
+							sql.ErrUniqueKeyViolation.Is(err) ||
+							errors.Is(err, editor.ErrDuplicateKey) {
 							badRowChan <- &TransformRowFailure{r.Row, "writer", err.Error()}
 						} else {
 							p.StopWithErr(err)

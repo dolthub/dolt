@@ -35,7 +35,7 @@ import (
 
 var (
 	tableEditorMaxOps uint64 = 16384
-	ErrDuplicatePK           = errors.New("duplicate key error")
+	ErrDuplicateKey          = errors.New("duplicate key error")
 )
 
 func init() {
@@ -46,7 +46,7 @@ func init() {
 	}
 }
 
-type PKDuplicateErrFunc func(keyString string, k, v types.Tuple) error
+type PKDuplicateErrFunc func(keyString string, k, v types.Tuple, isPk bool) error
 
 type TableEditor interface {
 	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
@@ -148,7 +148,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		if err != nil {
 			return nil, err
 		}
-		te.indexEds[i] = NewIndexEditor(index, indexData)
+		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, tableSch)
 	}
 
 	err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -333,7 +333,7 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 	return rows, nil
 }
 
-func (te *pkTableEditor) pkErrForKVP(ctx context.Context, kvp *doltKVP, errFunc PKDuplicateErrFunc) error {
+func (te *pkTableEditor) keyErrForKVP(ctx context.Context, kvp *doltKVP, isPk bool, errFunc PKDuplicateErrFunc) error {
 	kVal, err := kvp.k.Value(ctx)
 	if err != nil {
 		return err
@@ -350,9 +350,9 @@ func (te *pkTableEditor) pkErrForKVP(ctx context.Context, kvp *doltKVP, errFunc 
 	}
 
 	if errFunc != nil {
-		return errFunc(keyStr, kVal.(types.Tuple), vVal.(types.Tuple))
+		return errFunc(keyStr, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
 	} else {
-		return fmt.Errorf("duplicate key '%s': %w", keyStr, ErrDuplicatePK)
+		return fmt.Errorf("duplicate key '%s': %w", keyStr, ErrDuplicateKey)
 	}
 }
 
@@ -384,7 +384,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	if kvp, pkExists, err := te.tea.maybeGet(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
-		return te.pkErrForKVP(ctx, kvp, errFunc)
+		return te.keyErrForKVP(ctx, kvp, true, errFunc)
 	}
 	te.tea.insertedKeys[keyHash] = key
 	te.tea.addedKeys[keyHash] = key
@@ -401,6 +401,32 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 				te.autoIncVal = types.Round(insertVal)
 			}
 			te.autoIncVal = types.Increment(te.autoIncVal)
+		}
+	}
+
+	for _, indexEd := range te.indexEds {
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
+		if err != nil {
+			return err
+		}
+		err = indexEd.InsertRow(ctx, fullKey, partialKey)
+		if uke, ok := err.(*uniqueKeyErr); ok {
+			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
+			if err != nil {
+				return err
+			}
+			kvp, pkExists, err := te.tea.maybeGet(ctx, tableTupleHash, uke.TableTuple)
+			if err != nil {
+				return err
+			}
+			if !pkExists {
+				keyStr, _ := formatKey(ctx, uke.TableTuple)
+				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
+					indexEd.Index().Name(), keyStr)
+			}
+			return te.keyErrForKVP(ctx, kvp, false, errFunc)
+		} else if err != nil {
+			return err
 		}
 	}
 
@@ -443,7 +469,7 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 	if kvp, pkExists, err := te.tea.maybeGet(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
-		return te.pkErrForKVP(ctx, kvp, errFunc)
+		return te.keyErrForKVP(ctx, kvp, true, errFunc)
 	}
 	te.tea.insertedKeys[keyHash] = key
 	te.tea.addedKeys[keyHash] = key
@@ -460,6 +486,32 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 				te.autoIncVal = types.Round(insertVal)
 			}
 			te.autoIncVal = types.Increment(te.autoIncVal)
+		}
+	}
+
+	for _, indexEd := range te.indexEds {
+		fullKey, partialKey, err := row.ReduceToIndexKeys(indexEd.Index(), dRow)
+		if err != nil {
+			return err
+		}
+		err = indexEd.InsertRow(ctx, fullKey, partialKey)
+		if uke, ok := err.(*uniqueKeyErr); ok {
+			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
+			if err != nil {
+				return err
+			}
+			kvp, pkExists, err := te.tea.maybeGet(ctx, tableTupleHash, uke.TableTuple)
+			if err != nil {
+				return err
+			}
+			if !pkExists {
+				keyStr, _ := formatKey(ctx, uke.TableTuple)
+				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
+					indexEd.Index().Name(), keyStr)
+			}
+			return te.keyErrForKVP(ctx, kvp, false, errFunc)
+		} else if err != nil {
+			return err
 		}
 	}
 
@@ -482,7 +534,32 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) error {
 		return err
 	}
 
-	return te.delete(key.(types.Tuple))
+	keyHash, err := key.Hash(te.nbf)
+	if err != nil {
+		return err
+	}
+
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
+
+	delete(te.tea.addedKeys, keyHash)
+	te.tea.removedKeys[keyHash] = key
+	te.tea.affectedKeys[keyHash] = &doltKVP{k: key}
+
+	for _, indexEd := range te.indexEds {
+		fullKey, partialKey, err := row.ReduceToIndexKeys(indexEd.Index(), dRow)
+		if err != nil {
+			return err
+		}
+		err = indexEd.DeleteRow(ctx, fullKey, partialKey)
+		if err != nil {
+			return err
+		}
+	}
+
+	te.tea.ed.AddEdit(key, nil)
+	te.tea.opCount++
+	return nil
 }
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.
@@ -491,14 +568,12 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
 
-	dOldKey := dOldRow.NomsMapKey(te.tSch)
-	dOldKeyVal, err := dOldKey.Value(ctx)
+	dOldKeyVal, err := dOldRow.NomsMapKey(te.tSch).Value(ctx)
 	if err != nil {
 		return err
 	}
 
-	dNewKey := dNewRow.NomsMapKey(te.tSch)
-	dNewKeyVal, err := dNewKey.Value(ctx)
+	dNewKeyVal, err := dNewRow.NomsMapKey(te.tSch).Value(ctx)
 	if err != nil {
 		return err
 	}
@@ -531,7 +606,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		if kvp, pkExists, err := te.tea.maybeGet(ctx, newHash, dNewKeyVal); err != nil {
 			return err
 		} else if pkExists {
-			return te.pkErrForKVP(ctx, kvp, errFunc)
+			return te.keyErrForKVP(ctx, kvp, true, errFunc)
 		}
 		te.tea.addedKeys[newHash] = dNewKeyVal
 		te.tea.removedKeys[oldHash] = dOldKeyVal
@@ -541,6 +616,40 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	val, err := dNewRow.NomsMapValue(te.tSch).Value(ctx)
 	if err != nil {
 		return err
+	}
+
+	for _, indexEd := range te.indexEds {
+		oldFullKey, oldPartialKey, err := row.ReduceToIndexKeys(indexEd.Index(), dOldRow)
+		if err != nil {
+			return err
+		}
+		err = indexEd.DeleteRow(ctx, oldFullKey, oldPartialKey)
+		if err != nil {
+			return err
+		}
+		newFullKey, newPartialKey, err := row.ReduceToIndexKeys(indexEd.Index(), dNewRow)
+		if err != nil {
+			return err
+		}
+		err = indexEd.InsertRow(ctx, newFullKey, newPartialKey)
+		if uke, ok := err.(*uniqueKeyErr); ok {
+			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
+			if err != nil {
+				return err
+			}
+			kvp, pkExists, err := te.tea.maybeGet(ctx, tableTupleHash, uke.TableTuple)
+			if err != nil {
+				return err
+			}
+			if !pkExists {
+				keyStr, _ := formatKey(ctx, uke.TableTuple)
+				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
+					indexEd.Index().Name(), keyStr)
+			}
+			return te.keyErrForKVP(ctx, kvp, false, errFunc)
+		} else if err != nil {
+			return err
+		}
 	}
 
 	te.tea.affectedKeys[newHash] = &doltKVP{k: dNewKeyVal, v: val}
@@ -560,9 +669,15 @@ func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 }
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
-func (te *pkTableEditor) Table(_ context.Context) (*doltdb.Table, error) {
+func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 	te.flush()
 	err := te.aq.WaitForEmpty()
+	if err != nil {
+		return nil, err
+	}
+
+	te.flushMutex.Lock()
+	defer te.flushMutex.Unlock()
 
 	if te.hasAutoInc {
 		te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
@@ -571,7 +686,37 @@ func (te *pkTableEditor) Table(_ context.Context) (*doltdb.Table, error) {
 		}
 	}
 
-	return te.t, err
+	tbl := te.t
+	idxMutex := &sync.Mutex{}
+	idxWg := &sync.WaitGroup{}
+	idxWg.Add(len(te.indexEds))
+	for i := 0; i < len(te.indexEds); i++ {
+		go func(i int) {
+			defer idxWg.Done()
+			indexMap, idxErr := te.indexEds[i].Map(ctx)
+			idxMutex.Lock()
+			defer idxMutex.Unlock()
+			if err != nil {
+				return
+			}
+			if idxErr != nil {
+				err = idxErr
+				return
+			}
+			tbl, idxErr = tbl.SetIndexRowData(ctx, te.indexEds[i].Index().Name(), indexMap)
+			if idxErr != nil {
+				err = idxErr
+				return
+			}
+		}(i)
+	}
+	idxWg.Wait()
+	if err != nil {
+		return nil, err
+	}
+	te.t = tbl
+
+	return te.t, nil
 }
 
 func (te *pkTableEditor) Schema() schema.Schema {
@@ -591,7 +736,10 @@ func (te *pkTableEditor) Format() *types.NomsBinFormat {
 func (te *pkTableEditor) Close() error {
 	te.tea.ed.Close()
 	for _, indexEd := range te.indexEds {
-		indexEd.ed.Close()
+		err := indexEd.Close()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -620,24 +768,6 @@ func (te *pkTableEditor) autoFlush() {
 	if runFlush {
 		te.flush()
 	}
-}
-
-func (te *pkTableEditor) delete(key types.Tuple) error {
-	keyHash, err := key.Hash(te.nbf)
-	if err != nil {
-		return err
-	}
-
-	te.writeMutex.Lock()
-	defer te.writeMutex.Unlock()
-
-	delete(te.tea.addedKeys, keyHash)
-	te.tea.removedKeys[keyHash] = key
-	te.tea.affectedKeys[keyHash] = &doltKVP{k: key}
-
-	te.tea.ed.AddEdit(key, nil)
-	te.tea.opCount++
-	return nil
 }
 
 func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) error {
@@ -675,10 +805,6 @@ func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface 
 		return err
 	}
 	newTable, err := te.t.UpdateRows(ctx, updatedMap)
-	if err != nil {
-		return err
-	}
-	newTable, err = te.updateIndexes(ctx, tea, newTable, tea.rowData, updatedMap)
 	if err != nil {
 		return err
 	}
@@ -728,85 +854,4 @@ func formatKey(ctx context.Context, key types.Value) (string, error) {
 	}
 
 	return fmt.Sprintf("[%s]", strings.Join(vals, ",")), nil
-}
-
-func (te *pkTableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *doltdb.Table, originalRowData types.Map, updated types.Map) (*doltdb.Table, error) {
-	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
-	if len(te.indexEds) == 0 {
-		return tbl, nil
-	}
-
-	indexActionQueue := async.NewActionExecutor(ctx, func(_ context.Context, keyInt interface{}) error {
-		key := keyInt.(types.Value)
-
-		var originalRow row.Row
-		var updatedRow row.Row
-
-		if val, ok, err := originalRowData.MaybeGet(ctx, key); err == nil && ok {
-			originalRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
-			if err != nil {
-				return err
-			}
-		} else if err != nil {
-			return err
-		}
-		if val, ok, err := updated.MaybeGet(ctx, key); err == nil && ok {
-			updatedRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
-			if err != nil {
-				return err
-			}
-		} else if err != nil {
-			return err
-		}
-
-		for _, indexEd := range te.indexEds {
-			var err error
-			var originalIndexRow row.Row
-			var updatedIndexRow row.Row
-			if originalRow != nil {
-				originalIndexRow, err = row.ReduceToIndex(indexEd.Index(), originalRow)
-				if err != nil {
-					return err
-				}
-			}
-			if updatedRow != nil {
-				updatedIndexRow, err = row.ReduceToIndex(indexEd.Index(), updatedRow)
-				if err != nil {
-					return err
-				}
-			}
-
-			err = indexEd.UpdateIndex(ctx, originalIndexRow, updatedIndexRow)
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}, 4, 0)
-
-	for _, kvp := range tea.affectedKeys {
-		indexActionQueue.Execute(kvp.k)
-	}
-
-	err := indexActionQueue.WaitForEmpty()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, indexEd := range te.indexEds {
-		if !indexEd.HasChanges() {
-			continue
-		}
-		indexMap, err := indexEd.Map(ctx)
-		if err != nil {
-			return nil, err
-		}
-		tbl, err = tbl.SetIndexRowData(ctx, indexEd.Index().Name(), indexMap)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return tbl, nil
 }

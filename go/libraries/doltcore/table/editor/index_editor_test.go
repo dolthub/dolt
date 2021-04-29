@@ -71,7 +71,7 @@ func TestIndexEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < indexEditorConcurrencyIterations; i++ {
-		indexEditor := NewIndexEditor(index, emptyMap)
+		indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
 		wg := &sync.WaitGroup{}
 
 		for j := 0; j < indexEditorConcurrencyFinalCount*2; j++ {
@@ -82,7 +82,9 @@ func TestIndexEditorConcurrency(t *testing.T) {
 					1: types.Int(val),
 				})
 				require.NoError(t, err)
-				require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
+				fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+				require.NoError(t, err)
+				require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 				wg.Done()
 			}(j)
 		}
@@ -101,7 +103,12 @@ func TestIndexEditorConcurrency(t *testing.T) {
 					1: types.Int(val + 1),
 				})
 				require.NoError(t, err)
-				require.NoError(t, indexEditor.UpdateIndex(context.Background(), dOldRow, dNewRow))
+				oldFullKey, oldPartialKey, err := row.ReduceToIndexKeys(index, dOldRow)
+				require.NoError(t, err)
+				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey))
+				newFullKey, newPartialKey, err := row.ReduceToIndexKeys(index, dNewRow)
+				require.NoError(t, err)
+				require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey))
 				wg.Done()
 			}(j)
 		}
@@ -115,7 +122,9 @@ func TestIndexEditorConcurrency(t *testing.T) {
 					1: types.Int(val),
 				})
 				require.NoError(t, err)
-				require.NoError(t, indexEditor.UpdateIndex(context.Background(), dRow, nil))
+				fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+				require.NoError(t, err)
+				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey))
 				wg.Done()
 			}(j)
 		}
@@ -157,20 +166,22 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
 
-	indexEditor := NewIndexEditor(index, emptyMap)
+	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
 	for i := 0; i < indexEditorConcurrencyFinalCount*2; i++ {
 		dRow, err := row.New(format, indexSch, row.TaggedValues{
 			0: types.Int(i),
 			1: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
+		fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+		require.NoError(t, err)
+		require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 	}
 	indexData, err := indexEditor.Map(context.Background())
 	require.NoError(t, err)
 
 	for i := 0; i < indexEditorConcurrencyIterations; i++ {
-		indexEditor := NewIndexEditor(index, indexData)
+		indexEditor := NewIndexEditor(context.Background(), index, indexData, tableSch)
 		wg := &sync.WaitGroup{}
 
 		for j := 0; j < indexEditorConcurrencyFinalCount; j++ {
@@ -186,7 +197,12 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 					1: types.Int(val + 1),
 				})
 				require.NoError(t, err)
-				require.NoError(t, indexEditor.UpdateIndex(context.Background(), dOldRow, dNewRow))
+				oldFullKey, oldPartialKey, err := row.ReduceToIndexKeys(index, dOldRow)
+				require.NoError(t, err)
+				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey))
+				newFullKey, newPartialKey, err := row.ReduceToIndexKeys(index, dNewRow)
+				require.NoError(t, err)
+				require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey))
 				wg.Done()
 			}(j)
 		}
@@ -199,94 +215,9 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 					1: types.Int(val),
 				})
 				require.NoError(t, err)
-				require.NoError(t, indexEditor.UpdateIndex(context.Background(), dRow, nil))
-				wg.Done()
-			}(j)
-		}
-		wg.Wait()
-
-		newIndexData, err := indexEditor.Map(context.Background())
-		require.NoError(t, err)
-		if assert.Equal(t, uint64(indexEditorConcurrencyFinalCount), newIndexData.Len()) {
-			iterIndex := 0
-			_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
-				dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
+				fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
 				require.NoError(t, err)
-				dReadVals, err := dReadRow.TaggedValues()
-				require.NoError(t, err)
-				assert.Equal(t, row.TaggedValues{
-					0: types.Int(iterIndex),
-					1: types.Int(iterIndex + 1),
-				}, dReadVals)
-				iterIndex++
-				return nil
-			})
-		}
-	}
-}
-
-func TestIndexEditorConcurrencyUnique(t *testing.T) {
-	format := types.Format_Default
-	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
-	require.NoError(t, err)
-	colColl := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false),
-		schema.NewColumn("v2", 2, types.IntKind, false))
-	tableSch, err := schema.SchemaFromCols(colColl)
-	require.NoError(t, err)
-	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: true, Comment: ""})
-	require.NoError(t, err)
-	indexSch := index.Schema()
-	emptyMap, err := types.NewMap(context.Background(), db)
-	require.NoError(t, err)
-
-	for i := 0; i < indexEditorConcurrencyIterations; i++ {
-		indexEditor := NewIndexEditor(index, emptyMap)
-		wg := &sync.WaitGroup{}
-
-		for j := 0; j < indexEditorConcurrencyFinalCount*2; j++ {
-			wg.Add(1)
-			go func(val int) {
-				dRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val),
-				})
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
-				wg.Done()
-			}(j)
-		}
-		wg.Wait()
-
-		for j := 0; j < indexEditorConcurrencyFinalCount; j++ {
-			wg.Add(1)
-			go func(val int) {
-				dOldRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val),
-				})
-				require.NoError(t, err)
-				dNewRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val + 1),
-				})
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.UpdateIndex(context.Background(), dOldRow, dNewRow))
-				wg.Done()
-			}(j)
-		}
-
-		// We let the Updates and Deletes execute at the same time
-		for j := indexEditorConcurrencyFinalCount; j < indexEditorConcurrencyFinalCount*2; j++ {
-			wg.Add(1)
-			go func(val int) {
-				dRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val),
-				})
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.UpdateIndex(context.Background(), dRow, nil))
+				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey))
 				wg.Done()
 			}(j)
 		}
@@ -327,14 +258,16 @@ func TestIndexEditorUniqueMultipleNil(t *testing.T) {
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
 
-	indexEditor := NewIndexEditor(index, emptyMap)
+	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
 	for i := 0; i < 3; i++ {
 		dRow, err := row.New(format, indexSch, row.TaggedValues{
 			0: types.NullValue,
 			1: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
+		fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+		require.NoError(t, err)
+		require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 	}
 	newIndexData, err := indexEditor.Map(context.Background())
 	require.NoError(t, err)
@@ -370,7 +303,7 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
 
-	indexEditor := NewIndexEditor(index, emptyMap)
+	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
 	require.NoError(t, err)
 
 	for i := 0; i < 20; i++ {
@@ -379,10 +312,13 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 			1: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
+		fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+		require.NoError(t, err)
+		require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 	}
 
-	require.NoError(t, indexEditor.Flush(context.Background()))
+	_, err = indexEditor.Map(context.Background())
+	require.NoError(t, err)
 
 	for i := 10; i < 20; i++ {
 		dRow, err := row.New(format, indexSch, row.TaggedValues{
@@ -390,7 +326,9 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 			1: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, indexEditor.UpdateIndex(context.Background(), dRow, nil))
+		fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+		require.NoError(t, err)
+		require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey))
 	}
 
 	newIndexData, err := indexEditor.Map(context.Background())
@@ -416,7 +354,7 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 	assert.True(t, sameIndexData.Equals(newIndexData))
 }
 
-func TestIndexEditorFlushClearsUniqueError(t *testing.T) {
+func TestIndexEditorUniqueErrorDoesntPersist(t *testing.T) {
 	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
@@ -431,23 +369,31 @@ func TestIndexEditorFlushClearsUniqueError(t *testing.T) {
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
 
-	indexEditor := NewIndexEditor(index, emptyMap)
+	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
 	dRow, err := row.New(format, indexSch, row.TaggedValues{
 		0: types.Int(1),
 		1: types.Int(1),
 	})
 	require.NoError(t, err)
-	require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
+	fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+	require.NoError(t, err)
+	require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 	dRow, err = row.New(format, indexSch, row.TaggedValues{
 		0: types.Int(2),
 		1: types.Int(1),
 	})
 	require.NoError(t, err)
-	require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
-	err = indexEditor.Flush(context.Background())
-	require.Error(t, err)
-	err = indexEditor.Flush(context.Background())
+	fullKey, partialKey, err = row.ReduceToIndexKeys(index, dRow)
 	require.NoError(t, err)
+	require.Error(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
+	dRow, err = row.New(format, indexSch, row.TaggedValues{
+		0: types.Int(2),
+		1: types.Int(2),
+	})
+	require.NoError(t, err)
+	fullKey, partialKey, err = row.ReduceToIndexKeys(index, dRow)
+	require.NoError(t, err)
+	require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 }
 
 func TestIndexRebuildingWithZeroIndexes(t *testing.T) {
