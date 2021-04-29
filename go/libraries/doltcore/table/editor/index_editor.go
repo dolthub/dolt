@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-	//gsql "github.com/dolthub/go-mysql-server/sql"
 )
 
 // NOTE: Regarding partial keys and full keys. For this example, let's say that our table has a primary key W, with
@@ -216,7 +215,6 @@ func (iea *indexEditAccumulator) HasPartial(
 	for addedHash, addedTpl := range iea.addedPartialKeys[partialKeyHash] {
 		matches = append(matches, hashedTuple{addedTpl, addedHash})
 	}
-
 	return matches, nil
 }
 
