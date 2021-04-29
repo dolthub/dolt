@@ -267,126 +267,134 @@ func (sess *DoltSession) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb
 
 func (sess *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
 	if isHead, dbName := IsHeadKey(key); isHead {
-		dbd, dbFound := sess.dbDatas[dbName]
-
-		if !dbFound {
-			return sql.ErrDatabaseNotFound.New(dbName)
-		}
-
-		valStr, isStr := value.(string)
-
-		if !isStr || !hash.IsValid(valStr) {
-			return doltdb.ErrInvalidHash
-		}
-
-		cs, err := doltdb.NewCommitSpec(valStr)
-
-		if err != nil {
-			return err
-		}
-
-		cm, err := dbd.Ddb.Resolve(ctx, cs, nil)
-
-		if err != nil {
-			return err
-		}
-
-		root, err := cm.GetRootValue()
-
-		if err != nil {
-			return err
-		}
-
-		h, err := root.HashOf()
-
-		if err != nil {
-			return err
-		}
-
-		err = sess.Session.SetSessionVariable(ctx, key, value)
-
-		if err != nil {
-			return err
-		}
-
-		hashStr := h.String()
-		err = sess.Session.SetSessionVariable(ctx, dbName+WorkingKeySuffix, hashStr)
-
-		if err != nil {
-			return err
-		}
-
-		sess.roots[dbName] = dbRoot{hashStr, root}
-
-		err = sess.editSessions[dbName].SetRoot(ctx, root)
-		if err != nil {
-			return err
-		}
-
-		sess.caches[dbName].Clear()
-
-		return nil
+		return sess.setHeadSessionVar(ctx, key, value, dbName)
 	}
 
 	if isWorking, dbName := IsWorkingKey(key); isWorking {
-		valStr, isStr := value.(string) // valStr represents a root val hash
-		if !isStr || !hash.IsValid(valStr) {
-			return doltdb.ErrInvalidHash
-		}
-
-		err := sess.Session.SetSessionVariable(ctx, key, valStr)
-		if err != nil {
-			return err
-		}
-
-		// If there's a Root Value that's associated with this hash update dbRoots to include it
-		dbd, dbFound := sess.dbDatas[dbName]
-		if !dbFound {
-			return sql.ErrDatabaseNotFound.New(dbName)
-		}
-
-		root, err := dbd.Ddb.ReadRootValue(ctx, hash.Parse(valStr))
-		if errors.Is(doltdb.ErrNoRootValAtHash, err) {
-			return nil
-		} else if err != nil {
-			return err
-		}
-
-		sess.roots[dbName] = dbRoot{valStr, root}
-
-		err = sess.editSessions[dbName].SetRoot(ctx, root)
-		if err != nil {
-			return err
-		}
-
-		sess.caches[dbName].Clear()
-
-		return nil
+		return sess.setWorkingSessionVar(ctx, key, value, dbName)
 	}
 
 	if strings.ToLower(key) == "foreign_key_checks" {
-		convertedVal, err := sql.Int64.Convert(value)
-		if err != nil {
-			return err
-		}
-		intVal := int64(0)
-		if convertedVal != nil {
-			intVal = convertedVal.(int64)
-		}
-		if intVal == 0 {
-			for _, tableEditSession := range sess.editSessions {
-				tableEditSession.Props.ForeignKeyChecksDisabled = true
-			}
-		} else if intVal == 1 {
-			for _, tableEditSession := range sess.editSessions {
-				tableEditSession.Props.ForeignKeyChecksDisabled = false
-			}
-		} else {
-			return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
-		}
+		return sess.setForeignKeyChecksSessionVar(ctx, key, value)
 	}
 
 	return sess.Session.SetSessionVariable(ctx, key, value)
+}
+
+func (sess *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
+	convertedVal, err := sql.Int64.Convert(value)
+	if err != nil {
+		return err
+	}
+	intVal := int64(0)
+	if convertedVal != nil {
+		intVal = convertedVal.(int64)
+	}
+	if intVal == 0 {
+		for _, tableEditSession := range sess.editSessions {
+			tableEditSession.Props.ForeignKeyChecksDisabled = true
+		}
+	} else if intVal == 1 {
+		for _, tableEditSession := range sess.editSessions {
+			tableEditSession.Props.ForeignKeyChecksDisabled = false
+		}
+	} else {
+		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
+	}
+
+	return sess.Session.SetSessionVariable(ctx, key, value)
+}
+
+func (sess *DoltSession) setWorkingSessionVar(ctx *sql.Context, key string, value interface{}, dbName string) error {
+	valStr, isStr := value.(string) // valStr represents a root val hash
+	if !isStr || !hash.IsValid(valStr) {
+		return doltdb.ErrInvalidHash
+	}
+
+	err := sess.Session.SetSessionVariable(ctx, key, valStr)
+	if err != nil {
+		return err
+	}
+
+	// If there's a Root Value that's associated with this hash update dbRoots to include it
+	dbd, dbFound := sess.dbDatas[dbName]
+	if !dbFound {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	root, err := dbd.Ddb.ReadRootValue(ctx, hash.Parse(valStr))
+	if errors.Is(doltdb.ErrNoRootValAtHash, err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	sess.roots[dbName] = dbRoot{valStr, root}
+
+	err = sess.editSessions[dbName].SetRoot(ctx, root)
+	if err != nil {
+		return err
+	}
+
+	sess.caches[dbName].Clear()
+
+	return nil
+}
+
+func (sess *DoltSession) setHeadSessionVar(ctx *sql.Context, key string, value interface{}, dbName string) error {
+	dbd, dbFound := sess.dbDatas[dbName]
+
+	if !dbFound {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	valStr, isStr := value.(string)
+
+	if !isStr || !hash.IsValid(valStr) {
+		return doltdb.ErrInvalidHash
+	}
+
+	cs, err := doltdb.NewCommitSpec(valStr)
+	if err != nil {
+		return err
+	}
+
+	cm, err := dbd.Ddb.Resolve(ctx, cs, nil)
+	if err != nil {
+		return err
+	}
+
+	root, err := cm.GetRootValue()
+	if err != nil {
+		return err
+	}
+
+	h, err := root.HashOf()
+	if err != nil {
+		return err
+	}
+
+	err = sess.Session.SetSessionVariable(ctx, key, value)
+	if err != nil {
+		return err
+	}
+
+	hashStr := h.String()
+	err = sess.Session.SetSessionVariable(ctx, dbName+WorkingKeySuffix, hashStr)
+	if err != nil {
+		return err
+	}
+
+	sess.roots[dbName] = dbRoot{hashStr, root}
+
+	err = sess.editSessions[dbName].SetRoot(ctx, root)
+	if err != nil {
+		return err
+	}
+
+	sess.caches[dbName].Clear()
+
+	return nil
 }
 
 // SetSessionVarDirectly directly updates sess.Session. This is useful in the context of the sql shell where
