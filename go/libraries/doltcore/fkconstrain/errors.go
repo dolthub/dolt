@@ -19,19 +19,20 @@ import (
 	"fmt"
 )
 
-var ErrForeignKeyConstraintViolation = errors.New("foreign key constraint violation")
+var ErrGenericForeignKeyConstraintViolation = errors.New("foreign key constraint violation")
 
-type ForeignKeyError struct {
+// This represents a commit time violation that is different from the FK errors in go-mysql-server (sql/errors.go)
+type GenericForeignKeyError struct {
 	tableName           string
 	referencedTableName string
 	fkName              string
 	keyStr              string
 }
 
-func (err *ForeignKeyError) Error() string {
+func (err *GenericForeignKeyError) Error() string {
 	return fmt.Sprintf("Foreign key violation on fk: `%s`, table: `%s`, referenced table: `%s`, key: `%s`", err.fkName, err.tableName, err.referencedTableName, err.keyStr)
 }
 
-func (err *ForeignKeyError) Unwrap() error {
-	return ErrForeignKeyConstraintViolation
+func (err *GenericForeignKeyError) Unwrap() error {
+	return ErrGenericForeignKeyConstraintViolation
 }

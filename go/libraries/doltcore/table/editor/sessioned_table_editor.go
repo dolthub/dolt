@@ -18,11 +18,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -198,8 +199,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 			}
 		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
-			return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: cannot delete rows with value `%s`",
-				foreignKey.TableName, foreignKey.Name, indexKeyStr)
+			return sql.ErrForeignKeyChildViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
 		default:
 			return fmt.Errorf("unknown ON DELETE reference option on `%s`: `%s`", foreignKey.Name, foreignKey.OnDelete.String())
 		}
@@ -305,8 +305,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			}
 		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
-			return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: cannot update rows with value `%s`",
-				foreignKey.TableName, foreignKey.Name, indexKeyStr)
+			return sql.ErrForeignKeyParentViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
 		default:
 			return fmt.Errorf("unknown ON UPDATE reference option on `%s`: `%s`", foreignKey.Name, foreignKey.OnUpdate.String())
 		}
@@ -439,7 +438,7 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVa
 				}
 			}
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
-			return fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", foreignKey.TableName, foreignKey.Name, indexKeyStr)
+			return sql.ErrForeignKeyChildViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
 		}
 	}
 	return nil

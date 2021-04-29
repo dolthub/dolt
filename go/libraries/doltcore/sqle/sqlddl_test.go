@@ -1519,19 +1519,19 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	// insert tests against foreign key
 	_, err = ExecuteSql(dEnv, root, "INSERT INTO child VALUES ('9', 9)")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "foreign key violation")
+		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
 	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_idx VALUES ('9', 9)")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "foreign key violation")
+		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
 	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_unq VALUES ('9', 9)")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "foreign key violation")
+		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
 	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_non_unq VALUES ('9', 9)")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "foreign key violation")
+		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
 }
 

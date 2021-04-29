@@ -1708,3 +1708,74 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'child2_fk' ]] || false
 }
+
+@test "foreign-keys: child violation correctly detected" {
+    dolt sql <<SQL
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+CREATE TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id),
+    CONSTRAINT color_fk FOREIGN KEY (color) REFERENCES colors(color)
+);
+INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple');
+INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+SQL
+
+    # Run a query and assert that no changes were made
+    run dolt sql -q "DELETE FROM colors where color='green'"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `(2162,"green")`' ]] || false
+}
+
+@test "foreign-keys: insert ignore into works correctly w/ FK violations" {
+    dolt sql <<SQL
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+CREATE TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id),
+    CONSTRAINT color_fk FOREIGN KEY (color) REFERENCES colors(color)
+);
+INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple');
+INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+SQL
+
+    # Run a query and assert that no changes were made
+    run dolt sql -q "INSERT IGNORE INTO objects (id,name,color) VALUES (5, 'hi', 'yellow');"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'Query OK, 0 rows affected' ]] || false
+
+    # Validate the data is correct
+    run dolt sql -q "SELECT * FROM objects ORDER BY id" -r csv
+    [ "$status" -eq "0" ]
+    [[ $output =~ 'id,name,color' ]] || false
+    [[ "$output" =~ '1,truck,red' ]] || false
+    [[ "$output" =~ '2,ball,green' ]] || false
+    [[ "$output" =~ '3,shoe,blue' ]] || false
+
+    # Run the query again and this time assert warnings
+    run dolt sql  <<SQL
+INSERT IGNORE INTO objects (id,name,color) VALUES (5, 'hi', 'yellow');
+SHOW WARNINGS;
+SQL
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ '1452' ]] || false # first ensure the proper code
+    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `(4011,"yellow")`' ]] || false
+}

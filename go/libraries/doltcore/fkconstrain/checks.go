@@ -101,7 +101,7 @@ func (chk check) ColsIntersectChanges(changes map[uint64]bool) bool {
 }
 
 func (chk check) NewErrForKey(key types.Tuple) error {
-	return &ForeignKeyError{
+	return &GenericForeignKeyError{
 		tableName:           chk.fk.TableName,
 		referencedTableName: chk.fk.ReferencedTableName,
 		fkName:              chk.fk.Name,

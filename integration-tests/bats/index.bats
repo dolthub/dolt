@@ -2449,14 +2449,45 @@ SQL
     # INSERT against foreign key
     run dolt sql -q "INSERT INTO child VALUES ('9', 9)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
     run dolt sql -q "INSERT INTO child_idx VALUES ('9', 9)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
     run dolt sql -q "INSERT INTO child_unq VALUES ('9', 9)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
     run dolt sql -q "INSERT INTO child_non_unq VALUES ('9', 9)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
+}
+
+@test "index: INSERT IGNORE INTO with unique key violations ignores correctly" {
+    dolt sql -q "CREATE TABLE mytable(pk int PRIMARY KEY, name varchar(20) UNIQUE)"
+
+    dolt sql -q "INSERT INTO mytable values (1,'jon')"
+
+    # Try the repeat and assert an error
+    run dolt sql -q "INSERT INTO mytable values (2,'jon')"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate unique key given: [1]" ]] || false
+
+    # try with ignore
+    run dolt sql << SQL
+INSERT IGNORE INTO mytable values (2,'jon');
+SHOW WARNINGS;
+SQL
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ '1062' ]] || false # First Validate the correct code
+
+    # Now try again to assert the 0 rows affected
+    run dolt sql -q "INSERT IGNORE INTO mytable values (2,'jon');"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'Query OK, 0 rows affected' ]] || false
+
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM mytable"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM mytable"
+    [[ "$output" =~ "1,jon" ]] || false
 }
