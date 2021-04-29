@@ -31,6 +31,27 @@ import (
 	//gsql "github.com/dolthub/go-mysql-server/sql"
 )
 
+// NOTE: Regarding partial keys and full keys. For this example, let's say that our table has a primary key W, with
+// non-pk columns X, Y, and Z. You then declare an index over X and Y (in that order). In the table map containing all of
+// the rows for the table, each row is composed of two tuples: the first tuple is called the key, the second tuple is
+// called the value. The key is the entire primary key, which in this case is Tuple<W> (tags are ignored for this
+// example). The value is the remaining three columns: Tuple<X,Y,Z>. Therefore, a row in the table map is
+// Row(Tuple<W>,Tuple<X,Y,Z>).
+//
+// The index map containing all of the rows for the index also follows this format of key and value tuples. However,
+// indexes store all of the columns in the key, and have an empty value tuple. An index key contains the indexed columns
+// in the order they were defined, along with any primary keys that were not defined in the index. Thus, our example key
+// looks like Tuple<X,Y,W>. We refer to this key as the full key in the index context, as with the full key you can
+// construct an index row, as it's simply adding an empty tuple to the value, i.e. Row(Tuple<X,Y,W>,Tuple<>). Also with
+// a full key, you can find the table row that matches this index row, as the entire primary key (just W) is in the full
+// key.
+//
+// In both the table and index maps, keys are sorted. This means that given X and Y values for the index, we can
+// construct a tuple with just those values, Tuple<X,Y>, and find all of the rows in the table with those two values by
+// the appended primary key(s). We refer to this prefix of the full key as a partial key. It's easy to think of partial
+// keys as just the indexed columns (Tuple<X,Y>), and the full key as the partial key along with the referring primary
+// key (Tuple<X,Y> + W = Tuple<X,Y,W>).
+
 // IndexEditor takes in changes to an index map and returns the updated map if changes have been made.
 //
 // This type is thread-safe, and may be used in a multi-threaded environment.
@@ -195,6 +216,7 @@ func (iea *indexEditAccumulator) HasPartial(
 	for addedHash, addedTpl := range iea.addedPartialKeys[partialKeyHash] {
 		matches = append(matches, hashedTuple{addedTpl, addedHash})
 	}
+
 	return matches, nil
 }
 

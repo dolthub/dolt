@@ -114,9 +114,8 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 	}
 }
 
-// ReduceToIndexKeys creates a full key and a partial key from the given row (first tuple being the full key). As all
-// non-key tuples in an index map are empty, the full key is equivalent to the entire row of an index. The partial key
-// contains only the stated indexed columns, allowing for matches across duplicate values (for non-unique indexes).
+// ReduceToIndexKeys creates a full key and a partial key from the given row (first tuple being the full key). Please
+// refer to the note in the index editor for more information regarding partial keys.
 func ReduceToIndexKeys(idx schema.Index, r Row) (types.Tuple, types.Tuple, error) {
 	vals := make([]types.Value, 0, len(idx.AllTags())*2)
 	for _, tag := range idx.AllTags() {
@@ -138,9 +137,7 @@ func ReduceToIndexKeys(idx schema.Index, r Row) (types.Tuple, types.Tuple, error
 }
 
 // ReduceToIndexKeysFromTagMap creates a full key and a partial key from the given map of tags (first tuple being the
-// full key). As all non-key tuples in an index map are empty, the full key is equivalent to the entire row of an index.
-// The partial key contains only the stated indexed columns, allowing for matches across duplicate values (for
-// non-unique indexes).
+// full key). Please refer to the note in the index editor for more information regarding partial keys.
 func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tagToVal map[uint64]types.Value) (types.Tuple, types.Tuple, error) {
 	vals := make([]types.Value, 0, len(idx.AllTags())*2)
 	for _, tag := range idx.AllTags() {
