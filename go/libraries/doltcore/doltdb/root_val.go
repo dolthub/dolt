@@ -1166,3 +1166,21 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 
 	return nil
 }
+
+func (root *RootValue) Equal(otherRoot *RootValue) (bool, error) {
+	if otherRoot == nil {
+		return false, nil
+	}
+
+	h, err := root.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	otherH, err := otherRoot.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	return h.Equal(otherH), nil
+}

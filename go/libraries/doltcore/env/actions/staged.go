@@ -73,6 +73,12 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 		return err
 	}
 
+	if eq, err := staged.Equal(working); err != nil {
+		return err
+	} else if eq {
+		return nil
+	}
+
 	docs, err := drw.GetDocsOnDisk()
 	if err != nil {
 		return err
@@ -90,7 +96,7 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 
 	err = stageTables(ctx, ddb, rsw, tbls, staged, working)
 	if err != nil {
-		env.ResetWorkingDocsToStagedDocs(ctx, ddb, rsr, rsw)
+		_ = env.ResetWorkingDocsToStagedDocs(ctx, ddb, rsr, rsw)
 		return err
 	}
 
