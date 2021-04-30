@@ -62,6 +62,7 @@ type IndexEditor struct {
 	aq      *async.ActionExecutor
 	nbf     *types.NomsBinFormat
 	idxData types.Map
+	stack   indexOperationStack
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -268,6 +269,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 		if rowExists, err := ie.iea.Has(ctx, keyHash, key); err != nil {
 			return err
 		} else if rowExists {
+			ie.stack.Push(true, types.EmptyTuple(key.Format()), types.EmptyTuple(key.Format()))
 			return nil
 		}
 	}
@@ -285,6 +287,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 
 	ie.iea.ed.AddEdit(key, types.EmptyTuple(key.Format()))
 	ie.iea.opCount++
+	ie.stack.Push(true, key, partialKey)
 	return nil
 }
 
@@ -315,7 +318,41 @@ func (ie *IndexEditor) DeleteRow(ctx context.Context, key, partialKey types.Tupl
 
 	ie.iea.ed.AddEdit(key, nil)
 	ie.iea.opCount++
+	ie.stack.Push(false, key, partialKey)
 	return nil
+}
+
+// Undo will cause the index editor to undo the last operation at the top of the stack. As Insert and Delete are called,
+// they are added onto a limited-size stack, and Undo pops an operation off the top and undoes it. So if there was an
+// Insert on a key, it will use Delete on that same key. The stack size is very small, therefore too many consecutive
+// calls will cause the stack to empty. This should only be called in the event that an operation was performed that
+// has failed for other reasons, such as an INSERT on the parent table failing on a separate index editor. In the event
+// that Undo is called and there are no operations to undo OR the reverse operation fails (it never should), this panics
+// rather than errors, as the index editor is in an invalid state that cannot be corrected.
+func (ie *IndexEditor) Undo(ctx context.Context) {
+	indexOp, ok := ie.stack.Pop()
+	if !ok {
+		panic(fmt.Sprintf("attempted to undo the last operation on index '%s' but failed due to an empty stack", ie.idx.Name()))
+	}
+	// If an operation succeeds and does not do anything, then an empty tuple is pushed onto the stack.
+	if indexOp.fullKey.Empty() {
+		return
+	}
+	if indexOp.isInsert {
+		err := ie.DeleteRow(ctx, indexOp.fullKey, indexOp.partialKey)
+		if err != nil {
+			panic(fmt.Sprintf("index '%s' is in an invalid and unrecoverable state: "+
+				"attempted to undo previous insertion but encountered the following error: %v",
+				ie.idx.Name(), err))
+		}
+	} else {
+		err := ie.InsertRow(ctx, indexOp.fullKey, indexOp.partialKey)
+		if err != nil {
+			panic(fmt.Sprintf("index '%s' is in an invalid and unrecoverable state: "+
+				"attempted to undo previous deletion but encountered the following error: %v",
+				ie.idx.Name(), err))
+		}
+	}
 }
 
 // Map returns a map based on the edits given, if any. If Flush() was not called prior, it will be called here.
