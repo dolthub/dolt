@@ -76,9 +76,7 @@ func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.T
 		return nil, err
 	}
 
-	if defaultVal != "" {
-		tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, newSchema)
-	}
+	tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, newSchema)
 	if err != nil {
 		return nil, err
 	}

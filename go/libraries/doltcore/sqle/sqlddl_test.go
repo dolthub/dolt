@@ -445,9 +445,11 @@ func TestAddColumn(t *testing.T) {
 			expectedErr: "table not found: notFound",
 		},
 		{
-			name:        "alter add column not null without default",
-			query:       "alter table people add (newColumn varchar(80) not null)",
-			expectedErr: "must have a non-null default value",
+			name:  "alter add column not null without default",
+			query: "alter table people add (newColumn varchar(80) not null)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumnWDefVal(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, "", schema.NotNullConstraint{})),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, types.String("")),
 		},
 		{
 			name:  "alter add column nullable",
