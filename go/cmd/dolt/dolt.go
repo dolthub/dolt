@@ -17,6 +17,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"strconv"
@@ -94,6 +97,7 @@ func init() {
 	dfunctions.VersionString = Version
 }
 
+const pprofServerFlag = "--pprof-server"
 const chdirFlag = "--chdir"
 const jaegerFlag = "--jaeger"
 const profFlag = "--prof"
@@ -136,6 +140,13 @@ func runMain() int {
 					panic("Unexpected prof flag: " + args[1])
 				}
 				args = args[2:]
+
+			case pprofServerFlag:
+				// serve the pprof endpoints setup in the init function run when "net/http/pprof" is imported
+				go func() {
+					log.Println(http.ListenAndServe("localhost:6060", nil))
+				}()
+				args = args[1:]
 
 			// Enable a global jaeger tracer for this run of Dolt,
 			// emitting traces to a collector running at
