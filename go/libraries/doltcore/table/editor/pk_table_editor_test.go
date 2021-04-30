@@ -380,3 +380,123 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		})
 	}
 }
+
+func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
+	ctx := context.Background()
+	format := types.Format_Default
+	db, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
+	require.NoError(t, err)
+	colColl := schema.NewColCollection(
+		schema.NewColumn("pk", 0, types.IntKind, true),
+		schema.NewColumn("v1", 1, types.IntKind, false),
+		schema.NewColumn("v2", 2, types.IntKind, false))
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
+	idxv1, err := tableSch.Indexes().AddIndexByColNames("idx_v1", []string{"v1"}, schema.IndexProperties{
+		IsUnique: true,
+	})
+	require.NoError(t, err)
+	idxv2, err := tableSch.Indexes().AddIndexByColNames("idx_v2", []string{"v2"}, schema.IndexProperties{
+		IsUnique: true,
+	})
+	require.NoError(t, err)
+	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, db, tableSch)
+	require.NoError(t, err)
+	emptyMap, err := types.NewMap(ctx, db)
+	require.NoError(t, err)
+	table, err := doltdb.NewTable(ctx, db, tableSchVal, emptyMap, emptyMap, nil)
+	require.NoError(t, err)
+	table, err = RebuildAllIndexes(ctx, table)
+	require.NoError(t, err)
+	tableEditor, err := newPkTableEditor(ctx, table, tableSch, tableName)
+	require.NoError(t, err)
+
+	for i := 0; i < 3; i++ {
+		dRow, err := row.New(format, tableSch, row.TaggedValues{
+			0: types.Int(i),
+			1: types.Int(i),
+			2: types.Int(i),
+		})
+		require.NoError(t, err)
+		require.NoError(t, tableEditor.InsertRow(ctx, dRow, nil))
+	}
+
+	_, err = tableEditor.Table(ctx)
+	require.NoError(t, err)
+
+	for i := 0; i < 3; i++ {
+		dRow, err := row.New(format, tableSch, row.TaggedValues{
+			0: types.Int(i + 10),
+			1: types.Int(i),
+			2: types.Int(i + 10),
+		})
+		require.NoError(t, err)
+		err = tableEditor.InsertRow(ctx, dRow, nil)
+		require.True(t, errors.Is(err, ErrDuplicateKey))
+		dRow, err = row.New(format, tableSch, row.TaggedValues{
+			0: types.Int(i + 10),
+			1: types.Int(i + 10),
+			2: types.Int(i),
+		})
+		require.NoError(t, err)
+		err = tableEditor.InsertRow(ctx, dRow, nil)
+		require.True(t, errors.Is(err, ErrDuplicateKey))
+	}
+
+	table, err = tableEditor.Table(ctx)
+	require.NoError(t, err)
+	tableData, err := table.GetRowData(ctx)
+	require.NoError(t, err)
+	if assert.Equal(t, uint64(3), tableData.Len()) {
+		iterIndex := 0
+		_ = tableData.IterAll(ctx, func(key, value types.Value) error {
+			dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
+			require.NoError(t, err)
+			dReadVals, err := dReadRow.TaggedValues()
+			require.NoError(t, err)
+			assert.Equal(t, row.TaggedValues{
+				0: types.Int(iterIndex),
+				1: types.Int(iterIndex),
+				2: types.Int(iterIndex),
+			}, dReadVals)
+			iterIndex++
+			return nil
+		})
+	}
+
+	idxv1Data, err := table.GetIndexRowData(ctx, "idx_v1")
+	require.NoError(t, err)
+	if assert.Equal(t, uint64(3), idxv1Data.Len()) {
+		iterIndex := 0
+		_ = idxv1Data.IterAll(ctx, func(key, value types.Value) error {
+			dReadRow, err := row.FromNoms(idxv1.Schema(), key.(types.Tuple), value.(types.Tuple))
+			require.NoError(t, err)
+			dReadVals, err := dReadRow.TaggedValues()
+			require.NoError(t, err)
+			assert.Equal(t, row.TaggedValues{
+				1: types.Int(iterIndex),
+				0: types.Int(iterIndex),
+			}, dReadVals)
+			iterIndex++
+			return nil
+		})
+	}
+
+	idxv2Data, err := table.GetIndexRowData(ctx, "idx_v2")
+	require.NoError(t, err)
+	if assert.Equal(t, uint64(3), idxv2Data.Len()) {
+		iterIndex := 0
+		_ = idxv2Data.IterAll(ctx, func(key, value types.Value) error {
+			dReadRow, err := row.FromNoms(idxv2.Schema(), key.(types.Tuple), value.(types.Tuple))
+			require.NoError(t, err)
+			dReadVals, err := dReadRow.TaggedValues()
+			require.NoError(t, err)
+			assert.Equal(t, row.TaggedValues{
+				2: types.Int(iterIndex),
+				0: types.Int(iterIndex),
+			}, dReadVals)
+			iterIndex++
+			return nil
+		})
+	}
+}
