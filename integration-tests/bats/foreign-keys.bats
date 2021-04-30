@@ -1683,6 +1683,16 @@ SQL
     [[ "$output" =~ '{"rows": [{"id":2,"v1":2}]}' ]] || false
 }
 
+@test "foreign-keys: self referential foreign keys do not break committing" {
+    dolt sql <<SQL
+CREATE TABLE test (id char(32) NOT NULL PRIMARY KEY);
+ALTER TABLE test ADD COLUMN new_col char(32) NULL;
+ALTER TABLE test ADD CONSTRAINT fk_test FOREIGN KEY (new_col) REFERENCES test(id);
+SQL
+    dolt add -A
+    dolt commit -m "committed"
+}
+
 @test "foreign-keys: deleting and readding" {
     dolt sql <<SQL
 CREATE TABLE parent2 (

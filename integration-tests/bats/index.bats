@@ -24,6 +24,22 @@ teardown() {
     teardown_common
 }
 
+@test "index: Permissive index names" {
+    dolt sql <<SQL
+CREATE TABLE test(
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  INDEX _idx_name_ (v1),
+  INDEX \`if$\` (v2)
+);
+SQL
+    run dolt schema show test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'KEY `_idx_name_` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `if$` (`v2`)' ]] || false
+}
+
 @test "index: CREATE TABLE INDEX" {
     dolt sql <<SQL
 CREATE TABLE test(
