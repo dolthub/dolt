@@ -394,7 +394,7 @@ func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.Work
 	wsSt, hasHead := ds.MaybeHead()
 
 	if !hasHead {
-		return nil, ErrTagNotFound
+		return nil, ErrWorkingSetNotFound
 	}
 
 	if wsSt.Name() != datas.WorkingSetName {

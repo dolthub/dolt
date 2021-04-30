@@ -37,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -463,57 +462,19 @@ func (db Database) WorkingKey() string {
 
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
+// GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
 	currRoot, dbRootOk := dsess.roots[db.name]
 
-	key := db.WorkingKey()
-	workingHash, err := ctx.Session.GetSessionVariable(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	workingHashStr, ok := workingHash.(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid value for '%s'", key)
+	if !dbRootOk {
+		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	if workingHash == "" {
-		if !dbRootOk {
-			return nil, fmt.Errorf("value for '%s' not found", key)
-		} else {
-			err := db.SetRoot(ctx, currRoot.root)
-
-			if err != nil {
-				return nil, err
-			}
-
-			return currRoot.root, nil
-		}
-	} else {
-		h, ok := hash.MaybeParse(workingHashStr)
-
-		if !ok {
-			return nil, fmt.Errorf("invalid hash '%s' stored in '%s'", workingHashStr, key)
-		}
-
-		if dbRootOk {
-			if workingHashStr == currRoot.hashStr {
-				return currRoot.root, nil
-			}
-		}
-
-		newRoot, err := db.ddb.ReadRootValue(ctx, h)
-
-		if err != nil {
-			return nil, err
-		}
-
-		dsess.roots[db.name] = dbRoot{workingHashStr, newRoot}
-		return newRoot, nil
-	}
+	return currRoot.root, nil
 }
 
-// SetRoot a new root value for the database.
+// SetRoot a new root value for the database session
 // Can be used if the dolt working set value changes outside of the
 // basic SQL execution engine. If |newRoot|'s FeatureVersion is
 // out-of-date with the client, SetRoot will update it.

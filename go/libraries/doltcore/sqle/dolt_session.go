@@ -362,6 +362,7 @@ func (sess *DoltSession) setHeadSessionVar(ctx *sql.Context, key string, value i
 	}
 
 	hashStr := h.String()
+	// TODO: this needs to use the shared working set, if present
 	err = sess.Session.SetSessionVariable(ctx, dbName+WorkingKeySuffix, hashStr)
 	if err != nil {
 		return err
@@ -385,8 +386,11 @@ func (sess *DoltSession) SetSessionVarDirectly(ctx *sql.Context, key string, val
 	return sess.Session.SetSessionVariable(ctx, key, value)
 }
 
+// AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
+// other state tracking metadata.
 func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
-	name := db.Name()
+	defineSystemVariables(db.Name())
+
 	rsr := db.GetStateReader()
 	rsw := db.GetStateWriter()
 	drw := db.GetDocsReadWriter()
@@ -399,12 +403,37 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()
 
+	// The working root for this session comes from the working set ref if it exists, or the repo state file if not
+	// (for backwards compatibility)
 	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
 	if err != nil {
 		return err
 	}
-
 	sess.workingSets[db.name] = workingSetRef
+
+	var workingRoot *doltdb.RootValue
+	workingSet, err := ddb.ResolveWorkingSet(ctx, workingSetRef)
+	if err == doltdb.ErrWorkingSetNotFound {
+		workingHash := rsr.WorkingHash()
+		workingRoot, err = ddb.ReadRootValue(ctx, workingHash)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	} else {
+		workingRoot = workingSet.RootValue()
+	}
+
+	workingHash, err := workingRoot.HashOf()
+	if err != nil {
+		return err
+	}
+
+	sess.roots[db.name] = dbRoot{
+		hashStr: workingHash.String(),
+		root:    workingRoot,
+	}
 
 	cm, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
@@ -416,6 +445,38 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 		return err
 	}
 
+	return sess.setSessionVars(ctx, db, workingSetRef, headCommitHash, workingHash)
+}
+
+// setSessionVars sets the dolt-specific session vars for the database given to the values given.
+func (sess *DoltSession) setSessionVars(
+	ctx *sql.Context,
+	db Database,
+	workingSetRef ref.WorkingSetRef,
+	headCommitHash hash.Hash,
+	workingRootHash hash.Hash,
+) error {
+	// TODO: this isn't quite right, should store the head ref instead maybe?
+	err := sess.Session.SetSessionVariable(ctx, db.Name()+HeadRefKeySuffix, workingSetRef.GetPath())
+	if err != nil {
+		return err
+	}
+
+	err = sess.Session.SetSessionVariable(ctx, db.Name()+HeadKeySuffix, headCommitHash.String())
+	if err != nil {
+		return err
+	}
+
+	err = sess.Session.SetSessionVariable(ctx, db.Name()+WorkingKeySuffix, workingRootHash.String())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// defineSystemVariables defines dolt-session variables in the engine as necessary
+func defineSystemVariables(name string) {
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 			{
@@ -444,21 +505,4 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 			},
 		})
 	}
-
-	err = sess.Session.SetSessionVariable(ctx, name+HeadRefKeySuffix, workingSetRef.GetPath())
-	if err != nil {
-		return err
-	}
-
-	err = sess.Session.SetSessionVariable(ctx, name+HeadKeySuffix, headCommitHash.String())
-	if err != nil {
-		return err
-	}
-
-	err = sess.Session.SetSessionVariable(ctx, name+WorkingKeySuffix, "")
-	if err != nil {
-		return err
-	}
-
-	return sess.SetSessionVariable(ctx, name+HeadKeySuffix, headCommitHash.String())
 }
