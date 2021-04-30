@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -28,9 +29,10 @@ const (
 )
 
 type DoltTransaction struct {
-	startRoot *doltdb.RootValue
+	startRoot  *doltdb.RootValue
 	workingSet ref.WorkingSetRef
-	db *doltdb.DoltDB
+	db         *doltdb.DoltDB
+	rsw        env.RepoStateWriter
 }
 
 func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, db *doltdb.DoltDB) *DoltTransaction {
@@ -52,8 +54,10 @@ func (tx * DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) 
 		ws, err := tx.db.ResolveWorkingSet(ctx, tx.workingSet)
 		if err == doltdb.ErrWorkingSetNotFound {
 			// initial commit
-			// TODO: should this happen at server start?
 			err = tx.db.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash.Hash{})
+			if err == datas.ErrOptimisticLockFailed {
+				continue
+			}
 		}
 
 		if err != nil {
@@ -85,11 +89,27 @@ func (tx * DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) 
 			continue
 		}
 
-		return mergedRoot, err
+		// TODO: this is not thread safe, but will not be necessary after migrating all clients away from using the
+		//  working set stored in repo_state.json, so should be good enough for now
+		return tx.updateRepoStateFile(ctx, mergedRoot, err)
 	}
 
 	// TODO: different error type for retries exhausted
 	return nil, datas.ErrOptimisticLockFailed
+}
+
+func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *doltdb.RootValue, err error) (*doltdb.RootValue, error) {
+	hash, err := mergedRoot.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.rsw.SetWorkingHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return mergedRoot, err
 }
 
 func rootsEqual(left, right *doltdb.RootValue) bool {

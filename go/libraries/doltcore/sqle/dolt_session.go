@@ -407,8 +407,8 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()
 
-	// The working root for this session comes from the working set ref if it exists, or the repo state file if not
-	// (for backwards compatibility)
+	// Not all dolt commands update the working set ref yet. So until that's true, we update it here with the contents
+	// of the repo_state.json file
 	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
 	if err != nil {
 		return err
@@ -416,26 +416,33 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	sess.workingSets[db.name] = workingSetRef
 
 	var workingRoot *doltdb.RootValue
+	workingHashInRepoState := rsr.WorkingHash()
+	workingHashInWsRef := hash.Hash{}
+
+	workingRoot, err = ddb.ReadRootValue(ctx, workingHashInRepoState)
+	if err != nil {
+		return err
+	}
+
 	workingSet, err := ddb.ResolveWorkingSet(ctx, workingSetRef)
 	if err == doltdb.ErrWorkingSetNotFound {
-		workingHash := rsr.WorkingHash()
-		workingRoot, err = ddb.ReadRootValue(ctx, workingHash)
-		if err != nil {
-			return err
-		}
+		// no working set ref established yet
 	} else if err != nil {
 		return err
 	} else {
-		workingRoot = workingSet.RootValue()
+		workingHashInWsRef, err = workingSet.RootValue().HashOf()
+		if err != nil {
+			return err
+		}
 	}
 
-	workingHash, err := workingRoot.HashOf()
+	err = ddb.UpdateWorkingSet(ctx, workingSetRef, workingRoot, workingHashInWsRef)
 	if err != nil {
 		return err
 	}
 
 	sess.roots[db.name] = dbRoot{
-		hashStr: workingHash.String(),
+		hashStr: workingHashInRepoState.String(),
 		root:    workingRoot,
 	}
 
@@ -449,7 +456,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 		return err
 	}
 
-	return sess.setSessionVars(ctx, db, workingSetRef, headCommitHash, workingHash)
+	return sess.setSessionVars(ctx, db, workingSetRef, headCommitHash, workingHashInRepoState)
 }
 
 // setSessionVars sets the dolt-specific session vars for the database given to the values given.
