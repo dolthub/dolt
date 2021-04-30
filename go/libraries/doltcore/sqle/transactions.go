@@ -19,6 +19,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -49,6 +50,12 @@ func (tx DoltTransaction) String() string {
 func (tx * DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for i := 0; i < maxTxCommitRetries; i++ {
 		ws, err := tx.db.ResolveWorkingSet(ctx, tx.workingSet)
+		if err == doltdb.ErrWorkingSetNotFound {
+			// initial commit
+			// TODO: should this happen at server start?
+			err = tx.db.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash.Hash{})
+		}
+
 		if err != nil {
 			return nil, err
 		}

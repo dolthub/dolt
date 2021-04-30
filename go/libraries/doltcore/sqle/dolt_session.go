@@ -247,7 +247,11 @@ func (sess *DoltSession) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb
 	return cm, h, nil
 }
 
+// SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
+// vars that we define. Otherwise we pass it on to the base implementation.
 func (sess *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
+	// TODO: is working head ref
+
 	if isHead, dbName := IsHeadKey(key); isHead {
 		return sess.setHeadSessionVar(ctx, key, value, dbName)
 	}
