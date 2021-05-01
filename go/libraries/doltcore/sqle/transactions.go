@@ -35,12 +35,18 @@ type DoltTransaction struct {
 	rsw        env.RepoStateWriter
 }
 
-func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, db *doltdb.DoltDB) *DoltTransaction {
-	return &DoltTransaction{startRoot: startRoot, workingSet: workingSet, db: db}
+func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, db *doltdb.DoltDB, rsw env.RepoStateWriter) *DoltTransaction {
+	return &DoltTransaction{
+		startRoot: startRoot,
+		workingSet: workingSet,
+		db: db,
+		rsw: rsw,
+	}
 }
 
 func (tx DoltTransaction) String() string {
-	return ""
+	// TODO: return more info (hashes need caching)
+	return "DoltTransaction"
 }
 
 // Commit attempts to merge newRoot into the working set

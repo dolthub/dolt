@@ -76,7 +76,7 @@ func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
 	}
 
 	wsRef := dsession.workingSets[ctx.GetCurrentDatabase()]
-	return NewDoltTransaction(root, wsRef, db.ddb),  nil
+	return NewDoltTransaction(root, wsRef, db.ddb, db.rsw),  nil
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {

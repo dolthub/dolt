@@ -489,7 +489,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	} else if err != nil {
 		return err
 	} else {
-		workingHashInWsRef, err = workingSet.RootValue().HashOf()
+		workingHashInWsRef, err = workingSet.Struct().Hash(ddb.Format())
 		if err != nil {
 			return err
 		}
