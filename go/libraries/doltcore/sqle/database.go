@@ -51,28 +51,6 @@ const (
 	single
 )
 
-const (
-	HeadKeySuffix    = "_head"
-	HeadRefKeySuffix = "_head_ref"
-	WorkingKeySuffix = "_working"
-)
-
-func IsHeadKey(key string) (bool, string) {
-	if strings.HasSuffix(key, HeadKeySuffix) {
-		return true, key[:len(key)-len(HeadKeySuffix)]
-	}
-
-	return false, ""
-}
-
-func IsWorkingKey(key string) (bool, string) {
-	if strings.HasSuffix(key, WorkingKeySuffix) {
-		return true, key[:len(key)-len(WorkingKeySuffix)]
-	}
-
-	return false, ""
-}
-
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
@@ -103,24 +81,7 @@ func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
 	dsession := DSessFromSess(ctx.Session)
-
-	root, ok := dsession.GetRoot(ctx.GetCurrentDatabase())
-	if !ok {
-		// Should be impossible, the engine needs a current DB to start a transaction
-		return fmt.Errorf("No currently selected database")
-	}
-
-	dtx, ok := tx.(*DoltTransaction)
-	if !ok {
-		return fmt.Errorf("Expected a DoltTransaction")
-	}
-
-	mergedRoot, err := dtx.Commit(ctx, root)
-	if err != nil {
-		return err
-	}
-
-	return db.SetRoot(ctx, mergedRoot)
+	return dsession.CommitTransaction(ctx, db.name)
 }
 
 func (db Database) Rollback(ctx *sql.Context, transaction sql.Transaction) error {
@@ -452,12 +413,12 @@ func filterDoltInternalTables(tblNames []string) []string {
 	return result
 }
 
-func (db Database) HeadKey() string {
-	return db.name + HeadKeySuffix
+func HeadKey(dbName string) string {
+	return dbName + HeadKeySuffix
 }
 
-func (db Database) WorkingKey() string {
-	return db.name + WorkingKeySuffix
+func WorkingKey(dbName string) string {
+	return dbName + WorkingKeySuffix
 }
 
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
@@ -474,35 +435,11 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	return currRoot.root, nil
 }
 
-// SetRoot a new root value for the database session
-// Can be used if the dolt working set value changes outside of the
-// basic SQL execution engine. If |newRoot|'s FeatureVersion is
-// out-of-date with the client, SetRoot will update it.
+// SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
+// convenience.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	h, err := newRoot.HashOf()
-
-	if err != nil {
-		return err
-	}
-
-	hashStr := h.String()
-	key := db.WorkingKey()
-
-	err = ctx.Session.SetSessionVariable(ctx, key, hashStr)
-
-	if err != nil {
-		return err
-	}
-
 	dsess := DSessFromSess(ctx.Session)
-	dsess.roots[db.name] = dbRoot{hashStr, newRoot}
-
-	err = dsess.editSessions[db.name].SetRoot(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return dsess.SetRoot(ctx, db.name, newRoot)
 }
 
 // LoadRootFromRepoState loads the root value from the repo state's working hash, then calls SetRoot with the loaded

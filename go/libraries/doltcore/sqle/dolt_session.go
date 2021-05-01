@@ -33,7 +33,27 @@ type dbRoot struct {
 	root    *doltdb.RootValue
 }
 
-var _ sql.Session = &DoltSession{}
+const (
+	HeadKeySuffix    = "_head"
+	HeadRefKeySuffix = "_head_ref"
+	WorkingKeySuffix = "_working"
+)
+
+func IsHeadKey(key string) (bool, string) {
+	if strings.HasSuffix(key, HeadKeySuffix) {
+		return true, key[:len(key)-len(HeadKeySuffix)]
+	}
+
+	return false, ""
+}
+
+func IsWorkingKey(key string) (bool, string) {
+	if strings.HasSuffix(key, WorkingKeySuffix) {
+		return true, key[:len(key)-len(WorkingKeySuffix)]
+	}
+
+	return false, ""
+}
 
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type DoltSession struct {
@@ -43,10 +63,11 @@ type DoltSession struct {
 	dbDatas      map[string]env.DbData
 	editSessions map[string]*editor.TableEditSession
 	caches       map[string]TableCache
-
 	Username string
 	Email    string
 }
+
+var _ sql.Session = &DoltSession{}
 
 // DefaultDoltSession creates a DoltSession object with default values
 func DefaultDoltSession() *DoltSession {
@@ -56,6 +77,7 @@ func DefaultDoltSession() *DoltSession {
 		dbDatas:      make(map[string]env.DbData),
 		editSessions: make(map[string]*editor.TableEditSession),
 		caches:       make(map[string]TableCache),
+		workingSets:  make(map[string]ref.WorkingSetRef),
 		Username:     "",
 		Email:        "",
 	}
@@ -102,6 +124,7 @@ func TableCacheFromSess(sess sql.Session, dbName string) TableCache {
 	return sess.(*DoltSession).caches[dbName]
 }
 
+// CommitTransaction commits the in-progress transaction for the database named
 func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) error {
 	// This is triggered when certain commands are sent to the server (ex. commit) when a database is not selected.
 	// These commands should not error.
@@ -116,15 +139,23 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) erro
 		return nil
 	}
 
-	dbData := sess.dbDatas[dbName]
+	tx := ctx.GetTransaction()
+	if tx == nil {
+		return nil
+	}
 
-	root := dbRoot.root
-	h, err := dbData.Ddb.WriteRootValue(ctx, root)
+	// TODO: validate that the transaction belongs to the DB named
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		return fmt.Errorf("Expected a DoltTransaction")
+	}
+
+	mergedRoot, err := dtx.Commit(ctx, dbRoot.root)
 	if err != nil {
 		return err
 	}
 
-	return dbData.Rsw.SetWorkingHash(ctx, h)
+	return sess.SetRoot(ctx, dbName, mergedRoot)
 }
 
 // GetDoltDB returns the *DoltDB for a given database by name
@@ -210,6 +241,34 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	}
 
 	return dbRoot.root, true
+}
+
+// SetRoot sets a new root value for the session for the database named.
+// Can be used if the dolt working set value changes outside of the basic SQL execution engine.
+// If |newRoot|'s FeatureVersion is out-of-date with the client, SetRoot will update it.
+func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+	h, err := newRoot.HashOf()
+	if err != nil {
+		return err
+	}
+
+	hashStr := h.String()
+	key := WorkingKey(dbName)
+
+	err = ctx.Session.SetSessionVariable(ctx, key, hashStr)
+
+	if err != nil {
+		return err
+	}
+
+	sess.roots[dbName] = dbRoot{hashStr, newRoot}
+
+	err = sess.editSessions[dbName].SetRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // GetHeadCommit returns the parent commit of the current session.
@@ -367,7 +426,7 @@ func (sess *DoltSession) setHeadSessionVar(ctx *sql.Context, key string, value i
 
 	hashStr := h.String()
 	// TODO: this needs to use the shared working set, if present
-	err = sess.Session.SetSessionVariable(ctx, dbName+WorkingKeySuffix, hashStr)
+	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), hashStr)
 	if err != nil {
 		return err
 	}
@@ -467,18 +526,17 @@ func (sess *DoltSession) setSessionVars(
 	headCommitHash hash.Hash,
 	workingRootHash hash.Hash,
 ) error {
-	// TODO: this isn't quite right, should store the head ref instead maybe?
 	err := sess.Session.SetSessionVariable(ctx, db.Name()+HeadRefKeySuffix, workingSetRef.GetPath())
 	if err != nil {
 		return err
 	}
 
-	err = sess.Session.SetSessionVariable(ctx, db.Name()+HeadKeySuffix, headCommitHash.String())
+	err = sess.Session.SetSessionVariable(ctx, HeadKey(db.Name()), headCommitHash.String())
 	if err != nil {
 		return err
 	}
 
-	err = sess.Session.SetSessionVariable(ctx, db.Name()+WorkingKeySuffix, workingRootHash.String())
+	err = sess.Session.SetSessionVariable(ctx, WorkingKey(db.Name()), workingRootHash.String())
 	if err != nil {
 		return err
 	}
