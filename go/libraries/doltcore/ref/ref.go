@@ -67,6 +67,15 @@ var RefTypes = map[RefType]struct{}{
 	WorkingSetRefType: {},
 }
 
+// HeadRefTypes are the ref types that point to a HEAD.
+var HeadRefTypes = map[RefType]struct{}{
+	BranchRefType:     {},
+	RemoteRefType:     {},
+	InternalRefType:   {},
+	TagRefType:        {},
+	WorkspaceRefType:  {},
+}
+
 // PrefixForType returns what a reference string for a given type should start with
 func PrefixForType(refType RefType) string {
 	return refPrefix + string(refType) + "/"
