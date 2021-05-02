@@ -445,9 +445,11 @@ func TestAddColumn(t *testing.T) {
 			expectedErr: "table not found: notFound",
 		},
 		{
-			name:        "alter add column not null without default",
-			query:       "alter table people add (newColumn varchar(80) not null)",
-			expectedErr: "must have a non-null default value",
+			name:  "alter add column not null without default",
+			query: "alter table people add (newColumn varchar(80) not null)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumnWDefVal(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, "", schema.NotNullConstraint{})),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, types.String("")),
 		},
 		{
 			name:  "alter add column nullable",
@@ -1511,7 +1513,7 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	require.NoError(t, err)
 	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_unq VALUES ('6', 5)")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "UNIQUE constraint violation")
+		assert.True(t, sql.ErrUniqueKeyViolation.Is(err))
 	}
 	root, err = ExecuteSql(dEnv, root, "INSERT INTO child_non_unq VALUES ('6', 5)")
 	require.NoError(t, err)
@@ -1519,19 +1521,19 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	// insert tests against foreign key
 	_, err = ExecuteSql(dEnv, root, "INSERT INTO child VALUES ('9', 9)")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "foreign key violation")
+		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
 	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_idx VALUES ('9', 9)")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "foreign key violation")
+		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
 	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_unq VALUES ('9', 9)")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "foreign key violation")
+		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
 	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_non_unq VALUES ('9', 9)")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "foreign key violation")
+		assert.Contains(t, err.Error(), "Foreign key violation")
 	}
 }
 

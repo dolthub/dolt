@@ -343,7 +343,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 		err = tableEditor.InsertRow(context.Background(), dRow, nil)
-		require.True(t, errors.Is(err, ErrDuplicatePK))
+		require.True(t, errors.Is(err, ErrDuplicateKey))
 	}
 
 	_, err = tableEditor.Table(context.Background())
