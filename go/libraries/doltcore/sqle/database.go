@@ -69,13 +69,25 @@ type Database struct {
 func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
 	dsession := DSessFromSess(ctx.Session)
 
-	root, ok := dsession.GetRoot(ctx.GetCurrentDatabase())
-	if !ok {
-		// Should be impossible, the engine needs a current DB to start a transaction
-		return nil, fmt.Errorf("No currently selected database")
+	// When we begin the transaction, we must synchronize the state of this session with the global state for the
+	// current head ref. Any pending transaction has already been committed before this happens.
+	wsRef := dsession.workingSets[ctx.GetCurrentDatabase()]
+
+	ws, err := db.ddb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return nil, err
 	}
 
-	wsRef := dsession.workingSets[ctx.GetCurrentDatabase()]
+	err = db.SetRoot(ctx, ws.RootValue())
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return NewDoltTransaction(root, wsRef, db.ddb, db.rsw),  nil
 }
 
