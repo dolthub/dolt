@@ -618,7 +618,6 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 	return tryCommitErr
 }
 
-
 func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doDelete(ctx, ds.ID()) })
 }

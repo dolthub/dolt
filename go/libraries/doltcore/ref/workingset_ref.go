@@ -72,4 +72,3 @@ func (r WorkingSetRef) String() string {
 func (r WorkingSetRef) MarshalJSON() ([]byte, error) {
 	return MarshalJSON(r)
 }
-

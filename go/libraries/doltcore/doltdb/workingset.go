@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	workingMetaStName  = "workingset"
+	workingMetaStName        = "workingset"
 	workingMetaVersionStName = "version"
-	workingMetaVersion = "1.0"
+	workingMetaVersion       = "1.0"
 )
 
 type WorkingSet struct {
@@ -113,7 +113,7 @@ func NewWorkingSetMeta() *WorkingSetMeta {
 
 func (tm *WorkingSetMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
 	metadata := types.StructData{
-		workingMetaVersionStName:   types.String(workingMetaVersion),
+		workingMetaVersionStName: types.String(workingMetaVersion),
 	}
 
 	return types.NewStruct(nbf, workingMetaStName, metadata)

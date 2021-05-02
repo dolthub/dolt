@@ -17,8 +17,9 @@ package sqle
 import (
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // TableCache is a caches for sql.Tables.
@@ -36,7 +37,6 @@ type TableCache interface {
 	// Clear removes all entries from the cache.
 	Clear()
 }
-
 
 func newTableCache() TableCache {
 	return tableCache{
@@ -104,4 +104,3 @@ func (tc tableCache) Clear() {
 		delete(tc.tables, rt)
 	}
 }
-

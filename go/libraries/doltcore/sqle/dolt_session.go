@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -63,8 +63,8 @@ type DoltSession struct {
 	dbDatas      map[string]env.DbData
 	editSessions map[string]*editor.TableEditSession
 	caches       map[string]TableCache
-	Username string
-	Email    string
+	Username     string
+	Email        string
 }
 
 var _ sql.Session = &DoltSession{}
@@ -98,7 +98,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		Session:      sqlSess,
 		dbDatas:      dbDatas,
 		editSessions: editSessions,
-		roots: 		  make(map[string]dbRoot),
+		roots:        make(map[string]dbRoot),
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		caches:       make(map[string]TableCache),
 		Username:     username,

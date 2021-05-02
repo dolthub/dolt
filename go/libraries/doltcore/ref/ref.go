@@ -59,11 +59,11 @@ const (
 // RefTypes is the set of all supported reference types.  External RefTypes can be added to this map in order to add
 // RefTypes for external tooling
 var RefTypes = map[RefType]struct{}{
-	BranchRefType: {},
-	RemoteRefType: {},
-	InternalRefType: {},
-	TagRefType: {},
-	WorkspaceRefType: {},
+	BranchRefType:     {},
+	RemoteRefType:     {},
+	InternalRefType:   {},
+	TagRefType:        {},
+	WorkspaceRefType:  {},
 	WorkingSetRefType: {},
 }
 

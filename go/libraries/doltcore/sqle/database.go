@@ -88,7 +88,7 @@ func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return nil, err
 	}
 
-	return NewDoltTransaction(root, wsRef, db.ddb, db.rsw),  nil
+	return NewDoltTransaction(root, wsRef, db.ddb, db.rsw), nil
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {

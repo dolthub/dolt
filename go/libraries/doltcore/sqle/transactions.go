@@ -15,13 +15,14 @@
 package sqle
 
 import (
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const (
@@ -37,10 +38,10 @@ type DoltTransaction struct {
 
 func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, db *doltdb.DoltDB, rsw env.RepoStateWriter) *DoltTransaction {
 	return &DoltTransaction{
-		startRoot: startRoot,
+		startRoot:  startRoot,
 		workingSet: workingSet,
-		db: db,
-		rsw: rsw,
+		db:         db,
+		rsw:        rsw,
 	}
 }
 
@@ -55,7 +56,7 @@ func (tx DoltTransaction) String() string {
 // |newRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
 // if working set == ancRoot, attempt a fast-forward merge
-func (tx * DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for i := 0; i < maxTxCommitRetries; i++ {
 		ws, err := tx.db.ResolveWorkingSet(ctx, tx.workingSet)
 		if err == doltdb.ErrWorkingSetNotFound {
