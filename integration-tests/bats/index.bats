@@ -2487,6 +2487,14 @@ SQL
     [ "$status" -eq "1" ]
     [[ "$output" =~ "duplicate unique key given: [1]" ]] || false
 
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM mytable"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM mytable"
+    [[ "$output" =~ "1,jon" ]] || false
+    ! [[ "$output" =~ "2,jon" ]] || false
+
     # try with ignore
     run dolt sql << SQL
 INSERT IGNORE INTO mytable values (2,'jon');
@@ -2506,4 +2514,5 @@ SQL
 
     run dolt sql -r csv -q "SELECT * FROM mytable"
     [[ "$output" =~ "1,jon" ]] || false
+    ! [[ "$output" =~ "2,jon" ]] || false
 }

@@ -1744,6 +1744,18 @@ SQL
     run dolt sql -q "DELETE FROM colors where color='green'"
     [ "$status" -eq "1" ]
     [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `(2162,"green")`' ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM colors"
+    [ "$status" -eq "0" ]
+    [[ $output =~ 'id,color' ]] || false
+    [[ "$output" =~ '1,red' ]] || false
+    [[ "$output" =~ '2,green' ]] || false
+    [[ "$output" =~ '3,blue' ]] || false
+    [[ "$output" =~ '4,purple' ]] || false
+
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM colors"
+    [ "$status" -eq "0" ]
+    [[ $output =~ '4' ]] || false
 }
 
 @test "foreign-keys: insert ignore into works correctly w/ FK violations" {
