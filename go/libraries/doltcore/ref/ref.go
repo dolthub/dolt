@@ -56,18 +56,18 @@ const (
 	WorkingSetRefType RefType = "workingSets"
 )
 
-// RefTypes is the set of all supported reference types.  External RefTypes can be added to this map in order to add
-// RefTypes for external tooling
-var RefTypes = map[RefType]struct{}{
-	BranchRefType:     {},
-	RemoteRefType:     {},
-	InternalRefType:   {},
-	TagRefType:        {},
-	WorkspaceRefType:  {},
-	WorkingSetRefType: {},
+var allRefTypes = []RefType{
+	BranchRefType,
+	RemoteRefType,
+	InternalRefType,
+	TagRefType,
+	WorkspaceRefType,
+	WorkingSetRefType,
 }
 
-// HeadRefTypes are the ref types that point to a HEAD.
+// HeadRefTypes are the ref types that point to a HEAD and contain a Commit struct. These are the types that are
+// returned by GetHeadRefs. Other ref types don't point to Commits necessarily, so aren't in this list and must be
+// asked for explicitly.
 var HeadRefTypes = map[RefType]struct{}{
 	BranchRefType:     {},
 	RemoteRefType:     {},
@@ -81,21 +81,21 @@ func PrefixForType(refType RefType) string {
 	return refPrefix + string(refType) + "/"
 }
 
-type RefUpdateMode struct {
+type UpdateMode struct {
 	Force bool
 }
 
-var ForceUpdate = RefUpdateMode{true}
-var FastForwardOnly = RefUpdateMode{false}
+var ForceUpdate = UpdateMode{true}
+var FastForwardOnly = UpdateMode{false}
 
 // DoltRef is a reference to a commit.
 type DoltRef interface {
 	fmt.Stringer
 
-	// Type is the RefType of this ref
+	// GetType returns the RefType of this ref
 	GetType() RefType
 
-	// Path is the identifier for the reference
+	// GetPath returns the identifier for the reference
 	GetPath() string
 }
 
@@ -121,12 +121,12 @@ func EqualsStr(dr DoltRef, str string) bool {
 	return Equals(dr, other)
 }
 
-// String() converts the DoltRef to a reference string in the format refs/type/path
+// String converts the DoltRef to a reference string in the format refs/type/path
 func String(dr DoltRef) string {
 	return PrefixForType(dr.GetType()) + dr.GetPath()
 }
 
-// MarshalJson implements the json Marshaler interface to json encode DoltRefs as their string representation
+// MarshalJSON implements the json Marshaler interface to json encode DoltRefs as their string representation
 func MarshalJSON(dr DoltRef) ([]byte, error) {
 	str := dr.String()
 	data := make([]byte, len(str)+2)
@@ -152,7 +152,7 @@ func Parse(str string) (DoltRef, error) {
 		}
 	}
 
-	for rType := range RefTypes {
+	for _, rType := range allRefTypes {
 		prefix := PrefixForType(rType)
 		if strings.HasPrefix(str, prefix) {
 			str = str[len(prefix):]

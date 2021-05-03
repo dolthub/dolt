@@ -353,8 +353,9 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 	return NewCommit(ddb.db, commitSt), nil
 }
 
-// ResolveRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found.
-func (ddb *DoltDB) ResolveRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
+// ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
+// point to a Commit.
+func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
 	commitSt, err := getCommitStForRefStr(ctx, ddb.db, ref.String())
 	if err != nil {
 		return nil, err
@@ -482,7 +483,7 @@ func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *
 
 // CanFastForward returns whether the given branch can be fast-forwarded to the commit given.
 func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *Commit) (bool, error) {
-	current, err := ddb.ResolveRef(ctx, branch)
+	current, err := ddb.ResolveCommitRef(ctx, branch)
 
 	if err != nil {
 		if err == ErrBranchNotFound {
@@ -731,26 +732,6 @@ func (ddb *DoltDB) HasRef(ctx context.Context, doltRef ref.DoltRef) (bool, error
 	return dss.Has(ctx, types.String(doltRef.String()))
 }
 
-// GetRef returns the ref given, if it exists
-func (ddb *DoltDB) GetRef(ctx context.Context, doltRef ref.DoltRef) (hash.Hash, bool, error) {
-	ds, err := ddb.db.GetDataset(ctx, doltRef.String())
-	if err != nil {
-		return hash.Hash{}, false, err
-	}
-
-	if !ds.HasHead() {
-		return hash.Hash{}, false, nil
-	}
-
-	head, ok := ds.MaybeHead()
-	if !ok {
-		return hash.Hash{}, false, nil
-	}
-
-	hash, err := head.Hash(ddb.Format())
-	return hash, true, err
-}
-
 var branchRefFilter = map[ref.RefType]struct{}{ref.BranchRefType: {}}
 
 // GetBranches returns a list of all branches in the database.
@@ -779,9 +760,9 @@ func (ddb *DoltDB) GetWorkingSets(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, workingSetsRefFilter)
 }
 
-// GetRefs returns a list of all refs in the database.
-func (ddb *DoltDB) GetRefs(ctx context.Context) ([]ref.DoltRef, error) {
-	return ddb.GetRefsOfType(ctx, ref.RefTypes)
+// GetHeadRefs returns a list of all refs that point to a Commit
+func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
+	return ddb.GetRefsOfType(ctx, ref.HeadRefTypes)
 }
 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
@@ -897,7 +878,8 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 	return err
 }
 
-// UpdateWorkingSet updates the working set with the ref given.
+// UpdateWorkingSet updates the working set with the ref given to the root value given
+// |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
 func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.DoltRef, rootVal *RootValue, prevHash hash.Hash) error {
 	if !IsWorkingSetRef(workingSetRef) {
 		panic(fmt.Sprintf("invalid working set ref %s", workingSetRef.String()))

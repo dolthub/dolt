@@ -143,7 +143,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	printRemote := apr.Contains(remoteParam)
 	printAll := apr.Contains(allFlag)
 
-	branches, err := dEnv.DoltDB.GetRefs(ctx)
+	branches, err := dEnv.DoltDB.GetHeadRefs(ctx)
 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)

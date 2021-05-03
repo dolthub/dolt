@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -116,7 +115,7 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 }
 
 func calcSuperDuperSchema(ctx context.Context, ddb *doltdb.DoltDB, working *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
-	refs, err := ddb.GetRefsOfType(ctx, ref.HeadRefTypes)
+	refs, err := ddb.GetHeadRefs(ctx)
 
 	if err != nil {
 		return nil, err
@@ -134,7 +133,7 @@ func calcSuperDuperSchema(ctx context.Context, ddb *doltdb.DoltDB, working *dolt
 	}
 
 	for _, ref := range refs {
-		cm, err := ddb.ResolveRef(ctx, ref)
+		cm, err := ddb.ResolveCommitRef(ctx, ref)
 
 		if err != nil {
 			return nil, err

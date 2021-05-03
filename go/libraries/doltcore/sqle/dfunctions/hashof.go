@@ -82,7 +82,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return nil, err
 		}
 
-		cm, err = ddb.ResolveRef(ctx, branchRef)
+		cm, err = ddb.ResolveCommitRef(ctx, branchRef)
 		if err != nil {
 			return nil, err
 		}
