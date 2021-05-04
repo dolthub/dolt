@@ -135,7 +135,6 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 
 	// Run log where the input is a commit or no args are provided
 	if argIsRef || apr.NArg() == 0 {
-		// Used if input is a commit
 		cs, err := parseCommitSpec(dEnv, apr)
 		if err != nil {
 			cli.PrintErr(err)
@@ -229,16 +228,8 @@ func checkIfTableExists(ctx context.Context, commit *doltdb.Commit, tableName st
 
 func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc, tableName string, numLines int) int {
 	commit, err := dEnv.DoltDB.Resolve(ctx, dEnv.RepoState.CWBHeadSpec(), dEnv.RepoState.CWBHeadRef())
-
 	if err != nil {
 		cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
-		return 1
-	}
-
-	h, err := commit.HashOf()
-
-	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit hash"))
 		return 1
 	}
 
@@ -251,6 +242,12 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLo
 
 	if !exists {
 		cli.PrintErrln("error: Invalid commit spec or table given")
+		return 1
+	}
+
+	h, err := commit.HashOf()
+	if err != nil {
+		cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit hash"))
 		return 1
 	}
 
