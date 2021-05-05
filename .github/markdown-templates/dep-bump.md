@@ -13,3 +13,4 @@ $ go get -u github.com/dolthub/<dependency>/go@<commit>
 
 This PR must have passing CI and a review before merging.
 
+If this PR has passing CI, a `check-suite-ok` label will automatically be applied to it.
