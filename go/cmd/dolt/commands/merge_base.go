@@ -29,7 +29,7 @@ import (
 var mergeBaseDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Find the common ancestor of two commits.`,
 	LongDesc:  `Find the common ancestor of two commits.`,
-	Synopsis:  []string{
+	Synopsis: []string{
 		`{{.LessThan}}commit spec{{.GreaterThan}} {{.LessThan}}commit spec{{.GreaterThan}}`,
 	},
 }
