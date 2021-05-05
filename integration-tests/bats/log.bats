@@ -94,7 +94,7 @@ teardown() {
 @test "log: Properly throws an error when neither a valid commit hash nor a valid table are passed" {
     run dolt log notvalid
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "error: Invalid commit spec or table given" ]] || false
+    [[ "$output" =~ "error: table notvalid does not exist" ]] || false
 }
 
 @test "log: Log on a table has basic functionality" {
@@ -194,11 +194,49 @@ teardown() {
 
     run dolt log test
     [ $status -eq 0 ]
-    echo $output
     [[ "$output" =~ "MergeCommit" ]] || false
     [[ "$output" =~ "Merge:" ]] || false
     [[ "$output" =~ "Commit1" ]] || false
     [[ "$output" =~ "Commit3" ]] || false
     [[ "$output" =~ "Commit2" ]] || false
     [[ ! "$output" =~ "Initialize data repository" ]] || false
+}
+
+@test "log: dolt log with ref and table" {
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Commit1"
+    dolt checkout -b test-branch
+    dolt sql -q "insert into test values (0,0)"
+    dolt add test
+    dolt commit -m "Commit2"
+    dolt checkout master
+
+    run dolt log test-branch test
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit2" ]] || false
+    [[ "$output" =~ "Commit1" ]] || false
+}
+
+@test "log: dolt log with table deleted between revisions" {
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Commit1"
+
+    dolt sql -q "DROP TABLE test"
+    dolt add test
+    dolt commit -m "Commit 2"
+
+    run dolt log test
+    [ $status -eq 1 ]
+    [[ "$output" =~ "error: table test does not exist" ]] || false
+
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Commit3"
+
+    run dolt log test
+    [[ "$output" =~ "Commit3" ]] || false
+    [[ "$output" =~ "Commit1" ]] || false
+    ! [[ "$output" =~ "Commit2" ]] || false
 }

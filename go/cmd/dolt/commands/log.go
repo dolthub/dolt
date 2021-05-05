@@ -16,7 +16,7 @@ package commands
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"strings"
 
 	"github.com/fatih/color"
@@ -42,7 +42,7 @@ var logDocs = cli.CommandDocumentationContent{
 
 The command takes options to control what is shown and how.`,
 	Synopsis: []string{
-		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}commit/table name{{.GreaterThan}}]`,
+		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}commit{{.GreaterThan}}] [[--] {{.LessThan}}table{{.GreaterThan}}]`,
 	},
 }
 
@@ -121,46 +121,35 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, logDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() > 1 {
+	if apr.NArg() > 2 {
 		usage()
 		return 1
 	}
 
 	numLines := apr.GetIntOrDefault(numLinesParam, -1)
 
-	argIsRef := false
-	if apr.NArg() == 1 {
-		argIsRef = actions.ValidateIsRef(ctx, apr.Arg(0), dEnv.DoltDB, dEnv.RepoStateReader())
-	}
+	// Just dolt log
+	if apr.NArg() == 0 {
+		return logCommits(ctx, dEnv, dEnv.RepoState.CWBHeadSpec(), loggerFunc, numLines)
+	} else if apr.NArg() == 1 { // dolt log <ref/table>
+		argIsRef := actions.ValidateIsRef(ctx, apr.Arg(0), dEnv.DoltDB, dEnv.RepoStateReader())
 
-	// Run log where the input is a commit or no args are provided
-	if argIsRef || apr.NArg() == 0 {
-		cs, err := parseCommitSpec(dEnv, apr)
-		if err != nil {
-			cli.PrintErr(err)
-			return 1
+		if argIsRef {
+			cs, err := doltdb.NewCommitSpec(apr.Arg(0))
+			if err != nil {
+				cli.PrintErrln(color.HiRedString("invalid commit %s\n", apr.Arg(0)))
+			}
+			return logCommits(ctx, dEnv, cs, loggerFunc, numLines)
+		} else {
+			return logTableCommits(ctx, dEnv, loggerFunc, dEnv.RepoState.CWBHeadSpec(), apr.Arg(0), numLines)
 		}
-
-		return logCommits(ctx, dEnv, cs, loggerFunc, numLines)
+	} else { // dolt log ref table
+		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
+		if err != nil {
+			cli.PrintErrln(color.HiRedString("invalid commit %s\n", apr.Arg(0)))
+		}
+		return logTableCommits(ctx, dEnv, loggerFunc, cs, apr.Arg(1), numLines)
 	}
-
-	// Run log if the input is a table
-	return logTableCommits(ctx, dEnv, loggerFunc, apr.Arg(0), numLines)
-}
-
-func parseCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, error) {
-	if apr.NArg() == 0 || apr.Arg(0) == "--" {
-		return dEnv.RepoState.CWBHeadSpec(), nil
-	}
-
-	comSpecStr := apr.Arg(0)
-	cs, err := doltdb.NewCommitSpec(comSpecStr)
-
-	if err != nil {
-		return nil, fmt.Errorf("invalid commit %s\n", comSpecStr)
-	}
-
-	return cs, nil
 }
 
 func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, loggerFunc commitLoggerFunc, numLines int) int {
@@ -212,7 +201,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, l
 	return 0
 }
 
-func checkIfTableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (bool, error) {
+func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (bool, error) {
 	rv, err := commit.GetRootValue()
 	if err != nil {
 		return false, err
@@ -226,22 +215,22 @@ func checkIfTableExists(ctx context.Context, commit *doltdb.Commit, tableName st
 	return ok, nil
 }
 
-func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc, tableName string, numLines int) int {
-	commit, err := dEnv.DoltDB.Resolve(ctx, dEnv.RepoState.CWBHeadSpec(), dEnv.RepoState.CWBHeadRef())
+func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc, cs *doltdb.CommitSpec, tableName string, numLines int) int {
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 	if err != nil {
 		cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
 		return 1
 	}
 
 	// Check that the table exists in the head commit
-	exists, err := checkIfTableExists(ctx, commit, tableName)
+	exists, err := tableExists(ctx, commit, tableName)
 	if err != nil {
 		cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit info"))
 		return 1
 	}
 
 	if !exists {
-		cli.PrintErrln("error: Invalid commit spec or table given")
+		cli.PrintErrln(color.HiRedString("error: table %s does not exist", tableName))
 		return 1
 	}
 
@@ -251,67 +240,70 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLo
 		return 1
 	}
 
-	commits, err := commitwalk.GetTopNTopoOrderedCommits(ctx, dEnv.DoltDB, h, -1)
+	itr, err := commitwalk.GetTopologicalOrderIterator(ctx, dEnv.DoltDB, h)
+	if err != nil && err != io.EOF {
+		cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit history"))
+		return 1
+	}
 
-	for _, commit := range commits {
+	var prevCommit *doltdb.Commit = nil
+	var prevHash hash.Hash
+	for {
+		// If we reached the EOF limit break
 		if numLines == 0 {
 			break
 		}
 
-		meta, err := commit.GetCommitMeta()
-		if err != nil {
-			cli.PrintErrln("error: failed to get commit metadata")
+		h, c, err := itr.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			cli.PrintErrln("Fatal Error: failed to get commit history")
 			return 1
 		}
 
-		crv, err := commit.GetRootValue()
+		if prevCommit == nil {
+			prevCommit = c
+			prevHash = h
+			continue
+		}
+
+		parentRV, err := c.GetRootValue()
 		if err != nil {
-			cli.PrintErrln("error: failed to get commit root value")
+			cli.PrintErrln("error: failed to get parent root value")
 			return 1
 		}
 
-		cmHash, err := commit.HashOf()
+		childRV, err := prevCommit.GetRootValue()
 		if err != nil {
-			cli.PrintErrln("error: failed to get commit hash")
+			cli.PrintErrln("error: failed to get child root value")
 			return 1
 		}
 
-		pHashes, err := commit.ParentHashes(ctx)
+		ok, err := didTableChangeBetweenRootValues(ctx, childRV, parentRV, tableName)
 		if err != nil {
-			cli.PrintErrln("error: failed to get parent hashes")
-			return 1
+			return 1 // helper handles logic
 		}
 
-		for _, pHash := range pHashes {
-			pcs, err := doltdb.NewCommitSpec(pHash.String())
+		if ok {
+			meta, err := prevCommit.GetCommitMeta()
 			if err != nil {
-				cli.PrintErrln("Invalid Parent hash")
+				cli.PrintErrln("error: failed to get commit metadata")
 				return 1
 			}
 
-			parentCommit, err := dEnv.DoltDB.Resolve(ctx, pcs, dEnv.RepoState.CWBHeadRef())
+			ph, err := prevCommit.ParentHashes(ctx)
 			if err != nil {
-				cli.PrintErrln(color.HiRedString("Fatal error: cannot get parent commit for commit %s.", cmHash.String()))
+				cli.PrintErrln("error: failed to get parent hashes")
 				return 1
 			}
 
-			prv, err := parentCommit.GetRootValue()
-			if err != nil {
-				cli.PrintErrln("error: failed to get parent root value")
-				return 1
-			}
-
-			ok, err := didTableChangeBetweenRootValues(ctx, crv, prv, tableName)
-			if err != nil {
-				return 1 // helper handles logic
-			}
-
-			if ok {
-				loggerFunc(meta, pHashes, cmHash)
-				numLines--
-				break
-			}
+			loggerFunc(meta, ph, prevHash)
+			numLines--
 		}
+
+		prevCommit = c
+		prevHash = h
 	}
 
 	return 0
