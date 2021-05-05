@@ -5,18 +5,53 @@ on:
     branches: [ master ]
 
 jobs:
+  format:
+    name: Format PR
+    runs-on: ubuntu-18.04
+    outputs:
+      has-changes: ${{ steps.detect-changes.outputs.has-changes }}
+      commit: ${{ steps.get_commit.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Format repo and update licenses
+        working-directory: ./go
+        run: |
+          ./utils/repofmt/format_repo.sh
+          ./Godeps/update.sh
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+          CHANGE_TARGET: ${{ github.base_ref }}
+      - name: Changes detected
+        id: detect-changes
+        run: |
+          changes=$(git status --porcelain)
+          if [ ! -z "$changes" ]; then
+             echo "::set-output name=has-changes::true"
+          fi
+      - uses: EndBug/add-and-commit@v7
+        if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
+        with:
+          message: "[ga-format-pr] Run go/utils/repofmt/format_repo.sh and go/Godeps/update.sh"
+          add: "."
+          cwd: "."
+      - name: Get commit
+        id: get_commit
+        if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
+        run: |
+          commit=$(git rev-parse HEAD)
+          echo "::set-output name=commit::$commit"
+
   verify:
+    needs: format
     name: Verify format and committers
     runs-on: ubuntu-18.04
     steps:
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v2
-        with:
-          go-version: ^1.13
-        id: go
       - uses: actions/checkout@v2
+        if: ${{ needs.format.outputs.has-changes == 'true' && needs.format.outputs.commit != '' }}
         with:
-          fetch-depth: 0
+          ref: ${{ needs.format.outputs.commit }}
+      - uses: actions/checkout@v2
+        if: ${{ needs.format.outputs.has-changes != 'true' }}
       - name: Check all
         working-directory: ./go
         # Keep this in sync with //go/utils/prepr/prepr.sh.
