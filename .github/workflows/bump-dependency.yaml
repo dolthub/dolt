@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Bump dependency
         working-directory: go
-        run: go get -u github.com/dolthub/${{ github.event.client_payload.dependency }}/go@${{ github.event.client_payload.head_commit_sha }}
+        run: go get -u github.com/dolthub/${{ github.event.client_payload.dependency }}@${{ github.event.client_payload.head_commit_sha }}
       - name: Get Assignee and Reviewer
         id: get_reviewer
         run: |
