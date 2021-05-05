@@ -12,7 +12,13 @@ jobs:
       has-changes: ${{ steps.detect-changes.outputs.has-changes }}
       commit: ${{ steps.get_commit.outputs.commit }}
     steps:
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.15
       - uses: actions/checkout@v2
+      - name: Install goimports
+        run: go get golang.org/x/tools/cmd/goimports
       - name: Format repo and update licenses
         working-directory: ./go
         run: |
@@ -46,6 +52,10 @@ jobs:
     name: Verify format and committers
     runs-on: ubuntu-18.04
     steps:
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.15
       - uses: actions/checkout@v2
         if: ${{ needs.format.outputs.has-changes == 'true' && needs.format.outputs.commit != '' }}
         with:
