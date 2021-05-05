@@ -243,7 +243,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 
 	if err != nil {
 		if err == io.EOF {
-			err = fmt.Errorf("EOF when trying to read the root hash and chunk count - %w", ErrCorruptNVF)
+			err = fmt.Errorf("EOF read while trying to read the root hash and chunk count - %w", ErrCorruptNVF)
 		}
 
 		return hash.Hash{}, nil, err
