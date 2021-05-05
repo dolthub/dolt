@@ -349,6 +349,21 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return HandleVErrAndExitCode(verr, usage)
 }
 
+func parseCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, error) {
+	if apr.NArg() == 0 || apr.Arg(0) == "--" {
+		return dEnv.RepoState.CWBHeadSpec(), nil
+	}
+
+	comSpecStr := apr.Arg(0)
+	cs, err := doltdb.NewCommitSpec(comSpecStr)
+
+	if err != nil {
+		return nil, fmt.Errorf("invalid commit %s\n", comSpecStr)
+	}
+
+	return cs, nil
+}
+
 func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv, newDatabase)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
