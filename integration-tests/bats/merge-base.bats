@@ -47,6 +47,10 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "$MERGE_BASE" ]
 
+    run dolt merge-base one two
+    [ "$status" -eq 0 ]
+    [ "$output" = "$MERGE_BASE" ]
+
     dolt checkout master
     run dolt log
     [ "$status" -eq 0 ]
@@ -79,4 +83,9 @@ teardown() {
     run dolt sql -q "SELECT message FROM dolt_log WHERE commit_hash = dolt_merge_base('master', 'master');" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "commit C" ]
+
+    # dolt_merge_base() resolves commit hashes
+    run dolt sql -q "SELECT dolt_merge_base('master', hashof('one')) = dolt_merge_base(hashof('master'),'one') FROM dual;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "true" ]
 }

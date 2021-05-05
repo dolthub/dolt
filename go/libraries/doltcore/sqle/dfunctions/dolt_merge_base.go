@@ -31,10 +31,12 @@ type MergeBase struct {
 	expression.BinaryExpression
 }
 
+// NewMergeBase returns a MergeBase sql function.
 func NewMergeBase(left, right sql.Expression) sql.Expression {
 	return &MergeBase{expression.BinaryExpression{Left: left, Right: right}}
 }
 
+// Eval implements the sql.Expression interface.
 func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if _, ok := d.Left.Type().(sql.StringType); !ok {
 		return nil, sql.ErrInvalidType.New(d.Left.Type())
@@ -50,6 +52,10 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	rightSpec, err := d.Right.Eval(ctx, row)
 	if err != nil {
 		return nil, err
+	}
+
+	if leftSpec == nil || rightSpec == nil {
+		return nil, nil
 	}
 
 	left, right, err := resolveRefSpecs(ctx, leftSpec.(string), rightSpec.(string))
@@ -99,14 +105,17 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 	return
 }
 
+// String implements the sql.Expression interface.
 func (d MergeBase) String() string {
 	return fmt.Sprintf("DOLT_MERGE_BASE(%s,%s)", d.Left.String(), d.Right.String())
 }
 
+// Type implements the sql.Expression interface.
 func (d MergeBase) Type() sql.Type {
 	return sql.Text
 }
 
+// WithChildren implements the sql.Expression interface.
 func (d MergeBase) WithChildren(children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 2 {
 		return nil, sql.ErrInvalidChildrenNumber.New(d, len(children), 2)

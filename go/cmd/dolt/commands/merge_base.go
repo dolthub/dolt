@@ -28,15 +28,15 @@ import (
 
 var mergeBaseDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Find the common ancestor of two commits.`,
-	LongDesc:  `Find the common ancestor of two commits.`,
-	Synopsis:  []string{
+	LongDesc:  `Find the common ancestor of two commits, and return the ancestor's commit hash.'`,
+	Synopsis: []string{
 		`{{.LessThan}}commit spec{{.GreaterThan}} {{.LessThan}}commit spec{{.GreaterThan}}`,
 	},
 }
 
 type MergeBaseCmd struct{}
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd MergeBaseCmd) Name() string {
 	return "merge-base"
 }
