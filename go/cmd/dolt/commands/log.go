@@ -249,7 +249,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLo
 	var prevCommit *doltdb.Commit = nil
 	var prevHash hash.Hash
 	for {
-		// If we reached the EOF limit break
+		// If we reached the limit then break
 		if numLines == 0 {
 			break
 		}
