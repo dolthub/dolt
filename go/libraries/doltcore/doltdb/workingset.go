@@ -90,16 +90,9 @@ func (t *WorkingSet) Struct() types.Struct {
 	return t.st
 }
 
-// DoltRef returns a DoltRef for this WorkingSet.
-func (t *WorkingSet) DoltRef() ref.DoltRef {
+// Ref returns a WorkingSetRef for this WorkingSet.
+func (t *WorkingSet) Ref() ref.WorkingSetRef {
 	return ref.NewWorkingSetRef(t.Name)
-}
-
-// IsWorkingSetRef returns whether the given ref is a valid workingset ref
-func IsWorkingSetRef(dref ref.DoltRef) bool {
-	path := dref.GetPath()
-	return dref.GetType() == ref.WorkingSetRefType &&
-		ref.IsValidBranchName(path) // same naming rules as branches
 }
 
 // WorkingSetMeta contains all the metadata that is associated with a working set

@@ -753,13 +753,6 @@ func (ddb *DoltDB) GetWorkspaces(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, workspacesRefFilter)
 }
 
-var workingSetsRefFilter = map[ref.RefType]struct{}{ref.WorkingSetRefType: {}}
-
-// GetWorkingSets returns a list of all workspaces in the database.
-func (ddb *DoltDB) GetWorkingSets(ctx context.Context) ([]ref.DoltRef, error) {
-	return ddb.GetRefsOfType(ctx, workingSetsRefFilter)
-}
-
 // GetHeadRefs returns a list of all refs that point to a Commit
 func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.HeadRefTypes)
@@ -778,7 +771,10 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 
 		var dref ref.DoltRef
 		if ref.IsRef(keyStr) {
-			dref, _ = ref.Parse(keyStr)
+			dref, err = ref.Parse(keyStr)
+			if err != nil {
+				return err
+			}
 
 			if _, ok := refTypeFilter[dref.GetType()]; ok {
 				refs = append(refs, dref)
@@ -880,11 +876,7 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 
 // UpdateWorkingSet updates the working set with the ref given to the root value given
 // |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
-func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.DoltRef, rootVal *RootValue, prevHash hash.Hash) error {
-	if !IsWorkingSetRef(workingSetRef) {
-		panic(fmt.Sprintf("invalid working set ref %s", workingSetRef.String()))
-	}
-
+func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, rootVal *RootValue, prevHash hash.Hash) error {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
 		return err

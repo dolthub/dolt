@@ -20,25 +20,22 @@ import (
 	"strings"
 )
 
+// A WorkingSetRef is not a DoltRef, and doesn't live in the |refs/| namespace. But it functions similarly to DoltRefs
 type WorkingSetRef struct {
 	name string
 }
 
-var _ DoltRef = WorkingSetRef{}
+const WorkingSetRefPrefix = "workingSets"
 
-// NewWorkingSetRef creates a working set ref from a name or a working set ref e.g. my-workspace, or
-// refs/workingSets/my-workspace
-func NewWorkingSetRef(path string) WorkingSetRef {
-	if IsRef(path) {
-		prefix := PrefixForType(WorkingSetRefType)
-		if strings.HasPrefix(path, prefix) {
-			path = path[len(prefix):]
-		} else {
-			panic(path + " is a ref that is not of type " + prefix)
-		}
+// NewWorkingSetRef creates a working set ref from a name or a working set ref e.g. heads/master, or
+// workingSets/heads/master
+func NewWorkingSetRef(workingSetName string) WorkingSetRef {
+	prefix := WorkingSetRefPrefix + "/"
+	if strings.HasPrefix(workingSetName, prefix) {
+		workingSetName = workingSetName[len(prefix):]
 	}
 
-	return WorkingSetRef{path}
+	return WorkingSetRef{workingSetName}
 }
 
 // WorkingSetRefForHead returns a new WorkingSetRef for the head ref given, or an error if the ref given doesn't
@@ -52,11 +49,6 @@ func WorkingSetRefForHead(ref DoltRef) (WorkingSetRef, error) {
 	}
 }
 
-// GetType will return WorkingSetRefType
-func (r WorkingSetRef) GetType() RefType {
-	return WorkingSetRefType
-}
-
 // GetPath returns the name of the working set
 func (r WorkingSetRef) GetPath() string {
 	return r.name
@@ -65,10 +57,5 @@ func (r WorkingSetRef) GetPath() string {
 // String returns the fully qualified reference name e.g.
 // refs/workingSets/my-branch
 func (r WorkingSetRef) String() string {
-	return String(r)
-}
-
-// MarshalJSON serializes a WorkingSetRef to JSON.
-func (r WorkingSetRef) MarshalJSON() ([]byte, error) {
-	return MarshalJSON(r)
+	return path.Join(WorkingSetRefPrefix, r.name)
 }

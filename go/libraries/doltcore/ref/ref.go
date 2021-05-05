@@ -51,19 +51,7 @@ const (
 
 	// WorkspaceRefType is a reference to a workspace
 	WorkspaceRefType RefType = "workspaces"
-
-	// WorkingSetRefType is a reference to a working set
-	WorkingSetRefType RefType = "workingSets"
 )
-
-var allRefTypes = []RefType{
-	BranchRefType,
-	RemoteRefType,
-	InternalRefType,
-	TagRefType,
-	WorkspaceRefType,
-	WorkingSetRefType,
-}
 
 // HeadRefTypes are the ref types that point to a HEAD and contain a Commit struct. These are the types that are
 // returned by GetHeadRefs. Other ref types don't point to Commits necessarily, so aren't in this list and must be
@@ -152,7 +140,7 @@ func Parse(str string) (DoltRef, error) {
 		}
 	}
 
-	for _, rType := range allRefTypes {
+	for rType := range HeadRefTypes {
 		prefix := PrefixForType(rType)
 		if strings.HasPrefix(str, prefix) {
 			str = str[len(prefix):]
@@ -167,8 +155,6 @@ func Parse(str string) (DoltRef, error) {
 				return NewTagRef(str), nil
 			case WorkspaceRefType:
 				return NewWorkspaceRef(str), nil
-			case WorkingSetRefType:
-				return NewWorkingSetRef(str), nil
 			default:
 				panic("unknown type " + rType)
 			}

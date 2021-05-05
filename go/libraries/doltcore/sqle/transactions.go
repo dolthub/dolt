@@ -15,6 +15,8 @@
 package sqle
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -86,9 +88,16 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			}
 		}
 
-		mergedRoot, _, err := merge.MergeRoots(ctx, root, newRoot, tx.startRoot)
+		mergedRoot, stats, err := merge.MergeRoots(ctx, root, newRoot, tx.startRoot)
 		if err != nil {
 			return nil, err
+		}
+
+		for table, mergeStats := range stats {
+			if mergeStats.Conflicts > 0 {
+				// TODO: surface duplicate key errors as appropriate
+				return nil, fmt.Errorf("conflict in table %s", table)
+			}
 		}
 
 		err = tx.db.UpdateWorkingSet(ctx, tx.workingSet, mergedRoot, hash)
