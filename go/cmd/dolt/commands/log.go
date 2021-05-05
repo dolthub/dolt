@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 
@@ -141,14 +142,14 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 			}
 			return logCommits(ctx, dEnv, cs, loggerFunc, numLines)
 		} else {
-			return logTableCommits(ctx, dEnv, loggerFunc, dEnv.RepoState.CWBHeadSpec(), apr.Arg(0), numLines)
+			return handleErrAndExit(logTableCommits(ctx, dEnv, loggerFunc, dEnv.RepoState.CWBHeadSpec(), apr.Arg(0), numLines))
 		}
 	} else { // dolt log ref table
 		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
 		if err != nil {
 			cli.PrintErrln(color.HiRedString("invalid commit %s\n", apr.Arg(0)))
 		}
-		return logTableCommits(ctx, dEnv, loggerFunc, cs, apr.Arg(1), numLines)
+		return handleErrAndExit(logTableCommits(ctx, dEnv, loggerFunc, cs, apr.Arg(1), numLines))
 	}
 }
 
@@ -215,35 +216,30 @@ func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (
 	return ok, nil
 }
 
-func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc, cs *doltdb.CommitSpec, tableName string, numLines int) int {
+func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc, cs *doltdb.CommitSpec, tableName string, numLines int) error {
 	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
-		return 1
+		return err
 	}
 
 	// Check that the table exists in the head commit
 	exists, err := tableExists(ctx, commit, tableName)
 	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit info"))
-		return 1
+		return err
 	}
 
 	if !exists {
-		cli.PrintErrln(color.HiRedString("error: table %s does not exist", tableName))
-		return 1
+		return fmt.Errorf("error: table %s does not exist", tableName)
 	}
 
 	h, err := commit.HashOf()
 	if err != nil {
-		cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit hash"))
-		return 1
+		return err
 	}
 
 	itr, err := commitwalk.GetTopologicalOrderIterator(ctx, dEnv.DoltDB, h)
 	if err != nil && err != io.EOF {
-		cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit history"))
-		return 1
+		return err
 	}
 
 	var prevCommit *doltdb.Commit = nil
@@ -258,8 +254,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLo
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			cli.PrintErrln("Fatal Error: failed to get commit history")
-			return 1
+			return err
 		}
 
 		if prevCommit == nil {
@@ -270,32 +265,28 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLo
 
 		parentRV, err := c.GetRootValue()
 		if err != nil {
-			cli.PrintErrln("error: failed to get parent root value")
-			return 1
+			return err
 		}
 
 		childRV, err := prevCommit.GetRootValue()
 		if err != nil {
-			cli.PrintErrln("error: failed to get child root value")
-			return 1
+			return err
 		}
 
 		ok, err := didTableChangeBetweenRootValues(ctx, childRV, parentRV, tableName)
 		if err != nil {
-			return 1 // helper handles logic
+			return err
 		}
 
 		if ok {
 			meta, err := prevCommit.GetCommitMeta()
 			if err != nil {
-				cli.PrintErrln("error: failed to get commit metadata")
-				return 1
+				return err
 			}
 
 			ph, err := prevCommit.ParentHashes(ctx)
 			if err != nil {
-				cli.PrintErrln("error: failed to get parent hashes")
-				return 1
+				return err
 			}
 
 			loggerFunc(meta, ph, prevHash)
@@ -306,7 +297,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLo
 		prevHash = h
 	}
 
-	return 0
+	return nil
 }
 
 func didTableChangeBetweenRootValues(ctx context.Context, child, parent *doltdb.RootValue, tableName string) (bool, error) {
@@ -316,7 +307,7 @@ func didTableChangeBetweenRootValues(ctx context.Context, child, parent *doltdb.
 		return false, nil
 	}
 	if err != nil {
-		cli.PrintErrln(color.HiRedString("error: failed to retrieve table %s from root value", tableName))
+		return false, err
 	}
 
 	parentHash, ok, err := parent.GetTableHash(ctx, tableName)
@@ -327,8 +318,17 @@ func didTableChangeBetweenRootValues(ctx context.Context, child, parent *doltdb.
 	}
 
 	if err != nil {
-		cli.PrintErrln(color.HiRedString("error: failed to retrieve table %s from parent root value", tableName))
+		return false, err
 	}
 
 	return childHash != parentHash, nil
+}
+
+func handleErrAndExit(err error) int {
+	if err != nil {
+		cli.PrintErrln(err)
+		return 1
+	}
+
+	return 0
 }
