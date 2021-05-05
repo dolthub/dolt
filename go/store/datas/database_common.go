@@ -539,7 +539,8 @@ func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, ref types.
 // doUpdateWorkingSet manages concurrent access the single logical piece of mutable state: the current Root. It uses
 // the same optimistic locking write algorithm as doCommit (see above). Unlike doCommit and other methods in this file,
 // an error is returned if the current value of the ref being written has changed.
-// Workspace updates are serialized, but all other
+// Workspace updates are serialized, but all other changes to a database's root value can proceed independently with the
+// normal optimistic locking.
 func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, workingSet types.Struct, currHash hash.Hash) error {
 	err := db.validateWorkingSet(workingSet)
 	if err != nil {
