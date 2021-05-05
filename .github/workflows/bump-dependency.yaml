@@ -140,7 +140,7 @@ jobs:
               const pull = JSON.parse(PULL);
 
               for (const label of pull.labels) {
-                 if (label.name === "go-tests-ok") {
+                 if (label.name === "check-suite-ok") {
                     await github.issues.createComment({
                       issue_number: pull.number,
                       owner,
