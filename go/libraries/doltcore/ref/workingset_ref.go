@@ -59,3 +59,8 @@ func (r WorkingSetRef) GetPath() string {
 func (r WorkingSetRef) String() string {
 	return path.Join(WorkingSetRefPrefix, r.name)
 }
+
+// IsWorkingSet returns whether the given ref is a working set
+func IsWorkingSet(ref string) bool {
+	return strings.HasPrefix(ref, WorkingSetRefPrefix)
+}

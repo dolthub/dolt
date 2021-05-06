@@ -1021,7 +1021,7 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 	var deletes []string
 	_ = dd.Iter(ctx, func(ds, _ types.Value) (stop bool, err error) {
 		dsID := string(ds.(types.String))
-		if !ref.IsRef(dsID) {
+		if !ref.IsRef(dsID) && !ref.IsWorkingSet(dsID) {
 			deletes = append(deletes, dsID)
 		}
 		return false, nil
