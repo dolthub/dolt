@@ -893,7 +893,6 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.Worki
 	}
 
 	h, err := rootRef.Hash(rootRef.Format())
-	fmt.Sprintf("%v", h)
 
 	// workspaceStruct, err := datas.NewWorkspace(ctx, rootRef, st)
 	// if err != nil {
