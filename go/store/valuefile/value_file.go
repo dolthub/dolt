@@ -204,12 +204,20 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 	fmtLen, err := errRd.ReadUint32(binary.BigEndian)
 
 	if err != nil {
+		if err == io.EOF {
+			err = fmt.Errorf("EOF read while tring to get nbf format len - %w", ErrCorruptNVF)
+		}
+
 		return hash.Hash{}, nil, err
 	}
 
 	data, err := iohelp.ReadNBytes(errRd, int(fmtLen))
 
 	if err != nil {
+		if err == io.EOF {
+			err = fmt.Errorf("EOF read while tring to get nbf format string - %w", ErrCorruptNVF)
+		}
+
 		return hash.Hash{}, nil, err
 	}
 
@@ -234,6 +242,10 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 	numChunks, err := errRd.ReadUint32(binary.BigEndian)
 
 	if err != nil {
+		if err == io.EOF {
+			err = fmt.Errorf("EOF read while trying to read the root hash and chunk count - %w", ErrCorruptNVF)
+		}
+
 		return hash.Hash{}, nil, err
 	}
 
@@ -248,6 +260,10 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		size, err := errRd.ReadUint32(binary.BigEndian)
 
 		if err != nil {
+			if err == io.EOF {
+				err = fmt.Errorf("EOF read the root hash and chunk count - %w", ErrCorruptNVF)
+			}
+
 			return hash.Hash{}, nil, err
 		}
 
@@ -260,7 +276,11 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		size := hashAndSize.size
 		chBytes, err := iohelp.ReadNBytes(errRd, int(size))
 
-		if err != nil {
+		if err != nil && err != io.EOF || err == io.EOF && uint32(len(chBytes)) != size {
+			if err == io.EOF {
+				err = fmt.Errorf("EOF read trying to read chunk - %w", ErrCorruptNVF)
+			}
+
 			return hash.Hash{}, nil, err
 		}
 
@@ -269,7 +289,12 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		if h != ch.Hash() {
 			return hash.Hash{}, nil, errors.New("data corrupted")
 		}
-		store.Put(ctx, ch)
+
+		err = store.Put(ctx, ch)
+
+		if err != nil {
+			return hash.Hash{}, nil, err
+		}
 	}
 
 	return hash.New(hashBytes), store, nil

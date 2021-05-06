@@ -34,6 +34,7 @@ type sessionedTableEditor struct {
 	tableEditor       TableEditor
 	referencedTables  []doltdb.ForeignKey // The tables that we reference to ensure an insert or update is valid
 	referencingTables []doltdb.ForeignKey // The tables that reference us to ensure their inserts and updates are valid
+	indexSchemaCache  map[string]schema.Schema
 }
 
 var _ TableEditor = &sessionedTableEditor{}
@@ -144,6 +145,10 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		return err
 	}
 
+	if ste.indexSchemaCache == nil {
+		ste.indexSchemaCache = make(map[string]schema.Schema)
+	}
+
 	for _, foreignKey := range ste.referencingTables {
 		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
 		if !ok {
@@ -156,7 +161,15 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		if hasNulls {
 			continue
 		}
-		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex)
+
+		tblName := referencingSte.tableEditor.Name()
+		cacheKey := tblName + "->" + foreignKey.TableIndex
+		idxSch, ok := ste.indexSchemaCache[cacheKey]
+		if !ok {
+			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
+			ste.indexSchemaCache[cacheKey] = idxSch
+		}
+		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
 			return err
 		}
@@ -217,6 +230,9 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	if ste.indexSchemaCache == nil {
+		ste.indexSchemaCache = make(map[string]schema.Schema)
+	}
 
 	for _, foreignKey := range ste.referencingTables {
 		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
@@ -230,7 +246,14 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 		if hasNulls {
 			continue
 		}
-		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex)
+		tblName := referencingSte.tableEditor.Name()
+		cacheKey := tblName + "->" + foreignKey.TableIndex
+		idxSch, ok := ste.indexSchemaCache[cacheKey]
+		if !ok {
+			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
+			ste.indexSchemaCache[cacheKey] = idxSch
+		}
+		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
 			return err
 		}
@@ -406,6 +429,11 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVa
 	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
 		return nil
 	}
+
+	if ste.indexSchemaCache == nil {
+		ste.indexSchemaCache = make(map[string]schema.Schema)
+	}
+
 	for _, foreignKey := range ste.referencedTables {
 		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, taggedVals)
 		if err != nil {
@@ -418,7 +446,16 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVa
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.ReferencedTableName)
 		}
-		exists, err := ContainsIndexedKey(ctx, referencingSte.tableEditor, indexKey, foreignKey.ReferencedTableIndex)
+
+		tblName := referencingSte.tableEditor.Name()
+		cacheKey := tblName + "->" + foreignKey.ReferencedTableIndex
+		idxSch, ok := ste.indexSchemaCache[cacheKey]
+		if !ok {
+			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.ReferencedTableIndex).Schema()
+			ste.indexSchemaCache[cacheKey] = idxSch
+		}
+
+		exists, err := ContainsIndexedKey(ctx, referencingSte.tableEditor, indexKey, foreignKey.ReferencedTableIndex, idxSch)
 		if err != nil {
 			return err
 		}
