@@ -57,11 +57,11 @@ const (
 // returned by GetHeadRefs. Other ref types don't point to Commits necessarily, so aren't in this list and must be
 // asked for explicitly.
 var HeadRefTypes = map[RefType]struct{}{
-	BranchRefType:     {},
-	RemoteRefType:     {},
-	InternalRefType:   {},
-	TagRefType:        {},
-	WorkspaceRefType:  {},
+	BranchRefType:    {},
+	RemoteRefType:    {},
+	InternalRefType:  {},
+	TagRefType:       {},
+	WorkspaceRefType: {},
 }
 
 // PrefixForType returns what a reference string for a given type should start with
