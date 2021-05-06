@@ -249,7 +249,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 }
 
 const (
-	getLocsBatchSize      = (4 * 1024) / 20
+	getLocsBatchSize = (4 * 1024) / 20
 )
 
 type GetRange remotesapi.HttpGetRange
