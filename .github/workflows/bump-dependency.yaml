@@ -71,16 +71,16 @@ jobs:
   open-bump-pr:
     needs: [get-label, stale-bump-prs]
     name: Open Bump PR
-    runs-on: macos-latest
+    runs-on: ubuntu-18.04
     outputs:
       latest-pr: ${{ steps.latest-pr.outputs.pr_url }}
     steps:
       - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
       - name: Bump dependency
         working-directory: go
-        run: |
-          go get github.com/dolthub/${{ github.event.client_payload.dependency }}@${{ github.event.client_payload.head_commit_sha }}
-          go mod tidy
+        run: go get github.com/dolthub/${{ github.event.client_payload.dependency }}@${{ github.event.client_payload.head_commit_sha }}
       - name: Get Assignee and Reviewer
         id: get_reviewer
         run: |
@@ -142,21 +142,43 @@ jobs:
               const pull = JSON.parse(PULL);
 
               for (const label of pull.labels) {
-                 if (label.name === "check-suite-ok") {
-                    await github.issues.createComment({
-                      issue_number: pull.number,
-                      owner,
-                      repo,
-                      body: `This PR has been superseded by ${SUPERSEDED_BY}`
-                    });
-                    await github.pulls.update({
-                      owner,
-                      repo,
-                      pull_number: pull.number,
-                      state: 'closed',
-                    });
-                    break;
-                 }
+                if (label.name === "keep-alive") {
+                  process.exit(0);
+                }
+              }
+
+              const checkSuiteRes = github.checks.listSuitesForRef({
+                owner,
+                repo,
+                ref: pull.head.ref,
+              });
+
+              console.log(checkSuiteRes);
+
+              if (checkSuiteRes.data) {
+                let successes = 0;
+
+                for (const suite of checkSuiteRes.data.check_suites) {
+                  if (suite.status === "completed" && suite.conclusion === "success") {
+                    successes += 1;
+                  }
+                }
+
+                if (successes == checkSuiteRes.data.total_count) {
+                  await github.issues.createComment({
+                    issue_number: pull.number,
+                    owner,
+                    repo,
+                    body: `This PR has been superseded by ${SUPERSEDED_BY}`
+                  });
+                  await github.pulls.update({
+                    owner,
+                    repo,
+                    pull_number: pull.number,
+                    state: 'closed',
+                  });
+                }
+
               }
 
               process.exit(0);
