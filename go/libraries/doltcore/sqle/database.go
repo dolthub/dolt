@@ -66,7 +66,17 @@ type Database struct {
 	batchMode commitBehavior
 }
 
+// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
+type DisabledTransaction struct {}
+func (d DisabledTransaction) String() string {
+	return "Disabled transaction"
+}
+
 func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
+	if !transactionsEnabled {
+		return DisabledTransaction{}, nil
+	}
+
 	dsession := DSessFromSess(ctx.Session)
 
 	// When we begin the transaction, we must synchronize the state of this session with the global state for the

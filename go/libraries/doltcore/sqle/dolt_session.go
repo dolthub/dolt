@@ -17,6 +17,7 @@ package sqle
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -38,6 +39,19 @@ const (
 	HeadRefKeySuffix = "_head_ref"
 	WorkingKeySuffix = "_working"
 )
+
+const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
+
+var transactionsEnabled = false
+
+func init() {
+	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
+	if ok {
+		if strings.ToLower(enableTx) == "true" {
+			transactionsEnabled = true
+		}
+	}
+}
 
 func IsHeadKey(key string) (bool, string) {
 	if strings.HasSuffix(key, HeadKeySuffix) {
@@ -139,6 +153,21 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) erro
 		return nil
 	}
 
+	// Old "commit" path, which just writes whatever the root for this session is to the repo state file with no care
+	// for concurrency. Over time we will disable this path.
+	if !transactionsEnabled {
+		dbData := sess.dbDatas[dbName]
+
+		h, err := dbData.Ddb.WriteRootValue(ctx, dbRoot.root)
+		if err != nil {
+			return err
+		}
+
+		return dbData.Rsw.SetWorkingHash(ctx, h)
+	}
+
+	// Newer commit path does a concurrent merge of the current root with the one other clients are editing, then
+	// updates the session with this new root.
 	tx := ctx.GetTransaction()
 	if tx == nil {
 		return nil
@@ -147,7 +176,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) erro
 	// TODO: validate that the transaction belongs to the DB named
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
-		return fmt.Errorf("Expected a DoltTransaction")
+		return fmt.Errorf("expected a DoltTransaction")
 	}
 
 	mergedRoot, err := dtx.Commit(ctx, dbRoot.root)
