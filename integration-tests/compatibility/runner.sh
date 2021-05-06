@@ -110,6 +110,12 @@ function test_forward_compatibility() {
   REMOTE="`pwd`"/repos/HEAD/file-remote
 
   # Clone from the remote and establish local branches
+
+  if [-d "repos/$ver" ]
+  then
+      rm -rf "repos/$ver"
+  fi
+  
   cd repos
   PATH="`pwd`"/"$bin":"$PATH" dolt clone "file://$REMOTE" $ver
   cd $ver
