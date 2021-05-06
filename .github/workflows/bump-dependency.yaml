@@ -71,14 +71,16 @@ jobs:
   open-bump-pr:
     needs: [get-label, stale-bump-prs]
     name: Open Bump PR
-    runs-on: ubuntu-18.04
+    runs-on: macos-latest
     outputs:
       latest-pr: ${{ steps.latest-pr.outputs.pr_url }}
     steps:
       - uses: actions/checkout@v2
       - name: Bump dependency
         working-directory: go
-        run: go get -u github.com/dolthub/${{ github.event.client_payload.dependency }}@${{ github.event.client_payload.head_commit_sha }}
+        run: |
+          go get github.com/dolthub/${{ github.event.client_payload.dependency }}@${{ github.event.client_payload.head_commit_sha }}
+          go mod tidy
       - name: Get Assignee and Reviewer
         id: get_reviewer
         run: |
