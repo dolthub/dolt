@@ -111,7 +111,7 @@ function test_forward_compatibility() {
 
   # Clone from the remote and establish local branches
 
-  if [-d "repos/$ver" ]
+  if [ -d "repos/$ver" ]
   then
       rm -rf "repos/$ver"
   fi
