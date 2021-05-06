@@ -67,7 +67,8 @@ type Database struct {
 }
 
 // DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
-type DisabledTransaction struct {}
+type DisabledTransaction struct{}
+
 func (d DisabledTransaction) String() string {
 	return "Disabled transaction"
 }
