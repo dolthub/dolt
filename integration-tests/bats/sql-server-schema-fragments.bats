@@ -20,7 +20,7 @@ teardown() {
     teardown_common
 }
 
-@test "sql-server: views get updated tables when changing _head" {
+@test "sql-server-schema-fragments: views get updated tables when changing _head" {
     cd repo1
     dolt sql -q 'CREATE TABLE `values` (id int primary key);'
     dolt sql -q 'CREATE VIEW query_values AS SELECT * FROM `values` ORDER BY id ASC;'
@@ -49,7 +49,7 @@ teardown() {
     " ";id\n1;;id\n2;;id"
 }
 
-@test "sql-server: views at new head visible changing _head" {
+@test "sql-server-schema-fragments: views at new head visible changing _head" {
     skip "this is currently incorrect in dolt"
 
     cd repo1
@@ -67,7 +67,7 @@ teardown() {
     " ";47\n47"
 }
 
-@test "sql-server: views not at new head no longer visible when changing _head" {
+@test "sql-server-schema-fragments: views not at new head no longer visible when changing _head" {
     skip "this is currently incorrect in dolt"
 
     cd repo1
