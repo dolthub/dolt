@@ -892,8 +892,6 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.Worki
 		return err
 	}
 
-	h, err := rootRef.Hash(rootRef.Format())
-
 	// workspaceStruct, err := datas.NewWorkspace(ctx, rootRef, st)
 	// if err != nil {
 	// 	return err
