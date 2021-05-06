@@ -18,7 +18,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.2
-	github.com/dolthub/go-mysql-server v0.9.1-0.20210430112822-dc45456dbd23
+	github.com/dolthub/go-mysql-server v0.9.1-0.20210506141947-b3061a6fb867
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
@@ -31,19 +31,21 @@ require (
 	github.com/go-openapi/strfmt v0.19.5 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gocraft/dbr/v2 v2.7.0
-	github.com/golang/protobuf v1.4.2
+	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
+	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.1
-	github.com/google/go-cmp v0.5.2
+	github.com/google/go-cmp v0.5.5
 	github.com/google/uuid v1.2.0
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/jedib0t/go-pretty v4.3.1-0.20191104025401-85fe5d6a7c4d+incompatible
 	github.com/jpillora/backoff v1.0.0
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
-	github.com/lestrrat-go/strftime v1.0.3 // indirect
+	github.com/lestrrat-go/strftime v1.0.4 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.9
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
+	github.com/mitchellh/hashstructure v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.3.2 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1
@@ -52,7 +54,7 @@ require (
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/shirou/gopsutil v3.21.2+incompatible
 	github.com/shopspring/decimal v1.2.0
-	github.com/sirupsen/logrus v1.6.0
+	github.com/sirupsen/logrus v1.8.1
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/spf13/cobra v1.0.0
@@ -65,12 +67,13 @@ require (
 	go.mongodb.org/mongo-driver v1.3.4 // indirect
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/net v0.0.0-20201021035429-f5854403a974
-	golang.org/x/sync v0.0.0-20201008141435-b3e1573b7520
-	golang.org/x/sys v0.0.0-20210316164454-77fc1eacc6aa
+	golang.org/x/net v0.0.0-20210505214959-0714010a04ed
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	golang.org/x/sys v0.0.0-20210503173754-0981d6026fa6
 	google.golang.org/api v0.32.0
-	google.golang.org/grpc v1.32.0
-	google.golang.org/protobuf v1.25.0
+	google.golang.org/genproto v0.0.0-20210506142907-4a47615972c2 // indirect
+	google.golang.org/grpc v1.37.0
+	google.golang.org/protobuf v1.26.0
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.3.0
