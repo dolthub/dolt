@@ -555,7 +555,7 @@ func (sess *DoltSession) setSessionVars(
 	headCommitHash hash.Hash,
 	workingRootHash hash.Hash,
 ) error {
-	err := sess.Session.SetSessionVariable(ctx, db.Name()+HeadRefKeySuffix, workingSetRef.GetPath())
+	err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), workingSetRef.GetPath())
 	if err != nil {
 		return err
 	}
@@ -578,27 +578,27 @@ func defineSystemVariables(name string) {
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 			{
-				Name:              name + HeadRefKeySuffix,
+				Name:              HeadRefKey(name),
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
 				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(name + HeadRefKeySuffix),
+				Type:              sql.NewSystemStringType(HeadRefKey(name)),
 				Default:           "",
 			},
 			{
-				Name:              name + HeadKeySuffix,
+				Name:              HeadKey(name),
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
 				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(name + HeadKeySuffix),
+				Type:              sql.NewSystemStringType(HeadKey(name)),
 				Default:           "",
 			},
 			{
-				Name:              name + WorkingKeySuffix,
+				Name:              WorkingKey(name),
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
 				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(name + WorkingKeySuffix),
+				Type:              sql.NewSystemStringType(WorkingKey(name)),
 				Default:           "",
 			},
 		})

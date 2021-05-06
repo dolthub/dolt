@@ -440,6 +440,10 @@ func HeadKey(dbName string) string {
 	return dbName + HeadKeySuffix
 }
 
+func HeadRefKey(dbName string) string {
+	return dbName + HeadRefKeySuffix
+}
+
 func WorkingKey(dbName string) string {
 	return dbName + WorkingKeySuffix
 }
