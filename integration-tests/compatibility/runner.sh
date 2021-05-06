@@ -92,8 +92,39 @@ function test_forward_compatibility() {
   bin=`download_release "$ver"`
 
   echo "Run the bats tests using older Dolt version $ver hitting repositories from the current Dolt version"
+  
+  # Push this repo to a file remote in preparation to clone it. This
+  # prunes out certain aspects of the storage (certain refs) that may
+  # not be compatible with older versions.
+  if [ ! -d repos/HEAD/file-remote ]
+  then
+      cd repos/HEAD
+      mkdir file-remote
+      dolt remote add file-remote file://file-remote
+      dolt push file-remote master
+      dolt push file-remote init
+      dolt push file-remote no-data
+      dolt push file-remote other
+      cd ../../
+  fi
+  REMOTE="`pwd`"/repos/HEAD/file-remote
+
+  # Clone from the remote and establish local branches
+  cd repos
+  PATH="`pwd`"/"$bin":"$PATH" dolt clone "file://$REMOTE" $ver
+  cd $ver
+  PATH="`pwd`"/"$bin":"$PATH" dolt branch no-data origin/no-data
+  PATH="`pwd`"/"$bin":"$PATH" dolt branch init origin/init
+  PATH="`pwd`"/"$bin":"$PATH" dolt branch other origin/other
+  # Also copy the files exported by setup_repo
+  cp ../../repos/HEAD/*.csv ./
+  cp ../../repos/HEAD/*.json ./
+  cd ../../
+
+  # Run the bats test.
   PATH="`pwd`"/"$bin":"$PATH" dolt version
-  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
+  echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
+  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
 }
 
 if [ -s "test_files/forward_compatible_versions.txt" ]; then
