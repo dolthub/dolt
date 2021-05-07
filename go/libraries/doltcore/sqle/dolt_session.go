@@ -495,38 +495,46 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()
 
-	// Not all dolt commands update the working set ref yet. So until that's true, we update it here with the contents
-	// of the repo_state.json file
-	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
-	if err != nil {
-		return err
-	}
-	sess.workingSets[db.name] = workingSetRef
-
 	var workingRoot *doltdb.RootValue
 	workingHashInRepoState := rsr.WorkingHash()
 	workingHashInWsRef := hash.Hash{}
 
-	workingRoot, err = ddb.ReadRootValue(ctx, workingHashInRepoState)
+	workingRoot, err := ddb.ReadRootValue(ctx, workingHashInRepoState)
 	if err != nil {
 		return err
 	}
 
-	workingSet, err := ddb.ResolveWorkingSet(ctx, workingSetRef)
-	if err == doltdb.ErrWorkingSetNotFound {
-		// no working set ref established yet
-	} else if err != nil {
-		return err
-	} else {
-		workingHashInWsRef, err = workingSet.Struct().Hash(ddb.Format())
+	if transactionsEnabled {
+		// Not all dolt commands update the working set ref yet. So until that's true, we update it here with the contents
+		// of the repo_state.json file
+		workingSetRef, err := ref.WorkingSetRefForHead(headRef)
 		if err != nil {
 			return err
 		}
-	}
+		sess.workingSets[db.name] = workingSetRef
 
-	err = ddb.UpdateWorkingSet(ctx, workingSetRef, workingRoot, workingHashInWsRef)
-	if err != nil {
-		return err
+		workingSet, err := ddb.ResolveWorkingSet(ctx, workingSetRef)
+		if err == doltdb.ErrWorkingSetNotFound {
+			// no working set ref established yet
+		} else if err != nil {
+			return err
+		} else {
+			workingHashInWsRef, err = workingSet.Struct().Hash(ddb.Format())
+			if err != nil {
+				return err
+			}
+		}
+
+		// TODO: there's a race here if more than one client connects at the same time. We need a retry
+		err = ddb.UpdateWorkingSet(ctx, workingSetRef, workingRoot, workingHashInWsRef)
+		if err != nil {
+			return err
+		}
+
+		err = sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), workingSetRef.GetPath())
+		if err != nil {
+			return err
+		}
 	}
 
 	sess.roots[db.name] = dbRoot{
@@ -544,28 +552,12 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 		return err
 	}
 
-	return sess.setSessionVars(ctx, db, workingSetRef, headCommitHash, workingHashInRepoState)
-}
-
-// setSessionVars sets the dolt-specific session vars for the database given to the values given.
-func (sess *DoltSession) setSessionVars(
-	ctx *sql.Context,
-	db Database,
-	workingSetRef ref.WorkingSetRef,
-	headCommitHash hash.Hash,
-	workingRootHash hash.Hash,
-) error {
-	err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), workingSetRef.GetPath())
-	if err != nil {
-		return err
-	}
-
 	err = sess.Session.SetSessionVariable(ctx, HeadKey(db.Name()), headCommitHash.String())
 	if err != nil {
 		return err
 	}
 
-	err = sess.Session.SetSessionVariable(ctx, WorkingKey(db.Name()), workingRootHash.String())
+	err = sess.Session.SetSessionVariable(ctx, WorkingKey(db.Name()), workingHashInRepoState.String())
 	if err != nil {
 		return err
 	}
