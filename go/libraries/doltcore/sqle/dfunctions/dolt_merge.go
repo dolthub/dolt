@@ -132,7 +132,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		if apr.Contains(cli.NoFFParam) {
 			err = executeNoFFMerge(ctx, sess, apr, dbName, dbData, head, cm)
 		} else {
-			err = executeFFMerge(ctx, apr.Contains(cli.SquashParam), dbData, cm)
+			err = executeFFMerge(ctx, apr.Contains(cli.SquashParam), dbName, dbData, cm)
 		}
 
 		if err != nil {
@@ -188,7 +188,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, name s
 	return mergeRootToWorking(ctx, squash, name, dbData, mergeRoot, cm, mergeStats)
 }
 
-func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltdb.Commit) error {
+func executeFFMerge(ctx *sql.Context, squash bool, dbName string, dbData env.DbData, cm2 *doltdb.Commit) error {
 	rv, err := cm2.GetRootValue()
 
 	if err != nil {
@@ -226,7 +226,7 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 	}
 
 	if squash {
-		return setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix)
+		return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String())
 	} else {
 		return setHeadAndWorkingSessionRoot(ctx, hh.String())
 	}
