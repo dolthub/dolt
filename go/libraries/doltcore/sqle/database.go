@@ -108,19 +108,19 @@ func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error
 }
 
 func (db Database) Rollback(ctx *sql.Context, transaction sql.Transaction) error {
-	panic("implement me")
+	return nil
 }
 
 func (db Database) CreateSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
-	panic("implement me")
+	return nil
 }
 
 func (db Database) RollbackToSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
-	panic("implement me")
+	return nil
 }
 
 func (db Database) ReleaseSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
-	panic("implement me")
+	return nil
 }
 
 var _ SqlDatabase = Database{}
