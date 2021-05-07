@@ -130,7 +130,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	if canFF {
 		if apr.Contains(cli.NoFFParam) {
-			err = executeNoFFMerge(ctx, sess, apr, dbData, head, cm)
+			err = executeNoFFMerge(ctx, sess, apr, dbName, dbData, head, cm)
 		} else {
 			err = executeFFMerge(ctx, apr.Contains(cli.SquashParam), dbData, cm)
 		}
@@ -141,7 +141,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmh.String(), err
 	}
 
-	err = executeMerge(ctx, apr.Contains(cli.SquashParam), head, cm, dbData)
+	err = executeMerge(ctx, apr.Contains(cli.SquashParam), head, cm, dbName, dbData)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func abortMerge(ctx *sql.Context, dbData env.DbData) error {
 	return setHeadAndWorkingSessionRoot(ctx, hh.String())
 }
 
-func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, dbData env.DbData) error {
+func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, name string, dbData env.DbData) error {
 	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm)
 
 	if err != nil {
@@ -185,7 +185,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, dbData
 		}
 	}
 
-	return mergeRootToWorking(ctx, squash, dbData, mergeRoot, cm, mergeStats)
+	return mergeRootToWorking(ctx, squash, name, dbData, mergeRoot, cm, mergeStats)
 }
 
 func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltdb.Commit) error {
@@ -232,13 +232,20 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 	}
 }
 
-func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.ArgParseResults, dbData env.DbData, pr, cm2 *doltdb.Commit) error {
+func executeNoFFMerge(
+	ctx *sql.Context,
+	dSess *sqle.DoltSession,
+	apr *argparser.ArgParseResults,
+	dbName string,
+	dbData env.DbData,
+	pr, cm2 *doltdb.Commit,
+) error {
 	mergedRoot, err := cm2.GetRootValue()
 	if err != nil {
 		return errors.New("Failed to return root value.")
 	}
 
-	err = mergeRootToWorking(ctx, false, dbData, mergedRoot, cm2, map[string]*merge.MergeStats{})
+	err = mergeRootToWorking(ctx, false, dbName, dbData, mergedRoot, cm2, map[string]*merge.MergeStats{})
 	if err != nil {
 		return err
 	}
@@ -295,7 +302,15 @@ func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.
 	return setHeadAndWorkingSessionRoot(ctx, h)
 }
 
-func mergeRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, mergedRoot *doltdb.RootValue, cm2 *doltdb.Commit, mergeStats map[string]*merge.MergeStats) error {
+func mergeRootToWorking(
+	ctx *sql.Context,
+	squash bool,
+	dbName string,
+	dbData env.DbData,
+	mergedRoot *doltdb.RootValue,
+	cm2 *doltdb.Commit,
+	mergeStats map[string]*merge.MergeStats,
+) error {
 	h2, err := cm2.HashOf()
 	if err != nil {
 		return err
@@ -318,7 +333,7 @@ func mergeRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, merged
 	hasConflicts := checkForConflicts(mergeStats)
 
 	if hasConflicts {
-		return errors.New("merge has conflicts. use the dolt_conflicts table to resolve.")
+		return errors.New("merge has conflicts. use the dolt_conflicts table to resolve")
 	}
 
 	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
@@ -326,7 +341,7 @@ func mergeRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, merged
 		return err
 	}
 
-	return setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix)
+	return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String())
 }
 
 func checkForConflicts(tblToStats map[string]*merge.MergeStats) bool {
