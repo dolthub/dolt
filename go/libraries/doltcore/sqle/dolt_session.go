@@ -76,6 +76,7 @@ type DoltSession struct {
 	workingSets  map[string]ref.WorkingSetRef
 	dbDatas      map[string]env.DbData
 	editSessions map[string]*editor.TableEditSession
+	dirty        map[string]bool
 	caches       map[string]TableCache
 	Username     string
 	Email        string
@@ -90,6 +91,7 @@ func DefaultDoltSession() *DoltSession {
 		roots:        make(map[string]dbRoot),
 		dbDatas:      make(map[string]env.DbData),
 		editSessions: make(map[string]*editor.TableEditSession),
+		dirty:        make(map[string]bool),
 		caches:       make(map[string]TableCache),
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		Username:     "",
@@ -112,6 +114,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		Session:      sqlSess,
 		dbDatas:      dbDatas,
 		editSessions: editSessions,
+		dirty:        make(map[string]bool),
 		roots:        make(map[string]dbRoot),
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		caches:       make(map[string]TableCache),
@@ -140,6 +143,10 @@ func TableCacheFromSess(sess sql.Session, dbName string) TableCache {
 
 // CommitTransaction commits the in-progress transaction for the database named
 func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) error {
+	if !sess.dirty[dbName] {
+		return nil
+	}
+
 	// This is triggered when certain commands are sent to the server (ex. commit) when a database is not selected.
 	// These commands should not error.
 	if dbName == "" {
@@ -163,6 +170,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) erro
 			return err
 		}
 
+		sess.dirty[dbName] = false
 		return dbData.Rsw.SetWorkingHash(ctx, h)
 	}
 
@@ -184,7 +192,13 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) erro
 		return err
 	}
 
-	return sess.SetRoot(ctx, dbName, mergedRoot)
+	err = sess.SetRoot(ctx, dbName, mergedRoot)
+	if err != nil {
+		return err
+	}
+
+	sess.dirty[dbName] = false
+	return nil
 }
 
 // GetDoltDB returns the *DoltDB for a given database by name
@@ -272,20 +286,22 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	return dbRoot.root, true
 }
 
-// SetRoot sets a new root value for the session for the database named.
-// Can be used if the dolt working set value changes outside of the basic SQL execution engine.
-// If |newRoot|'s FeatureVersion is out-of-date with the client, SetRoot will update it.
+// SetRoot sets a new root value for the session for the database named. This is the primary mechanism by which data
+// changes are communicated to the engine and persisted back to disk. All data changes should be followed by a call to
+// update the session's root value via this method.
+// Data changes contained in the |newRoot| aren't persisted until this session is committed.
 func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+	if rootsEqual(sess.roots[dbName].root, newRoot) {
+		return nil
+	}
+
 	h, err := newRoot.HashOf()
 	if err != nil {
 		return err
 	}
 
 	hashStr := h.String()
-	key := WorkingKey(dbName)
-
-	err = ctx.Session.SetSessionVariable(ctx, key, hashStr)
-
+	err = ctx.Session.SetSessionVariable(ctx, WorkingKey(dbName), hashStr)
 	if err != nil {
 		return err
 	}
@@ -297,6 +313,7 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 		return err
 	}
 
+	sess.dirty[dbName] = true
 	return nil
 }
 
@@ -345,7 +362,7 @@ func (sess *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value 
 	}
 
 	if isWorking, dbName := IsWorkingKey(key); isWorking {
-		return sess.setWorkingSessionVar(ctx, key, value, dbName)
+		return sess.setWorkingSessionVar(ctx, value, dbName)
 	}
 
 	if strings.ToLower(key) == "foreign_key_checks" {
@@ -379,15 +396,10 @@ func (sess *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key str
 	return sess.Session.SetSessionVariable(ctx, key, value)
 }
 
-func (sess *DoltSession) setWorkingSessionVar(ctx *sql.Context, key string, value interface{}, dbName string) error {
+func (sess *DoltSession) setWorkingSessionVar(ctx *sql.Context, value interface{}, dbName string) error {
 	valStr, isStr := value.(string) // valStr represents a root val hash
 	if !isStr || !hash.IsValid(valStr) {
 		return doltdb.ErrInvalidHash
-	}
-
-	err := sess.Session.SetSessionVariable(ctx, key, valStr)
-	if err != nil {
-		return err
 	}
 
 	// If there's a Root Value that's associated with this hash update dbRoots to include it
@@ -403,16 +415,7 @@ func (sess *DoltSession) setWorkingSessionVar(ctx *sql.Context, key string, valu
 		return err
 	}
 
-	sess.roots[dbName] = dbRoot{valStr, root}
-
-	err = sess.editSessions[dbName].SetRoot(ctx, root)
-	if err != nil {
-		return err
-	}
-
-	sess.caches[dbName].Clear()
-
-	return nil
+	return sess.SetRoot(ctx, dbName, root)
 }
 
 func (sess *DoltSession) setHeadSessionVar(ctx *sql.Context, key string, value interface{}, dbName string) error {
@@ -443,33 +446,13 @@ func (sess *DoltSession) setHeadSessionVar(ctx *sql.Context, key string, value i
 		return err
 	}
 
-	h, err := root.HashOf()
+	err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), value)
 	if err != nil {
 		return err
 	}
 
-	err = sess.Session.SetSessionVariable(ctx, key, value)
-	if err != nil {
-		return err
-	}
-
-	hashStr := h.String()
-	// TODO: this needs to use the shared working set, if present
-	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), hashStr)
-	if err != nil {
-		return err
-	}
-
-	sess.roots[dbName] = dbRoot{hashStr, root}
-
-	err = sess.editSessions[dbName].SetRoot(ctx, root)
-	if err != nil {
-		return err
-	}
-
-	sess.caches[dbName].Clear()
-
-	return nil
+	// TODO: preserve working set changes?
+	return sess.SetRoot(ctx, dbName, root)
 }
 
 // SetSessionVarDirectly directly updates sess.Session. This is useful in the context of the sql shell where
