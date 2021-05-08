@@ -86,6 +86,8 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			if err == datas.ErrOptimisticLockFailed {
 				continue
 			}
+
+			return newRoot, nil
 		}
 
 		mergedRoot, stats, err := merge.MergeRoots(ctx, root, newRoot, tx.startRoot)
