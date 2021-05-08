@@ -147,38 +147,40 @@ jobs:
                 }
               }
 
-              const checkSuiteRes = github.checks.listSuitesForRef({
+              const checkSuiteRes = await github.checks.listSuitesForRef({
                 owner,
                 repo,
                 ref: pull.head.ref,
               });
 
-              console.log(checkSuiteRes);
-
               if (checkSuiteRes.data) {
-                let successes = 0;
-
                 for (const suite of checkSuiteRes.data.check_suites) {
-                  if (suite.status === "completed" && suite.conclusion === "success") {
-                    successes += 1;
+                  console.log("suite id:", suite.id);
+                  console.log("suite app slug:", suite.app.slug);
+                  console.log("suite status:", suite.status);
+                  console.log("suite conclusion:", suite.conclusion);
+                  if (suite.app.slug === "github-actions") {
+                     if (suite.status !== "completed" || suite.conclusion !== "success") {
+                       console.log(`Leaving pr open due to status:${suite.status} conclusion${suite.conclusion}`);
+                       process.exit(0);
+                     }
                   }
                 }
 
-                if (successes == checkSuiteRes.data.total_count) {
-                  await github.issues.createComment({
-                    issue_number: pull.number,
-                    owner,
-                    repo,
-                    body: `This PR has been superseded by ${SUPERSEDED_BY}`
-                  });
-                  await github.pulls.update({
-                    owner,
-                    repo,
-                    pull_number: pull.number,
-                    state: 'closed',
-                  });
-                }
+                console.log(`Closing open pr ${pull.number}`);
+                await github.issues.createComment({
+                  issue_number: pull.number,
+                  owner,
+                  repo,
+                  body: `This PR has been superseded by ${SUPERSEDED_BY}`
+                });
 
+                await github.pulls.update({
+                  owner,
+                  repo,
+                  pull_number: pull.number,
+                  state: 'closed',
+                });
               }
 
               process.exit(0);
