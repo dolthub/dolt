@@ -131,6 +131,10 @@ func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *dol
 }
 
 func rootsEqual(left, right *doltdb.RootValue) bool {
+	if left == nil || right == nil {
+		return false
+	}
+
 	lh, err := left.HashOf()
 	if err != nil {
 		return false

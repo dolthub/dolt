@@ -301,7 +301,7 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 	}
 
 	hashStr := h.String()
-	err = ctx.Session.SetSessionVariable(ctx, WorkingKey(dbName), hashStr)
+	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), hashStr)
 	if err != nil {
 		return err
 	}
@@ -520,11 +520,12 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 		}
 	}
 
-	sess.roots[db.name] = dbRoot{
-		hashStr: workingHashInRepoState.String(),
-		root:    workingRoot,
+	err = sess.SetRoot(ctx, db.name, workingRoot)
+	if err != nil {
+		return err
 	}
 
+	// TODO: this resolve probably isn't necessary and slows things down
 	cm, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return err
@@ -536,11 +537,6 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	}
 
 	err = sess.Session.SetSessionVariable(ctx, HeadKey(db.Name()), headCommitHash.String())
-	if err != nil {
-		return err
-	}
-
-	err = sess.Session.SetSessionVariable(ctx, WorkingKey(db.Name()), workingHashInRepoState.String())
 	if err != nil {
 		return err
 	}
