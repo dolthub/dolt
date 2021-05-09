@@ -110,9 +110,7 @@ func (d *DoltHarness) Parallelism() int {
 func (d *DoltHarness) NewContext() *sql.Context {
 	return sql.NewContext(
 		context.Background(),
-		sql.WithSession(d.session),
-		sql.WithViewRegistry(sql.NewViewRegistry()),
-	)
+		sql.WithSession(d.session))
 }
 
 func (d *DoltHarness) SupportsNativeIndexCreation() bool {
@@ -183,14 +181,14 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	require.True(d.t, ok)
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
-		"set @@"+ddb.HeadKey()+" = COMMIT('-m', 'test commit');")
+		"set @@"+sqle.HeadKey(ddb.Name())+" = COMMIT('-m', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)
 
 	ctx = enginetest.NewContext(d)
 	_, iter, err = e.Query(ctx,
-		"insert into dolt_branches (name, hash) values ('"+asOfString+"', @@"+ddb.HeadKey()+")")
+		"insert into dolt_branches (name, hash) values ('"+asOfString+"', @@"+sqle.HeadKey(ddb.Name())+")")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)

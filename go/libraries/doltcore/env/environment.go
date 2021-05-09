@@ -361,7 +361,7 @@ func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
 
 func (r *repoStateReader) CWBHeadHash(ctx context.Context) (hash.Hash, error) {
 	ref := r.CWBHeadRef()
-	cm, err := r.dEnv.DoltDB.ResolveRef(ctx, ref)
+	cm, err := r.dEnv.DoltDB.ResolveCommitRef(ctx, ref)
 
 	if err != nil {
 		return hash.Hash{}, err
@@ -480,7 +480,7 @@ func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	commit, err := dEnv.DoltDB.ResolveRef(ctx, dEnv.RepoState.CWBHeadRef())
+	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
 		return nil, err

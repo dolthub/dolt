@@ -226,7 +226,7 @@ func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWri
 
 // Returns the head root.
 func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
-	commit, err := ddb.ResolveRef(ctx, rsr.CWBHeadRef())
+	commit, err := ddb.ResolveCommitRef(ctx, rsr.CWBHeadRef())
 
 	if err != nil {
 		return nil, err

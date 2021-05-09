@@ -329,7 +329,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE works with ff and squash" {
-        run dolt sql << SQL
+    run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
