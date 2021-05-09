@@ -255,7 +255,7 @@ func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) 
 		return nil, fmt.Errorf("Failed to read file '%s'. Error: %s", path, err.Error())
 	}
 
-	cfg, err := newYamlConfig(data)
+	cfg, err := NewYamlConfig(data)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
 	}
