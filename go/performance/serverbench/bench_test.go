@@ -17,23 +17,19 @@ package serverbench
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/gocraft/dbr/v2"
 	"golang.org/x/sync/errgroup"
 
 	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-)
-
-const (
-	database = "dolt_bench"
-	port     = 1234
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type query string
@@ -44,50 +40,77 @@ type serverTest struct {
 	test  []query
 }
 
-func BenchmarkSqlServer(b *testing.B) {
-	tests := []serverTest{
-		{
-			name: "smoke test",
-			setup: []query{
-				`CREATE TABLE test (pk int PRIMARY KEY, c0 int);`,
-				`INSERT INTO test VALUES 
-					(0,0), (1,1), (2,2), (3,3), (4,4),
-					(5,5), (6,6), (7,7), (8,8), (9,9);`,
-			},
-			test: []query{
-				`SELECT * FROM test;`,
-			},
+func BenchmarkServerSmoke(b *testing.B) {
+
+	setup := make([]query, 101)
+	setup[0] = "CREATE TABLE test (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);"
+
+	q := strings.Builder{}
+	q.WriteString("INSERT INTO test (c0) VALUES (0)")
+	i := 1
+	for i < 1000 {
+		q.WriteString(fmt.Sprintf(",(%d)", i))
+		i++
+	}
+	qs := q.String()
+
+	for i := range setup {
+		if i == 0 {
+			continue
+		}
+		setup[i] = query(qs)
+	}
+
+	benchmarkServer(b, serverTest{
+		name:  "smoke test",
+		setup: setup,
+		test: []query{
+			"SELECT count(*) FROM test;",
 		},
-	}
-
-	ctx := context.Background()
-	for _, test := range tests {
-		cfg, fs := GetConfigAndFS(b.TempDir())
-		dEnv := GetFSDoltEnv(ctx, fs)
-
-		executeBenchQueries(ctx, b, dEnv, cfg, test.setup)
-		b.Run(test.name, func(b *testing.B) {
-			executeBenchQueries(ctx, b, dEnv, cfg, test.test)
-		})
-	}
+	})
 }
 
+func benchmarkServer(b *testing.B, test serverTest) {
+	ctx := context.Background()
+	dEnv, cfg := getEnvAndConfig(ctx, b)
+	executeServerQueries(ctx, b, dEnv, cfg, test.setup)
+	b.Run(test.name, func(b *testing.B) {
+		b.ResetTimer()
+		executeServerQueries(ctx, b, dEnv, cfg, test.test)
+	})
+}
 
-func GetConfigAndFS(tmpDir string) (cfg srv.ServerConfig, fs filesys.Filesys) {
-	dbDir := path.Join(tmpDir, database)
+const (
+	database = "dolt_bench"
+	port     = 1234
+
+	name  = "name"
+	email = "name@fake.horse"
+)
+
+func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg srv.ServerConfig) {
+	tmp := b.TempDir()
+	//b.Logf("db directory: %s", tmp)
+	dbDir := path.Join(tmp, database)
 	err := os.Mkdir(dbDir, os.ModePerm)
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 
 	err = os.Chdir(dbDir)
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 
-	fs, err = filesys.LocalFilesysWithWorkingDir(".")
+	fs, err := filesys.LocalFilesysWithWorkingDir(".")
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
+	}
+
+	dEnv = env.Load(ctx, os.UserHomeDir, fs, doltdb.LocalDirDoltDB, "test")
+	err = dEnv.InitRepo(ctx, types.Format_7_18, name, email)
+	if err != nil {
+		b.Fatal(err)
 	}
 
 	yaml := []byte(fmt.Sprintf(`
@@ -114,29 +137,18 @@ listener:
 
 	cfg, err = srv.NewYamlConfig(yaml)
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 
-	return cfg, fs
+	return dEnv, cfg
 }
 
-func GetFSDoltEnv(ctx context.Context, fs filesys.Filesys) *env.DoltEnv {
-	const name = "test mcgibbins"
-	const email = "bigfakeytester@fake.horse"
-	dEnv := env.Load(ctx, os.UserHomeDir, fs, doltdb.LocalDirDoltDB, "test")
-	err := dEnv.InitRepo(ctx, types.Format_7_18, name, email)
-	if err != nil {
-		panic(err)
-	}
-	return dEnv
-}
-
-func executeBenchQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, cfg srv.ServerConfig, queries []query) {
+func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, cfg srv.ServerConfig, queries []query) {
 	serverController := srv.CreateServerController()
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	b.Logf("Starting server with Config %v\n", srv.ConfigInfo(cfg))
+	//b.Logf("Starting server with Config %v\n", srv.ConfigInfo(cfg))
 	eg.Go(func() (err error) {
 		startErr, closeErr := srv.Serve(ctx, "", cfg, serverController, dEnv)
 		if startErr != nil {
