@@ -36,6 +36,7 @@ type DoltTransaction struct {
 	workingSet ref.WorkingSetRef
 	db         *doltdb.DoltDB
 	rsw        env.RepoStateWriter
+	savepoints map[string]*doltdb.RootValue
 }
 
 func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, db *doltdb.DoltDB, rsw env.RepoStateWriter) *DoltTransaction {
@@ -128,6 +129,21 @@ func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *dol
 	}
 
 	return mergedRoot, err
+}
+
+func (tx *DoltTransaction) CreateSavepoint(name string, root *doltdb.RootValue) error {
+	tx.savepoints[name] = root
+	return nil
+}
+
+func (tx DoltTransaction) GetSavepoint(name string) *doltdb.RootValue {
+	return tx.savepoints[name]
+}
+
+func (tx DoltTransaction) ClearSavepoint(name string) *doltdb.RootValue {
+	prev := tx.savepoints[name]
+	delete(tx.savepoints, name)
+	return prev
 }
 
 func rootsEqual(left, right *doltdb.RootValue) bool {

@@ -142,7 +142,7 @@ func TableCacheFromSess(sess sql.Session, dbName string) TableCache {
 }
 
 // CommitTransaction commits the in-progress transaction for the database named
-func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) error {
+func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
 	if !sess.dirty[dbName] {
 		return nil
 	}
@@ -176,11 +176,6 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) erro
 
 	// Newer commit path does a concurrent merge of the current root with the one other clients are editing, then
 	// updates the session with this new root.
-	tx := ctx.GetTransaction()
-	if tx == nil {
-		return nil
-	}
-
 	// TODO: validate that the transaction belongs to the DB named
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
@@ -198,6 +193,87 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) erro
 	}
 
 	sess.dirty[dbName] = false
+	return nil
+}
+
+// RollbackTransaction rolls the given transaction back
+func (sess *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+	if !transactionsEnabled || dbName == "" {
+		return nil
+	}
+
+	if !sess.dirty[dbName] {
+		return nil
+	}
+
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		return fmt.Errorf("expected a DoltTransaction")
+	}
+
+	err := sess.SetRoot(ctx, dbName, dtx.startRoot)
+	if err != nil {
+		return err
+	}
+
+	sess.dirty[dbName] = false
+	return nil
+}
+
+// CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
+// with the same name will be overwritten.
+func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+	if !transactionsEnabled || dbName == "" {
+		return nil
+	}
+
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		return fmt.Errorf("expected a DoltTransaction")
+	}
+
+	return dtx.CreateSavepoint(savepointName, sess.roots[dbName].root)
+}
+
+// RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if not savepoint
+// with that name exists.
+func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+	if !transactionsEnabled || dbName == "" {
+		return nil
+	}
+
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		return fmt.Errorf("expected a DoltTransaction")
+	}
+
+	root := dtx.GetSavepoint(savepointName)
+	if root == nil {
+		// TODO: sql namespace error
+		return fmt.Errorf("no savepoint found with name %s", savepointName)
+	}
+
+	return sess.SetRoot(ctx, dbName, root)
+}
+
+// ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
+// exists.
+func (sess *DoltSession) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
+	if !transactionsEnabled || dbName == "" {
+		return nil
+	}
+
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		return fmt.Errorf("expected a DoltTransaction")
+	}
+
+	root := dtx.ClearSavepoint(savepointName)
+	if root == nil {
+		// TODO: sql namespace error
+		return fmt.Errorf("no savepoint found with name %s", savepointName)
+	}
+
 	return nil
 }
 
