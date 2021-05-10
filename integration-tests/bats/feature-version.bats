@@ -78,12 +78,15 @@ SQL
     popd
 
     pushd clone_repo
-    run dolt --feature-version $NEW sql -q "SELECT count(*) FROM test;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "3" ]] || false
     run dolt --feature-version $MAX version --feature
     [ "$status" -eq 0 ]
     [[ "$output" =~ "feature version: $OLD" ]] || false
+    # because of autocommit, running this select actually does write
+    # a new working root value with the new feature version, so we do this
+    # after the above check
+    run dolt --feature-version $NEW sql -q "SELECT count(*) FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "3" ]] || false
 
     # pull fails with old FeatureVersion
     run dolt --feature-version $OLD pull

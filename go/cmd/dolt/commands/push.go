@@ -49,7 +49,7 @@ type pushOpts struct {
 	destRef     ref.DoltRef
 	remoteRef   ref.DoltRef
 	remote      env.Remote
-	mode        ref.RefUpdateMode
+	mode        ref.UpdateMode
 	setUpstream bool
 }
 
@@ -238,7 +238,7 @@ func parsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		destRef:   dest,
 		remoteRef: remoteRef,
 		remote:    remote,
-		mode: ref.RefUpdateMode{
+		mode: ref.UpdateMode{
 			Force: apr.Contains(ForcePushFlag),
 		},
 		setUpstream: apr.Contains(SetUpstreamFlag),
@@ -361,7 +361,7 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 	return nil
 }
 
-func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpdateMode, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) errhand.VerboseError {
+func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateMode, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) errhand.VerboseError {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(remote.Url)
