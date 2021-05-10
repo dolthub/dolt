@@ -52,16 +52,33 @@ jobs:
               });
 
               const { data } = res;
-              const filtered = data.filter(p => {
-                if (p.labels.length < 1) return false;
-                for (const label of p.labels) {
-                  if (label.name === LABEL) return true;
-                }
-                return false;
-              });
 
-              console.log(filtered);
-              if (filtered.length > 0) core.setOutput("open-pulls", JSON.stringify(filtered));
+              const reduced = data.reduce((acc, p) => {
+                if (p.labels.length < 1) return acc;
+
+                let keepAlive = false;
+                let shouldPush = false;
+
+                for (const label of p.labels) {
+                  if (label.name === LABEL) {
+                    shouldPush = true;
+                  }
+                  if (label.name === "keep-alive") {
+                    keepAlive = true;
+                  }
+                }
+                if (shouldPush) {
+                  acc.push({
+                    number: p.number,
+                    keepAlive,
+                    headRef: p.head.ref,
+                  });
+                }
+                return acc;
+              }, []);
+
+              console.log(reduced);
+              if (reduced.length > 0) core.setOutput("open-pulls", JSON.stringify(reduced));
               process.exit(0);
             } catch(err) {
               console.log("Error:", err);
@@ -141,16 +158,12 @@ jobs:
               const { PULL, SUPERSEDED_BY } = process.env;
               const pull = JSON.parse(PULL);
 
-              for (const label of pull.labels) {
-                if (label.name === "keep-alive") {
-                  process.exit(0);
-                }
-              }
+              if (pull.keepAlive) process.exit(0);
 
               const checkSuiteRes = await github.checks.listSuitesForRef({
                 owner,
                 repo,
-                ref: pull.head.ref,
+                ref: pull.headRef,
               });
 
               if (checkSuiteRes.data) {
