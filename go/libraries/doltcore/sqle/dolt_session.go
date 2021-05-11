@@ -478,13 +478,38 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()
 
-	var workingRoot *doltdb.RootValue
 	workingHashInRepoState := rsr.WorkingHash()
 	workingHashInWsRef := hash.Hash{}
 
-	workingRoot, err := ddb.ReadRootValue(ctx, workingHashInRepoState)
+	// TODO: this resolve isn't necessary in all cases and slows things down
+	cm, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return err
+	}
+
+	headCommitHash, err := cm.HashOf()
+	if err != nil {
+		return err
+	}
+
+	var workingRoot *doltdb.RootValue
+	// Get a working root to use for this session. This could come from the an independent working set not associated
+	// with any commit, or from the head commit itself in some use cases. Some implementors of RepoStateReader use the
+	// current HEAD hash as the working set hash, and in fact they have to -- there's not always an independently
+	// addressable root value available, only one persisted as a value in a Commit object.
+	if headCommitHash == workingHashInRepoState {
+		workingRoot, err = cm.GetRootValue()
+		if err != nil {
+			return err
+		}
+	}
+
+	if workingRoot == nil {
+		// If the root isn't a head commit value, assume it's a standalone value and look it up
+		workingRoot, err = ddb.ReadRootValue(ctx, workingHashInRepoState)
+		if err != nil {
+			return err
+		}
 	}
 
 	if transactionsEnabled {
@@ -521,17 +546,6 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 	}
 
 	err = sess.SetRoot(ctx, db.name, workingRoot)
-	if err != nil {
-		return err
-	}
-
-	// TODO: this resolve probably isn't necessary and slows things down
-	cm, err := ddb.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return err
-	}
-
-	headCommitHash, err := cm.HashOf()
 	if err != nil {
 		return err
 	}
