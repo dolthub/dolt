@@ -249,8 +249,7 @@ func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, db
 
 	root := dtx.GetSavepoint(savepointName)
 	if root == nil {
-		// TODO: sql namespace error
-		return fmt.Errorf("no savepoint found with name %s", savepointName)
+		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
 	return sess.SetRoot(ctx, dbName, root)
@@ -270,8 +269,7 @@ func (sess *DoltSession) ReleaseSavepoint(ctx *sql.Context, savepointName, dbNam
 
 	root := dtx.ClearSavepoint(savepointName)
 	if root == nil {
-		// TODO: sql namespace error
-		return fmt.Errorf("no savepoint found with name %s", savepointName)
+		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
 	return nil

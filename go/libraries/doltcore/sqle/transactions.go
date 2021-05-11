@@ -45,6 +45,7 @@ func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRe
 		workingSet: workingSet,
 		db:         db,
 		rsw:        rsw,
+		savepoints: make(map[string]*doltdb.RootValue),
 	}
 }
 
@@ -88,7 +89,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 				continue
 			}
 
-			return newRoot, nil
+			return tx.updateRepoStateFile(ctx, newRoot)
 		}
 
 		mergedRoot, stats, err := merge.MergeRoots(ctx, root, newRoot, tx.startRoot)
@@ -110,14 +111,14 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 
 		// TODO: this is not thread safe, but will not be necessary after migrating all clients away from using the
 		//  working set stored in repo_state.json, so should be good enough for now
-		return tx.updateRepoStateFile(ctx, mergedRoot, err)
+		return tx.updateRepoStateFile(ctx, mergedRoot)
 	}
 
 	// TODO: different error type for retries exhausted
 	return nil, datas.ErrOptimisticLockFailed
 }
 
-func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *doltdb.RootValue, err error) (*doltdb.RootValue, error) {
+func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	hash, err := mergedRoot.HashOf()
 	if err != nil {
 		return nil, err

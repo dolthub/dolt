@@ -109,7 +109,7 @@ func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error
 
 func (db Database) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 	dsession := DSessFromSess(ctx.Session)
-	return dsession.CommitTransaction(ctx, db.name, tx)
+	return dsession.RollbackTransaction(ctx, db.name, tx)
 }
 
 func (db Database) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
