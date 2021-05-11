@@ -312,7 +312,10 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 // InitializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
 func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
 	cs, _ := doltdb.NewCommitSpec(doltdb.MasterBranch)
-	commit, _ := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	if err != nil {
+		return err
+	}
 
 	root, err := commit.GetRootValue()
 	if err != nil {
