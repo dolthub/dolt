@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 	"testing"
 
@@ -37,16 +39,17 @@ type query string
 type serverTest struct {
 	name  string
 	setup []query
-	test  []query
+	bench []query
 }
 
-func BenchmarkServerSmoke(b *testing.B) {
+// usage: `go test -bench .`
+func BenchmarkServerExample(b *testing.B) {
 
 	setup := make([]query, 101)
-	setup[0] = "CREATE TABLE test (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);"
+	setup[0] = "CREATE TABLE bench (pk int PRIMARY KEY AUTO_INCREMENT, c0 int);"
 
 	q := strings.Builder{}
-	q.WriteString("INSERT INTO test (c0) VALUES (0)")
+	q.WriteString("INSERT INTO bench (c0) VALUES (0)")
 	i := 1
 	for i < 1000 {
 		q.WriteString(fmt.Sprintf(",(%d)", i))
@@ -62,21 +65,39 @@ func BenchmarkServerSmoke(b *testing.B) {
 	}
 
 	benchmarkServer(b, serverTest{
-		name:  "smoke test",
+		name:  "smoke bench",
 		setup: setup,
-		test: []query{
-			"SELECT count(*) FROM test;",
+		bench: []query{
+			"SELECT count(*) FROM bench;",
 		},
 	})
 }
 
 func benchmarkServer(b *testing.B, test serverTest) {
+	var dEnv *env.DoltEnv
+	var cfg srv.ServerConfig
 	ctx := context.Background()
-	dEnv, cfg := getEnvAndConfig(ctx, b)
+
+	// setup
+	dEnv, cfg = getEnvAndConfig(ctx, b)
 	executeServerQueries(ctx, b, dEnv, cfg, test.setup)
+
+	// bench
+	f := getProfFile(b)
+	err := pprof.StartCPUProfile(f)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer func() {
+		pprof.StopCPUProfile()
+		if err = f.Close(); err != nil {
+			b.Fatal(err)
+		}
+		fmt.Printf("\twriting CPU profile for %s: %s\n", b.Name(), f.Name())
+	}()
+
 	b.Run(test.name, func(b *testing.B) {
-		b.ResetTimer()
-		executeServerQueries(ctx, b, dEnv, cfg, test.test)
+		executeServerQueries(ctx, b, dEnv, cfg, test.bench)
 	})
 }
 
@@ -107,7 +128,7 @@ func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg 
 		b.Fatal(err)
 	}
 
-	dEnv = env.Load(ctx, os.UserHomeDir, fs, doltdb.LocalDirDoltDB, "test")
+	dEnv = env.Load(ctx, os.UserHomeDir, fs, doltdb.LocalDirDoltDB, "bench")
 	err = dEnv.InitRepo(ctx, types.Format_7_18, name, email)
 	if err != nil {
 		b.Fatal(err)
@@ -141,6 +162,16 @@ listener:
 	}
 
 	return dEnv, cfg
+}
+
+func getProfFile(b *testing.B) *os.File {
+	_, testFile, _, _ := runtime.Caller(0)
+
+	f, err := os.Create(path.Join(path.Dir(testFile), b.Name()+".out"))
+	if err != nil {
+		b.Fatal(err)
+	}
+	return f
 }
 
 func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, cfg srv.ServerConfig, queries []query) {
