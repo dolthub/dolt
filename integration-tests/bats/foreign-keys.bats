@@ -1693,7 +1693,7 @@ SQL
     dolt commit -m "committed"
 }
 
-@test "foreign-keys: deleting and reading" {
+@test "foreign-keys: deleting and readding" {
     dolt sql <<SQL
 CREATE TABLE parent2 (
   pk BIGINT PRIMARY KEY

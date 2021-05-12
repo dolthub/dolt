@@ -193,6 +193,29 @@ func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName 
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
 	}
 
+	if headRoot != nil {
+		tbl, found, err := headRoot.GetTable(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+
+		if found {
+			sch, err := tbl.GetSchema(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			colOverlap := schema.GetSharedCols(sch, newColNames, newColKinds)
+			if len(colOverlap) == len(newColNames) {
+				var reusedTags []uint64
+				for _, k := range newColNames {
+					reusedTags = append(reusedTags, colOverlap[k])
+				}
+				return reusedTags, nil
+			}
+		}
+	}
+
 	rootSuperSchema, err := GetRootValueSuperSchema(ctx, root)
 
 	if err != nil {
@@ -213,45 +236,6 @@ func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName 
 			existingColKinds = append(existingColKinds, col.Kind)
 			return false, nil
 		})
-	}
-
-	if headRoot != nil {
-		tbl, found, err = headRoot.GetTable(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
-
-		if found {
-			sch, err := tbl.GetSchema(ctx)
-			if err != nil {
-				return nil, err
-			}
-			var existingColNames []string
-			var existingColTags []uint64
-			_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				existingColKinds = append(existingColKinds, col.Kind)
-				existingColNames = append(existingColNames, col.Name)
-				existingColTags = append(existingColTags, col.Tag)
-				return false, nil
-			})
-
-			if len(newColNames) == len(existingColNames) {
-				match := true
-				for i, col := range newColNames {
-					if col != existingColNames[i] {
-						match = false
-						break
-					}
-					if existingColKinds[i] != newColKinds[i] {
-						match = false
-						break
-					}
-				}
-				if match {
-					return existingColTags, nil
-				}
-			}
-		}
 	}
 
 	newTags := make([]uint64, len(newColNames))
