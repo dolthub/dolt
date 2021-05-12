@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -31,7 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *testMergeableIndexDb, []*indexTuple) {
+func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *env.DoltEnv, *testMergeableIndexDb, []*indexTuple, *doltdb.RootValue) {
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -61,7 +63,11 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 
 	idxv1, ok := tbl.sch.Indexes().GetByNameCaseInsensitive("idxv1")
 	require.True(t, ok)
-	idxv1RowData, err := tbl.table.GetIndexRowData(context.Background(), idxv1.Name())
+
+	table, err := tbl.doltTable(sqlCtx)
+	require.NoError(t, err)
+
+	idxv1RowData, err := table.GetIndexRowData(context.Background(), idxv1.Name())
 	require.NoError(t, err)
 	idxv1Cols := make([]schema.Column, idxv1.Count())
 	for i, tag := range idxv1.IndexedColumnTags() {
@@ -74,7 +80,7 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 
 	idxv2v1, ok := tbl.sch.Indexes().GetByNameCaseInsensitive("idxv2v1")
 	require.True(t, ok)
-	idxv2v1RowData, err := tbl.table.GetIndexRowData(context.Background(), idxv2v1.Name())
+	idxv2v1RowData, err := table.GetIndexRowData(context.Background(), idxv2v1.Name())
 	require.NoError(t, err)
 	idxv2v1Cols := make([]schema.Column, idxv2v1.Count())
 	for i, tag := range idxv2v1.IndexedColumnTags() {
@@ -91,14 +97,18 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	}
 	engine = sqle.NewDefault()
 	engine.AddDatabase(mergeableDb)
-	return engine, mergeableDb, []*indexTuple{
+
+	// Get an updated root to use for the rest of the test
+	root, _ = DSessFromSess(sqlCtx.Session).GetRoot(mergeableDb.Name())
+
+	return engine, dEnv, mergeableDb, []*indexTuple{
 		idxv1ToTuple,
 		idxv2v1ToTuple,
 		{
 			nbf:  idxv2v1RowData.Format(),
 			cols: idxv2v1Cols[:len(idxv2v1Cols)-1],
 		},
-	}
+	}, root
 }
 
 // Database made to test mergeable indexes while using the full SQL engine.

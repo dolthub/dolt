@@ -140,7 +140,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		dsqlDBs[i] = dsqlDB
 
 		sess := dsql.DSessFromSess(ctx.Session)
-		err := sess.AddDB(ctx, dsqlDB)
+		err := sess.AddDB(ctx, dsqlDB, dsqlDB.DbData())
 
 		if err != nil {
 			return err

@@ -185,6 +185,15 @@ func (db Database) GetDocsReadWriter() env.DocsReadWriter {
 	return db.drw
 }
 
+func (db Database) DbData() env.DbData {
+	return env.DbData{
+		Ddb: db.ddb,
+		Rsw: db.rsw,
+		Rsr: db.rsr,
+		Drw: db.drw,
+	}
+}
+
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
