@@ -173,7 +173,7 @@ func (root *RootValue) GenerateTagsForNewColColl(ctx context.Context, tableName 
 		return false, nil
 	})
 
-	newTags, err := root.GenerateTagsForNewColumns(ctx, tableName, newColNames, newColKinds)
+	newTags, err := root.GenerateTagsForNewColumns(ctx, tableName, newColNames, newColKinds, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ func (root *RootValue) GenerateTagsForNewColColl(ctx context.Context, tableName 
 
 // GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
 // the new columns are used to see the tag generator.
-func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName string, newColNames []string, newColKinds []types.NomsKind) ([]uint64, error) {
+func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName string, newColNames []string, newColKinds []types.NomsKind, headRoot *RootValue) ([]uint64, error) {
 	if len(newColNames) != len(newColKinds) {
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
 	}
@@ -213,6 +213,45 @@ func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName 
 			existingColKinds = append(existingColKinds, col.Kind)
 			return false, nil
 		})
+	}
+
+	if headRoot != nil {
+		tbl, found, err = headRoot.GetTable(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+
+		if found {
+			sch, err := tbl.GetSchema(ctx)
+			if err != nil {
+				return nil, err
+			}
+			var existingColNames []string
+			var existingColTags []uint64
+			_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+				existingColKinds = append(existingColKinds, col.Kind)
+				existingColNames = append(existingColNames, col.Name)
+				existingColTags = append(existingColTags, col.Tag)
+				return false, nil
+			})
+
+			if len(newColNames) == len(existingColNames) {
+				match := true
+				for i, col := range newColNames {
+					if col != existingColNames[i] {
+						match = false
+						break
+					}
+					if existingColKinds[i] != newColKinds[i] {
+						match = false
+						break
+					}
+				}
+				if match {
+					return existingColTags, nil
+				}
+			}
+		}
 	}
 
 	newTags := make([]uint64, len(newColNames))

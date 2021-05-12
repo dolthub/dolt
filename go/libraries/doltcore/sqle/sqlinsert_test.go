@@ -442,7 +442,7 @@ func mustGetDoltSchema(sch sql.Schema, tableName string, testEnv *env.DoltEnv) s
 		panic(err)
 	}
 
-	doltSchema, err := sqlutil.ToDoltSchema(context.Background(), wrt, tableName, sch)
+	doltSchema, err := sqlutil.ToDoltSchema(context.Background(), wrt, tableName, sch, nil)
 	if err != nil {
 		panic(err)
 	}
