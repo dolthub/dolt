@@ -249,7 +249,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 }
 
 const (
-	getLocsBatchSize = (4 * 1024) / 20
+	getLocsBatchSize = 256
 )
 
 type GetRange remotesapi.HttpGetRange
@@ -394,11 +394,11 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 			return false
 		})
 		op := func() error {
+			seg, ctx := errgroup.WithContext(ctx)
 			stream, err := dcs.csClient.StreamDownloadLocations(ctx)
 			if err != nil {
 				return NewRpcError(err, "StreamDownloadLocations", dcs.host, nil)
 			}
-			seg, ctx := errgroup.WithContext(ctx)
 			completedReqs := 0
 			// Write requests
 			seg.Go(func() error {
