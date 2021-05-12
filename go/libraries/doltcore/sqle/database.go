@@ -73,7 +73,7 @@ func (d DisabledTransaction) String() string {
 	return "Disabled transaction"
 }
 
-func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
+func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 	if !transactionsEnabled {
 		return DisabledTransaction{}, nil
 	}
@@ -104,23 +104,27 @@ func (db Database) BeginTransaction(ctx *sql.Context) (sql.Transaction, error) {
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
 	dsession := DSessFromSess(ctx.Session)
-	return dsession.CommitTransaction(ctx, db.name)
+	return dsession.CommitTransaction(ctx, db.name, tx)
 }
 
-func (db Database) Rollback(ctx *sql.Context, transaction sql.Transaction) error {
-	return nil
+func (db Database) Rollback(ctx *sql.Context, tx sql.Transaction) error {
+	dsession := DSessFromSess(ctx.Session)
+	return dsession.RollbackTransaction(ctx, db.name, tx)
 }
 
-func (db Database) CreateSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
-	return nil
+func (db Database) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
+	dsession := DSessFromSess(ctx.Session)
+	return dsession.CreateSavepoint(ctx, name, db.name, tx)
 }
 
-func (db Database) RollbackToSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
-	return nil
+func (db Database) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
+	dsession := DSessFromSess(ctx.Session)
+	return dsession.RollbackToSavepoint(ctx, name, db.name, tx)
 }
 
-func (db Database) ReleaseSavepoint(ctx *sql.Context, transaction sql.Transaction, name string) error {
-	return nil
+func (db Database) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
+	dsession := DSessFromSess(ctx.Session)
+	return dsession.ReleaseSavepoint(ctx, name, db.name, tx)
 }
 
 var _ SqlDatabase = Database{}
