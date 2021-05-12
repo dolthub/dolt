@@ -321,18 +321,6 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 	return b.String(), nil
 }
 
-func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
-	tableNames, err := root.GetTableNames(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	newRoot, err := root.RemoveTables(context.Background(), tableNames...)
-	if err != nil {
-		panic(err)
-	}
-	return newRoot
-}
-
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
 	db := dsql.NewDatabase("dolt", dEnv.DbData())
 	engine := sqle.NewDefault()

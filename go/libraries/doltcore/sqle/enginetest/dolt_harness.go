@@ -72,14 +72,13 @@ func (d DoltHarness) WithParallelism(parallelism int) *DoltHarness {
 	return &d
 }
 
-// WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
-// less means to use the system parallelism settings.
+// WithSkippedQueries returns a copy of the harness with the given queries skipped
 func (d DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
 	d.skippedQueries = queries
 	return &d
 }
 
-// Logic to skip unsupported queries
+// SkipQueryTest returns whether to skip a query
 func (d *DoltHarness) SkipQueryTest(query string) bool {
 	lowerQuery := strings.ToLower(query)
 	for _, skipped := range d.skippedQueries {

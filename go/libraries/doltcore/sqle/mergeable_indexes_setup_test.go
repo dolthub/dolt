@@ -112,7 +112,7 @@ func (db *testMergeableIndexDb) Name() string {
 	return "dolt"
 }
 func (db *testMergeableIndexDb) GetTableInsensitive(_ *sql.Context, tblName string) (sql.Table, bool, error) {
-	if strings.ToLower(tblName) == strings.ToLower(db.tbl.name) {
+	if strings.ToLower(tblName) == strings.ToLower(db.tbl.tableName) {
 		return &testMergeableIndexTable{
 			AlterableDoltTable: db.tbl,
 			t:                  db.t,
@@ -122,7 +122,7 @@ func (db *testMergeableIndexDb) GetTableInsensitive(_ *sql.Context, tblName stri
 	return nil, false, nil
 }
 func (db *testMergeableIndexDb) GetTableNames(_ *sql.Context) ([]string, error) {
-	return []string{db.tbl.name}, nil
+	return []string{db.tbl.tableName}, nil
 }
 
 // Table made to test mergeable indexes by intercepting specific index-related functions.

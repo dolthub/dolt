@@ -262,7 +262,24 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return nil, false, nil
 	}
 
-	return db.getTable(ctx, root, tableName)
+	table, ok, err := db.getTable(ctx, root, tableName)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, nil
+	}
+
+	switch table := table.(type) {
+	case *DoltTable:
+		return table.LockedToRoot(root), true, nil
+	case *AlterableDoltTable:
+		return table.LockedToRoot(root), true, nil
+	case *WritableDoltTable:
+		return table.LockedToRoot(root), true, nil
+	default:
+		panic(fmt.Sprintf("unexpected table type %T", table))
+	}
 }
 
 // rootAsOf returns the root of the DB as of the expression given, which may be nil in the case that it refers to an
@@ -385,7 +402,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 
 	readonlyTable := NewDoltTable(tableName, sch, tbl, db)
 	if doltdb.IsReadOnlySystemTable(tableName) {
-		table = &readonlyTable
+		table = readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {
 		table = &WritableDoltTable{DoltTable: readonlyTable, db: db}
 	} else {
@@ -636,35 +653,44 @@ func (db Database) DropView(ctx *sql.Context, name string) error {
 
 // GetTriggers implements sql.TriggerDatabase.
 func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error) {
-	sqlTbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, ok, err := root.GetTable(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, nil
 	}
-	tbl := sqlTbl.(*WritableDoltTable)
 
-	typeCol, ok := tbl.sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
-	if !ok {
-		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
-	}
-	nameCol, ok := tbl.sch.GetAllCols().GetByName(doltdb.SchemasTablesNameCol)
-	if !ok {
-		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
-	}
-	fragCol, ok := tbl.sch.GetAllCols().GetByName(doltdb.SchemasTablesFragmentCol)
-	if !ok {
-		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	rowData, err := tbl.table.GetRowData(ctx)
+	typeCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
+	if !ok {
+		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
+	}
+	nameCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesNameCol)
+	if !ok {
+		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
+	}
+	fragCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesFragmentCol)
+	if !ok {
+		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
+	}
+
+	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var triggers []sql.TriggerDefinition
 	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
-		dRow, err := row.FromNoms(tbl.sch, key.(types.Tuple), val.(types.Tuple))
+		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
 		if err != nil {
 			return true, err
 		}
@@ -712,22 +738,32 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureDetails, error) {
 	missingValue := errors.NewKind("missing `%s` value for procedure row: (%s)")
 
-	sqlTbl, ok, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	table, ok, err := root.GetTable(ctx, doltdb.ProceduresTableName)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, nil
 	}
-	tbl := sqlTbl.(*WritableDoltTable)
 
-	rowData, err := tbl.table.GetRowData(ctx)
+	rowData, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var spds []sql.StoredProcedureDetails
 	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
-		dRow, err := row.FromNoms(tbl.sch, key.(types.Tuple), val.(types.Tuple))
+		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
 		if err != nil {
 			return true, err
 		}
@@ -866,7 +902,12 @@ func (db Database) TableEditSession(ctx *sql.Context) *editor.TableEditSession {
 // schema fragments if they don't parse, or if registries within the
 // `catalog` return errors.
 func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootValue) error {
-	stbl, found, err := db.GetTableInsensitiveWithRoot(ctx, root, doltdb.SchemasTableName)
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	tbl, found, err := root.GetTable(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -874,14 +915,13 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 		return nil
 	}
 
-	tbl := stbl.(*WritableDoltTable)
-	rowData, err := tbl.table.GetRowData(ctx)
+	rowData, err := tbl.GetRowData(ctx)
 
 	if err != nil {
 		return err
 	}
 
-	iter, err := newRowIterator(ctx, &tbl.DoltTable, nil, &doltTablePartition{rowData: rowData, end: NoUpperBound})
+	iter, err := newRowIterator(ctx, tbl, nil, &doltTablePartition{rowData: rowData, end: NoUpperBound})
 	if err != nil {
 		return err
 	}

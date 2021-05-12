@@ -51,7 +51,7 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 		return nil, false, err
 	}
 	dt := NewDoltTable(tableName, sch, table, db)
-	return &dt, true, nil
+	return dt, true, nil
 }
 
 func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
