@@ -26,6 +26,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -103,6 +104,15 @@ type Database interface {
 	// success or failure, and Datasets() is updated to match backing storage
 	// upon return as well.
 	Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error)
+
+	// UpdateWorkingSet updates the dataset given, setting its value to a new
+	// working set value object with the ref and meta given. If the dataset given
+	// already had a value, it must match the hash given or this method returns
+	// ErrOptimisticLockFailed and the caller must retry.
+	// The returned Dataset is always the newest snapshot, regardless of
+	// success or failure, and Datasets() is updated to match backing storage
+	// upon return as well.
+	UpdateWorkingSet(ctx context.Context, ds Dataset, workingSetValue types.Ref, meta WorkingSetMeta, prevHash hash.Hash) (Dataset, error)
 
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. The Dataset data is not necessarily cleaned up at this

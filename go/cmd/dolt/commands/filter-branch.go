@@ -105,25 +105,6 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
-			Name:              dbName + "_head",
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dbName + "_head"),
-			Default:           "",
-		},
-		{
-			Name:              dbName + "_working",
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dbName + "_head"),
-			Default:           "",
-		},
-	})
-
 	query := apr.Arg(0)
 	notFound := make(missingTbls)
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {

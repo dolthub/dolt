@@ -910,9 +910,9 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 	err = func() error {
 		// This is unfortunate. We want to serialize commits to the same store
 		// so that we avoid writing a bunch of unreachable small tables which result
-		// from optismistic lock failures. However, this means that the time to
+		// from optimistic lock failures. However, this means that the time to
 		// write tables is included in "commit" time and if all commits are
-		// serialized, it means alot more waiting.
+		// serialized, it means a lot more waiting.
 		// "non-trivial" tables are persisted here, outside of the commit-lock.
 		// all other tables are persisted in updateManifest()
 		nbs.mu.Lock()

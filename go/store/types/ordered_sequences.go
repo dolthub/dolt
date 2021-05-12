@@ -208,7 +208,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 		var lastKey orderedKey
 		for i, v := range items {
 			mt := v.(metaTuple)
-			key, err := mt.key()
+			key, err := mt.key(vrw)
 
 			if err != nil {
 				return nil, orderedKey{}, 0, err
@@ -249,7 +249,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 			col = newMap(seq)
 		}
 
-		k, err := tuples[len(tuples)-1].key()
+		k, err := tuples[len(tuples)-1].key(vrw)
 
 		if err != nil {
 			return nil, orderedKey{}, 0, err

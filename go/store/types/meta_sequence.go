@@ -68,23 +68,23 @@ const (
 	metaTuplePartNumLeaves = 2
 )
 
-func (mt metaTuple) decoderAtPart(part uint32) valueDecoder {
+func (mt metaTuple) decoderAtPart(part uint32, vrw ValueReadWriter) valueDecoder {
 	offset := mt.offsets[part] - mt.offsets[metaTuplePartRef]
-	return newValueDecoder(mt.buff[offset:], nil)
+	return newValueDecoder(mt.buff[offset:], vrw)
 }
 
 func (mt metaTuple) ref() (Ref, error) {
-	dec := mt.decoderAtPart(metaTuplePartRef)
+	dec := mt.decoderAtPart(metaTuplePartRef, nil)
 	return dec.readRef(mt.nbf)
 }
 
-func (mt metaTuple) key() (orderedKey, error) {
-	dec := mt.decoderAtPart(metaTuplePartKey)
+func (mt metaTuple) key(vrw ValueReadWriter) (orderedKey, error) {
+	dec := mt.decoderAtPart(metaTuplePartKey, vrw)
 	return dec.readOrderedKey(mt.nbf)
 }
 
 func (mt metaTuple) numLeaves() uint64 {
-	dec := mt.decoderAtPart(metaTuplePartNumLeaves)
+	dec := mt.decoderAtPart(metaTuplePartNumLeaves, nil)
 	return dec.readCount()
 }
 

@@ -139,7 +139,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 
 	heads := make([]*doltdb.Commit, len(refs))
 	for i, dRef := range refs {
-		heads[i], err = ddb.ResolveRef(ctx, dRef)
+		heads[i], err = ddb.ResolveCommitRef(ctx, dRef)
 		if err != nil {
 			return err
 		}
@@ -169,7 +169,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		}
 	}
 
-	cm, err := ddb.ResolveRef(ctx, cwbRef)
+	cm, err := ddb.ResolveCommitRef(ctx, cwbRef)
 	if err != nil {
 		return err
 	}

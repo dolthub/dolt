@@ -92,12 +92,11 @@ func TestHedgerObeysMaxHedges(t *testing.T) {
 		ch <- 1
 		i, err := h.Do(context.Background(), Work{
 			Work: func(ctx context.Context) (interface{}, error) {
-				select {
-				case <-ch:
+				cur := atomic.AddInt32(&cnt, 1)
+				if cur == int32(max) {
 					time.Sleep(100 * time.Millisecond)
 					return 1, nil
-				default:
-					atomic.AddInt32(&cnt, 1)
+				} else {
 					<-ctx.Done()
 					return 2, nil
 				}
@@ -105,7 +104,7 @@ func TestHedgerObeysMaxHedges(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, i.(int))
-		assert.Equal(t, int32(max), atomic.LoadInt32(&cnt))
+		assert.Equal(t, int32(max)+1, atomic.LoadInt32(&cnt))
 	}
 	try(1)
 	try(2)

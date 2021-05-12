@@ -37,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -51,27 +50,6 @@ const (
 	batched commitBehavior = iota
 	single
 )
-
-const (
-	HeadKeySuffix    = "_head"
-	WorkingKeySuffix = "_working"
-)
-
-func IsHeadKey(key string) (bool, string) {
-	if strings.HasSuffix(key, HeadKeySuffix) {
-		return true, key[:len(key)-len(HeadKeySuffix)]
-	}
-
-	return false, ""
-}
-
-func IsWorkingKey(key string) (bool, string) {
-	if strings.HasSuffix(key, WorkingKeySuffix) {
-		return true, key[:len(key)-len(WorkingKeySuffix)]
-	}
-
-	return false, ""
-}
 
 type SqlDatabase interface {
 	sql.Database
@@ -88,6 +66,67 @@ type Database struct {
 	batchMode commitBehavior
 }
 
+// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
+type DisabledTransaction struct{}
+
+func (d DisabledTransaction) String() string {
+	return "Disabled transaction"
+}
+
+func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
+	if !transactionsEnabled {
+		return DisabledTransaction{}, nil
+	}
+
+	dsession := DSessFromSess(ctx.Session)
+
+	// When we begin the transaction, we must synchronize the state of this session with the global state for the
+	// current head ref. Any pending transaction has already been committed before this happens.
+	wsRef := dsession.workingSets[ctx.GetCurrentDatabase()]
+
+	ws, err := db.ddb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.SetRoot(ctx, ws.RootValue())
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewDoltTransaction(root, wsRef, db.ddb, db.rsw), nil
+}
+
+func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
+	dsession := DSessFromSess(ctx.Session)
+	return dsession.CommitTransaction(ctx, db.name, tx)
+}
+
+func (db Database) Rollback(ctx *sql.Context, tx sql.Transaction) error {
+	dsession := DSessFromSess(ctx.Session)
+	return dsession.RollbackTransaction(ctx, db.name, tx)
+}
+
+func (db Database) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
+	dsession := DSessFromSess(ctx.Session)
+	return dsession.CreateSavepoint(ctx, name, db.name, tx)
+}
+
+func (db Database) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
+	dsession := DSessFromSess(ctx.Session)
+	return dsession.RollbackToSavepoint(ctx, name, db.name, tx)
+}
+
+func (db Database) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
+	dsession := DSessFromSess(ctx.Session)
+	return dsession.ReleaseSavepoint(ctx, name, db.name, tx)
+}
+
 var _ SqlDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.TableDropper = Database{}
@@ -95,6 +134,7 @@ var _ sql.TableCreator = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
+var _ sql.TransactionDatabase = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, dbData env.DbData) Database {
@@ -400,95 +440,37 @@ func filterDoltInternalTables(tblNames []string) []string {
 	return result
 }
 
-func (db Database) HeadKey() string {
-	return db.name + HeadKeySuffix
+func HeadKey(dbName string) string {
+	return dbName + HeadKeySuffix
 }
 
-func (db Database) WorkingKey() string {
-	return db.name + WorkingKeySuffix
+func HeadRefKey(dbName string) string {
+	return dbName + HeadRefKeySuffix
+}
+
+func WorkingKey(dbName string) string {
+	return dbName + WorkingKeySuffix
 }
 
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
+// GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	currRoot, dbRootOk := dsess.dbRoots[db.name]
+	currRoot, dbRootOk := dsess.roots[db.name]
 
-	key := db.WorkingKey()
-	workingHash, err := ctx.Session.GetSessionVariable(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	workingHashStr, ok := workingHash.(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid value for '%s'", key)
+	if !dbRootOk {
+		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	if workingHash == "" {
-		if !dbRootOk {
-			return nil, fmt.Errorf("value for '%s' not found", key)
-		} else {
-			err := db.SetRoot(ctx, currRoot.root)
-
-			if err != nil {
-				return nil, err
-			}
-
-			return currRoot.root, nil
-		}
-	} else {
-		h, ok := hash.MaybeParse(workingHashStr)
-
-		if !ok {
-			return nil, fmt.Errorf("invalid hash '%s' stored in '%s'", workingHashStr, key)
-		}
-
-		if dbRootOk {
-			if workingHashStr == currRoot.hashStr {
-				return currRoot.root, nil
-			}
-		}
-
-		newRoot, err := db.ddb.ReadRootValue(ctx, h)
-
-		if err != nil {
-			return nil, err
-		}
-
-		dsess.dbRoots[db.name] = dbRoot{workingHashStr, newRoot}
-		return newRoot, nil
-	}
+	return currRoot.root, nil
 }
 
-// SetRoot a new root value for the database.
-// Can be used if the dolt working set value changes outside of the
-// basic SQL execution engine. If |newRoot|'s FeatureVersion is
-// out-of-date with the client, SetRoot will update it.
+// SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
+// convenience.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	h, err := newRoot.HashOf()
-
-	if err != nil {
-		return err
-	}
-
-	hashStr := h.String()
-	key := db.WorkingKey()
-
-	err = ctx.Session.SetSessionVariable(ctx, key, hashStr)
-
-	if err != nil {
-		return err
-	}
-
 	dsess := DSessFromSess(ctx.Session)
-	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
-
-	err = dsess.dbEditors[db.name].SetRoot(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return dsess.SetRoot(ctx, db.name, newRoot)
 }
 
 // LoadRootFromRepoState loads the root value from the repo state's working hash, then calls SetRoot with the loaded
@@ -900,7 +882,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context) *editor.TableEditSession {
-	return DSessFromSess(ctx.Session).dbEditors[db.name]
+	return DSessFromSess(ctx.Session).editSessions[db.name]
 }
 
 // RegisterSchemaFragments register SQL schema fragments that are persisted in the given
