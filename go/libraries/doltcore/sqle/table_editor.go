@@ -16,11 +16,11 @@ package sqle
 
 import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
@@ -36,7 +36,13 @@ import (
 // editor after every SQL statement is incorrect and will return incorrect results. The single reliable exception is an
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type sqlTableEditor struct {
-	t           *WritableDoltTable
+	tableName string
+	dbName string
+	sch schema.Schema
+	autoIncCol schema.Column
+	batchMode commitBehavior
+	vrw types.ValueReadWriter
+	autoIncrementType typeinfo.TypeInfo
 	kvToSQLRow  *KVToSqlRowConverter
 	tableEditor editor.TableEditor
 	sess        *editor.TableEditSession
@@ -56,7 +62,12 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
-		t:           t,
+		tableName:   t.Name(),
+		dbName:      t.db.Name(),
+		sch:         t.sch,
+		autoIncCol:  t.autoIncCol,
+		batchMode:   t.db.batchMode,
+		vrw:         t.db.ddb.ValueReadWriter(),
 		kvToSQLRow:  conv,
 		tableEditor: tableEditor,
 		sess:        sess,
@@ -73,8 +84,8 @@ func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple
 }
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	if !schema.IsKeyless(te.t.sch) {
-		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
+	if !schema.IsKeyless(te.sch) {
+		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
 
 		if err != nil {
 			return err
@@ -83,7 +94,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
 	}
 
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
+	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 
 	if err != nil {
 		return err
@@ -93,7 +104,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
+	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 	if err != nil {
 		return err
 	}
@@ -102,11 +113,11 @@ func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	dOldRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), oldRow, te.t.sch)
+	dOldRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, oldRow, te.sch)
 	if err != nil {
 		return err
 	}
-	dNewRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), newRow, te.t.sch)
+	dNewRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, newRow, te.sch)
 	if err != nil {
 		return err
 	}
@@ -116,11 +127,11 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 
 func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
 	val := te.tableEditor.GetAutoIncrementValue()
-	return te.t.DoltTable.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
+	return te.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
 }
 
 func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
-	nomsVal, err := te.t.DoltTable.autoIncCol.TypeInfo.ConvertValueToNomsValue(ctx, te.t.table.ValueReadWriter(), val)
+	nomsVal, err := te.autoIncCol.TypeInfo.ConvertValueToNomsValue(ctx, te.vrw, val)
 	if err != nil {
 		return err
 	}
@@ -133,7 +144,7 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 // Close implements Closer
 func (te *sqlTableEditor) Close(ctx *sql.Context) error {
 	// If we're running in batched mode, don't flush the edits until explicitly told to do so by the parent table.
-	if te.t.db.batchMode == batched {
+	if te.batchMode == batched {
 		return nil
 	}
 	return te.flush(ctx)
@@ -145,13 +156,6 @@ func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 		return err
 	}
 
-	newTable, ok, err := newRoot.GetTable(ctx, te.t.name)
-	if err != nil {
-		return errhand.BuildDError("failed to load updated table").AddCause(err).Build()
-	}
-	if !ok {
-		return errhand.BuildDError("failed to find updated table").Build()
-	}
-	te.t.table = newTable
-	return te.t.db.SetRoot(ctx, newRoot)
+	dSess := DSessFromSess(ctx.Session)
+	return dSess.SetRoot(ctx, te.dbName, newRoot)
 }

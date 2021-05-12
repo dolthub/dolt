@@ -51,6 +51,7 @@ func init() {
 			transactionsEnabled = true
 		}
 	}
+	transactionsEnabled = true
 }
 
 func IsHeadKey(key string) (bool, string) {
@@ -77,7 +78,6 @@ type DoltSession struct {
 	dbDatas      map[string]env.DbData
 	editSessions map[string]*editor.TableEditSession
 	dirty        map[string]bool
-	caches       map[string]TableCache
 	Username     string
 	Email        string
 }
@@ -92,7 +92,6 @@ func DefaultDoltSession() *DoltSession {
 		dbDatas:      make(map[string]env.DbData),
 		editSessions: make(map[string]*editor.TableEditSession),
 		dirty:        make(map[string]bool),
-		caches:       make(map[string]TableCache),
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		Username:     "",
 		Email:        "",
@@ -117,7 +116,6 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		dirty:        make(map[string]bool),
 		roots:        make(map[string]dbRoot),
 		workingSets:  make(map[string]ref.WorkingSetRef),
-		caches:       make(map[string]TableCache),
 		Username:     username,
 		Email:        email,
 	}
@@ -135,10 +133,6 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 // DSessFromSess retrieves a dolt session from a standard sql.Session
 func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
-}
-
-func TableCacheFromSess(sess sql.Session, dbName string) TableCache {
-	return sess.(*DoltSession).caches[dbName]
 }
 
 // CommitTransaction commits the in-progress transaction for the database named
@@ -547,7 +541,6 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 
 	sess.dbDatas[db.Name()] = env.DbData{Drw: drw, Rsr: rsr, Rsw: rsw, Ddb: ddb}
 	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
-	sess.caches[db.name] = newTableCache()
 
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()

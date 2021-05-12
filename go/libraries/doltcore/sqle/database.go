@@ -358,11 +358,6 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 // getTable gets the table with the exact name given at the root value given. The database caches tables for all root
 // values to avoid doing schema lookups on every table lookup, which are expensive.
 func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
-	cache := TableCacheFromSess(ctx.Session, db.name)
-	if table, ok := cache.Get(tableName, root); ok {
-		return table, true, nil
-	}
-
 	tableNames, err := getAllTableNames(ctx, root)
 	if err != nil {
 		return nil, true, err
@@ -396,8 +391,6 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	} else {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
 	}
-
-	cache.Put(tableName, root, table)
 
 	return table, true, nil
 }
@@ -616,33 +609,15 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db Database) Flush(ctx *sql.Context) error {
-	root, err := db.GetRoot(ctx)
+	dsess := DSessFromSess(ctx.Session)
+	editSession := dsess.editSessions[db.name]
+
+	newRoot, err := editSession.Flush(ctx)
 	if err != nil {
 		return err
 	}
 
-	cache := TableCacheFromSess(ctx.Session, db.name)
-	tables, ok := cache.AllForRoot(root)
-
-	if ok {
-		for _, table := range tables {
-			if writable, ok := table.(*WritableDoltTable); ok {
-				if err := writable.flushBatchedEdits(ctx); err != nil {
-					return err
-				}
-			} else if alterable, ok := table.(*AlterableDoltTable); ok {
-				if err := alterable.flushBatchedEdits(ctx); err != nil {
-					return err
-				}
-			} else if writable, ok := table.(*WritableIndexedDoltTable); ok {
-				if err := writable.flushBatchedEdits(ctx); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	return nil
+	return db.SetRoot(ctx, newRoot)
 }
 
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
