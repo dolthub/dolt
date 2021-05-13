@@ -138,8 +138,11 @@ func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 func (t *DoltTable) doltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	root := t.lockedToRoot
 	if root == nil {
-		sess := DSessFromSess(ctx.Session)
-		root, _ = sess.GetRoot(t.db.Name())
+		var err error
+		root, err = t.db.GetRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	table, ok, err := root.GetTable(ctx, t.tableName)

@@ -76,6 +76,10 @@ func TestSchemaTableRecreation(t *testing.T) {
 
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
 	require.NoError(t, err)
+
+	table, err = tbl.doltTable(ctx)
+	require.NoError(t, err)
+
 	rowData, err = table.GetRowData(ctx)
 	require.NoError(t, err)
 	expectedVals = []sql.Row{
