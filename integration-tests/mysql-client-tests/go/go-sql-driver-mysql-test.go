@@ -1,9 +1,9 @@
 package main
 
 import (
-	"os"
-	"fmt"
 	"database/sql"
+	"fmt"
+	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -23,12 +23,12 @@ type StmtTest struct {
 	Res   []ResFunc
 }
 
-var stmtTests []StmtTest = []StmtTest {
+var stmtTests []StmtTest = []StmtTest{
 	{
 		"select * from test where pk = ?",
 		[]interface{}{int64(0)},
 		[]ResFunc{
-			func (rows *sql.Rows) error {
+			func(rows *sql.Rows) error {
 				var pk, value int64
 				if err := rows.Scan(&pk, &value); err != nil {
 					return err

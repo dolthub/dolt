@@ -86,6 +86,22 @@ func TestSchemaWithNoPKs(t *testing.T) {
 	})
 }
 
+func TestSchemaOverlap(t *testing.T) {
+	colColl := NewColCollection(nonPkCols...)
+	sch, _ := SchemaFromCols(colColl)
+
+	names := []string{addrColName, ageColName}
+	kinds := []types.NomsKind{types.StringKind, types.UintKind}
+	res := GetSharedCols(sch, names, kinds)
+
+	cmp := map[string]uint64{
+		addrColName: addrColTag,
+		ageColName:  ageColTag,
+	}
+
+	assert.Equal(t, res, cmp)
+}
+
 func TestIsKeyless(t *testing.T) {
 	cc := NewColCollection(allCols...)
 	pkSch, err := SchemaFromCols(cc)

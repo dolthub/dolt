@@ -717,7 +717,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	if err != nil {
 		return err
 	}
-	tags, err := root.GenerateTagsForNewColumns(ctx, t.name, []string{column.Name}, []types.NomsKind{ti.NomsKind()})
+	tags, err := root.GenerateTagsForNewColumns(ctx, t.name, []string{column.Name}, []types.NomsKind{ti.NomsKind()}, nil)
 	if err != nil {
 		return err
 	}
@@ -867,7 +867,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			}
 		}
 		if existingCol.Kind != col.Kind { // We only change the tag when the underlying Noms kind changes
-			tags, err := root.GenerateTagsForNewColumns(ctx, t.name, []string{col.Name}, []types.NomsKind{col.Kind})
+			tags, err := root.GenerateTagsForNewColumns(ctx, t.name, []string{col.Name}, []types.NomsKind{col.Kind}, nil)
 			if err != nil {
 				return err
 			}
