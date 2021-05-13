@@ -33,6 +33,7 @@ type ChunkStoreServiceClient interface {
 	Root(ctx context.Context, in *RootRequest, opts ...grpc.CallOption) (*RootResponse, error)
 	Commit(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*CommitResponse, error)
 	ListTableFiles(ctx context.Context, in *ListTableFilesRequest, opts ...grpc.CallOption) (*ListTableFilesResponse, error)
+	RefreshTableFileUrl(ctx context.Context, in *RefreshTableFileUrlRequest, opts ...grpc.CallOption) (*RefreshTableFileUrlResponse, error)
 	AddTableFiles(ctx context.Context, in *AddTableFilesRequest, opts ...grpc.CallOption) (*AddTableFilesResponse, error)
 }
 
@@ -147,6 +148,15 @@ func (c *chunkStoreServiceClient) ListTableFiles(ctx context.Context, in *ListTa
 	return out, nil
 }
 
+func (c *chunkStoreServiceClient) RefreshTableFileUrl(ctx context.Context, in *RefreshTableFileUrlRequest, opts ...grpc.CallOption) (*RefreshTableFileUrlResponse, error) {
+	out := new(RefreshTableFileUrlResponse)
+	err := c.cc.Invoke(ctx, "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/RefreshTableFileUrl", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *chunkStoreServiceClient) AddTableFiles(ctx context.Context, in *AddTableFilesRequest, opts ...grpc.CallOption) (*AddTableFilesResponse, error) {
 	out := new(AddTableFilesResponse)
 	err := c.cc.Invoke(ctx, "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/AddTableFiles", in, out, opts...)
@@ -176,6 +186,7 @@ type ChunkStoreServiceServer interface {
 	Root(context.Context, *RootRequest) (*RootResponse, error)
 	Commit(context.Context, *CommitRequest) (*CommitResponse, error)
 	ListTableFiles(context.Context, *ListTableFilesRequest) (*ListTableFilesResponse, error)
+	RefreshTableFileUrl(context.Context, *RefreshTableFileUrlRequest) (*RefreshTableFileUrlResponse, error)
 	AddTableFiles(context.Context, *AddTableFilesRequest) (*AddTableFilesResponse, error)
 	mustEmbedUnimplementedChunkStoreServiceServer()
 }
@@ -210,6 +221,9 @@ func (*UnimplementedChunkStoreServiceServer) Commit(context.Context, *CommitRequ
 }
 func (*UnimplementedChunkStoreServiceServer) ListTableFiles(context.Context, *ListTableFilesRequest) (*ListTableFilesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListTableFiles not implemented")
+}
+func (*UnimplementedChunkStoreServiceServer) RefreshTableFileUrl(context.Context, *RefreshTableFileUrlRequest) (*RefreshTableFileUrlResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshTableFileUrl not implemented")
 }
 func (*UnimplementedChunkStoreServiceServer) AddTableFiles(context.Context, *AddTableFilesRequest) (*AddTableFilesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddTableFiles not implemented")
@@ -390,6 +404,24 @@ func _ChunkStoreService_ListTableFiles_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ChunkStoreService_RefreshTableFileUrl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshTableFileUrlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChunkStoreServiceServer).RefreshTableFileUrl(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/RefreshTableFileUrl",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChunkStoreServiceServer).RefreshTableFileUrl(ctx, req.(*RefreshTableFileUrlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ChunkStoreService_AddTableFiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddTableFilesRequest)
 	if err := dec(in); err != nil {
@@ -443,6 +475,10 @@ var _ChunkStoreService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListTableFiles",
 			Handler:    _ChunkStoreService_ListTableFiles_Handler,
+		},
+		{
+			MethodName: "RefreshTableFileUrl",
+			Handler:    _ChunkStoreService_RefreshTableFileUrl_Handler,
 		},
 		{
 			MethodName: "AddTableFiles",

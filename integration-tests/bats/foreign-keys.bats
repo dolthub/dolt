@@ -1706,6 +1706,7 @@ SQL
     dolt add -A
     dolt commit -m "parent2 and child2"
     dolt sql -q "DROP TABLE child2"
+    dolt commit -am "drop child"
     dolt sql <<SQL
 CREATE TABLE child2 (
   pk BIGINT PRIMARY KEY,

@@ -504,6 +504,15 @@ func (db Database) LoadRootFromRepoState(ctx *sql.Context) error {
 	return db.SetRoot(ctx, root)
 }
 
+func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
+	dsess := DSessFromSess(ctx.Session)
+	head, _, err := dsess.GetHeadCommit(ctx, db.name)
+	if err != nil {
+		return nil, err
+	}
+	return head.GetRootValue()
+}
+
 // DropTable drops the table with the name given
 func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	root, err := db.GetRoot(ctx)
@@ -559,7 +568,12 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Sc
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch)
+	headRoot, err := db.GetHeadRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot)
 	if err != nil {
 		return err
 	}
@@ -581,7 +595,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 		if err != nil {
 			return true, err
 		}
-		if exists {
+		if exists && tbl != tableName {
 			errStr := schema.ErrTagPrevUsed(tag, col.Name, tbl).Error()
 			conflictingTbls = append(conflictingTbls, errStr)
 		}
