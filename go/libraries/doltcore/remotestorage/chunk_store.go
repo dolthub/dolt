@@ -323,12 +323,22 @@ func (gr *GetRange) ChunkByteRange(i int) (uint64, uint64) {
 	return start, end
 }
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl func(context.Context, string) (string, error)) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
 	return func() error {
-		comprData, err := hedgedRangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), gr.RangeLen(), gr.Url)
+		urlF := func() (string, error) {
+			url, err := pathToUrl(ctx, gr.ResourcePath())
+			if err != nil {
+				return "", err
+			}
+			if url == "" {
+				url = gr.Url
+			}
+			return url, nil
+		}
+		comprData, err := hedgedRangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), gr.RangeLen(), urlF)
 		if err != nil {
 			return err
 		}
@@ -349,15 +359,77 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, ch
 	}
 }
 
-func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (map[string]*GetRange, error) {
+type locationRefresh struct {
+	RefreshAfter   time.Time
+	RefreshRequest *remotesapi.RefreshTableFileUrlRequest
+	URL            string
+	mu             *sync.Mutex
+}
+
+func (r *locationRefresh) Add(resp *remotesapi.DownloadLoc) {
+	if r.URL == "" {
+		r.URL = resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange.Url
+	}
+	if resp.RefreshAfter == nil {
+		return
+	}
+	respTime := resp.RefreshAfter.AsTime()
+	if (r.RefreshAfter == time.Time{}) || respTime.After(r.RefreshAfter) {
+		r.RefreshAfter = resp.RefreshAfter.AsTime()
+		r.RefreshRequest = resp.RefreshRequest
+		r.URL = resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange.Url
+	}
+}
+
+func (r *locationRefresh) GetURL(ctx context.Context, client remotesapi.ChunkStoreServiceClient) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.RefreshRequest != nil && time.Now().After(r.RefreshAfter) {
+		resp, err := client.RefreshTableFileUrl(ctx, r.RefreshRequest)
+		if err != nil {
+			return r.URL, err
+		}
+		r.RefreshAfter = resp.RefreshAfter.AsTime()
+		r.URL = resp.Url
+	}
+	return r.URL, nil
+}
+
+type dlLocations struct {
+	ranges    map[string]*GetRange
+	refreshes map[string]*locationRefresh
+}
+
+func newDlLocations() dlLocations {
+	return dlLocations{
+		ranges:    make(map[string]*GetRange),
+		refreshes: make(map[string]*locationRefresh),
+	}
+}
+
+func (l *dlLocations) Add(resp *remotesapi.DownloadLoc) {
+	gr := (*GetRange)(resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange)
+	path := gr.ResourcePath()
+	if v, ok := l.ranges[path]; ok {
+		v.Append(gr)
+		l.refreshes[path].Add(resp)
+	} else {
+		l.ranges[path] = gr
+		refresh := &locationRefresh{mu: new(sync.Mutex)}
+		refresh.Add(resp)
+		l.refreshes[path] = refresh
+	}
+}
+
+func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (dlLocations, error) {
 	span, ctx := tracing.StartSpan(ctx, "remotestorage.getDLLocs")
 	span.LogKV("num_hashes", len(hashes))
 	defer span.Finish()
 
-	res := make(map[string]*GetRange)
+	res := newDlLocations()
 
 	// channel for receiving results from go routines making grpc calls to get download locations for chunks
-	resCh := make(chan []*remotesapi.HttpGetRange)
+	resCh := make(chan []*remotesapi.DownloadLoc)
 
 	eg, ctx := errgroup.WithContext(ctx)
 
@@ -370,12 +442,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 					return nil
 				}
 				for _, loc := range locs {
-					gr := (*GetRange)(loc)
-					if v, ok := res[gr.ResourcePath()]; ok {
-						v.Append(gr)
-					} else {
-						res[gr.ResourcePath()] = gr
-					}
+					res.Add(loc)
 				}
 			case <-ctx.Done():
 				return ctx.Err()
@@ -419,12 +486,8 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 						}
 						return NewRpcError(err, "StreamDownloadLocations", dcs.host, reqs[completedReqs])
 					}
-					tosend := make([]*remotesapi.HttpGetRange, len(resp.Locs))
-					for i, l := range resp.Locs {
-						tosend[i] = l.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
-					}
 					select {
-					case resCh <- tosend:
+					case resCh <- resp.Locs:
 						completedReqs += 1
 					case <-ctx.Done():
 						return ctx.Err()
@@ -442,15 +505,14 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 	})
 
 	if err := eg.Wait(); err != nil {
-		return nil, err
+		return dlLocations{}, err
 	}
 	return res, nil
 }
 
 func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, found func(nbs.CompressedChunk)) error {
 	// get the locations where the chunks can be downloaded from
-	resourceToUrlAndRanges, err := dcs.getDLLocs(ctx, notCached)
-
+	dlLocs, err := dcs.getDLLocs(ctx, notCached)
 	if err != nil {
 		return err
 	}
@@ -483,7 +545,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 	// download the chunks and close the channel after
 	func() {
 		defer close(chunkChan)
-		err = dcs.downloadChunks(ctx, resourceToUrlAndRanges, chunkChan)
+		err = dcs.downloadChunks(ctx, dlLocs, chunkChan)
 	}()
 
 	// wait for all the results to finish processing
@@ -858,17 +920,23 @@ func logDownloadStats(span opentracing.Span, originalGets map[string]*GetRange, 
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
 // to chunkChan
-func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[string]*GetRange, chunkChan chan nbs.CompressedChunk) error {
+func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocations, chunkChan chan nbs.CompressedChunk) error {
 	span, ctx := tracing.StartSpan(ctx, "remotestorage.downloadChunks")
 	defer span.Finish()
+
+	resourceGets := dlLocs.ranges
 
 	gets := aggregateDownloads(chunkAggDistance, resourceGets)
 	logDownloadStats(span, resourceGets, gets)
 
+	toUrl := func(ctx context.Context, resourcePath string) (string, error) {
+		return dlLocs.refreshes[resourcePath].GetURL(ctx, dcs.csClient)
+	}
+
 	// loop over all the gets that need to be downloaded and create a work function for each
 	work := make([]func() error, len(gets))
 	for i, get := range gets {
-		work[i] = get.GetDownloadFunc(ctx, dcs.httpFetcher, chunkChan)
+		work[i] = get.GetDownloadFunc(ctx, dcs.httpFetcher, chunkChan, toUrl)
 	}
 
 	// execute the work
@@ -877,10 +945,14 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[
 	return err
 }
 
-func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStr string) ([]byte, error) {
+func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF func() (string, error)) ([]byte, error) {
 	res, err := DownloadHedger.Do(ctx, Work{
 		Work: func(ctx context.Context) (interface{}, error) {
-			return rangeDownloadWithRetries(ctx, fetcher, offset, length, urlStr)
+			url, err := urlStrF()
+			if err != nil {
+				return nil, err
+			}
+			return rangeDownloadWithRetries(ctx, fetcher, offset, length, url)
 		},
 		Size: int(length),
 	})
