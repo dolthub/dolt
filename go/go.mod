@@ -80,6 +80,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
 
+replace github.com/dolthub/go-mysql-server => /Users/vinairachakonda/Desktop/go-mysql-server-dup
+
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 go 1.13

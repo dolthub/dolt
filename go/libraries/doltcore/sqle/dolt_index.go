@@ -35,6 +35,7 @@ type DoltIndex interface {
 	IndexSchema() schema.Schema
 	TableData() types.Map
 	IndexRowData() types.Map
+	Underlying() *doltIndex
 }
 
 type doltIndex struct {
@@ -272,4 +273,45 @@ func (di *doltIndex) keysToTuple(keys []interface{}) (types.Tuple, error) {
 		vals = append(vals, types.Uint(col.Tag), val)
 	}
 	return types.NewTuple(nbf, vals...)
+}
+
+func (di *doltIndex) Underlying() *doltIndex {
+	return di
+}
+
+func (di *doltIndex) Equals(oIdx *doltIndex) bool {
+	if !schema.ColsAreEquals(di.cols, oIdx.cols) {
+		return false
+	}
+
+	if !(di.db.Name() == oIdx.db.Name()) {
+		return false
+	}
+
+	if !(di.id == oIdx.id) {
+		return false
+	}
+
+	if !(di.IndexRowData().Equals(oIdx.IndexRowData())) {
+		return false
+	}
+
+	if !(schema.SchemasAreEqual(di.indexSch, oIdx.indexSch)) {
+		return false
+	}
+
+	if !(di.TableData().Equals(oIdx.tableData)) {
+		return false
+	}
+
+	if !(di.tableName == oIdx.tableName) {
+		return false
+	}
+
+	if !(schema.SchemasAreEqual(di.tableSch, oIdx.tableSch)) {
+		return false
+	}
+
+
+	return (di.unique == oIdx.unique) && (di.comment == oIdx.comment) &&  (di.generated == oIdx.generated)
 }

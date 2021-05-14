@@ -87,6 +87,27 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	return sch1.Indexes().Equals(sch2.Indexes())
 }
 
+// SchemasAreEqual tests equality of two schema cols..
+func ColsAreEquals(cols1, cols2 []Column) bool {
+	if cols1 == nil && cols2 == nil {
+		return true
+	} else if cols1 == nil || cols2 == nil {
+		return false
+	}
+
+	if len(cols1) != len(cols2) {
+		return false
+	}
+
+	for i, col1 := range cols1 {
+		if !col1.Equals(cols2[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // TODO: this function never returns an error
 // VerifyInSchema tests that the incoming schema matches the schema from the original table
 // based on the presence of the column name in the original schema.

@@ -116,7 +116,7 @@ func TableCacheFromSess(sess sql.Session, dbName string) TableCache {
 	return sess.(*DoltSession).caches[dbName]
 }
 
-func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) error {
+func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, transaction sql.Transaction) error {
 	// This is triggered when certain commands are sent to the server (ex. commit) when a database is not selected.
 	// These commands should not error.
 	if dbName == "" {

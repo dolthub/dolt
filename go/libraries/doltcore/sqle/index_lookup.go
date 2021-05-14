@@ -53,7 +53,8 @@ func (il *doltIndexLookup) IsMergeable(indexLookup sql.IndexLookup) bool {
 	if !ok {
 		return false
 	}
-	return il.idx == otherIl.idx
+
+	return il.idx.Underlying().Equals(otherIl.idx.Underlying())
 }
 
 // Intersection implements sql.MergeableIndexLookup
