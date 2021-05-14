@@ -433,10 +433,12 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	}
 
 	// Create a list of tables to open so we can open them in parallel.
-	tablesToOpen := map[addr]tableSpec{}
+	tablesToOpen := []tableSpec{} // keep specs in order to play nicely with manifest appendix optimization
+	presents := map[addr]tableSpec{}
 	for _, spec := range specs {
-		if _, present := tablesToOpen[spec.name]; !present { // Filter out dups
-			tablesToOpen[spec.name] = spec
+		if _, present := presents[spec.name]; !present { // Filter out dups
+			tablesToOpen = append(tablesToOpen, spec)
+			presents[spec.name] = spec
 		}
 	}
 
