@@ -239,13 +239,24 @@ func (sc *sequenceChunker) Append(ctx context.Context, item sequenceItem) (bool,
 	}
 
 	if sc.rv.crossedBoundary {
-		err := sc.handleChunkBoundary(ctx)
-
-		if err != nil {
-			return false, err
+		// When a metaTuple contains a key that is so large that it causes a chunk boundary to be crossed simply by encoding
+		// the metaTuple then we will create a metaTuple to encode the metaTuple containing the same key again, and again
+		// crossing a chunk boundary causes infinite recursion.  The solution is not to allow a metaTuple with a single
+		// leaf to cross chunk boundaries.
+		isOneLeafedMetaTuple := false
+		if mt, ok := item.(metaTuple); ok {
+			isOneLeafedMetaTuple = mt.numLeaves() == 1
 		}
 
-		return true, nil
+		if !isOneLeafedMetaTuple {
+			err := sc.handleChunkBoundary(ctx)
+
+			if err != nil {
+				return false, err
+			}
+
+			return true, nil
+		}
 	}
 	return false, nil
 }

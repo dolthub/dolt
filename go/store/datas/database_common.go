@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -37,6 +38,7 @@ import (
 type database struct {
 	*types.ValueStore
 	rt rootTracker
+	mu sync.Mutex
 }
 
 var (
@@ -80,8 +82,6 @@ func (db *database) StatsSummary() string {
 }
 
 func (db *database) Flush(ctx context.Context) error {
-	// TODO: This is a pretty ghetto hack - do better.
-	// See: https://github.com/attic-labs/noms/issues/3530
 	ds, err := db.GetDataset(ctx, fmt.Sprintf("-/flush/%s", random.Id()))
 
 	if err != nil {
@@ -521,6 +521,104 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 	return tryCommitErr
 }
 
+func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, ref types.Ref, meta WorkingSetMeta, prevHash hash.Hash) (Dataset, error) {
+	return db.doHeadUpdate(
+		ctx,
+		ds,
+		func(ds Dataset) error {
+			workspace, err := NewWorkingSet(ctx, ref)
+			if err != nil {
+				return err
+			}
+
+			return db.doUpdateWorkingSet(ctx, ds.ID(), workspace, prevHash)
+		},
+	)
+}
+
+// doUpdateWorkingSet manages concurrent access the single logical piece of mutable state: the current Root. It uses
+// the same optimistic locking write algorithm as doCommit (see above). Unlike doCommit and other methods in this file,
+// an error is returned if the current value of the ref being written has changed.
+// Workspace updates are serialized, but all other changes to a database's root value can proceed independently with the
+// normal optimistic locking.
+func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, workingSet types.Struct, currHash hash.Hash) error {
+	err := db.validateWorkingSet(workingSet)
+	if err != nil {
+		return err
+	}
+
+	// This could loop forever, given enough simultaneous writers. BUG 2565
+	var tryCommitErr error
+	testSetFailed := false
+	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
+		tryCommitErr = func() error {
+			db.mu.Lock()
+			defer db.mu.Unlock()
+
+			currentRootHash, err := db.rt.Root(ctx)
+
+			if err != nil {
+				return err
+			}
+
+			currentDatasets, err := db.Datasets(ctx)
+			if err != nil {
+				return err
+			}
+
+			workingSetRef, err := db.WriteValue(ctx, workingSet) // will be orphaned if the tryCommitChunks() below fails
+			if err != nil {
+				return err
+			}
+
+			ds, err := db.GetDataset(ctx, datasetID)
+			if err != nil {
+				return err
+			}
+
+			// Second level of locking: assert that the dataset value we read is unchanged from its expected value.
+			// This is separate than the whole-DB lock in the outer loop, as it only protects the value of this dataset
+			// entry. Other writers can update other values and writes chunks in the database and we will retry
+			// indefinitely. But if we find the expected value in the dataset has changed, we immediately abort and the
+			// caller must retry after reconciliation.
+			if ds.HasHead() {
+				head, ok := ds.MaybeHead()
+				if !ok {
+					panic("no head found")
+				}
+
+				h, err := head.Hash(db.Format())
+				if err != nil {
+					return err
+				}
+
+				if h != currHash {
+					testSetFailed = true
+					return ErrOptimisticLockFailed
+				}
+			} else {
+				if !currHash.IsEmpty() {
+					panic("No ref found for workspace " + datasetID)
+				}
+			}
+
+			valRef, err := types.ToRefOfValue(workingSetRef, db.Format())
+			if err != nil {
+				return err
+			}
+
+			currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), valRef).Map(ctx)
+			if err != nil {
+				return err
+			}
+
+			return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
+		}()
+	}
+
+	return tryCommitErr
+}
+
 func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doDelete(ctx, ds.ID()) })
 }
@@ -652,6 +750,26 @@ func (db *database) validateTag(ctx context.Context, t types.Struct) error {
 
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (db *database) validateWorkingSet(t types.Struct) error {
+	is, err := IsWorkingSet(t)
+	if err != nil {
+		return err
+	}
+	if !is {
+		return fmt.Errorf("WorkingSet struct %s is malformed, IsWorkingSet() == false", t.String())
+	}
+
+	_, ok, err := t.MaybeGet(WorkingSetRefField)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("WorkingSet is missing field %s", WorkingSetRefField)
 	}
 
 	return nil

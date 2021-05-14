@@ -61,7 +61,7 @@ databases:
 		},
 	}
 
-	config, err := newYamlConfig([]byte(testStr))
+	config, err := NewYamlConfig([]byte(testStr))
 	require.NoError(t, err)
 	assert.Equal(t, expected, config)
 }
@@ -92,7 +92,7 @@ databases:
     - name: noaa
       path: /Users/brian/datasets/noaa
 `
-	_, err := newYamlConfig([]byte(testStr))
+	_, err := NewYamlConfig([]byte(testStr))
 	assert.Error(t, err)
 }
 

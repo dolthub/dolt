@@ -14,6 +14,8 @@
 
 package schema
 
+import "github.com/dolthub/dolt/go/store/types"
+
 // Schema is an interface for retrieving the columns that make up a schema
 type Schema interface {
 	// GetPKCols gets the collection of columns which make the primary key.
@@ -136,4 +138,26 @@ func VerifyInSchema(inSch, outSch Schema) (bool, error) {
 	}
 
 	return match, nil
+}
+
+// GetSharedCols returns a name -> tag mapping for name/kind matches
+func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) map[string]uint64 {
+	existingColKinds := make(map[string]types.NomsKind)
+	existingColTags := make(map[string]uint64)
+
+	_ = schema.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		existingColKinds[col.Name] = col.Kind
+		existingColTags[col.Name] = col.Tag
+		return false, nil
+	})
+
+	reuseTags := make(map[string]uint64)
+	for i, col := range cmpNames {
+		if val, ok := existingColKinds[col]; ok {
+			if val == cmpKinds[i] {
+				reuseTags[col] = existingColTags[col]
+			}
+		}
+	}
+	return reuseTags
 }

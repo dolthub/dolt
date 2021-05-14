@@ -752,7 +752,7 @@ func (te *pkTableEditor) autoFlush() {
 	}
 }
 
-func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) error {
+func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) (err error) {
 	// We don't call any locks at the function entrance since this is called from an ActionExecutor with a concurrency of 1
 	futureTea := teaInterface.(*tableEditAccumulator)
 	tea := futureTea.prevTea
@@ -770,6 +770,11 @@ func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface 
 	defer func() {
 		//TODO: need some way to reset an index editor to a previous point as well
 		if encounteredErr {
+			// As this is in a defer and we're attempting to capture all errors, that includes panics as well.
+			// Naturally a panic doesn't set the err variable, so we have to recover it.
+			if recoveredErr := recover(); recoveredErr != nil && err == nil {
+				err = recoveredErr.(error)
+			}
 			// All tea modifications are guarded by writeMutex locks, so we have to acquire it
 			te.writeMutex.Lock()
 			futureTea.prevTea = nil

@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package dolt.services.remotesapi.v1alpha1;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapi";
 
 service ChunkStoreService {
@@ -43,6 +45,8 @@ service ChunkStoreService {
   rpc Commit(CommitRequest) returns (CommitResponse);
 
   rpc ListTableFiles(ListTableFilesRequest) returns (ListTableFilesResponse);
+
+  rpc RefreshTableFileUrl(RefreshTableFileUrlRequest) returns (RefreshTableFileUrlResponse);
 
   rpc AddTableFiles(AddTableFilesRequest) returns (AddTableFilesResponse);
 }
@@ -183,6 +187,18 @@ message TableFileInfo {
   string file_id = 1;
   uint32 num_chunks = 2;
   string url = 3;
+  google.protobuf.Timestamp refresh_after = 4;
+  RefreshTableFileUrlRequest refresh_request = 5;
+}
+
+message RefreshTableFileUrlRequest {
+  RepoId repo_id = 1;
+  string file_id = 2;
+}
+
+message RefreshTableFileUrlResponse {
+  string url = 1;
+  google.protobuf.Timestamp refresh_after = 2;
 }
 
 message ListTableFilesResponse {

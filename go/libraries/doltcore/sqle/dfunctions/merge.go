@@ -169,7 +169,7 @@ func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*do
 		return nil, hash.Hash{}, err
 	}
 
-	cm, err := ddb.ResolveRef(ctx, branchRef)
+	cm, err := ddb.ResolveCommitRef(ctx, branchRef)
 
 	if err != nil {
 		return nil, hash.Hash{}, err
