@@ -323,7 +323,9 @@ func (gr *GetRange) ChunkByteRange(i int) (uint64, uint64) {
 	return start, end
 }
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl func(context.Context, string) (string, error)) func() error {
+type resourcePathToUrlFunc func(ctx context.Context, resourcePath string) (url string, err error)
+
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
