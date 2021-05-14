@@ -51,7 +51,6 @@ func init() {
 			transactionsEnabled = true
 		}
 	}
-	transactionsEnabled = true
 }
 
 func IsHeadKey(key string) (bool, string) {
