@@ -447,9 +447,8 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	ae := atomicerr.New()
 	merged.upstream = make(chunkSources, len(tablesToOpen))
 	wg := &sync.WaitGroup{}
-	i := 0
-	for _, spec := range tablesToOpen {
-		wg.Add(1)
+	wg.Add(len(tablesToOpen))
+	for i, spec := range tablesToOpen {
 		go func(idx int, spec tableSpec) {
 			defer wg.Done()
 			defer func() {
@@ -474,7 +473,6 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 				ae.SetIfError(err)
 			}
 		}(i, spec)
-		i++
 	}
 	wg.Wait()
 
