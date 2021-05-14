@@ -35,7 +35,7 @@ type DoltIndex interface {
 	IndexSchema() schema.Schema
 	TableData() types.Map
 	IndexRowData() types.Map
-	Underlying() *doltIndex
+	Equals(index DoltIndex) bool
 }
 
 type doltIndex struct {
@@ -275,20 +275,16 @@ func (di *doltIndex) keysToTuple(keys []interface{}) (types.Tuple, error) {
 	return types.NewTuple(nbf, vals...)
 }
 
-func (di *doltIndex) Underlying() *doltIndex {
-	return di
-}
-
-func (di *doltIndex) Equals(oIdx *doltIndex) bool {
-	if !schema.ColsAreEquals(di.cols, oIdx.cols) {
+func (di *doltIndex) Equals(oIdx DoltIndex) bool {
+	if !expressionsAreEquals(di.Expressions(), oIdx.Expressions()) {
 		return false
 	}
 
-	if !(di.db.Name() == oIdx.db.Name()) {
+	if !(di.Database() == oIdx.Database()) {
 		return false
 	}
 
-	if !(di.id == oIdx.id) {
+	if !(di.ID() == oIdx.ID()) {
 		return false
 	}
 
@@ -296,22 +292,41 @@ func (di *doltIndex) Equals(oIdx *doltIndex) bool {
 		return false
 	}
 
-	if !(schema.SchemasAreEqual(di.indexSch, oIdx.indexSch)) {
+	if !(schema.SchemasAreEqual(di.IndexSchema(), oIdx.IndexSchema())) {
 		return false
 	}
 
-	if !(di.TableData().Equals(oIdx.tableData)) {
+	if !(di.TableData().Equals(oIdx.TableData())) {
 		return false
 	}
 
-	if !(di.tableName == oIdx.tableName) {
+	if !(di.Table() == oIdx.Table()) {
 		return false
 	}
 
-	if !(schema.SchemasAreEqual(di.tableSch, oIdx.tableSch)) {
+	if !(schema.SchemasAreEqual(di.Schema(), oIdx.Schema())) {
 		return false
 	}
 
+	return (di.IsUnique() == oIdx.IsUnique()) && (di.Comment() == oIdx.Comment()) && (di.IsGenerated() == oIdx.IsGenerated())
+}
 
-	return (di.unique == oIdx.unique) && (di.comment == oIdx.comment) &&  (di.generated == oIdx.generated)
+func expressionsAreEquals(exprs1, exprs2 []string) bool {
+	if exprs1 == nil && exprs2 == nil {
+		return true
+	} else if exprs1 == nil || exprs2 == nil {
+		return false
+	}
+
+	if len(exprs1) != len(exprs2) {
+		return false
+	}
+
+	for i, expr1 := range exprs1 {
+		if !(expr1 == exprs2[i]) {
+			return false
+		}
+	}
+
+	return true
 }
