@@ -1149,8 +1149,8 @@ func processBatchableEditQuery(ctx *sql.Context, se *sqlEngine, query string, sq
 }
 
 // canProcessBatchEdit returns whether the given statement can be processed as a batch insert. Only simple inserts
-// (inserting a list of values) can be processed in this way. Other kinds of insert (notably INSERT INTO SELECT AS and
-// AUTO_INCREMENT) need a flushed root and can't benefit from batch optimizations.
+// (inserting a list of values) and deletes can be processed in this way. Other kinds of insert (notably INSERT INTO
+// SELECT AS and AUTO_INCREMENT) need a flushed root and can't benefit from batch optimizations.
 func canProcessAsBatchEdit(ctx *sql.Context, sqlStatement sqlparser.Statement, se *sqlEngine, query string) (batchMode, error) {
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Delete:
@@ -1261,12 +1261,21 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *sqlEngine, query string) 
 	}
 
 	isAutoInc := false
-	_, err = plan.TransformExpressionsUp(a, func(exp sql.Expression) (sql.Expression, error) {
-		if _, ok := exp.(*expression.AutoIncrement); ok {
-			isAutoInc = true
+	plan.Inspect(a, func(n sql.Node) bool {
+		switch n := n.(type) {
+		case *plan.InsertInto:
+			_, err = plan.TransformExpressionsUp(n.Source, func(exp sql.Expression) (sql.Expression, error) {
+				if _, ok := exp.(*expression.AutoIncrement); ok {
+					isAutoInc = true
+				}
+				return exp, nil
+			})
+			return false
+		default:
+			return true
 		}
-		return exp, nil
 	})
+
 	if err != nil {
 		return false, err
 	}
@@ -1355,7 +1364,7 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		nameToDB[db.Name()] = db
 		root := roots[db.Name()]
 		engine.AddDatabase(db)
-		err := dsess.AddDB(sqlCtx, db)
+		err := dsess.AddDB(sqlCtx, db, db.DbData())
 
 		if err != nil {
 			return nil, err

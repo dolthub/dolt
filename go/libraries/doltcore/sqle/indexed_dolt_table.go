@@ -141,17 +141,6 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 	return partitionIndexedTableRows(ctx, t, t.projectedCols, part)
 }
 
-// NumRows returns the unfiltered count of rows contained in the table
-func (t *WritableIndexedDoltTable) NumRows(ctx *sql.Context) (uint64, error) {
-	m, err := t.table.GetRowData(ctx)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return m.Len(), nil
-}
-
 func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
 	switch typed := part.(type) {
 	case rangePartition:

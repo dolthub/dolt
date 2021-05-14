@@ -77,7 +77,6 @@ type DoltSession struct {
 	dbDatas      map[string]env.DbData
 	editSessions map[string]*editor.TableEditSession
 	dirty        map[string]bool
-	caches       map[string]TableCache
 	Username     string
 	Email        string
 }
@@ -92,7 +91,6 @@ func DefaultDoltSession() *DoltSession {
 		dbDatas:      make(map[string]env.DbData),
 		editSessions: make(map[string]*editor.TableEditSession),
 		dirty:        make(map[string]bool),
-		caches:       make(map[string]TableCache),
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		Username:     "",
 		Email:        "",
@@ -117,12 +115,11 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		dirty:        make(map[string]bool),
 		roots:        make(map[string]dbRoot),
 		workingSets:  make(map[string]ref.WorkingSetRef),
-		caches:       make(map[string]TableCache),
 		Username:     username,
 		Email:        email,
 	}
 	for _, db := range dbs {
-		err := sess.AddDB(ctx, db)
+		err := sess.AddDB(ctx, db, db.DbData())
 
 		if err != nil {
 			return nil, err
@@ -135,10 +132,6 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 // DSessFromSess retrieves a dolt session from a standard sql.Session
 func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
-}
-
-func TableCacheFromSess(sess sql.Session, dbName string) TableCache {
-	return sess.(*DoltSession).caches[dbName]
 }
 
 // CommitTransaction commits the in-progress transaction for the database named
@@ -537,17 +530,14 @@ func (sess *DoltSession) SetSessionVarDirectly(ctx *sql.Context, key string, val
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
+func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbData) error {
 	defineSystemVariables(db.Name())
 
-	rsr := db.GetStateReader()
-	rsw := db.GetStateWriter()
-	drw := db.GetDocsReadWriter()
-	ddb := db.GetDoltDB()
+	rsr := dbData.Rsr
+	ddb := dbData.Ddb
 
-	sess.dbDatas[db.Name()] = env.DbData{Drw: drw, Rsr: rsr, Rsw: rsw, Ddb: ddb}
+	sess.dbDatas[db.Name()] = dbData
 	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
-	sess.caches[db.name] = newTableCache()
 
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()
@@ -593,7 +583,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 		if err != nil {
 			return err
 		}
-		sess.workingSets[db.name] = workingSetRef
+		sess.workingSets[db.Name()] = workingSetRef
 
 		workingSet, err := ddb.ResolveWorkingSet(ctx, workingSetRef)
 		if err == doltdb.ErrWorkingSetNotFound {
@@ -619,7 +609,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db Database) error {
 		}
 	}
 
-	err = sess.SetRoot(ctx, db.name, workingRoot)
+	err = sess.SetRoot(ctx, db.Name(), workingRoot)
 	if err != nil {
 		return err
 	}
