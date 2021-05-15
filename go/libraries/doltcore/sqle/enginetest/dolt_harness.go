@@ -44,7 +44,6 @@ var _ enginetest.IndexHarness = (*DoltHarness)(nil)
 var _ enginetest.VersionedDBHarness = (*DoltHarness)(nil)
 var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
 var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
-var _ enginetest.ChecksHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
@@ -123,10 +122,6 @@ func (d *DoltHarness) SupportsForeignKeys() bool {
 }
 
 func (d *DoltHarness) SupportsKeylessTables() bool {
-	return true
-}
-
-func (d *DoltHarness) SupportsCheckConstraints() bool {
 	return true
 }
 
