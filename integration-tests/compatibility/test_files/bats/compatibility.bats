@@ -196,6 +196,6 @@ teardown() {
     run dolt sql -q 'select * from view1'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| (2 + 2) |" ]] || false
-    [[ "${lines[2]}" =~ "+-------+" ]] || false
-    [[ "${lines[3]}" =~ "| 4     |" ]] || false
+    [[ "${lines[2]}" =~ "+---------+" ]] || false
+    [[ "${lines[3]}" =~ "| 4       |" ]] || false
 }
