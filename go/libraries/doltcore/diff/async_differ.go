@@ -138,6 +138,57 @@ func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Di
 	}
 }
 
+func (ad *AsyncDiffer) GetDiffsWithFilter(numDiffs int, timeout time.Duration, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error) {
+	if timeout < 0 {
+		return ad.GetDiffsWithoutTimeoutWithFilter(numDiffs, filterByChangeType)
+	}
+
+	diffs := make([]*diff.Difference, 0, ad.bufferSize)
+	timeoutChan := time.After(timeout)
+	for {
+		select {
+		case d, more := <-ad.diffChan:
+			if more {
+				if d.ChangeType == filterByChangeType {
+					ad.diffStats[d.ChangeType]++
+					diffs = append(diffs, &d)
+				}
+				if numDiffs != 0 && numDiffs == len(diffs) {
+					return diffs, true, nil
+				}
+			} else {
+				return diffs, false, ad.eg.Wait()
+			}
+		case <-timeoutChan:
+			return diffs, true, nil
+		case <-ad.egCtx.Done():
+			return nil, false, ad.eg.Wait()
+		}
+	}
+}
+
+func (ad *AsyncDiffer) GetDiffsWithoutTimeoutWithFilter(numDiffs int, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error) {
+	diffs := make([]*diff.Difference, 0, ad.bufferSize)
+	for {
+		select {
+		case d, more := <-ad.diffChan:
+			if more {
+				if d.ChangeType == filterByChangeType {
+					ad.diffStats[d.ChangeType]++
+					diffs = append(diffs, &d)
+				}
+				if numDiffs != 0 && numDiffs == len(diffs) {
+					return diffs, true, nil
+				}
+			} else {
+				return diffs, false, ad.eg.Wait()
+			}
+		case <-ad.egCtx.Done():
+			return nil, false, ad.eg.Wait()
+		}
+	}
+}
+
 func (ad *AsyncDiffer) GetDiffsWithoutTimeout(numDiffs int) ([]*diff.Difference, bool, error) {
 	diffs := make([]*diff.Difference, 0, ad.bufferSize)
 	for {
