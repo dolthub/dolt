@@ -620,38 +620,40 @@ func (m Map) HumanReadableString() string {
 }
 
 // VisitMapLevelOrder writes hashes of internal node chunks to a writer
-// delimited with a newline character and returns the total number of
+// delimited with a newline character and returns the number or chunks written and the total number of
 // bytes written or an error if encountered
-func VisitMapLevelOrder(w io.Writer, m Map) (total int, err error) {
-	total = 0
-	curLevel := []Map{m}
+func VisitMapLevelOrder(w io.Writer, m Map) (int64, int64, error) {
+	chunkCount := int64(0)
+	byteCount := int64(0)
 
+	curLevel := []Map{m}
 	for len(curLevel) > 0 {
 		nextLevel := []Map{}
 		for _, m := range curLevel {
 			if metaSeq, ok := m.orderedSequence.(metaSequence); ok {
 				ts, err := metaSeq.tuples()
 				if err != nil {
-					return 0, err
+					return 0, 0, err
 				}
 				for _, t := range ts {
 					r, err := t.ref()
 					if err != nil {
-						return 0, err
+						return 0, 0, err
 					}
 
 					p := []byte(r.TargetHash().String() + "\n")
 
 					n, err := w.Write(p)
 					if err != nil {
-						return 0, err
+						return 0, 0, err
 					}
 
-					total += n
+					chunkCount++
+					byteCount += int64(n)
 
 					v, err := r.TargetValue(context.Background(), m.valueReadWriter())
 					if err != nil {
-						return 0, err
+						return 0, 0, err
 					}
 
 					nextLevel = append(nextLevel, v.(Map))
@@ -663,5 +665,5 @@ func VisitMapLevelOrder(w io.Writer, m Map) (total int, err error) {
 		curLevel = nextLevel
 	}
 
-	return total, nil
+	return chunkCount, byteCount, nil
 }

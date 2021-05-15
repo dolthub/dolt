@@ -72,14 +72,13 @@ func (d DoltHarness) WithParallelism(parallelism int) *DoltHarness {
 	return &d
 }
 
-// WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
-// less means to use the system parallelism settings.
+// WithSkippedQueries returns a copy of the harness with the given queries skipped
 func (d DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
 	d.skippedQueries = queries
 	return &d
 }
 
-// Logic to skip unsupported queries
+// SkipQueryTest returns whether to skip a query
 func (d *DoltHarness) SkipQueryTest(query string) bool {
 	lowerQuery := strings.ToLower(query)
 	for _, skipped := range d.skippedQueries {
@@ -132,7 +131,7 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 
 	d.mrEnv.AddEnv(name, dEnv)
 	db := sqle.NewDatabase(name, dEnv.DbData())
-	require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db))
+	require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db, db.DbData()))
 	require.NoError(d.t, db.SetRoot(enginetest.NewContext(d).WithCurrentDB(db.Name()), root))
 	return db
 }

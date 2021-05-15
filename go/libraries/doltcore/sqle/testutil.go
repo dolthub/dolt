@@ -88,9 +88,10 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 
 // NewTestSQLCtx returns a new *sql.Context with a default DoltSession, a new IndexRegistry, and a new ViewRegistry
 func NewTestSQLCtx(ctx context.Context) *sql.Context {
+	session := DefaultDoltSession()
 	sqlCtx := sql.NewContext(
 		ctx,
-		sql.WithSession(DefaultDoltSession()),
+		sql.WithSession(session),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
 	).WithCurrentDB("dolt")
@@ -104,7 +105,7 @@ func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*s
 	engine.AddDatabase(db)
 
 	sqlCtx := NewTestSQLCtx(ctx)
-	DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, db)
+	DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, db, db.DbData())
 	sqlCtx.SetCurrentDatabase(db.Name())
 	err := db.SetRoot(sqlCtx, root)
 

@@ -140,7 +140,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		dsqlDBs[i] = dsqlDB
 
 		sess := dsql.DSessFromSess(ctx.Session)
-		err := sess.AddDB(ctx, dsqlDB)
+		err := sess.AddDB(ctx, dsqlDB, dsqlDB.DbData())
 
 		if err != nil {
 			return err
@@ -319,18 +319,6 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 		}
 	}
 	return b.String(), nil
-}
-
-func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
-	tableNames, err := root.GetTableNames(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	newRoot, err := root.RemoveTables(context.Background(), tableNames...)
-	if err != nil {
-		panic(err)
-	}
-	return newRoot
 }
 
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {

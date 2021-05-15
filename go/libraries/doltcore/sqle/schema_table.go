@@ -148,7 +148,12 @@ func migrateOldSchemasTableToNew(
 ) {
 	// Copy all of the old data over and add an index column
 	var rowsToAdd []sql.Row
-	rowData, err := schemasTable.table.GetRowData(ctx)
+	table, err := schemasTable.doltTable(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rowData, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

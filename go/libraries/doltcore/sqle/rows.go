@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -33,8 +34,8 @@ type doltTableRowIter struct {
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(ctx *sql.Context, tbl *DoltTable, projCols []string, partition *doltTablePartition) (sql.RowIter, error) {
-	sch, err := tbl.table.GetSchema(ctx)
+func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, partition *doltTablePartition) (sql.RowIter, error) {
+	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
 		return nil, err
@@ -48,13 +49,13 @@ func newRowIterator(ctx *sql.Context, tbl *DoltTable, projCols []string, partiti
 	}
 }
 
-func newKeylessRowIterator(ctx *sql.Context, tbl *DoltTable, partition *doltTablePartition) (*doltTableRowIter, error) {
+func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, partition *doltTablePartition) (*doltTableRowIter, error) {
 	var iter table.SqlTableReader
 	var err error
 	if partition.end == NoUpperBound {
-		iter, err = table.NewBufferedTableReader(ctx, tbl.table)
+		iter, err = table.NewBufferedTableReader(ctx, tbl)
 	} else {
-		iter, err = table.NewBufferedTableReaderForPartition(ctx, tbl.table, partition.start, partition.end)
+		iter, err = table.NewBufferedTableReaderForPartition(ctx, tbl, partition.start, partition.end)
 	}
 
 	if err != nil {
@@ -67,7 +68,7 @@ func newKeylessRowIterator(ctx *sql.Context, tbl *DoltTable, partition *doltTabl
 	}, nil
 }
 
-func newKeyedRowIter(ctx context.Context, tbl *DoltTable, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
+func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
 	var err error
 	var mapIter types.MapTupleIterator
 	rowData := partition.rowData
@@ -81,7 +82,12 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, projectedCols []string
 		return nil, err
 	}
 
-	cols := tbl.sch.GetAllCols().GetColumns()
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 
 	resultColSet := set.NewCaseInsensitiveStrSet(projectedCols)
@@ -91,7 +97,7 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, projectedCols []string
 		}
 	}
 
-	conv := NewKVToSqlRowConverter(tbl.nbf, tagToSqlColIdx, cols, len(cols))
+	conv := NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, cols, len(cols))
 	return NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
 }
 
