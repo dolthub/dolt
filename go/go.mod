@@ -21,7 +21,7 @@ require (
 	github.com/dolthub/go-mysql-server v0.9.1-0.20210514133531-631be9f46a1e
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
-	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
+	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
 	github.com/dolthub/vitess v0.0.0-20210428165934-5801b1103b04
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
