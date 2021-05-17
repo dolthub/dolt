@@ -280,15 +280,19 @@ func (di *doltIndex) Equals(oIdx DoltIndex) bool {
 		return false
 	}
 
-	if !(di.Database() == oIdx.Database()) {
+	if di.Database() != oIdx.Database() {
 		return false
 	}
 
-	if !(di.ID() == oIdx.ID()) {
+	if di.Table() != oIdx.Table() {
 		return false
 	}
 
-	if !(di.IndexRowData().Equals(oIdx.IndexRowData())) {
+	if di.ID() != oIdx.ID() {
+		return false
+	}
+
+	if di.IsUnique() != oIdx.IsUnique() {
 		return false
 	}
 
@@ -296,19 +300,7 @@ func (di *doltIndex) Equals(oIdx DoltIndex) bool {
 		return false
 	}
 
-	if !(di.TableData().Equals(oIdx.TableData())) {
-		return false
-	}
-
-	if !(di.Table() == oIdx.Table()) {
-		return false
-	}
-
-	if !(schema.SchemasAreEqual(di.Schema(), oIdx.Schema())) {
-		return false
-	}
-
-	return (di.IsUnique() == oIdx.IsUnique()) && (di.Comment() == oIdx.Comment()) && (di.IsGenerated() == oIdx.IsGenerated())
+	return true
 }
 
 func expressionsAreEquals(exprs1, exprs2 []string) bool {
@@ -323,7 +315,7 @@ func expressionsAreEquals(exprs1, exprs2 []string) bool {
 	}
 
 	for i, expr1 := range exprs1 {
-		if !(expr1 == exprs2[i]) {
+		if expr1 != exprs2[i] {
 			return false
 		}
 	}
