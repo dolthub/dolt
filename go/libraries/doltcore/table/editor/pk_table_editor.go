@@ -19,10 +19,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -34,7 +36,7 @@ import (
 )
 
 var (
-	tableEditorMaxOps uint64 = 16384
+	tableEditorMaxOps uint64 = 16 * 1024
 	ErrDuplicateKey          = errors.New("duplicate key error")
 )
 
@@ -50,6 +52,7 @@ type PKDuplicateErrFunc func(keyString string, k, v types.Tuple, isPk bool) erro
 
 type TableEditor interface {
 	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
+	DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) error
 
 	InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateErrFunc) error
 	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
@@ -86,6 +89,10 @@ type pkTableEditor struct {
 	aq       *async.ActionExecutor
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
+
+	lastFlush  time.Time
+	flushedOps uint64
+	totalSecs  float64
 
 	hasAutoInc bool
 	autoIncCol schema.Column
@@ -139,6 +146,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		return nil, err
 	}
 	te.tea = createInitialTableEditAcc(t.Format(), rowData)
+	te.lastFlush = time.Now()
 	// Warning: changing this from a concurrency of 1 will introduce race conditions, thus much would need to be changed.
 	// All of the logic is built upon the assumption that edit accumulators are processed sequentially.
 	te.aq = async.NewActionExecutor(ctx, te.flushEditAccumulator, 1, 1)
@@ -476,6 +484,53 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 	return te.InsertKeyVal(ctx, key.(types.Tuple), val.(types.Tuple), tagToVal, errFunc)
 }
 
+func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) (retErr error) {
+	defer te.autoFlush()
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
+
+	// Regarding the lock's position here, refer to the comment in InsertKeyVal
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
+
+	// Index operations should come before all table operations. For the reasoning, refer to the comment in InsertKeyVal
+	indexOpsToUndo := make([]int, len(te.indexEds))
+	defer func() {
+		if retErr != nil {
+			for i, opsToUndo := range indexOpsToUndo {
+				for undone := 0; undone < opsToUndo; undone++ {
+					te.indexEds[i].Undo(ctx)
+				}
+			}
+		}
+	}()
+
+	for i, indexEd := range te.indexEds {
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
+		if err != nil {
+			return err
+		}
+		err = indexEd.DeleteRow(ctx, fullKey, partialKey)
+		if err != nil {
+			return err
+		}
+		indexOpsToUndo[i]++
+	}
+
+	keyHash, err := key.Hash(te.nbf)
+	if err != nil {
+		return err
+	}
+
+	delete(te.tea.addedKeys, keyHash)
+	te.tea.removedKeys[keyHash] = key
+	te.tea.affectedKeys[keyHash] = &doltKVP{k: key}
+
+	te.tea.ed.AddEdit(key, nil)
+	te.tea.opCount++
+	return nil
+}
+
 // DeleteRow removes the given row from the table. This essentially acts as a convenience function for DeleteKey, while
 // ensuring proper thread safety.
 func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr error) {
@@ -732,6 +787,12 @@ func (te *pkTableEditor) flush() {
 	defer te.flushMutex.Unlock()
 
 	if te.tea.opCount > 0 {
+		t := time.Now()
+		secs := t.Sub(te.lastFlush).Seconds()
+		te.flushedOps += te.tea.opCount
+		te.totalSecs += secs
+		log.Printf("%d %f. flushing %d ops. secs since last flush %f", te.flushedOps, te.totalSecs, te.tea.opCount, secs)
+		te.lastFlush = t
 		newTea := te.tea.NewFromCurrent()
 		te.aq.Execute(newTea)
 		te.tea = newTea

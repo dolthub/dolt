@@ -52,6 +52,13 @@ func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val type
 	return ti.InsertKeyVal(ctx, key, val, tagToVal, errFunc)
 }
 
+func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) error {
+	ste.tableEditSession.writeMutex.RLock()
+	defer ste.tableEditSession.writeMutex.RUnlock()
+
+	return ste.tableEditor.DeleteByKey(ctx, key, tagToVal)
+}
+
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
 func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
 	ste.tableEditSession.writeMutex.RLock()
