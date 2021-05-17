@@ -52,7 +52,7 @@ func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, 
 	return &AsyncSortedEdits{
 		sliceSize:       sliceSize,
 		sortConcurrency: sortConcurrency,
-		accumulating:    make([]types.KVP, 0, sliceSize),
+		accumulating:    nil, // lazy alloc
 		sortedColls:     nil,
 		nbf:             nbf,
 		sortWork:        sortCh,
@@ -64,6 +64,11 @@ func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, 
 
 // AddEdit adds an edit
 func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
+	if ase.accumulating == nil {
+		// TODO: buffer pool
+		ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
+	}
+
 	ase.accumulating = append(ase.accumulating, types.KVP{Key: k, Val: v})
 	if len(ase.accumulating) == ase.sliceSize {
 		coll := NewKVPCollection(ase.nbf, ase.accumulating)
