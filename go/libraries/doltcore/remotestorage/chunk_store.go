@@ -950,11 +950,7 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF func() (string, error)) ([]byte, error) {
 	res, err := DownloadHedger.Do(ctx, Work{
 		Work: func(ctx context.Context) (interface{}, error) {
-			url, err := urlStrF()
-			if err != nil {
-				return nil, err
-			}
-			return rangeDownloadWithRetries(ctx, fetcher, offset, length, url)
+			return rangeDownloadWithRetries(ctx, fetcher, offset, length, urlStrF)
 		},
 		Size: int(length),
 	})
@@ -966,12 +962,8 @@ func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, of
 
 // rangeDownloadWithRetries executes an http get with the 'Range' header to get a range of bytes from a file.  Request
 // is executed with retries and if progress was made, downloads will be resumed from where they left off on subsequent attempts.
-func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStr string) ([]byte, error) {
+func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF func() (string, error)) ([]byte, error) {
 	// create the request
-	req, err := http.NewRequest(http.MethodGet, urlStr, nil)
-	if err != nil {
-		return nil, err
-	}
 
 	// parameters used for resuming downloads.
 	var allBufs [][]byte
@@ -980,6 +972,16 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 
 	//execute the request
 	op := func() error {
+		urlStr, err := urlStrF()
+		if err != nil {
+			return err
+		}
+
+		req, err := http.NewRequest(http.MethodGet, urlStr, nil)
+		if err != nil {
+			return err
+		}
+
 		rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
 		req.Header.Set("Range", rangeVal)
 
@@ -1007,8 +1009,7 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 		return err
 	}
 
-	err = backoff.Retry(op, backoff.WithMaxRetries(downRetryParams, downRetryCount))
-
+	err := backoff.Retry(op, backoff.WithMaxRetries(downRetryParams, downRetryCount))
 	if err != nil {
 		return nil, err
 	}
