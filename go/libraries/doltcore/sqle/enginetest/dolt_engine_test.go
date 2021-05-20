@@ -56,7 +56,7 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	var scripts = []enginetest.ScriptTest{
 		{
@@ -64,8 +64,8 @@ func TestSingleScript(t *testing.T) {
 			Name: "Top-level DECLARE statements",
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:       "DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE",
-					ExpectedErr: sql.ErrSyntaxError,
+					Query:       "select 1+1",
+					Expected: []sql.Row{{2}},
 				},
 			},
 		},
@@ -280,12 +280,10 @@ func TestJsonScripts(t *testing.T) {
 }
 
 func TestTriggers(t *testing.T) {
-	t.Skip()
 	enginetest.TestTriggers(t, newDoltHarness(t))
 }
 
 func TestStoredProcedures(t *testing.T) {
-	t.Skip()
 	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
 	for _, test := range enginetest.ProcedureLogicTests {
 		//TODO: fix REPLACE always returning a successful deletion
