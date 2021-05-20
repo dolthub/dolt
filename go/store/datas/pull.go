@@ -130,9 +130,28 @@ func CloseWithErr(c io.Closer, err *error) {
 const concurrentTableFileDownloads = 3
 
 func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
-	root, tblFiles, err := srcTS.Sources(ctx)
+	_, appendixFiles, err := srcTS.AppendixSources(ctx)
 	if err != nil {
 		return err
+	}
+
+	_, appendixMap := mapTableFiles(appendixFiles)
+	
+	root, sourceFiles, err := srcTS.Sources(ctx)
+	if err != nil {
+		return err
+	}
+
+	var tblFiles []nbs.TableFile
+	if len(appendixMap) > 0 {
+		tblFiles = make([]nbs.TableFile, 0)
+		for _, sf := range sourceFiles {
+			if _, ok := appendixMap[sf.FileID()]; !ok {
+				tblFiles = append(tblFiles, sf)
+			}
+		}
+	} else {
+		tblFiles = sourceFiles
 	}
 
 	report := func(e TableFileEvent) {

@@ -1123,6 +1123,24 @@ func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableF
 	return hash.New(resp.RootHash), tblFiles, nil
 }
 
+// AppendixSources retrieves the current root hash, and a list of all the appendix table files
+func (dcs *DoltChunkStore) AppendixSources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+	req := &remotesapi.ListTableFilesRequest{RepoId: dcs.getRepoId(), AppendixOnly: true}
+	resp, err := dcs.csClient.ListTableFiles(ctx, req)
+
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	var tblFiles []nbs.TableFile
+	for _, nfo := range resp.TableFileInfo {
+		tblFiles = append(tblFiles, DoltRemoteTableFile{dcs, nfo})
+	}
+
+	return hash.New(resp.RootHash), tblFiles, nil
+}
+
+
 func (dcs *DoltChunkStore) Size(ctx context.Context) (uint64, error) {
 	return dcs.metadata.StorageSize, nil
 }

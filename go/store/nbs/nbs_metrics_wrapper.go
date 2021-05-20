@@ -46,6 +46,11 @@ func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (hash.Hash, []TableF
 	return nbsMW.nbs.Sources(ctx)
 }
 
+// AppendixSources retrieves the current root hash, and a list of all the appendix table files
+func (nbsMW *NBSMetricWrapper) AppendixSources(ctx context.Context) (hash.Hash, []TableFile, error) {
+	return nbsMW.nbs.AppendixSources(ctx)
+}
+
 func (nbsMW *NBSMetricWrapper) Size(ctx context.Context) (uint64, error) {
 	return nbsMW.nbs.Size(ctx)
 }

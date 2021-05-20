@@ -447,6 +447,12 @@ func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.T
 	return ttfs.root, tblFiles, nil
 }
 
+func (ttfs *TestTableFileStore) AppendixSources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+	ttfs.mu.Lock()
+	defer ttfs.mu.Unlock()
+	return ttfs.root, []nbs.TableFile{}, nil
+}
+
 func (ttfs *TestTableFileStore) Size(ctx context.Context) (uint64, error) {
 	ttfs.mu.Lock()
 	defer ttfs.mu.Unlock()
@@ -488,6 +494,18 @@ func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nb
 		return r, files, nil
 	}
 	return f.TestTableFileStore.Sources(ctx)
+}
+
+func (f *FlakeyTestTableFileStore) AppendixSources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+	if !f.GoodNow {
+		f.GoodNow = true
+		r, files, _ := f.TestTableFileStore.AppendixSources(ctx)
+		for i := range files {
+			files[i] = &TestFailingTableFile{files[i].FileID(), files[i].NumChunks()}
+		}
+		return r, files, nil
+	}
+	return f.TestTableFileStore.AppendixSources(ctx)
 }
 
 func (ttfs *TestTableFileStore) SupportedOperations() nbs.TableFileStoreOps {
