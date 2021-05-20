@@ -89,6 +89,9 @@ func init() {
 	downRetryParams.MaxInterval = 5 * time.Second
 }
 
+// Only hedge downloads of ranges < 4MB in length for now.
+const HedgeDownloadSizeLimit = 4 * 1024 * 1024
+
 type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
 }
@@ -346,7 +349,14 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, ch
 			}
 			return url, nil
 		}
-		comprData, err := hedgedRangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), gr.RangeLen(), urlF)
+		var comprData []byte
+		var err error
+		rangeLen := gr.RangeLen()
+		if rangeLen > HedgeDownloadSizeLimit {
+			comprData, err = rangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
+		} else {
+			comprData, err = hedgedRangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
+		}
 		if err != nil {
 			return err
 		}
