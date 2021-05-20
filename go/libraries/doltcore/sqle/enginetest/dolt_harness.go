@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
@@ -33,7 +32,6 @@ import (
 type DoltHarness struct {
 	t              *testing.T
 	session        *sqle.DoltSession
-	mrEnv          env.MultiRepoEnv
 	parallelism    int
 	skippedQueries []string
 }
@@ -51,7 +49,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	return &DoltHarness{
 		t:              t,
 		session:        session,
-		mrEnv:          make(env.MultiRepoEnv),
 		skippedQueries: defaultSkippedQueries,
 	}
 }
@@ -126,13 +123,9 @@ func (d *DoltHarness) SupportsKeylessTables() bool {
 
 func (d *DoltHarness) NewDatabase(name string) sql.Database {
 	dEnv := dtestutils.CreateTestEnv()
-	root, err := dEnv.WorkingRoot(enginetest.NewContext(d))
-	require.NoError(d.t, err)
 
-	d.mrEnv.AddEnv(name, dEnv)
 	db := sqle.NewDatabase(name, dEnv.DbData())
 	require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db, db.DbData()))
-	require.NoError(d.t, db.SetRoot(enginetest.NewContext(d).WithCurrentDB(db.Name()), root))
 	return db
 }
 
