@@ -80,7 +80,11 @@ func TestSingleScript(t *testing.T) {
 
 	harness := newDoltHarness(t)
 	for _, test := range scripts {
-		enginetest.TestScript(t, harness, test)
+		engine := enginetest.NewEngine(t, harness)
+		engine.Analyzer.Debug = true
+		engine.Analyzer.Verbose = true
+
+		enginetest.TestScriptWithEngine(t, engine, harness, test)
 	}
 }
 
