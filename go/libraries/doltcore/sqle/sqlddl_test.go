@@ -1159,28 +1159,33 @@ func TestAlterSystemTables(t *testing.T) {
 	systemTableNames := []string{"dolt_docs", "dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"}
 	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
 
-	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
+	var dEnv *env.DoltEnv
+	setup := func() {
+		dEnv = dtestutils.CreateTestEnv()
+		CreateTestDatabase(dEnv, t)
+
+		dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
+			doltdocs.Schema,
+			NewRow(types.String("LICENSE.md"), types.String("A license")))
+		dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
+			dtables.DoltQueryCatalogSchema,
+			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
+		dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
+			schemasTableDoltSchema(),
+			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
+	}
 
 	t.Run("Create", func(t *testing.T) {
+		setup()
 		for _, tableName := range append(systemTableNames, reservedTableNames...) {
 			assertFails(t, dEnv, fmt.Sprintf("create table %s (a int primary key not null)", tableName), "reserved")
 		}
 	})
 
-	dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-		doltdocs.Schema,
-		NewRow(types.String("LICENSE.md"), types.String("A license")))
-	dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
-		dtables.DoltQueryCatalogSchema,
-		NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
-	dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
-		schemasTableDoltSchema(),
-		NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
-
 	// The _history and _diff tables give not found errors right now because of https://github.com/dolthub/dolt/issues/373.
 	// We can remove the divergent failure logic when the issue is fixed.
 	t.Run("Drop", func(t *testing.T) {
+		setup()
 		for _, tableName := range systemTableNames {
 			expectedErr := "system table"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
@@ -1194,6 +1199,7 @@ func TestAlterSystemTables(t *testing.T) {
 	})
 
 	t.Run("Rename", func(t *testing.T) {
+		setup()
 		for _, tableName := range systemTableNames {
 			expectedErr := "system table"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
@@ -1201,12 +1207,13 @@ func TestAlterSystemTables(t *testing.T) {
 			}
 			assertFails(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName), expectedErr)
 		}
-		for _, tableName := range reservedTableNames {
-			assertSucceeds(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName))
+		for i, tableName := range reservedTableNames {
+			assertSucceeds(t, dEnv, fmt.Sprintf("rename table %s to newname%d", tableName, i))
 		}
 	})
 
 	t.Run("Alter", func(t *testing.T) {
+		setup()
 		for _, tableName := range append(systemTableNames, reservedTableNames...) {
 			expectedErr := "cannot be altered"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
