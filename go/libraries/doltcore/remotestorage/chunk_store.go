@@ -323,6 +323,12 @@ func (gr *GetRange) ChunkByteRange(i int) (uint64, uint64) {
 	return start, end
 }
 
+func sortRangesBySize(ranges []*GetRange) {
+	sort.Slice(ranges, func(i, j int) bool {
+		return ranges[j].RangeLen() < ranges[i].RangeLen()
+	})
+}
+
 type resourcePathToUrlFunc func(ctx context.Context, resourcePath string) (url string, err error)
 
 func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
@@ -930,6 +936,8 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 
 	gets := aggregateDownloads(chunkAggDistance, resourceGets)
 	logDownloadStats(span, resourceGets, gets)
+
+	sortRangesBySize(gets)
 
 	toUrl := func(ctx context.Context, resourcePath string) (string, error) {
 		return dlLocs.refreshes[resourcePath].GetURL(ctx, dcs.csClient)
