@@ -308,3 +308,7 @@ func TestStoredProcedures(t *testing.T) {
 
 	enginetest.TestStoredProcedures(t, newDoltHarness(t))
 }
+
+func TestTransactions(t *testing.T) {
+	enginetest.TestTransactionScripts(t, newDoltHarness(t))
+}

@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
@@ -33,7 +32,7 @@ import (
 type DoltHarness struct {
 	t              *testing.T
 	session        *sqle.DoltSession
-	mrEnv          env.MultiRepoEnv
+	databases      []sqle.Database
 	parallelism    int
 	skippedQueries []string
 }
@@ -51,7 +50,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	return &DoltHarness{
 		t:              t,
 		session:        session,
-		mrEnv:          make(env.MultiRepoEnv),
 		skippedQueries: defaultSkippedQueries,
 	}
 }
@@ -112,6 +110,22 @@ func (d *DoltHarness) NewContext() *sql.Context {
 		sql.WithSession(d.session))
 }
 
+func (d DoltHarness) NewSession() *sql.Context {
+	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	require.NoError(d.t, err)
+
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithSession(session))
+
+	for _, db := range d.databases {
+		err := session.AddDB(ctx, db, db.DbData())
+		require.NoError(d.t, err)
+	}
+
+	return ctx
+}
+
 func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 	return true
 }
@@ -129,8 +143,9 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 	root, err := dEnv.WorkingRoot(enginetest.NewContext(d))
 	require.NoError(d.t, err)
 
-	d.mrEnv.AddEnv(name, dEnv)
 	db := sqle.NewDatabase(name, dEnv.DbData())
+	d.databases = append(d.databases, db)
+
 	require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db, db.DbData()))
 	require.NoError(d.t, db.SetRoot(enginetest.NewContext(d).WithCurrentDB(db.Name()), root))
 	return db
