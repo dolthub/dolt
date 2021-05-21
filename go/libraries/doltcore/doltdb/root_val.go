@@ -297,6 +297,10 @@ func (root *RootValue) getOrCreateSuperSchemaMap(ctx context.Context) (types.Map
 	} else {
 		ssm, err = types.NewMap(ctx, root.vrw)
 	}
+
+	x := ssm.Len()
+	fmt.Println(x)
+
 	return ssm, err
 }
 
