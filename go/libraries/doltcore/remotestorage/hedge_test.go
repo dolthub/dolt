@@ -126,7 +126,7 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 		Work: func(ctx context.Context) (interface{}, error) {
 			cur := atomic.AddInt32(&cnt, 1)
 			if cur == int32(1) {
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				return 1, nil
 			} else {
 				return 2, nil
@@ -142,10 +142,10 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 		Work: func(ctx context.Context) (interface{}, error) {
 			cur := atomic.AddInt32(&cnt, 1)
 			if cur == int32(1) {
-				time.Sleep(2 * time.Second)
+				time.Sleep(30 * time.Second)
 				return 1, nil
 			} else if cur == int32(2) {
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				return 2, nil
 			} else {
 				return 3, nil
