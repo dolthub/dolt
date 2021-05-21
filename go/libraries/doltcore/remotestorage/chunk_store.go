@@ -1106,40 +1106,26 @@ func (dcs *DoltChunkStore) PruneTableFiles(ctx context.Context) error {
 	return chunks.ErrUnsupportedOperation
 }
 
-// Sources retrieves the current root hash, and a list of all the table files
-func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+// Sources retrieves the current root hash, a list of all the table files (which may include appendix table files)
+// and a list of only appendix table files
+func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, []nbs.TableFile, error) {
 	req := &remotesapi.ListTableFilesRequest{RepoId: dcs.getRepoId()}
 	resp, err := dcs.csClient.ListTableFiles(ctx, req)
-
 	if err != nil {
-		return hash.Hash{}, nil, err
+		return hash.Hash{}, nil, nil, err
 	}
-
-	var tblFiles []nbs.TableFile
-	for _, nfo := range resp.TableFileInfo {
-		tblFiles = append(tblFiles, DoltRemoteTableFile{dcs, nfo})
-	}
-
-	return hash.New(resp.RootHash), tblFiles, nil
+	sourceFiles := getTableFiles(dcs, resp.TableFileInfo)
+	appendixFiles := getTableFiles(dcs, resp.AppendixTableFileInfo)
+	return hash.New(resp.RootHash), sourceFiles, appendixFiles, nil
 }
 
-// AppendixSources retrieves the current root hash, and a list of all the appendix table files
-func (dcs *DoltChunkStore) AppendixSources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
-	req := &remotesapi.ListTableFilesRequest{RepoId: dcs.getRepoId(), AppendixOnly: true}
-	resp, err := dcs.csClient.ListTableFiles(ctx, req)
-
-	if err != nil {
-		return hash.Hash{}, nil, err
+func getTableFiles(dcs *DoltChunkStore, infoList []*remotesapi.TableFileInfo) []nbs.TableFile {
+	tableFiles := make([]nbs.TableFile, 0)
+	for _, nfo := range infoList {
+		tableFiles = append(tableFiles, DoltRemoteTableFile{dcs, nfo})
 	}
-
-	var tblFiles []nbs.TableFile
-	for _, nfo := range resp.TableFileInfo {
-		tblFiles = append(tblFiles, DoltRemoteTableFile{dcs, nfo})
-	}
-
-	return hash.New(resp.RootHash), tblFiles, nil
+	return tableFiles
 }
-
 
 func (dcs *DoltChunkStore) Size(ctx context.Context) (uint64, error) {
 	return dcs.metadata.StorageSize, nil

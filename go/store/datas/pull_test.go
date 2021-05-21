@@ -436,7 +436,7 @@ type TestTableFileStore struct {
 
 var _ nbs.TableFileStore = &TestTableFileStore{}
 
-func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, []nbs.TableFile, error) {
 	ttfs.mu.Lock()
 	defer ttfs.mu.Unlock()
 	var tblFiles []nbs.TableFile
@@ -444,13 +444,7 @@ func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.T
 		tblFiles = append(tblFiles, tblFile)
 	}
 
-	return ttfs.root, tblFiles, nil
-}
-
-func (ttfs *TestTableFileStore) AppendixSources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
-	ttfs.mu.Lock()
-	defer ttfs.mu.Unlock()
-	return ttfs.root, []nbs.TableFile{}, nil
+	return ttfs.root, tblFiles, []nbs.TableFile{}, nil
 }
 
 func (ttfs *TestTableFileStore) Size(ctx context.Context) (uint64, error) {
@@ -484,28 +478,16 @@ type FlakeyTestTableFileStore struct {
 	GoodNow bool
 }
 
-func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, []nbs.TableFile, error) {
 	if !f.GoodNow {
 		f.GoodNow = true
-		r, files, _ := f.TestTableFileStore.Sources(ctx)
+		r, files, appendixFiles, _ := f.TestTableFileStore.Sources(ctx)
 		for i := range files {
 			files[i] = &TestFailingTableFile{files[i].FileID(), files[i].NumChunks()}
 		}
-		return r, files, nil
+		return r, files, appendixFiles, nil
 	}
 	return f.TestTableFileStore.Sources(ctx)
-}
-
-func (f *FlakeyTestTableFileStore) AppendixSources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
-	if !f.GoodNow {
-		f.GoodNow = true
-		r, files, _ := f.TestTableFileStore.AppendixSources(ctx)
-		for i := range files {
-			files[i] = &TestFailingTableFile{files[i].FileID(), files[i].NumChunks()}
-		}
-		return r, files, nil
-	}
-	return f.TestTableFileStore.AppendixSources(ctx)
 }
 
 func (ttfs *TestTableFileStore) SupportedOperations() nbs.TableFileStoreOps {
