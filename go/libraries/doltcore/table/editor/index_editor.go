@@ -322,6 +322,26 @@ func (ie *IndexEditor) DeleteRow(ctx context.Context, key, partialKey types.Tupl
 	return nil
 }
 
+// HasPartial returns whether the index editor has the given partial key.
+func (ie *IndexEditor) HasPartial(ctx context.Context, partialKey types.Tuple) (bool, error) {
+	ie.flushMutex.RLock()
+	defer ie.flushMutex.RUnlock()
+
+	partialKeyHash, err := partialKey.Hash(partialKey.Format())
+	if err != nil {
+		return false, err
+	}
+
+	ie.writeMutex.Lock()
+	defer ie.writeMutex.Unlock()
+
+	tpls, err := ie.iea.HasPartial(ctx, ie.idxSch, partialKeyHash, partialKey)
+	if err != nil {
+		return false, err
+	}
+	return len(tpls) > 0, nil
+}
+
 // Undo will cause the index editor to undo the last operation at the top of the stack. As Insert and Delete are called,
 // they are added onto a limited-size stack, and Undo pops an operation off the top and undoes it. So if there was an
 // Insert on a key, it will use Delete on that same key. The stack size is very small, therefore too many consecutive
