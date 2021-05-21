@@ -96,17 +96,23 @@ type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
+type ConcurrencyParams struct {
+	ConcurrentSmallFetches int
+	ConcurrentLargeFetches int
+	LargeFetchSize         int
+}
+
 type DoltChunkStore struct {
-	org                 string
-	repoName            string
-	host                string
-	csClient            remotesapi.ChunkStoreServiceClient
-	cache               ChunkCache
-	metadata            *remotesapi.GetRepoMetadataResponse
-	nbf                 *types.NomsBinFormat
-	httpFetcher         HTTPFetcher
-	downloadConcurrency int
-	stats               cacheStats
+	org         string
+	repoName    string
+	host        string
+	csClient    remotesapi.ChunkStoreServiceClient
+	cache       ChunkCache
+	metadata    *remotesapi.GetRepoMetadataResponse
+	nbf         *types.NomsBinFormat
+	httpFetcher HTTPFetcher
+	concurrency ConcurrencyParams
+	stats       cacheStats
 }
 
 func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
@@ -139,22 +145,22 @@ func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoN
 		return nil, err
 	}
 
-	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, nbf, globalHttpFetcher, defaultDownloadConcurrency, cacheStats{}}, nil
+	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, nbf, globalHttpFetcher, defaultConcurrency, cacheStats{}}, nil
 }
 
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, fetcher, dcs.downloadConcurrency, dcs.stats}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, fetcher, dcs.concurrency, dcs.stats}
 }
 
 func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, noopChunkCache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.downloadConcurrency, dcs.stats}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, noopChunkCache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.concurrency, dcs.stats}
 }
 
 func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, cache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.downloadConcurrency, dcs.stats}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, cache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.concurrency, dcs.stats}
 }
 
-func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency int) *DoltChunkStore {
+func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency ConcurrencyParams) *DoltChunkStore {
 	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, dcs.httpFetcher, concurrency, dcs.stats}
 }
 
@@ -927,9 +933,14 @@ func aggregateDownloads(aggDistance uint64, resourceGets map[string]*GetRange) [
 }
 
 const (
-	chunkAggDistance           = 8 * 1024
-	defaultDownloadConcurrency = 16
+	chunkAggDistance = 8 * 1024
 )
+
+var defaultConcurrency ConcurrencyParams = ConcurrencyParams{
+	ConcurrentSmallFetches: 64,
+	ConcurrentLargeFetches: 2,
+	LargeFetchSize:         2 * 1024 * 1024,
+}
 
 func logDownloadStats(span opentracing.Span, originalGets map[string]*GetRange, computedGets []*GetRange) {
 	chunkCount := 0
@@ -962,16 +973,27 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 		return dlLocs.refreshes[resourcePath].GetURL(ctx, lastError, dcs.csClient)
 	}
 
+	eg, ctx := errgroup.WithContext(ctx)
+
 	// loop over all the gets that need to be downloaded and create a work function for each
 	work := make([]func() error, len(gets))
+	largeCutoff := -1
 	for i, get := range gets {
 		work[i] = get.GetDownloadFunc(ctx, dcs.httpFetcher, chunkChan, toUrl)
+		if get.RangeLen() >= uint64(dcs.concurrency.LargeFetchSize) {
+			largeCutoff = i
+		}
 	}
 
 	// execute the work
-	err := concurrentExec(work, dcs.downloadConcurrency)
+	eg.Go(func() error {
+		return concurrentExec(work[0:largeCutoff+1], dcs.concurrency.ConcurrentLargeFetches)
+	})
+	eg.Go(func() error {
+		return concurrentExec(work[largeCutoff+1:len(work)], dcs.concurrency.ConcurrentSmallFetches)
+	})
 
-	return err
+	return eg.Wait()
 }
 
 type urlFactoryFunc func(error) (string, error)
