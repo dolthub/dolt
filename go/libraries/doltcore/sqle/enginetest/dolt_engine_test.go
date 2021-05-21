@@ -64,7 +64,7 @@ func TestSingleScript(t *testing.T) {
 			Name: "Top-level DECLARE statements",
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:       "select 1+1",
+					Query:    "select 1+1",
 					Expected: []sql.Row{{2}},
 				},
 			},
