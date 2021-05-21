@@ -145,6 +145,8 @@ func (ms *MinStrategy) Observe(sz, n int, d time.Duration, err error) {
 	}
 }
 
+var MaxHedgesPerRequest = 1
+
 // Do runs |w| to completion, potentially spawning concurrent hedge runs of it.
 // Returns the results from the first invocation that completes, and cancels
 // the contexts of all invocations.
@@ -160,6 +162,9 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 	try := func() {
 		n := len(cancels) + 1
 		finalize := func() {}
+		if n-1 > MaxHedgesPerRequest {
+			return
+		}
 		if n > 1 {
 			if !h.sema.TryAcquire(1) {
 				// Too many outstanding hedges. Do nothing.
