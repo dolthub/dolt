@@ -414,7 +414,7 @@ func (r *locationRefresh) GetURL(ctx context.Context, lastError error, client re
 	if r.RefreshRequest != nil {
 		now := time.Now()
 		wantsRefresh := now.After(r.RefreshAfter) || errors.Is(lastError, HttpError)
-		canRefresh := now.After(r.lastRefresh.Add(refreshTableFileURLRetryDuration))
+		canRefresh := time.Since(r.lastRefresh) > refreshTableFileURLRetryDuration
 		if wantsRefresh && canRefresh {
 			resp, err := client.RefreshTableFileUrl(ctx, r.RefreshRequest)
 			if err != nil {
