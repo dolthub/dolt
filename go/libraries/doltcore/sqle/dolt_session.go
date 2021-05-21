@@ -155,7 +155,8 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 
 	// Old "commit" path, which just writes whatever the root for this session is to the repo state file with no care
 	// for concurrency. Over time we will disable this path.
-	if !transactionsEnabled {
+	_, disabled := tx.(DisabledTransaction)
+	if !transactionsEnabled || disabled {
 		dbData := sess.dbDatas[dbName]
 
 		h, err := dbData.Ddb.WriteRootValue(ctx, dbRoot.root)
