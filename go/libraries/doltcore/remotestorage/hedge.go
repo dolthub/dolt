@@ -162,7 +162,7 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 	try := func() {
 		n := len(cancels) + 1
 		finalize := func() {}
-		if n - 1 > MaxHedgesPerRequest {
+		if n-1 > MaxHedgesPerRequest {
 			return
 		}
 		if n > 1 {
