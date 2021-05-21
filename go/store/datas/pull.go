@@ -130,11 +130,12 @@ func CloseWithErr(c io.Closer, err *error) {
 const concurrentTableFileDownloads = 3
 
 func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
-	root, tblFiles, err := srcTS.Sources(ctx)
+	root, sourceFiles, appendixFiles, err := srcTS.Sources(ctx)
 	if err != nil {
 		return err
 	}
 
+	tblFiles := filterAppendicesFromSourceFiles(appendixFiles, sourceFiles)
 	report := func(e TableFileEvent) {
 		if eventCh != nil {
 			eventCh <- e
@@ -229,14 +230,29 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 		if failureCount >= maxAttempts {
 			return err
 		}
-		if _, tblFiles, err = srcTS.Sources(ctx); err != nil {
+		if _, sourceFiles, appendixFiles, err = srcTS.Sources(ctx); err != nil {
 			return err
 		} else {
+			tblFiles = filterAppendicesFromSourceFiles(appendixFiles, sourceFiles)
 			_, fileIDToTF = mapTableFiles(tblFiles)
 		}
 	}
 
 	return sinkTS.SetRootChunk(ctx, root, hash.Hash{})
+}
+
+func filterAppendicesFromSourceFiles(appendixFiles []nbs.TableFile, sourceFiles []nbs.TableFile) []nbs.TableFile {
+	if len(appendixFiles) == 0 {
+		return sourceFiles
+	}
+	tblFiles := make([]nbs.TableFile, 0)
+	_, appendixMap := mapTableFiles(appendixFiles)
+	for _, sf := range sourceFiles {
+		if _, ok := appendixMap[sf.FileID()]; !ok {
+			tblFiles = append(tblFiles, sf)
+		}
+	}
+	return tblFiles
 }
 
 // Pull objects that descend from sourceRef from srcDB to sinkDB.
