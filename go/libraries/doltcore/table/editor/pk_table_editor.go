@@ -18,6 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -25,11 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-	"io"
-	"os"
-	"strconv"
-	"strings"
-	"sync"
 )
 
 var (
