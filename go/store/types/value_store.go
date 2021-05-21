@@ -356,6 +356,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 		lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		delete(lvs.bufferedChunks, h)
+		delete(lvs.withBufferedChildren, h)
 
 		return nil
 	}
@@ -409,6 +410,10 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 	// Enforce invariant (2)
 	for lvs.bufferedChunkSize > lvs.bufferedChunksMax {
+		if len(lvs.withBufferedChildren) == 0 {
+			panic("deadlock detected")
+		}
+
 		var tallest hash.Hash
 		var height uint64 = 0
 		for parent, ht := range lvs.withBufferedChildren {
@@ -472,6 +477,7 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 			}
 
 			delete(lvs.bufferedChunks, h)
+			delete(lvs.withBufferedChildren, h)
 			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
 			return nil
 		}
