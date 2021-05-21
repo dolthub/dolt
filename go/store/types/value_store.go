@@ -356,6 +356,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 		lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		delete(lvs.bufferedChunks, h)
+		delete(lvs.withBufferedChildren, h)
 
 		return nil
 	}
@@ -472,6 +473,7 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 			}
 
 			delete(lvs.bufferedChunks, h)
+			delete(lvs.withBufferedChildren, h)
 			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
 			return nil
 		}
