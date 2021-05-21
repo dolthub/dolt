@@ -18,14 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"log"
-	"os"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -33,10 +25,15 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"io"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
 )
 
 var (
-	tableEditorMaxOps uint64 = 16 * 1024
+	tableEditorMaxOps uint64 = 256 * 1024
 	ErrDuplicateKey          = errors.New("duplicate key error")
 )
 
@@ -90,10 +87,6 @@ type pkTableEditor struct {
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
 
-	lastFlush  time.Time
-	flushedOps uint64
-	totalSecs  float64
-
 	hasAutoInc bool
 	autoIncCol schema.Column
 	autoIncVal types.Value
@@ -146,7 +139,6 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		return nil, err
 	}
 	te.tea = createInitialTableEditAcc(t.Format(), rowData)
-	te.lastFlush = time.Now()
 	// Warning: changing this from a concurrency of 1 will introduce race conditions, thus much would need to be changed.
 	// All of the logic is built upon the assumption that edit accumulators are processed sequentially.
 	te.aq = async.NewActionExecutor(ctx, te.flushEditAccumulator, 1, 1)
@@ -787,12 +779,6 @@ func (te *pkTableEditor) flush() {
 	defer te.flushMutex.Unlock()
 
 	if te.tea.opCount > 0 {
-		t := time.Now()
-		secs := t.Sub(te.lastFlush).Seconds()
-		te.flushedOps += te.tea.opCount
-		te.totalSecs += secs
-		log.Printf("%d %f. flushing %d ops. secs since last flush %f", te.flushedOps, te.totalSecs, te.tea.opCount, secs)
-		te.lastFlush = t
 		newTea := te.tea.NewFromCurrent()
 		te.aq.Execute(newTea)
 		te.tea = newTea
