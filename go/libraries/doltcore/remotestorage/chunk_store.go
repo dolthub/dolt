@@ -332,15 +332,15 @@ func sortRangesBySize(ranges []*GetRange) {
 	})
 }
 
-type resourcePathToUrlFunc func(ctx context.Context, resourcePath string) (url string, err error)
+type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
 func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
 	return func() error {
-		urlF := func() (string, error) {
-			url, err := pathToUrl(ctx, gr.ResourcePath())
+		urlF := func(lastError error) (string, error) {
+			url, err := pathToUrl(ctx, lastError, gr.ResourcePath())
 			if err != nil {
 				return "", err
 			}
@@ -381,6 +381,7 @@ type locationRefresh struct {
 	RefreshAfter   time.Time
 	RefreshRequest *remotesapi.RefreshTableFileUrlRequest
 	URL            string
+	lastRefresh    time.Time
 	mu             *sync.Mutex
 }
 
@@ -399,16 +400,24 @@ func (r *locationRefresh) Add(resp *remotesapi.DownloadLoc) {
 	}
 }
 
-func (r *locationRefresh) GetURL(ctx context.Context, client remotesapi.ChunkStoreServiceClient) (string, error) {
+var refreshTableFileURLRetryDuration = 5 * time.Second
+
+func (r *locationRefresh) GetURL(ctx context.Context, lastError error, client remotesapi.ChunkStoreServiceClient) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.RefreshRequest != nil && time.Now().After(r.RefreshAfter) {
-		resp, err := client.RefreshTableFileUrl(ctx, r.RefreshRequest)
-		if err != nil {
-			return r.URL, err
+	if r.RefreshRequest != nil {
+		now := time.Now()
+		wantsRefresh := now.After(r.RefreshAfter) || errors.Is(lastError, HttpError)
+		canRefresh := now.After(r.lastRefresh.Add(refreshTableFileURLRetryDuration))
+		if wantsRefresh && canRefresh {
+			resp, err := client.RefreshTableFileUrl(ctx, r.RefreshRequest)
+			if err != nil {
+				return r.URL, err
+			}
+			r.RefreshAfter = resp.RefreshAfter.AsTime()
+			r.URL = resp.Url
+			r.lastRefresh = now
 		}
-		r.RefreshAfter = resp.RefreshAfter.AsTime()
-		r.URL = resp.Url
 	}
 	return r.URL, nil
 }
@@ -949,8 +958,8 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 
 	sortRangesBySize(gets)
 
-	toUrl := func(ctx context.Context, resourcePath string) (string, error) {
-		return dlLocs.refreshes[resourcePath].GetURL(ctx, dcs.csClient)
+	toUrl := func(ctx context.Context, lastError error, resourcePath string) (string, error) {
+		return dlLocs.refreshes[resourcePath].GetURL(ctx, lastError, dcs.csClient)
 	}
 
 	// loop over all the gets that need to be downloaded and create a work function for each
@@ -965,7 +974,9 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 	return err
 }
 
-func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF func() (string, error)) ([]byte, error) {
+type urlFactoryFunc func(error) (string, error)
+
+func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF urlFactoryFunc) ([]byte, error) {
 	res, err := DownloadHedger.Do(ctx, Work{
 		Work: func(ctx context.Context) (interface{}, error) {
 			return rangeDownloadWithRetries(ctx, fetcher, offset, length, urlStrF)
@@ -980,7 +991,7 @@ func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, of
 
 // rangeDownloadWithRetries executes an http get with the 'Range' header to get a range of bytes from a file.  Request
 // is executed with retries and if progress was made, downloads will be resumed from where they left off on subsequent attempts.
-func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF func() (string, error)) ([]byte, error) {
+func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF urlFactoryFunc) ([]byte, error) {
 	// create the request
 
 	// parameters used for resuming downloads.
@@ -988,9 +999,14 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 	currOffset := offset
 	currLength := length
 
+	var lastError error
+
 	//execute the request
-	op := func() error {
-		urlStr, err := urlStrF()
+	op := func() (rerr error) {
+		defer func() {
+			lastError = rerr
+		}()
+		urlStr, err := urlStrF(lastError)
 		if err != nil {
 			return err
 		}

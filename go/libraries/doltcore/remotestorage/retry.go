@@ -25,34 +25,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var RetriableHTTPStatusCodes = map[int]struct{}{
-	http.StatusRequestTimeout:      {},
-	http.StatusTooEarly:            {},
-	http.StatusTooManyRequests:     {},
-	http.StatusInternalServerError: {},
-	http.StatusBadGateway:          {},
-	http.StatusServiceUnavailable:  {},
-	http.StatusGatewayTimeout:      {},
-}
+var HttpError = errors.New("http")
 
 // ProcessHttpResp converts an http.Response, and error into a RetriableCallState
 func processHttpResp(resp *http.Response, err error) error {
+	if errors.Is(err, context.Canceled) {
+		return backoff.Permanent(err)
+	}
+
 	if err == nil {
 		if resp.StatusCode/100 == 2 {
 			return nil
 		}
 
-		httpErr := fmt.Errorf("error: http %d", resp.StatusCode)
-
-		if _, ok := RetriableHTTPStatusCodes[resp.StatusCode]; ok {
-			return httpErr
-		}
-
-		return backoff.Permanent(httpErr)
-	}
-
-	if errors.Is(err, context.Canceled) {
-		return backoff.Permanent(err)
+		return fmt.Errorf("error: %w %d", HttpError, resp.StatusCode)
 	}
 
 	return err
