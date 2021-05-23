@@ -619,6 +619,9 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 		return err
 	}
 
+	// After setting the initial root we have no state to commit
+	sess.dirty[db.Name()] = false
+
 	return nil
 }
 
