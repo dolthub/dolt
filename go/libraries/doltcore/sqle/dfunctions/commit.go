@@ -7,8 +7,7 @@
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is dist
-//ributed on an "AS IS" BASIS,
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -78,13 +77,16 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, fmt.Errorf("unknown database '%s'", dbName)
 	}
 
-	tblNames, _ := root.GetTableNames(ctx)
-	root, _ = root.UpdateSuperSchemasFromOther(ctx, tblNames, root)
+	// Update the superschema
+	tblNames, err := root.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	mp, _ := root.GetSuperSchemaMap(ctx)
-
-	x := mp.Len()
-	fmt.Println(x)
+	root, err = root.UpdateSuperSchemasFromOther(ctx, tblNames, root)
+	if err != nil {
+		return nil, err
+	}
 
 	ddb, ok := dSess.GetDoltDB(dbName)
 
