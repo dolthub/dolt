@@ -973,13 +973,15 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 		return dlLocs.refreshes[resourcePath].GetURL(ctx, lastError, dcs.csClient)
 	}
 
+	stats := StatsFactory()
+
 	eg, ctx := errgroup.WithContext(ctx)
 
 	// loop over all the gets that need to be downloaded and create a work function for each
 	work := make([]func() error, len(gets))
 	largeCutoff := -1
 	for i, get := range gets {
-		work[i] = get.GetDownloadFunc(ctx, NullStatsRecorder{}, dcs.httpFetcher, chunkChan, toUrl)
+		work[i] = get.GetDownloadFunc(ctx, stats, dcs.httpFetcher, chunkChan, toUrl)
 		if get.RangeLen() >= uint64(dcs.concurrency.LargeFetchSize) {
 			largeCutoff = i
 		}
@@ -993,6 +995,9 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 		return concurrentExec(work[largeCutoff+1:len(work)], dcs.concurrency.ConcurrentSmallFetches)
 	})
 
+	defer func() {
+		StatsFlusher(stats)
+	}()
 	return eg.Wait()
 }
 
