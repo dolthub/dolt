@@ -146,6 +146,10 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 	pkVals := make([]types.Value, numPKCols*2)
 	tagToVal := make(map[uint64]types.Value, numCols)
 
+	if len(r) < numCols {
+		numCols = len(r)
+	}
+
 	// values for the pk tuple are in schema order
 	pkIdx := 0
 	for i := 0; i < numCols; i++ {
