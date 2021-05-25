@@ -340,7 +340,7 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
@@ -359,9 +359,9 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, ch
 		var err error
 		rangeLen := gr.RangeLen()
 		if rangeLen > HedgeDownloadSizeLimit {
-			comprData, err = rangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), rangeLen, 1, urlF)
+			comprData, err = rangeDownloadWithRetries(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, 1, urlF)
 		} else {
-			comprData, err = hedgedRangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
+			comprData, err = hedgedRangeDownloadWithRetries(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
 		}
 		if err != nil {
 			return err
@@ -979,7 +979,7 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 	work := make([]func() error, len(gets))
 	largeCutoff := -1
 	for i, get := range gets {
-		work[i] = get.GetDownloadFunc(ctx, dcs.httpFetcher, chunkChan, toUrl)
+		work[i] = get.GetDownloadFunc(ctx, NullStatsRecorder{}, dcs.httpFetcher, chunkChan, toUrl)
 		if get.RangeLen() >= uint64(dcs.concurrency.LargeFetchSize) {
 			largeCutoff = i
 		}
@@ -998,10 +998,10 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocation
 
 type urlFactoryFunc func(error) (string, error)
 
-func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF urlFactoryFunc) ([]byte, error) {
+func hedgedRangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, offset, length uint64, urlStrF urlFactoryFunc) ([]byte, error) {
 	res, err := DownloadHedger.Do(ctx, Work{
 		Work: func(ctx context.Context, n int) (interface{}, error) {
-			return rangeDownloadWithRetries(ctx, fetcher, offset, length, n, urlStrF)
+			return rangeDownloadWithRetries(ctx, stats, fetcher, offset, length, n, urlStrF)
 		},
 		Size: int(length),
 	})
@@ -1011,11 +1011,9 @@ func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, of
 	return res.([]byte), nil
 }
 
-var stats StatsRecorder = NullStatsRecorder{}
-
 // rangeDownloadWithRetries executes an http get with the 'Range' header to get a range of bytes from a file.  Request
 // is executed with retries and if progress was made, downloads will be resumed from where they left off on subsequent attempts.
-func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, hedgeN int, urlStrF urlFactoryFunc) ([]byte, error) {
+func rangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, offset, length uint64, hedgeN int, urlStrF urlFactoryFunc) ([]byte, error) {
 	// create the request
 
 	// parameters used for resuming downloads.
@@ -1045,7 +1043,7 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 		rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
 		req.Header.Set("Range", rangeVal)
 
-		stats.RecordDownloadAttemptStart(hedgeN, retryCnt, currOffset - offset, length)
+		stats.RecordDownloadAttemptStart(hedgeN, retryCnt, currOffset-offset, length)
 		start := time.Now()
 		resp, err := fetcher.Do(req.WithContext(ctx))
 		if err == nil {
