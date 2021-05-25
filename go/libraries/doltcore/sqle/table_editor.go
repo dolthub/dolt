@@ -36,16 +36,16 @@ import (
 // editor after every SQL statement is incorrect and will return incorrect results. The single reliable exception is an
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type sqlTableEditor struct {
-	tableName string
-	dbName string
-	sch schema.Schema
-	autoIncCol schema.Column
-	batchMode commitBehavior
-	vrw types.ValueReadWriter
+	tableName         string
+	dbName            string
+	sch               schema.Schema
+	autoIncCol        schema.Column
+	batchMode         commitBehavior
+	vrw               types.ValueReadWriter
 	autoIncrementType typeinfo.TypeInfo
-	kvToSQLRow  *KVToSqlRowConverter
-	tableEditor editor.TableEditor
-	sess        *editor.TableEditSession
+	kvToSQLRow        *KVToSqlRowConverter
+	tableEditor       editor.TableEditor
+	sess              *editor.TableEditSession
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)

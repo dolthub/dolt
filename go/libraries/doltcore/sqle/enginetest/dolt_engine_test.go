@@ -60,34 +60,26 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []enginetest.ScriptTest{
 		{
-			Name: "row_count() behavior",
-			SetUpScript: []string{
-				"create table b (x int primary key)",
-				"insert into b values (1), (2), (3), (4)",
-			},
+			// All DECLARE statements are only allowed under BEGIN/END blocks
+			Name: "Top-level DECLARE statements",
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:    "delete from b where x <> 2",
-					Expected: []sql.Row{{sql.NewOkResult(3)}},
-				},
-				{
-					Query:    "select * from b where x <> 2",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "replace into b values (1)",
-					Expected: []sql.Row{{sql.NewOkResult(1)}},
-				},
-				{
-					Query:    "select row_count()",
-					Expected: []sql.Row{{1}},
+					Query:    "select 1+1",
+					Expected: []sql.Row{{2}},
 				},
 			},
 		},
+		{
+			Name: "last_insert_id() behavior",
+			SetUpScript: []string{
+				"create table a (x int primary key, y int)",
+			},
+			Assertions: []enginetest.ScriptTestAssertion{},
+		},
 	}
 
+	harness := newDoltHarness(t)
 	for _, test := range scripts {
-		harness := newDoltHarness(t)
 		engine := enginetest.NewEngine(t, harness)
 		engine.Analyzer.Debug = true
 		engine.Analyzer.Verbose = true
@@ -113,7 +105,6 @@ func TestQueryPlans(t *testing.T) {
 		"SELECT opk.c5,pk1,pk2 FROM one_pk opk JOIN two_pk tpk ON pk=pk1 ORDER BY 1,2,3",
 		"SELECT pk,pk1,pk2 FROM one_pk LEFT JOIN two_pk ON pk=pk1 ORDER BY 1,2,3",
 		"SELECT pk,pk1,pk2 FROM one_pk t1, two_pk t2 WHERE pk=1 AND pk2=1 AND pk1=1 ORDER BY 1,2",
-		`SELECT * FROM (SELECT * FROM othertable WHERE i2 = 1) othertable_alias WHERE othertable_alias.i2 = 1`,
 	}
 
 	// Parallelism introduces Exchange nodes into the query plans, so disable.

@@ -342,7 +342,7 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	_, tfs, err := cs.Sources(ctx)
+	_, tfs, _, err := cs.Sources(ctx)
 
 	if err != nil {
 		return nil, err
@@ -379,33 +379,46 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 
 	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
-	root, tables, err := cs.Sources(ctx)
+	root, tables, appendixTables, err := cs.Sources(ctx)
 
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to get sources")
 	}
 
-	var tableFileInfo []*remotesapi.TableFileInfo
-	for _, tbl := range tables {
-		url, err := rs.getDownloadUrl(logger, req.RepoId.Org, req.RepoId.RepoName, tbl.FileID())
+	tableFileInfo, err := getTableFileInfo(rs, logger, tables, req)
+	if err != nil {
+		return nil, err
+	}
 
-		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to get download url for "+tbl.FileID())
-		}
-
-		tableFileInfo = append(tableFileInfo, &remotesapi.TableFileInfo{
-			FileId:    tbl.FileID(),
-			NumChunks: uint32(tbl.NumChunks()),
-			Url:       url,
-		})
+	appendixTableFileInfo, err := getTableFileInfo(rs, logger, appendixTables, req)
+	if err != nil {
+		return nil, err
 	}
 
 	resp := &remotesapi.ListTableFilesResponse{
-		RootHash:      root[:],
-		TableFileInfo: tableFileInfo,
+		RootHash:              root[:],
+		TableFileInfo:         tableFileInfo,
+		AppendixTableFileInfo: appendixTableFileInfo,
 	}
 
 	return resp, nil
+}
+
+func getTableFileInfo(rs *RemoteChunkStore, logger func(string), tableList []nbs.TableFile, req *remotesapi.ListTableFilesRequest) ([]*remotesapi.TableFileInfo, error) {
+	appendixTableFileInfo := make([]*remotesapi.TableFileInfo, 0)
+	for _, t := range tableList {
+		url, err := rs.getDownloadUrl(logger, req.RepoId.Org, req.RepoId.RepoName, t.FileID())
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to get download url for "+t.FileID())
+		}
+
+		appendixTableFileInfo = append(appendixTableFileInfo, &remotesapi.TableFileInfo{
+			FileId:    t.FileID(),
+			NumChunks: uint32(t.NumChunks()),
+			Url:       url,
+		})
+	}
+	return appendixTableFileInfo, nil
 }
 
 // AddTableFiles updates the remote manifest with new table files without modifying the root hash.

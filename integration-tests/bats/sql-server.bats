@@ -730,3 +730,38 @@ SQL
     insert_query 1 "INSERT INTO js_test VALUES (1, '{\"a\":1}');"
     server_query 1 "SELECT * FROM js_test;" "pk,js\n1,{\"a\": 1}"
 }
+
+@test "sql-server: manual commit table can be dropped (validates superschema structure)" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    # check no tables on master
+    server_query 1 "SHOW Tables" ""
+
+    # make some changes to master and commit to branch test_branch
+    multi_query 1 "
+    SET @@repo1_head=hashof('master');
+    CREATE TABLE one_pk (
+        pk BIGINT NOT NULL,
+        c1 BIGINT,
+        c2 BIGINT,
+        PRIMARY KEY (pk)
+    );
+    INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
+    SET @@repo1_head=commit('-m', 'test commit message', '--author', 'John Doe <john@example.com>');
+    INSERT INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);"
+
+    dolt add .
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "one_pk" ]] || false
+
+    dolt sql -q "drop table one_pk"
+    dolt commit -am "Dropped table one_pk"
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "one_pk" ]] || false
+}

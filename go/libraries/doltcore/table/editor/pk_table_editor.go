@@ -237,6 +237,16 @@ func (tea *tableEditAccumulator) maybeGet(ctx context.Context, keyHash hash.Hash
 // ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
 // format expected of the index, similar to searching on the index map itself.
 func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) (bool, error) {
+	// If we're working with a pkTableEditor, then we don't need to flush the table nor indexes.
+	if pkTe, ok := te.(*pkTableEditor); ok {
+		for _, indexEd := range pkTe.indexEds {
+			if indexEd.idx.Name() == indexName {
+				return indexEd.HasPartial(ctx, key)
+			}
+		}
+		return false, fmt.Errorf("an index editor for `%s` could not be found", indexName)
+	}
+
 	tbl, err := te.Table(ctx)
 	if err != nil {
 		return false, err

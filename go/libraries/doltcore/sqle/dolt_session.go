@@ -42,7 +42,7 @@ const (
 
 const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
 
-var transactionsEnabled = true
+var transactionsEnabled = false
 
 func init() {
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
@@ -618,6 +618,9 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	if err != nil {
 		return err
 	}
+
+	// After setting the initial root we have no state to commit
+	sess.dirty[db.Name()] = false
 
 	return nil
 }

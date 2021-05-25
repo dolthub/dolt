@@ -32,7 +32,7 @@ type Work struct {
 	// Work is the function that will be called by |Hedger.Do|. It will be
 	// called at least once, and possibly multiple times depending on how
 	// long it takes and the |Hedger|'s |Strategy|.
-	Work func(context.Context) (interface{}, error)
+	Work func(ctx context.Context, n int) (interface{}, error)
 
 	// Size is an integer representation of the size of the work.
 	// Potentially used by |Strategy|, not used by |Hedger|.
@@ -145,6 +145,8 @@ func (ms *MinStrategy) Observe(sz, n int, d time.Duration, err error) {
 	}
 }
 
+var MaxHedgesPerRequest = 1
+
 // Do runs |w| to completion, potentially spawning concurrent hedge runs of it.
 // Returns the results from the first invocation that completes, and cancels
 // the contexts of all invocations.
@@ -160,6 +162,9 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 	try := func() {
 		n := len(cancels) + 1
 		finalize := func() {}
+		if n-1 > MaxHedgesPerRequest {
+			return
+		}
 		if n > 1 {
 			if !h.sema.TryAcquire(1) {
 				// Too many outstanding hedges. Do nothing.
@@ -174,7 +179,7 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 		start := time.Now()
 		go func() {
 			defer finalize()
-			v, e := w.Work(ctx)
+			v, e := w.Work(ctx, n)
 			select {
 			case ch <- res{v, e, n, time.Since(start)}:
 			case <-ctx.Done():
