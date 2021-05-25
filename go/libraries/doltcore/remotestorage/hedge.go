@@ -32,7 +32,7 @@ type Work struct {
 	// Work is the function that will be called by |Hedger.Do|. It will be
 	// called at least once, and possibly multiple times depending on how
 	// long it takes and the |Hedger|'s |Strategy|.
-	Work func(context.Context) (interface{}, error)
+	Work func(ctx context.Context, n int) (interface{}, error)
 
 	// Size is an integer representation of the size of the work.
 	// Potentially used by |Strategy|, not used by |Hedger|.
@@ -179,7 +179,7 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 		start := time.Now()
 		go func() {
 			defer finalize()
-			v, e := w.Work(ctx)
+			v, e := w.Work(ctx, n)
 			select {
 			case ch <- res{v, e, n, time.Since(start)}:
 			case <-ctx.Done():

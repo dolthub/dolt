@@ -359,7 +359,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, ch
 		var err error
 		rangeLen := gr.RangeLen()
 		if rangeLen > HedgeDownloadSizeLimit {
-			comprData, err = rangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
+			comprData, err = rangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), rangeLen, 1, urlF)
 		} else {
 			comprData, err = hedgedRangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
 		}
@@ -1000,8 +1000,8 @@ type urlFactoryFunc func(error) (string, error)
 
 func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF urlFactoryFunc) ([]byte, error) {
 	res, err := DownloadHedger.Do(ctx, Work{
-		Work: func(ctx context.Context) (interface{}, error) {
-			return rangeDownloadWithRetries(ctx, fetcher, offset, length, urlStrF)
+		Work: func(ctx context.Context, n int) (interface{}, error) {
+			return rangeDownloadWithRetries(ctx, fetcher, offset, length, n, urlStrF)
 		},
 		Size: int(length),
 	})
@@ -1011,9 +1011,11 @@ func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, of
 	return res.([]byte), nil
 }
 
+var stats StatsRecorder = NullStatsRecorder{}
+
 // rangeDownloadWithRetries executes an http get with the 'Range' header to get a range of bytes from a file.  Request
 // is executed with retries and if progress was made, downloads will be resumed from where they left off on subsequent attempts.
-func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStrF urlFactoryFunc) ([]byte, error) {
+func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, hedgeN int, urlStrF urlFactoryFunc) ([]byte, error) {
 	// create the request
 
 	// parameters used for resuming downloads.
@@ -1022,11 +1024,13 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 	currLength := length
 
 	var lastError error
+	var retryCnt int
 
 	//execute the request
 	op := func() (rerr error) {
 		defer func() {
 			lastError = rerr
+			retryCnt += 1
 		}()
 		urlStr, err := urlStrF(lastError)
 		if err != nil {
@@ -1041,6 +1045,8 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 		rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
 		req.Header.Set("Range", rangeVal)
 
+		stats.RecordDownloadAttemptStart(hedgeN, retryCnt, currOffset - offset, length)
+		start := time.Now()
 		resp, err := fetcher.Do(req.WithContext(ctx))
 		if err == nil {
 			defer func() {
@@ -1052,6 +1058,7 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 		if respErr != nil {
 			return respErr
 		}
+		stats.RecordTimeToFirstByte(hedgeN, retryCnt, length, time.Since(start))
 
 		// read the results
 		comprData, err := iohelp.ReadWithMinThroughput(resp.Body, int64(currLength), downThroughputCheck)
@@ -1065,10 +1072,12 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 		return err
 	}
 
+	dstart := time.Now()
 	err := backoff.Retry(op, backoff.WithMaxRetries(downRetryParams, downRetryCount))
 	if err != nil {
 		return nil, err
 	}
+	stats.RecordDownloadComplete(hedgeN, retryCnt, length, time.Since(dstart))
 
 	return collapseBuffers(allBufs, length), nil
 }

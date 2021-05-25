@@ -55,7 +55,7 @@ func TestHedgerRunsWork(t *testing.T) {
 	h := NewHedger(1, NewMinStrategy(1*time.Second, nil))
 	ran := false
 	i, err := h.Do(context.Background(), Work{
-		Work: func(ctx context.Context) (interface{}, error) {
+		Work: func(ctx context.Context, n int) (interface{}, error) {
 			ran = true
 			return true, nil
 		},
@@ -71,7 +71,7 @@ func TestHedgerHedgesWork(t *testing.T) {
 	ch <- 1
 	ch <- 2
 	i, err := h.Do(context.Background(), Work{
-		Work: func(ctx context.Context) (interface{}, error) {
+		Work: func(ctx context.Context, n int) (interface{}, error) {
 			i := <-ch
 			if i == 1 {
 				<-ctx.Done()
@@ -93,7 +93,7 @@ func TestHedgerObeysMaxHedges(t *testing.T) {
 		h := NewHedger(int64(max), NewMinStrategy(1*time.Millisecond, nil))
 		cnt := int32(0)
 		i, err := h.Do(context.Background(), Work{
-			Work: func(ctx context.Context) (interface{}, error) {
+			Work: func(ctx context.Context, n int) (interface{}, error) {
 				cur := atomic.AddInt32(&cnt, 1)
 				if cur == int32(max) {
 					time.Sleep(100 * time.Millisecond)
@@ -123,7 +123,7 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 	h := NewHedger(int64(32), NewMinStrategy(1*time.Millisecond, nil))
 	cnt := int32(0)
 	i, err := h.Do(context.Background(), Work{
-		Work: func(ctx context.Context) (interface{}, error) {
+		Work: func(ctx context.Context, n int) (interface{}, error) {
 			cur := atomic.AddInt32(&cnt, 1)
 			if cur == int32(1) {
 				time.Sleep(500 * time.Millisecond)
@@ -139,7 +139,7 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 	MaxHedgesPerRequest = 1
 	cnt = int32(0)
 	i, err = h.Do(context.Background(), Work{
-		Work: func(ctx context.Context) (interface{}, error) {
+		Work: func(ctx context.Context, n int) (interface{}, error) {
 			cur := atomic.AddInt32(&cnt, 1)
 			if cur == int32(1) {
 				time.Sleep(30 * time.Second)
@@ -169,7 +169,7 @@ func TestHedgerContextCancelObeyed(t *testing.T) {
 		cancel()
 	}()
 	_, err := h.Do(ctx, Work{
-		Work: func(ctx context.Context) (interface{}, error) {
+		Work: func(ctx context.Context, n int) (interface{}, error) {
 			canCh <- struct{}{}
 			<-ctx.Done()
 			resCh <- struct{}{}
