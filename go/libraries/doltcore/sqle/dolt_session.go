@@ -228,7 +228,7 @@ func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName
 	return dtx.CreateSavepoint(savepointName, sess.roots[dbName].root)
 }
 
-// RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if not savepoint
+// RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
 func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
 	if !transactionsEnabled || dbName == "" {
@@ -245,7 +245,13 @@ func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, db
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
-	return sess.SetRoot(ctx, dbName, root)
+	err := sess.SetRoot(ctx, dbName, root)
+	if err != nil {
+		return err
+	}
+
+	dtx.ClearSavepoint(savepointName)
+	return nil
 }
 
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
