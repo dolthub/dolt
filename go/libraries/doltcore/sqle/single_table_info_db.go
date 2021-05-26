@@ -93,6 +93,10 @@ func (db *SingleTableInfoDatabase) PartitionRows(*sql.Context, sql.Partition) (s
 	return nil, fmt.Errorf("cannot get parition rows of a single table information database")
 }
 
+func (db *SingleTableInfoDatabase) IsTemporary() bool {
+	return false
+}
+
 // GetForeignKeys implements sql.ForeignKeyTable.
 func (db *SingleTableInfoDatabase) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
 	fks := make([]sql.ForeignKeyConstraint, len(db.foreignKeys))

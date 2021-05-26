@@ -129,6 +129,10 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 	return ht
 }
 
+func (ht *HistoryTable) IsTemporary() bool {
+	return false
+}
+
 var commitFilterCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
 
 func getColumnFilterCheck(colNameSet *set.StrSet) func(sql.Expression) bool {

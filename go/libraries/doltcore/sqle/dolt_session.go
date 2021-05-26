@@ -80,6 +80,7 @@ type DoltSession struct {
 	dirty        map[string]bool
 	Username     string
 	Email        string
+	tempTableRoot *doltdb.RootValue
 }
 
 var _ sql.Session = &DoltSession{}
@@ -95,6 +96,7 @@ func DefaultDoltSession() *DoltSession {
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		Username:     "",
 		Email:        "",
+		tempTableRoot: nil,
 	}
 	return sess
 }
@@ -118,6 +120,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		Username:     username,
 		Email:        email,
+		tempTableRoot: nil,
 	}
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db, db.DbData())
@@ -383,6 +386,28 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 
 	sess.dirty[dbName] = true
 	return nil
+}
+
+// TODO: Should this be moved to initialization
+func (sess *DoltSession) GetOrCreateTempTableRootValue(ctx *sql.Context, ddb *doltdb.DoltDB) (*doltdb.RootValue, error) {
+	if sess.tempTableRoot != nil {
+		return sess.tempTableRoot, nil
+	}
+
+	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
+
+	if err != nil {
+		return nil, err
+	}
+
+	sess.tempTableRoot = newRoot
+
+	return sess.tempTableRoot, nil
+}
+
+
+func (sess *DoltSession) SetTempTableRoot(newRoot *doltdb.RootValue) {
+	sess.tempTableRoot = newRoot
 }
 
 // GetHeadCommit returns the parent commit of the current session.

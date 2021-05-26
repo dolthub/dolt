@@ -158,6 +158,10 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return newDiffPartitions(ctx, cmItr, dt.workingRoot, dt.name, sf)
 }
 
+func (dt *DiffTable) IsTemporary() bool {
+	return false
+}
+
 var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
 
 func splitPartitionFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {

@@ -98,6 +98,10 @@ func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sq
 	return conflictRowIter{ctx, ct.rd}, nil
 }
 
+func (ct ConflictsTable) IsTemporary() bool {
+	return false
+}
+
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
 // and will end with a call to Close() to finalize the delete operation.
 func (ct ConflictsTable) Deleter(*sql.Context) sql.RowDeleter {

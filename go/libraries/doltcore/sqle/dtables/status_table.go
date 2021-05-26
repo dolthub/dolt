@@ -59,6 +59,10 @@ func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.R
 	return newStatusItr(context, &s)
 }
 
+func (s StatusTable) IsTemporary() bool {
+	return false
+}
+
 // NewStatusTable creates a StatusTable
 func NewStatusTable(_ *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) sql.Table {
 	return &StatusTable{ddb: ddb, rsr: rsr, drw: drw}

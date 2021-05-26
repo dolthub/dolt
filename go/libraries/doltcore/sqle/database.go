@@ -556,11 +556,6 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Schem
 	return db.createSqlTable(ctx, tableName, sch)
 }
 
-// CreateTemporaryTable creates a table that only exists the length of a schema.
-func (db Database) CreateTemporaryTable(ctx *sql.Context, name string, schema sql.Schema) error {
-	panic("implement me")
-}
-
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
 func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	root, err := db.GetRoot(ctx)
@@ -618,6 +613,77 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 	}
 
 	return db.SetRoot(ctx, newRoot)
+}
+
+// CreateTemporaryTable creates a table that only exists the length of a schema.
+func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
+	if doltdb.HasDoltPrefix(tableName) {
+		return ErrReservedTableName.New(tableName)
+	}
+
+	if !doltdb.IsValidTableName(tableName) {
+		return ErrInvalidTableName.New(tableName)
+	}
+
+	return db.createTempSQLTable(ctx, tableName, sch)
+}
+
+func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
+	// Get temporary root value
+	dsess := DSessFromSess(ctx.Session)
+	dbName := dsess.GetCurrentDatabase()
+	ddb, ok := dsess.GetDoltDB(dbName)
+
+	// TODO: This logic sucks
+	if !ok {
+		return fmt.Errorf("Can't get the ddb in TEMPORARY TABLE")
+	}
+
+	tempTableRootValue, err := dsess.GetOrCreateTempTableRootValue(ctx, ddb)
+	if err != nil {
+		return err
+	}
+
+	doltSch, err := sqlutil.ToDoltSchema(ctx, tempTableRootValue, tableName, sch, nil)
+	if err != nil {
+		return err
+	}
+
+	return db.createTempDoltTable(ctx, tableName, tempTableRootValue, doltSch, dsess)
+}
+
+func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema, dsess *DoltSession) error {
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
+
+	var conflictingTbls []string
+	_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		_, tbl, exists, err := root.GetTableByColTag(ctx, tag)
+		if err != nil {
+			return true, err
+		}
+		if exists && tbl != tableName {
+			errStr := schema.ErrTagPrevUsed(tag, col.Name, tbl).Error()
+			conflictingTbls = append(conflictingTbls, errStr)
+		}
+		return false, nil
+	})
+
+	if len(conflictingTbls) > 0 {
+		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
+	}
+
+	newRoot, err := root.CreateEmptyTable(ctx, tableName, doltSch)
+	if err != nil {
+		return err
+	}
+
+	dsess.SetTempTableRoot(newRoot)
+
+	return nil
 }
 
 // RenameTable implements sql.TableRenamer

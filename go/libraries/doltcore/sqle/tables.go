@@ -81,6 +81,7 @@ type DoltTable struct {
 	autoIncCol   schema.Column
 
 	projectedCols []string
+	temporary bool // denoted whether this is a temporary table
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase) *DoltTable {
@@ -100,6 +101,27 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		sch:           sch,
 		autoIncCol:    autoCol,
 		projectedCols: nil,
+	}
+}
+
+func NewTemporaryDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase) *DoltTable {
+	var autoCol schema.Column
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			autoCol = col
+			stop = true
+		}
+		return
+	})
+
+	return &DoltTable{
+		tableName:     name,
+		db:            db,
+		nbf:           tbl.Format(),
+		sch:           sch,
+		autoIncCol:    autoCol,
+		projectedCols: nil,
+		temporary: true,
 	}
 }
 
@@ -354,6 +376,10 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	partitions[numPartitions-1] = doltTablePartition{(numPartitions - 1) * itemsPerPartition, numElements, rowData}
 
 	return newDoltTablePartitionIter(rowData, partitions...), nil
+}
+
+func (t *DoltTable) IsTemporary() bool {
+	return t.temporary
 }
 
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {

@@ -76,6 +76,10 @@ func (bt *BranchesTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) 
 	return NewBranchItr(sqlCtx, bt.ddb)
 }
 
+func (bt *BranchesTable) IsTemporary() bool {
+	return false
+}
+
 // BranchItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type BranchItr struct {
 	branches []string

@@ -181,6 +181,10 @@ func (dt *CommitDiffTable) Schema() sql.Schema {
 	return dt.sqlSch
 }
 
+func (dt *CommitDiffTable) IsTemporary() bool {
+	return false
+}
+
 type SliceOfPartitionsItr struct {
 	partitions []sql.Partition
 	i          int
