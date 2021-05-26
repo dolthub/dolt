@@ -154,11 +154,14 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	require.NoError(d.t, err)
 
 	var dbs []sql.Database
+	d.databases = nil
 	for _, name := range names {
 		db := sqle.NewDatabase(name, dEnv.DbData())
 		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db, db.DbData()))
 		dbs = append(dbs, db)
+		d.databases = append(d.databases, db)
 	}
+
 	return dbs
 }
 
