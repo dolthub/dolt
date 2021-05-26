@@ -74,7 +74,7 @@ func (d DisabledTransaction) String() string {
 }
 
 func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
-	if !transactionsEnabled {
+	if !TransactionsEnabled {
 		return DisabledTransaction{}, nil
 	}
 

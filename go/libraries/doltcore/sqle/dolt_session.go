@@ -42,13 +42,15 @@ const (
 
 const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
 
-var transactionsEnabled = true
+// TransactionsEnabled controls whether to use SQL transactions
+// Exported only for testing
+var TransactionsEnabled = true
 
 func init() {
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
 	if ok {
 		if strings.ToLower(enableTx) == "true" {
-			transactionsEnabled = true
+			TransactionsEnabled = true
 		}
 	}
 }
@@ -155,7 +157,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 
 	// Old "commit" path, which just writes whatever the root for this session is to the repo state file with no care
 	// for concurrency. Over time we will disable this path.
-	if !transactionsEnabled {
+	if !TransactionsEnabled {
 		dbData := sess.dbDatas[dbName]
 
 		h, err := dbData.Ddb.WriteRootValue(ctx, dbRoot.root)
@@ -191,7 +193,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 
 // RollbackTransaction rolls the given transaction back
 func (sess *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if !transactionsEnabled || dbName == "" {
+	if !TransactionsEnabled || dbName == "" {
 		return nil
 	}
 
@@ -216,7 +218,7 @@ func (sess *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
 func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !transactionsEnabled || dbName == "" {
+	if !TransactionsEnabled || dbName == "" {
 		return nil
 	}
 
@@ -231,7 +233,7 @@ func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
 func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !transactionsEnabled || dbName == "" {
+	if !TransactionsEnabled || dbName == "" {
 		return nil
 	}
 
@@ -257,7 +259,7 @@ func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, db
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
 func (sess *DoltSession) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !transactionsEnabled || dbName == "" {
+	if !TransactionsEnabled || dbName == "" {
 		return nil
 	}
 
@@ -582,7 +584,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 		}
 	}
 
-	if transactionsEnabled {
+	if TransactionsEnabled {
 		// Not all dolt commands update the working set ref yet. So until that's true, we update it here with the contents
 		// of the repo_state.json file
 		workingSetRef, err := ref.WorkingSetRefForHead(headRef)

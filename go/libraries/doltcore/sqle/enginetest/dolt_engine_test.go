@@ -301,5 +301,11 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
+	if !sqle.TransactionsEnabled {
+		sqle.TransactionsEnabled = true
+		defer func() {
+			sqle.TransactionsEnabled = false
+		}()
+	}
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
 }
