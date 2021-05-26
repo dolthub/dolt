@@ -42,7 +42,7 @@ const (
 
 const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
 
-var transactionsEnabled = false
+var transactionsEnabled = true
 
 func init() {
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
