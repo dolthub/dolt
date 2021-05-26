@@ -41,6 +41,7 @@ const (
 )
 
 const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
+const TempTablesRootName = "DOLT_TEMP_TABLES"
 
 var transactionsEnabled = false
 

@@ -131,6 +131,7 @@ var _ SqlDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.TableDropper = Database{}
 var _ sql.TableCreator = Database{}
+var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
@@ -553,6 +554,11 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Schem
 	}
 
 	return db.createSqlTable(ctx, tableName, sch)
+}
+
+// CreateTemporaryTable creates a table that only exists the length of a schema.
+func (db Database) CreateTemporaryTable(ctx *sql.Context, name string, schema sql.Schema) error {
+	panic("implement me")
 }
 
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.

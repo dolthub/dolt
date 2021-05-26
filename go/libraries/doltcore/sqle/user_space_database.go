@@ -64,6 +64,7 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 		if !doltdb.IsReadOnlySystemTable(tbl) {
 			resultingTblNames = append(resultingTblNames, tbl)
 		}
+		// TODO: Don't display the temporary tables
 	}
 	return resultingTblNames, nil
 }
