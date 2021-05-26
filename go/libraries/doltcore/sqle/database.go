@@ -54,6 +54,7 @@ const (
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
+	GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, error)
 }
 
 // Database implements sql.Database for a dolt DB.
@@ -198,6 +199,23 @@ func (db Database) DbData() env.DbData {
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
+	// Check whether this table is a temporary table. It takes priority over persisted tables.
+	dsess := DSessFromSess(ctx.Session)
+	tempTableRootValue, err := dsess.GetTempTableRootValue()
+	if err != nil {
+		return nil, false, err
+	}
+
+	_, _, ok, err := tempTableRootValue.GetTableInsensitive(ctx, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if ok {
+		// TODO: Double Check that this is actually ok
+		return db.getTable(ctx, tempTableRootValue, tblName, true)
+	}
+
 	root, err := db.GetRoot(ctx)
 
 	if err != nil {
@@ -260,7 +278,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		return dt, found, nil
 	}
 
-	return db.getTable(ctx, root, tblName)
+	return db.getTable(ctx, root, tblName, false)
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
@@ -272,7 +290,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return nil, false, nil
 	}
 
-	table, ok, err := db.getTable(ctx, root, tableName)
+	table, ok, err := db.getTable(ctx, root, tableName, false)
 	if err != nil {
 		return nil, false, err
 	}
@@ -384,7 +402,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 
 // getTable gets the table with the exact name given at the root value given. The database caches tables for all root
 // values to avoid doing schema lookups on every table lookup, which are expensive.
-func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
+func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string, temporary bool) (sql.Table, bool, error) {
 	tableNames, err := getAllTableNames(ctx, root)
 	if err != nil {
 		return nil, true, err
@@ -410,7 +428,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 
 	var table sql.Table
 
-	readonlyTable := NewDoltTable(tableName, sch, tbl, db)
+	readonlyTable := NewDoltTable(tableName, sch, tbl, db, temporary)
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {
@@ -485,6 +503,12 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 	return currRoot.root, nil
 }
+
+func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
+	dsess := DSessFromSess(ctx.Session)
+	return dsess.GetTempTableRootValue()
+}
+
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
 // convenience.
@@ -631,15 +655,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch 
 func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	// Get temporary root value
 	dsess := DSessFromSess(ctx.Session)
-	dbName := dsess.GetCurrentDatabase()
-	ddb, ok := dsess.GetDoltDB(dbName)
-
-	// TODO: This logic sucks
-	if !ok {
-		return fmt.Errorf("Can't get the ddb in TEMPORARY TABLE")
-	}
-
-	tempTableRootValue, err := dsess.GetOrCreateTempTableRootValue(ctx, ddb)
+	tempTableRootValue, err := dsess.GetTempTableRootValue()
 	if err != nil {
 		return err
 	}
@@ -681,7 +697,7 @@ func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root 
 		return err
 	}
 
-	dsess.SetTempTableRoot(newRoot)
+	dsess.SetTempTableRoot(ctx, newRoot)
 
 	return nil
 }
@@ -989,6 +1005,10 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context) *editor.TableEditSession {
 	return DSessFromSess(ctx.Session).editSessions[db.name]
+}
+
+func (db Database) TempTableEditSession(ctx *sql.Context) *editor.TableEditSession {
+	return DSessFromSess(ctx.Session).editSessions[TempTablesEditSession]
 }
 
 // RegisterSchemaFragments register SQL schema fragments that are persisted in the given

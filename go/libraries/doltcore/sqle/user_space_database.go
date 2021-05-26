@@ -50,7 +50,7 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 	if err != nil {
 		return nil, false, err
 	}
-	dt := NewDoltTable(tableName, sch, table, db)
+	dt := NewDoltTable(tableName, sch, table, db, false)
 	return dt, true, nil
 }
 
@@ -70,5 +70,10 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 }
 
 func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
+	return db.RootValue, nil
+}
+
+// TODO: MAybe add another abstraction here
+func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, error) {
 	return db.RootValue, nil
 }

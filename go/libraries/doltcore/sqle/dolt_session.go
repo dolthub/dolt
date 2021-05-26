@@ -41,7 +41,7 @@ const (
 )
 
 const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
-const TempTablesRootName = "DOLT_TEMP_TABLES"
+const TempTablesEditSession = "DOLT_TEMP_TABLES"
 
 var transactionsEnabled = false
 
@@ -106,9 +106,21 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 	dbDatas := make(map[string]env.DbData)
 	editSessions := make(map[string]*editor.TableEditSession)
 
+	var tempTableRoot *doltdb.RootValue = nil
 	for _, db := range dbs {
 		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
 		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
+
+		// Create the RV that has the temp table
+		if tempTableRoot == nil {
+			newRoot, err := doltdb.EmptyRootValue(ctx, db.ddb.ValueReadWriter())
+			if err != nil {
+				return nil, err
+			}
+
+			tempTableRoot = newRoot
+			editSessions[TempTablesEditSession] = editor.CreateTableEditSession(tempTableRoot, editor.TableEditSessionProps{})
+		}
 	}
 
 	sess := &DoltSession{
@@ -120,7 +132,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		Username:     username,
 		Email:        email,
-		tempTableRoot: nil,
+		tempTableRoot: tempTableRoot,
 	}
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db, db.DbData())
@@ -389,25 +401,18 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 }
 
 // TODO: Should this be moved to initialization
-func (sess *DoltSession) GetOrCreateTempTableRootValue(ctx *sql.Context, ddb *doltdb.DoltDB) (*doltdb.RootValue, error) {
-	if sess.tempTableRoot != nil {
-		return sess.tempTableRoot, nil
+func (sess *DoltSession) GetTempTableRootValue() (*doltdb.RootValue, error) {
+	if sess.tempTableRoot == nil {
+		return nil, fmt.Errorf("error: root value that stores temporary tables does not exist")
 	}
-
-	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
-
-	if err != nil {
-		return nil, err
-	}
-
-	sess.tempTableRoot = newRoot
 
 	return sess.tempTableRoot, nil
 }
 
 
-func (sess *DoltSession) SetTempTableRoot(newRoot *doltdb.RootValue) {
+func (sess *DoltSession) SetTempTableRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	sess.tempTableRoot = newRoot
+	return sess.editSessions[TempTablesEditSession].SetRoot(ctx, newRoot)
 }
 
 // GetHeadCommit returns the parent commit of the current session.

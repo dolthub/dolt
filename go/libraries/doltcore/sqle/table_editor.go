@@ -46,6 +46,7 @@ type sqlTableEditor struct {
 	kvToSQLRow        *KVToSqlRowConverter
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
+	temporary		  bool
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -54,7 +55,14 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	sess := t.db.TableEditSession(ctx)
+	// todo: fix this
+	var sess *editor.TableEditSession
+	if t.IsTemporary() {
+		sess = t.db.TempTableEditSession(ctx)
+	} else {
+		sess = t.db.TableEditSession(ctx)
+	}
+
 	tableEditor, err := sess.GetTableEditor(ctx, t.tableName, t.sch)
 	if err != nil {
 		return nil, err
@@ -71,6 +79,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		kvToSQLRow:  conv,
 		tableEditor: tableEditor,
 		sess:        sess,
+		temporary: t.IsTemporary(),
 	}, nil
 }
 
@@ -157,5 +166,10 @@ func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 	}
 
 	dSess := DSessFromSess(ctx.Session)
+
+	if te.temporary {
+		return dSess.SetTempTableRoot(ctx, newRoot)
+	}
+
 	return dSess.SetRoot(ctx, te.dbName, newRoot)
 }

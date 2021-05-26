@@ -84,7 +84,7 @@ type DoltTable struct {
 	temporary bool // denoted whether this is a temporary table
 }
 
-func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase) *DoltTable {
+func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool) *DoltTable {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
@@ -101,27 +101,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		sch:           sch,
 		autoIncCol:    autoCol,
 		projectedCols: nil,
-	}
-}
-
-func NewTemporaryDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase) *DoltTable {
-	var autoCol schema.Column
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.AutoIncrement {
-			autoCol = col
-			stop = true
-		}
-		return
-	})
-
-	return &DoltTable{
-		tableName:     name,
-		db:            db,
-		nbf:           tbl.Format(),
-		sch:           sch,
-		autoIncCol:    autoCol,
-		projectedCols: nil,
-		temporary: true,
+		temporary: isTemporary,
 	}
 }
 
@@ -161,7 +141,13 @@ func (t *DoltTable) doltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	root := t.lockedToRoot
 	if root == nil {
 		var err error
-		root, err = t.db.GetRoot(ctx)
+
+		if t.temporary {
+			root, err = t.db.GetTemporaryTablesRoot(ctx)
+		} else {
+			root, err = t.db.GetRoot(ctx)
+		}
+
 		if err != nil {
 			return nil, err
 		}
@@ -1537,7 +1523,7 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 }
 
 func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootValue) error {
-	updatedTableSql, ok, err := t.db.getTable(ctx, root, t.tableName)
+	updatedTableSql, ok, err := t.db.getTable(ctx, root, t.tableName, t.temporary)
 	if err != nil {
 		return err
 	}
