@@ -55,13 +55,7 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	// todo: fix this
-	var sess *editor.TableEditSession
-	if t.IsTemporary() {
-		sess = t.db.TempTableEditSession(ctx)
-	} else {
-		sess = t.db.TableEditSession(ctx)
-	}
+	sess := t.db.TableEditSession(ctx, t.IsTemporary())
 
 	tableEditor, err := sess.GetTableEditor(ctx, t.tableName, t.sch)
 	if err != nil {
@@ -79,7 +73,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		kvToSQLRow:  conv,
 		tableEditor: tableEditor,
 		sess:        sess,
-		temporary: t.IsTemporary(),
+		temporary:   t.IsTemporary(),
 	}, nil
 }
 
@@ -167,6 +161,7 @@ func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 
 	dSess := DSessFromSess(ctx.Session)
 
+	// TODO: This needs to be fixed
 	if te.temporary {
 		return dSess.SetTempTableRoot(ctx, newRoot)
 	}

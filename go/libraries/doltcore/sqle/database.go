@@ -781,18 +781,18 @@ func (db Database) Flush(ctx *sql.Context) error {
 		return err
 	}
 
-	// Flush any changes made to temporary tables made
+	err = db.SetRoot(ctx, newRoot)
+	if err != nil {
+		return nil
+	}
+
+	// Flush any changes made to temporary tables
 	newTempTableRoot, err := dsess.editSessions[TempTablesEditSession].Flush(ctx)
 	if err != nil {
 		return nil
 	}
 
-	err = dsess.SetTempTableRoot(ctx, newTempTableRoot)
-	if err != nil {
-		return nil
-	}
-
-	return db.SetRoot(ctx, newRoot)
+	return dsess.SetTempTableRoot(ctx, newTempTableRoot)
 }
 
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
@@ -986,7 +986,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 
 	// If rows exist, then grab the highest id and add 1 to get the new id
 	indexToUse := int64(1)
-	te, err := db.TableEditSession(ctx).GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
+	te, err := db.TableEditSession(ctx, tbl.IsTemporary()).GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
 	if err != nil {
 		return err
 	}
@@ -1050,13 +1050,11 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 }
 
 // TableEditSession returns the TableEditSession for this database from the given context.
-func (db Database) TableEditSession(ctx *sql.Context) *editor.TableEditSession {
+func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) *editor.TableEditSession {
+	if isTemporary {
+		return DSessFromSess(ctx.Session).editSessions[TempTablesEditSession]
+	}
 	return DSessFromSess(ctx.Session).editSessions[db.name]
-}
-
-// TODO: Refactor into the above method
-func (db Database) TempTableEditSession(ctx *sql.Context) *editor.TableEditSession {
-	return DSessFromSess(ctx.Session).editSessions[TempTablesEditSession]
 }
 
 // RegisterSchemaFragments register SQL schema fragments that are persisted in the given
