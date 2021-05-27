@@ -44,7 +44,7 @@ const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
 
 // TransactionsEnabled controls whether to use SQL transactions
 // Exported only for testing
-var TransactionsEnabled = true
+var TransactionsEnabled = false
 
 func init() {
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
