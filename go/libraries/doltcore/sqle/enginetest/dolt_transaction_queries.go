@@ -709,6 +709,18 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 2}},
+			},
+			{
+				Query:    "/* client c */ select * from t order by x",
+				Expected: []sql.Row{{1, 1, 1}, {2, 2, 4}},
+			},
+			{
 				Query:    "/* client c */ commit",
 				Expected: []sql.Row{},
 			},
