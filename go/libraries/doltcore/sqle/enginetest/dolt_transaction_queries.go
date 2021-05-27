@@ -157,6 +157,14 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 					},
 				}}},
 			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 2}, {2, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 2}, {2, 2}},
+			},
 		},
 	},
 	{
@@ -390,6 +398,217 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			{
 				Query:    "/* client b */ select * from t order by x",
 				Expected: []sql.Row{{1, 3}, {2, 4}},
+			},
+		},
+	},
+	{
+		Name: "non overlapping updates (diff cols)",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, z int)",
+			"insert into t values (1, 1, 1), (2, 2, 2)",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update t set y = 2",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 2,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client b */ update t set z = 3",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: uint64(2),
+					Info: plan.UpdateInfo{
+						Matched: 2,
+						Updated: 2,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 2, 3}, {2, 2, 3}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 2, 3}, {2, 2, 3}},
+			},
+		},
+	},
+	{
+		Name: "duplicate deletes, autocommit on",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2)",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ delete from t where y = 2",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ delete from t where y = 2",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+		},
+	},
+	{
+		Name: "duplicate deletes, autocommit off",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2)",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ delete from t where y = 2",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ delete from t where y = 2",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+		},
+	},
+	{
+		Name: "non overlapping deletes",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2), (3, 3)",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ delete from t where y = 2",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ delete from t where y = 3",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+		},
+	},
+	{
+		Name: "conflicting delete and update",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2)",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update t set y = 3 where y = 2",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client b */ delete from t where y = 2",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				ExpectedErrStr: "conflict in table t",
+			},
+			{
+				Query:    "/* client b */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 3}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 3}},
 			},
 		},
 	},
