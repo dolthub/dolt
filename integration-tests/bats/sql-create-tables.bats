@@ -410,3 +410,70 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "name" ]] || false
 }
+
+@test "sql-create-tables: Can create a temporary table that lasts the length of a session" {
+    run dolt sql -q "CREATE TEMPORARY TABLE mytemptable(pk int PRIMARY KEY)"
+    [ "$status" -eq 0 ]
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "mytemptable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: Temporary tables can have data inserted and retrieved" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id)
+);
+
+INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
+SELECT * FROM colors;
+SQL
+    [[ "$output" =~ "| id | color |" ]] || false
+    [[ "$output" =~ "1  | red" ]] || false
+    [[ "$output" =~ "2  | green" ]] || false
+    [[ "$output" =~ "3  | blue" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "colors" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: Temporary tables with indexenn n  s can have data inserted and retrieved" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+
+INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
+SELECT * FROM colors;
+SQL
+    [[ "$output" =~ "| id | color |" ]] || false
+    [[ "$output" =~ "1  | red" ]] || false
+    [[ "$output" =~ "2  | green" ]] || false
+    [[ "$output" =~ "3  | blue" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    echo $output
+    ! [[ "$output" =~ "colors" ]] || false
+}
+
+

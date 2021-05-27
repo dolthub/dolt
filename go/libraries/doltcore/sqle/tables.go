@@ -1011,7 +1011,13 @@ func (t *AlterableDoltTable) CreateIndex(
 	if err != nil {
 		return err
 	}
-	err = t.db.SetRoot(ctx, newRoot)
+
+	if t.temporary {
+		err = t.db.SetTemporaryRoot(ctx, newRoot)
+	} else {
+		err = t.db.SetRoot(ctx, newRoot)
+	}
+
 	if err != nil {
 		return err
 	}

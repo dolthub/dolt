@@ -512,9 +512,15 @@ func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, 
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
 // convenience.
+// TODO: This interface needs to be fixed
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dsess := DSessFromSess(ctx.Session)
 	return dsess.SetRoot(ctx, db.name, newRoot)
+}
+
+func (db Database) SetTemporaryRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+	dsess := DSessFromSess(ctx.Session)
+	return dsess.SetTempTableRoot(ctx,newRoot)
 }
 
 // LoadRootFromRepoState loads the root value from the repo state's working hash, then calls SetRoot with the loaded
@@ -743,6 +749,17 @@ func (db Database) Flush(ctx *sql.Context) error {
 	newRoot, err := editSession.Flush(ctx)
 	if err != nil {
 		return err
+	}
+
+	// Flush any changes made to temporary tables made
+	newTempTableRoot, err := dsess.editSessions[TempTablesEditSession].Flush(ctx)
+	if err != nil {
+		return nil
+	}
+
+	err = dsess.SetTempTableRoot(ctx, newTempTableRoot)
+	if err != nil {
+		return nil
 	}
 
 	return db.SetRoot(ctx, newRoot)

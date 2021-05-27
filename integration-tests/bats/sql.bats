@@ -1110,12 +1110,3 @@ SQL
     [ "${lines[0]}" = "Grants for root@%" ]
     [ "${lines[1]}" = "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION" ]
 }
-
-@test "sql: Can create a temporary table that last the length of a session" {
-    run dolt sql -q "CREATE TEMPORARY TABLE mytemptable(pk int PRIMARY KEY)"
-    [ "$status" -eq 0 ]
-
-    run dolt ls
-    [ "$status" -eq 0 ]
-    ! [[ "$output" =~ "mytemptable" ]] || false
-}

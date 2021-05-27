@@ -1364,7 +1364,7 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		nameToDB[db.Name()] = db
 		root := roots[db.Name()]
 		engine.AddDatabase(db)
-		err := dsess.AddDB(sqlCtx, db, db.DbData())
+ 		err := dsess.AddDB(sqlCtx, db, db.DbData())
 
 		if err != nil {
 			return nil, err
