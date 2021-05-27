@@ -17,6 +17,7 @@ package sqle
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/types"
 	"os"
 	"strings"
 
@@ -106,21 +107,9 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 	dbDatas := make(map[string]env.DbData)
 	editSessions := make(map[string]*editor.TableEditSession)
 
-	var tempTableRoot *doltdb.RootValue = nil
 	for _, db := range dbs {
 		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
 		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
-
-		// Create the RV that has the temp table
-		if tempTableRoot == nil {
-			newRoot, err := doltdb.EmptyRootValue(ctx, db.ddb.ValueReadWriter())
-			if err != nil {
-				return nil, err
-			}
-
-			tempTableRoot = newRoot
-			editSessions[TempTablesEditSession] = editor.CreateTableEditSession(tempTableRoot, editor.TableEditSessionProps{})
-		}
 	}
 
 	sess := &DoltSession{
@@ -132,7 +121,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		workingSets:  make(map[string]ref.WorkingSetRef),
 		Username:     username,
 		Email:        email,
-		tempTableRoot: tempTableRoot,
+		tempTableRoot: nil,
 	}
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db, db.DbData())
@@ -140,6 +129,11 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	err := sess.CreateTemporaryTablesRoot(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	return sess, nil
@@ -400,7 +394,6 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 	return nil
 }
 
-// TODO: Should this be moved to initialization
 func (sess *DoltSession) GetTempTableRootValue() (*doltdb.RootValue, error) {
 	if sess.tempTableRoot == nil {
 		return nil, fmt.Errorf("error: root value that stores temporary tables does not exist")
@@ -408,7 +401,6 @@ func (sess *DoltSession) GetTempTableRootValue() (*doltdb.RootValue, error) {
 
 	return sess.tempTableRoot, nil
 }
-
 
 func (sess *DoltSession) SetTempTableRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	sess.tempTableRoot = newRoot
@@ -652,18 +644,22 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 
 	// After setting the initial root we have no state to commit
 	sess.dirty[db.Name()] = false
+	return nil
+}
 
+func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context) error {
+	ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, doltdb.LocalDirDoltDB, nil)
+	if err != nil {
+		return nil
+	}
 
-	// TODO: Refactor this
-	if sess.tempTableRoot == nil {
-		newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
-		if err != nil {
+	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
+	if err != nil {
 			return err
 		}
 
-		sess.tempTableRoot = newRoot
-		sess.editSessions[TempTablesEditSession] = editor.CreateTableEditSession(sess.tempTableRoot, editor.TableEditSessionProps{})
-	}
+	sess.tempTableRoot = newRoot
+	sess.editSessions[TempTablesEditSession] = editor.CreateTableEditSession(sess.tempTableRoot, editor.TableEditSessionProps{})
 
 	return nil
 }

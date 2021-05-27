@@ -549,11 +549,6 @@ SQL
 
     run dolt sql -q "SELECT COUNT(*) FROM goodtable;"
     [[ "$output" =~ "0" ]] || false
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "sql-create-table: You can create a normal table even if a temporary table exists with the same name" {
@@ -576,11 +571,6 @@ SQL
 
     run dolt sql -q "SELECT COUNT(*) FROM goodtable;"
     [[ "$output" =~ "0" ]] || false
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "sql-create-table: Alter on a temporary table" {

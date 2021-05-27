@@ -1382,6 +1382,11 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		}
 	}
 
+	err = dsess.CreateTemporaryTablesRoot(sqlCtx)
+	if err != nil {
+		return nil, err
+	}
+
 	return &sqlEngine{nameToDB, mrEnv, engine, format}, nil
 }
 
