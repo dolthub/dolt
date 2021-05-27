@@ -32,6 +32,7 @@ import (
 type DoltHarness struct {
 	t              *testing.T
 	session        *sqle.DoltSession
+	databases      []sqle.Database
 	parallelism    int
 	skippedQueries []string
 }
@@ -109,6 +110,22 @@ func (d *DoltHarness) NewContext() *sql.Context {
 		sql.WithSession(d.session))
 }
 
+func (d DoltHarness) NewSession() *sql.Context {
+	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	require.NoError(d.t, err)
+
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithSession(session))
+
+	for _, db := range d.databases {
+		err := session.AddDB(ctx, db, db.DbData())
+		require.NoError(d.t, err)
+	}
+
+	return ctx
+}
+
 func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 	return true
 }
@@ -137,11 +154,14 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	require.NoError(d.t, err)
 
 	var dbs []sql.Database
+	d.databases = nil
 	for _, name := range names {
 		db := sqle.NewDatabase(name, dEnv.DbData())
 		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db, db.DbData()))
 		dbs = append(dbs, db)
+		d.databases = append(d.databases, db)
 	}
+
 	return dbs
 }
 
