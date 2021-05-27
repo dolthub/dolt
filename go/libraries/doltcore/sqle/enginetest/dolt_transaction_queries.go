@@ -612,4 +612,118 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "delete in one client, insert into another",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1), (2, 2)",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ delete from t where y = 1",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ delete from t",
+				Expected: []sql.Row{{sql.NewOkResult(2)}},
+			},
+			{
+				Query:    "/* client b */ insert into t values (1,1)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "multiple client edit session",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int, z int)",
+			"insert into t values (1, 1, 1), (2, 2, 2)",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client c */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ update t set y = 3 where y = 2",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client b */ delete from t where y = 1",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client c */ update t set z = 4 where y = 2",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client c */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 4}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 4}},
+			},
+			{
+				Query:    "/* client c */ select * from t order by x",
+				Expected: []sql.Row{{2, 3, 4}},
+			},
+		},
+	},
 }
