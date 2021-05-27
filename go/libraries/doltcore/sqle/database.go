@@ -1007,6 +1007,7 @@ func (db Database) TableEditSession(ctx *sql.Context) *editor.TableEditSession {
 	return DSessFromSess(ctx.Session).editSessions[db.name]
 }
 
+// TODO: Refactor into the above method
 func (db Database) TempTableEditSession(ctx *sql.Context) *editor.TableEditSession {
 	return DSessFromSess(ctx.Session).editSessions[TempTablesEditSession]
 }

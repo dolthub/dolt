@@ -653,6 +653,18 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	// After setting the initial root we have no state to commit
 	sess.dirty[db.Name()] = false
 
+
+	// TODO: Refactor this
+	if sess.tempTableRoot == nil {
+		newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
+		if err != nil {
+			return err
+		}
+
+		sess.tempTableRoot = newRoot
+		sess.editSessions[TempTablesEditSession] = editor.CreateTableEditSession(sess.tempTableRoot, editor.TableEditSessionProps{})
+	}
+
 	return nil
 }
 
