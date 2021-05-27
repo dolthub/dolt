@@ -473,6 +473,11 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "colors" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "sql-create-tables: Create temporary table select from another table works" {
@@ -490,7 +495,6 @@ INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
 CREATE TEMPORARY TABLE mytemptable SELECT * FROM colors;
 SELECT * from mytemptable;
 SQL
-    echo $output
     [[ "$output" =~ "| id | color |" ]] || false
     [[ "$output" =~ "1  | red" ]] || false
     [[ "$output" =~ "2  | green" ]] || false
@@ -500,6 +504,11 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "colors" ]] || false
     [[ "$output" =~ "mytemptable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "sql-create-tables: You can drop temp tables" {
@@ -512,6 +521,11 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "colors" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 
@@ -535,4 +549,60 @@ SQL
 
     run dolt sql -q "SELECT COUNT(*) FROM goodtable;"
     [[ "$output" =~ "0" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-table: You can create a normal table even if a temporary table exists with the same name" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
+INSERT INTO goodtable VALUES (1);
+
+CREATE TABLE goodtable(pk int PRIMARY KEY);
+
+SELECT * FROM goodtable;
+DROP TABLE goodtable;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk |" ]] || false
+    [[ "$output" =~ "| 1  |" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "goodtable" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM goodtable;"
+    [[ "$output" =~ "0" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-table: Alter on a temporary table" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
+ALTER TABLE goodtable ADD COLUMN val int;
+
+INSERT INTO goodtable VALUES (1, 1);
+
+SELECT * FROM goodtable;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk | val |" ]] || false
+    [[ "$output" =~ "+----+-----+" ]] || false
+    [[ "$output" =~ "| 1  | 1   |" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "goodtable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
