@@ -452,7 +452,7 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "sql-create-tables: Temporary tables with indexenn n  s can have data inserted and retrieved" {
+@test "sql-create-tables: Temporary tables with indexes can have data inserted and retrieved" {
     run dolt sql <<SQL
 CREATE TEMPORARY TABLE colors (
     id INT NOT NULL,
@@ -472,8 +472,67 @@ SQL
 
     run dolt ls
     [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "colors" ]] || false
+}
+
+@test "sql-create-tables: Create temporary table select from another table works" {
+    skip "CREATE TABLE (SELECT * ) is not supported"
+    run dolt sql <<SQL
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+
+INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
+CREATE TEMPORARY TABLE mytemptable SELECT * FROM colors;
+SELECT * from mytemptable;
+SQL
     echo $output
+    [[ "$output" =~ "| id | color |" ]] || false
+    [[ "$output" =~ "1  | red" ]] || false
+    [[ "$output" =~ "2  | green" ]] || false
+    [[ "$output" =~ "3  | blue" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "colors" ]] || false
+    [[ "$output" =~ "mytemptable" ]] || false
+}
+
+@test "sql-create-tables: You can drop temp tables" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE mytemptable(pk int PRIMARY KEY);
+DROP TABLE mytemptable
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt ls
+    [ "$status" -eq 0 ]
     ! [[ "$output" =~ "colors" ]] || false
 }
 
 
+@test "sql-create-tables: You can create a temp table of the same name as a normal table. Run it through operations" {
+    run dolt sql <<SQL
+CREATE TABLE goodtable(pk int PRIMARY KEY);
+
+CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
+INSERT INTO goodtable VALUES (1);
+
+SELECT * FROM goodtable;
+DROP TABLE goodtable;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk |" ]] || false
+    [[ "$output" =~ "| 1  |" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "goodtable" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM goodtable;"
+    [[ "$output" =~ "0" ]] || false
+}

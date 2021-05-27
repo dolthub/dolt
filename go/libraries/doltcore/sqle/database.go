@@ -546,15 +546,45 @@ func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 // DropTable drops the table with the name given
 func (db Database) DropTable(ctx *sql.Context, tableName string) error {
+	if doltdb.IsReadOnlySystemTable(tableName) {
+		return ErrSystemTableAlter.New(tableName)
+	}
+
+	// Temporary Tables Get Precedence over schema tables
+	tempTableRoot, err := db.GetTemporaryTablesRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	tempTableExists, err := tempTableRoot.HasTable(ctx, tableName)
+	if err != nil {
+		return err
+	}
+
+	if tempTableExists {
+		tableExists, err := tempTableRoot.HasTable(ctx, tableName)
+		if err != nil {
+			return err
+		}
+
+		if !tableExists {
+			return sql.ErrTableNotFound.New(tableName)
+		}
+
+		newRoot, err := tempTableRoot.RemoveTables(ctx, tableName)
+		if err != nil {
+			return err
+		}
+
+		return db.SetTemporaryRoot(ctx, newRoot)
+	}
+
 	root, err := db.GetRoot(ctx)
 
 	if err != nil {
 		return err
 	}
 
-	if doltdb.IsReadOnlySystemTable(tableName) {
-		return ErrSystemTableAlter.New(tableName)
-	}
 
 	tableExists, err := root.HasTable(ctx, tableName)
 	if err != nil {
