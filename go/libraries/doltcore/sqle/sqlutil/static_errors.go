@@ -76,6 +76,16 @@ func (e *StaticErrorEditor) SetAutoIncrementValue(*sql.Context, interface{}) err
 	return e.err
 }
 
+func (e *StaticErrorEditor) StatementBegin(ctx *sql.Context) {}
+
+func (e *StaticErrorEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	return nil
+}
+
+func (e *StaticErrorEditor) StatementComplete(ctx *sql.Context) error {
+	return nil
+}
+
 func (e *StaticErrorEditor) Close(*sql.Context) error {
 	// Or e.err?
 	return nil

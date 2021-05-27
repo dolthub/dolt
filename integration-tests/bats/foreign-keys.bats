@@ -1601,8 +1601,6 @@ SQL
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
 
-    skip "replace causes parent rows to be dropped: https://github.com/dolthub/dolt/issues/1738"
-    
     dolt sql <<SQL
 UPDATE parent SET v2 = 2 WHERE id = 1;
 UPDATE parent SET v2 = 1 WHERE id = 2;
