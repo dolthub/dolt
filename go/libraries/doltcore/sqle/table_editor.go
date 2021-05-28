@@ -150,6 +150,21 @@ func (te *sqlTableEditor) Close(ctx *sql.Context) error {
 	return te.flush(ctx)
 }
 
+// StatementBegin implements the interface sql.TableEditor.
+func (te *sqlTableEditor) StatementBegin(ctx *sql.Context) {
+	te.tableEditor.StatementStarted(ctx)
+}
+
+// DiscardChanges implements the interface sql.TableEditor.
+func (te *sqlTableEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	return te.tableEditor.StatementFinished(ctx, true)
+}
+
+// StatementComplete implements the interface sql.TableEditor.
+func (te *sqlTableEditor) StatementComplete(ctx *sql.Context) error {
+	return te.tableEditor.StatementFinished(ctx, false)
+}
+
 func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 	newRoot, err := te.sess.Flush(ctx)
 	if err != nil {

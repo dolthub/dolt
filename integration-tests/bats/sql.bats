@@ -39,6 +39,83 @@ teardown() {
     teardown_common
 }
 
+@test "sql: errors do not write incomplete rows" {
+    dolt sql <<"SQL"
+CREATE TABLE test (
+    pk BIGINT PRIMARY KEY,
+    v1 BIGINT,
+    INDEX (v1)
+);
+INSERT INTO test VALUES (1,1), (4,4), (5,5);
+SQL
+    run dolt sql -q "INSERT INTO test VALUES (2,2), (3,3), (1,1);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "UPDATE test SET pk = pk + 1;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+
+    dolt sql <<"SQL"
+CREATE TABLE test2 (
+    pk BIGINT PRIMARY KEY,
+    CONSTRAINT fk_test FOREIGN KEY (pk) REFERENCES test (v1)
+);
+INSERT INTO test2 VALUES (4);
+SQL
+    run dolt sql -q "DELETE FROM test WHERE pk > 0;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "SELECT * FROM test2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -q "REPLACE INTO test VALUES (1,7), (4,8), (5,9);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "SELECT * FROM test2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}
+
 @test "sql: select from multiple tables" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk"
     [ "$status" -eq 0 ]
