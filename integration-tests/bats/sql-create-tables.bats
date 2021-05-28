@@ -413,6 +413,7 @@ SQL
 
 @test "sql-create-tables: Can create a temporary table that lasts the length of a session" {
     run dolt sql -q "CREATE TEMPORARY TABLE mytemptable(pk int PRIMARY KEY)"
+    echo $output
     [ "$status" -eq 0 ]
 
     run dolt ls
@@ -437,6 +438,7 @@ CREATE TEMPORARY TABLE colors (
 INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
 SELECT * FROM colors;
 SQL
+    echo $output
     [[ "$output" =~ "| id | color |" ]] || false
     [[ "$output" =~ "1  | red" ]] || false
     [[ "$output" =~ "2  | green" ]] || false
@@ -669,4 +671,42 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: create like with temporary tables" {
+      run dolt sql <<SQL
+CREATE TABLE mytable (
+    pk int PRIMARY KEY,
+    val int
+);
+
+CREATE TEMPORARY TABLE mytemptable like mytable;
+INSERT INTO mytemptable VALUES (1,1),(2,1);
+SELECT * from mytemptable;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk | val |" ]] || false
+    [[ "$output" =~ "+----+-----+" ]] || false
+    [[ "$output" =~ "| 1  | 1   |" ]] || false
+    [[ "$output" =~ "| 2  | 1   |" ]] || false
+}
+
+@test "sql-create-tables: create temporary table like from other database" {
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt sql -q "CREATE TABLE tableone(pk bigint primary key, v1 int)"
+    cd ..
+    mkdir repo2
+    cd repo2
+    dolt init
+    cd ..
+    run dolt sql --multi-db-dir ./ -b -q "USE repo2;CREATE TEMPORARY TABLE temp2 LIKE repo1.tableone;"
+    [ "$status" -eq 0 ]
+    cd repo2
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "temp2" ]] || false
 }

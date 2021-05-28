@@ -163,7 +163,7 @@ func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 
 	// TODO: This needs to be fixed
 	if te.temporary {
-		return dSess.SetTempTableRoot(ctx, newRoot)
+		return dSess.SetTempTableRoot(ctx, te.dbName, newRoot)
 	}
 
 	return dSess.SetRoot(ctx, te.dbName, newRoot)

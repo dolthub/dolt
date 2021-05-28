@@ -201,19 +201,16 @@ func (db Database) DbData() env.DbData {
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
 	// Check whether this table is a temporary table. It takes priority over persisted tables.
 	dsess := DSessFromSess(ctx.Session)
-	tempTableRootValue, err := dsess.GetTempTableRootValue()
-	if err != nil {
-		return nil, false, err
-	}
-
-	_, _, ok, err := tempTableRootValue.GetTableInsensitive(ctx, tblName)
-	if err != nil {
-		return nil, false, err
-	}
-
+	tempTableRootValue, ok := dsess.GetTempTableRootValue(db.Name())
 	if ok {
-		// TODO: Double Check that this is actually ok
-		return db.getTable(ctx, tempTableRootValue, tblName, true)
+		ok2, err := tempTableRootValue.HasTable(ctx, tblName)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if ok2 {
+			return db.getTable(ctx, tempTableRootValue, tblName, true)
+		}
 	}
 
 	root, err := db.GetRoot(ctx)
@@ -506,7 +503,13 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	return dsess.GetTempTableRootValue()
+	currRoot, dbRootOk := dsess.tempTableRoots[db.name]
+
+	if !dbRootOk {
+		return nil, fmt.Errorf("no temporary table root value found in session")
+	}
+
+	return currRoot, nil
 }
 
 
@@ -520,7 +523,7 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 
 func (db Database) SetTemporaryRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dsess := DSessFromSess(ctx.Session)
-	return dsess.SetTempTableRoot(ctx,newRoot)
+	return dsess.SetTempTableRoot(ctx, db.name, newRoot)
 }
 
 // LoadRootFromRepoState loads the root value from the repo state's working hash, then calls SetRoot with the loaded
@@ -691,9 +694,9 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch 
 func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	// Get temporary root value
 	dsess := DSessFromSess(ctx.Session)
-	tempTableRootValue, err := dsess.GetTempTableRootValue()
-	if err != nil {
-		return err
+	tempTableRootValue, ok := dsess.GetTempTableRootValue(db.name)
+	if !ok {
+		return fmt.Errorf("error: no temporary table root value found")
 	}
 
 	doltSch, err := sqlutil.ToDoltSchema(ctx, tempTableRootValue, tableName, sch, nil)
@@ -733,9 +736,7 @@ func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root 
 		return err
 	}
 
-	dsess.SetTempTableRoot(ctx, newRoot)
-
-	return nil
+	return dsess.SetTempTableRoot(ctx, db.Name(), newRoot)
 }
 
 // RenameTable implements sql.TableRenamer
@@ -787,12 +788,12 @@ func (db Database) Flush(ctx *sql.Context) error {
 	}
 
 	// Flush any changes made to temporary tables
-	newTempTableRoot, err := dsess.editSessions[TempTablesEditSession].Flush(ctx)
+	newTempTableRoot, err := dsess.tempTableEditSessions[db.Name()].Flush(ctx)
 	if err != nil {
 		return nil
 	}
 
-	return dsess.SetTempTableRoot(ctx, newTempTableRoot)
+	return dsess.SetTempTableRoot(ctx, db.Name(), newTempTableRoot)
 }
 
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
@@ -1052,7 +1053,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) *editor.TableEditSession {
 	if isTemporary {
-		return DSessFromSess(ctx.Session).editSessions[TempTablesEditSession]
+		return DSessFromSess(ctx.Session).tempTableEditSessions[db.name]
 	}
 	return DSessFromSess(ctx.Session).editSessions[db.name]
 }
