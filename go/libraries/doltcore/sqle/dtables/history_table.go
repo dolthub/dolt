@@ -129,10 +129,6 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 	return ht
 }
 
-func (ht *HistoryTable) IsTemporary() bool {
-	return false
-}
-
 var commitFilterCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
 
 func getColumnFilterCheck(colNameSet *set.StrSet) func(sql.Expression) bool {
@@ -258,6 +254,11 @@ func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql
 	cp := part.(*commitPartition)
 
 	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.name, ht.ss, ht.rowFilters, ht.readerCreateFuncCache)
+}
+
+// IsTemporary denotes whether this is a temporary table or not.
+func (ht *HistoryTable) IsTemporary() bool {
+	return false
 }
 
 // commitPartition is a single commit

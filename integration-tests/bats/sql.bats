@@ -1110,3 +1110,4 @@ SQL
     [ "${lines[0]}" = "Grants for root@%" ]
     [ "${lines[1]}" = "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION" ]
 }
+

@@ -413,7 +413,6 @@ SQL
 
 @test "sql-create-tables: Can create a temporary table that lasts the length of a session" {
     run dolt sql -q "CREATE TEMPORARY TABLE mytemptable(pk int PRIMARY KEY)"
-    echo $output
     [ "$status" -eq 0 ]
 
     run dolt ls
@@ -438,7 +437,6 @@ CREATE TEMPORARY TABLE colors (
 INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
 SELECT * FROM colors;
 SQL
-    echo $output
     [[ "$output" =~ "| id | color |" ]] || false
     [[ "$output" =~ "1  | red" ]] || false
     [[ "$output" =~ "2  | green" ]] || false

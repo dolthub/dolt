@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
@@ -159,9 +160,12 @@ func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 		return err
 	}
 
+	return te.setRoot(ctx, newRoot)
+}
+
+func (te *sqlTableEditor) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dSess := DSessFromSess(ctx.Session)
 
-	// TODO: This needs to be fixed
 	if te.temporary {
 		return dSess.SetTempTableRoot(ctx, te.dbName, newRoot)
 	}

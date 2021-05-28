@@ -41,7 +41,6 @@ const (
 )
 
 const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
-const TempTablesEditSession = "DOLT_TEMP_TABLES"
 
 var transactionsEnabled = false
 
@@ -561,11 +560,6 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	sess.dbDatas[db.Name()] = dbData
 	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
-	err := sess.CreateTemporaryTablesRoot(ctx, db, ddb)
-	if err != nil {
-		return err
-	}
-
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()
 
@@ -649,18 +643,24 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	// After setting the initial root we have no state to commit
 	sess.dirty[db.Name()] = false
 
+	err = sess.createTemporaryTablesRoot(ctx, db.Name(), ddb)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context, db sql.Database, ddb *doltdb.DoltDB) error {
-	// TODO: Database needs to be selected with temporary tables.
+// createTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing
+// temporary tables.
+func (sess *DoltSession) createTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error {
 	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
 	if err != nil {
 		return err
 	}
 
-	sess.tempTableRoots[db.Name()] = newRoot
-	sess.tempTableEditSessions[db.Name()] = editor.CreateTableEditSession(newRoot, editor.TableEditSessionProps{})
+	sess.tempTableRoots[dbName] = newRoot
+	sess.tempTableEditSessions[dbName] = editor.CreateTableEditSession(newRoot, editor.TableEditSessionProps{})
 
 	return nil
 }

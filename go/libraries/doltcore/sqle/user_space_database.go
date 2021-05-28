@@ -64,8 +64,8 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 		if !doltdb.IsReadOnlySystemTable(tbl) {
 			resultingTblNames = append(resultingTblNames, tbl)
 		}
-		// TODO: Don't display the temporary tables
 	}
+
 	return resultingTblNames, nil
 }
 
@@ -73,7 +73,6 @@ func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
 	return db.RootValue, nil
 }
 
-// TODO: MAybe add another abstraction here
 func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, error) {
-	return db.RootValue, nil
+	panic("UserSpaceDatabase should not contain any temporary tables")
 }

@@ -515,12 +515,12 @@ func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, 
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
 // convenience.
-// TODO: This interface needs to be fixed
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dsess := DSessFromSess(ctx.Session)
 	return dsess.SetRoot(ctx, db.name, newRoot)
 }
 
+// SetTemporaryRoot sets the root value holding temporary tables not persisted to the repo state after the session.
 func (db Database) SetTemporaryRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dsess := DSessFromSess(ctx.Session)
 	return dsess.SetTempTableRoot(ctx, db.name, newRoot)
@@ -565,15 +565,6 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	if tempTableExists {
-		tableExists, err := tempTableRoot.HasTable(ctx, tableName)
-		if err != nil {
-			return err
-		}
-
-		if !tableExists {
-			return sql.ErrTableNotFound.New(tableName)
-		}
-
 		newRoot, err := tempTableRoot.RemoveTables(ctx, tableName)
 		if err != nil {
 			return err
@@ -583,11 +574,9 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	root, err := db.GetRoot(ctx)
-
 	if err != nil {
 		return err
 	}
-
 
 	tableExists, err := root.HasTable(ctx, tableName)
 	if err != nil {
