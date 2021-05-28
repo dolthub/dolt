@@ -33,7 +33,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ insert into t values (2, 2)",
+				Query:       "/* client b */ insert into t values (2, 2)",
 				ExpectedErr: sql.ErrPrimaryKeyViolation,
 			},
 		},
@@ -107,7 +107,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:          "/* client b */ commit",
 				ExpectedErrStr: "conflict in table t",
 			},
 			{
@@ -138,7 +138,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ update t set y = 2",
+				Query: "/* client a */ update t set y = 2",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
@@ -148,7 +148,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				}}},
 			},
 			{
-				Query:    "/* client b */ update t set y = 2",
+				Query: "/* client b */ update t set y = 2",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(0),
 					Info: plan.UpdateInfo{
@@ -183,7 +183,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ update t set y = 2",
+				Query: "/* client a */ update t set y = 2",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
@@ -193,7 +193,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				}}},
 			},
 			{
-				Query:    "/* client b */ update t set y = 2",
+				Query: "/* client b */ update t set y = 2",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
@@ -236,7 +236,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ update t set y = 3",
+				Query: "/* client a */ update t set y = 3",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
@@ -246,7 +246,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				}}},
 			},
 			{
-				Query:    "/* client b */ update t set y = 4",
+				Query: "/* client b */ update t set y = 4",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
@@ -260,7 +260,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:          "/* client b */ commit",
 				ExpectedErrStr: "conflict in table t",
 			},
 			{
@@ -297,7 +297,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ update t set y = 3",
+				Query: "/* client a */ update t set y = 3",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
@@ -307,7 +307,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				}}},
 			},
 			{
-				Query:    "/* client b */ update t set y = 4",
+				Query: "/* client b */ update t set y = 4",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
@@ -321,11 +321,11 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:          "/* client b */ commit",
 				ExpectedErrStr: "conflict in table t",
 			},
 			{
-				Query:    "/* client b */ update t set y = 3",
+				Query: "/* client b */ update t set y = 3",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
@@ -364,7 +364,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ update t set y = 3 where x = 1",
+				Query: "/* client a */ update t set y = 3 where x = 1",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
@@ -374,7 +374,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				}}},
 			},
 			{
-				Query:    "/* client b */ update t set y = 4 where x = 2",
+				Query: "/* client b */ update t set y = 4 where x = 2",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
@@ -417,7 +417,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ update t set y = 2",
+				Query: "/* client a */ update t set y = 2",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
@@ -427,7 +427,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				}}},
 			},
 			{
-				Query:    "/* client b */ update t set z = 3",
+				Query: "/* client b */ update t set z = 3",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
@@ -577,7 +577,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ update t set y = 3 where y = 2",
+				Query: "/* client a */ update t set y = 3 where y = 2",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
@@ -595,7 +595,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:          "/* client b */ commit",
 				ExpectedErrStr: "conflict in table t",
 			},
 			{
@@ -677,7 +677,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ update t set y = 3 where y = 2",
+				Query: "/* client a */ update t set y = 3 where y = 2",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
@@ -691,7 +691,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client c */ update t set z = 4 where y = 2",
+				Query: "/* client c */ update t set z = 4 where y = 2",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
