@@ -247,13 +247,7 @@ func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, db
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
-	err := sess.SetRoot(ctx, dbName, root)
-	if err != nil {
-		return err
-	}
-
-	dtx.ClearSavepoint(savepointName)
-	return nil
+	return sess.SetRoot(ctx, dbName, root)
 }
 
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
