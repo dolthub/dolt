@@ -765,7 +765,7 @@ SQL
     ! [[ "$output" =~ "one_pk" ]] || false
 }
 
-@test "sql-server: Run Temporary tables through a series of operations" {
+@test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1

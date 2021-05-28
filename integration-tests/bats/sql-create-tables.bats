@@ -597,5 +597,76 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-#todo: Add a test the validates that temporary tables cannot use foreign keys
-# todo: Temporary table with UNIQUE index
+@test "sql-create-table: Creating a foreign key on a temporary table throws an error" {
+    run dolt sql <<SQL
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+
+CREATE TEMPORARY TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id),
+    FOREIGN KEY (color) REFERENCES colors(color)
+);
+
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "temporary tables do not support foreign key" ]] || false
+
+    # Now try with an alter
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id)
+);
+
+ALTER TABLE objects ADD FOREIGN KEY (color) REFERENCES colors(color);
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "temporary tables do not support foreign key" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "objects" ]] || false
+    [[ "$output" =~ "colors" ]] || false
+}
+
+@test "sql-create-table: Temporary table supports UNIQUE Index" {
+     run dolt sql <<SQL
+CREATE TEMPORARY TABLE mytemptable (
+    pk INT NOT NULL,
+    val INT,
+
+    PRIMARY KEY (pk),
+    UNIQUE INDEX (val)
+);
+
+INSERT IGNORE INTO mytemptable VALUES (1,1);
+INSERT IGNORE INTO mytemptable VALUES (2,1);
+SELECT * FROM mytemptable;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk | val |" ]] || false
+    [[ "$output" =~ "+----+-----+" ]] || false
+    [[ "$output" =~ "| 1  | 1   |" ]] || false
+    ! [[ "$output" =~ "| 2  | 1   |" ]] ||
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "mytemptable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
