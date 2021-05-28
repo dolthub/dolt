@@ -648,9 +648,27 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 }
 
 func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context) error {
+	if sess.tempTableRoot != nil {
+		return nil
+	}
+
+	// In this edge case we are in multidb mode. In that case we just pick a ddb we can write to
+	if len(sess.dbDatas) > 1 {
+		for _, value := range sess.dbDatas {
+			newRoot, err := doltdb.EmptyRootValue(ctx, value.Ddb.ValueReadWriter())
+			if err != nil {
+				return err
+			}
+
+			sess.tempTableRoot = newRoot
+			sess.editSessions[TempTablesEditSession] = editor.CreateTableEditSession(sess.tempTableRoot, editor.TableEditSessionProps{})
+			return nil
+		}
+	}
+
 	ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, doltdb.LocalDirDoltDB, nil)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())

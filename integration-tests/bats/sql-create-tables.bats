@@ -596,3 +596,6 @@ SQL
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
+
+#todo: Add a test the validates that temporary tables cannot use foreign keys
+# todo: Temporary table with UNIQUE index

@@ -78,7 +78,6 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 }
 
-
 @test "sql-server: test dolt sql interface works properly with autocommit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
@@ -764,4 +763,24 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "one_pk" ]] || false
+}
+
+@test "sql-server: Run Temporary tables through a series of operations" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    # check no tables on master
+    server_query 1 "SHOW Tables" ""
+
+    # Create a temporary table with some indexes
+    server_query 1 "CREATE TEMPORARY TABLE one_pk (
+        pk int,
+        c1 int,
+        c2 int,
+        PRIMARY KEY (pk),
+        INDEX idx_v1 (c1, c2) COMMENT 'hello there'
+    )" ""
+    server_query 1 "SHOW tables" "" # validate that it does have show tables
 }
