@@ -227,7 +227,8 @@ func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	return dtx.CreateSavepoint(savepointName, sess.roots[dbName].root)
+	dtx.CreateSavepoint(savepointName, sess.roots[dbName].root)
+	return nil
 }
 
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
@@ -242,7 +243,7 @@ func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, db
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	root := dtx.GetSavepoint(savepointName)
+	root := dtx.RollbackToSavepoint(savepointName)
 	if root == nil {
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
@@ -252,7 +253,6 @@ func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, db
 		return err
 	}
 
-	dtx.ClearSavepoint(savepointName)
 	return nil
 }
 

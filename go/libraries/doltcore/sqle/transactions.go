@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -36,7 +37,12 @@ type DoltTransaction struct {
 	workingSet ref.WorkingSetRef
 	db         *doltdb.DoltDB
 	rsw        env.RepoStateWriter
-	savepoints map[string]*doltdb.RootValue
+	savepoints []savepoint
+}
+
+type savepoint struct {
+	name string
+	root *doltdb.RootValue
 }
 
 func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, db *doltdb.DoltDB, rsw env.RepoStateWriter) *DoltTransaction {
@@ -45,7 +51,6 @@ func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRe
 		workingSet: workingSet,
 		db:         db,
 		rsw:        rsw,
-		savepoints: make(map[string]*doltdb.RootValue),
 	}
 }
 
@@ -87,6 +92,8 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			err = tx.db.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash)
 			if err == datas.ErrOptimisticLockFailed {
 				continue
+			} else if err != nil {
+				return nil, err
 			}
 
 			return tx.updateRepoStateFile(ctx, newRoot)
@@ -132,19 +139,48 @@ func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *dol
 	return mergedRoot, err
 }
 
-func (tx *DoltTransaction) CreateSavepoint(name string, root *doltdb.RootValue) error {
-	tx.savepoints[name] = root
+// CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given
+// already exists, it's overwritten.
+func (tx *DoltTransaction) CreateSavepoint(name string, root *doltdb.RootValue) {
+	existing := tx.findSavepoint(name)
+	if existing >= 0 {
+		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
+	}
+	tx.savepoints = append(tx.savepoints, savepoint{name, root})
+}
+
+// findSavepoint returns the index of the savepoint with the name given, or -1 if it doesn't exist
+func (tx *DoltTransaction) findSavepoint(name string) int {
+	for i, s := range tx.savepoints {
+		if strings.ToLower(s.name) == strings.ToLower(name) {
+			return i
+		}
+	}
+	return -1
+}
+
+// RollbackToSavepoint returns the root value associated with the savepoint name given, or nil if no such savepoint can
+// be found. All savepoints created after the one being rolled back to are no longer accessible.
+func (tx *DoltTransaction) RollbackToSavepoint(name string) *doltdb.RootValue {
+	existing := tx.findSavepoint(name)
+	if existing >= 0 {
+		// Clear out any savepoints past this one
+		tx.savepoints = tx.savepoints[:existing+1]
+		return tx.savepoints[existing].root
+	}
 	return nil
 }
 
-func (tx DoltTransaction) GetSavepoint(name string) *doltdb.RootValue {
-	return tx.savepoints[name]
-}
-
-func (tx DoltTransaction) ClearSavepoint(name string) *doltdb.RootValue {
-	prev := tx.savepoints[name]
-	delete(tx.savepoints, name)
-	return prev
+// ClearSavepoint removes the savepoint with the name given and returns the root value recorded there, or nil if no
+// savepoint exists with that name.
+func (tx *DoltTransaction) ClearSavepoint(name string) *doltdb.RootValue {
+	existing := tx.findSavepoint(name)
+	var existingRoot *doltdb.RootValue
+	if existing >= 0 {
+		existingRoot = tx.savepoints[existing].root
+		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
+	}
+	return existingRoot
 }
 
 func rootsEqual(left, right *doltdb.RootValue) bool {

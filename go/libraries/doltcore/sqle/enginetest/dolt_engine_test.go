@@ -308,4 +308,8 @@ func TestTransactions(t *testing.T) {
 		}()
 	}
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
+
+	for _, script := range DoltTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
 }
