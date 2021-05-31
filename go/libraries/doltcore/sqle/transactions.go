@@ -35,8 +35,7 @@ const (
 type DoltTransaction struct {
 	startRoot  *doltdb.RootValue
 	workingSet ref.WorkingSetRef
-	db         *doltdb.DoltDB
-	rsw        env.RepoStateWriter
+	dbData     env.DbData
 	savepoints []savepoint
 }
 
@@ -45,12 +44,11 @@ type savepoint struct {
 	root *doltdb.RootValue
 }
 
-func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, db *doltdb.DoltDB, rsw env.RepoStateWriter) *DoltTransaction {
+func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, dbData env.DbData) *DoltTransaction {
 	return &DoltTransaction{
 		startRoot:  startRoot,
 		workingSet: workingSet,
-		db:         db,
-		rsw:        rsw,
+		dbData:     dbData,
 	}
 }
 
@@ -67,10 +65,10 @@ func (tx DoltTransaction) String() string {
 // if working set == ancRoot, attempt a fast-forward merge
 func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for i := 0; i < maxTxCommitRetries; i++ {
-		ws, err := tx.db.ResolveWorkingSet(ctx, tx.workingSet)
+		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSet)
 		if err == doltdb.ErrWorkingSetNotFound {
 			// initial commit
-			err = tx.db.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash.Hash{})
+			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash.Hash{})
 			if err == datas.ErrOptimisticLockFailed {
 				continue
 			}
@@ -82,14 +80,14 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 
 		root := ws.RootValue()
 
-		hash, err := ws.Struct().Hash(tx.db.Format())
+		hash, err := ws.Struct().Hash(tx.dbData.Ddb.Format())
 		if err != nil {
 			return nil, err
 		}
 
 		if rootsEqual(root, tx.startRoot) {
 			// ff merge
-			err = tx.db.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash)
+			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash)
 			if err == datas.ErrOptimisticLockFailed {
 				continue
 			} else if err != nil {
@@ -111,7 +109,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			}
 		}
 
-		err = tx.db.UpdateWorkingSet(ctx, tx.workingSet, mergedRoot, hash)
+		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, mergedRoot, hash)
 		if err == datas.ErrOptimisticLockFailed {
 			continue
 		}
@@ -131,7 +129,7 @@ func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *dol
 		return nil, err
 	}
 
-	err = tx.rsw.SetWorkingHash(ctx, hash)
+	err = tx.dbData.Rsw.SetWorkingHash(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
