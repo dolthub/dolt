@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -40,7 +41,10 @@ const (
 	WorkingKeySuffix = "_working"
 )
 
-const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
+const (
+	EnableTransactionsEnvKey      = "DOLT_ENABLE_TRANSACTIONS"
+	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
+)
 
 // TransactionsEnabled controls whether to use SQL transactions
 // Exported only for testing
@@ -53,6 +57,16 @@ func init() {
 			TransactionsEnabled = true
 		}
 	}
+	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+		{
+			Name:              DoltCommitOnTransactionCommit,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(DoltCommitOnTransactionCommit),
+			Default:           int8(0),
+		},
+	})
 }
 
 func IsHeadKey(key string) (bool, string) {
@@ -187,7 +201,55 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 		return err
 	}
 
+	err = sess.CommitWorkingSetToDolt(ctx, dtx.dbData, dbName)
+	if err != nil {
+		return err
+	}
+
 	sess.dirty[dbName] = false
+	return nil
+}
+
+// CommitWorkingSetToDolt stages the working set and then immediately commits the staged changes. This is a Dolt commit
+// rather than a transaction commit. If there are no changes to be staged, then no commit is created.
+func (sess *DoltSession) CommitWorkingSetToDolt(ctx *sql.Context, dbData env.DbData, dbName string) error {
+	if commitBool, err := sess.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit); err != nil {
+		return err
+	} else if commitBool.(int8) == 1 {
+		fkChecks, err := sess.Session.GetSessionVariable(ctx, "foreign_key_checks")
+		if err != nil {
+			return err
+		}
+		err = actions.StageAllTables(ctx, dbData)
+		if err != nil {
+			return err
+		}
+		queryTime := ctx.QueryTime()
+		_, err = actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+			Message:          fmt.Sprintf("Transaction commit at %s", queryTime.UTC().Format("2006-01-02T15:04:05Z")),
+			Date:             queryTime,
+			AllowEmpty:       false,
+			CheckForeignKeys: fkChecks.(int8) == 1,
+			Name:             sess.Username,
+			Email:            sess.Email,
+		})
+		if _, ok := err.(actions.NothingStaged); err != nil && !ok {
+			return err
+		}
+
+		headCommit, err := dbData.Ddb.Resolve(ctx, dbData.Rsr.CWBHeadSpec(), dbData.Rsr.CWBHeadRef())
+		if err != nil {
+			return err
+		}
+		headHash, err := headCommit.HashOf()
+		if err != nil {
+			return err
+		}
+		err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), headHash.String())
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
