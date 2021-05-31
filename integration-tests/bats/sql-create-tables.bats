@@ -708,3 +708,25 @@ SQL
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "temp2" ]] || false
 }
+
+@test "sql-create-table: verify that temporary tables appear in the innodb_temp_table_info table" {
+      run dolt sql <<SQL
+CREATE TEMPORARY TABLE mytemptable (
+    pk int PRIMARY KEY,
+    val int
+);
+
+SELECT name FROM information_schema.innodb_temp_table_info;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| mytemptable |" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "mytemptable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
