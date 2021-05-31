@@ -81,7 +81,7 @@ type DoltTable struct {
 	autoIncCol   schema.Column
 
 	projectedCols []string
-	temporary bool
+	temporary     bool
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool) *DoltTable {
@@ -101,7 +101,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		sch:           sch,
 		autoIncCol:    autoCol,
 		projectedCols: nil,
-		temporary: isTemporary,
+		temporary:     isTemporary,
 	}
 }
 

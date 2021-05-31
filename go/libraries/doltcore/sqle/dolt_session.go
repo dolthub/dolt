@@ -72,14 +72,14 @@ func IsWorkingKey(key string) (bool, string) {
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	roots        map[string]dbRoot
-	workingSets  map[string]ref.WorkingSetRef
-	dbDatas      map[string]env.DbData
-	editSessions map[string]*editor.TableEditSession
-	dirty        map[string]bool
-	Username     string
-	Email        string
-	tempTableRoots map[string]*doltdb.RootValue
+	roots                 map[string]dbRoot
+	workingSets           map[string]ref.WorkingSetRef
+	dbDatas               map[string]env.DbData
+	editSessions          map[string]*editor.TableEditSession
+	dirty                 map[string]bool
+	Username              string
+	Email                 string
+	tempTableRoots        map[string]*doltdb.RootValue
 	tempTableEditSessions map[string]*editor.TableEditSession
 }
 
@@ -88,15 +88,15 @@ var _ sql.Session = &DoltSession{}
 // DefaultDoltSession creates a DoltSession object with default values
 func DefaultDoltSession() *DoltSession {
 	sess := &DoltSession{
-		Session:      sql.NewBaseSession(),
-		roots:        make(map[string]dbRoot),
-		dbDatas:      make(map[string]env.DbData),
-		editSessions: make(map[string]*editor.TableEditSession),
-		dirty:        make(map[string]bool),
-		workingSets:  make(map[string]ref.WorkingSetRef),
-		Username:     "",
-		Email:        "",
-		tempTableRoots: make(map[string]*doltdb.RootValue),
+		Session:               sql.NewBaseSession(),
+		roots:                 make(map[string]dbRoot),
+		dbDatas:               make(map[string]env.DbData),
+		editSessions:          make(map[string]*editor.TableEditSession),
+		dirty:                 make(map[string]bool),
+		workingSets:           make(map[string]ref.WorkingSetRef),
+		Username:              "",
+		Email:                 "",
+		tempTableRoots:        make(map[string]*doltdb.RootValue),
 		tempTableEditSessions: make(map[string]*editor.TableEditSession),
 	}
 	return sess
@@ -113,15 +113,15 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 	}
 
 	sess := &DoltSession{
-		Session:      sqlSess,
-		dbDatas:      dbDatas,
-		editSessions: editSessions,
-		dirty:        make(map[string]bool),
-		roots:        make(map[string]dbRoot),
-		workingSets:  make(map[string]ref.WorkingSetRef),
-		Username:     username,
-		Email:        email,
-		tempTableRoots: make(map[string]*doltdb.RootValue),
+		Session:               sqlSess,
+		dbDatas:               dbDatas,
+		editSessions:          editSessions,
+		dirty:                 make(map[string]bool),
+		roots:                 make(map[string]dbRoot),
+		workingSets:           make(map[string]ref.WorkingSetRef),
+		Username:              username,
+		Email:                 email,
+		tempTableRoots:        make(map[string]*doltdb.RootValue),
 		tempTableEditSessions: make(map[string]*editor.TableEditSession),
 	}
 	for _, db := range dbs {

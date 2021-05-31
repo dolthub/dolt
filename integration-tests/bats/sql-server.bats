@@ -78,6 +78,7 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 }
 
+
 @test "sql-server: test dolt sql interface works properly with autocommit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 

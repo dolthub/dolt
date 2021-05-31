@@ -47,7 +47,7 @@ type sqlTableEditor struct {
 	kvToSQLRow        *KVToSqlRowConverter
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
-	temporary		  bool
+	temporary         bool
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)

@@ -67,6 +67,11 @@ type Database struct {
 	batchMode commitBehavior
 }
 
+var _ sql.Database = (*Database)(nil)
+var _ sql.TableCreator = (*Database)(nil)
+var _ sql.TemporaryTableCreator = (*Database)(nil)
+var _ sql.TemporaryTableDatabase = (*Database)(nil)
+
 // DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
 type DisabledTransaction struct{}
 
@@ -199,8 +204,10 @@ func (db Database) DbData() env.DbData {
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
-	// Check whether this table is a temporary table. It takes priority over persisted tables.
 	dsess := DSessFromSess(ctx.Session)
+
+	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
+	// priority over persisted tables of name `x`.
 	tempTableRootValue, ok := dsess.GetTempTableRootValue(db.Name())
 	if ok {
 		ok2, err := tempTableRootValue.HasTable(ctx, tblName)
@@ -511,7 +518,6 @@ func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, 
 
 	return currRoot, nil
 }
-
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
 // convenience.
@@ -1045,6 +1051,33 @@ func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) *editor.
 		return DSessFromSess(ctx.Session).tempTableEditSessions[db.name]
 	}
 	return DSessFromSess(ctx.Session).editSessions[db.name]
+}
+
+// GetAllTemporaryTables returns all temporary tables
+func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
+	dsess := DSessFromSess(ctx.Session)
+
+	tables := make([]sql.Table, 0)
+
+	for _, root := range dsess.tempTableRoots {
+		tNames, err := root.GetTableNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, tName := range tNames {
+			tbl, ok, err := db.GetTableInsensitive(ctx, tName)
+			if err != nil {
+				return nil, err
+			}
+
+			if ok {
+				tables = append(tables, tbl)
+			}
+		}
+	}
+
+	return tables, nil
 }
 
 // RegisterSchemaFragments register SQL schema fragments that are persisted in the given
