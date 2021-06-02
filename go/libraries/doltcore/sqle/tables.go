@@ -114,6 +114,7 @@ func (t DoltTable) LockedToRoot(rootValue *doltdb.RootValue) *DoltTable {
 }
 
 var _ sql.Table = (*DoltTable)(nil)
+var _ sql.TemporaryTable = (*DoltTable)(nil)
 var _ sql.IndexedTable = (*DoltTable)(nil)
 var _ sql.ForeignKeyTable = (*DoltTable)(nil)
 var _ sql.StatisticsTable = (*DoltTable)(nil)

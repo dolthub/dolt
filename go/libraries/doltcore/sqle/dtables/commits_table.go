@@ -70,10 +70,6 @@ func (dt *CommitsTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql
 	return NewCommitsRowItr(sqlCtx, dt.ddb)
 }
 
-func (dt *CommitsTable) IsTemporary() bool {
-	return false
-}
-
 // CommitsRowItr is a sql.RowItr which iterates over each commit as if it's a row in the table.
 type CommitsRowItr struct {
 	ctx context.Context

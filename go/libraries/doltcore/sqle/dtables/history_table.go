@@ -256,11 +256,6 @@ func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql
 	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.name, ht.ss, ht.rowFilters, ht.readerCreateFuncCache)
 }
 
-// IsTemporary denotes whether this is a temporary table or not.
-func (ht *HistoryTable) IsTemporary() bool {
-	return false
-}
-
 // commitPartition is a single commit
 type commitPartition struct {
 	h  hash.Hash

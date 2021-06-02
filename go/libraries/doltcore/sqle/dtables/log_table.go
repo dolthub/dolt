@@ -71,10 +71,6 @@ func (dt *LogTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql.Row
 	return NewLogItr(sqlCtx, dt.ddb, dt.head)
 }
 
-func (dt *LogTable) IsTemporary() bool {
-	return false
-}
-
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
 	commits []*doltdb.Commit

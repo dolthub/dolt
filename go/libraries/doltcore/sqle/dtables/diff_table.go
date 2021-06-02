@@ -189,10 +189,6 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 	return dp.getRowIter(ctx, dt.ddb, dt.ss, dt.joiner)
 }
 
-func (dt *DiffTable) IsTemporary() bool {
-	return false
-}
-
 func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.Map, schema.Schema, error) {
 	var data types.Map
 	var err error
