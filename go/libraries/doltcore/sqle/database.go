@@ -208,15 +208,15 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
-	tempTableRootValue, ok := dsess.GetTempTableRootValue(db.Name())
-	if ok {
-		ok2, err := tempTableRootValue.HasTable(ctx, tblName)
+	tempTableRootValue, tempRootValueExists := dsess.GetTempTableRootValue(db.Name())
+	if tempRootValueExists {
+		tbl, tableFound, err := db.getTable(ctx, tempTableRootValue, tblName, true)
 		if err != nil {
 			return nil, false, err
 		}
 
-		if ok2 {
-			return db.getTable(ctx, tempTableRootValue, tblName, true)
+		if tableFound {
+			return tbl, true, nil
 		}
 	}
 
@@ -709,22 +709,16 @@ func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root 
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	var conflictingTbls []string
 	_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		_, tbl, exists, err := root.GetTableByColTag(ctx, tag)
 		if err != nil {
 			return true, err
 		}
 		if exists && tbl != tableName {
-			errStr := schema.ErrTagPrevUsed(tag, col.Name, tbl).Error()
-			conflictingTbls = append(conflictingTbls, errStr)
+			panic("Table's tags are associated with a different table name")
 		}
 		return false, nil
 	})
-
-	if len(conflictingTbls) > 0 {
-		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
-	}
 
 	newRoot, err := root.CreateEmptyTable(ctx, tableName, doltSch)
 	if err != nil {
@@ -788,6 +782,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 		return nil
 	}
 
+	// TODO: Shouldn't always be updating both roots. Needs to update either both roots or neither of them, atomically
 	return dsess.SetTempTableRoot(ctx, db.Name(), newTempTableRoot)
 }
 

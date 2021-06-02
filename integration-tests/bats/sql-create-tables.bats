@@ -522,6 +522,19 @@ SQL
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "colors" ]] || false
 
+    # Double check with an additional query
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE mytemptable(pk int PRIMARY KEY);
+DROP TABLE mytemptable;
+SELECT * FROM mytemptable;
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: mytemptable" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "colors" ]] || false
+
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
@@ -729,4 +742,36 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-table: temporary tables can be queried in a case insensitive way" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE myTempTable (
+    pk int PRIMARY KEY,
+    val int
+);
+
+INSERT INTO myTempTABLE VALUES (1,1),(2,2),(3,3);
+DELETE FROM MyTempTable where pk = 3;
+SELECT * FROM myTEMPTable;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk | val |" ]] || false
+    [[ "$output" =~ "+----+-----+" ]] || false
+    [[ "$output" =~ "| 1  | 1   |" ]] || false
+    [[ "$output" =~ "| 2  | 2   |" ]] || false
+
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE myTempTable (
+    pk int PRIMARY KEY,
+    val int
+);
+
+INSERT INTO myTempTABLE VALUES (1,1),(2,2),(3,3);
+DROP TABLE myTempTABLE;
+SELECT * FROM myTempTable;
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: myTempTable" ]] || false
 }
