@@ -564,7 +564,7 @@ SQL
     [[ "$output" =~ "0" ]] || false
 }
 
-@test "sql-create-table: You can create a normal table even if a temporary table exists with the same name" {
+@test "sql-create-tables: You can create a normal table even if a temporary table exists with the same name" {
     run dolt sql <<SQL
 CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
 INSERT INTO goodtable VALUES (1);
@@ -586,7 +586,7 @@ SQL
     [[ "$output" =~ "0" ]] || false
 }
 
-@test "sql-create-table: Alter on a temporary table" {
+@test "sql-create-tables: Alter on a temporary table" {
     run dolt sql <<SQL
 CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
 ALTER TABLE goodtable ADD COLUMN val int;
@@ -610,7 +610,7 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "sql-create-table: Creating a foreign key on a temporary table throws an error" {
+@test "sql-create-tables: Creating a foreign key on a temporary table throws an error" {
     run dolt sql <<SQL
 CREATE TABLE colors (
     id INT NOT NULL,
@@ -654,7 +654,7 @@ SQL
     [[ "$output" =~ "colors" ]] || false
 }
 
-@test "sql-create-table: Temporary table supports UNIQUE Index" {
+@test "sql-create-tables: Temporary table supports UNIQUE Index" {
      run dolt sql <<SQL
 CREATE TEMPORARY TABLE mytemptable (
     pk INT NOT NULL,
@@ -722,7 +722,7 @@ SQL
     ! [[ "$output" =~ "temp2" ]] || false
 }
 
-@test "sql-create-table: verify that temporary tables appear in the innodb_temp_table_info table" {
+@test "sql-create-tables: verify that temporary tables appear in the innodb_temp_table_info table" {
       run dolt sql <<SQL
 CREATE TEMPORARY TABLE mytemptable (
     pk int PRIMARY KEY,
@@ -744,7 +744,7 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "sql-create-table: temporary tables can be queried in a case insensitive way" {
+@test "sql-create-tables: temporary tables can be queried in a case insensitive way" {
     run dolt sql <<SQL
 CREATE TEMPORARY TABLE myTempTable (
     pk int PRIMARY KEY,
