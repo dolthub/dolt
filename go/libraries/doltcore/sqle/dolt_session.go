@@ -390,14 +390,26 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 	return nil
 }
 
-func (sess *DoltSession) GetTempTableRootValue(dbName string) (*doltdb.RootValue, bool) {
+func (sess *DoltSession) GetTempTableRootValue(ctx *sql.Context, dbName string) (*doltdb.RootValue, error) {
 	tempTableRoot, ok := sess.tempTableRoots[dbName]
 
+	// Create the Temporary Tables Root Value and Table Edit Map on demand.
+	// If the database that this is called on isn't found at all we return false.
 	if !ok {
-		return nil, false
+		dbData, dbExists := sess.dbDatas[dbName]
+		if !dbExists {
+			return nil, fmt.Errorf("error: database %s does not exist", dbName)
+		}
+
+		err := sess.createTemporaryTablesRoot(ctx, dbName, dbData.Ddb)
+		if err != nil {
+			return nil, err
+		}
+
+		return sess.tempTableRoots[dbName], nil
 	}
 
-	return tempTableRoot, true
+	return tempTableRoot, nil
 }
 
 func (sess *DoltSession) SetTempTableRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
@@ -642,11 +654,6 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 
 	// After setting the initial root we have no state to commit
 	sess.dirty[db.Name()] = false
-
-	err = sess.createTemporaryTablesRoot(ctx, db.Name(), ddb)
-	if err != nil {
-		return err
-	}
 
 	return nil
 }

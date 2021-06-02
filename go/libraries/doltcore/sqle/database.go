@@ -208,16 +208,18 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
-	tempTableRootValue, tempRootValueExists := dsess.GetTempTableRootValue(db.Name())
-	if tempRootValueExists {
-		tbl, tableFound, err := db.getTable(ctx, tempTableRootValue, tblName, true)
-		if err != nil {
-			return nil, false, err
-		}
+	tempTableRootValue, err := dsess.GetTempTableRootValue(ctx, db.Name())
+	if err != nil {
+		return nil, false, err
+	}
 
-		if tableFound {
-			return tbl, true, nil
-		}
+	tbl, tempTableFound, err := db.getTable(ctx, tempTableRootValue, tblName, true)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if tempTableFound {
+		return tbl, true, nil
 	}
 
 	root, err := db.GetRoot(ctx)
@@ -553,7 +555,8 @@ func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	return head.GetRootValue()
 }
 
-// DropTable drops the table with the name given
+// DropTable drops the table with the name given.
+// The planner returns the correct case sensitive name in tableName
 func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		return ErrSystemTableAlter.New(tableName)
@@ -689,9 +692,10 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch 
 func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	// Get temporary root value
 	dsess := DSessFromSess(ctx.Session)
-	tempTableRootValue, ok := dsess.GetTempTableRootValue(db.name)
-	if !ok {
-		return fmt.Errorf("error: no temporary table root value found")
+	tempTableRootValue, err := dsess.GetTempTableRootValue(ctx, db.name)
+
+	if err != nil {
+		return err
 	}
 
 	doltSch, err := sqlutil.ToDoltSchema(ctx, tempTableRootValue, tableName, sch, nil)
@@ -777,13 +781,18 @@ func (db Database) Flush(ctx *sql.Context) error {
 	}
 
 	// Flush any changes made to temporary tables
-	newTempTableRoot, err := dsess.tempTableEditSessions[db.Name()].Flush(ctx)
-	if err != nil {
-		return nil
+	// TODO: Shouldn't always be updating both roots. Needs to update either both roots or neither of them, atomically
+	tempTableEditSession, sessionExists := dsess.tempTableEditSessions[db.Name()]
+	if sessionExists {
+		newTempTableRoot, err := tempTableEditSession.Flush(ctx)
+		if err != nil {
+			return nil
+		}
+
+		return dsess.SetTempTableRoot(ctx, db.Name(), newTempTableRoot)
 	}
 
-	// TODO: Shouldn't always be updating both roots. Needs to update either both roots or neither of them, atomically
-	return dsess.SetTempTableRoot(ctx, db.Name(), newTempTableRoot)
+	return nil
 }
 
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
