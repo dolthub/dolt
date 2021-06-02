@@ -247,6 +247,19 @@ func (bWr branchWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	return bWr.bt.ddb.DeleteBranch(ctx, brRef)
 }
 
+// StatementBegin implements the interface sql.TableEditor. Currently a no-op.
+func (bWr branchWriter) StatementBegin(ctx *sql.Context) {}
+
+// DiscardChanges implements the interface sql.TableEditor. Currently a no-op.
+func (bWr branchWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	return nil
+}
+
+// StatementComplete implements the interface sql.TableEditor. Currently a no-op.
+func (bWr branchWriter) StatementComplete(ctx *sql.Context) error {
+	return nil
+}
+
 // Close finalizes the delete operation, persisting the result.
 func (bWr branchWriter) Close(*sql.Context) error {
 	return nil

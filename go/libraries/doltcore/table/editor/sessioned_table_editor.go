@@ -130,6 +130,16 @@ func (ste *sessionedTableEditor) Format() *types.NomsBinFormat {
 	return ste.tableEditor.Format()
 }
 
+// StatementStarted implements TableEditor.
+func (ste *sessionedTableEditor) StatementStarted(ctx context.Context) {
+	ste.tableEditor.StatementStarted(ctx)
+}
+
+// StatementFinished implements TableEditor.
+func (ste *sessionedTableEditor) StatementFinished(ctx context.Context, errored bool) error {
+	return ste.tableEditor.StatementFinished(ctx, errored)
+}
+
 func (ste *sessionedTableEditor) Close() error {
 	return ste.tableEditor.Close()
 }

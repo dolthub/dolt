@@ -213,10 +213,12 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	if err != nil {
 		cli.PrintErrln(err.Error())
 	}
-	serverController.StopServer()
-	err = serverController.WaitForClose()
-	if err != nil {
-		cli.PrintErrln(err.Error())
+	if apr.Contains(sqlClientDualFlag) {
+		serverController.StopServer()
+		err = serverController.WaitForClose()
+		if err != nil {
+			cli.PrintErrln(err.Error())
+		}
 	}
 
 	return 0

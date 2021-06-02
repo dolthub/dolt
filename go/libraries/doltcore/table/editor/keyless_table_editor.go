@@ -238,6 +238,14 @@ func (kte *keylessTableEditor) Format() *types.NomsBinFormat {
 	return kte.tbl.Format()
 }
 
+// StatementStarted implements TableEditor.
+func (kte *keylessTableEditor) StatementStarted(ctx context.Context) {}
+
+// StatementFinished implements TableEditor.
+func (kte *keylessTableEditor) StatementFinished(ctx context.Context, errored bool) error {
+	return nil
+}
+
 // Close implements TableEditor.
 func (kte *keylessTableEditor) Close() error {
 	return nil

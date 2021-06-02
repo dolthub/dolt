@@ -299,3 +299,17 @@ func TestStoredProcedures(t *testing.T) {
 
 	enginetest.TestStoredProcedures(t, newDoltHarness(t))
 }
+
+func TestTransactions(t *testing.T) {
+	if !sqle.TransactionsEnabled {
+		sqle.TransactionsEnabled = true
+		defer func() {
+			sqle.TransactionsEnabled = false
+		}()
+	}
+	enginetest.TestTransactionScripts(t, newDoltHarness(t))
+
+	for _, script := range DoltTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
+}

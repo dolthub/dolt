@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -40,17 +41,32 @@ const (
 	WorkingKeySuffix = "_working"
 )
 
-const EnableTransactionsEnvKey = "DOLT_ENABLE_TRANSACTIONS"
+const (
+	EnableTransactionsEnvKey      = "DOLT_ENABLE_TRANSACTIONS"
+	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
+)
 
-var transactionsEnabled = false
+// TransactionsEnabled controls whether to use SQL transactions
+// Exported only for testing
+var TransactionsEnabled = false
 
 func init() {
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
 	if ok {
 		if strings.ToLower(enableTx) == "true" {
-			transactionsEnabled = true
+			TransactionsEnabled = true
 		}
 	}
+	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+		{
+			Name:              DoltCommitOnTransactionCommit,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(DoltCommitOnTransactionCommit),
+			Default:           int8(0),
+		},
+	})
 }
 
 func IsHeadKey(key string) (bool, string) {
@@ -161,7 +177,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 
 	// Old "commit" path, which just writes whatever the root for this session is to the repo state file with no care
 	// for concurrency. Over time we will disable this path.
-	if !transactionsEnabled {
+	if !TransactionsEnabled {
 		dbData := sess.dbDatas[dbName]
 
 		h, err := dbData.Ddb.WriteRootValue(ctx, dbRoot.root)
@@ -191,13 +207,61 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 		return err
 	}
 
+	err = sess.CommitWorkingSetToDolt(ctx, dtx.dbData, dbName)
+	if err != nil {
+		return err
+	}
+
 	sess.dirty[dbName] = false
+	return nil
+}
+
+// CommitWorkingSetToDolt stages the working set and then immediately commits the staged changes. This is a Dolt commit
+// rather than a transaction commit. If there are no changes to be staged, then no commit is created.
+func (sess *DoltSession) CommitWorkingSetToDolt(ctx *sql.Context, dbData env.DbData, dbName string) error {
+	if commitBool, err := sess.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit); err != nil {
+		return err
+	} else if commitBool.(int8) == 1 {
+		fkChecks, err := sess.Session.GetSessionVariable(ctx, "foreign_key_checks")
+		if err != nil {
+			return err
+		}
+		err = actions.StageAllTables(ctx, dbData)
+		if err != nil {
+			return err
+		}
+		queryTime := ctx.QueryTime()
+		_, err = actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+			Message:          fmt.Sprintf("Transaction commit at %s", queryTime.UTC().Format("2006-01-02T15:04:05Z")),
+			Date:             queryTime,
+			AllowEmpty:       false,
+			CheckForeignKeys: fkChecks.(int8) == 1,
+			Name:             sess.Username,
+			Email:            sess.Email,
+		})
+		if _, ok := err.(actions.NothingStaged); err != nil && !ok {
+			return err
+		}
+
+		headCommit, err := dbData.Ddb.Resolve(ctx, dbData.Rsr.CWBHeadSpec(), dbData.Rsr.CWBHeadRef())
+		if err != nil {
+			return err
+		}
+		headHash, err := headCommit.HashOf()
+		if err != nil {
+			return err
+		}
+		err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), headHash.String())
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // RollbackTransaction rolls the given transaction back
 func (sess *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if !transactionsEnabled || dbName == "" {
+	if !TransactionsEnabled || dbName == "" {
 		return nil
 	}
 
@@ -222,7 +286,7 @@ func (sess *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
 func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !transactionsEnabled || dbName == "" {
+	if !TransactionsEnabled || dbName == "" {
 		return nil
 	}
 
@@ -231,13 +295,14 @@ func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	return dtx.CreateSavepoint(savepointName, sess.roots[dbName].root)
+	dtx.CreateSavepoint(savepointName, sess.roots[dbName].root)
+	return nil
 }
 
-// RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if not savepoint
+// RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
 func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !transactionsEnabled || dbName == "" {
+	if !TransactionsEnabled || dbName == "" {
 		return nil
 	}
 
@@ -246,18 +311,23 @@ func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, db
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	root := dtx.GetSavepoint(savepointName)
+	root := dtx.RollbackToSavepoint(savepointName)
 	if root == nil {
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
-	return sess.SetRoot(ctx, dbName, root)
+	err := sess.SetRoot(ctx, dbName, root)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
 func (sess *DoltSession) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !transactionsEnabled || dbName == "" {
+	if !TransactionsEnabled || dbName == "" {
 		return nil
 	}
 
@@ -609,7 +679,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 		}
 	}
 
-	if transactionsEnabled {
+	if TransactionsEnabled {
 		// Not all dolt commands update the working set ref yet. So until that's true, we update it here with the contents
 		// of the repo_state.json file
 		workingSetRef, err := ref.WorkingSetRefForHead(headRef)
