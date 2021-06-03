@@ -766,6 +766,7 @@ SQL
     ! [[ "$output" =~ "one_pk" ]] || false
 }
 
+# TODO: Need to update testing logic allow queries for a multiple session.
 @test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 

@@ -54,7 +54,7 @@ const (
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
-	GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, error)
+	GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool)
 }
 
 // Database implements sql.Database for a dolt DB.
@@ -225,22 +225,18 @@ func (db Database) DbData() env.DbData {
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
-	dsess := DSessFromSess(ctx.Session)
-
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
-	tempTableRootValue, err := dsess.GetTempTableRootValue(ctx, db.Name())
-	if err != nil {
-		return nil, false, err
-	}
+	tempTableRootValue, tempRootExists := db.GetTemporaryTablesRoot(ctx)
+	if tempRootExists {
+		tbl, tempTableFound, err := db.getTable(ctx, tempTableRootValue, tblName, true)
+		if err != nil {
+			return nil, false, err
+		}
 
-	tbl, tempTableFound, err := db.getTable(ctx, tempTableRootValue, tblName, true)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if tempTableFound {
-		return tbl, true, nil
+		if tempTableFound {
+			return tbl, true, nil
+		}
 	}
 
 	root, err := db.GetRoot(ctx)
@@ -531,15 +527,9 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	return currRoot.root, nil
 }
 
-func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
+func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, bool) {
 	dsess := DSessFromSess(ctx.Session)
-	currRoot, dbRootOk := dsess.tempTableRoots[db.name]
-
-	if !dbRootOk {
-		return nil, fmt.Errorf("no temporary table root value found in session")
-	}
-
-	return currRoot, nil
+	return dsess.GetTempTableRootValue(ctx, db.Name())
 }
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
@@ -584,23 +574,21 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	// Temporary Tables Get Precedence over schema tables
-	tempTableRoot, err := db.GetTemporaryTablesRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	tempTableExists, err := tempTableRoot.HasTable(ctx, tableName)
-	if err != nil {
-		return err
-	}
-
-	if tempTableExists {
-		newRoot, err := tempTableRoot.RemoveTables(ctx, tableName)
+	tempTableRoot, tempRootExists := db.GetTemporaryTablesRoot(ctx)
+	if tempRootExists {
+		tempTableExists, err := tempTableRoot.HasTable(ctx, tableName)
 		if err != nil {
 			return err
 		}
 
-		return db.SetTemporaryRoot(ctx, newRoot)
+		if tempTableExists {
+			newRoot, err := tempTableRoot.RemoveTables(ctx, tableName)
+			if err != nil {
+				return err
+			}
+
+			return db.SetTemporaryRoot(ctx, newRoot)
+		}
 	}
 
 	root, err := db.GetRoot(ctx)
@@ -697,7 +685,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 	return db.SetRoot(ctx, newRoot)
 }
 
-// CreateTemporaryTable creates a table that only exists the length of a schema.
+// CreateTemporaryTable creates a table that only exists the length of a session.
 func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
@@ -713,10 +701,16 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch 
 func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	// Get temporary root value
 	dsess := DSessFromSess(ctx.Session)
-	tempTableRootValue, err := dsess.GetTempTableRootValue(ctx, db.name)
+	tempTableRootValue, exists := db.GetTemporaryTablesRoot(ctx)
 
-	if err != nil {
-		return err
+	// create the root value only when needed.
+	if !exists {
+		err := dsess.createTemporaryTablesRoot(ctx, db.Name(), db.GetDoltDB())
+		if err != nil {
+			return err
+		}
+
+		tempTableRootValue, _ = db.GetTemporaryTablesRoot(ctx)
 	}
 
 	doltSch, err := sqlutil.ToDoltSchema(ctx, tempTableRootValue, tableName, sch, nil)
