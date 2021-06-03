@@ -463,8 +463,6 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 func (sess *DoltSession) GetTempTableRootValue(ctx *sql.Context, dbName string) (*doltdb.RootValue, bool) {
 	tempTableRoot, ok := sess.tempTableRoots[dbName]
 
-	// Create the Temporary Tables Root Value and Table Edit Map on demand.
-	// If the database that this is called on isn't found at all we return false.
 	if !ok {
 		return nil, false
 	}
@@ -718,9 +716,10 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	return nil
 }
 
-// createTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing
-// temporary tables.
-func (sess *DoltSession) createTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error {
+// CreateTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing
+// temporary tables. This should only be used on demand. That is only when a temporary table is created should we
+// create the root map and edit session map.
+func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error {
 	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
 	if err != nil {
 		return err

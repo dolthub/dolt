@@ -65,7 +65,6 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 			resultingTblNames = append(resultingTblNames, tbl)
 		}
 	}
-
 	return resultingTblNames, nil
 }
 

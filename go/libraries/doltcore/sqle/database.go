@@ -705,7 +705,7 @@ func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sq
 
 	// create the root value only when needed.
 	if !exists {
-		err := dsess.createTemporaryTablesRoot(ctx, db.Name(), db.GetDoltDB())
+		err := dsess.CreateTemporaryTablesRoot(ctx, db.Name(), db.GetDoltDB())
 		if err != nil {
 			return err
 		}
