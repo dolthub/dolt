@@ -443,13 +443,13 @@ SQL
 @test "sql: limit less than zero" {
     run dolt sql -q "select * from one_pk order by pk limit -1"
     [ $status -eq 1 ]
-    [[ "$output" =~ "unsupported syntax: LIMIT must be >= 0" ]] || false
+    [[ "$output" =~ "syntax error" ]] || false
     run dolt sql -q "select * from one_pk order by pk limit -2"
     [ $status -eq 1 ]
-    [[ "$output" =~ "unsupported syntax: LIMIT must be >= 0" ]] || false
+    [[ "$output" =~ "syntax error" ]] || false
     run dolt sql -q "select * from one_pk order by pk limit -1,1"
     [ $status -eq 1 ]
-    [[ "$output" =~ "unsupported syntax: OFFSET must be >= 0" ]] || false
+    [[ "$output" =~ "syntax error" ]] || false
 }
 
 @test "sql: addition on both left and right sides of comparison operator" {
