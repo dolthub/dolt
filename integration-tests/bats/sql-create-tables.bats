@@ -410,3 +410,16 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "name" ]] || false
 }
+
+@test "sql-create-tables: CREATE TABLE SELECT * works" {
+    dolt sql -q "CREATE TABLE t1(pk int PRIMARY KEY, v1 varchar(10))"
+    dolt sql -q "INSERT INTO t1 VALUES (1, '1'), (2, '2'), (3, '3')"
+
+    dolt sql -q "CREATE TABLE t2 AS SELECT * FROM t1"
+
+    run dolt sql -q "SELECT * FROM t1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1  | 1" ]] || false
+    [[ "$output" =~ "2  | 2" ]] || false
+    [[ "$output" =~ "3  | 3" ]] || false
+}

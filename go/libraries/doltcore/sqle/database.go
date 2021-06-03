@@ -156,6 +156,7 @@ var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
+var _ sql.TableCopierDatabase = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, dbData env.DbData) Database {
@@ -938,6 +939,50 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context) *editor.TableEditSession {
 	return DSessFromSess(ctx.Session).editSessions[db.name]
+}
+
+// TODO: Make this support temporary tables
+func (db Database) CopyTableData(ctx *sql.Context, sourceTableName string, destinationTableName string) error {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	sourceTable, sourceTableExists, err := root.GetTable(ctx, sourceTableName)
+	if err != nil {
+		return err
+	}
+
+	if !sourceTableExists {
+		return fmt.Errorf("error: table %s not found", sourceTable)
+	}
+
+	destinationTable, destinationTableExists, err := root.GetTable(ctx, destinationTableName)
+	if err != nil {
+		return err
+	}
+
+	if !destinationTableExists {
+		return  fmt.Errorf("error: table %s not found", destinationTable)
+	}
+
+	// TODO: Copy the ref instead
+	rowData, err := sourceTable.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	updatedTable, err := destinationTable.UpdateRows(ctx, rowData)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutTable(ctx, destinationTableName, updatedTable)
+	if err != nil {
+		return err
+	}
+
+	return db.SetRoot(ctx, newRoot)
 }
 
 // RegisterSchemaFragments register SQL schema fragments that are persisted in the given
