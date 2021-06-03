@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -48,7 +49,7 @@ const (
 
 // TransactionsEnabled controls whether to use SQL transactions
 // Exported only for testing
-var TransactionsEnabled = false
+var TransactionsEnabled = true
 
 func init() {
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
@@ -438,6 +439,9 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 	}
 
 	hashStr := h.String()
+	logrus.Errorf("Setting hash to %s", hashStr)
+	logrus.Errorf("Setting root to %s", newRoot.DebugString(ctx, true))
+
 	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), hashStr)
 	if err != nil {
 		return err

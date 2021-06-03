@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -87,6 +88,8 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 
 		if rootsEqual(root, tx.startRoot) {
 			// ff merge
+			logrus.Errorf("Updating working set with hash %s", hash.String())
+
 			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash)
 			if err == datas.ErrOptimisticLockFailed {
 				continue
@@ -108,6 +111,8 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 				return nil, fmt.Errorf("conflict in table %s", table)
 			}
 		}
+
+		logrus.Errorf("Updating working set with hash %s", hash.String())
 
 		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, mergedRoot, hash)
 		if err == datas.ErrOptimisticLockFailed {

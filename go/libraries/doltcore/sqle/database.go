@@ -124,6 +124,13 @@ func (db Database) setHeadHash(ctx *sql.Context) error {
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
+	if db.batchMode == batched {
+		err := db.Flush(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	
 	dsession := DSessFromSess(ctx.Session)
 	return dsession.CommitTransaction(ctx, db.name, tx)
 }
@@ -503,6 +510,8 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
+	//logrus.Errorf("GetRoot returning %s", currRoot.root.DebugString(ctx, true))
+
 	return currRoot.root, nil
 }
 
@@ -677,6 +686,8 @@ func (db Database) Flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
+
+	//logrus.Errorf("Flushed root is %s", newRoot.DebugString(ctx, true))
 
 	return db.SetRoot(ctx, newRoot)
 }
