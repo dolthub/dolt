@@ -58,7 +58,7 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 		return 1, err
 	}
 
-	apr, err := cli.ParseArgs(ap, args, nil)
+	apr, err := ap.Parse(args)
 	if err != nil {
 		return 1, err
 	}
