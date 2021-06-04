@@ -365,7 +365,7 @@ func parseCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb
 }
 
 func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv, newDatabase)
+	dbs := CollectDBs(mrEnv)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -379,12 +379,13 @@ func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 }
 
 func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv, newBatchedDatabase)
+	dbs := CollectDBs(mrEnv)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	dsqle.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 	err = runBatchMode(sqlCtx, se, batchInput)
 	if err != nil {
 		return errhand.BuildDError("Error processing batch").Build()
@@ -393,18 +394,12 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 	return writeRoots(sqlCtx, se, mrEnv, roots)
 }
 
-type createDBFunc func(name string, dEnv *env.DoltEnv) dsqle.Database
-
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData())
 }
 
-func newBatchedDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
-	return dsqle.NewBatchedDatabase(name, dEnv.DbData())
-}
-
 func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv, newDatabase)
+	dbs := CollectDBs(mrEnv)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -427,10 +422,10 @@ func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(mrEnv env.MultiRepoEnv, createDB createDBFunc) []dsqle.Database {
+func CollectDBs(mrEnv env.MultiRepoEnv) []dsqle.Database {
 	dbs := make([]dsqle.Database, 0, len(mrEnv))
 	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		db := createDB(name, dEnv)
+		db := newDatabase(name, dEnv)
 		dbs = append(dbs, db)
 		return false, nil
 	})

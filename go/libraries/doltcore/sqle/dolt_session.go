@@ -20,15 +20,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type dbRoot struct {
@@ -45,6 +43,12 @@ const (
 const (
 	EnableTransactionsEnvKey      = "DOLT_ENABLE_TRANSACTIONS"
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
+)
+
+type commitBehavior int8
+const (
+	batched commitBehavior = iota
+	single
 )
 
 // TransactionsEnabled controls whether to use SQL transactions
@@ -94,6 +98,7 @@ type DoltSession struct {
 	dbDatas      map[string]env.DbData
 	editSessions map[string]*editor.TableEditSession
 	dirty        map[string]bool
+	batchMode 	 commitBehavior
 	Username     string
 	Email        string
 }
@@ -146,13 +151,40 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 	return sess, nil
 }
 
+// EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
+// Sessions operating in batched mode don't flush any edit buffers except when told to do so explicitly, or when a
+// transaction commits. Disable @@autocommit to prevent edit buffers from being flushed prematurely in this mode.
+func (sess *DoltSession) EnableBatchedMode() {
+	sess.batchMode = batched
+}
+
 // DSessFromSess retrieves a dolt session from a standard sql.Session
 func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
 }
 
+// Flush flushes all changes sitting in edit sessions to the sesssion root for the database named. This normally
+// happens automatically as part of statement execution, and is only necessary when the session is manually batched (as
+// for bulk SQL import)
+func (sess *DoltSession) Flush(ctx *sql.Context, dbName string) error {
+	editSession := sess.editSessions[dbName]
+	newRoot, err := editSession.Flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	return sess.SetRoot(ctx, dbName, newRoot)
+}
+
 // CommitTransaction commits the in-progress transaction for the database named
 func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+	if sess.batchMode == batched {
+		err := sess.Flush(ctx, dbName)
+		if err != nil {
+			return err
+		}
+	}
+
 	if !sess.dirty[dbName] {
 		return nil
 	}
@@ -439,8 +471,6 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 	}
 
 	hashStr := h.String()
-	logrus.Errorf("Setting hash to %s", hashStr)
-	logrus.Errorf("Setting root to %s", newRoot.DebugString(ctx, true))
 
 	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), hashStr)
 	if err != nil {

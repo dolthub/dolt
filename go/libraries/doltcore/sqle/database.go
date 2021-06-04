@@ -40,16 +40,9 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type commitBehavior int8
-
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
-
-const (
-	batched commitBehavior = iota
-	single
-)
 
 type SqlDatabase interface {
 	sql.Database
@@ -63,7 +56,6 @@ type Database struct {
 	rsr       env.RepoStateReader
 	rsw       env.RepoStateWriter
 	drw       env.DocsReadWriter
-	batchMode commitBehavior
 }
 
 // DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
@@ -124,13 +116,6 @@ func (db Database) setHeadHash(ctx *sql.Context) error {
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
-	if db.batchMode == batched {
-		err := db.Flush(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	
 	dsession := DSessFromSess(ctx.Session)
 	return dsession.CommitTransaction(ctx, db.name, tx)
 }
@@ -172,20 +157,6 @@ func NewDatabase(name string, dbData env.DbData) Database {
 		rsr:       dbData.Rsr,
 		rsw:       dbData.Rsw,
 		drw:       dbData.Drw,
-		batchMode: single,
-	}
-}
-
-// NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
-// commit any outstanding edits.
-func NewBatchedDatabase(name string, dbData env.DbData) Database {
-	return Database{
-		name:      name,
-		ddb:       dbData.Ddb,
-		rsr:       dbData.Rsr,
-		rsw:       dbData.Rsw,
-		drw:       dbData.Drw,
-		batchMode: batched,
 	}
 }
 
@@ -510,8 +481,6 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	//logrus.Errorf("GetRoot returning %s", currRoot.root.DebugString(ctx, true))
-
 	return currRoot.root, nil
 }
 
@@ -686,8 +655,6 @@ func (db Database) Flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-
-	//logrus.Errorf("Flushed root is %s", newRoot.DebugString(ctx, true))
 
 	return db.SetRoot(ctx, newRoot)
 }

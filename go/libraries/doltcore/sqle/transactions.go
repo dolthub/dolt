@@ -18,15 +18,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const (
@@ -88,8 +86,6 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 
 		if rootsEqual(root, tx.startRoot) {
 			// ff merge
-			logrus.Errorf("Updating working set with hash %s", hash.String())
-
 			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash)
 			if err == datas.ErrOptimisticLockFailed {
 				continue
@@ -112,11 +108,11 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			}
 		}
 
-		logrus.Errorf("Updating working set with hash %s", hash.String())
-
 		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, mergedRoot, hash)
 		if err == datas.ErrOptimisticLockFailed {
 			continue
+		} else if err != nil {
+			return nil, err
 		}
 
 		// TODO: this is not thread safe, but will not be necessary after migrating all clients away from using the

@@ -21,23 +21,20 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"github.com/sirupsen/logrus"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
-// Executes all the SQL non-select statements given in the string against the root value given and returns the updated
-// root, or an error. Statements in the input string are split by `;\n`
+// ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
+// the updated root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
-	// db := NewDatabase("dolt", dEnv.DbData())
-	db := NewBatchedDatabase("dolt", dEnv.DbData())
+	db := NewDatabase("dolt", dEnv.DbData())
 
-	logrus.Errorf("Setting root for statements %s", statements)
 	engine, ctx, err := NewTestEngine(context.Background(), db, root)
+	DSessFromSess(ctx.Session).EnableBatchedMode()
 
 	if err != nil {
 		return nil, err
@@ -52,8 +49,6 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		if err != nil {
 			return nil, err
 		}
-
-		logrus.Errorf("Executing statement %s", query)
 
 		var execErr error
 		switch sqlStatement.(type) {
