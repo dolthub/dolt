@@ -52,6 +52,17 @@ teardown() {
     ! [[ "$output" =~ "The following rows were skipped:" ]] || false
 }
 
+@test "import-update-tables: update table using csv with null (blank) values" {
+    skip "nulls from csv not working correctly on update"
+    dolt sql < 1pk5col-ints-sch.sql
+    run dolt table import -u test `batshelper 1pk5col-nulls.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    # Validate that a successful import with no bad rows does not print the following
+    ! [[ "$output" =~ "The following rows were skipped:" ]] || false
+}
+
 @test "import-update-tables: update table using schema with csv" {
     dolt sql < 1pk5col-ints-sch.sql
     run dolt table import -u -s `batshelper 1pk5col-ints-schema.json` test `batshelper 1pk5col-ints.csv`
