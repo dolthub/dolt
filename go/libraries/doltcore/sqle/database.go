@@ -942,47 +942,48 @@ func (db Database) TableEditSession(ctx *sql.Context) *editor.TableEditSession {
 }
 
 // TODO: Make this support temporary tables
-func (db Database) CopyTableData(ctx *sql.Context, sourceTableName string, destinationTableName string) error {
+// TODO: Make this do insensitive matching
+func (db Database) CopyTableData(ctx *sql.Context, sourceTableName string, destinationTableName string) (uint64, error) {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	sourceTable, sourceTableExists, err := root.GetTable(ctx, sourceTableName)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if !sourceTableExists {
-		return fmt.Errorf("error: table %s not found", sourceTable)
+		return 0, fmt.Errorf("error: table %s not found", sourceTable)
 	}
 
 	destinationTable, destinationTableExists, err := root.GetTable(ctx, destinationTableName)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if !destinationTableExists {
-		return  fmt.Errorf("error: table %s not found", destinationTable)
+		return 0, fmt.Errorf("error: table %s not found", destinationTable)
 	}
 
 	// TODO: Copy the ref instead
 	rowData, err := sourceTable.GetRowData(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	updatedTable, err := destinationTable.UpdateRows(ctx, rowData)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	newRoot, err := root.PutTable(ctx, destinationTableName, updatedTable)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return db.SetRoot(ctx, newRoot)
+	return rowData.Len(), db.SetRoot(ctx, newRoot)
 }
 
 // RegisterSchemaFragments register SQL schema fragments that are persisted in the given
