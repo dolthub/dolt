@@ -765,3 +765,24 @@ SQL
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "one_pk" ]] || false
 }
+
+# TODO: Need to update testing logic allow queries for a multiple session.
+@test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    # check no tables on master
+    server_query 1 "SHOW Tables" ""
+
+    # Create a temporary table with some indexes
+    server_query 1 "CREATE TEMPORARY TABLE one_pk (
+        pk int,
+        c1 int,
+        c2 int,
+        PRIMARY KEY (pk),
+        INDEX idx_v1 (c1, c2) COMMENT 'hello there'
+    )" ""
+    server_query 1 "SHOW tables" "" # validate that it does have show tables
+}
