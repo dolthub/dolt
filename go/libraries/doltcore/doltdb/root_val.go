@@ -68,7 +68,7 @@ func newRootValue(vrw types.ValueReadWriter, st types.Struct) (*RootValue, error
 	return &RootValue{vrw, st, nil}, nil
 }
 
-func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
+func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
 	empty, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return nil, err

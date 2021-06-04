@@ -93,14 +93,16 @@ func IsWorkingKey(key string) (bool, string) {
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	roots        map[string]dbRoot
-	workingSets  map[string]ref.WorkingSetRef
-	dbDatas      map[string]env.DbData
-	editSessions map[string]*editor.TableEditSession
-	dirty        map[string]bool
+	roots                 map[string]dbRoot
+	workingSets           map[string]ref.WorkingSetRef
+	dbDatas               map[string]env.DbData
+	editSessions          map[string]*editor.TableEditSession
+	dirty                 map[string]bool
 	batchMode 	 commitBehavior
-	Username     string
-	Email        string
+	Username              string
+	Email                 string
+	tempTableRoots        map[string]*doltdb.RootValue
+	tempTableEditSessions map[string]*editor.TableEditSession
 }
 
 var _ sql.Session = &DoltSession{}
@@ -108,14 +110,16 @@ var _ sql.Session = &DoltSession{}
 // DefaultDoltSession creates a DoltSession object with default values
 func DefaultDoltSession() *DoltSession {
 	sess := &DoltSession{
-		Session:      sql.NewBaseSession(),
-		roots:        make(map[string]dbRoot),
-		dbDatas:      make(map[string]env.DbData),
-		editSessions: make(map[string]*editor.TableEditSession),
-		dirty:        make(map[string]bool),
-		workingSets:  make(map[string]ref.WorkingSetRef),
-		Username:     "",
-		Email:        "",
+		Session:               sql.NewBaseSession(),
+		roots:                 make(map[string]dbRoot),
+		dbDatas:               make(map[string]env.DbData),
+		editSessions:          make(map[string]*editor.TableEditSession),
+		dirty:                 make(map[string]bool),
+		workingSets:           make(map[string]ref.WorkingSetRef),
+		Username:              "",
+		Email:                 "",
+		tempTableRoots:        make(map[string]*doltdb.RootValue),
+		tempTableEditSessions: make(map[string]*editor.TableEditSession),
 	}
 	return sess
 }
@@ -131,14 +135,16 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 	}
 
 	sess := &DoltSession{
-		Session:      sqlSess,
-		dbDatas:      dbDatas,
-		editSessions: editSessions,
-		dirty:        make(map[string]bool),
-		roots:        make(map[string]dbRoot),
-		workingSets:  make(map[string]ref.WorkingSetRef),
-		Username:     username,
-		Email:        email,
+		Session:               sqlSess,
+		dbDatas:               dbDatas,
+		editSessions:          editSessions,
+		dirty:                 make(map[string]bool),
+		roots:                 make(map[string]dbRoot),
+		workingSets:           make(map[string]ref.WorkingSetRef),
+		Username:              username,
+		Email:                 email,
+		tempTableRoots:        make(map[string]*doltdb.RootValue),
+		tempTableEditSessions: make(map[string]*editor.TableEditSession),
 	}
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db, db.DbData())
@@ -488,6 +494,21 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 	return nil
 }
 
+func (sess *DoltSession) GetTempTableRootValue(ctx *sql.Context, dbName string) (*doltdb.RootValue, bool) {
+	tempTableRoot, ok := sess.tempTableRoots[dbName]
+
+	if !ok {
+		return nil, false
+	}
+
+	return tempTableRoot, true
+}
+
+func (sess *DoltSession) SetTempTableRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+	sess.tempTableRoots[dbName] = newRoot
+	return sess.tempTableEditSessions[dbName].SetRoot(ctx, newRoot)
+}
+
 // GetHeadCommit returns the parent commit of the current session.
 func (sess *DoltSession) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
@@ -727,6 +748,20 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	sess.dirty[db.Name()] = false
 
 	return nil
+}
+
+// CreateTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing
+// temporary tables. This should only be used on demand. That is only when a temporary table is created should we
+// create the root map and edit session map.
+func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error {
+	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
+	if err != nil {
+		return err
+	}
+
+	sess.tempTableEditSessions[dbName] = editor.CreateTableEditSession(newRoot, editor.TableEditSessionProps{})
+
+	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }
 
 // defineSystemVariables defines dolt-session variables in the engine as necessary
