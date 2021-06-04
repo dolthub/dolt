@@ -725,10 +725,9 @@ func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context, dbName stri
 		return err
 	}
 
-	sess.tempTableRoots[dbName] = newRoot
 	sess.tempTableEditSessions[dbName] = editor.CreateTableEditSession(newRoot, editor.TableEditSessionProps{})
 
-	return nil
+	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }
 
 // defineSystemVariables defines dolt-session variables in the engine as necessary

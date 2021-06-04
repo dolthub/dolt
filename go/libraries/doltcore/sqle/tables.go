@@ -159,7 +159,7 @@ func (t *DoltTable) doltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	return table, nil
 }
 
-// getRoot returns the correct root value that needs to updated with the new tale info. The only controlling factor
+// getRoot returns the appropriate root value for this session. The only controlling factor
 // is whether this is a temporary table or not.
 func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	if t.temporary {
