@@ -45,15 +45,15 @@ const (
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 )
 
-type commitBehavior int8
+type batchMode int8
 const (
-	batched commitBehavior = iota
-	single
+	single batchMode = iota
+	batched
 )
 
 // TransactionsEnabled controls whether to use SQL transactions
 // Exported only for testing
-var TransactionsEnabled = true
+var TransactionsEnabled = false
 
 func init() {
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
@@ -98,7 +98,7 @@ type DoltSession struct {
 	dbDatas               map[string]env.DbData
 	editSessions          map[string]*editor.TableEditSession
 	dirty                 map[string]bool
-	batchMode 	 commitBehavior
+	batchMode             batchMode
 	Username              string
 	Email                 string
 	tempTableRoots        map[string]*doltdb.RootValue
