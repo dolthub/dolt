@@ -148,7 +148,7 @@ func (ti *varStringType) Equals(other TypeInfo) bool {
 	if ti2, ok := other.(*varStringType); ok {
 		return ti.sqlStringType.MaxCharacterLength() == ti2.sqlStringType.MaxCharacterLength() &&
 			ti.sqlStringType.Type() == ti2.sqlStringType.Type() &&
-			ti.sqlStringType.Collation() == ti2.sqlStringType.Collation()
+			ti.sqlStringType.Collation().Equals(ti2.sqlStringType.Collation())
 	}
 	return false
 }

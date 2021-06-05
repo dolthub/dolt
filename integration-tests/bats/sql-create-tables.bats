@@ -423,3 +423,367 @@ SQL
     [[ "$output" =~ "2  | 2" ]] || false
     [[ "$output" =~ "3  | 3" ]] || false
 }
+
+@test "sql-create-tables: Can create a temporary table that lasts the length of a session" {
+    run dolt sql -q "CREATE TEMPORARY TABLE mytemptable(pk int PRIMARY KEY)"
+    [ "$status" -eq 0 ]
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "mytemptable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: Temporary tables can have data inserted and retrieved" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id)
+);
+
+INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
+SELECT * FROM colors;
+SQL
+    [[ "$output" =~ "| id | color |" ]] || false
+    [[ "$output" =~ "1  | red" ]] || false
+    [[ "$output" =~ "2  | green" ]] || false
+    [[ "$output" =~ "3  | blue" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "colors" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: Temporary tables with indexes can have data inserted and retrieved" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+
+INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
+SELECT * FROM colors;
+SQL
+    [[ "$output" =~ "| id | color |" ]] || false
+    [[ "$output" =~ "1  | red" ]] || false
+    [[ "$output" =~ "2  | green" ]] || false
+    [[ "$output" =~ "3  | blue" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "colors" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: Create temporary table select from another table works" {
+    run dolt sql <<SQL
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+
+INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
+CREATE TEMPORARY TABLE mytemptable SELECT * FROM colors;
+SELECT * from mytemptable;
+SQL
+    [[ "$output" =~ "| id | color |" ]] || false
+    [[ "$output" =~ "1  | red" ]] || false
+    [[ "$output" =~ "2  | green" ]] || false
+    [[ "$output" =~ "3  | blue" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "colors" ]] || false
+    [[ "$output" =~ "mytemptable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: You can drop temp tables" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE mytemptable(pk int PRIMARY KEY);
+DROP TABLE mytemptable
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "colors" ]] || false
+
+    # Double check with an additional query
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE mytemptable(pk int PRIMARY KEY);
+DROP TABLE mytemptable;
+SELECT * FROM mytemptable;
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: mytemptable" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "colors" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+
+@test "sql-create-tables: You can create a temp table of the same name as a normal table. Run it through operations" {
+    run dolt sql <<SQL
+CREATE TABLE goodtable(pk int PRIMARY KEY);
+
+CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
+INSERT INTO goodtable VALUES (1);
+
+SELECT * FROM goodtable;
+DROP TABLE goodtable;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk |" ]] || false
+    [[ "$output" =~ "| 1  |" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "goodtable" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM goodtable;"
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "sql-create-tables: You can create a normal table even if a temporary table exists with the same name" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
+INSERT INTO goodtable VALUES (1);
+
+CREATE TABLE goodtable(pk int PRIMARY KEY);
+
+SELECT * FROM goodtable;
+DROP TABLE goodtable;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk |" ]] || false
+    [[ "$output" =~ "| 1  |" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "goodtable" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM goodtable;"
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "sql-create-tables: Alter on a temporary table" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
+ALTER TABLE goodtable ADD COLUMN val int;
+
+INSERT INTO goodtable VALUES (1, 1);
+
+SELECT * FROM goodtable;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk | val |" ]] || false
+    [[ "$output" =~ "+----+-----+" ]] || false
+    [[ "$output" =~ "| 1  | 1   |" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "goodtable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: Creating a foreign key on a temporary table throws an error" {
+    run dolt sql <<SQL
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+
+CREATE TEMPORARY TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id),
+    FOREIGN KEY (color) REFERENCES colors(color)
+);
+
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "temporary tables do not support foreign key" ]] || false
+
+    # Now try with an alter
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id)
+);
+
+ALTER TABLE objects ADD FOREIGN KEY (color) REFERENCES colors(color);
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "temporary tables do not support foreign key" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "objects" ]] || false
+    [[ "$output" =~ "colors" ]] || false
+}
+
+@test "sql-create-tables: Temporary table supports UNIQUE Index" {
+     run dolt sql <<SQL
+CREATE TEMPORARY TABLE mytemptable (
+    pk INT NOT NULL,
+    val INT,
+
+    PRIMARY KEY (pk),
+    UNIQUE INDEX (val)
+);
+
+INSERT IGNORE INTO mytemptable VALUES (1,1);
+INSERT IGNORE INTO mytemptable VALUES (2,1);
+SELECT * FROM mytemptable;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk | val |" ]] || false
+    [[ "$output" =~ "+----+-----+" ]] || false
+    [[ "$output" =~ "| 1  | 1   |" ]] || false
+    ! [[ "$output" =~ "| 2  | 1   |" ]] ||
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "mytemptable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: create like with temporary tables" {
+      run dolt sql <<SQL
+CREATE TABLE mytable (
+    pk int PRIMARY KEY,
+    val int
+);
+
+CREATE TEMPORARY TABLE mytemptable like mytable;
+INSERT INTO mytemptable VALUES (1,1),(2,1);
+SELECT * from mytemptable;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk | val |" ]] || false
+    [[ "$output" =~ "+----+-----+" ]] || false
+    [[ "$output" =~ "| 1  | 1   |" ]] || false
+    [[ "$output" =~ "| 2  | 1   |" ]] || false
+}
+
+@test "sql-create-tables: create temporary table like from other database" {
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt sql -q "CREATE TABLE tableone(pk bigint primary key, v1 int)"
+    cd ..
+    mkdir repo2
+    cd repo2
+    dolt init
+    cd ..
+    run dolt sql --multi-db-dir ./ -b -q "USE repo2;CREATE TEMPORARY TABLE temp2 LIKE repo1.tableone;"
+    [ "$status" -eq 0 ]
+    cd repo2
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "temp2" ]] || false
+}
+
+@test "sql-create-tables: verify that temporary tables appear in the innodb_temp_table_info table" {
+      run dolt sql <<SQL
+CREATE TEMPORARY TABLE mytemptable (
+    pk int PRIMARY KEY,
+    val int
+);
+
+SELECT name FROM information_schema.innodb_temp_table_info;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| mytemptable |" ]] || false
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "mytemptable" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-create-tables: temporary tables can be queried in a case insensitive way" {
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE myTempTable (
+    pk int PRIMARY KEY,
+    val int
+);
+
+INSERT INTO myTempTABLE VALUES (1,1),(2,2),(3,3);
+DELETE FROM MyTempTable where pk = 3;
+SELECT * FROM myTEMPTable;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| pk | val |" ]] || false
+    [[ "$output" =~ "+----+-----+" ]] || false
+    [[ "$output" =~ "| 1  | 1   |" ]] || false
+    [[ "$output" =~ "| 2  | 2   |" ]] || false
+
+    run dolt sql <<SQL
+CREATE TEMPORARY TABLE myTempTable (
+    pk int PRIMARY KEY,
+    val int
+);
+
+INSERT INTO myTempTABLE VALUES (1,1),(2,2),(3,3);
+DROP TABLE myTempTABLE;
+SELECT * FROM myTempTable;
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: myTempTable" ]] || false
+}
