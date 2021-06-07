@@ -481,7 +481,6 @@ SQL
 }
 
 @test "sql-create-tables: Create temporary table select from another table works" {
-    skip "CREATE TABLE (SELECT * ) is not supported"
     run dolt sql <<SQL
 CREATE TABLE colors (
     id INT NOT NULL,
@@ -495,6 +494,7 @@ INSERT INTO colors VALUES (1,'red'),(2,'green'),(3,'blue');
 CREATE TEMPORARY TABLE mytemptable SELECT * FROM colors;
 SELECT * from mytemptable;
 SQL
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "| id | color |" ]] || false
     [[ "$output" =~ "1  | red" ]] || false
     [[ "$output" =~ "2  | green" ]] || false
@@ -503,12 +503,7 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "colors" ]] || false
-    [[ "$output" =~ "mytemptable" ]] || false
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    ! [[ "$output" =~ "mytemptable" ]] || false
 }
 
 @test "sql-create-tables: You can drop temp tables" {
