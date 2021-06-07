@@ -97,28 +97,7 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return nil, err
 	}
 
-	err = db.setHeadHash(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	return NewDoltTransaction(root, wsRef, db.DbData()), nil
-}
-
-func (db Database) setHeadHash(ctx *sql.Context) error {
-	headCommit, err := db.ddb.Resolve(ctx, db.rsr.CWBHeadSpec(), db.rsr.CWBHeadRef())
-	if err != nil {
-		return err
-	}
-	headHash, err := headCommit.HashOf()
-	if err != nil {
-		return err
-	}
-	if doltSession, ok := ctx.Session.(*DoltSession); ok {
-		return doltSession.SetSessionVarDirectly(ctx, HeadKey(db.name), headHash.String())
-	} else {
-		return ctx.SetSessionVariable(ctx, HeadKey(db.name), headHash.String())
-	}
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
@@ -285,6 +264,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
 func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
 	root, err := db.rootAsOf(ctx, asOf)
+
 	if err != nil {
 		return nil, false, err
 	} else if root == nil {

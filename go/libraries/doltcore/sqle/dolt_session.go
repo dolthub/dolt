@@ -53,7 +53,7 @@ const (
 
 // TransactionsEnabled controls whether to use SQL transactions
 // Exported only for testing
-var TransactionsEnabled = false
+var TransactionsEnabled = true
 
 func init() {
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
