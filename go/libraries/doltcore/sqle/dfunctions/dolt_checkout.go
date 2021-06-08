@@ -240,10 +240,10 @@ func (d DoltCheckoutFunc) Type() sql.Type {
 	return sql.Int8
 }
 
-func (d DoltCheckoutFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	return NewDoltCheckoutFunc(children...)
+func (d DoltCheckoutFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+	return NewDoltCheckoutFunc(ctx, children...)
 }
 
-func NewDoltCheckoutFunc(args ...sql.Expression) (sql.Expression, error) {
+func NewDoltCheckoutFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
 	return &DoltCheckoutFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }

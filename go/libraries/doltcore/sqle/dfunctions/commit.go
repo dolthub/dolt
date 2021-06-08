@@ -32,7 +32,7 @@ type CommitFunc struct {
 }
 
 // NewCommitFunc creates a new CommitFunc expression.
-func NewCommitFunc(args ...sql.Expression) (sql.Expression, error) {
+func NewCommitFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
 	return &CommitFunc{children: args}, nil
 }
 
@@ -151,8 +151,8 @@ func (cf *CommitFunc) Children() []sql.Expression {
 }
 
 // WithChildren implements the Expression interface.
-func (cf *CommitFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	return NewCommitFunc(children...)
+func (cf *CommitFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+	return NewCommitFunc(ctx, children...)
 }
 
 func (cf *CommitFunc) Type() sql.Type {

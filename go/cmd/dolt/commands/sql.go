@@ -1264,7 +1264,7 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *sqlEngine, query string) 
 	plan.Inspect(a, func(n sql.Node) bool {
 		switch n := n.(type) {
 		case *plan.InsertInto:
-			_, err = plan.TransformExpressionsUp(n.Source, func(exp sql.Expression) (sql.Expression, error) {
+			_, err = plan.TransformExpressionsUp(ctx, n.Source, func(exp sql.Expression) (sql.Expression, error) {
 				if _, ok := exp.(*expression.AutoIncrement); ok {
 					isAutoInc = true
 				}
