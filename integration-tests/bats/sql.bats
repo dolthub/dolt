@@ -1188,3 +1188,15 @@ SQL
     [ "${lines[1]}" = "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION" ]
 }
 
+@test "sql: found_row works with update properly" {
+    run dolt sql <<SQL
+CREATE TABLE tbl(pk int primary key, v1 int);
+INSERT INTO tbl VALUES (1,1), (2,1);
+UPDATE tbl set v1 = 1 where v1 = 1;
+SELECT FOUND_ROWS();
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| FOUND_ROWS() |" ]] || false
+    [[ "$output" =~ "| 2            |" ]] || false
+}
