@@ -477,7 +477,6 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 	}
 
 	hashStr := h.String()
-
 	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), hashStr)
 	if err != nil {
 		return err

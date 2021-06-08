@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -97,7 +98,34 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return nil, err
 	}
 
+	err = db.setHeadHash(ctx, wsRef)
+	if err != nil {
+		return nil, err
+	}
+
 	return NewDoltTransaction(root, wsRef, db.DbData()), nil
+}
+
+func (db Database) setHeadHash(ctx *sql.Context, ref ref.WorkingSetRef) error {
+	// TODO: use the session HEAD ref here instead of the repo state one
+	// headRef, err := ref.ToHeadRef()
+	// if err != nil {
+	// 	return err
+	// }
+
+	headCommit, err := db.ddb.Resolve(ctx, db.rsr.CWBHeadSpec(), db.rsr.CWBHeadRef())
+	if err != nil {
+		return err
+	}
+	headHash, err := headCommit.HashOf()
+	if err != nil {
+		return err
+	}
+	if doltSession, ok := ctx.Session.(*DoltSession); ok {
+		return doltSession.SetSessionVarDirectly(ctx, HeadKey(db.name), headHash.String())
+	} else {
+		return ctx.SetSessionVariable(ctx, HeadKey(db.name), headHash.String())
+	}
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {

@@ -215,8 +215,14 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)
 
+	headHash, err := ctx.GetSessionVariable(ctx, sqle.HeadKey(ddb.Name()))
+	require.NoError(d.t, err)
+
 	ctx = enginetest.NewContext(d)
-	query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', @@" + sqle.HeadKey(ddb.Name()) + ")"
+	// TODO: there's a bug in test setup with transactions, where the HEAD session var gets overwritten on transaction
+	//  start, so we quote it here instead
+	// query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', @@" + sqle.HeadKey(ddb.Name()) + ")"
+	query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', '" + headHash.(string) + "')"
 
 	_, iter, err = e.Query(ctx,
 		query)
