@@ -394,6 +394,10 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 
 	err = runBatchMode(sqlCtx, se, batchInput)
 	if err != nil {
+		// If we encounter an error, flush what we have so far to disk before exiting
+		_ = flushBatchedEdits(sqlCtx, se)
+		_ = writeRoots(sqlCtx, se, mrEnv, roots)
+
 		return errhand.BuildDError("Error processing batch").Build()
 	}
 
