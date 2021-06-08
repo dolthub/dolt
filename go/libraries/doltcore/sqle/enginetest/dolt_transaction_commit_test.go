@@ -23,19 +23,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 func TestDoltTransactionCommitOneClient(t *testing.T) {
 	// In this test, we're setting only one client to match transaction commits to dolt commits.
 	// Autocommit is disabled for the enabled client, as it's the recommended way to use this feature.
-	ote := sqle.TransactionsEnabled
-	sqle.TransactionsEnabled = true
-	defer func() {
-		sqle.TransactionsEnabled = ote
-	}()
-
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).withTransactionsEnabled(true)
 	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
 		Name: "dolt commit after transaction commit one client",
 		SetUpScript: []string{
@@ -164,13 +157,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	// In this test, we're setting both clients to match transaction commits to dolt commits.
 	// Autocommit is disabled, as it's the recommended way to use this feature.
-	ote := sqle.TransactionsEnabled
-	sqle.TransactionsEnabled = true
-	defer func() {
-		sqle.TransactionsEnabled = ote
-	}()
-
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).withTransactionsEnabled(true)
 	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
 		Name: "dolt commit after transaction commit two clients",
 		SetUpScript: []string{
@@ -293,13 +280,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	// In this test, each insertion from both clients cause a commit as autocommit is enabled.
 	// Not the recommended way to use the feature, but it's permitted.
-	ote := sqle.TransactionsEnabled
-	sqle.TransactionsEnabled = true
-	defer func() {
-		sqle.TransactionsEnabled = ote
-	}()
-
-	harness := newDoltHarness(t)
+	harness := newDoltHarness(t).withTransactionsEnabled(true)
 	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
 		Name: "dolt commit after transaction commit autocommit",
 		SetUpScript: []string{

@@ -30,11 +30,12 @@ import (
 )
 
 type DoltHarness struct {
-	t              *testing.T
-	session        *sqle.DoltSession
-	databases      []sqle.Database
-	parallelism    int
-	skippedQueries []string
+	t                   *testing.T
+	session             *sqle.DoltSession
+	transactionsEnabled bool
+	databases           []sqle.Database
+	parallelism         int
+	skippedQueries      []string
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -52,6 +53,23 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
 	}
+}
+
+// withTransactionsEnabled returns a copy of this harness with transactions enabled or not for all sessions
+func (d DoltHarness) withTransactionsEnabled(enabled bool) *DoltHarness {
+	d.transactionsEnabled = enabled
+	d.setTransactionSessionVar(d.session, enabled)
+	return &d
+}
+
+func (d DoltHarness) setTransactionSessionVar(session *sqle.DoltSession, enabled bool) {
+	enabledVal := int8(0)
+	if enabled {
+		enabledVal = int8(1)
+	}
+
+	err := session.SetSessionVariable(sql.NewEmptyContext(), sqle.TransactionsEnabledSysVar, enabledVal)
+	require.NoError(d.t, err)
 }
 
 var defaultSkippedQueries = []string{
@@ -114,6 +132,8 @@ func (d DoltHarness) NewSession() *sql.Context {
 	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(d.t, err)
 
+	d.setTransactionSessionVar(session, d.transactionsEnabled)
+
 	ctx := sql.NewContext(
 		context.Background(),
 		sql.WithSession(session))
@@ -152,6 +172,8 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	var err error
 	d.session, err = sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(d.t, err)
+
+	d.setTransactionSessionVar(d.session, d.transactionsEnabled)
 
 	var dbs []sql.Database
 	d.databases = nil
