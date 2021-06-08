@@ -123,8 +123,7 @@ func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*s
 	return engine, sqlCtx, nil
 }
 
-// Executes the select statement given and returns the resulting rows, or an error if one is encountered.
-// This uses the index functionality, which is not ready for prime time. Use with caution.
+// ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
 func ExecuteSelect(dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) ([]sql.Row, error) {
 
 	dbData := env.DbData{

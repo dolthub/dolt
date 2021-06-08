@@ -56,6 +56,9 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
+	err = dEnv.UpdateWorkingRoot(ctx, root)
+	require.NoError(t, err)
+
 	rows, err := sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName)
 	require.NoError(t, err)
 	expectedRows := []sql.Row{
@@ -75,6 +78,9 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	retrieved2, err := dtables.RetrieveFromQueryCatalog(ctx, root, sq2.ID)
 	require.NoError(t, err)
 	assert.Equal(t, sq2, retrieved2)
+
+	err = dEnv.UpdateWorkingRoot(ctx, root)
+	require.NoError(t, err)
 
 	rows, err = sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName+" order by display_order")
 	require.NoError(t, err)
