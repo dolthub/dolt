@@ -385,7 +385,13 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	// In batch mode, we need to set a couple flags on the session to prevent flushes to disk after every commit
 	dsqle.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
+	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, uint8(0))
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
 	err = runBatchMode(sqlCtx, se, batchInput)
 	if err != nil {
 		return errhand.BuildDError("Error processing batch").Build()
