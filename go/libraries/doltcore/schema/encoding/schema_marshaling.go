@@ -17,6 +17,7 @@ package encoding
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -330,6 +331,7 @@ type schCacheData struct {
 	sd    *schemaData
 }
 
+var schemaCacheMu *sync.Mutex = &sync.Mutex{}
 var unmarshalledSchemaCache = map[hash.Hash]schCacheData{}
 
 // UnmarshalSchemaNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
@@ -339,7 +341,9 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		return nil, err
 	}
 
+	schemaCacheMu.Lock()
 	cachedData, ok := unmarshalledSchemaCache[h]
+	schemaCacheMu.Unlock()
 
 	if ok {
 		cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
@@ -364,12 +368,17 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		return nil, err
 	}
 
-	unmarshalledSchemaCache[h] = schCacheData{
+	d := schCacheData{
 		all:   sch.GetAllCols(),
 		pk:    sch.GetPKCols(),
 		nonPK: sch.GetNonPKCols(),
 		sd:    sd.Copy(),
 	}
+
+	schemaCacheMu.Lock()
+	unmarshalledSchemaCache[h] = d
+	schemaCacheMu.Unlock()
+
 	return sch, nil
 }
 

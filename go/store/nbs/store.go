@@ -1103,7 +1103,7 @@ func (nbs *NomsBlockStore) Close() error {
 }
 
 func (nbs *NomsBlockStore) Stats() interface{} {
-	return *nbs.stats
+	return nbs.stats.Clone()
 }
 
 func (nbs *NomsBlockStore) StatsSummary() string {
