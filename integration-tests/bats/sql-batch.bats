@@ -53,6 +53,7 @@ SQL
 insert into test values (0,0,0,0,0,0);
 insert into test values (1,0,0,0,0,0);
 insert into test values (a,b,c);
+insert into test values (2,0,0,0,0,0); -- will not run
 SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error on line 3 for query" ]] || false
@@ -74,13 +75,13 @@ SQL
     [[ "$output" =~ "insert into test values poop" ]] || false
 
     run dolt sql <<SQL
-insert into test values (0,0,0,0,0,0);
+insert into test values (2,0,0,0,0,0);
 
-insert into test values (1,0,
+insert into test values (3,0,
 0,0,0,0);
 
 insert into 
-test values (2,0,0,0,0,0)
+test values (4,0,0,0,0,0)
 ;
 
 insert into 
