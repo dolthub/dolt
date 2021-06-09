@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/types"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/sqllogictest/go/logictest"
@@ -36,12 +35,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var _ logictest.Harness = &DoltHarness{}
 
 const (
-	name = "sqllogictest runner"
+	name  = "sqllogictest runner"
 	email = "sqllogictestrunner@dolthub.com"
 )
 
