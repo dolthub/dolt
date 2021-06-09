@@ -394,7 +394,14 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 
 	err = runBatchMode(sqlCtx, se, batchInput)
 	if err != nil {
-		// If we encounter an error, flush what we have so far to disk before exiting
+		// If we encounter an error, flush what we have so far to disk before exiting, except in the case of merge
+		// errors, which have already updated the repo state all they're going to (and writing session root on top of
+		// them would overwrite these changes)
+		// TODO: this is a mess, merge conflicts need to follow the same code path as everything else
+		if err == doltdb.ErrUnresolvedConflicts || err == doltdb.ErrMergeActive {
+			return errhand.BuildDError("Error processing batch").Build()
+		}
+
 		_ = flushBatchedEdits(sqlCtx, se)
 		_ = writeRoots(sqlCtx, se, mrEnv, roots)
 
@@ -1100,7 +1107,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *sqlEngine, query string, sql
 	if rowIter != nil {
 		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
-			return fmt.Errorf("error executing statement: %v", err.Error())
+			return err
 		}
 
 		// Some statement types should print results, even in batch mode.
@@ -1130,7 +1137,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *sqlEngine, query string, sql
 func processBatchableEditQuery(ctx *sql.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
 	_, rowIter, err := se.query(ctx, query)
 	if err != nil {
-		return fmt.Errorf("Error inserting rows: %v", err.Error())
+		return err
 	}
 
 	if rowIter != nil {
@@ -1142,7 +1149,7 @@ func processBatchableEditQuery(ctx *sql.Context, se *sqlEngine, query string, sq
 		}()
 		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
-			return fmt.Errorf("Error inserting rows: %v", err.Error())
+			return err
 		}
 	}
 
