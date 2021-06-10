@@ -16,6 +16,7 @@ package dolt
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -97,26 +98,30 @@ func TestDoltHarness(t *testing.T) {
 		},
 	}
 
-	t.Run("should execute simple sql queries against Dolt", func(t *testing.T) {
-		h := &DoltHarness{}
-		fs := filesys.NewInMemFS([]string{}, nil, tmp)
-		dEnv := createTestEnvWithFS(fs, wd)
+	fs := filesys.NewInMemFS([]string{}, nil, tmp)
+	dEnv := createTestEnvWithFS(fs, wd)
 
-		err := innerInit(h, dEnv)
-		assert.Equal(t, nil, err)
+	// We run this several times in a row to make sure that the same dolt env can be used in multiple setup / teardown
+	// cycles
+	for i := 0; i < 10; i++ {
+		t.Run(fmt.Sprintf("dolt harness runner %d", i), func(t *testing.T) {
+			h := &DoltHarness{}
+			err := innerInit(h, dEnv)
+			assert.Equal(t, nil, err)
 
-		// setup repo with statements
-		for _, test := range statementTests {
-			err = h.ExecuteStatement(test.statement)
-			assert.Equal(t, test.expErr, err)
-		}
+			// setup repo with statements
+			for _, test := range statementTests {
+				err = h.ExecuteStatement(test.statement)
+				assert.Equal(t, test.expErr, err)
+			}
 
-		// test queries
-		for _, test := range queryTests {
-			schema, results, err := h.ExecuteQuery(test.query)
-			assert.Equal(t, test.expErr, err)
-			assert.Equal(t, test.expSchema, schema)
-			assert.Equal(t, test.expResults, results)
-		}
-	})
+			// test queries
+			for _, test := range queryTests {
+				schema, results, err := h.ExecuteQuery(test.query)
+				assert.Equal(t, test.expErr, err)
+				assert.Equal(t, test.expSchema, schema)
+				assert.Equal(t, test.expResults, results)
+			}
+		})
+	}
 }
