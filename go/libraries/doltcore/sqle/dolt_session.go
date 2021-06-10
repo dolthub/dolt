@@ -46,15 +46,21 @@ const (
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 )
 
-// TransactionsEnabled controls whether to use SQL transactions
-// Exported only for testing
-var TransactionsEnabled = false
+type batchMode int8
+
+const (
+	single batchMode = iota
+	batched
+)
+
+const TransactionsEnabledSysVar = "dolt_transactions_enabled"
 
 func init() {
+	txEnabledSessionVar := int8(0)
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
 	if ok {
 		if strings.ToLower(enableTx) == "true" {
-			TransactionsEnabled = true
+			txEnabledSessionVar = int8(1)
 		}
 	}
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
@@ -66,7 +72,31 @@ func init() {
 			Type:              sql.NewSystemBoolType(DoltCommitOnTransactionCommit),
 			Default:           int8(0),
 		},
+		{
+			Name:              TransactionsEnabledSysVar,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(TransactionsEnabledSysVar),
+			Default:           txEnabledSessionVar,
+		},
 	})
+}
+
+func TransactionsEnabled(ctx *sql.Context) bool {
+	enabled, err := ctx.GetSessionVariable(ctx, TransactionsEnabledSysVar)
+	if err != nil {
+		panic(err)
+	}
+
+	switch enabled.(int8) {
+	case 0:
+		return false
+	case 1:
+		return true
+	default:
+		panic(fmt.Sprintf("Unexpected value %v", enabled))
+	}
 }
 
 func IsHeadKey(key string) (bool, string) {
@@ -93,6 +123,7 @@ type DoltSession struct {
 	dbDatas               map[string]env.DbData
 	editSessions          map[string]*editor.TableEditSession
 	dirty                 map[string]bool
+	batchMode             batchMode
 	Username              string
 	Email                 string
 	tempTableRoots        map[string]*doltdb.RootValue
@@ -151,13 +182,40 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 	return sess, nil
 }
 
+// EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
+// Sessions operating in batched mode don't flush any edit buffers except when told to do so explicitly, or when a
+// transaction commits. Disable @@autocommit to prevent edit buffers from being flushed prematurely in this mode.
+func (sess *DoltSession) EnableBatchedMode() {
+	sess.batchMode = batched
+}
+
 // DSessFromSess retrieves a dolt session from a standard sql.Session
 func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
 }
 
+// Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally
+// happens automatically as part of statement execution, and is only necessary when the session is manually batched (as
+// for bulk SQL import)
+func (sess *DoltSession) Flush(ctx *sql.Context, dbName string) error {
+	editSession := sess.editSessions[dbName]
+	newRoot, err := editSession.Flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	return sess.SetRoot(ctx, dbName, newRoot)
+}
+
 // CommitTransaction commits the in-progress transaction for the database named
 func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+	if sess.batchMode == batched {
+		err := sess.Flush(ctx, dbName)
+		if err != nil {
+			return err
+		}
+	}
+
 	if !sess.dirty[dbName] {
 		return nil
 	}
@@ -177,7 +235,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 
 	// Old "commit" path, which just writes whatever the root for this session is to the repo state file with no care
 	// for concurrency. Over time we will disable this path.
-	if !TransactionsEnabled {
+	if !TransactionsEnabled(ctx) {
 		dbData := sess.dbDatas[dbName]
 
 		h, err := dbData.Ddb.WriteRootValue(ctx, dbRoot.root)
@@ -261,7 +319,7 @@ func (sess *DoltSession) CommitWorkingSetToDolt(ctx *sql.Context, dbData env.DbD
 
 // RollbackTransaction rolls the given transaction back
 func (sess *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if !TransactionsEnabled || dbName == "" {
+	if !TransactionsEnabled(ctx) || dbName == "" {
 		return nil
 	}
 
@@ -286,7 +344,7 @@ func (sess *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
 func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !TransactionsEnabled || dbName == "" {
+	if !TransactionsEnabled(ctx) || dbName == "" {
 		return nil
 	}
 
@@ -302,7 +360,7 @@ func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
 func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !TransactionsEnabled || dbName == "" {
+	if !TransactionsEnabled(ctx) || dbName == "" {
 		return nil
 	}
 
@@ -327,7 +385,7 @@ func (sess *DoltSession) RollbackToSavepoint(ctx *sql.Context, savepointName, db
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
 func (sess *DoltSession) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !TransactionsEnabled || dbName == "" {
+	if !TransactionsEnabled(ctx) || dbName == "" {
 		return nil
 	}
 
@@ -667,7 +725,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 		}
 	}
 
-	if TransactionsEnabled {
+	if TransactionsEnabled(ctx) {
 		// Not all dolt commands update the working set ref yet. So until that's true, we update it here with the contents
 		// of the repo_state.json file
 		workingSetRef, err := ref.WorkingSetRefForHead(headRef)

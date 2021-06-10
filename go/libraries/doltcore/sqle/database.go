@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
@@ -40,16 +41,9 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type commitBehavior int8
-
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
-
-const (
-	batched commitBehavior = iota
-	single
-)
 
 type SqlDatabase interface {
 	sql.Database
@@ -59,12 +53,11 @@ type SqlDatabase interface {
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	name      string
-	ddb       *doltdb.DoltDB
-	rsr       env.RepoStateReader
-	rsw       env.RepoStateWriter
-	drw       env.DocsReadWriter
-	batchMode commitBehavior
+	name string
+	ddb  *doltdb.DoltDB
+	rsr  env.RepoStateReader
+	rsw  env.RepoStateWriter
+	drw  env.DocsReadWriter
 }
 
 var _ sql.Database = (*Database)(nil)
@@ -80,7 +73,7 @@ func (d DisabledTransaction) String() string {
 }
 
 func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
-	if !TransactionsEnabled {
+	if !TransactionsEnabled(ctx) {
 		return DisabledTransaction{}, nil
 	}
 
@@ -105,7 +98,7 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return nil, err
 	}
 
-	err = db.setHeadHash(ctx)
+	err = db.setHeadHash(ctx, wsRef)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +106,13 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 	return NewDoltTransaction(root, wsRef, db.DbData()), nil
 }
 
-func (db Database) setHeadHash(ctx *sql.Context) error {
+func (db Database) setHeadHash(ctx *sql.Context, ref ref.WorkingSetRef) error {
+	// TODO: use the session HEAD ref here instead of the repo state one
+	// headRef, err := ref.ToHeadRef()
+	// if err != nil {
+	// 	return err
+	// }
+
 	headCommit, err := db.ddb.Resolve(ctx, db.rsr.CWBHeadSpec(), db.rsr.CWBHeadRef())
 	if err != nil {
 		return err
@@ -167,25 +166,11 @@ var _ sql.TransactionDatabase = Database{}
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, dbData env.DbData) Database {
 	return Database{
-		name:      name,
-		ddb:       dbData.Ddb,
-		rsr:       dbData.Rsr,
-		rsw:       dbData.Rsw,
-		drw:       dbData.Drw,
-		batchMode: single,
-	}
-}
-
-// NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
-// commit any outstanding edits.
-func NewBatchedDatabase(name string, dbData env.DbData) Database {
-	return Database{
-		name:      name,
-		ddb:       dbData.Ddb,
-		rsr:       dbData.Rsr,
-		rsw:       dbData.Rsw,
-		drw:       dbData.Drw,
-		batchMode: batched,
+		name: name,
+		ddb:  dbData.Ddb,
+		rsr:  dbData.Rsr,
+		rsw:  dbData.Rsw,
+		drw:  dbData.Drw,
 	}
 }
 
@@ -307,6 +292,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
 func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
 	root, err := db.rootAsOf(ctx, asOf)
+
 	if err != nil {
 		return nil, false, err
 	} else if root == nil {

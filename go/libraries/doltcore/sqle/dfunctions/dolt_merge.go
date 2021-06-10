@@ -58,7 +58,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, err
 	}
 
-	apr, err := cli.ParseArgs(ap, args, nil)
+	apr, err := ap.Parse(args)
 	if err != nil {
 		return nil, err
 	}
@@ -100,11 +100,11 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	if hasConflicts {
-		return 1, errors.New("error: merge has unresolved conflicts")
+		return 1, doltdb.ErrUnresolvedConflicts
 	}
 
 	if dbData.Rsr.IsMergeActive() {
-		return 1, errors.New("error: merging is not possible because you have not committed an active merge")
+		return 1, doltdb.ErrMergeActive
 	}
 
 	head, hh, headRoot, err := getHead(ctx, sess, dbName)
@@ -333,7 +333,7 @@ func mergeRootToWorking(
 	hasConflicts := checkForConflicts(mergeStats)
 
 	if hasConflicts {
-		return errors.New("merge has conflicts. use the dolt_conflicts table to resolve")
+		return doltdb.ErrUnresolvedConflicts
 	}
 
 	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
