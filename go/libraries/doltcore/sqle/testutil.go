@@ -36,7 +36,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 
 	engine, ctx, err := NewTestEngine(context.Background(), db, root)
 	DSessFromSess(ctx.Session).EnableBatchedMode()
-	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, uint8(0))
+	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, true)
 	if err != nil {
 		return nil, err
 	}

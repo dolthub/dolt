@@ -1191,6 +1191,9 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 	return nil
 }
 
+// DebugString returns a human readable string with the contents of this root. If |transitive| is true, row data from
+// all tables is also included. This method is very expensive for large root values, so |transitive| should only be used
+// when debugging tests.
 func (root *RootValue) DebugString(ctx context.Context, transitive bool) string {
 	var buf bytes.Buffer
 	err := types.WriteEncodedValue(ctx, &buf, root.valueSt)

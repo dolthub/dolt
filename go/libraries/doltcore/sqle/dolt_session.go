@@ -72,8 +72,6 @@ func init() {
 			Type:              sql.NewSystemBoolType(DoltCommitOnTransactionCommit),
 			Default:           int8(0),
 		},
-	})
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{
 			Name:              TransactionsEnabledSysVar,
 			Scope:             sql.SystemVariableScope_Session,
@@ -196,7 +194,7 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
 }
 
-// Flush flushes all changes sitting in edit sessions to the sesssion root for the database named. This normally
+// Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally
 // happens automatically as part of statement execution, and is only necessary when the session is manually batched (as
 // for bulk SQL import)
 func (sess *DoltSession) Flush(ctx *sql.Context, dbName string) error {

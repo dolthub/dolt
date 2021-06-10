@@ -63,12 +63,7 @@ func (d DoltHarness) withTransactionsEnabled(enabled bool) *DoltHarness {
 }
 
 func (d DoltHarness) setTransactionSessionVar(session *sqle.DoltSession, enabled bool) {
-	enabledVal := int8(0)
-	if enabled {
-		enabledVal = int8(1)
-	}
-
-	err := session.SetSessionVariable(sql.NewEmptyContext(), sqle.TransactionsEnabledSysVar, enabledVal)
+	err := session.SetSessionVariable(sql.NewEmptyContext(), sqle.TransactionsEnabledSysVar, enabled)
 	require.NoError(d.t, err)
 }
 
