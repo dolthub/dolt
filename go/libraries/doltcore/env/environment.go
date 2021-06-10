@@ -327,27 +327,70 @@ func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
 		return err
 	}
 
+	// TODO: stop reading repo state
 	dEnv.RepoState, err = CreateRepoState(dEnv.FS, doltdb.MasterBranch, rootHash)
 	if err != nil {
 		return ErrStateUpdate
+	}
+
+	err = dEnv.UpdateWorkingRoot(ctx, root)
+	if err != nil {
+		return err
 	}
 
 	dEnv.RSLoadErr = nil
 	return nil
 }
 
+// WorkingRoot returns the working root for the current working branch
 func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	return dEnv.DoltDB.ReadRootValue(ctx, dEnv.RepoState.WorkingHash())
-}
-
-func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	h, err := dEnv.DoltDB.WriteRootValue(ctx, newRoot)
-
+	workingSet, err := dEnv.WorkingSet(ctx)
 	if err != nil {
-		return doltdb.ErrNomsIO
+		return nil, err
 	}
 
-	return dEnv.RepoStateWriter().SetWorkingHash(ctx, h)
+	return workingSet.RootValue(), nil
+}
+
+func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
+	workingSetRef, err := ref.WorkingSetRefForHead(dEnv.RepoState.CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+
+	workingSet, err := dEnv.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return workingSet, nil
+}
+
+// UpdateWorkingRoot updates the working root for the current working branch to the root value given.
+// This method can fail if another client updates the working root at the same time.
+func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	var h hash.Hash
+	var wsRef ref.WorkingSetRef
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// first time updating root
+		wsRef, err = ref.WorkingSetRefForHead(dEnv.RepoState.CWBHeadRef())
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	} else {
+		h, err = ws.HashOf()
+		if err != nil {
+			return err
+		}
+
+		wsRef = ws.Ref()
+	}
+
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, newRoot, h)
 }
 
 type repoStateReader struct {

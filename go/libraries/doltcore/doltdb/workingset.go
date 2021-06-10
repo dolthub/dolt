@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -83,6 +84,12 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 // RootValue returns the root value stored by this workingset
 func (t *WorkingSet) RootValue() *RootValue {
 	return t.rootValue
+}
+
+// HashOf returns the hash of the workingset struct, which is not the same as the hash of the root value stored in the
+// working set. This value is used for optimistic locking when updating a working set for a head ref.
+func (t *WorkingSet) HashOf() (hash.Hash, error) {
+	return t.st.Hash(t.format)
 }
 
 // Struct returns the struct used to construct this WorkingSet.

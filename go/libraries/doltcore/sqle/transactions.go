@@ -80,7 +80,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 
 		root := ws.RootValue()
 
-		hash, err := ws.Struct().Hash(tx.dbData.Ddb.Format())
+		hash, err := ws.HashOf()
 		if err != nil {
 			return nil, err
 		}

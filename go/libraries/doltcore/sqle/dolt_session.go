@@ -740,7 +740,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 		} else if err != nil {
 			return err
 		} else {
-			workingHashInWsRef, err = workingSet.Struct().Hash(ddb.Format())
+			workingHashInWsRef, err = workingSet.HashOf()
 			if err != nil {
 				return err
 			}
