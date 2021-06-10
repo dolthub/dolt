@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
@@ -53,11 +53,11 @@ type SqlDatabase interface {
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	name      string
-	ddb       *doltdb.DoltDB
-	rsr       env.RepoStateReader
-	rsw       env.RepoStateWriter
-	drw       env.DocsReadWriter
+	name string
+	ddb  *doltdb.DoltDB
+	rsr  env.RepoStateReader
+	rsw  env.RepoStateWriter
+	drw  env.DocsReadWriter
 }
 
 var _ sql.Database = (*Database)(nil)
@@ -166,11 +166,11 @@ var _ sql.TransactionDatabase = Database{}
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, dbData env.DbData) Database {
 	return Database{
-		name:      name,
-		ddb:       dbData.Ddb,
-		rsr:       dbData.Rsr,
-		rsw:       dbData.Rsw,
-		drw:       dbData.Drw,
+		name: name,
+		ddb:  dbData.Ddb,
+		rsr:  dbData.Rsr,
+		rsw:  dbData.Rsw,
+		drw:  dbData.Drw,
 	}
 }
 

@@ -1191,7 +1191,6 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 	return nil
 }
 
-
 func (root *RootValue) DebugString(ctx context.Context, transitive bool) string {
 	var buf bytes.Buffer
 	err := types.WriteEncodedValue(ctx, &buf, root.valueSt)
