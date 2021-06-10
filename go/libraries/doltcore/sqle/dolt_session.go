@@ -56,7 +56,7 @@ const (
 const TransactionsEnabledSysVar = "dolt_transactions_enabled"
 
 func init() {
-	txEnabledSessionVar := int8(0)
+	txEnabledSessionVar := int8(1)
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
 	if ok {
 		if strings.ToLower(enableTx) == "true" {
