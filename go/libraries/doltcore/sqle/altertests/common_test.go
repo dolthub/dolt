@@ -20,6 +20,7 @@ import (
 	"io"
 	"testing"
 	"time"
+	"os"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
@@ -64,6 +65,12 @@ func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
 			require.NoError(t, err)
 			assert.Equal(t, test.SelectRes, res)
 		})
+	}
+}
+
+func SkipByDefaultInCI(t *testing.T) {
+	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_ALTERTESTS") == "" {
+		t.Skip()
 	}
 }
 
