@@ -133,7 +133,7 @@ func (declFKC declaredFKCheck) Check(ctx context.Context, _, newTV row.TaggedVal
 		declTag := declFKC.refTagsToDeclTags[refTag]
 		keyTupVals[i*2] = types.Uint(refTag)
 
-		if val, ok := newTV[declTag]; ok {
+		if val, ok := newTV[declTag]; ok && !types.IsNull(val) {
 			keyTupVals[i*2+1] = val
 		} else {
 			// full key is not present.  skip check
@@ -184,7 +184,7 @@ func (refFKC referencedFKCheck) Check(ctx context.Context, oldTV, _ row.TaggedVa
 	for i, tag := range indexColTags {
 		keyTupVals[i*2] = types.Uint(tag)
 
-		if val, ok := oldTV[tag]; ok {
+		if val, ok := oldTV[tag]; ok && !types.IsNull(val) {
 			keyTupVals[i*2+1] = val
 		} else {
 			// full key is not present.  skip check

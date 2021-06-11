@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeFloat(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"FLOAT",
