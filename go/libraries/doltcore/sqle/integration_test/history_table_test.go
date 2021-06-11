@@ -31,6 +31,7 @@ import (
 )
 
 func TestHistoryTable(t *testing.T) {
+	SkipByDefaultInCI(t)
 	dEnv := setupHistoryTests(t)
 	for _, test := range historyTableTests() {
 		t.Run(test.name, func(t *testing.T) {
