@@ -22,12 +22,13 @@ import (
 
 // ResetWorkingDocsToStagedDocs resets the `dolt_docs` table on the working root to match the staged root.
 // If the `dolt_docs` table does not exist on the staged root, it will be removed from the working root.
-func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader, rsw RepoStateWriter) error {
-	wrkRoot, err := WorkingRoot(ctx, ddb, rsr)
-	if err != nil {
-		return err
-	}
-
+func ResetWorkingDocsToStagedDocs(
+	ctx context.Context,
+	ddb *doltdb.DoltDB,
+	workingRoot *doltdb.RootValue,
+	rsr RepoStateReader,
+	rsw RepoStateWriter,
+) error {
 	stgRoot, err := StagedRoot(ctx, ddb, rsr)
 	if err != nil {
 		return err
@@ -38,13 +39,13 @@ func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr R
 		return err
 	}
 
-	_, wrkDocsFound, err := wrkRoot.GetTable(ctx, doltdb.DocTableName)
+	_, wrkDocsFound, err := workingRoot.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return err
 	}
 
 	if wrkDocsFound && !stgDocsFound {
-		newWrkRoot, err := wrkRoot.RemoveTables(ctx, doltdb.DocTableName)
+		newWrkRoot, err := workingRoot.RemoveTables(ctx, doltdb.DocTableName)
 		if err != nil {
 			return err
 		}
@@ -53,7 +54,7 @@ func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr R
 	}
 
 	if stgDocsFound {
-		newWrkRoot, err := wrkRoot.PutTable(ctx, doltdb.DocTableName, stgDocTbl)
+		newWrkRoot, err := workingRoot.PutTable(ctx, doltdb.DocTableName, stgDocTbl)
 		if err != nil {
 			return err
 		}

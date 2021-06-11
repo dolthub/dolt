@@ -60,7 +60,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 }
 
 // CommitStaged adds a new commit to HEAD with the given props. Returns the new commit's hash as a string and an error.
-func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProps) (string, error) {
+func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env.DbData, props CommitStagedProps) (string, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
@@ -70,7 +70,7 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 		return "", doltdb.ErrEmptyCommitMessage
 	}
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, workingRoot, rsr)
 	if err != nil {
 		return "", err
 	}
@@ -85,7 +85,7 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 	}
 
 	if len(staged) == 0 && !rsr.IsMergeActive() && !props.AllowEmpty {
-		_, notStagedDocs, err := diff.GetDocDiffs(ctx, ddb, rsr, drw)
+		_, notStagedDocs, err := diff.GetDocDiffs(ctx, ddb, workingRoot, rsr, drw)
 		if err != nil {
 			return "", err
 		}
@@ -94,11 +94,7 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 
 	var mergeCmSpec []*doltdb.CommitSpec
 	if rsr.IsMergeActive() {
-		root, err := env.WorkingRoot(ctx, ddb, rsr)
-		if err != nil {
-			return "", err
-		}
-		inConflict, err := root.TablesInConflict(ctx)
+		inConflict, err := workingRoot.TablesInConflict(ctx)
 		if err != nil {
 			return "", err
 		}
@@ -153,19 +149,13 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 		return "", err
 	}
 
-	wrt, err := env.WorkingRoot(ctx, ddb, rsr)
+	workingRoot, err = workingRoot.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
 
 	if err != nil {
 		return "", err
 	}
 
-	wrt, err = wrt.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
-
-	if err != nil {
-		return "", err
-	}
-
-	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, wrt)
+	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, workingRoot)
 
 	if err != nil {
 		return "", err

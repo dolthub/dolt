@@ -185,7 +185,12 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 		cli.Println("Squash commit -- not updating HEAD")
 	}
 
-	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, cm2, dEnv.DbData())
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil
+	}
+
+	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, workingRoot, cm2, dEnv.DbData())
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()

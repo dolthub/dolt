@@ -76,9 +76,13 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	// Check if the -all param is provided. Stage all tables if so.
 	allFlag := apr.Contains(cli.AllFlag)
 
-	var err error
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
+	}
+
 	if allFlag {
-		err = actions.StageAllTables(ctx, dEnv.DbData())
+		err = actions.StageAllTables(ctx, workingRoot, dEnv.DbData())
 	}
 
 	if err != nil {
@@ -114,7 +118,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
@@ -198,20 +202,25 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
-	currBranch := dEnv.RepoState.CWBHeadRef()
-	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, workingRoot, dEnv.RepoStateReader())
 
 	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
+	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv.DoltDB, workingRoot, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
 	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
 
+	currBranch := dEnv.RepoState.CWBHeadRef()
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
 		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"
 

@@ -209,71 +209,78 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 }
 
 // updateRootsForBranch writes the roots needed for a checkout and returns the updated work and staged hash.
-func updateRootsForBranch(ctx context.Context, dbData env.DbData, dref ref.DoltRef, brName string) (wrkHash hash.Hash, stgHash hash.Hash, err error) {
-	hasRef, err := dbData.Ddb.HasRef(ctx, dref)
+func updateRootsForBranch(
+	ctx context.Context,
+	dbData env.DbData,
+	branchRef ref.DoltRef,
+	brName string,
+) (workingRoot *doltdb.RootValue, stagedRoot *doltdb.RootValue, err error) {
+
+	hasRef, err := dbData.Ddb.HasRef(ctx, branchRef)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, err
+		return nil, nil, err
 	}
 	if !hasRef {
-		return hash.Hash{}, hash.Hash{}, doltdb.ErrBranchNotFound
+		return nil, nil, doltdb.ErrBranchNotFound
 	}
-	if ref.Equals(dbData.Rsr.CWBHeadRef(), dref) {
-		return hash.Hash{}, hash.Hash{}, doltdb.ErrAlreadyOnBranch
+	if ref.Equals(dbData.Rsr.CWBHeadRef(), branchRef) {
+		return nil, nil, doltdb.ErrAlreadyOnBranch
 	}
 
 	currRoots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.HeadRoot, doltdb.WorkingRoot, doltdb.StagedRoot)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, err
+		return nil, nil, err
 	}
 
 	cs, err := doltdb.NewCommitSpec(brName)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
+		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
 	cm, err := dbData.Ddb.Resolve(ctx, cs, nil)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
+		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
-	newRoot, err := cm.GetRootValue()
+	branchRoot, err := cm.GetRootValue()
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, err
+		return nil, nil, err
 	}
 
 	conflicts := set.NewStrSet([]string{})
 
-	wrkTblHashes, err := moveModifiedTables(ctx, currRoots[doltdb.HeadRoot], newRoot, currRoots[doltdb.WorkingRoot], conflicts)
+	wrkTblHashes, err := moveModifiedTables(ctx, currRoots[doltdb.HeadRoot], branchRoot, currRoots[doltdb.WorkingRoot], conflicts)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, err
+		return nil, nil, err
 	}
 
-	stgTblHashes, err := moveModifiedTables(ctx, currRoots[doltdb.HeadRoot], newRoot, currRoots[doltdb.StagedRoot], conflicts)
+	stgTblHashes, err := moveModifiedTables(ctx, currRoots[doltdb.HeadRoot], branchRoot, currRoots[doltdb.StagedRoot], conflicts)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, err
+		return nil, nil, err
 	}
+
 	if conflicts.Size() > 0 {
-		return hash.Hash{}, hash.Hash{}, CheckoutWouldOverwrite{conflicts.AsSlice()}
+		return nil, nil, CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	wrkHash, err = writeRoot(ctx, dbData.Ddb, newRoot, wrkTblHashes)
+	workingRoot, err = writeRoot(ctx, dbData.Ddb, branchRoot, wrkTblHashes)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, err
+		return nil, nil, err
 	}
 
-	stgHash, err = writeRoot(ctx, dbData.Ddb, newRoot, stgTblHashes)
+	stagedRoot, err = writeRoot(ctx, dbData.Ddb, branchRoot, stgTblHashes)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, err
+		return nil, nil, err
 	}
 
-	return wrkHash, stgHash, nil
+	return workingRoot, stagedRoot, nil
 }
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
 	dbData := dEnv.DbData()
-	dref := ref.NewBranchRef(brName)
+	branchRef := ref.NewBranchRef(brName)
 
-	wrkHash, stgHash, err := updateRootsForBranch(ctx, dbData, dref, brName)
+	workingRoot, stagedRoot, err := updateRootsForBranch(ctx, dbData, branchRef, brName)
 	if err != nil {
 		return err
 	}
@@ -283,45 +290,28 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	err = dbData.Rsw.SetWorkingHash(ctx, wrkHash)
+	err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
 	if err != nil {
 		return err
 	}
 
-	err = dbData.Rsw.SetStagedHash(ctx, stgHash)
+	err = dEnv.UpdateWorkingRoot(ctx, workingRoot)
 	if err != nil {
 		return err
 	}
 
-	err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: dref})
+	// TODO: moved stage root into working set too
+	stagedHash, err := stagedRoot.HashOf()
+	if err != nil {
+		return err
+	}
+
+	err = dbData.Rsw.SetStagedHash(ctx, stagedHash)
 	if err != nil {
 		return err
 	}
 
 	return SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
-}
-
-// CheckoutBranchWithoutDocs checkouts a branch without considering any working changes to the local docs. Used
-// with DOLT_CHECKOUT.
-func CheckoutBranchWithoutDocs(ctx context.Context, dbData env.DbData, brName string) error {
-	dref := ref.NewBranchRef(brName)
-
-	wrkHash, stgHash, err := updateRootsForBranch(ctx, dbData, dref, brName)
-	if err != nil {
-		return err
-	}
-
-	err = dbData.Rsw.SetWorkingHash(ctx, wrkHash)
-	if err != nil {
-		return err
-	}
-
-	err = dbData.Rsw.SetStagedHash(ctx, stgHash)
-	if err != nil {
-		return err
-	}
-
-	return dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: dref})
 }
 
 var emptyHash = hash.Hash{}
@@ -392,10 +382,10 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 	return resultMap, nil
 }
 
-func writeRoot(ctx context.Context, ddb *doltdb.DoltDB, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (hash.Hash, error) {
+func writeRoot(ctx context.Context, ddb *doltdb.DoltDB, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
 	names, err := head.GetTableNames(ctx)
 	if err != nil {
-		return hash.Hash{}, err
+		return nil, err
 	}
 
 	var toDrop []string
@@ -407,7 +397,7 @@ func writeRoot(ctx context.Context, ddb *doltdb.DoltDB, head *doltdb.RootValue, 
 
 	head, err = head.RemoveTables(ctx, toDrop...)
 	if err != nil {
-		return hash.Hash{}, err
+		return nil, err
 	}
 
 	for k, v := range tblHashes {
@@ -417,11 +407,16 @@ func writeRoot(ctx context.Context, ddb *doltdb.DoltDB, head *doltdb.RootValue, 
 
 		head, err = head.SetTableHash(ctx, k, v)
 		if err != nil {
-			return hash.Hash{}, err
+			return nil, err
 		}
 	}
 
-	return ddb.WriteRootValue(ctx, head)
+	_, err = ddb.WriteRootValue(ctx, head)
+	if err != nil {
+		return nil, err
+	}
+	
+	return head, nil
 }
 
 func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {

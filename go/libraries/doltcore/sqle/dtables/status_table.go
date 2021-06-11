@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -30,9 +31,10 @@ import (
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type StatusTable struct {
-	ddb *doltdb.DoltDB
-	rsr env.RepoStateReader
-	drw env.DocsReadWriter
+	ddb    *doltdb.DoltDB
+	rsr    env.RepoStateReader
+	drw    env.DocsReadWriter
+	dbName string
 }
 
 func (s StatusTable) Name() string {
@@ -60,8 +62,13 @@ func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.R
 }
 
 // NewStatusTable creates a StatusTable
-func NewStatusTable(_ *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) sql.Table {
-	return &StatusTable{ddb: ddb, rsr: rsr, drw: drw}
+func NewStatusTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) sql.Table {
+	return &StatusTable{
+		ddb: ddb,
+		dbName: dbName,
+		rsr: rsr,
+		drw: drw,
+	}
 }
 
 // StatusIter is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -77,13 +84,19 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	rsr := st.rsr
 	drw := st.drw
 
-	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
+	sess := dsqle.DSessFromSess(ctx.Session)
+	workingRoot, ok := sess.GetRoot(st.dbName)
+	if !ok {
+		return nil, fmt.Errorf("No root found in session")
+	}
+
+	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, workingRoot, rsr)
 
 	if err != nil {
 		return &StatusItr{}, err
 	}
 
-	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, rsr, drw)
+	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, workingRoot, rsr, drw)
 
 	if err != nil {
 		return &StatusItr{}, err
@@ -95,7 +108,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return &StatusItr{}, err
 	}
 
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, ddb, rsr, drw)
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, workingRoot, drw)
 
 	if err != nil {
 		return &StatusItr{}, err

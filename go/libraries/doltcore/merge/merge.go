@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -840,6 +841,21 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	return newRoot, tblToStats, nil
 }
 
+func getWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*doltdb.RootValue, error) {
+	wsRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+
+	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return ws.RootValue(), nil
+}
+
+// TODO: pass in roots here instead
 func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
 	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
 
@@ -855,8 +871,7 @@ func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoSt
 		return nil, nil, nil, err
 	}
 
-	workingRoot, err = env.WorkingRoot(ctx, ddb, rsr)
-
+	workingRoot, err = getWorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -882,13 +897,8 @@ func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoSt
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
 
-func GetDocsInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
+func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
 	docs, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return nil, err
-	}
-
-	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, err
 	}

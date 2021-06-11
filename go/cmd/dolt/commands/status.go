@@ -66,10 +66,15 @@ func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
+	}
+
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, workingRoot, dEnv.RepoStateReader())
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
@@ -82,14 +87,14 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
+	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv.DoltDB, workingRoot, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, workingRoot, dEnv.DocsReadWriter())
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())

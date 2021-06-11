@@ -202,11 +202,6 @@ func (rs *RepoState) GetMergeCommit() string {
 	return rs.Merge.Commit
 }
 
-// Returns the working root.
-func WorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
-	return ddb.ReadRootValue(ctx, rsr.WorkingHash())
-}
-
 // Updates the working root.
 func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
 	h, err := ddb.WriteRootValue(ctx, newRoot)
@@ -270,36 +265,8 @@ func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRo
 	return nil
 }
 
-func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (working *doltdb.RootValue, staged *doltdb.RootValue, head *doltdb.RootValue, err error) {
-	working, err = WorkingRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	staged, err = StagedRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	head, err = HeadRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return working, staged, head, nil
-}
-
-func MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
+func MergeWouldStompChanges(ctx context.Context, workingRoot *doltdb.RootValue, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
 	headRoot, err := HeadRoot(ctx, dbData.Ddb, dbData.Rsr)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	workingRoot, err := WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
 
 	if err != nil {
 		return nil, nil, err

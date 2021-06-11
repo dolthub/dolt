@@ -19,6 +19,7 @@ import (
 	"errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -51,24 +52,19 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 
 	err = stageTables(ctx, ddb, rsw, tables, staged, working)
 	if err != nil {
-		env.ResetWorkingDocsToStagedDocs(ctx, ddb, rsr, rsw)
+		env.ResetWorkingDocsToStagedDocs(ctx, ddb, working, rsr, rsw)
 		return err
 	}
 	return nil
 }
 
-func StageAllTables(ctx context.Context, dbData env.DbData) error {
+func StageAllTables(ctx context.Context, working *doltdb.RootValue, dbData env.DbData) error {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
 	staged, err := env.StagedRoot(ctx, ddb, rsr)
-	if err != nil {
-		return err
-	}
-
-	working, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return err
 	}
@@ -90,7 +86,7 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 
 	err = stageTables(ctx, ddb, rsw, tbls, staged, working)
 	if err != nil {
-		env.ResetWorkingDocsToStagedDocs(ctx, ddb, rsr, rsw)
+		env.ResetWorkingDocsToStagedDocs(ctx, ddb, working, rsr, rsw)
 		return err
 	}
 
@@ -217,7 +213,7 @@ func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, 
 		case doltdb.StagedRoot:
 			root, err = env.StagedRoot(ctx, ddb, rsr)
 		case doltdb.WorkingRoot:
-			root, err = env.WorkingRoot(ctx, ddb, rsr)
+			root, err = getWorkingRoot(ctx, ddb, rsr)
 		case doltdb.HeadRoot:
 			root, err = env.HeadRoot(ctx, ddb, rsr)
 		default:
@@ -232,4 +228,19 @@ func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, 
 	}
 
 	return roots, nil
+}
+
+// TODO: get rid of this
+func getWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*doltdb.RootValue, error) {
+	wsRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+
+	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return ws.RootValue(), nil
 }

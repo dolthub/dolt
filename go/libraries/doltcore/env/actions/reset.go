@@ -175,7 +175,7 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return stagedRoot, nil
 }
 
-func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	tables, err := getUnionedTables(ctx, tables, stagedRoot, headRoot)
 
 	if err != nil {
@@ -197,7 +197,7 @@ func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, stagedRo
 		return nil, err
 	}
 
-	stagedRoot, err = resetDocs(ctx, dbData, headRoot, stagedRoot, docs)
+	stagedRoot, err = resetDocs(ctx, dbData, workingRoot, headRoot, stagedRoot, docs)
 	if err != nil {
 		return nil, err
 	}
@@ -257,23 +257,18 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 }
 
 // resetDocs resets the working and staged docs with docs from head.
-func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docs doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
+func resetDocs(ctx context.Context, dbData env.DbData, workingRoot, headRoot, staged *doltdb.RootValue, docs doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
 	docs, err = doltdocs.GetDocsFromRoot(ctx, headRoot, doltdocs.GetDocNamesFromDocs(docs)...)
 	if err != nil {
 		return nil, err
 	}
 
-	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+	workingRoot, err = doltdocs.UpdateRootWithDocs(ctx, workingRoot, docs)
 	if err != nil {
 		return nil, err
 	}
 
-	working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, working)
+	_, err = env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
 	if err != nil {
 		return nil, err
 	}

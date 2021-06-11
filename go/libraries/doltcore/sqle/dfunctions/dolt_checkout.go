@@ -154,29 +154,32 @@ func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) erro
 		return ErrEmptyBranchName
 	}
 
-	err := actions.CheckoutBranchWithoutDocs(ctx, dbData, branchName)
+	return nil
 
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
-		} else if doltdb.IsRootValUnreachable(err) {
-			rt := doltdb.GetUnreachableRootType(err)
-			return fmt.Errorf("error: unable to read the %s", rt.String())
-		} else if actions.IsCheckoutWouldOverwrite(err) {
-			tbls := actions.CheckoutWouldOverwriteTables(err)
-			msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
-			for _, tbl := range tbls {
-				msg = msg + tbl + "\n"
-			}
-			return errors.New(msg)
-		} else if err == doltdb.ErrAlreadyOnBranch {
-			return nil // No need to return an error if on the same branch
-		} else {
-			return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
-		}
-	}
+	// TODO: fix me
+	//err := actions.CheckoutBranch(ctx, dbData, branchName)
 
-	return updateHeadAndWorkingSessionVars(ctx, dbData)
+	// if err != nil {
+	// 	if err == doltdb.ErrBranchNotFound {
+	// 		return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
+	// 	} else if doltdb.IsRootValUnreachable(err) {
+	// 		rt := doltdb.GetUnreachableRootType(err)
+	// 		return fmt.Errorf("error: unable to read the %s", rt.String())
+	// 	} else if actions.IsCheckoutWouldOverwrite(err) {
+	// 		tbls := actions.CheckoutWouldOverwriteTables(err)
+	// 		msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
+	// 		for _, tbl := range tbls {
+	// 			msg = msg + tbl + "\n"
+	// 		}
+	// 		return errors.New(msg)
+	// 	} else if err == doltdb.ErrAlreadyOnBranch {
+	// 		return nil // No need to return an error if on the same branch
+	// 	} else {
+	// 		return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
+	// 	}
+	// }
+	//
+	// return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
 func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error {

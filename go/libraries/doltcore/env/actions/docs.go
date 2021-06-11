@@ -153,7 +153,9 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, working, staged, he
 
 // GetUnstagedDocs retrieves the unstaged docs (docs from the filesystem).
 func GetUnstagedDocs(ctx context.Context, dbData env.DbData) (doltdocs.Docs, error) {
-	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, dbData.Ddb, dbData.Rsr, dbData.Drw)
+	workingRoot, err := getWorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+
+	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, dbData.Ddb, workingRoot, dbData.Rsr, dbData.Drw)
 	if err != nil {
 		return nil, err
 	}
