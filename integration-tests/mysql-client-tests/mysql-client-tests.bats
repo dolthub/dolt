@@ -99,5 +99,5 @@ cmake ..
 @test "elixir myxql test" {
     cd $BATS_TEST_DIRNAME/elixir/
     mix deps.get
-    mix run -e "IO.puts(SmokeTest.run())"
+    mix run -e "IO.puts(SmokeTest.run())" $USER $PORT $REPO_NAME
 }

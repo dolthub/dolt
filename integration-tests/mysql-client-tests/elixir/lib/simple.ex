@@ -5,8 +5,14 @@ defmodule SmokeTest do
     end
   end
 
+  @spec run :: nil
   def run do
-    {:ok, pid} = MyXQL.start_link(username: "root", port: 3307, password: "root", database: "dsimple")
+    args = System.argv()
+    user = Enum.at(args, 0)
+    {port, _} = Integer.parse(Enum.at(args, 1))
+    database = Enum.at(args, 2)
+
+    {:ok, pid} = MyXQL.start_link(username: user, port: port, database: database)
     {:ok, _} = MyXQL.query(pid, "drop table if exists test")
     {:ok, _} = MyXQL.query(pid, "create table test (pk int, `value` int, primary key(pk))")
     {:ok, _} = MyXQL.query(pid, "describe test")
