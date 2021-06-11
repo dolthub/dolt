@@ -26,8 +26,7 @@ RUN apt install -y \
 	libmysqlcppconn-dev \
 	git \
 	ruby\
-	gem \
-	elixir
+	gem
 
 # install go
 WORKDIR /root
@@ -86,6 +85,13 @@ COPY mysql-client-tests/ruby/Gemfile.lock /mysql-client-tests/ruby/
 WORKDIR /mysql-client-tests/ruby
 RUN gem install bundler -v 2.1.4
 RUN bundle install
+
+# install elixir
+RUN apt-get install wget
+RUN wget https://packages.erlang-solutions.com/erlang-solutions_2.0_all.deb && dpkg -i erlang-solutions_2.0_all.deb
+RUN apt-get update && apt-get -y upgrade
+RUN apt-get install -y esl-erlang
+RUN apt-get install -y elixir
 
 # install dolt from source
 WORKDIR /root/building
