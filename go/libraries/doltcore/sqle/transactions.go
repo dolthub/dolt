@@ -112,6 +112,8 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, mergedRoot, hash)
 		if err == datas.ErrOptimisticLockFailed {
 			continue
+		} else if err != nil {
+			return nil, err
 		}
 
 		// TODO: this is not thread safe, but will not be necessary after migrating all clients away from using the

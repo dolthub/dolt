@@ -209,7 +209,7 @@ SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "merge has conflicts" ]] || false
+    [[ $output =~ "merge has unresolved conflicts" ]] || false
 
     run dolt sql -q "SELECT DOLT_MERGE('--abort');"
     [ $status -eq 0 ]
@@ -244,8 +244,9 @@ SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
 SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch');
 SQL
+
     [ $status -eq 1 ]
-    [[ $output =~ "merge has conflicts" ]] || false
+    [[ $output =~ "merge has unresolved conflicts" ]] || false
 
     run dolt status
     [ $status -eq 0 ]
@@ -304,7 +305,7 @@ SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "merge has conflicts" ]] || false
+    [[ $output =~ "merge has unresolved conflicts" ]] || false
 
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 1 ]

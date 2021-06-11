@@ -47,7 +47,11 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	apr := cli.ParseArgsOrDie(ap, args, nil)
+
+	apr, err := ap.Parse(args)
+	if err != nil {
+		return nil, err
+	}
 
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
@@ -95,25 +99,21 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	h, err := ddb.WriteRootValue(ctx, root)
-
 	if err != nil {
 		return nil, err
 	}
 
 	meta, err := doltdb.NewCommitMeta(name, email, commitMessage)
-
 	if err != nil {
 		return nil, err
 	}
 
 	cm, err := ddb.CommitDanglingWithParentCommits(ctx, h, []*doltdb.Commit{parent}, meta)
-
 	if err != nil {
 		return nil, err
 	}
 
 	h, err = cm.HashOf()
-
 	if err != nil {
 		return nil, err
 	}

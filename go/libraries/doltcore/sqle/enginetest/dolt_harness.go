@@ -30,11 +30,12 @@ import (
 )
 
 type DoltHarness struct {
-	t              *testing.T
-	session        *sqle.DoltSession
-	databases      []sqle.Database
-	parallelism    int
-	skippedQueries []string
+	t                   *testing.T
+	session             *sqle.DoltSession
+	transactionsEnabled bool
+	databases           []sqle.Database
+	parallelism         int
+	skippedQueries      []string
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -52,6 +53,18 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
 	}
+}
+
+// withTransactionsEnabled returns a copy of this harness with transactions enabled or not for all sessions
+func (d DoltHarness) withTransactionsEnabled(enabled bool) *DoltHarness {
+	d.transactionsEnabled = enabled
+	d.setTransactionSessionVar(d.session, enabled)
+	return &d
+}
+
+func (d DoltHarness) setTransactionSessionVar(session *sqle.DoltSession, enabled bool) {
+	err := session.SetSessionVariable(sql.NewEmptyContext(), sqle.TransactionsEnabledSysVar, enabled)
+	require.NoError(d.t, err)
 }
 
 var defaultSkippedQueries = []string{
@@ -114,6 +127,8 @@ func (d DoltHarness) NewSession() *sql.Context {
 	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(d.t, err)
 
+	d.setTransactionSessionVar(session, d.transactionsEnabled)
+
 	ctx := sql.NewContext(
 		context.Background(),
 		sql.WithSession(session))
@@ -152,6 +167,8 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	var err error
 	d.session, err = sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(d.t, err)
+
+	d.setTransactionSessionVar(d.session, d.transactionsEnabled)
 
 	var dbs []sql.Database
 	d.databases = nil
@@ -207,6 +224,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 
 	asOfString, ok := asOf.(string)
 	require.True(d.t, ok)
+
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
 		"set @@"+sqle.HeadKey(ddb.Name())+" = COMMIT('-m', 'test commit');")
@@ -214,9 +232,17 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)
 
+	headHash, err := ctx.GetSessionVariable(ctx, sqle.HeadKey(ddb.Name()))
+	require.NoError(d.t, err)
+
 	ctx = enginetest.NewContext(d)
+	// TODO: there's a bug in test setup with transactions, where the HEAD session var gets overwritten on transaction
+	//  start, so we quote it here instead
+	// query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', @@" + sqle.HeadKey(ddb.Name()) + ")"
+	query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', '" + headHash.(string) + "')"
+
 	_, iter, err = e.Query(ctx,
-		"insert into dolt_branches (name, hash) values ('"+asOfString+"', @@"+sqle.HeadKey(ddb.Name())+")")
+		query)
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)

@@ -41,7 +41,6 @@ type sqlTableEditor struct {
 	dbName            string
 	sch               schema.Schema
 	autoIncCol        schema.Column
-	batchMode         commitBehavior
 	vrw               types.ValueReadWriter
 	autoIncrementType typeinfo.TypeInfo
 	kvToSQLRow        *KVToSqlRowConverter
@@ -69,7 +68,6 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		dbName:      t.db.Name(),
 		sch:         t.sch,
 		autoIncCol:  t.autoIncCol,
-		batchMode:   t.db.batchMode,
 		vrw:         t.db.ddb.ValueReadWriter(),
 		kvToSQLRow:  conv,
 		tableEditor: tableEditor,
@@ -147,8 +145,10 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 
 // Close implements Closer
 func (te *sqlTableEditor) Close(ctx *sql.Context) error {
-	// If we're running in batched mode, don't flush the edits until explicitly told to do so by the parent table.
-	if te.batchMode == batched {
+	sess := DSessFromSess(ctx.Session)
+
+	// If we're running in batched mode, don't flush the edits until explicitly told to do so
+	if sess.batchMode == batched {
 		return nil
 	}
 	return te.flush(ctx)
