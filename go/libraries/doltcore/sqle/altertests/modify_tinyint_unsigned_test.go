@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeTinyintUnsigned(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"TINYINT UNSIGNED",

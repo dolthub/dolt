@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeBigint(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"BIGINT",

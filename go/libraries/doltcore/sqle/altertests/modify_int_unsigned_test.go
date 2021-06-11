@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeIntUnsigned(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"INT UNSIGNED",
