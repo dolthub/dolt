@@ -55,8 +55,8 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
-  altertests:
-    name: Go tests sqle/altertests
+  noracetest:
+    name: Go tests - no race
     defaults:
       run:
         shell: bash
@@ -76,6 +76,7 @@ jobs:
       working-directory: ./go
       run: |
         go test -timeout 30m -race ./libraries/doltcore/sqle/altertests
+        go test -timeout 30m -race ./libraries/doltcore/sqle/integration_test
       env:
         MATRIX_OS: ${{ matrix.os }}
-        DOLT_TEST_RUN_ALTERTESTS: "true"
+        DOLT_TEST_RUN_NON_RACE_TESTS: "true"

@@ -69,7 +69,7 @@ func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
 }
 
 func SkipByDefaultInCI(t *testing.T) {
-	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_ALTERTESTS") == "" {
+	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_NON_RACE_TESTS") == "" {
 		t.Skip()
 	}
 }
