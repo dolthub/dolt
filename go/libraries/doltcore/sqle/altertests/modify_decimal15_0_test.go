@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeDecimal15_0(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"DECIMAL(15,0)",

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -64,6 +65,12 @@ func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
 			require.NoError(t, err)
 			assert.Equal(t, test.SelectRes, res)
 		})
+	}
+}
+
+func SkipByDefaultInCI(t *testing.T) {
+	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_NON_RACE_TESTS") == "" {
+		t.Skip()
 	}
 }
 
