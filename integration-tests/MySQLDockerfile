@@ -26,7 +26,8 @@ RUN apt install -y \
 	libmysqlcppconn-dev \
 	git \
 	ruby\
-	gem
+	gem \
+	elixir
 
 # install go
 WORKDIR /root
