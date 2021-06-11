@@ -58,8 +58,8 @@ func TestSingleQuery(t *testing.T) {
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
-	//engine.Analyzer.Debug = true
-	//engine.Analyzer.Verbose = true
+	engine.Analyzer.Debug = true
+	engine.Analyzer.Verbose = true
 
 	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
 }
@@ -526,4 +526,8 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t).withTransactionsEnabled(true), script)
 	}
+}
+
+func TestSystemTableQueries(t *testing.T) {
+	enginetest.RunQueryTests(t, newDoltHarness(t), BrokenSystemTableQueries)
 }

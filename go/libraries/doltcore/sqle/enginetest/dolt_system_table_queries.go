@@ -2,10 +2,10 @@ package enginetest
 
 import (
 	"github.com/dolthub/go-mysql-server/enginetest"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
-var BrokenQueries = []enginetest.QueryErrorTest{
+var BrokenSystemTableQueries = []enginetest.QueryTest{
 	{
 		Query: `SELECT 
 					myTable.i, 
@@ -18,7 +18,7 @@ var BrokenQueries = []enginetest.QueryErrorTest{
 						U0.to_commit = 'abc'
 					)) AS diff_type 
 				FROM myTable`,
-		ExpectedErr: analyzer.ErrFieldMissing,
+		Expected: []sql.Row{},
 	},
 	{
 		// extra filter clause breaks filter pushdown
@@ -35,6 +35,6 @@ var BrokenQueries = []enginetest.QueryErrorTest{
 						dolt_commit_diff_mytable.to_i = myTable.i  -- extra filter clause
 					)) AS diff_type 
 				FROM myTable`,
-		ExpectedErr: analyzer.ErrFieldMissing,
+		Expected: []sql.Row{},
 	},
 }
