@@ -51,8 +51,8 @@ assert_linux_or_macos() {
   if [ "$OS" != Linux -a "$OS" != Darwin ]; then
     fail "E_UNSUPPORTED_OS" "dolt install.sh only supports macOS and Linux."
   fi
-  if [ "$ARCH" != x86_64 -a "$ARCH" != i386 -a "$ARCH" != i686 ]; then
-    fail "E_UNSUPPOSED_ARCH" "dolt install.sh only supports installing dolt on x86_64 or x86."
+  if [ "$ARCH" != x86_64 -a "$ARCH" != i386 -a "$ARCH" != i686 -a "$ARCH-$OS" != arm64-Darwin ]; then
+    fail "E_UNSUPPOSED_ARCH" "dolt install.sh only supports installing dolt on x86_64 or x86 or Darwin-arm64."
   fi
 
   if [ "$OS" == Linux ]; then
@@ -61,6 +61,8 @@ assert_linux_or_macos() {
     PLATFORM_TUPLE=darwin
   fi
   if [ "$ARCH" == x86_64 ]; then
+    PLATFORM_TUPLE=$PLATFORM_TUPLE-amd64
+  elif [ "$ARCH" == arm64 -a "$OS" == Darwin ]; then
     PLATFORM_TUPLE=$PLATFORM_TUPLE-amd64
   else
     PLATFORM_TUPLE=$PLATFORM_TUPLE-386

@@ -45,6 +45,7 @@ import (
 )
 
 var ErrFetchFailure = errors.New("fetch failed")
+var ErrSpecWithoutChunkSource = errors.New("manifest referenced table file for which there is no chunkSource.")
 
 // The root of a Noms Chunk Store is stored in a 'manifest', along with the
 // names of the tables that hold all the chunks in the store. The number of
@@ -1102,7 +1103,7 @@ func (nbs *NomsBlockStore) Close() error {
 }
 
 func (nbs *NomsBlockStore) Stats() interface{} {
-	return *nbs.stats
+	return nbs.stats.Clone()
 }
 
 func (nbs *NomsBlockStore) StatsSummary() string {
@@ -1134,8 +1135,9 @@ func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, error) {
 	return tf.open(ctx)
 }
 
-// Sources retrieves the current root hash, and a list of all the table files
-func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile, error) {
+// Sources retrieves the current root hash, a list of all table files (which may include appendix tablefiles),
+// and a second list of only the appendix table files
+func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile, []TableFile, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
@@ -1143,89 +1145,63 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, stats, nil)
 
 	if err != nil {
-		return hash.Hash{}, nil, err
+		return hash.Hash{}, nil, nil, err
 	}
 
 	if !exists {
-		return hash.Hash{}, nil, nil
+		return hash.Hash{}, nil, nil, nil
 	}
 
 	css, err := nbs.chunkSourcesByAddr()
 	if err != nil {
-		return hash.Hash{}, nil, err
+		return hash.Hash{}, nil, nil, err
 	}
 
-	numSpecs := contents.NumTableSpecs()
-
-	var tableFiles []TableFile
-	for i := 0; i < numSpecs; i++ {
-		info := contents.getSpec(i)
-		cs, ok := css[info.name]
-		if !ok {
-			return hash.Hash{}, nil, errors.New("manifest referenced table file for which there is no chunkSource.")
-		}
-		tf := tableFile{
-			info: info,
-			open: func(ctx context.Context) (io.ReadCloser, error) {
-				r, err := cs.reader(ctx)
-				if err != nil {
-					return nil, err
-				}
-
-				return ioutil.NopCloser(r), nil
-			},
-		}
-		tableFiles = append(tableFiles, tf)
+	appendixTableFiles, err := getTableFiles(css, contents, contents.NumAppendixSpecs(), func(mc manifestContents, idx int) tableSpec {
+		return mc.getAppendixSpec(idx)
+	})
+	if err != nil {
+		return hash.Hash{}, nil, nil, err
 	}
 
-	return contents.GetRoot(), tableFiles, nil
+	allTableFiles, err := getTableFiles(css, contents, contents.NumTableSpecs(), func(mc manifestContents, idx int) tableSpec {
+		return mc.getSpec(idx)
+	})
+	if err != nil {
+		return hash.Hash{}, nil, nil, err
+	}
+
+	return contents.GetRoot(), allTableFiles, appendixTableFiles, nil
 }
 
-// AppendixSources retrieves the current root hash, and a list of all the table files in the manifest appendix
-func (nbs *NomsBlockStore) AppendixSources(ctx context.Context) (hash.Hash, []TableFile, error) {
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
-
-	stats := &Stats{}
-	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, stats, nil)
-
-	if err != nil {
-		return hash.Hash{}, nil, err
+func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]TableFile, error) {
+	tableFiles := make([]TableFile, 0)
+	if numSpecs == 0 {
+		return tableFiles, nil
 	}
-
-	if !exists {
-		return hash.Hash{}, nil, nil
-	}
-
-	css, err := nbs.chunkSourcesByAddr()
-	if err != nil {
-		return hash.Hash{}, nil, err
-	}
-
-	numSpecs := contents.NumAppendixSpecs()
-
-	var tableFiles []TableFile
 	for i := 0; i < numSpecs; i++ {
-		info := contents.getAppendixSpec(i)
+		info := specFunc(contents, i)
 		cs, ok := css[info.name]
 		if !ok {
-			return hash.Hash{}, nil, errors.New("manifest referenced table file for which there is no chunkSource.")
+			return nil, ErrSpecWithoutChunkSource
 		}
-		tf := tableFile{
-			info: info,
-			open: func(ctx context.Context) (io.ReadCloser, error) {
-				r, err := cs.reader(ctx)
-				if err != nil {
-					return nil, err
-				}
-
-				return ioutil.NopCloser(r), nil
-			},
-		}
-		tableFiles = append(tableFiles, tf)
+		tableFiles = append(tableFiles, newTableFile(cs, info))
 	}
+	return tableFiles, nil
+}
 
-	return contents.GetRoot(), tableFiles, nil
+func newTableFile(cs chunkSource, info tableSpec) tableFile {
+	return tableFile{
+		info: info,
+		open: func(ctx context.Context) (io.ReadCloser, error) {
+			r, err := cs.reader(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			return ioutil.NopCloser(r), nil
+		},
+	}
 }
 
 func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {

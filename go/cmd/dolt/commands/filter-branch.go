@@ -256,7 +256,7 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 	engine := sqle.New(cat, azr, &sqle.Config{Auth: new(auth.None)})
 	engine.AddDatabase(db)
 
-	err = dsess.AddDB(sqlCtx, db)
+	err = dsess.AddDB(sqlCtx, db, db.DbData())
 	if err != nil {
 		return nil, nil, err
 	}

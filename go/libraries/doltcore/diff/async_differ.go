@@ -111,19 +111,16 @@ func (ad *AsyncDiffer) Close() error {
 	return ad.eg.Wait()
 }
 
-func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
-	if timeout < 0 {
-		return ad.GetDiffsWithoutTimeout(numDiffs)
-	}
-
+func (ad *AsyncDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pred diffPredicate) ([]*diff.Difference, bool, error) {
 	diffs := make([]*diff.Difference, 0, ad.bufferSize)
-	timeoutChan := time.After(timeout)
 	for {
 		select {
 		case d, more := <-ad.diffChan:
 			if more {
-				ad.diffStats[d.ChangeType]++
-				diffs = append(diffs, &d)
+				if pred(&d) {
+					ad.diffStats[d.ChangeType]++
+					diffs = append(diffs, &d)
+				}
 				if numDiffs != 0 && numDiffs == len(diffs) {
 					return diffs, true, nil
 				}
@@ -138,24 +135,40 @@ func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Di
 	}
 }
 
-func (ad *AsyncDiffer) GetDiffsWithoutTimeout(numDiffs int) ([]*diff.Difference, bool, error) {
-	diffs := make([]*diff.Difference, 0, ad.bufferSize)
-	for {
-		select {
-		case d, more := <-ad.diffChan:
-			if more {
-				ad.diffStats[d.ChangeType]++
-				diffs = append(diffs, &d)
-				if numDiffs != 0 && numDiffs == len(diffs) {
-					return diffs, true, nil
-				}
-			} else {
-				return diffs, false, ad.eg.Wait()
-			}
-		case <-ad.egCtx.Done():
-			return nil, false, ad.eg.Wait()
-		}
+var forever <-chan time.Time = make(chan time.Time)
+
+type diffPredicate func(*diff.Difference) bool
+
+var alwaysTruePredicate diffPredicate = func(*diff.Difference) bool {
+	return true
+}
+
+func hasChangeTypePredicate(changeType types.DiffChangeType) diffPredicate {
+	return func(d *diff.Difference) bool {
+		return d.ChangeType == changeType
 	}
+}
+
+func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
+	if timeout < 0 {
+		return ad.GetDiffsWithoutTimeout(numDiffs)
+	}
+	return ad.getDiffs(numDiffs, time.After(timeout), alwaysTruePredicate)
+}
+
+func (ad *AsyncDiffer) GetDiffsWithFilter(numDiffs int, timeout time.Duration, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error) {
+	if timeout < 0 {
+		return ad.GetDiffsWithoutTimeoutWithFilter(numDiffs, filterByChangeType)
+	}
+	return ad.getDiffs(numDiffs, time.After(timeout), hasChangeTypePredicate(filterByChangeType))
+}
+
+func (ad *AsyncDiffer) GetDiffsWithoutTimeoutWithFilter(numDiffs int, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error) {
+	return ad.getDiffs(numDiffs, forever, hasChangeTypePredicate(filterByChangeType))
+}
+
+func (ad *AsyncDiffer) GetDiffsWithoutTimeout(numDiffs int) ([]*diff.Difference, bool, error) {
+	return ad.getDiffs(numDiffs, forever, alwaysTruePredicate)
 }
 
 type keylessDiffer struct {

@@ -32,7 +32,7 @@ type CommitFunc struct {
 }
 
 // NewCommitFunc creates a new CommitFunc expression.
-func NewCommitFunc(args ...sql.Expression) (sql.Expression, error) {
+func NewCommitFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
 	return &CommitFunc{children: args}, nil
 }
 
@@ -47,7 +47,11 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	apr := cli.ParseArgsOrDie(ap, args, nil)
+
+	apr, err := ap.Parse(args)
+	if err != nil {
+		return nil, err
+	}
 
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
@@ -77,6 +81,17 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, fmt.Errorf("unknown database '%s'", dbName)
 	}
 
+	// Update the superschema to with any new information from the table map.
+	tblNames, err := root.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err = root.UpdateSuperSchemasFromOther(ctx, tblNames, root)
+	if err != nil {
+		return nil, err
+	}
+
 	ddb, ok := dSess.GetDoltDB(dbName)
 
 	if !ok {
@@ -84,25 +99,21 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	h, err := ddb.WriteRootValue(ctx, root)
-
 	if err != nil {
 		return nil, err
 	}
 
 	meta, err := doltdb.NewCommitMeta(name, email, commitMessage)
-
 	if err != nil {
 		return nil, err
 	}
 
 	cm, err := ddb.CommitDanglingWithParentCommits(ctx, h, []*doltdb.Commit{parent}, meta)
-
 	if err != nil {
 		return nil, err
 	}
 
 	h, err = cm.HashOf()
-
 	if err != nil {
 		return nil, err
 	}
@@ -140,8 +151,8 @@ func (cf *CommitFunc) Children() []sql.Expression {
 }
 
 // WithChildren implements the Expression interface.
-func (cf *CommitFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	return NewCommitFunc(children...)
+func (cf *CommitFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+	return NewCommitFunc(ctx, children...)
 }
 
 func (cf *CommitFunc) Type() sql.Type {

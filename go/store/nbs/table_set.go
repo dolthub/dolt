@@ -433,10 +433,12 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	}
 
 	// Create a list of tables to open so we can open them in parallel.
-	tablesToOpen := map[addr]tableSpec{}
+	tablesToOpen := []tableSpec{} // keep specs in order to play nicely with manifest appendix optimization
+	presents := map[addr]tableSpec{}
 	for _, spec := range specs {
-		if _, present := tablesToOpen[spec.name]; !present { // Filter out dups
-			tablesToOpen[spec.name] = spec
+		if _, present := presents[spec.name]; !present { // Filter out dups
+			tablesToOpen = append(tablesToOpen, spec)
+			presents[spec.name] = spec
 		}
 	}
 
@@ -445,9 +447,8 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	ae := atomicerr.New()
 	merged.upstream = make(chunkSources, len(tablesToOpen))
 	wg := &sync.WaitGroup{}
-	i := 0
-	for _, spec := range tablesToOpen {
-		wg.Add(1)
+	wg.Add(len(tablesToOpen))
+	for i, spec := range tablesToOpen {
 		go func(idx int, spec tableSpec) {
 			defer wg.Done()
 			defer func() {
@@ -472,7 +473,6 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 				ae.SetIfError(err)
 			}
 		}(i, spec)
-		i++
 	}
 	wg.Wait()
 

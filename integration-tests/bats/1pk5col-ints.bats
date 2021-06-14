@@ -126,12 +126,10 @@ teardown() {
 }
 
 @test "1pk5col-ints: dolt sql with insert ignore" {
-    skip "New engine does not support insert ignore"
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "insert ignore into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6),(11,111,111,111,111,111)"
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "Rows inserted: 1" ]
-    [ "${lines[1]}" = "Errors ignored: 1" ]
+    [[ "$output" = "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "111" ]] || false
 }

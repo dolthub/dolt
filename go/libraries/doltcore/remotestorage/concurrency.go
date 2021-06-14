@@ -23,7 +23,11 @@ import (
 func concurrentExec(work []func() error, concurrency int) error {
 	if concurrency <= 0 {
 		panic("Invalid argument")
-	} else if len(work) < concurrency {
+	}
+	if len(work) == 0 {
+		return nil
+	}
+	if len(work) < concurrency {
 		concurrency = len(work)
 	}
 

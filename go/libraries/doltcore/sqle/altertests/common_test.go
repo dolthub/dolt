@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -40,7 +41,6 @@ type ModifyTypeTest struct {
 }
 
 func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
-	dEnv := dtestutils.CreateTestEnv()
 	for _, test := range tests {
 		name := fmt.Sprintf("%s -> %s: %s", test.FromType, test.ToType, test.InsertValues)
 		if len(name) > 200 {
@@ -48,6 +48,7 @@ func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
 		}
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
+			dEnv := dtestutils.CreateTestEnv()
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 			root, err = executeModify(ctx, dEnv, root, fmt.Sprintf("CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 %s);", test.FromType))
@@ -64,6 +65,12 @@ func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
 			require.NoError(t, err)
 			assert.Equal(t, test.SelectRes, res)
 		})
+	}
+}
+
+func SkipByDefaultInCI(t *testing.T) {
+	if os.Getenv("CI") != "" && os.Getenv("DOLT_TEST_RUN_NON_RACE_TESTS") == "" {
+		t.Skip()
 	}
 }
 
