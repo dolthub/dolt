@@ -1200,3 +1200,13 @@ SQL
     [[ "$output" =~ "| FOUND_ROWS() |" ]] || false
     [[ "$output" =~ "| 2            |" ]] || false
 }
+
+@test "sql: empty byte is parsed" {
+    dolt sql -q "create table mytable(pk int, val bit);"
+    run dolt sql -q "INSERT INTO mytable values (1, b'');"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * from mytable"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1  | 0" ]] || false
+}
