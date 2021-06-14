@@ -102,7 +102,12 @@ cmake ..
 
 @test "elixir myxql test" {
     cd $BATS_TEST_DIRNAME/elixir/
+    # install some mix dependencies
+    mix local.hex --force
+    mix local.rebar --force
     mix deps.get
+
+    # run the test
     mix run -e "IO.puts(SmokeTest.run())" $USER $PORT $REPO_NAME
 }
 

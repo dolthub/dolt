@@ -92,8 +92,6 @@ RUN wget https://packages.erlang-solutions.com/erlang-solutions_2.0_all.deb && d
 RUN apt-get update && apt-get -y upgrade
 RUN apt-get install -y esl-erlang
 RUN apt-get install -y elixir
-RUN mix local.hex --force
-RUN mix local.rebar --force
 
 # install dolt from source
 WORKDIR /root/building
