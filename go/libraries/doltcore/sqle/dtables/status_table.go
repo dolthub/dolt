@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 
-	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -84,10 +83,10 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	rsr := st.rsr
 	drw := st.drw
 
-	sess := dsqle.DSessFromSess(ctx.Session)
-	workingRoot, ok := sess.GetRoot(st.dbName)
-	if !ok {
-		return nil, fmt.Errorf("No root found in session")
+	workingHash := rsr.WorkingHash()
+	workingRoot, err := ddb.ReadRootValue(ctx, workingHash)
+	if err != nil {
+		return nil, err
 	}
 
 	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, workingRoot, rsr)

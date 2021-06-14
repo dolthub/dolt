@@ -284,12 +284,15 @@ func (sess *DoltSession) CommitWorkingSetToDolt(ctx *sql.Context, dbData env.DbD
 		if err != nil {
 			return err
 		}
-		err = actions.StageAllTables(ctx, dbData)
+
+		workingRoot := sess.roots[dbName].root
+
+		err = actions.StageAllTables(ctx, workingRoot, dbData)
 		if err != nil {
 			return err
 		}
 		queryTime := ctx.QueryTime()
-		_, err = actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+		_, err = actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
 			Message:          fmt.Sprintf("Transaction commit at %s", queryTime.UTC().Format("2006-01-02T15:04:05Z")),
 			Date:             queryTime,
 			AllowEmpty:       false,

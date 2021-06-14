@@ -236,7 +236,8 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (dt sql.Table, found bool, err error) {
 	lwrName := strings.ToLower(tblName)
 
-	head, _, err := DSessFromSess(ctx.Session).GetHeadCommit(ctx, db.name)
+	sess := DSessFromSess(ctx.Session)
+	head, _, err := sess.GetHeadCommit(ctx, db.name)
 	if err != nil {
 		return nil, false, err
 	}
@@ -280,7 +281,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, db.rsr, db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, NewSessionRepoStateReader(sess, db.name), db.drw), true
 	}
 	if found {
 		return dt, found, nil
