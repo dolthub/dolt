@@ -316,7 +316,7 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 				}
 			}
 
-			return false, err
+			return false, nil
 		}, nil
 	} else {
 		return nil, errUnsupportedComparisonType.New()

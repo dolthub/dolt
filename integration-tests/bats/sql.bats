@@ -1213,7 +1213,6 @@ SQL
     [[ "$output" =~ "| COUNT(*) |" ]] || false
     [[ "$output" =~ "| 2        |" ]] || false
 
-
     dolt sql -q "INSERT INTO mytable VALUES (3)"
     dolt commit -am "Commit 2"
 
