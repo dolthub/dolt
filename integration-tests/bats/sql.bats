@@ -1217,12 +1217,12 @@ SQL
     dolt sql -q "INSERT INTO mytable VALUES (3)"
     dolt commit -am "Commit 2"
 
-    head_commit=$(get_head_commit)
+    head_commit2=$(get_head_commit)
 
-    run dolt sql -q "SELECT COUNT(*) from dolt_diff_mytable where dolt_diff_mytable.to_commit IN ('$head_commit')"
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_mytable where dolt_diff_mytable.to_commit IN ('$head_commit', '$head_commit2', 'fake-val')"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| COUNT(*) |" ]] || false
-    [[ "$output" =~ "| 1        |" ]] || false
+    [[ "$output" =~ "| 3        |" ]] || false
 }
 
 get_head_commit() {
