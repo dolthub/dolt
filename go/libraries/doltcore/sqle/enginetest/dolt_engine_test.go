@@ -41,13 +41,19 @@ func TestSingleQuery(t *testing.T) {
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query: "SELECT t1.c1,t2.c2 FROM one_pk t1, two_pk t2 WHERE pk1=1 AND pk2=1 ORDER BY 1,2",
-		Expected: []sql.Row{
-			{0, 31},
-			{10, 31},
-			{20, 31},
-			{30, 31},
-		},
+		Query: `SELECT 
+					myTable.i, 
+					(SELECT 
+						dolt_commit_diff_mytable.diff_type 
+					FROM 
+						dolt_commit_diff_mytable
+					WHERE (
+						dolt_commit_diff_mytable.from_commit = 'abc' AND 
+						dolt_commit_diff_mytable.to_commit = 'abc' AND
+						dolt_commit_diff_mytable.to_i = myTable.i  -- extra filter clause
+					)) AS diff_type 
+				FROM myTable`,
+		Expected: []sql.Row{},
 	}
 
 	harness := newDoltHarness(t)
@@ -520,4 +526,8 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t).withTransactionsEnabled(true), script)
 	}
+}
+
+func TestSystemTableQueries(t *testing.T) {
+	enginetest.RunQueryTests(t, newDoltHarness(t), BrokenSystemTableQueries)
 }

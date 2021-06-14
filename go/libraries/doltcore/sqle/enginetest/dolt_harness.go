@@ -74,6 +74,7 @@ var defaultSkippedQueries = []string{
 	"json_arrayagg",            // TODO: aggregation ordering
 	"json_objectagg",           // TODO: aggregation ordering
 	"typestable",               // Bit type isn't working?
+	"dolt_commit_diff_",        // see broken queries in `dolt_system_table_queries.go`
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
