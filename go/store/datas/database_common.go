@@ -640,7 +640,7 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 
 	var initialHead types.Ref
 	if r, hasHead, err := currentDatasets.MaybeGet(ctx, datasetID); err != nil {
-
+		return err
 	} else if !hasHead {
 		return nil
 	} else {
