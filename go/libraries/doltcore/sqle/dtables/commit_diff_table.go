@@ -38,6 +38,7 @@ var ErrExactlyOneToCommit = errors.New("dolt_commit_diff_* tables must be filter
 var ErrExactlyOneFromCommit = errors.New("dolt_commit_diff_* tables must be filtered to a single 'from_commit'")
 
 var _ sql.Table = (*CommitDiffTable)(nil)
+var _ sql.FilteredTable = (*CommitDiffTable)(nil)
 
 type CommitDiffTable struct {
 	name              string

@@ -55,6 +55,7 @@ func fromNamer(name string) string {
 }
 
 var _ sql.Table = (*DiffTable)(nil)
+var _ sql.FilteredTable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name        string

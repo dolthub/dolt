@@ -45,7 +45,8 @@ const (
 	CommitDateCol = "commit_date"
 )
 
-var _ sql.Table = &HistoryTable{}
+var _ sql.Table = (*HistoryTable)(nil)
+var _ sql.FilteredTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
