@@ -2386,9 +2386,6 @@ SQL
     dolt add -A
     dolt commit -m "added index"
     dolt checkout master
-
-    skip "https://github.com/dolthub/dolt/issues/1824"
-
     dolt merge other
     run dolt sql -q "select * from test where v1 = 2" -r=csv
     [ "$status" -eq "0" ]
