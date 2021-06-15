@@ -1201,6 +1201,16 @@ SQL
     [[ "$output" =~ "| 2            |" ]] || false
 }
 
+@test "sql: empty byte is parsed" {
+    dolt sql -q "create table mytable(pk int, val bit);"
+    run dolt sql -q "INSERT INTO mytable values (1, b'');"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * from mytable"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1  | 0" ]] || false
+}
+
 @test "sql: dolt diff table correctly works with IN" {
     dolt sql -q "CREATE TABLE mytable(pk int primary key);"
     dolt sql -q "INSERT INTO mytable VALUES (1), (2)"
