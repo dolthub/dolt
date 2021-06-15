@@ -34,8 +34,17 @@ import (
 )
 
 const (
-	numLinesParam = "number"
+	numLinesParam   = "number"
+	mergesParam     = "merges"
+	minParentsParam = "min-parents"
+	parentsParam    = "parents"
 )
+
+type logOpts struct {
+	numLines    int
+	showParents bool
+	minParents  int
+}
 
 var logDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Show commit logs`,
@@ -47,10 +56,21 @@ The command takes options to control what is shown and how.`,
 	},
 }
 
-type commitLoggerFunc func(*doltdb.CommitMeta, []hash.Hash, hash.Hash)
+type commitLoggerFunc func(logOpts, *doltdb.CommitMeta, []hash.Hash, hash.Hash)
 
-func logToStdOutFunc(cm *doltdb.CommitMeta, parentHashes []hash.Hash, ch hash.Hash) {
-	cli.Println(color.YellowString("commit %s", ch.String()))
+func logToStdOutFunc(opts logOpts, cm *doltdb.CommitMeta, parentHashes []hash.Hash, ch hash.Hash) {
+	if len(parentHashes) < opts.minParents {
+		return
+	}
+
+	chStr := ch.String()
+	if opts.showParents {
+		for _, h := range parentHashes {
+			chStr += " " + h.String()
+		}
+	}
+
+	cli.Println(color.YellowString("commit %s", chStr))
 
 	if len(parentHashes) > 1 {
 		printMerge(parentHashes)
@@ -108,7 +128,10 @@ func (cmd LogCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) er
 
 func createLogArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output")
+	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output.")
+	ap.SupportsInt(minParentsParam, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
+	ap.SupportsFlag(mergesParam, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
+	ap.SupportsFlag(parentsParam, "", "Shows all parents of each commit in the log.")
 	return ap
 }
 
@@ -127,11 +150,20 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	numLines := apr.GetIntOrDefault(numLinesParam, -1)
+	minParents := apr.GetIntOrDefault(minParentsParam, 0)
+	if apr.Contains(mergesParam) {
+		minParents = 2
+	}
+
+	opts := logOpts{
+		numLines:    apr.GetIntOrDefault(numLinesParam, -1),
+		showParents: apr.Contains(parentsParam),
+		minParents:  minParents,
+	}
 
 	// Just dolt log
 	if apr.NArg() == 0 {
-		return logCommits(ctx, dEnv, dEnv.RepoState.CWBHeadSpec(), loggerFunc, numLines)
+		return logCommits(ctx, dEnv, dEnv.RepoState.CWBHeadSpec(), opts, loggerFunc)
 	} else if apr.NArg() == 1 { // dolt log <ref/table>
 		argIsRef := actions.ValidateIsRef(ctx, apr.Arg(0), dEnv.DoltDB, dEnv.RepoStateReader())
 
@@ -140,20 +172,20 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 			if err != nil {
 				cli.PrintErrln(color.HiRedString("invalid commit %s\n", apr.Arg(0)))
 			}
-			return logCommits(ctx, dEnv, cs, loggerFunc, numLines)
+			return logCommits(ctx, dEnv, cs, opts, loggerFunc)
 		} else {
-			return handleErrAndExit(logTableCommits(ctx, dEnv, loggerFunc, dEnv.RepoState.CWBHeadSpec(), apr.Arg(0), numLines))
+			return handleErrAndExit(logTableCommits(ctx, dEnv, opts, loggerFunc, dEnv.RepoState.CWBHeadSpec(), apr.Arg(0)))
 		}
 	} else { // dolt log ref table
 		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
 		if err != nil {
 			cli.PrintErrln(color.HiRedString("invalid commit %s\n", apr.Arg(0)))
 		}
-		return handleErrAndExit(logTableCommits(ctx, dEnv, loggerFunc, cs, apr.Arg(1), numLines))
+		return handleErrAndExit(logTableCommits(ctx, dEnv, opts, loggerFunc, cs, apr.Arg(1)))
 	}
 }
 
-func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, loggerFunc commitLoggerFunc, numLines int) int {
+func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, opts logOpts, loggerFunc commitLoggerFunc) int {
 	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
@@ -168,7 +200,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, l
 		return 1
 	}
 
-	commits, err := commitwalk.GetTopNTopoOrderedCommits(ctx, dEnv.DoltDB, h, numLines)
+	commits, err := commitwalk.GetTopNTopoOrderedCommits(ctx, dEnv.DoltDB, h, opts.numLines)
 
 	if err != nil {
 		cli.PrintErrln("Error retrieving commit.")
@@ -196,7 +228,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, l
 			cli.PrintErrln("error: failed to get commit hash")
 			return 1
 		}
-		loggerFunc(meta, pHashes, cmHash)
+		loggerFunc(opts, meta, pHashes, cmHash)
 	}
 
 	return 0
@@ -216,7 +248,7 @@ func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (
 	return ok, nil
 }
 
-func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc, cs *doltdb.CommitSpec, tableName string, numLines int) error {
+func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, loggerFunc commitLoggerFunc, cs *doltdb.CommitSpec, tableName string) error {
 	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 	if err != nil {
 		return err
@@ -244,6 +276,8 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLo
 
 	var prevCommit *doltdb.Commit = nil
 	var prevHash hash.Hash
+
+	numLines := opts.numLines
 	for {
 		// If we reached the limit then break
 		if numLines == 0 {
@@ -289,7 +323,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, loggerFunc commitLo
 				return err
 			}
 
-			loggerFunc(meta, ph, prevHash)
+			loggerFunc(opts, meta, ph, prevHash)
 			numLines--
 		}
 
