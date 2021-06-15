@@ -176,7 +176,7 @@ func (dt *DiffTable) Filters() []sql.Expression {
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied
-func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
+func (dt *DiffTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
 	if dt.partitionFilters == nil {
 		dt.partitionFilters, dt.rowFilters = splitPartitionFilters(filters)
 	}
