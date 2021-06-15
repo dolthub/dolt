@@ -100,6 +100,8 @@ func getExpFunc(nbf *types.NomsBinFormat, sch schema.Schema, exp sql.Expression)
 		}
 
 		return newAndFunc(leftFunc, rightFunc), nil
+	case *expression.InTuple:
+		return newComparisonFunc(EqualsOp{}, typedExpr.BinaryExpression, sch)
 	}
 
 	return nil, errNotImplemented.New(exp.Type().String())
@@ -273,7 +275,49 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 			}
 		}, nil
 	} else if compType == VariableInLiteralList {
-		return nil, errUnsupportedComparisonType.New()
+		colName := vars[0].Name()
+		col, ok := sch.GetAllCols().GetByNameCaseInsensitive(colName)
+
+		if !ok {
+			return nil, errUnknownColumn.New(colName)
+		}
+
+		tag := col.Tag
+
+		// Get all the noms values
+		nomsVals := make([]types.Value, len(consts))
+		for i, c := range consts {
+			nomsVal, err := LiteralToNomsValue(col.Kind, c)
+			if err != nil {
+				return nil, err
+			}
+			nomsVals[i] = nomsVal
+		}
+
+		compareNomsValues := op.CompareNomsValues
+		compareToNil := op.CompareToNil
+
+		return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
+			colVal, ok := vals[tag]
+
+			for _, nv := range nomsVals {
+				var lb bool
+				if ok && !types.IsNull(colVal) {
+					lb, err = compareNomsValues(colVal, nv)
+				} else {
+					lb, err = compareToNil(nv)
+				}
+
+				if err != nil {
+					return false, err
+				}
+				if lb {
+					return true, nil
+				}
+			}
+
+			return false, nil
+		}, nil
 	} else {
 		return nil, errUnsupportedComparisonType.New()
 	}
