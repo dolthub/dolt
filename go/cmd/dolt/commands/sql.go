@@ -150,7 +150,7 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
-	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. used for batch mode only.")
+	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. Used for batch mode only.")
 	return ap
 }
 
