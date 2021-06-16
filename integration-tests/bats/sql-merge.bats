@@ -462,7 +462,7 @@ SQL
     [[ "$output" =~ "6" ]] || false
 }
 
-@test "sql-merge: DOLT_MERGE with conflicts renders the conflicts table" {
+@test "sql-merge: DOLT_MERGE with conflicts renders the dolt_conflicts table" {
       run dolt sql --continue << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
@@ -483,7 +483,7 @@ SELECT DOLT_MERGE('feature-branch');
 SELECT COUNT(*) FROM dolt_conflicts;
 SQL
     [ $status -eq 0 ]
-    [[ $output =~ "merge has unresolved conflicts" ]] || false
+    [[ $output =~ "merge has unresolved conflicts. please use the dolt_conflicts table to resolve" ]] || false
     [[ "$output" =~ "| COUNT(*) |" ]] || false
     [[ "$output" =~ "| 1        |" ]] || false
 }
