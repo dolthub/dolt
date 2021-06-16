@@ -480,7 +480,7 @@ INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
 SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch');
-SELECT COUNT(*) FROM dolt_conflicts;
+SELECT COUNT(*) FROM dolt_conflicts where num_conflicts > 0;
 SQL
     [ $status -eq 0 ]
     [[ $output =~ "merge has unresolved conflicts. please use the dolt_conflicts table to resolve" ]] || false
