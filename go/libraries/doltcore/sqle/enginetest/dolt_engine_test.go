@@ -259,11 +259,14 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestScripts(t *testing.T) {
+	skipped := []string{
+		"create index r_c0 on r (c0);",
+	}
 	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestScripts(t, newDoltHarness(t))
+		enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 	})
 	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestScripts(t, newDoltHarness(t).withTransactionsEnabled(true))
+		enginetest.TestScripts(t, newDoltHarness(t).withTransactionsEnabled(true).WithSkippedQueries(skipped))
 	})
 }
 
