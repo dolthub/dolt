@@ -150,7 +150,7 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
-	ap.SupportsFlag(continueFlag, "c", "batch mode, continue running queries on an error.")
+	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. used for batch mode only.")
 	return ap
 }
 
@@ -194,7 +194,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	var mrEnv env.MultiRepoEnv
 	var initialRoots map[string]*doltdb.RootValue
 	var readOnly = false
-	_, continueOnError := apr.GetValue(continueFlag)
 	if multiDir, ok := apr.GetValue(multiDBDirFlag); !ok {
 		if !cli.CheckEnvIsValid(dEnv) {
 			return 2
@@ -281,6 +280,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		currentDB = name
 	}
 
+	_, continueOnError := apr.GetValue(continueFlag)
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		batchMode := apr.Contains(BatchFlag)
 
@@ -627,6 +627,7 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader, continueOnEr
 			if err := processBatchQuery(ctx, query, se); err != nil {
 				// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
 				//  to processing the query)
+				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
 				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
 				cli.PrintErrln(verr.Verbose())
 				if !continueOnErr {

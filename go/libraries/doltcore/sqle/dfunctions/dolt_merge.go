@@ -333,7 +333,7 @@ func mergeRootToWorking(
 	hasConflicts := checkForConflicts(mergeStats)
 
 	if hasConflicts {
-		// If there are conflicts write them to the work root anyway too allow for merge resolution via the dolt_conflicts
+		// If there are conflicts write them to the working root anyway too allow for merge resolution via the dolt_conflicts
 		// table.
 		err := ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String())
 		if err != nil {
