@@ -80,7 +80,7 @@ func TestNBSAsTableFileStore(t *testing.T) {
 	st, _ := makeTestLocalStore(t, defaultMaxTables)
 	fileToData := populateLocalStore(t, st, numTableFiles)
 
-	_, sources, err := st.Sources(ctx)
+	_, sources, _, err := st.Sources(ctx)
 	require.NoError(t, err)
 
 	assert.Equal(t, numTableFiles, len(sources))
@@ -149,7 +149,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	require.True(t, ok)
 	require.NoError(t, err)
 
-	_, sources, err := st.Sources(ctx)
+	_, sources, _, err := st.Sources(ctx)
 	require.NoError(t, err)
 	assert.Greater(t, numTableFiles, len(sources))
 

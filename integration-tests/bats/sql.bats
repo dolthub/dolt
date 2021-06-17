@@ -39,6 +39,83 @@ teardown() {
     teardown_common
 }
 
+@test "sql: errors do not write incomplete rows" {
+    dolt sql <<"SQL"
+CREATE TABLE test (
+    pk BIGINT PRIMARY KEY,
+    v1 BIGINT,
+    INDEX (v1)
+);
+INSERT INTO test VALUES (1,1), (4,4), (5,5);
+SQL
+    run dolt sql -q "INSERT INTO test VALUES (2,2), (3,3), (1,1);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "UPDATE test SET pk = pk + 1;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+
+    dolt sql <<"SQL"
+CREATE TABLE test2 (
+    pk BIGINT PRIMARY KEY,
+    CONSTRAINT fk_test FOREIGN KEY (pk) REFERENCES test (v1)
+);
+INSERT INTO test2 VALUES (4);
+SQL
+    run dolt sql -q "DELETE FROM test WHERE pk > 0;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "SELECT * FROM test2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -q "REPLACE INTO test VALUES (1,7), (4,8), (5,9);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ ! "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "SELECT * FROM test2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}
+
 @test "sql: select from multiple tables" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk"
     [ "$status" -eq 0 ]
@@ -366,13 +443,13 @@ SQL
 @test "sql: limit less than zero" {
     run dolt sql -q "select * from one_pk order by pk limit -1"
     [ $status -eq 1 ]
-    [[ "$output" =~ "unsupported syntax: LIMIT must be >= 0" ]] || false
+    [[ "$output" =~ "syntax error" ]] || false
     run dolt sql -q "select * from one_pk order by pk limit -2"
     [ $status -eq 1 ]
-    [[ "$output" =~ "unsupported syntax: LIMIT must be >= 0" ]] || false
+    [[ "$output" =~ "syntax error" ]] || false
     run dolt sql -q "select * from one_pk order by pk limit -1,1"
     [ $status -eq 1 ]
-    [[ "$output" =~ "unsupported syntax: OFFSET must be >= 0" ]] || false
+    [[ "$output" =~ "syntax error" ]] || false
 }
 
 @test "sql: addition on both left and right sides of comparison operator" {
@@ -816,7 +893,7 @@ INSERT INTO test VALUES (6, 6, 6)
 SQL
     run dolt sql -q "CALL p1(3)" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "test.pk + x,test.v1 + x,test.v2 + x" ]] || false
+    [[ "$output" =~ "(test.pk + x),(test.v1 + x),(test.v2 + x)" ]] || false
     [[ "$output" =~ "11,11,11" ]] || false
     [[ "$output" =~ "12,12,12" ]] || false
     [[ "$output" =~ "13,13,13" ]] || false
@@ -827,7 +904,7 @@ SQL
 
     run dolt sql -q "CALL p1(20)" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "test.pk + x,test.v1 + x,test.v2 + x" ]] || false
+    [[ "$output" =~ "(test.pk + x),(test.v1 + x),(test.v2 + x)" ]] || false
     [[ "$output" =~ "21,21,21" ]] || false
     [[ "$output" =~ "22,22,22" ]] || false
     [[ "$output" =~ "23,23,23" ]] || false
@@ -1112,3 +1189,52 @@ SQL
     [ "${lines[1]}" = "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION" ]
 }
 
+@test "sql: found_row works with update properly" {
+    run dolt sql <<SQL
+CREATE TABLE tbl(pk int primary key, v1 int);
+INSERT INTO tbl VALUES (1,1), (2,1);
+UPDATE tbl set v1 = 1 where v1 = 1;
+SELECT FOUND_ROWS();
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| FOUND_ROWS() |" ]] || false
+    [[ "$output" =~ "| 2            |" ]] || false
+}
+
+@test "sql: empty byte is parsed" {
+    dolt sql -q "create table mytable(pk int, val bit);"
+    run dolt sql -q "INSERT INTO mytable values (1, b'');"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * from mytable"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1  | 0" ]] || false
+}
+
+@test "sql: dolt diff table correctly works with IN" {
+    dolt sql -q "CREATE TABLE mytable(pk int primary key);"
+    dolt sql -q "INSERT INTO mytable VALUES (1), (2)"
+    dolt commit -am "Commit 1"
+
+    head_commit=$(get_head_commit)
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_mytable where dolt_diff_mytable.to_commit IN ('$head_commit', '00200202')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| COUNT(*) |" ]] || false
+    [[ "$output" =~ "| 2        |" ]] || false
+
+    dolt sql -q "INSERT INTO mytable VALUES (3)"
+    dolt commit -am "Commit 2"
+
+    head_commit2=$(get_head_commit)
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_mytable where dolt_diff_mytable.to_commit IN ('$head_commit', '$head_commit2', 'fake-val')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| COUNT(*) |" ]] || false
+    [[ "$output" =~ "| 3        |" ]] || false
+}
+
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 8-
+}

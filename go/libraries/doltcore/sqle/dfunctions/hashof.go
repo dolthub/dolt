@@ -35,7 +35,7 @@ type HashOf struct {
 }
 
 // NewHashOf creates a new HashOf expression.
-func NewHashOf(e sql.Expression) sql.Expression {
+func NewHashOf(ctx *sql.Context, e sql.Expression) sql.Expression {
 	return &HashOf{expression.UnaryExpression{Child: e}}
 }
 
@@ -82,7 +82,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return nil, err
 		}
 
-		cm, err = ddb.ResolveRef(ctx, branchRef)
+		cm, err = ddb.ResolveCommitRef(ctx, branchRef)
 		if err != nil {
 			return nil, err
 		}
@@ -128,11 +128,11 @@ func (t *HashOf) IsNullable() bool {
 }
 
 // WithChildren implements the Expression interface.
-func (t *HashOf) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (t *HashOf) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 1 {
 		return nil, sql.ErrInvalidChildrenNumber.New(t, len(children), 1)
 	}
-	return NewHashOf(children[0]), nil
+	return NewHashOf(ctx, children[0]), nil
 }
 
 // Type implements the Expression interface.

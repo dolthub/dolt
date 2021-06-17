@@ -312,7 +312,10 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 // InitializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
 func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
 	cs, _ := doltdb.NewCommitSpec(doltdb.MasterBranch)
-	commit, _ := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	if err != nil {
+		return err
+	}
 
 	root, err := commit.GetRootValue()
 	if err != nil {
@@ -361,7 +364,7 @@ func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
 
 func (r *repoStateReader) CWBHeadHash(ctx context.Context) (hash.Hash, error) {
 	ref := r.CWBHeadRef()
-	cm, err := r.dEnv.DoltDB.ResolveRef(ctx, ref)
+	cm, err := r.dEnv.DoltDB.ResolveCommitRef(ctx, ref)
 
 	if err != nil {
 		return hash.Hash{}, err
@@ -480,7 +483,7 @@ func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	commit, err := dEnv.DoltDB.ResolveRef(ctx, dEnv.RepoState.CWBHeadRef())
+	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
 		return nil, err

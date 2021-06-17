@@ -53,7 +53,7 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, err
 	}
 
-	apr, err := cli.ParseArgs(ap, args, nil)
+	apr, err := ap.Parse(args)
 	if err != nil {
 		return 1, err
 	}
@@ -91,12 +91,12 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			}
 
 			h = headHash.String()
-			if err := setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix); err != nil {
+			if err := ctx.SetSessionVariable(ctx, sqle.HeadKey(dbName), h); err != nil {
 				return 1, err
 			}
 
 			workingHash := dbData.Rsr.WorkingHash()
-			if err := setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix); err != nil {
+			if err := ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String()); err != nil {
 				return 1, err
 			}
 		} else {
@@ -150,10 +150,10 @@ func (d DoltResetFunc) Children() []sql.Expression {
 	return d.children
 }
 
-func (d DoltResetFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	return NewDoltResetFunc(children...)
+func (d DoltResetFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+	return NewDoltResetFunc(ctx, children...)
 }
 
-func NewDoltResetFunc(args ...sql.Expression) (sql.Expression, error) {
+func NewDoltResetFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
 	return DoltResetFunc{children: args}, nil
 }

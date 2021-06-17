@@ -35,7 +35,7 @@ type MergeFunc struct {
 }
 
 // NewMergeFunc creates a new MergeFunc expression.
-func NewMergeFunc(args ...sql.Expression) (sql.Expression, error) {
+func NewMergeFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
 	return &MergeFunc{children: args}, nil
 }
 
@@ -51,7 +51,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	apr, err := cli.ParseArgs(ap, args, nil)
+	apr, err := ap.Parse(args)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*do
 		return nil, hash.Hash{}, err
 	}
 
-	cm, err := ddb.ResolveRef(ctx, branchRef)
+	cm, err := ddb.ResolveCommitRef(ctx, branchRef)
 
 	if err != nil {
 		return nil, hash.Hash{}, err
@@ -227,8 +227,8 @@ func (cf *MergeFunc) Children() []sql.Expression {
 }
 
 // WithChildren implements the Expression interface.
-func (cf *MergeFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	return NewMergeFunc(children...)
+func (cf *MergeFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+	return NewMergeFunc(ctx, children...)
 }
 
 // Type implements the Expression interface.

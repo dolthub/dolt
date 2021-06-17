@@ -23,6 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func init() {
+	MaxHedgesPerRequest = 1024
+}
+
 func TestPercentileStrategy(t *testing.T) {
 	s := NewPercentileStrategy(0, 1*time.Hour, 95.0)
 	for i := 0; i < 90; i++ {
@@ -51,7 +55,7 @@ func TestHedgerRunsWork(t *testing.T) {
 	h := NewHedger(1, NewMinStrategy(1*time.Second, nil))
 	ran := false
 	i, err := h.Do(context.Background(), Work{
-		Work: func(ctx context.Context) (interface{}, error) {
+		Work: func(ctx context.Context, n int) (interface{}, error) {
 			ran = true
 			return true, nil
 		},
@@ -67,7 +71,7 @@ func TestHedgerHedgesWork(t *testing.T) {
 	ch <- 1
 	ch <- 2
 	i, err := h.Do(context.Background(), Work{
-		Work: func(ctx context.Context) (interface{}, error) {
+		Work: func(ctx context.Context, n int) (interface{}, error) {
 			i := <-ch
 			if i == 1 {
 				<-ctx.Done()
@@ -88,16 +92,13 @@ func TestHedgerObeysMaxHedges(t *testing.T) {
 	try := func(max int) {
 		h := NewHedger(int64(max), NewMinStrategy(1*time.Millisecond, nil))
 		cnt := int32(0)
-		ch := make(chan int, 1)
-		ch <- 1
 		i, err := h.Do(context.Background(), Work{
-			Work: func(ctx context.Context) (interface{}, error) {
-				select {
-				case <-ch:
+			Work: func(ctx context.Context, n int) (interface{}, error) {
+				cur := atomic.AddInt32(&cnt, 1)
+				if cur == int32(max) {
 					time.Sleep(100 * time.Millisecond)
 					return 1, nil
-				default:
-					atomic.AddInt32(&cnt, 1)
+				} else {
 					<-ctx.Done()
 					return 2, nil
 				}
@@ -105,11 +106,54 @@ func TestHedgerObeysMaxHedges(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, i.(int))
-		assert.Equal(t, int32(max), atomic.LoadInt32(&cnt))
+		assert.Equal(t, int32(max)+1, atomic.LoadInt32(&cnt))
 	}
 	try(1)
 	try(2)
 	try(3)
+}
+
+func TestMaxHedgesPerRequestObeyed(t *testing.T) {
+	before := MaxHedgesPerRequest
+	defer func() {
+		MaxHedgesPerRequest = before
+	}()
+
+	MaxHedgesPerRequest = 0
+	h := NewHedger(int64(32), NewMinStrategy(1*time.Millisecond, nil))
+	cnt := int32(0)
+	i, err := h.Do(context.Background(), Work{
+		Work: func(ctx context.Context, n int) (interface{}, error) {
+			cur := atomic.AddInt32(&cnt, 1)
+			if cur == int32(1) {
+				time.Sleep(500 * time.Millisecond)
+				return 1, nil
+			} else {
+				return 2, nil
+			}
+		},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, i.(int))
+
+	MaxHedgesPerRequest = 1
+	cnt = int32(0)
+	i, err = h.Do(context.Background(), Work{
+		Work: func(ctx context.Context, n int) (interface{}, error) {
+			cur := atomic.AddInt32(&cnt, 1)
+			if cur == int32(1) {
+				time.Sleep(30 * time.Second)
+				return 1, nil
+			} else if cur == int32(2) {
+				time.Sleep(500 * time.Millisecond)
+				return 2, nil
+			} else {
+				return 3, nil
+			}
+		},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 2, i.(int))
 }
 
 func TestHedgerContextCancelObeyed(t *testing.T) {
@@ -125,7 +169,7 @@ func TestHedgerContextCancelObeyed(t *testing.T) {
 		cancel()
 	}()
 	_, err := h.Do(ctx, Work{
-		Work: func(ctx context.Context) (interface{}, error) {
+		Work: func(ctx context.Context, n int) (interface{}, error) {
 			canCh <- struct{}{}
 			<-ctx.Done()
 			resCh <- struct{}{}

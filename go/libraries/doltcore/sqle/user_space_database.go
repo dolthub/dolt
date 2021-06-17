@@ -50,8 +50,8 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 	if err != nil {
 		return nil, false, err
 	}
-	dt := NewDoltTable(tableName, sch, table, db)
-	return &dt, true, nil
+	dt := NewDoltTable(tableName, sch, table, db, false)
+	return dt, true, nil
 }
 
 func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
@@ -70,4 +70,8 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 
 func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
 	return db.RootValue, nil
+}
+
+func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool) {
+	panic("UserSpaceDatabase should not contain any temporary tables")
 }

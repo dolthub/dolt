@@ -53,6 +53,7 @@ teardown() {
     [[ "$output" =~ "migrate - Executes a repository migration to update to the latest format." ]] || false
     [[ "$output" =~ "gc - Cleans up unreferenced data from the repository." ]] || false
     [[ "$output" =~ "filter-branch - Edits the commit history using the provided query." ]] || false
+    [[ "$output" =~ "merge-base - Find the common ancestor of two commits." ]] || false
 }
 
 @test "no-repo: check all commands for valid help text" {

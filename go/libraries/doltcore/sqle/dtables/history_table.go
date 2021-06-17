@@ -45,7 +45,8 @@ const (
 	CommitDateCol = "commit_date"
 )
 
-var _ sql.Table = &HistoryTable{}
+var _ sql.Table = (*HistoryTable)(nil)
+var _ sql.FilteredTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
@@ -111,13 +112,13 @@ func (ht *HistoryTable) Filters() []sql.Expression {
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied
-func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
+func (ht *HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
 	if ht.commitFilters == nil {
 		ht.commitFilters, ht.rowFilters = splitCommitFilters(filters)
 	}
 
 	if len(ht.commitFilters) > 0 {
-		commitCheck, err := getCommitFilterFunc(ht.commitFilters)
+		commitCheck, err := getCommitFilterFunc(ctx, ht.commitFilters)
 
 		if err != nil {
 			return sqlutil.NewStaticErrorTable(ht, err)
@@ -171,8 +172,8 @@ func splitCommitFilters(filters []sql.Expression) (commitFilters, rowFilters []s
 	return splitFilters(filters, getColumnFilterCheck(commitFilterCols))
 }
 
-func getCommitFilterFunc(filters []sql.Expression) (doltdb.CommitFilter, error) {
-	filters = transformFilters(filters...)
+func getCommitFilterFunc(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter, error) {
+	filters = transformFilters(ctx, filters...)
 
 	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
 		meta, err := cm.GetCommitMeta()
@@ -199,9 +200,9 @@ func getCommitFilterFunc(filters []sql.Expression) (doltdb.CommitFilter, error) 
 	}, nil
 }
 
-func transformFilters(filters ...sql.Expression) []sql.Expression {
+func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Expression {
 	for i := range filters {
-		filters[i], _ = expression.TransformUp(filters[i], func(e sql.Expression) (sql.Expression, error) {
+		filters[i], _ = expression.TransformUp(ctx, filters[i], func(e sql.Expression) (sql.Expression, error) {
 			gf, ok := e.(*expression.GetField)
 			if !ok {
 				return e, nil

@@ -94,7 +94,7 @@ func NewBranchItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*BranchItr, error) {
 	branchNames := make([]string, len(branches))
 	commits := make([]*doltdb.Commit, len(branches))
 	for i, branch := range branches {
-		commit, err := ddb.ResolveRef(sqlCtx, branch)
+		commit, err := ddb.ResolveCommitRef(sqlCtx, branch)
 
 		if err != nil {
 			return nil, err
@@ -245,6 +245,19 @@ func (bWr branchWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	}
 
 	return bWr.bt.ddb.DeleteBranch(ctx, brRef)
+}
+
+// StatementBegin implements the interface sql.TableEditor. Currently a no-op.
+func (bWr branchWriter) StatementBegin(ctx *sql.Context) {}
+
+// DiscardChanges implements the interface sql.TableEditor. Currently a no-op.
+func (bWr branchWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	return nil
+}
+
+// StatementComplete implements the interface sql.TableEditor. Currently a no-op.
+func (bWr branchWriter) StatementComplete(ctx *sql.Context) error {
+	return nil
 }
 
 // Close finalizes the delete operation, persisting the result.

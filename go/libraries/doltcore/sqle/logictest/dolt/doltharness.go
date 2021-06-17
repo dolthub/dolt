@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -34,9 +35,15 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var _ logictest.Harness = &DoltHarness{}
+
+const (
+	name  = "sqllogictest runner"
+	email = "sqllogictestrunner@dolthub.com"
+)
 
 type DoltHarness struct {
 	Version string
@@ -53,10 +60,6 @@ func (h *DoltHarness) EngineStr() string {
 
 func (h *DoltHarness) Init() error {
 	dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
-	if !dEnv.HasDoltDir() {
-		panic("Current directory must be a valid dolt repository")
-	}
-
 	return innerInit(h, dEnv)
 }
 
@@ -116,6 +119,18 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 }
 
 func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
+	if !dEnv.HasDoltDir() {
+		err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, time.Now())
+		if err != nil {
+			return err
+		}
+	} else {
+		err := dEnv.InitDBAndRepoState(context.Background(), types.Format_Default, name, email, time.Now())
+		if err != nil {
+			return err
+		}
+	}
+
 	var err error
 	h.engine, err = sqlNewEngine(dEnv)
 
@@ -140,7 +155,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		dsqlDBs[i] = dsqlDB
 
 		sess := dsql.DSessFromSess(ctx.Session)
-		err := sess.AddDB(ctx, dsqlDB)
+		err := sess.AddDB(ctx, dsqlDB, dsqlDB.DbData())
 
 		if err != nil {
 			return err
@@ -319,18 +334,6 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 		}
 	}
 	return b.String(), nil
-}
-
-func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
-	tableNames, err := root.GetTableNames(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	newRoot, err := root.RemoveTables(context.Background(), tableNames...)
-	if err != nil {
-		panic(err)
-	}
-	return newRoot
 }
 
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {

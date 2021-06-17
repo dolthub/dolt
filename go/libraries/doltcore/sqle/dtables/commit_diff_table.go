@@ -38,6 +38,7 @@ var ErrExactlyOneToCommit = errors.New("dolt_commit_diff_* tables must be filter
 var ErrExactlyOneFromCommit = errors.New("dolt_commit_diff_* tables must be filtered to a single 'from_commit'")
 
 var _ sql.Table = (*CommitDiffTable)(nil)
+var _ sql.FilteredTable = (*CommitDiffTable)(nil)
 
 type CommitDiffTable struct {
 	name              string
@@ -115,7 +116,7 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 }
 
 func calcSuperDuperSchema(ctx context.Context, ddb *doltdb.DoltDB, working *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
-	refs, err := ddb.GetRefs(ctx)
+	refs, err := ddb.GetHeadRefs(ctx)
 
 	if err != nil {
 		return nil, err
@@ -133,7 +134,7 @@ func calcSuperDuperSchema(ctx context.Context, ddb *doltdb.DoltDB, working *dolt
 	}
 
 	for _, ref := range refs {
-		cm, err := ddb.ResolveRef(ctx, ref)
+		cm, err := ddb.ResolveCommitRef(ctx, ref)
 
 		if err != nil {
 			return nil, err
@@ -356,7 +357,7 @@ func (dt *CommitDiffTable) Filters() []sql.Expression {
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied
-func (dt *CommitDiffTable) WithFilters(filters []sql.Expression) sql.Table {
+func (dt *CommitDiffTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
 	return dt
 }
 

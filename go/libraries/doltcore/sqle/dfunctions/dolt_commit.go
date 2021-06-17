@@ -36,7 +36,7 @@ type DoltCommitFunc struct {
 }
 
 // NewDoltCommitFunc creates a new DoltCommitFunc expression whose children represents the args passed in DOLT_COMMIT.
-func NewDoltCommitFunc(args ...sql.Expression) (sql.Expression, error) {
+func NewDoltCommitFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
 	return &DoltCommitFunc{children: args}, nil
 }
 
@@ -62,7 +62,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, err
 	}
 
-	apr, err := cli.ParseArgs(ap, args, nil)
+	apr, err := ap.Parse(args)
 	if err != nil {
 		return nil, err
 	}
@@ -207,8 +207,8 @@ func (d DoltCommitFunc) IsNullable() bool {
 	return false
 }
 
-func (d DoltCommitFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	return NewDoltCommitFunc(children...)
+func (d DoltCommitFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+	return NewDoltCommitFunc(ctx, children...)
 }
 
 func (d DoltCommitFunc) Resolved() bool {

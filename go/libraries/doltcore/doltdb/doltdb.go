@@ -125,7 +125,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 		return errors.New("database already exists")
 	}
 
-	rv, err := emptyRootValue(ctx, ddb.db)
+	rv, err := EmptyRootValue(ctx, ddb.db)
 
 	if err != nil {
 		return err
@@ -353,8 +353,9 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 	return NewCommit(ddb.db, commitSt), nil
 }
 
-// ResolveRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found.
-func (ddb *DoltDB) ResolveRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
+// ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
+// point to a Commit.
+func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
 	commitSt, err := getCommitStForRefStr(ctx, ddb.db, ref.String())
 	if err != nil {
 		return nil, err
@@ -381,6 +382,27 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 	}
 
 	return NewTag(ctx, tagRef.GetPath(), ddb.db, tagSt)
+}
+
+// ResolveWorkingSet takes a WorkingSetRef and returns the corresponding WorkingSet object.
+func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef) (*WorkingSet, error) {
+	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
+
+	if err != nil {
+		return nil, ErrWorkingSetNotFound
+	}
+
+	wsSt, hasHead := ds.MaybeHead()
+
+	if !hasHead {
+		return nil, ErrWorkingSetNotFound
+	}
+
+	if wsSt.Name() != datas.WorkingSetName {
+		return nil, fmt.Errorf("workingSetRef head is not a workingSetRef")
+	}
+
+	return NewWorkingSet(ctx, workingSetRef.GetPath(), ddb.db, wsSt)
 }
 
 // TODO: convenience method to resolve the head commit of a branch.
@@ -461,7 +483,7 @@ func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *
 
 // CanFastForward returns whether the given branch can be fast-forwarded to the commit given.
 func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *Commit) (bool, error) {
-	current, err := ddb.ResolveRef(ctx, branch)
+	current, err := ddb.ResolveCommitRef(ctx, branch)
 
 	if err != nil {
 		if err == ErrBranchNotFound {
@@ -731,9 +753,9 @@ func (ddb *DoltDB) GetWorkspaces(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, workspacesRefFilter)
 }
 
-// GetRefs returns a list of all refs in the database.
-func (ddb *DoltDB) GetRefs(ctx context.Context) ([]ref.DoltRef, error) {
-	return ddb.GetRefsOfType(ctx, ref.RefTypes)
+// GetHeadRefs returns a list of all refs that point to a Commit
+func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
+	return ddb.GetRefsOfType(ctx, ref.HeadRefTypes)
 }
 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
@@ -749,7 +771,10 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 
 		var dref ref.DoltRef
 		if ref.IsRef(keyStr) {
-			dref, _ = ref.Parse(keyStr)
+			dref, err = ref.Parse(keyStr)
+			if err != nil {
+				return err
+			}
 
 			if _, ok := refTypeFilter[dref.GetType()]; ok {
 				refs = append(refs, dref)
@@ -846,6 +871,41 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 
 	ds, err = ddb.db.Tag(ctx, ds, r, tag)
 
+	return err
+}
+
+// UpdateWorkingSet updates the working set with the ref given to the root value given
+// |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
+func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, rootVal *RootValue, prevHash hash.Hash) error {
+	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
+	if err != nil {
+		return err
+	}
+
+	// st, err := NewWorkingSetMeta().toNomsStruct(ddb.Format())
+	// if err != nil {
+	// 	return err
+	// }
+
+	rootRef, err := ddb.db.WriteValue(ctx, rootVal.valueSt)
+	if err != nil {
+		return err
+	}
+
+	// workspaceStruct, err := datas.NewWorkspace(ctx, rootRef, st)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// wsRef, err := types.NewRef(workspaceStruct, ddb.Format())
+	// if err != nil {
+	// 	return err
+	// }
+
+	// h, err = wsRef.Hash(wsRef.Format())
+	// fmt.Sprintf("%v", h)
+
+	_, err = ddb.db.UpdateWorkingSet(ctx, ds, rootRef, datas.WorkingSetMeta{}, prevHash)
 	return err
 }
 
@@ -958,7 +1018,7 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 	var deletes []string
 	_ = dd.Iter(ctx, func(ds, _ types.Value) (stop bool, err error) {
 		dsID := string(ds.(types.String))
-		if !ref.IsRef(dsID) {
+		if !ref.IsRef(dsID) && !ref.IsWorkingSet(dsID) {
 			deletes = append(deletes, dsID)
 		}
 		return false, nil

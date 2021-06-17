@@ -17,6 +17,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"strconv"
@@ -46,7 +49,7 @@ import (
 )
 
 const (
-	Version = "0.26.2"
+	Version = "0.26.9"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -87,6 +90,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.GarbageCollectionCmd{},
 	commands.FilterBranchCmd{},
 	commands.VerifyConstraintsCmd{},
+	commands.MergeBaseCmd{},
 })
 
 func init() {
@@ -94,6 +98,7 @@ func init() {
 	dfunctions.VersionString = Version
 }
 
+const pprofServerFlag = "--pprof-server"
 const chdirFlag = "--chdir"
 const jaegerFlag = "--jaeger"
 const profFlag = "--prof"
@@ -136,6 +141,13 @@ func runMain() int {
 					panic("Unexpected prof flag: " + args[1])
 				}
 				args = args[2:]
+
+			case pprofServerFlag:
+				// serve the pprof endpoints setup in the init function run when "net/http/pprof" is imported
+				go func() {
+					log.Println(http.ListenAndServe("localhost:6060", nil))
+				}()
+				args = args[1:]
 
 			// Enable a global jaeger tracer for this run of Dolt,
 			// emitting traces to a collector running at

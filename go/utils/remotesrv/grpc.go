@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
@@ -116,6 +118,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 		url, err := rs.getDownloadUrl(logger, org, repoName, loc.String())
 		if err != nil {
 			log.Println("Failed to sign request", err)
+			return nil, err
 		}
 
 		logger("The URL is " + url)
@@ -125,6 +128,64 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 	}
 
 	return &remotesapi.GetDownloadLocsResponse{Locs: locs}, nil
+}
+
+func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStoreService_StreamDownloadLocationsServer) error {
+	logger := getReqLogger("GRPC", "StreamDownloadLocations")
+	defer func() { logger("finished") }()
+
+	var repoID *remotesapi.RepoId
+	var cs *nbs.NomsBlockStore
+	for {
+		req, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+
+		if !proto.Equal(req.RepoId, repoID) {
+			repoID = req.RepoId
+			cs = rs.getStore(repoID, "StreamDownloadLoctions")
+			if cs == nil {
+				return status.Error(codes.Internal, "Could not get chunkstore")
+			}
+			logger(fmt.Sprintf("found repo %s/%s", repoID.Org, repoID.RepoName))
+		}
+
+		org := req.RepoId.Org
+		repoName := req.RepoId.RepoName
+		hashes, _ := remotestorage.ParseByteSlices(req.ChunkHashes)
+		locations, err := cs.GetChunkLocations(hashes)
+		if err != nil {
+			return err
+		}
+
+		var locs []*remotesapi.DownloadLoc
+		for loc, hashToRange := range locations {
+			var ranges []*remotesapi.RangeChunk
+			for h, r := range hashToRange {
+				hCpy := h
+				ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
+			}
+
+			url, err := rs.getDownloadUrl(logger, org, repoName, loc.String())
+			if err != nil {
+				log.Println("Failed to sign request", err)
+				return err
+			}
+
+			logger("The URL is " + url)
+
+			getRange := &remotesapi.HttpGetRange{Url: url, Ranges: ranges}
+			locs = append(locs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
+		}
+
+		if err := stream.Send(&remotesapi.GetDownloadLocsResponse{Locs: locs}); err != nil {
+			return err
+		}
+	}
 }
 
 func (rs *RemoteChunkStore) getDownloadUrl(logger func(string), org, repoName, fileId string) (string, error) {
@@ -281,7 +342,7 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	_, tfs, err := cs.Sources(ctx)
+	_, tfs, _, err := cs.Sources(ctx)
 
 	if err != nil {
 		return nil, err
@@ -318,33 +379,46 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 
 	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
-	root, tables, err := cs.Sources(ctx)
+	root, tables, appendixTables, err := cs.Sources(ctx)
 
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to get sources")
 	}
 
-	var tableFileInfo []*remotesapi.TableFileInfo
-	for _, tbl := range tables {
-		url, err := rs.getDownloadUrl(logger, req.RepoId.Org, req.RepoId.RepoName, tbl.FileID())
+	tableFileInfo, err := getTableFileInfo(rs, logger, tables, req)
+	if err != nil {
+		return nil, err
+	}
 
-		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to get download url for "+tbl.FileID())
-		}
-
-		tableFileInfo = append(tableFileInfo, &remotesapi.TableFileInfo{
-			FileId:    tbl.FileID(),
-			NumChunks: uint32(tbl.NumChunks()),
-			Url:       url,
-		})
+	appendixTableFileInfo, err := getTableFileInfo(rs, logger, appendixTables, req)
+	if err != nil {
+		return nil, err
 	}
 
 	resp := &remotesapi.ListTableFilesResponse{
-		RootHash:      root[:],
-		TableFileInfo: tableFileInfo,
+		RootHash:              root[:],
+		TableFileInfo:         tableFileInfo,
+		AppendixTableFileInfo: appendixTableFileInfo,
 	}
 
 	return resp, nil
+}
+
+func getTableFileInfo(rs *RemoteChunkStore, logger func(string), tableList []nbs.TableFile, req *remotesapi.ListTableFilesRequest) ([]*remotesapi.TableFileInfo, error) {
+	appendixTableFileInfo := make([]*remotesapi.TableFileInfo, 0)
+	for _, t := range tableList {
+		url, err := rs.getDownloadUrl(logger, req.RepoId.Org, req.RepoId.RepoName, t.FileID())
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to get download url for "+t.FileID())
+		}
+
+		appendixTableFileInfo = append(appendixTableFileInfo, &remotesapi.TableFileInfo{
+			FileId:    t.FileID(),
+			NumChunks: uint32(t.NumChunks()),
+			Url:       url,
+		})
+	}
+	return appendixTableFileInfo, nil
 }
 
 // AddTableFiles updates the remote manifest with new table files without modifying the root hash.

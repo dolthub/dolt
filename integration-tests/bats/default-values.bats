@@ -339,7 +339,7 @@ teardown() {
     [[ "${#lines[@]}" = "4" ]] || false
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v2\` bigint DEFAULT (v1y + 1)" ]] || false
+    [[ "$output" =~ "\`v2\` bigint DEFAULT ((v1y + 1))" ]] || false
 }
 
 @test "default-values: Invalid literal for column type" {

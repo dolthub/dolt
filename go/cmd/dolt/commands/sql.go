@@ -98,6 +98,7 @@ const (
 	messageFlag    = "message"
 	BatchFlag      = "batch"
 	multiDBDirFlag = "multi-db-dir"
+	continueFlag   = "continue"
 	welcomeMsg     = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
@@ -149,6 +150,7 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
+	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. Used for batch mode only.")
 	return ap
 }
 
@@ -278,12 +280,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		currentDB = name
 	}
 
+	_, continueOnError := apr.GetValue(continueFlag)
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		batchMode := apr.Contains(BatchFlag)
 
 		if batchMode {
 			batchInput := strings.NewReader(query)
-			verr = execBatch(sqlCtx, readOnly, mrEnv, roots, batchInput, format)
+			verr = execBatch(sqlCtx, readOnly, continueOnError, mrEnv, roots, batchInput, format)
 		} else {
 			verr = execQuery(sqlCtx, readOnly, mrEnv, roots, query, format)
 
@@ -336,7 +339,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if runInBatchMode {
-			verr = execBatch(sqlCtx, readOnly, mrEnv, roots, os.Stdin, format)
+			verr = execBatch(sqlCtx, readOnly, continueOnError, mrEnv, roots, os.Stdin, format)
 		} else {
 			verr = execShell(sqlCtx, readOnly, mrEnv, roots, format)
 		}
@@ -349,8 +352,23 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return HandleVErrAndExitCode(verr, usage)
 }
 
+func parseCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, error) {
+	if apr.NArg() == 0 || apr.Arg(0) == "--" {
+		return dEnv.RepoState.CWBHeadSpec(), nil
+	}
+
+	comSpecStr := apr.Arg(0)
+	cs, err := doltdb.NewCommitSpec(comSpecStr)
+
+	if err != nil {
+		return nil, fmt.Errorf("invalid commit %s\n", comSpecStr)
+	}
+
+	return cs, nil
+}
+
 func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv, newDatabase)
+	dbs := CollectDBs(mrEnv)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -363,33 +381,45 @@ func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 	return nil
 }
 
-func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv, newBatchedDatabase)
+func execBatch(sqlCtx *sql.Context, readOnly bool, continueOnErr bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) errhand.VerboseError {
+	dbs := CollectDBs(mrEnv)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = runBatchMode(sqlCtx, se, batchInput)
+	// In batch mode, we need to set a couple flags on the session to prevent flushes to disk after every commit
+	dsqle.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
+	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
 	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr)
+	if err != nil {
+		// If we encounter an error, flush what we have so far to disk before exiting, except in the case of merge
+		// errors, which have already updated the repo state all they're going to (and writing session root on top of
+		// them would overwrite these changes)
+		// TODO: this is a mess, merge conflicts need to follow the same code path as everything else
+		if err == doltdb.ErrUnresolvedConflicts || err == doltdb.ErrMergeActive {
+			return errhand.BuildDError("Error processing batch").Build()
+		}
+
+		_ = flushBatchedEdits(sqlCtx, se)
+		_ = writeRoots(sqlCtx, se, mrEnv, roots)
+
 		return errhand.BuildDError("Error processing batch").Build()
 	}
 
 	return writeRoots(sqlCtx, se, mrEnv, roots)
 }
 
-type createDBFunc func(name string, dEnv *env.DoltEnv) dsqle.Database
-
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData())
 }
 
-func newBatchedDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
-	return dsqle.NewBatchedDatabase(name, dEnv.DbData())
-}
-
 func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv, newDatabase)
+	dbs := CollectDBs(mrEnv)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -412,10 +442,10 @@ func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(mrEnv env.MultiRepoEnv, createDB createDBFunc) []dsqle.Database {
+func CollectDBs(mrEnv env.MultiRepoEnv) []dsqle.Database {
 	dbs := make([]dsqle.Database, 0, len(mrEnv))
 	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		db := createDB(name, dEnv)
+		db := newDatabase(name, dEnv)
 		dbs = append(dbs, db)
 		return false, nil
 	})
@@ -578,7 +608,7 @@ func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name s
 }
 
 // runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
-func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
+func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader, continueOnErr bool) error {
 	scanner := NewSqlStatementScanner(input)
 
 	var query string
@@ -597,9 +627,12 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 			if err := processBatchQuery(ctx, query, se); err != nil {
 				// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
 				//  to processing the query)
+				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
 				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
 				cli.PrintErrln(verr.Verbose())
-				return err
+				if !continueOnErr {
+					return err
+				}
 			}
 		}
 		query = ""
@@ -1080,7 +1113,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *sqlEngine, query string, sql
 	if rowIter != nil {
 		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
-			return fmt.Errorf("error executing statement: %v", err.Error())
+			return err
 		}
 
 		// Some statement types should print results, even in batch mode.
@@ -1110,7 +1143,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *sqlEngine, query string, sql
 func processBatchableEditQuery(ctx *sql.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
 	_, rowIter, err := se.query(ctx, query)
 	if err != nil {
-		return fmt.Errorf("Error inserting rows: %v", err.Error())
+		return err
 	}
 
 	if rowIter != nil {
@@ -1122,7 +1155,7 @@ func processBatchableEditQuery(ctx *sql.Context, se *sqlEngine, query string, sq
 		}()
 		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
-			return fmt.Errorf("Error inserting rows: %v", err.Error())
+			return err
 		}
 	}
 
@@ -1134,8 +1167,8 @@ func processBatchableEditQuery(ctx *sql.Context, se *sqlEngine, query string, sq
 }
 
 // canProcessBatchEdit returns whether the given statement can be processed as a batch insert. Only simple inserts
-// (inserting a list of values) can be processed in this way. Other kinds of insert (notably INSERT INTO SELECT AS and
-// AUTO_INCREMENT) need a flushed root and can't benefit from batch optimizations.
+// (inserting a list of values) and deletes can be processed in this way. Other kinds of insert (notably INSERT INTO
+// SELECT AS and AUTO_INCREMENT) need a flushed root and can't benefit from batch optimizations.
 func canProcessAsBatchEdit(ctx *sql.Context, sqlStatement sqlparser.Statement, se *sqlEngine, query string) (batchMode, error) {
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Delete:
@@ -1246,12 +1279,21 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *sqlEngine, query string) 
 	}
 
 	isAutoInc := false
-	_, err = plan.TransformExpressionsUp(a, func(exp sql.Expression) (sql.Expression, error) {
-		if _, ok := exp.(*expression.AutoIncrement); ok {
-			isAutoInc = true
+	plan.Inspect(a, func(n sql.Node) bool {
+		switch n := n.(type) {
+		case *plan.InsertInto:
+			_, err = plan.TransformExpressionsUp(ctx, n.Source, func(exp sql.Expression) (sql.Expression, error) {
+				if _, ok := exp.(*expression.AutoIncrement); ok {
+					isAutoInc = true
+				}
+				return exp, nil
+			})
+			return false
+		default:
+			return true
 		}
-		return exp, nil
 	})
+
 	if err != nil {
 		return false, err
 	}
@@ -1340,7 +1382,7 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		nameToDB[db.Name()] = db
 		root := roots[db.Name()]
 		engine.AddDatabase(db)
-		err := dsess.AddDB(sqlCtx, db)
+		err := dsess.AddDB(sqlCtx, db, db.DbData())
 
 		if err != nil {
 			return nil, err

@@ -82,7 +82,7 @@ type YAMLConfig struct {
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
 }
 
-func newYamlConfig(configFileData []byte) (YAMLConfig, error) {
+func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 	var cfg YAMLConfig
 	err := yaml.UnmarshalStrict(configFileData, &cfg)
 	return cfg, err

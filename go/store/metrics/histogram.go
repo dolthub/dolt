@@ -79,6 +79,12 @@ func (h *Histogram) Sample(v uint64) {
 	atomic.AddUint64(&h.buckets[pot-1], 1)
 }
 
+func (h *Histogram) Clone() *Histogram {
+	n := &Histogram{histType: h.histType}
+	n.Add(h)
+	return n
+}
+
 // SampleTimeSince is a convenience wrapper around Sample which takes the
 // duration since |t|, if 0, rounds to 1 and passes to Sample() as an uint64
 // number of nanoseconds.
@@ -108,8 +114,8 @@ func (h Histogram) Sum() uint64 {
 
 // Add returns a new Histogram which is the result of adding this and other
 // bucket-wise.
-func (h *Histogram) Add(other Histogram) {
-	atomic.AddUint64(&h.sum, other.sum)
+func (h *Histogram) Add(other *Histogram) {
+	atomic.AddUint64(&h.sum, atomic.LoadUint64(&other.sum))
 
 	for i := 0; i < bucketCount; i++ {
 		atomic.AddUint64(&h.buckets[i], atomic.LoadUint64(&other.buckets[i]))

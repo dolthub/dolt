@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/fatih/color"
@@ -25,6 +26,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -32,8 +34,17 @@ import (
 )
 
 const (
-	numLinesParam = "number"
+	numLinesParam   = "number"
+	mergesParam     = "merges"
+	minParentsParam = "min-parents"
+	parentsParam    = "parents"
 )
+
+type logOpts struct {
+	numLines    int
+	showParents bool
+	minParents  int
+}
 
 var logDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Show commit logs`,
@@ -41,14 +52,25 @@ var logDocs = cli.CommandDocumentationContent{
 
 The command takes options to control what is shown and how.`,
 	Synopsis: []string{
-		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}commit{{.GreaterThan}}]`,
+		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}commit{{.GreaterThan}}] [[--] {{.LessThan}}table{{.GreaterThan}}]`,
 	},
 }
 
-type commitLoggerFunc func(*doltdb.CommitMeta, []hash.Hash, hash.Hash)
+type commitLoggerFunc func(logOpts, *doltdb.CommitMeta, []hash.Hash, hash.Hash)
 
-func logToStdOutFunc(cm *doltdb.CommitMeta, parentHashes []hash.Hash, ch hash.Hash) {
-	cli.Println(color.YellowString("commit %s", ch.String()))
+func logToStdOutFunc(opts logOpts, cm *doltdb.CommitMeta, parentHashes []hash.Hash, ch hash.Hash) {
+	if len(parentHashes) < opts.minParents {
+		return
+	}
+
+	chStr := ch.String()
+	if opts.showParents {
+		for _, h := range parentHashes {
+			chStr += " " + h.String()
+		}
+	}
+
+	cli.Println(color.YellowString("commit %s", chStr))
 
 	if len(parentHashes) > 1 {
 		printMerge(parentHashes)
@@ -106,7 +128,10 @@ func (cmd LogCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) er
 
 func createLogArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output")
+	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output.")
+	ap.SupportsInt(minParentsParam, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
+	ap.SupportsFlag(mergesParam, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
+	ap.SupportsFlag(parentsParam, "", "Shows all parents of each commit in the log.")
 	return ap
 }
 
@@ -120,37 +145,47 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, logDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() > 1 {
+	if apr.NArg() > 2 {
 		usage()
 		return 1
 	}
 
-	cs, err := parseCommitSpec(dEnv, apr)
-	if err != nil {
-		cli.PrintErr(err)
-		return 1
+	minParents := apr.GetIntOrDefault(minParentsParam, 0)
+	if apr.Contains(mergesParam) {
+		minParents = 2
 	}
 
-	numLines := apr.GetIntOrDefault(numLinesParam, -1)
-	return logCommits(ctx, dEnv, cs, loggerFunc, numLines)
+	opts := logOpts{
+		numLines:    apr.GetIntOrDefault(numLinesParam, -1),
+		showParents: apr.Contains(parentsParam),
+		minParents:  minParents,
+	}
+
+	// Just dolt log
+	if apr.NArg() == 0 {
+		return logCommits(ctx, dEnv, dEnv.RepoState.CWBHeadSpec(), opts, loggerFunc)
+	} else if apr.NArg() == 1 { // dolt log <ref/table>
+		argIsRef := actions.ValidateIsRef(ctx, apr.Arg(0), dEnv.DoltDB, dEnv.RepoStateReader())
+
+		if argIsRef {
+			cs, err := doltdb.NewCommitSpec(apr.Arg(0))
+			if err != nil {
+				cli.PrintErrln(color.HiRedString("invalid commit %s\n", apr.Arg(0)))
+			}
+			return logCommits(ctx, dEnv, cs, opts, loggerFunc)
+		} else {
+			return handleErrAndExit(logTableCommits(ctx, dEnv, opts, loggerFunc, dEnv.RepoState.CWBHeadSpec(), apr.Arg(0)))
+		}
+	} else { // dolt log ref table
+		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
+		if err != nil {
+			cli.PrintErrln(color.HiRedString("invalid commit %s\n", apr.Arg(0)))
+		}
+		return handleErrAndExit(logTableCommits(ctx, dEnv, opts, loggerFunc, cs, apr.Arg(1)))
+	}
 }
 
-func parseCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, error) {
-	if apr.NArg() == 0 || apr.Arg(0) == "--" {
-		return dEnv.RepoState.CWBHeadSpec(), nil
-	}
-
-	comSpecStr := apr.Arg(0)
-	cs, err := doltdb.NewCommitSpec(comSpecStr)
-
-	if err != nil {
-		return nil, fmt.Errorf("invalid commit %s\n", comSpecStr)
-	}
-
-	return cs, nil
-}
-
-func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, loggerFunc commitLoggerFunc, numLines int) int {
+func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, opts logOpts, loggerFunc commitLoggerFunc) int {
 	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
@@ -165,7 +200,16 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, l
 		return 1
 	}
 
-	commits, err := commitwalk.GetTopNTopoOrderedCommits(ctx, dEnv.DoltDB, h, numLines)
+	matchFunc := func(commit *doltdb.Commit) (bool, error) {
+		numParents, err := commit.NumParents()
+
+		if err != nil {
+			return false, err
+		}
+
+		return numParents >= opts.minParents, nil
+	}
+	commits, err := commitwalk.GetTopNTopoOrderedCommitsMatching(ctx, dEnv.DoltDB, h, opts.numLines, matchFunc)
 
 	if err != nil {
 		cli.PrintErrln("Error retrieving commit.")
@@ -193,7 +237,140 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, l
 			cli.PrintErrln("error: failed to get commit hash")
 			return 1
 		}
-		loggerFunc(meta, pHashes, cmHash)
+		loggerFunc(opts, meta, pHashes, cmHash)
+	}
+
+	return 0
+}
+
+func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (bool, error) {
+	rv, err := commit.GetRootValue()
+	if err != nil {
+		return false, err
+	}
+
+	_, ok, err := rv.GetTable(ctx, tableName)
+	if err != nil {
+		return false, err
+	}
+
+	return ok, nil
+}
+
+func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, loggerFunc commitLoggerFunc, cs *doltdb.CommitSpec, tableName string) error {
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	if err != nil {
+		return err
+	}
+
+	// Check that the table exists in the head commit
+	exists, err := tableExists(ctx, commit, tableName)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return fmt.Errorf("error: table %s does not exist", tableName)
+	}
+
+	h, err := commit.HashOf()
+	if err != nil {
+		return err
+	}
+
+	itr, err := commitwalk.GetTopologicalOrderIterator(ctx, dEnv.DoltDB, h)
+	if err != nil && err != io.EOF {
+		return err
+	}
+
+	var prevCommit *doltdb.Commit = nil
+	var prevHash hash.Hash
+
+	numLines := opts.numLines
+	for {
+		// If we reached the limit then break
+		if numLines == 0 {
+			break
+		}
+
+		h, c, err := itr.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		if prevCommit == nil {
+			prevCommit = c
+			prevHash = h
+			continue
+		}
+
+		parentRV, err := c.GetRootValue()
+		if err != nil {
+			return err
+		}
+
+		childRV, err := prevCommit.GetRootValue()
+		if err != nil {
+			return err
+		}
+
+		ok, err := didTableChangeBetweenRootValues(ctx, childRV, parentRV, tableName)
+		if err != nil {
+			return err
+		}
+
+		if ok {
+			meta, err := prevCommit.GetCommitMeta()
+			if err != nil {
+				return err
+			}
+
+			ph, err := prevCommit.ParentHashes(ctx)
+			if err != nil {
+				return err
+			}
+
+			loggerFunc(opts, meta, ph, prevHash)
+			numLines--
+		}
+
+		prevCommit = c
+		prevHash = h
+	}
+
+	return nil
+}
+
+func didTableChangeBetweenRootValues(ctx context.Context, child, parent *doltdb.RootValue, tableName string) (bool, error) {
+	childHash, ok, err := child.GetTableHash(ctx, tableName)
+
+	if !ok {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	parentHash, ok, err := parent.GetTableHash(ctx, tableName)
+
+	// If the table didn't exist in the parent then we know there was a change
+	if !ok {
+		return true, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return childHash != parentHash, nil
+}
+
+func handleErrAndExit(err error) int {
+	if err != nil {
+		cli.PrintErrln(err)
+		return 1
 	}
 
 	return 0

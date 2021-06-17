@@ -116,7 +116,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 	}
 
-	dbs := commands.CollectDBs(mrEnv, newDatabase)
+	dbs := commands.CollectDBs(mrEnv)
 
 	for _, db := range dbs {
 		sqlEngine.AddDatabase(db)

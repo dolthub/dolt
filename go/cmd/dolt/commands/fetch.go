@@ -86,7 +86,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	remotes, _ := dEnv.GetRemotes()
 	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
 
-	updateMode := ref.RefUpdateMode{Force: apr.Contains(ForceFetchFlag)}
+	updateMode := ref.UpdateMode{Force: apr.Contains(ForceFetchFlag)}
 
 	if verr == nil {
 		verr = fetchRefSpecs(ctx, updateMode, dEnv, r, refSpecs)
@@ -178,8 +178,8 @@ func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[
 	return rsToRem, nil
 }
 
-func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
-	srcDB, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
+	srcDB, err := rem.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
@@ -187,7 +187,7 @@ func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEn
 
 	for _, rs := range refSpecs {
 
-		branchRefs, err := srcDB.GetRefs(ctx)
+		branchRefs, err := srcDB.GetHeadRefs(ctx)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to read from ").AddCause(err).Build()

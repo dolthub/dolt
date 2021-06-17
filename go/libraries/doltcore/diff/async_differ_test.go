@@ -17,6 +17,7 @@ package diff
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -207,6 +208,35 @@ func TestAsyncDiffer(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, more)
 		assert.Len(t, res, 1)
+		err = ad.Close()
+		assert.NoError(t, err)
+	})
+
+	t.Run("can filter based on change type", func(t *testing.T) {
+		ad := NewAsyncDiffer(20)
+		ad.Start(ctx, m1, m2)
+		res, more, err := ad.GetDiffs(10, -1)
+		require.NoError(t, err)
+		assert.True(t, more)
+		assert.Len(t, res, 10)
+		err = ad.Close()
+		assert.NoError(t, err)
+
+		ad = NewAsyncDiffer(20)
+		ad.Start(ctx, m1, m2)
+		res, more, err = ad.GetDiffsWithFilter(10, 20*time.Second, types.DiffChangeModified)
+		require.NoError(t, err)
+		assert.False(t, more)
+		assert.Len(t, res, 5)
+		err = ad.Close()
+		assert.NoError(t, err)
+
+		ad = NewAsyncDiffer(20)
+		ad.Start(ctx, m1, m2)
+		res, more, err = ad.GetDiffsWithFilter(6, -1, types.DiffChangeAdded)
+		require.NoError(t, err)
+		assert.True(t, more)
+		assert.Len(t, res, 6)
 		err = ad.Close()
 		assert.NoError(t, err)
 	})

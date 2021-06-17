@@ -1683,6 +1683,16 @@ SQL
     [[ "$output" =~ '{"rows": [{"id":2,"v1":2}]}' ]] || false
 }
 
+@test "foreign-keys: self referential foreign keys do not break committing" {
+    dolt sql <<SQL
+CREATE TABLE test (id char(32) NOT NULL PRIMARY KEY);
+ALTER TABLE test ADD COLUMN new_col char(32) NULL;
+ALTER TABLE test ADD CONSTRAINT fk_test FOREIGN KEY (new_col) REFERENCES test(id);
+SQL
+    dolt add -A
+    dolt commit -m "committed"
+}
+
 @test "foreign-keys: deleting and readding" {
     dolt sql <<SQL
 CREATE TABLE parent2 (
@@ -1696,6 +1706,7 @@ SQL
     dolt add -A
     dolt commit -m "parent2 and child2"
     dolt sql -q "DROP TABLE child2"
+    dolt commit -am "drop child"
     dolt sql <<SQL
 CREATE TABLE child2 (
   pk BIGINT PRIMARY KEY,
@@ -1707,4 +1718,115 @@ SQL
     run dolt schema show child2
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'child2_fk' ]] || false
+}
+
+@test "foreign-keys: child violation correctly detected" {
+    dolt sql <<SQL
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+CREATE TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id),
+    CONSTRAINT color_fk FOREIGN KEY (color) REFERENCES colors(color)
+);
+INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple');
+INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+SQL
+
+    # Run a query and assert that no changes were made
+    run dolt sql -q "DELETE FROM colors where color='green'"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `(2162,"green")`' ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM colors"
+    [ "$status" -eq "0" ]
+    [[ $output =~ 'id,color' ]] || false
+    [[ "$output" =~ '1,red' ]] || false
+    [[ "$output" =~ '2,green' ]] || false
+    [[ "$output" =~ '3,blue' ]] || false
+    [[ "$output" =~ '4,purple' ]] || false
+
+    run dolt sql -r csv -q "SELECT COUNT(*) FROM colors"
+    [ "$status" -eq "0" ]
+    [[ $output =~ '4' ]] || false
+}
+
+@test "foreign-keys: insert ignore into works correctly w/ FK violations" {
+    dolt sql <<SQL
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+CREATE TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id),
+    CONSTRAINT color_fk FOREIGN KEY (color) REFERENCES colors(color)
+);
+INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple');
+INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+SQL
+
+    # Run a query and assert that no changes were made
+    run dolt sql -q "INSERT IGNORE INTO objects (id,name,color) VALUES (5, 'hi', 'yellow');"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'Query OK, 0 rows affected' ]] || false
+
+    # Validate the data is correct
+    run dolt sql -q "SELECT * FROM objects ORDER BY id" -r csv
+    [ "$status" -eq "0" ]
+    [[ $output =~ 'id,name,color' ]] || false
+    [[ "$output" =~ '1,truck,red' ]] || false
+    [[ "$output" =~ '2,ball,green' ]] || false
+    [[ "$output" =~ '3,shoe,blue' ]] || false
+
+    # Run the query again and this time assert warnings
+    run dolt sql  <<SQL
+INSERT IGNORE INTO objects (id,name,color) VALUES (5, 'hi', 'yellow');
+SHOW WARNINGS;
+SQL
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ '1452' ]] || false # first ensure the proper code
+    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `(4011,"yellow")`' ]] || false
+}
+
+@test "foreign-keys: updating to null works as expected in commit" {
+    dolt sql -q "create table unprocessed_t (id int primary key);"
+    dolt sql -q "create table additional_t (id int primary key);"
+    dolt sql <<SQL
+create table t (
+  id int primary key,
+  unprocessed_id int,
+  foreign key (unprocessed_id) references unprocessed_t(id) on delete cascade on update cascade,
+  additional_id int,
+  foreign key (additional_id) references additional_t(id) on delete cascade on update cascade
+);
+SQL
+
+    dolt add .
+    dolt commit -m 'schema'
+
+    dolt sql -q 'insert into additional_t values (20)'
+    dolt sql -q 'insert into t (id, additional_id) values (1,20);'
+    dolt add .
+    dolt commit -m 'initial'
+
+    dolt sql -q 'insert into unprocessed_t values (20)'
+    dolt sql -q 'update t set additional_id = null, unprocessed_id = 20 where id = 1'
+    dolt sql -q 'delete from additional_t'
+    dolt add .
+    dolt commit -m 'this should not break'
 }

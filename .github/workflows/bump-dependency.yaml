@@ -1,0 +1,205 @@
+name: Bump Deps
+
+on:
+  repository_dispatch:
+    types: [ bump-dependency ]
+
+jobs:
+  get-label:
+    name: Get Label
+    outputs:
+      label: ${{ steps.get-label.outputs.label }}
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Get Label
+        id: get-label
+        env:
+          REPO: ${{ github.event.client_payload.dependency }}
+        run: |
+          if [ "$REPO" == "go-mysql-server" ]
+          then
+            echo "::set-output name=label::gms-bump"
+          else
+            echo "$REPO is unsupported"
+            exit 1
+          fi
+
+  stale-bump-prs:
+    name: Retrieving Stale Bump PRs
+    needs: get-label
+    outputs:
+      stale-pulls: ${{ steps.get-stale-prs.outputs.open-pulls }}
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Get Open Bump PRs
+        id: get-stale-prs
+        uses: actions/github-script@v4
+        env:
+          LABEL: ${{ needs.get-label.outputs.label }}
+        with:
+          debug: true
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          script: |
+            try {
+              const { LABEL } = process.env;
+              const { owner, repo } = context.repo;
+              const res = await github.pulls.list({
+                owner,
+                repo,
+                state: 'open',
+                sort: 'created',
+                direction: 'desc',
+              });
+
+              const { data } = res;
+
+              const reduced = data.reduce((acc, p) => {
+                if (p.labels.length < 1) return acc;
+
+                let keepAlive = false;
+                let shouldPush = false;
+
+                for (const label of p.labels) {
+                  if (label.name === LABEL) {
+                    shouldPush = true;
+                  }
+                  if (label.name === "keep-alive") {
+                    keepAlive = true;
+                  }
+                }
+                if (shouldPush) {
+                  acc.push({
+                    number: p.number,
+                    keepAlive,
+                    headRef: p.head.ref,
+                  });
+                }
+                return acc;
+              }, []);
+
+              console.log(reduced);
+              if (reduced.length > 0) core.setOutput("open-pulls", JSON.stringify(reduced));
+              process.exit(0);
+            } catch(err) {
+              console.log("Error:", err);
+              process.exit(1);
+            }
+
+  open-bump-pr:
+    needs: [get-label, stale-bump-prs]
+    name: Open Bump PR
+    runs-on: ubuntu-18.04
+    outputs:
+      latest-pr: ${{ steps.latest-pr.outputs.pr_url }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Bump dependency
+        working-directory: go
+        run: |
+          go get github.com/dolthub/${{ github.event.client_payload.dependency }}@${{ github.event.client_payload.head_commit_sha }}
+          go mod tidy
+      - name: Get Assignee and Reviewer
+        id: get_reviewer
+        run: |
+          if [ "${{ github.event.client_payload.assignee }}" == "zachmu" ]
+          then
+            echo "::set-output name=reviewer::Hydrocharged"
+          else
+            echo "::set-output name=reviewer::zachmu"
+          fi
+      - name: Get short hash
+        id: short-sha
+        run: |
+          commit=${{ github.event.client_payload.head_commit_sha }}
+          short=${commit:0:8}
+          echo "::set-output name=short::$short"
+      - name: Create and Push new branch
+        run: |
+          git config --global --add user.name "${{ github.event.client_payload.assignee }}"
+          git config --global --add user.email "${{ github.event.client_payload.assignee_email }}"
+          branchname=${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short) }}
+          git checkout -b "$branchname"
+          git add .
+          git commit -m "${{ format('[ga-bump-dep] Bump dependency in Dolt by {0}', github.event.client_payload.assignee) }}"
+          git push origin "$branchname"
+      - name: pull-request
+        uses: repo-sync/pull-request@v2
+        id: latest-pr
+        with:
+          source_branch: ${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short ) }}
+          destination_branch: "master"
+          github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          pr_title: "[auto-bump] [no-release-notes] dependency by ${{ github.event.client_payload.assignee }}"
+          pr_template: ".github/markdown-templates/dep-bump.md"
+          pr_reviewer: ${{ steps.get_reviewer.outputs.reviewer }}
+          pr_assignee: ${{ github.event.client_payload.assignee }}
+          pr_label: ${{ needs.get-label.outputs.label }}
+
+  comment-on-stale-prs:
+    needs: [open-bump-pr, stale-bump-prs]
+    if: ${{ needs.stale-bump-prs.outputs.stale-pulls != '' }}
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        pull: ${{ fromJson(needs.stale-bump-prs.outputs.stale-pulls) }}
+    steps:
+      - name: Comment/Close Stale PRs
+        id: get-stale-prs
+        uses: actions/github-script@v4
+        env:
+          PULL: ${{ toJson(matrix.pull) }}
+          SUPERSEDED_BY: ${{ needs.open-bump-pr.outputs.latest-pr }}
+        with:
+          debug: true
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          script: |
+            try {
+              const { owner, repo } = context.repo;
+              const { PULL, SUPERSEDED_BY } = process.env;
+              const pull = JSON.parse(PULL);
+
+              if (pull.keepAlive) process.exit(0);
+
+              const checkSuiteRes = await github.checks.listSuitesForRef({
+                owner,
+                repo,
+                ref: pull.headRef,
+              });
+
+              if (checkSuiteRes.data) {
+                for (const suite of checkSuiteRes.data.check_suites) {
+                  console.log("suite id:", suite.id);
+                  console.log("suite app slug:", suite.app.slug);
+                  console.log("suite status:", suite.status);
+                  console.log("suite conclusion:", suite.conclusion);
+                  if (suite.app.slug === "github-actions") {
+                     if (suite.status !== "completed" || suite.conclusion !== "success") {
+                       console.log(`Leaving pr open due to status:${suite.status} conclusion${suite.conclusion}`);
+                       process.exit(0);
+                     }
+                  }
+                }
+
+                console.log(`Closing open pr ${pull.number}`);
+                await github.issues.createComment({
+                  issue_number: pull.number,
+                  owner,
+                  repo,
+                  body: `This PR has been superseded by ${SUPERSEDED_BY}`
+                });
+
+                await github.pulls.update({
+                  owner,
+                  repo,
+                  pull_number: pull.number,
+                  state: 'closed',
+                });
+              }
+
+              process.exit(0);
+            } catch(err) {
+              console.log("Error:", err);
+              process.exit(1);
+            }

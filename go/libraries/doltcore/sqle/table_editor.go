@@ -15,12 +15,13 @@
 package sqle
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
@@ -36,10 +37,16 @@ import (
 // editor after every SQL statement is incorrect and will return incorrect results. The single reliable exception is an
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type sqlTableEditor struct {
-	t           *WritableDoltTable
-	kvToSQLRow  *KVToSqlRowConverter
-	tableEditor editor.TableEditor
-	sess        *editor.TableEditSession
+	tableName         string
+	dbName            string
+	sch               schema.Schema
+	autoIncCol        schema.Column
+	vrw               types.ValueReadWriter
+	autoIncrementType typeinfo.TypeInfo
+	kvToSQLRow        *KVToSqlRowConverter
+	tableEditor       editor.TableEditor
+	sess              *editor.TableEditSession
+	temporary         bool
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -48,18 +55,24 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	sess := t.db.TableEditSession(ctx)
-	tableEditor, err := sess.GetTableEditor(ctx, t.name, t.sch)
+	sess := t.db.TableEditSession(ctx, t.IsTemporary())
+
+	tableEditor, err := sess.GetTableEditor(ctx, t.tableName, t.sch)
 	if err != nil {
 		return nil, err
 	}
 
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
-		t:           t,
+		tableName:   t.Name(),
+		dbName:      t.db.Name(),
+		sch:         t.sch,
+		autoIncCol:  t.autoIncCol,
+		vrw:         t.db.ddb.ValueReadWriter(),
 		kvToSQLRow:  conv,
 		tableEditor: tableEditor,
 		sess:        sess,
+		temporary:   t.IsTemporary(),
 	}, nil
 }
 
@@ -73,8 +86,8 @@ func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple
 }
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	if !schema.IsKeyless(te.t.sch) {
-		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
+	if !schema.IsKeyless(te.sch) {
+		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
 
 		if err != nil {
 			return err
@@ -83,7 +96,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
 	}
 
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
+	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 
 	if err != nil {
 		return err
@@ -93,7 +106,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
+	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 	if err != nil {
 		return err
 	}
@@ -102,11 +115,11 @@ func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	dOldRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), oldRow, te.t.sch)
+	dOldRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, oldRow, te.sch)
 	if err != nil {
 		return err
 	}
-	dNewRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), newRow, te.t.sch)
+	dNewRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, newRow, te.sch)
 	if err != nil {
 		return err
 	}
@@ -116,11 +129,11 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 
 func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
 	val := te.tableEditor.GetAutoIncrementValue()
-	return te.t.DoltTable.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
+	return te.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
 }
 
 func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
-	nomsVal, err := te.t.DoltTable.autoIncCol.TypeInfo.ConvertValueToNomsValue(ctx, te.t.table.ValueReadWriter(), val)
+	nomsVal, err := te.autoIncCol.TypeInfo.ConvertValueToNomsValue(ctx, te.vrw, val)
 	if err != nil {
 		return err
 	}
@@ -132,11 +145,28 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 
 // Close implements Closer
 func (te *sqlTableEditor) Close(ctx *sql.Context) error {
-	// If we're running in batched mode, don't flush the edits until explicitly told to do so by the parent table.
-	if te.t.db.batchMode == batched {
+	sess := DSessFromSess(ctx.Session)
+
+	// If we're running in batched mode, don't flush the edits until explicitly told to do so
+	if sess.batchMode == batched {
 		return nil
 	}
 	return te.flush(ctx)
+}
+
+// StatementBegin implements the interface sql.TableEditor.
+func (te *sqlTableEditor) StatementBegin(ctx *sql.Context) {
+	te.tableEditor.StatementStarted(ctx)
+}
+
+// DiscardChanges implements the interface sql.TableEditor.
+func (te *sqlTableEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	return te.tableEditor.StatementFinished(ctx, true)
+}
+
+// StatementComplete implements the interface sql.TableEditor.
+func (te *sqlTableEditor) StatementComplete(ctx *sql.Context) error {
+	return te.tableEditor.StatementFinished(ctx, false)
 }
 
 func (te *sqlTableEditor) flush(ctx *sql.Context) error {
@@ -145,13 +175,15 @@ func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 		return err
 	}
 
-	newTable, ok, err := newRoot.GetTable(ctx, te.t.name)
-	if err != nil {
-		return errhand.BuildDError("failed to load updated table").AddCause(err).Build()
+	return te.setRoot(ctx, newRoot)
+}
+
+func (te *sqlTableEditor) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+	dSess := DSessFromSess(ctx.Session)
+
+	if te.temporary {
+		return dSess.SetTempTableRoot(ctx, te.dbName, newRoot)
 	}
-	if !ok {
-		return errhand.BuildDError("failed to find updated table").Build()
-	}
-	te.t.table = newTable
-	return te.t.db.SetRoot(ctx, newRoot)
+
+	return dSess.SetRoot(ctx, te.dbName, newRoot)
 }
