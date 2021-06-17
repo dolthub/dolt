@@ -98,6 +98,7 @@ const (
 	messageFlag    = "message"
 	BatchFlag      = "batch"
 	multiDBDirFlag = "multi-db-dir"
+	continueFlag   = "continue"
 	welcomeMsg     = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
@@ -149,6 +150,7 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
+	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. Used for batch mode only.")
 	return ap
 }
 
@@ -278,12 +280,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		currentDB = name
 	}
 
+	_, continueOnError := apr.GetValue(continueFlag)
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		batchMode := apr.Contains(BatchFlag)
 
 		if batchMode {
 			batchInput := strings.NewReader(query)
-			verr = execBatch(sqlCtx, readOnly, mrEnv, roots, batchInput, format)
+			verr = execBatch(sqlCtx, readOnly, continueOnError, mrEnv, roots, batchInput, format)
 		} else {
 			verr = execQuery(sqlCtx, readOnly, mrEnv, roots, query, format)
 
@@ -336,7 +339,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if runInBatchMode {
-			verr = execBatch(sqlCtx, readOnly, mrEnv, roots, os.Stdin, format)
+			verr = execBatch(sqlCtx, readOnly, continueOnError, mrEnv, roots, os.Stdin, format)
 		} else {
 			verr = execShell(sqlCtx, readOnly, mrEnv, roots, format)
 		}
@@ -378,7 +381,7 @@ func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 	return nil
 }
 
-func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) errhand.VerboseError {
+func execBatch(sqlCtx *sql.Context, readOnly bool, continueOnErr bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -392,7 +395,7 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = runBatchMode(sqlCtx, se, batchInput)
+	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr)
 	if err != nil {
 		// If we encounter an error, flush what we have so far to disk before exiting, except in the case of merge
 		// errors, which have already updated the repo state all they're going to (and writing session root on top of
@@ -605,7 +608,7 @@ func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name s
 }
 
 // runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
-func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
+func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader, continueOnErr bool) error {
 	scanner := NewSqlStatementScanner(input)
 
 	var query string
@@ -624,9 +627,12 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 			if err := processBatchQuery(ctx, query, se); err != nil {
 				// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
 				//  to processing the query)
+				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
 				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
 				cli.PrintErrln(verr.Verbose())
-				return err
+				if !continueOnErr {
+					return err
+				}
 			}
 		}
 		query = ""
