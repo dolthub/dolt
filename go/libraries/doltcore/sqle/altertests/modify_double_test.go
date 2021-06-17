@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeDouble(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"DOUBLE",

@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeMediumintUnsigned(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"MEDIUMINT UNSIGNED",

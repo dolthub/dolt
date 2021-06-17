@@ -377,7 +377,7 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 		return false, manifestContents{}, err
 	}
 
-	// !exists(lockFileName) => unitialized store
+	// !exists(lockFileName) => uninitialized store
 	if locked {
 		var f *os.File
 		err = func() (ferr error) {
@@ -503,7 +503,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 			defer func() {
 				closeErr := f.Close()
 
-				if ferr != nil {
+				if ferr == nil {
 					ferr = closeErr
 				}
 			}()
@@ -546,9 +546,22 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 	}
 
 	err = os.Rename(tempManifestPath, manifestPath)
-
 	if err != nil {
-		return manifestContents{}, err
+		// On Windows, renaming the temporary manifest file to the current manifest file overwrites the current file.
+		// This can occasionally cause an "ACCESS DENIED" error, aborting the entire operation. The cause is not clear,
+		// as it does not appear to be a dangling file handle (observed through Process Explorer). The error is also
+		// hard to reproduce and inconsistent, as it seems to occur between 200-7,000 renames, but averages around 1,500
+		// renames. This adds a delay before retrying the rename, increasing the wait time by a factor of 10 after each
+		// failure, up to a max of 10 seconds. If an error still occurs after that time, then we just fail. It is
+		// unknown if this is sufficient enough to completely eliminate the issue, however it has so far been able to
+		// succeed before reaching the retry limit.
+		for waitTime := time.Duration(1); err != nil && waitTime <= 10000; waitTime *= 10 {
+			time.Sleep(waitTime * time.Millisecond)
+			err = os.Rename(tempManifestPath, manifestPath)
+		}
+		if err != nil {
+			return manifestContents{}, err
+		}
 	}
 
 	return newContents, nil

@@ -13,12 +13,16 @@ setup() {
     cd $REPO_NAME
 
     dolt init
+    dolt sql -q "CREATE TABLE mysqldump_table(pk int)"
+    dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
     let PORT="$$ % (65536-1024) + 1024"
     USER="dolt"
     dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
     SERVER_PID=$!
     # Give the server a chance to start
     sleep 1
+
+    export MYSQL_PWD=""
 }
 
 teardown() {
@@ -94,4 +98,19 @@ cmake ..
 
 @test "ruby ruby/mysql test" {
     ruby $BATS_TEST_DIRNAME/ruby/ruby-mysql-test.rb $USER $PORT $REPO_NAME
+}
+
+@test "elixir myxql test" {
+    cd $BATS_TEST_DIRNAME/elixir/
+    # install some mix dependencies
+    mix local.hex --force
+    mix local.rebar --force
+    mix deps.get
+
+    # run the test
+    mix run -e "IO.puts(SmokeTest.run())" $USER $PORT $REPO_NAME
+}
+
+@test "mysqldump works" {
+    mysqldump $REPO_NAME -P $PORT -h 0.0.0.0 -u $USER
 }

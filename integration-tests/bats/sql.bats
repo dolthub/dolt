@@ -1200,3 +1200,40 @@ SQL
     [[ "$output" =~ "| FOUND_ROWS() |" ]] || false
     [[ "$output" =~ "| 2            |" ]] || false
 }
+
+@test "sql: empty byte is parsed" {
+    dolt sql -q "create table mytable(pk int, val bit);"
+    run dolt sql -q "INSERT INTO mytable values (1, b'');"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * from mytable"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1  | 0" ]] || false
+}
+
+@test "sql: dolt diff table correctly works with IN" {
+    dolt sql -q "CREATE TABLE mytable(pk int primary key);"
+    dolt sql -q "INSERT INTO mytable VALUES (1), (2)"
+    dolt commit -am "Commit 1"
+
+    head_commit=$(get_head_commit)
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_mytable where dolt_diff_mytable.to_commit IN ('$head_commit', '00200202')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| COUNT(*) |" ]] || false
+    [[ "$output" =~ "| 2        |" ]] || false
+
+    dolt sql -q "INSERT INTO mytable VALUES (3)"
+    dolt commit -am "Commit 2"
+
+    head_commit2=$(get_head_commit)
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_mytable where dolt_diff_mytable.to_commit IN ('$head_commit', '$head_commit2', 'fake-val')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| COUNT(*) |" ]] || false
+    [[ "$output" =~ "| 3        |" ]] || false
+}
+
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 8-
+}

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"golang.org/x/sync/errgroup"
@@ -182,6 +183,25 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	updatedTbl, err := tbl.UpdateSchema(ctx, postMergeSchema)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// If any indexes were added during the merge, then we need to generate their row data to add to our updated table.
+	addedIndexesSet := make(map[string]string)
+	for _, index := range postMergeSchema.Indexes().AllIndexes() {
+		addedIndexesSet[strings.ToLower(index.Name())] = index.Name()
+	}
+	for _, index := range tblSchema.Indexes().AllIndexes() {
+		delete(addedIndexesSet, strings.ToLower(index.Name()))
+	}
+	for _, addedIndex := range addedIndexesSet {
+		newIndexData, err := editor.RebuildIndex(ctx, updatedTbl, addedIndex)
+		if err != nil {
+			return nil, nil, err
+		}
+		updatedTbl, err = updatedTbl.SetIndexRowData(ctx, addedIndex, newIndexData)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	err = sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {

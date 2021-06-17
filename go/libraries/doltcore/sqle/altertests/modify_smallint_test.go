@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeSmallint(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"SMALLINT",

@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeInt(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"INT",

@@ -189,7 +189,7 @@ func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, included
 // in reverse topological order, with tiebreaking done by the height of the commit graph -- higher commits
 // appear first. Remaining ties are broken by timestamp; newer commits appear first.
 func GetTopologicalOrderCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash) ([]*doltdb.Commit, error) {
-	return GetTopNTopoOrderedCommits(ctx, ddb, startCommitHash, -1)
+	return GetTopNTopoOrderedCommitsMatching(ctx, ddb, startCommitHash, -1, nil)
 }
 
 // GetTopologicalOrderCommitIterator returns an iterator for commits generated with the same semantics as
@@ -250,10 +250,10 @@ func (i *commiterator) Reset(ctx context.Context) error {
 	return nil
 }
 
-// GetTopNTopoOrderedCommits returns the first N commits (If N <= 0 then all commits) reachable from the commit at hash
+// GetTopNTopoOrderedCommitsMatching returns the first N commits (If N <= 0 then all commits) reachable from the commit at hash
 // `startCommitHash` in reverse topological order, with tiebreaking done by the height of the commit graph -- higher
 // commits appear first. Remaining ties are broken by timestamp; newer commits appear first.
-func GetTopNTopoOrderedCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash, n int) ([]*doltdb.Commit, error) {
+func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash, n int, matchFn func(*doltdb.Commit) (bool, error)) ([]*doltdb.Commit, error) {
 	itr, err := GetTopologicalOrderIterator(ctx, ddb, startCommitHash)
 	if err != nil {
 		return nil, err
@@ -267,7 +267,19 @@ func GetTopNTopoOrderedCommits(ctx context.Context, ddb *doltdb.DoltDB, startCom
 		} else if err != nil {
 			return nil, err
 		}
-		commitList = append(commitList, commit)
+
+		matches := true
+		if matchFn != nil {
+			matches, err = matchFn(commit)
+
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if matches {
+			commitList = append(commitList, commit)
+		}
 	}
 
 	return commitList, nil
