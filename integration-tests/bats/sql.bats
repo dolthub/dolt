@@ -1150,6 +1150,7 @@ ALTER TABLE t2 ADD CONSTRAINT chk2 CHECK (b > a);
 SQL
 
     dolt sql -q "insert into t2 values (5, 6)"
+    dolt sql -q "insert into t2 values (6, NULL)"
 
     run dolt sql -q "insert into t2 values (3, 4)"
     [ $status -eq 1 ]
