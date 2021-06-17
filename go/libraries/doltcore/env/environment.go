@@ -441,12 +441,12 @@ func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
 }
 
 type repoStateWriter struct {
-	dEnv *DoltEnv
+	*DoltEnv
 }
 
 func (r *repoStateWriter) SetStagedHash(ctx context.Context, h hash.Hash) error {
-	r.dEnv.RepoState.Staged = h.String()
-	err := r.dEnv.RepoState.Save(r.dEnv.FS)
+	r.RepoState.Staged = h.String()
+	err := r.RepoState.Save(r.FS)
 
 	if err != nil {
 		return ErrStateUpdate
@@ -456,8 +456,8 @@ func (r *repoStateWriter) SetStagedHash(ctx context.Context, h hash.Hash) error 
 }
 
 func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error {
-	r.dEnv.RepoState.Working = h.String()
-	err := r.dEnv.RepoState.Save(r.dEnv.FS)
+	r.RepoState.Working = h.String()
+	err := r.RepoState.Save(r.FS)
 
 	if err != nil {
 		return ErrStateUpdate
@@ -467,8 +467,8 @@ func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error
 }
 
 func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
-	r.dEnv.RepoState.Head = marshalableRef
-	err := r.dEnv.RepoState.Save(r.dEnv.FS)
+	r.RepoState.Head = marshalableRef
+	err := r.RepoState.Save(r.FS)
 
 	if err != nil {
 		return ErrStateUpdate
@@ -478,15 +478,15 @@ func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.
 }
 
 func (r *repoStateWriter) AbortMerge() error {
-	return r.dEnv.RepoState.AbortMerge(r.dEnv.FS)
+	return r.RepoState.AbortMerge(r.FS)
 }
 
 func (r *repoStateWriter) ClearMerge() error {
-	return r.dEnv.RepoState.ClearMerge(r.dEnv.FS)
+	return r.RepoState.ClearMerge(r.FS)
 }
 
 func (r *repoStateWriter) StartMerge(commitStr string) error {
-	return r.dEnv.RepoState.StartMerge(commitStr, r.dEnv.FS)
+	return r.RepoState.StartMerge(commitStr, r.FS)
 }
 
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {

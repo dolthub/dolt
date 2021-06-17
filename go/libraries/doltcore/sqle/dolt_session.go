@@ -237,14 +237,8 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 	// for concurrency. Over time we will disable this path.
 	if !TransactionsEnabled(ctx) {
 		dbData := sess.dbDatas[dbName]
-
-		h, err := dbData.Ddb.WriteRootValue(ctx, dbRoot.root)
-		if err != nil {
-			return err
-		}
-
 		sess.dirty[dbName] = false
-		return dbData.Rsw.SetWorkingHash(ctx, h)
+		return dbData.Rsw.UpdateWorkingRoot(ctx, dbRoot.root)
 	}
 
 	// Newer commit path does a concurrent merge of the current root with the one other clients are editing, then

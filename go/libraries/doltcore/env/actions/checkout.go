@@ -151,6 +151,8 @@ func checkoutTablesAndDocs(ctx context.Context, dbData env.DbData, roots map[dol
 
 	roots, err = getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.WorkingRoot, doltdb.StagedRoot, doltdb.HeadRoot)
 
+//	logrus.Infof("working is %s", roots[doltdb.WorkingRoot].DebugString(ctx, true))
+
 	if err != nil {
 		return err
 	}

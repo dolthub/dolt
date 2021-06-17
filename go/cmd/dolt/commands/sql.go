@@ -987,15 +987,10 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 			return false, err
 		}
 
-		h, err := root.HashOf()
-		if err != nil {
-			return false, err
-		}
-
 		dsess := dsqle.DSessFromSess(ctx.Session)
 		rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
 		if ok {
-			err = rsw.SetWorkingHash(ctx, h)
+			err = rsw.UpdateWorkingRoot(ctx, root)
 			if err != nil {
 				return false, err
 			}

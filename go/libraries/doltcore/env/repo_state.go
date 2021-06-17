@@ -41,7 +41,7 @@ type RepoStateReader interface {
 type RepoStateWriter interface {
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
 	SetStagedHash(context.Context, hash.Hash) error
-	SetWorkingHash(context.Context, hash.Hash) error
+	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	AbortMerge() error
 	ClearMerge() error
@@ -204,14 +204,14 @@ func (rs *RepoState) GetMergeCommit() string {
 
 // Updates the working root.
 func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
-	h, err := ddb.WriteRootValue(ctx, newRoot)
+	//logrus.Infof("Updating working root with value %s", newRoot.DebugString(ctx, true))
 
+	h, err := ddb.WriteRootValue(ctx, newRoot)
 	if err != nil {
 		return hash.Hash{}, doltdb.ErrNomsIO
 	}
 
-	err = rsw.SetWorkingHash(ctx, h)
-
+	err = rsw.UpdateWorkingRoot(ctx, newRoot)
 	if err != nil {
 		return hash.Hash{}, ErrStateUpdate
 	}

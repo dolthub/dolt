@@ -201,7 +201,6 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbName string, dbData env.DbD
 		return err
 	}
 
-	workingHash := stagedHash
 	if !squash {
 		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
 
@@ -210,7 +209,7 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbName string, dbData env.DbD
 		}
 	}
 
-	err = dbData.Rsw.SetWorkingHash(ctx, workingHash)
+	err = dbData.Rsw.UpdateWorkingRoot(ctx, rv)
 	if err != nil {
 		return err
 	}
@@ -226,7 +225,7 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbName string, dbData env.DbD
 	}
 
 	if squash {
-		return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String())
+		return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), stagedHash.String())
 	} else {
 		return setHeadAndWorkingSessionRoot(ctx, hh.String())
 	}

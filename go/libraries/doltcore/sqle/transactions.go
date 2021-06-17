@@ -126,12 +126,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 }
 
 func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-	hash, err := mergedRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	err = tx.dbData.Rsw.SetWorkingHash(ctx, hash)
+	err := tx.dbData.Rsw.UpdateWorkingRoot(ctx, mergedRoot)
 	if err != nil {
 		return nil, err
 	}
