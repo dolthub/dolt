@@ -286,7 +286,8 @@ func executeNoFFMerge(
 		}
 	}
 
-	h, err := actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+	workingRoot, _ := dSess.GetRoot(dbName)
+	h, err := actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),

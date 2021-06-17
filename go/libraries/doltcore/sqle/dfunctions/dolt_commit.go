@@ -86,12 +86,13 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
 	}
 
-	if allFlag {
-		err = actions.StageAllTables(ctx, dbData)
-	}
+	workingRoot, _ := dSess.GetRoot(dbName)
 
-	if err != nil {
-		return nil, fmt.Errorf(err.Error())
+	if allFlag {
+		err = actions.StageAllTables(ctx, workingRoot, dbData)
+		if err != nil {
+			return nil, fmt.Errorf(err.Error())
+		}
 	}
 
 	// Parse the author flag. Return an error if not.
@@ -123,7 +124,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-	h, err := actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+	h, err := actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),

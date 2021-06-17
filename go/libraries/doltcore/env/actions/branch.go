@@ -208,7 +208,7 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
-// updateRootsForBranch writes the roots needed for a checkout and returns the updated work and staged hash.
+// updateRootsForBranch writes the roots needed for a checkout and returns the updated work and staged roots.
 func updateRootsForBranch(
 	ctx context.Context,
 	dbData env.DbData,
@@ -300,7 +300,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	// TODO: moved stage root into working set too
+	// TODO: move stage root into working set too
 	stagedHash, err := stagedRoot.HashOf()
 	if err != nil {
 		return err

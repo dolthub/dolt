@@ -207,7 +207,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
 		if apr.Contains(cli.NoFFParam) {
-			return execNoFFMerge(ctx, apr, dEnv, cm2, verr, workingDiffs)
+			return execNoFFMerge(ctx, apr, dEnv, workingRoot, cm2, verr, workingDiffs)
 		} else {
 			return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
 		}
@@ -219,7 +219,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	}
 }
 
-func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cm2 *doltdb.Commit, verr errhand.VerboseError, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, cm2 *doltdb.Commit, verr errhand.VerboseError, workingDiffs map[string]hash.Hash) errhand.VerboseError {
 	mergedRoot, err := cm2.GetRootValue()
 
 	if err != nil {
@@ -255,7 +255,7 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),

@@ -62,7 +62,8 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if apr.NArg() == 0 && !allFlag {
 		return 1, fmt.Errorf("Nothing specified, nothing added. Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		err = actions.StageAllTables(ctx, dbData)
+		workingRoot, _ := dSess.GetRoot(dbName)
+		err = actions.StageAllTables(ctx, workingRoot, dbData)
 		if err != nil {
 			return 1, err
 		}
