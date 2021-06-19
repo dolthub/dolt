@@ -98,8 +98,13 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 				return 1, err
 			}
 
-			workingHash := dbData.Rsr.WorkingHash()
-			if err := ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String()); err != nil {
+			root, err := dbData.Rsr.WorkingRoot(ctx)
+			if err != nil {
+				return 1, err
+			}
+
+			err = dSess.SetRoot(ctx, dbName, root)
+			if err != nil {
 				return 1, err
 			}
 		} else {

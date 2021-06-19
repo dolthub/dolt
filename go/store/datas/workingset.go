@@ -22,21 +22,40 @@ import (
 )
 
 const (
-	WorkspaceMetaField = "meta"
-	WorkingSetRefField = "ref"
-	WorkingSetName     = "WorkingSet"
+	WorkingSetName      = "WorkingSet"
+	WorkspaceMetaField  = "meta"
+	WorkingRootRefField = "workingRootRef"
+	StagedRootRefField  = "stagedRootRef"
+	MergeStateField     = "mergeState"
+)
+
+const (
+	MergeStateName      = "MergeState"
+	MergeStateCommitField = "commit"
+	MergeStateWorkingPreMergeField = "working_pre_merge"
 )
 
 type WorkingSetMeta struct {
 	Meta types.Struct
 }
 
-var workingSetTemplate = types.MakeStructTemplate(WorkingSetName, []string{WorkingSetRefField})
-
-// ref is a Ref<Value>, any Value
+var workingSetTemplate = types.MakeStructTemplate(WorkingSetName, []string{WorkingRootRefField, StagedRootRefField, MergeStateField})
 var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
-        ref:  Ref<Value>,
+        workingRootRef:  Ref<Value>,
+				stagedRootRef?:  Ref<Value>,
+				mergeState?: Struct {},
 }`)
+
+var mergeStateTemplate = types.MakeStructTemplate(MergeStateName, []string{MergeStateCommitField, MergeStateWorkingPreMergeField})
+var valueMergeStateType = nomdl.MustParseType(`Struct MergeState {
+        commit:  Ref<Value>,
+				working_pre_merge:  Ref<Value>,
+}`)
+
+type MergeState struct {
+	Commit          string `json:"commit"`
+	PreMergeWorking string `json:"working_pre_merge"`
+}
 
 // NewWorkingSet creates a new working set object.
 // A working set is a value that has been persisted but is not necessarily referenced by a Commit. As the name implies,
@@ -47,7 +66,9 @@ var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
 // ```
 // struct WorkingSet {
 //   meta: M,
-//   ref: R,
+//   workingRootRef: R,
+//   stagedRootRef: R,
+//   mergeState: M,
 // }
 // ```
 // where M is a struct type and R is a ref type.

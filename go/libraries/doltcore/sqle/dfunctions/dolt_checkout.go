@@ -154,32 +154,31 @@ func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) erro
 		return ErrEmptyBranchName
 	}
 
-	return nil
+	// TODO: this isn't right. It updates the working root for the head ref, but needs to only update it for the
+	//  session. Otherwise this won't respect transaction boundaries.
+	err := actions.CheckoutBranchNoDocs(ctx, dbData, branchName)
 
-	// TODO: fix me
-	//err := actions.CheckoutBranch(ctx, dbData, branchName)
+	if err != nil {
+		if err == doltdb.ErrBranchNotFound {
+			return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
+		} else if doltdb.IsRootValUnreachable(err) {
+			rt := doltdb.GetUnreachableRootType(err)
+			return fmt.Errorf("error: unable to read the %s", rt.String())
+		} else if actions.IsCheckoutWouldOverwrite(err) {
+			tbls := actions.CheckoutWouldOverwriteTables(err)
+			msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
+			for _, tbl := range tbls {
+				msg = msg + tbl + "\n"
+			}
+			return errors.New(msg)
+		} else if err == doltdb.ErrAlreadyOnBranch {
+			return nil // No need to return an error if on the same branch
+		} else {
+			return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
+		}
+	}
 
-	// if err != nil {
-	// 	if err == doltdb.ErrBranchNotFound {
-	// 		return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
-	// 	} else if doltdb.IsRootValUnreachable(err) {
-	// 		rt := doltdb.GetUnreachableRootType(err)
-	// 		return fmt.Errorf("error: unable to read the %s", rt.String())
-	// 	} else if actions.IsCheckoutWouldOverwrite(err) {
-	// 		tbls := actions.CheckoutWouldOverwriteTables(err)
-	// 		msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
-	// 		for _, tbl := range tbls {
-	// 			msg = msg + tbl + "\n"
-	// 		}
-	// 		return errors.New(msg)
-	// 	} else if err == doltdb.ErrAlreadyOnBranch {
-	// 		return nil // No need to return an error if on the same branch
-	// 	} else {
-	// 		return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
-	// 	}
-	// }
-	//
-	// return updateHeadAndWorkingSessionVars(ctx, dbData)
+	return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
 func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error {
@@ -214,7 +213,9 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 		return err
 	}
 
-	workingHash := dbData.Rsr.WorkingHash().String()
+	// TODO: fix this
+	// workingHash := dbData.Rsr.WorkingHash().String()
+	workingHash := ""
 
 	// This will update the session table editor's root and clear its cache.
 	if !hasStagedChanges && !hasWorkingChanges {

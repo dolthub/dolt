@@ -688,7 +688,17 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()
 
-	workingHashInRepoState := rsr.WorkingHash()
+	workingRootInRepoState, err := rsr.WorkingRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	// TODO: collapse this difference
+	workingHashInRepoState, err := workingRootInRepoState.HashOf()
+	if err != nil {
+		return err
+	}
+
 	workingHashInWsRef := hash.Hash{}
 
 	// TODO: this resolve isn't necessary in all cases and slows things down

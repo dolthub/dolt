@@ -30,11 +30,18 @@ const (
 	workingMetaVersion       = "1.0"
 )
 
+type MergeState struct {
+	Commit          string `json:"commit"`
+	PreMergeWorking string `json:"working_pre_merge"`
+}
+
 type WorkingSet struct {
-	Name      string
-	format    *types.NomsBinFormat
-	st        types.Struct
-	rootValue *RootValue
+	Name        string
+	format      *types.NomsBinFormat
+	st          types.Struct
+	workingRoot *RootValue
+	stagedRoot  *RootValue
+	mergeState  *MergeState
 }
 
 // NewWorkingSet creates a new WorkingSet object.
@@ -55,35 +62,54 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	// 	return nil, err
 	// }
 
-	rootRef, ok, err := workingSetSt.MaybeGet(datas.WorkingSetRefField)
+	workingRootRef, ok, err := workingSetSt.MaybeGet(datas.WorkingRootRefField)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("workingset struct does not have field %s", datas.WorkingSetRefField)
+		return nil, fmt.Errorf("workingset struct does not have field %s", datas.WorkingRootRefField)
 	}
 
-	rootValSt, err := rootRef.(types.Ref).TargetValue(ctx, vrw)
+	workingRootValSt, err := workingRootRef.(types.Ref).TargetValue(ctx, vrw)
 	if err != nil {
 		return nil, err
 	}
 
-	rootVal, err := newRootValue(vrw, rootValSt.(types.Struct))
+	workingRoot, err := newRootValue(vrw, workingRootValSt.(types.Struct))
 	if err != nil {
 		return nil, err
+	}
+
+	stagedRootRef, ok, err := workingSetSt.MaybeGet(datas.StagedRootRefField)
+	if err != nil {
+		return nil, err
+	}
+
+	var stagedRoot *RootValue
+	if ok {
+		stagedRootValSt, err := stagedRootRef.(types.Ref).TargetValue(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
+		stagedRoot, err = newRootValue(vrw, stagedRootValSt.(types.Struct))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &WorkingSet{
-		Name:      name,
-		format:    vrw.Format(),
-		st:        workingSetSt,
-		rootValue: rootVal,
+		Name:        name,
+		format:      vrw.Format(),
+		st:          workingSetSt,
+		workingRoot: workingRoot,
+		stagedRoot:  stagedRoot,
 	}, nil
 }
 
 // RootValue returns the root value stored by this workingset
 func (t *WorkingSet) RootValue() *RootValue {
-	return t.rootValue
+	return t.workingRoot
 }
 
 // HashOf returns the hash of the workingset struct, which is not the same as the hash of the root value stored in the

@@ -535,13 +535,13 @@ func (db Database) SetTemporaryRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 // LoadRootFromRepoState loads the root value from the repo state's working hash, then calls SetRoot with the loaded
 // root value.
 func (db Database) LoadRootFromRepoState(ctx *sql.Context) error {
-	workingHash := db.rsr.WorkingHash()
-	root, err := db.ddb.ReadRootValue(ctx, workingHash)
+	// TODO: kill this, only used by server
+	workingRoot, err := db.rsr.WorkingRoot(ctx)
 	if err != nil {
 		return err
 	}
 
-	return db.SetRoot(ctx, root)
+	return db.SetRoot(ctx, workingRoot)
 }
 
 func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {

@@ -150,7 +150,9 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 }
 
 func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
-	return rsr.WorkingHash() != rsr.StagedHash()
+	// TODO: fix me
+	// return rsr.WorkingHash() != rsr.StagedHash()
+	return false
 }
 
 // TODO: We should not be dealing with root objects here but commit specs.

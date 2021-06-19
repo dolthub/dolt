@@ -83,8 +83,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	rsr := st.rsr
 	drw := st.drw
 
-	workingHash := rsr.WorkingHash()
-	workingRoot, err := ddb.ReadRootValue(ctx, workingHash)
+	workingRoot, err := rsr.WorkingRoot(ctx)
 	if err != nil {
 		return nil, err
 	}

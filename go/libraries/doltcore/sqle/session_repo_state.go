@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -28,6 +29,12 @@ type SessionRepoStateReader struct {
 	session *DoltSession
 	dbName string
 }
+
+func (s SessionRepoStateReader) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
+	return s.session.roots[s.dbName].root, nil
+}
+
+var _ env.RepoStateReader = SessionRepoStateReader{}
 
 func NewSessionRepoStateReader(session *DoltSession, dbName string) SessionRepoStateReader {
 	return SessionRepoStateReader{session: session, dbName: dbName}
@@ -56,15 +63,6 @@ func (s SessionRepoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
 func (s SessionRepoStateReader) CWBHeadHash(ctx context.Context) (hash.Hash, error) {
 	// TODO: get rid of this
 	panic("implement me")
-}
-
-func (s SessionRepoStateReader) WorkingHash() hash.Hash {
-	hash, err := s.session.roots[s.dbName].root.HashOf()
-	// TODO: fix this interface
-	if err != nil {
-		panic(err)
-	}
-	return hash
 }
 
 func (s SessionRepoStateReader) StagedHash() hash.Hash {

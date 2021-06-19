@@ -397,6 +397,10 @@ type repoStateReader struct {
 	dEnv *DoltEnv
 }
 
+func (r *repoStateReader) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
+	return r.dEnv.WorkingRoot(ctx)
+}
+
 func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
 	return r.dEnv.RepoState.CWBHeadRef()
 }

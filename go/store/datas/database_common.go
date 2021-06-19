@@ -764,12 +764,12 @@ func (db *database) validateWorkingSet(t types.Struct) error {
 		return fmt.Errorf("WorkingSet struct %s is malformed, IsWorkingSet() == false", t.String())
 	}
 
-	_, ok, err := t.MaybeGet(WorkingSetRefField)
+	_, ok, err := t.MaybeGet(WorkingRootRefField)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("WorkingSet is missing field %s", WorkingSetRefField)
+		return fmt.Errorf("WorkingSet is missing field %s", WorkingRootRefField)
 	}
 
 	return nil

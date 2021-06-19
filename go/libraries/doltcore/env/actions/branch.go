@@ -276,26 +276,20 @@ func updateRootsForBranch(
 	return workingRoot, stagedRoot, nil
 }
 
-func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
-	dbData := dEnv.DbData()
+func CheckoutBranchNoDocs(ctx context.Context, dbData env.DbData, brName string) error {
 	branchRef := ref.NewBranchRef(brName)
 
 	workingRoot, stagedRoot, err := updateRootsForBranch(ctx, dbData, branchRef, brName)
 	if err != nil {
 		return err
 	}
-
-	unstagedDocs, err := GetUnstagedDocs(ctx, dbData)
-	if err != nil {
-		return err
-	}
-
+	
 	err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, workingRoot)
+	err = dbData.Rsw.UpdateWorkingRoot(ctx, workingRoot)
 	if err != nil {
 		return err
 	}
@@ -306,13 +300,23 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	err = dbData.Rsw.SetStagedHash(ctx, stagedHash)
+	return dbData.Rsw.SetStagedHash(ctx, stagedHash)
+}
+
+func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
+	err := CheckoutBranchNoDocs(ctx, dEnv.DbData(), brName)
+	if err != nil {
+		return err
+	}
+
+	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv.DbData())
 	if err != nil {
 		return err
 	}
 
 	return SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 }
+
 
 var emptyHash = hash.Hash{}
 

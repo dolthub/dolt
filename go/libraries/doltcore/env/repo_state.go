@@ -31,7 +31,7 @@ type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
 	CWBHeadHash(ctx context.Context) (hash.Hash, error)
-	WorkingHash() hash.Hash
+	WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
 	StagedHash() hash.Hash
 	IsMergeActive() bool
 	GetMergeCommit() string
@@ -312,8 +312,18 @@ func MergeWouldStompChanges(ctx context.Context, workingRoot *doltdb.RootValue, 
 
 // GetGCKeepers queries |rsr| to find a list of values that need to be temporarily saved during GC.
 func GetGCKeepers(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) ([]hash.Hash, error) {
+	workingRoot, err := rsr.WorkingRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	workingHash, err := workingRoot.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
 	keepers := []hash.Hash{
-		rsr.WorkingHash(),
+		workingHash,
 		rsr.StagedHash(),
 	}
 
