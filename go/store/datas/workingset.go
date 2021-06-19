@@ -30,16 +30,15 @@ const (
 )
 
 const (
-	MergeStateName      = "MergeState"
-	MergeStateCommitField = "commit"
-	MergeStateWorkingPreMergeField = "working_pre_merge"
+	MergeStateName                 = "MergeState"
+	MergeStateCommitField          = "commit"
+	MergeStateWorkingPreMergeField = "workingPreMerge"
 )
 
 type WorkingSetMeta struct {
 	Meta types.Struct
 }
 
-var workingSetTemplate = types.MakeStructTemplate(WorkingSetName, []string{MergeStateField, StagedRootRefField, WorkingRootRefField})
 var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
 				mergeState?: Ref<Value>,
 				stagedRootRef?:  Ref<Value>,
@@ -52,9 +51,11 @@ var valueMergeStateType = nomdl.MustParseType(`Struct MergeState {
 				workingPreMerge:  Ref<Value>,
 }`)
 
-type MergeState struct {
-	Commit          string `json:"commit"`
-	PreMergeWorking string `json:"workingPreMerge"`
+type WorkingSetSpec struct {
+	Meta WorkingSetMeta
+	WorkingRoot types.Ref
+	StagedRoot *types.Ref
+	MergeState *types.Ref
 }
 
 // NewWorkingSet creates a new working set object.
@@ -68,7 +69,7 @@ type MergeState struct {
 //   meta: M,
 //   workingRootRef: R,
 //   stagedRootRef: R,
-//   mergeState: M,
+//   mergeState: R,
 // }
 // ```
 // where M is a struct type and R is a ref type.

@@ -521,12 +521,12 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 	return tryCommitErr
 }
 
-func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, ref types.Ref, meta WorkingSetMeta, prevHash hash.Hash) (Dataset, error) {
+func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
 	return db.doHeadUpdate(
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			workspace, err := NewWorkingSet(ctx, ref,nil, nil)
+			workspace, err := NewWorkingSet(ctx, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
 			if err != nil {
 				return err
 			}

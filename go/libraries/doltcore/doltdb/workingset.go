@@ -31,8 +31,17 @@ const (
 )
 
 type MergeState struct {
-	Commit          string `json:"commit"`
-	PreMergeWorking string `json:"working_pre_merge"`
+	valueSt         types.Struct
+	commit          *Commit
+	preMergeWorking *RootValue
+}
+
+func (m MergeState) Commit() *Commit {
+	return m.commit
+}
+
+func (m MergeState) PreMergeWorkingRoot() *RootValue {
+	return m.preMergeWorking
 }
 
 type WorkingSet struct {
@@ -42,6 +51,18 @@ type WorkingSet struct {
 	workingRoot *RootValue
 	stagedRoot  *RootValue
 	mergeState  *MergeState
+}
+
+func (t *WorkingSet) WorkingRoot() *RootValue {
+	return t.workingRoot
+}
+
+func (t *WorkingSet) StagedRoot() *RootValue {
+	return t.stagedRoot
+}
+
+func (t *WorkingSet) MergeState() *MergeState {
+	return t.mergeState
 }
 
 // NewWorkingSet creates a new WorkingSet object.
