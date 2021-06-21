@@ -390,7 +390,9 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, newRoot, h)
+	ws.SetWorkingRoot(newRoot)
+
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws, h)
 }
 
 type repoStateReader struct {
@@ -552,21 +554,33 @@ func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) 
 	return dEnv.DoltDB.ReadRootValue(ctx, dEnv.RepoState.StagedHash())
 }
 
-func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error) {
-	h, err := dEnv.DoltDB.WriteRootValue(ctx, newRoot)
+// UpdateStagedRoot updates the staged root for the current working branch. This can fail if multiple clients attempt
+// to update at the same time.
+func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	var h hash.Hash
+	var wsRef ref.WorkingSetRef
 
-	if err != nil {
-		return hash.Hash{}, doltdb.ErrNomsIO
+	ws, err := dEnv.WorkingSet(ctx)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// first time updating root
+		wsRef, err = ref.WorkingSetRefForHead(dEnv.RepoState.CWBHeadRef())
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	} else {
+		h, err = ws.HashOf()
+		if err != nil {
+			return err
+		}
+
+		wsRef = ws.Ref()
 	}
 
-	dEnv.RepoState.Staged = h.String()
-	err = dEnv.RepoState.Save(dEnv.FS)
+	ws.SetWorkingRoot(newRoot)
 
-	if err != nil {
-		return hash.Hash{}, ErrStateUpdate
-	}
-
-	return h, nil
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws, h)
 }
 
 // todo: move this out of env to actions

@@ -53,16 +53,24 @@ type WorkingSet struct {
 	mergeState  *MergeState
 }
 
-func (t *WorkingSet) WorkingRoot() *RootValue {
-	return t.workingRoot
+func (ws *WorkingSet) SetStagedRoot(stagedRoot *RootValue) {
+	ws.stagedRoot = stagedRoot
 }
 
-func (t *WorkingSet) StagedRoot() *RootValue {
-	return t.stagedRoot
+func (ws *WorkingSet) SetWorkingRoot(workingRoot *RootValue) {
+	ws.workingRoot = workingRoot
 }
 
-func (t *WorkingSet) MergeState() *MergeState {
-	return t.mergeState
+func (ws *WorkingSet) WorkingRoot() *RootValue {
+	return ws.workingRoot
+}
+
+func (ws *WorkingSet) StagedRoot() *RootValue {
+	return ws.stagedRoot
+}
+
+func (ws *WorkingSet) MergeState() *MergeState {
+	return ws.mergeState
 }
 
 // NewWorkingSet creates a new WorkingSet object.
@@ -119,6 +127,8 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 	}
 
+	// TODO: merge state
+
 	return &WorkingSet{
 		Name:        name,
 		format:      vrw.Format(),
@@ -129,24 +139,53 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 }
 
 // RootValue returns the root value stored by this workingset
-func (t *WorkingSet) RootValue() *RootValue {
-	return t.workingRoot
+func (ws *WorkingSet) RootValue() *RootValue {
+	return ws.workingRoot
 }
 
 // HashOf returns the hash of the workingset struct, which is not the same as the hash of the root value stored in the
 // working set. This value is used for optimistic locking when updating a working set for a head ref.
-func (t *WorkingSet) HashOf() (hash.Hash, error) {
-	return t.st.Hash(t.format)
-}
-
-// Struct returns the struct used to construct this WorkingSet.
-func (t *WorkingSet) Struct() types.Struct {
-	return t.st
+func (ws *WorkingSet) HashOf() (hash.Hash, error) {
+	return ws.st.Hash(ws.format)
 }
 
 // Ref returns a WorkingSetRef for this WorkingSet.
-func (t *WorkingSet) Ref() ref.WorkingSetRef {
-	return ref.NewWorkingSetRef(t.Name)
+func (ws *WorkingSet) Ref() ref.WorkingSetRef {
+	return ref.NewWorkingSetRef(ws.Name)
+}
+
+// writeValues write the values in this working set to the database and returns them
+func (ws *WorkingSet) writeValues(ctx context.Context, db datas.Database) (
+		workingRoot types.Ref,
+		stagedRoot *types.Ref,
+		mergeState *types.Ref,
+		err error,
+){
+	workingRoot, err = db.WriteValue(ctx, ws.workingRoot.valueSt)
+	if err != nil {
+		return types.Ref{}, nil, nil, err
+	}
+
+	if ws.stagedRoot != nil {
+		var stagedRootRef types.Ref
+		stagedRootRef, err = db.WriteValue(ctx, ws.stagedRoot.valueSt)
+		if err != nil {
+			return types.Ref{}, nil, nil, err
+		}
+		stagedRoot = &stagedRootRef
+	}
+
+	if ws.mergeState != nil {
+		// TODO: write nested merge state refs here?
+		var mergeStateRef types.Ref
+		mergeStateRef, err = db.WriteValue(ctx, ws.stagedRoot.valueSt)
+		if err != nil {
+			return types.Ref{}, nil, nil, err
+		}
+		mergeState = &mergeStateRef
+	}
+
+	return workingRoot, stagedRoot, mergeState, nil
 }
 
 // WorkingSetMeta contains all the metadata that is associated with a working set

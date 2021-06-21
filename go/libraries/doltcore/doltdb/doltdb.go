@@ -876,7 +876,7 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 
 // UpdateWorkingSet updates the working set with the ref given to the root value given
 // |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
-func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingRoot *RootValue, prevHash hash.Hash) error {
+func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, prevHash hash.Hash) error {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
 		return err
@@ -887,7 +887,7 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.Worki
 	// 	return err
 	// }
 
-	rootRef, err := ddb.db.WriteValue(ctx, workingRoot.valueSt)
+	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb.db)
 	if err != nil {
 		return err
 	}
@@ -905,7 +905,13 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.Worki
 	// h, err = wsRef.Hash(wsRef.Format())
 	// fmt.Sprintf("%v", h)
 
-	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{WorkingRoot: rootRef}, prevHash)
+	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
+		Meta:        datas.WorkingSetMeta{},
+		WorkingRoot: workingRootRef,
+		StagedRoot:  stagedRef,
+		MergeState:  mergeStateRef,
+	}, prevHash)
+
 	return err
 }
 
