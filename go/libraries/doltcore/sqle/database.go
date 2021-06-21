@@ -93,17 +93,12 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return nil, err
 	}
 
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	err = db.setHeadHash(ctx, wsRef)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewDoltTransaction(root, wsRef, db.DbData()), nil
+	return NewDoltTransaction(ws, wsRef, db.DbData()), nil
 }
 
 func (db Database) setHeadHash(ctx *sql.Context, ref ref.WorkingSetRef) error {

@@ -33,7 +33,7 @@ const (
 )
 
 type DoltTransaction struct {
-	startRoot  *doltdb.RootValue
+	startState *doltdb.WorkingSet
 	workingSet ref.WorkingSetRef
 	dbData     env.DbData
 	savepoints []savepoint
@@ -44,9 +44,9 @@ type savepoint struct {
 	root *doltdb.RootValue
 }
 
-func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, dbData env.DbData) *DoltTransaction {
+func NewDoltTransaction(startState *doltdb.WorkingSet, workingSet ref.WorkingSetRef, dbData env.DbData) *DoltTransaction {
 	return &DoltTransaction{
-		startRoot:  startRoot,
+		startState: startState,
 		workingSet: workingSet,
 		dbData:     dbData,
 	}
@@ -63,12 +63,13 @@ func (tx DoltTransaction) String() string {
 // |newRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
 // if working set == ancRoot, attempt a fast-forward merge
+// TODO: this needs to take the entire working set state, not just the new working root
 func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for i := 0; i < maxTxCommitRetries; i++ {
 		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSet)
 		if err == doltdb.ErrWorkingSetNotFound {
 			// initial commit
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash.Hash{})
+			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, tx.startState.WithWorkingRoot(newRoot), hash.Hash{})
 			if err == datas.ErrOptimisticLockFailed {
 				continue
 			}
@@ -85,9 +86,9 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			return nil, err
 		}
 
-		if rootsEqual(root, tx.startRoot) {
+		if rootsEqual(root, tx.startState.WorkingRoot()) {
 			// ff merge
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash)
+			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, tx.startState.WithWorkingRoot(newRoot), hash)
 			if err == datas.ErrOptimisticLockFailed {
 				continue
 			} else if err != nil {
@@ -97,7 +98,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			return tx.updateRepoStateFile(ctx, newRoot)
 		}
 
-		mergedRoot, stats, err := merge.MergeRoots(ctx, root, newRoot, tx.startRoot)
+		mergedRoot, stats, err := merge.MergeRoots(ctx, root, newRoot, tx.startState.WorkingRoot())
 		if err != nil {
 			return nil, err
 		}
@@ -109,7 +110,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			}
 		}
 
-		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, mergedRoot, hash)
+		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, tx.startState.WithWorkingRoot(mergedRoot), hash)
 		if err == datas.ErrOptimisticLockFailed {
 			continue
 		} else if err != nil {

@@ -390,9 +390,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	ws.SetWorkingRoot(newRoot)
-
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws, h)
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h)
 }
 
 type repoStateReader struct {
@@ -578,9 +576,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 		wsRef = ws.Ref()
 	}
 
-	ws.SetWorkingRoot(newRoot)
-
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws, h)
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h)
 }
 
 // todo: move this out of env to actions

@@ -53,12 +53,14 @@ type WorkingSet struct {
 	mergeState  *MergeState
 }
 
-func (ws *WorkingSet) SetStagedRoot(stagedRoot *RootValue) {
+func (ws WorkingSet) WithStagedRoot(stagedRoot *RootValue) *WorkingSet {
 	ws.stagedRoot = stagedRoot
+	return &ws
 }
 
-func (ws *WorkingSet) SetWorkingRoot(workingRoot *RootValue) {
+func (ws WorkingSet) WithWorkingRoot(workingRoot *RootValue) *WorkingSet {
 	ws.workingRoot = workingRoot
+	return &ws
 }
 
 func (ws *WorkingSet) WorkingRoot() *RootValue {

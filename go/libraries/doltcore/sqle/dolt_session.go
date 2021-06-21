@@ -329,7 +329,7 @@ func (sess *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	err := sess.SetRoot(ctx, dbName, dtx.startRoot)
+	err := sess.SetRoot(ctx, dbName, dtx.startState)
 	if err != nil {
 		return err
 	}
@@ -699,8 +699,6 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 		return err
 	}
 
-	workingHashInWsRef := hash.Hash{}
-
 	// TODO: this resolve isn't necessary in all cases and slows things down
 	cm, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
@@ -741,21 +739,11 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 		}
 		sess.workingSets[db.Name()] = workingSetRef
 
-		workingSet, err := ddb.ResolveWorkingSet(ctx, workingSetRef)
+		_, err = ddb.ResolveWorkingSet(ctx, workingSetRef)
 		if err == doltdb.ErrWorkingSetNotFound {
+			// TODO: read a working set from repo state file
 			// no working set ref established yet
 		} else if err != nil {
-			return err
-		} else {
-			workingHashInWsRef, err = workingSet.HashOf()
-			if err != nil {
-				return err
-			}
-		}
-
-		// TODO: there's a race here if more than one client connects at the same time. We need a retry
-		err = ddb.UpdateWorkingSet(ctx, workingSetRef, workingRoot, workingHashInWsRef)
-		if err != nil {
 			return err
 		}
 
