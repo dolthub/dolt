@@ -49,8 +49,7 @@ func ResetWorkingDocsToStagedDocs(
 		if err != nil {
 			return err
 		}
-		_, err = UpdateWorkingRoot(ctx, ddb, rsw, newWrkRoot)
-		return err
+		return UpdateWorkingRoot(ctx, rsw, newWrkRoot)
 	}
 
 	if stgDocsFound {
@@ -58,8 +57,7 @@ func ResetWorkingDocsToStagedDocs(
 		if err != nil {
 			return err
 		}
-		_, err = UpdateWorkingRoot(ctx, ddb, rsw, newWrkRoot)
-		return err
+		return UpdateWorkingRoot(ctx, rsw, newWrkRoot)
 	}
 	return nil
 }

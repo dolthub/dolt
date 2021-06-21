@@ -150,13 +150,11 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 	}
 
 	workingRoot, err = workingRoot.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
-
 	if err != nil {
 		return "", err
 	}
 
-	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, workingRoot)
-
+	err = env.UpdateWorkingRoot(ctx, rsw, workingRoot)
 	if err != nil {
 		return "", err
 	}

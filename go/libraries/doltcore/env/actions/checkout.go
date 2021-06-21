@@ -114,9 +114,7 @@ func checkoutTables(ctx context.Context, dbData env.DbData, roots map[doltdb.Roo
 	}
 
 	// update the working root with currRoot
-	_, err := env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, currRoot)
-
-	return err
+	return env.UpdateWorkingRoot(ctx, dbData.Rsw, currRoot)
 }
 
 func checkoutDocs(ctx context.Context, dbData env.DbData, roots map[doltdb.RootType]*doltdb.RootValue, docs doltdocs.Docs) error {
@@ -134,7 +132,7 @@ func checkoutDocs(ctx context.Context, dbData env.DbData, roots map[doltdb.RootT
 		docs = updatedDocs
 	}
 
-	_, err := env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, currRoot)
+	err := env.UpdateWorkingRoot(ctx, dbData.Rsw, currRoot)
 	if err != nil {
 		return err
 	}

@@ -83,8 +83,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, wo
 		}
 	}
 
-	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, newWkRoot)
-
+	err = env.UpdateWorkingRoot(ctx, rsw, newWkRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +267,7 @@ func resetDocs(ctx context.Context, dbData env.DbData, workingRoot, headRoot, st
 		return nil, err
 	}
 
-	_, err = env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
+	err = env.UpdateWorkingRoot(ctx, dbData.Rsw, workingRoot)
 	if err != nil {
 		return nil, err
 	}

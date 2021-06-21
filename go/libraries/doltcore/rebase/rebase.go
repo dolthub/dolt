@@ -184,17 +184,13 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		return err
 	}
 
+	// TODO: this should be a single update to repo state, not two
 	_, err = env.UpdateStagedRoot(ctx, ddb, rsw, r)
 	if err != nil {
 		return err
 	}
 
-	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, r)
-	if err != nil {
-		return err
-	}
-
-	return err
+	return env.UpdateWorkingRoot(ctx, rsw, r)
 }
 
 func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf NeedsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {

@@ -203,20 +203,15 @@ func (rs *RepoState) GetMergeCommit() string {
 }
 
 // Updates the working root.
-func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
+func UpdateWorkingRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
 	//logrus.Infof("Updating working root with value %s", newRoot.DebugString(ctx, true))
 
-	h, err := ddb.WriteRootValue(ctx, newRoot)
+	err := rsw.UpdateWorkingRoot(ctx, newRoot)
 	if err != nil {
-		return hash.Hash{}, doltdb.ErrNomsIO
+		return ErrStateUpdate
 	}
 
-	err = rsw.UpdateWorkingRoot(ctx, newRoot)
-	if err != nil {
-		return hash.Hash{}, ErrStateUpdate
-	}
-
-	return h, nil
+	return nil
 }
 
 // Returns the head root.
@@ -265,6 +260,7 @@ func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRo
 	return nil
 }
 
+// TODO: this needs to be a function in the merge package, not repo state
 func MergeWouldStompChanges(ctx context.Context, workingRoot *doltdb.RootValue, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
 	headRoot, err := HeadRoot(ctx, dbData.Ddb, dbData.Rsr)
 

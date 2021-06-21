@@ -325,7 +325,8 @@ func mergeRootToWorking(
 		}
 	}
 
-	workingHash, err := env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
+	// TODO: this should only update the session working root
+	err = env.UpdateWorkingRoot(ctx, dbData.Rsw, workingRoot)
 	if err != nil {
 		return err
 	}
@@ -341,7 +342,9 @@ func mergeRootToWorking(
 		return err
 	}
 
-	return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String())
+	// TODO: set the session root directly
+	// return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String())
+	return nil
 }
 
 func checkForConflicts(tblToStats map[string]*merge.MergeStats) bool {

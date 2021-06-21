@@ -1588,7 +1588,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	root, err := cm.GetRootValue()
 	require.NoError(t, err)
 
-	_, err = dEnv.UpdateStagedRoot(ctx, root)
+	err = dEnv.UpdateStagedRoot(ctx, root)
 	require.NoError(t, err)
 
 	err = dEnv.UpdateWorkingRoot(ctx, root)

@@ -45,7 +45,10 @@ func (a StageAll) CommandString() string { return "stage_all" }
 
 // Exec executes a StageAll command on a test dolt environment.
 func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	return actions.StageAllTables(context.Background(), dEnv.DbData())
+	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	require.NoError(t, err)
+
+	return actions.StageAllTables(context.Background(), workingRoot, dEnv.DbData())
 }
 
 type CommitStaged struct {
@@ -57,6 +60,9 @@ func (c CommitStaged) CommandString() string { return fmt.Sprintf("commit_staged
 
 // Exec executes a CommitStaged command on a test dolt environment.
 func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
+	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	require.NoError(t, err)
+
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
 
 	if err != nil {
@@ -65,7 +71,7 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(context.Background(), dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), workingRoot, dbData, actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -86,7 +92,10 @@ func (c CommitAll) CommandString() string { return fmt.Sprintf("commit: %s", c.M
 
 // Exec executes a CommitAll command on a test dolt environment.
 func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	err := actions.StageAllTables(context.Background(), dEnv.DbData())
+	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	require.NoError(t, err)
+
+	err = actions.StageAllTables(context.Background(), workingRoot, dEnv.DbData())
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
@@ -97,7 +106,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(context.Background(), dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), workingRoot, dbData, actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -126,7 +135,7 @@ func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	_, err = dEnv.UpdateStagedRoot(context.Background(), headRoot)
+	err = dEnv.UpdateStagedRoot(context.Background(), headRoot)
 	if err != nil {
 		return err
 	}
@@ -225,7 +234,10 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	assert.NoError(t, err)
 	assert.NotEqual(t, h1, h2)
 
-	tblNames, _, err := env.MergeWouldStompChanges(context.Background(), cm2, dEnv.DbData())
+	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	require.NoError(t, err)
+
+	tblNames, _, err := env.MergeWouldStompChanges(context.Background(), workingRoot, cm2, dEnv.DbData())
 	if err != nil {
 		return err
 	}
@@ -282,7 +294,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			return err
 		}
 
-		_, err = dEnv.UpdateStagedRoot(context.Background(), mergedRoot)
+		err = dEnv.UpdateStagedRoot(context.Background(), mergedRoot)
 		if err != nil {
 			return err
 		}
