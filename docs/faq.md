@@ -83,7 +83,7 @@ SQL](https://www.dolthub.com/blog/2021-03-15-programmatic-merge-and-resolve/)
 
 ## Does Dolt support transactions?
 
-Yes, but it's an alpha release that may have some rough edge, so it's
+Yes, but it's an alpha release that may have some rough edges, so it's
 not enabled by default. To turn it on, set an environment variable:
 
 `export DOLT_ENABLE_TRANSACTIONS=true`
