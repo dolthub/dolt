@@ -329,7 +329,7 @@ func (sess *DoltSession) RollbackTransaction(ctx *sql.Context, dbName string, tx
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	err := sess.SetRoot(ctx, dbName, dtx.startState)
+	err := sess.SetRoot(ctx, dbName, dtx.startState.WorkingRoot())
 	if err != nil {
 		return err
 	}

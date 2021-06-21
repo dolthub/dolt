@@ -379,6 +379,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		if err != nil {
 			return err
 		}
+		ws = doltdb.EmptyWorkingSet(wsRef)
 	} else if err != nil {
 		return err
 	} else {
@@ -565,6 +566,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 		if err != nil {
 			return err
 		}
+		ws = doltdb.EmptyWorkingSet(wsRef)
 	} else if err != nil {
 		return err
 	} else {

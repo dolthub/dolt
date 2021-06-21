@@ -53,6 +53,14 @@ type WorkingSet struct {
 	mergeState  *MergeState
 }
 
+func EmptyWorkingSet(wsRef ref.WorkingSetRef) *WorkingSet {
+	return &WorkingSet{
+		Name: wsRef.GetPath(),
+		format:      types.Format_Default,
+		st:          types.Struct{},
+	}
+}
+
 func (ws WorkingSet) WithStagedRoot(stagedRoot *RootValue) *WorkingSet {
 	ws.stagedRoot = stagedRoot
 	return &ws
