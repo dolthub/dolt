@@ -165,20 +165,21 @@ func (ws *WorkingSet) Ref() ref.WorkingSetRef {
 }
 
 // writeValues write the values in this working set to the database and returns them
-func (ws *WorkingSet) writeValues(ctx context.Context, db datas.Database) (
+func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 		workingRoot types.Ref,
 		stagedRoot *types.Ref,
 		mergeState *types.Ref,
 		err error,
 ){
-	workingRoot, err = db.WriteValue(ctx, ws.workingRoot.valueSt)
+
+	workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
 	if err != nil {
 		return types.Ref{}, nil, nil, err
 	}
 
 	if ws.stagedRoot != nil {
 		var stagedRootRef types.Ref
-		stagedRootRef, err = db.WriteValue(ctx, ws.stagedRoot.valueSt)
+		stagedRootRef, err = db.writeRootValue(ctx, ws.stagedRoot)
 		if err != nil {
 			return types.Ref{}, nil, nil, err
 		}
@@ -188,7 +189,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db datas.Database) (
 	if ws.mergeState != nil {
 		// TODO: write nested merge state refs here?
 		var mergeStateRef types.Ref
-		mergeStateRef, err = db.WriteValue(ctx, ws.stagedRoot.valueSt)
+		mergeStateRef, err = db.writeRootValue(ctx, ws.stagedRoot)
 		if err != nil {
 			return types.Ref{}, nil, nil, err
 		}

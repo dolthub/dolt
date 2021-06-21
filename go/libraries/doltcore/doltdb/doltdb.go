@@ -409,28 +409,34 @@ func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.Work
 
 // WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
 // and can be committed by hash at a later time.  Returns the hash of the value written.
+// This method is the primary place in doltcore that handles setting the FeatureVersion of root values to the current
+// value, so all writes of RootValues should happen here.
 func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash, error) {
-	var err error
-	rv.valueSt, err = rv.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	valRef, err := ddb.db.WriteValue(ctx, rv.valueSt)
-
+	valRef, err := ddb.writeRootValue(ctx, rv)
 	if err != nil {
 		return hash.Hash{}, err
 	}
 
 	err = ddb.db.Flush(ctx)
-
 	if err != nil {
 		return hash.Hash{}, err
 	}
 
-	valHash := valRef.TargetHash()
+	return valRef.TargetHash(), nil
+}
 
-	return valHash, err
+// writeRootValue writes the root value given to the DB and returns a ref to it. Unlike WriteRootValue, this method
+// does not flush the DB to disk afterward.
+// This method is the primary place in doltcore that handles setting the FeatureVersion of root values to the current
+// value, so all writes of RootValues should happen here or via WriteRootValue.
+func (ddb *DoltDB) writeRootValue(ctx context.Context, rv *RootValue) (types.Ref, error) {
+	var err error
+	rv.valueSt, err = rv.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	return ddb.db.WriteValue(ctx, rv.valueSt)
 }
 
 // ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
@@ -888,7 +894,7 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.Worki
 	// 	return err
 	// }
 
-	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb.db)
+	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb)
 	if err != nil {
 		return err
 	}

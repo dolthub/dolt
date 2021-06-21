@@ -25,6 +25,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -390,6 +391,8 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 
 		wsRef = ws.Ref()
 	}
+
+	logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), false))
 
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h)
 }
