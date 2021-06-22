@@ -25,7 +25,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -392,9 +391,21 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		wsRef = ws.Ref()
 	}
 
-	logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), false))
+	// TODO: add actual trace logging here
+	//logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), true))
 
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h)
+}
+
+// UpdateWorkingSet updates the working set for the current working branch to the value given.
+// This method can fail if another client updates the working set at the same time.
+func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
+	h, err := ws.HashOf()
+	if err != nil {
+		return err
+	}
+
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h)
 }
 
 type repoStateReader struct {

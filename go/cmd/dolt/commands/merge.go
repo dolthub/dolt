@@ -284,32 +284,26 @@ func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[
 	return root, nil
 }
 
-func executeFFMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func executeFFMerge(
+		ctx context.Context,
+		squash bool,
+		dEnv *env.DoltEnv,
+		mergeCommit *doltdb.Commit,
+		workingDiffs map[string]hash.Hash,
+) errhand.VerboseError {
 	cli.Println("Fast-forward")
 
-	rv, err := cm2.GetRootValue()
-
+	stagedRoot, err := mergeCommit.GetRootValue()
 	if err != nil {
 		return errhand.BuildDError("error: failed to get root value").AddCause(err).Build()
 	}
 
-	stagedHash, err := dEnv.DoltDB.WriteRootValue(ctx, rv)
-	if err != nil {
-		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
-	}
-
-	workingHash := stagedHash
+	workingRoot := stagedRoot
 	if len(workingDiffs) > 0 {
-		rv, err = applyChanges(ctx, rv, workingDiffs)
+		workingRoot, err = applyChanges(ctx, stagedRoot, workingDiffs)
 
 		if err != nil {
 			return errhand.BuildDError("Failed to re-apply working changes.").AddCause(err).Build()
-		}
-
-		workingHash, err = dEnv.DoltDB.WriteRootValue(ctx, rv)
-
-		if err != nil {
-			return errhand.BuildDError("Failed to write database").AddCause(err).Build()
 		}
 	}
 
@@ -319,17 +313,19 @@ func executeFFMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm2 *do
 	}
 
 	if !squash {
-		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.CWBHeadRef(), cm2)
+		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.CWBHeadRef(), mergeCommit)
 
 		if err != nil {
 			return errhand.BuildDError("Failed to write database").AddCause(err).Build()
 		}
 	}
 
-	dEnv.RepoState.Working = workingHash.String()
-	dEnv.RepoState.Staged = stagedHash.String()
+	workingSet, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
-	err = dEnv.RepoState.Save(dEnv.FS)
+	err = dEnv.UpdateWorkingSet(ctx, workingSet.WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot))
 	if err != nil {
 		return errhand.BuildDError("unable to execute repo state update.").
 			AddDetails(`As a result your .dolt/repo_state.json file may have invalid values for "staged" and "working".

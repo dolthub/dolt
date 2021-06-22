@@ -263,41 +263,36 @@ func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRo
 // TODO: this needs to be a function in the merge package, not repo state
 func MergeWouldStompChanges(ctx context.Context, workingRoot *doltdb.RootValue, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
 	headRoot, err := HeadRoot(ctx, dbData.Ddb, dbData.Rsr)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	mergeRoot, err := mergeCommit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	headTableHashes, err := mapTableHashes(ctx, headRoot)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	workingTableHashes, err := mapTableHashes(ctx, workingRoot)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	mergeTableHashes, err := mapTableHashes(ctx, mergeRoot)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
-	mergeWorkingDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
+	mergedHeadDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
 
 	stompedTables := make([]string, 0, len(headWorkingDiffs))
 	for tName, _ := range headWorkingDiffs {
-		if _, ok := mergeWorkingDiffs[tName]; ok {
+		if _, ok := mergedHeadDiffs[tName]; ok {
 			// even if the working changes match the merge changes, don't allow (matches git behavior).
 			stompedTables = append(stompedTables, tName)
 		}
