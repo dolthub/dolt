@@ -109,19 +109,13 @@ func stageTables(ctx context.Context, db *doltdb.DoltDB, rsw env.RepoStateWriter
 		return err
 	}
 
-	if err = env.UpdateWorkingRoot(ctx, rsw, working); err == nil {
-		if sh, err := env.UpdateStagedRoot(ctx, db, rsw, staged); err == nil {
-			err = rsw.SetStagedHash(ctx, sh)
-
-			if err != nil {
-				return env.ErrStateUpdate
-			}
-
-			return nil
-		}
+	// TODO: combine to single operation
+	err = env.UpdateWorkingRoot(ctx, rsw, working)
+	if err != nil {
+		return err
 	}
 
-	return doltdb.ErrNomsIO
+	return env.UpdateStagedRoot(ctx, db, rsw, staged)
 }
 
 func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {

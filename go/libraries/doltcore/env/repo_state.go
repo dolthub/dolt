@@ -40,7 +40,7 @@ type RepoStateReader interface {
 
 type RepoStateWriter interface {
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
-	SetStagedHash(context.Context, hash.Hash) error
+	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	AbortMerge() error
@@ -74,12 +74,14 @@ type MergeState struct {
 
 type RepoState struct {
 	Head     ref.MarshalableRef      `json:"head"`
-	// TODO: kill staged, working, merge
-	Staged   string                  `json:"staged"`
-	Working  string                  `json:"working"`
 	Merge    *MergeState             `json:"merge"`
 	Remotes  map[string]Remote       `json:"remotes"`
 	Branches map[string]BranchConfig `json:"branches"`
+	// staged and working are legacy fields left over from when Dolt repos stored this info in the repo state file, not
+	// in the DB directly. They're still here so that we can migrate existing repositories forward to the new storage
+	// format, but they should be used only for this purpose and are no longer written.
+	staged   string                  `json:"staged"`
+	working  string                  `json:"working"`
 }
 
 func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
@@ -103,13 +105,12 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
-	rs := &RepoState{ref.MarshalableRef{
+	rs := &RepoState{Head: ref.MarshalableRef{
 		Ref: ref.NewBranchRef("master")},
-		hashStr,
-		hashStr,
-		nil,
-		map[string]Remote{r.Name: r},
-		make(map[string]BranchConfig),
+		staged:   hashStr,
+		working:  hashStr,
+		Remotes:  map[string]Remote{r.Name: r},
+		Branches: make(map[string]BranchConfig),
 	}
 
 	err := rs.Save(fs)
@@ -122,7 +123,6 @@ func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 }
 
 func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*RepoState, error) {
-	hashStr := rootHash.String()
 	headRef, err := ref.Parse(br)
 
 	if err != nil {
@@ -130,12 +130,9 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 	}
 
 	rs := &RepoState{
-		ref.MarshalableRef{Ref: headRef},
-		hashStr,
-		hashStr,
-		nil,
-		make(map[string]Remote),
-		make(map[string]BranchConfig),
+		Head:     ref.MarshalableRef{Ref: headRef},
+		Remotes:  make(map[string]Remote),
+		Branches: make(map[string]BranchConfig),
 	}
 
 	err = rs.Save(fs)
@@ -169,12 +166,12 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 }
 
 func (rs *RepoState) StartMerge(commit string, fs filesys.Filesys) error {
-	rs.Merge = &MergeState{commit, rs.Working}
+	rs.Merge = &MergeState{commit, rs.working}
 	return rs.Save(fs)
 }
 
 func (rs *RepoState) AbortMerge(fs filesys.Filesys) error {
-	rs.Working = rs.Merge.PreMergeWorking
+	rs.working = rs.Merge.PreMergeWorking
 	return rs.ClearMerge(fs)
 }
 
@@ -185,14 +182,6 @@ func (rs *RepoState) ClearMerge(fs filesys.Filesys) error {
 
 func (rs *RepoState) AddRemote(r Remote) {
 	rs.Remotes[r.Name] = r
-}
-
-func (rs *RepoState) WorkingHash() hash.Hash {
-	return hash.Parse(rs.Working)
-}
-
-func (rs *RepoState) StagedHash() hash.Hash {
-	return hash.Parse(rs.Staged)
 }
 
 func (rs *RepoState) IsMergeActive() bool {
@@ -232,24 +221,17 @@ func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*
 }
 
 // Updates the staged root.
-func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
-	h, err := ddb.WriteRootValue(ctx, newRoot)
-
+func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
+	err := rsw.UpdateStagedRoot(ctx, newRoot)
 	if err != nil {
-		return hash.Hash{}, doltdb.ErrNomsIO
+		return ErrStateUpdate
 	}
 
-	err = rsw.SetStagedHash(ctx, h)
-
-	if err != nil {
-		return hash.Hash{}, ErrStateUpdate
-	}
-
-	return h, nil
+	return nil
 }
 
 func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	_, err := UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
+	err := UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:

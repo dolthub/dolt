@@ -143,8 +143,7 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 		}
 	}
 
-	h, err := env.UpdateStagedRoot(ctx, ddb, rsw, srt)
-
+	err = env.UpdateStagedRoot(ctx, ddb, rsw, srt)
 	if err != nil {
 		return "", err
 	}
@@ -160,6 +159,11 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 	}
 
 	meta, err := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	if err != nil {
+		return "", err
+	}
+
+	h, err := srt.HashOf()
 	if err != nil {
 		return "", err
 	}

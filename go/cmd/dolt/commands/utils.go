@@ -59,7 +59,7 @@ func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) err
 }
 
 func UpdateStagedWithVErr(ddb *doltdb.DoltDB, rsw env.RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	_, err := env.UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
+	err := env.UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:

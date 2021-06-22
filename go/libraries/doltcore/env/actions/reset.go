@@ -83,13 +83,13 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, wo
 		}
 	}
 
+	// TODO: combine these to a single operation
 	err = env.UpdateWorkingRoot(ctx, rsw, newWkRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = env.UpdateStagedRoot(ctx, ddb, rsw, headRoot)
-
+	err = env.UpdateStagedRoot(ctx, ddb, rsw, headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) err
 	}
 
 	// Changed the stage to old the root. Leave the working as is.
-	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, foundRoot)
+	err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, foundRoot)
 	if err != nil {
 		return err
 	}

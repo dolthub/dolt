@@ -196,7 +196,6 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbName string, dbData env.DbD
 	}
 
 	stagedHash, err := dbData.Ddb.WriteRootValue(ctx, rv)
-
 	if err != nil {
 		return err
 	}
@@ -209,12 +208,13 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbName string, dbData env.DbD
 		}
 	}
 
+	// TODO: this should be a single update, not two
 	err = dbData.Rsw.UpdateWorkingRoot(ctx, rv)
 	if err != nil {
 		return err
 	}
 
-	err = dbData.Rsw.SetStagedHash(ctx, stagedHash)
+	err = dbData.Rsw.UpdateStagedRoot(ctx, rv)
 	if err != nil {
 		return err
 	}
@@ -337,7 +337,7 @@ func mergeRootToWorking(
 		return doltdb.ErrUnresolvedConflicts
 	}
 
-	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
+	err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
 	if err != nil {
 		return err
 	}

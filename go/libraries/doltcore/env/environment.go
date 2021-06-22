@@ -435,12 +435,8 @@ func (r *repoStateReader) CWBHeadHash(ctx context.Context) (hash.Hash, error) {
 	return cm.HashOf()
 }
 
-func (r *repoStateReader) WorkingHash() hash.Hash {
-	return r.dEnv.RepoState.WorkingHash()
-}
-
 func (r *repoStateReader) StagedHash() hash.Hash {
-	return hash.Parse(r.dEnv.RepoState.Staged)
+	return hash.Parse(r.dEnv.RepoState.staged)
 }
 
 func (r *repoStateReader) IsMergeActive() bool {
@@ -464,7 +460,7 @@ type repoStateWriter struct {
 }
 
 func (r *repoStateWriter) SetStagedHash(ctx context.Context, h hash.Hash) error {
-	r.RepoState.Staged = h.String()
+	r.RepoState.staged = h.String()
 	err := r.RepoState.Save(r.FS)
 
 	if err != nil {
@@ -475,7 +471,7 @@ func (r *repoStateWriter) SetStagedHash(ctx context.Context, h hash.Hash) error 
 }
 
 func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error {
-	r.RepoState.Working = h.String()
+	r.RepoState.working = h.String()
 	err := r.RepoState.Save(r.FS)
 
 	if err != nil {
@@ -564,7 +560,12 @@ func (dEnv *DoltEnv) DbData() DbData {
 }
 
 func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	return dEnv.DoltDB.ReadRootValue(ctx, dEnv.RepoState.StagedHash())
+		workingSet, err := dEnv.WorkingSet(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return workingSet.StagedRoot(), nil
 }
 
 // UpdateStagedRoot updates the staged root for the current working branch. This can fail if multiple clients attempt
