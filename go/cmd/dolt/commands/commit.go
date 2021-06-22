@@ -220,7 +220,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
 	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
 
-	currBranch := dEnv.RepoState.CWBHeadRef()
+	currBranch := dEnv.RepoStateReader().CWBHeadRef()
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
 		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"
 

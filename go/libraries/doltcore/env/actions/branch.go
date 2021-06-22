@@ -39,7 +39,7 @@ func RenameBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch s
 		return err
 	}
 
-	if ref.Equals(dEnv.RepoState.CWBHeadRef(), oldRef) {
+	if ref.Equals(dEnv.RepoStateReader().CWBHeadRef(), oldRef) {
 		err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: newRef})
 		if err != nil {
 			return err
@@ -102,7 +102,7 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, opts De
 		}
 	} else {
 		dref = ref.NewBranchRef(brName)
-		if ref.Equals(dEnv.RepoState.CWBHeadRef(), dref) {
+		if ref.Equals(dEnv.RepoStateReader().CWBHeadRef(), dref) {
 			return ErrCOBranchDelete
 		}
 	}
@@ -433,7 +433,7 @@ func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb
 	cs, err := doltdb.NewCommitSpec(str)
 
 	if err == nil {
-		cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 
 		switch err {
 		case nil:

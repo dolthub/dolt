@@ -78,7 +78,7 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, 
 		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoStateReader().CWBHeadRef())
 
 	if err != nil {
 		if err == doltdb.ErrInvalidAncestorSpec {

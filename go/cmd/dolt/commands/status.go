@@ -331,7 +331,7 @@ func getAddedNotStaged(notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocD
 }
 
 func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict []string, workingDocsInConflict *diff.DocDiffs, stagedDocs, notStagedDocs *diff.DocDiffs) {
-	cli.Printf(branchHeader, dEnv.RepoState.CWBHeadRef().GetPath())
+	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
 
 	if dEnv.RepoState.Merge != nil {
 		if len(workingTblsInConflict) > 0 {

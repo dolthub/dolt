@@ -195,7 +195,7 @@ func (b Branch) CommandString() string { return fmt.Sprintf("branch: %s", b.Bran
 
 // Exec executes a Branch command on a test dolt environment.
 func (b Branch) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
-	cwb := dEnv.RepoState.Head.Ref.String()
+	cwb := dEnv.RepoStateReader().CWBHeadRef().String()
 	return actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(), b.BranchName, cwb, false)
 }
 
@@ -250,7 +250,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			return err
 		}
 
-		err = dEnv.DoltDB.FastForward(context.Background(), dEnv.RepoState.CWBHeadRef(), cm2)
+		err = dEnv.DoltDB.FastForward(context.Background(), dEnv.RepoStateReader().CWBHeadRef(), cm2)
 		if err != nil {
 			return err
 		}
@@ -305,7 +305,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 func resolveCommit(t *testing.T, cSpecStr string, dEnv *env.DoltEnv) *doltdb.Commit {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	require.NoError(t, err)
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoStateReader().CWBHeadRef())
 	require.NoError(t, err)
 	return cm
 }

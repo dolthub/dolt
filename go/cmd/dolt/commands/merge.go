@@ -313,7 +313,7 @@ func executeFFMerge(
 	}
 
 	if !squash {
-		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.CWBHeadRef(), mergeCommit)
+		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoStateReader().CWBHeadRef(), mergeCommit)
 
 		if err != nil {
 			return errhand.BuildDError("Failed to write database").AddCause(err).Build()
