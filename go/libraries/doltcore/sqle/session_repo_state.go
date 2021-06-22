@@ -30,6 +30,10 @@ type SessionRepoStateReader struct {
 	dbName string
 }
 
+func (s SessionRepoStateReader) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
+	panic("staged root not in session yet")
+}
+
 func (s SessionRepoStateReader) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	return s.session.roots[s.dbName].root, nil
 }

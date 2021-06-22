@@ -38,7 +38,7 @@ type RepoStateReader interface {
 	GetPreMergeWorking() string
 }
 
-type RepoStateWriter interface {error
+type RepoStateWriter interface {
 	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
@@ -121,7 +121,7 @@ func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	return rs, nil
 }
 
-func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*RepoState, error) {
+func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
 	headRef, err := ref.Parse(br)
 
 	if err != nil {
@@ -215,11 +215,13 @@ func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*do
 }
 
 // Returns the staged root.
+// TODO: remove this
 func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
 	return rsr.StagedRoot(ctx)
 }
 
 // Updates the staged root.
+// TODO: remove this
 func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
 	err := rsw.UpdateStagedRoot(ctx, newRoot)
 	if err != nil {

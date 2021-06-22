@@ -322,18 +322,18 @@ func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
 		return err
 	}
 
-	rootHash, err := root.HashOf()
-	if err != nil {
-		return err
-	}
-
-	// TODO: stop reading repo state
-	dEnv.RepoState, err = CreateRepoState(dEnv.FS, doltdb.MasterBranch, rootHash)
+	dEnv.RepoState, err = CreateRepoState(dEnv.FS, doltdb.MasterBranch)
 	if err != nil {
 		return ErrStateUpdate
 	}
 
+	// TODO: combine into one update
 	err = dEnv.UpdateWorkingRoot(ctx, root)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateStagedRoot(ctx, root)
 	if err != nil {
 		return err
 	}
@@ -597,7 +597,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h)
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h)
 }
 
 // todo: move this out of env to actions

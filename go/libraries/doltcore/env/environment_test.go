@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -51,9 +50,8 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 		initialDirs = append(initialDirs, doltDir)
 		initialDirs = append(initialDirs, doltDataDir)
 
-		hashStr := hash.Hash{}.String()
 		masterRef := ref.NewBranchRef("master")
-		repoState := &RepoState{ref.MarshalableRef{Ref: masterRef}, hashStr, hashStr, nil, nil, nil}
+		repoState := &RepoState{Head: ref.MarshalableRef{Ref: masterRef}}
 		repoStateData, err := json.Marshal(repoState)
 
 		if err != nil {
