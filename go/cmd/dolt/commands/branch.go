@@ -220,7 +220,7 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.MoveBranch(ctx, dEnv, src, apr.Arg(1), force)
+	err := actions.RenameBranch(ctx, dEnv, src, apr.Arg(1), force)
 
 	var verr errhand.VerboseError
 	if err != nil {

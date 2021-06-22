@@ -74,6 +74,7 @@ type MergeState struct {
 
 type RepoState struct {
 	Head     ref.MarshalableRef      `json:"head"`
+	// TODO: kill staged, working, merge
 	Staged   string                  `json:"staged"`
 	Working  string                  `json:"working"`
 	Merge    *MergeState             `json:"merge"`

@@ -250,21 +250,21 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			return err
 		}
 
-		rv, err := cm2.GetRootValue()
-		assert.NoError(t, err)
-
-		h, err := dEnv.DoltDB.WriteRootValue(context.Background(), rv)
-		assert.NoError(t, err)
-
 		err = dEnv.DoltDB.FastForward(context.Background(), dEnv.RepoState.CWBHeadRef(), cm2)
 		if err != nil {
 			return err
 		}
 
-		dEnv.RepoState.Working = h.String()
-		dEnv.RepoState.Staged = h.String()
-		err = dEnv.RepoState.Save(dEnv.FS)
+		workingSet, err := dEnv.WorkingSet(context.Background())
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+
+		rv, err := cm2.GetRootValue()
 		assert.NoError(t, err)
+
+		err = dEnv.UpdateWorkingSet(context.Background(), workingSet.WithWorkingRoot(rv))
+		require.NoError(t, err)
 
 		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
 		assert.NoError(t, err)

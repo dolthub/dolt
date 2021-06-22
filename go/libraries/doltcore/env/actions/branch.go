@@ -30,20 +30,17 @@ var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
 
-func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
+func RenameBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
 	err := CopyBranch(ctx, dEnv, oldBranch, newBranch, force)
-
 	if err != nil {
 		return err
 	}
 
 	if ref.Equals(dEnv.RepoState.CWBHeadRef(), oldRef) {
-		dEnv.RepoState.Head = ref.MarshalableRef{Ref: newRef}
-		err = dEnv.RepoState.Save(dEnv.FS)
-
+		err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: newRef})
 		if err != nil {
 			return err
 		}
