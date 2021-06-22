@@ -412,6 +412,10 @@ type repoStateReader struct {
 	dEnv *DoltEnv
 }
 
+func (r *repoStateReader) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
+	return r.dEnv.StagedRoot(ctx)
+}
+
 func (r *repoStateReader) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	return r.dEnv.WorkingRoot(ctx)
 }

@@ -151,25 +151,13 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
 	// TODO: fix me
-	// return rsr.WorkingHash() != rsr.StagedHash()
 	return false
 }
 
 // TODO: We should not be dealing with root objects here but commit specs.
 func hasStagedSetChanges(ctx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
-	root, err := env.HeadRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return false, err
-	}
-
-	headHash, err := root.HashOf()
-
-	if err != nil {
-		return false, err
-	}
-
-	return rsr.StagedHash() != headHash, nil
+	// TODO: fix me
+	return false, nil
 }
 
 func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {

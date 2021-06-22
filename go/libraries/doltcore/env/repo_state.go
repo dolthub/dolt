@@ -32,14 +32,13 @@ type RepoStateReader interface {
 	CWBHeadSpec() *doltdb.CommitSpec
 	CWBHeadHash(ctx context.Context) (hash.Hash, error)
 	WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
-	StagedHash() hash.Hash
+	StagedRoot(ctx context.Context) (*doltdb.RootValue, error)
 	IsMergeActive() bool
 	GetMergeCommit() string
 	GetPreMergeWorking() string
 }
 
-type RepoStateWriter interface {
-	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
+type RepoStateWriter interface {error
 	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
@@ -217,7 +216,7 @@ func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*do
 
 // Returns the staged root.
 func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
-	return ddb.ReadRootValue(ctx, rsr.StagedHash())
+	return rsr.StagedRoot(ctx)
 }
 
 // Updates the staged root.
@@ -285,6 +284,7 @@ func MergeWouldStompChanges(ctx context.Context, workingRoot *doltdb.RootValue, 
 }
 
 // GetGCKeepers queries |rsr| to find a list of values that need to be temporarily saved during GC.
+// TODO: move this out of repo_state.go
 func GetGCKeepers(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) ([]hash.Hash, error) {
 	workingRoot, err := rsr.WorkingRoot(ctx)
 	if err != nil {
@@ -296,9 +296,19 @@ func GetGCKeepers(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) 
 		return nil, err
 	}
 
+	stagedRoot, err := rsr.StagedRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	stagedHash, err := stagedRoot.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
 	keepers := []hash.Hash{
 		workingHash,
-		rsr.StagedHash(),
+		stagedHash,
 	}
 
 	if rsr.IsMergeActive() {

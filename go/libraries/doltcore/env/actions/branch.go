@@ -286,18 +286,13 @@ func CheckoutBranchNoDocs(ctx context.Context, dbData env.DbData, brName string)
 		return err
 	}
 
+	// TODO: combine into single update
 	err = dbData.Rsw.UpdateWorkingRoot(ctx, workingRoot)
 	if err != nil {
 		return err
 	}
 
-	// TODO: move stage root into working set too
-	stagedHash, err := stagedRoot.HashOf()
-	if err != nil {
-		return err
-	}
-
-	return dbData.Rsw.SetStagedHash(ctx, stagedHash)
+	return dbData.Rsw.UpdateStagedRoot(ctx, stagedRoot)
 }
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
