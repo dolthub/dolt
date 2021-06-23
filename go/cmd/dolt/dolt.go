@@ -16,14 +16,15 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/fatih/color"
 	"github.com/opentracing/opentracing-go"
@@ -111,7 +112,20 @@ const traceProf = "trace"
 
 const featureVersionFlag = "--feature-version"
 
+func ResetColorHandler() {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		cli.CloseOutput()
+		color.Unset()
+		os.Exit(0)
+	}()
+}
+
 func main() {
+	ResetColorHandler()
+
 	os.Exit(runMain())
 }
 
@@ -126,16 +140,16 @@ func runMain() int {
 			case profFlag:
 				switch args[1] {
 				case cpuProf:
-					fmt.Println("cpu profiling enabled.")
+					cli.Println("cpu profiling enabled.")
 					defer profile.Start(profile.CPUProfile).Stop()
 				case memProf:
-					fmt.Println("mem profiling enabled.")
+					cli.Println("mem profiling enabled.")
 					defer profile.Start(profile.MemProfile).Stop()
 				case blockingProf:
-					fmt.Println("block profiling enabled")
+					cli.Println("block profiling enabled")
 					defer profile.Start(profile.BlockProfile).Stop()
 				case traceProf:
-					fmt.Println("trace profiling enabled")
+					cli.Println("trace profiling enabled")
 					defer profile.Start(profile.TraceProfile).Stop()
 				default:
 					panic("Unexpected prof flag: " + args[1])
@@ -165,7 +179,7 @@ func runMain() int {
 			//    jaegertracing/all-in-one:1.21
 			// and browse to http://localhost:16686
 			case jaegerFlag:
-				fmt.Println("running with jaeger tracing reporting to localhost")
+				cli.Println("running with jaeger tracing reporting to localhost")
 				transport := transport.NewHTTPTransport("http://localhost:14268/api/traces?format=jaeger.thrift", transport.HTTPBatchSize(128000))
 				reporter := jaeger.NewRemoteReporter(transport)
 				tracer, closer := jaeger.NewTracer("dolt", jaeger.NewConstSampler(true), reporter)
@@ -187,7 +201,7 @@ func runMain() int {
 
 			case stdInFlag:
 				stdInFile := args[1]
-				fmt.Println("Using file contents as stdin:", stdInFile)
+				cli.Println("Using file contents as stdin:", stdInFile)
 
 				f, err := os.Open(stdInFile)
 
