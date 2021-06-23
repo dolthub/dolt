@@ -443,16 +443,17 @@ func (r *repoStateReader) StagedHash() hash.Hash {
 	return hash.Parse(r.dEnv.RepoState.staged)
 }
 
-func (r *repoStateReader) IsMergeActive() bool {
-	return r.dEnv.RepoState.Merge != nil
+func (r *repoStateReader) IsMergeActive(ctx context.Context) (bool, error) {
+	return r.dEnv.IsMergeActive(ctx)
 }
 
-func (r *repoStateReader) GetMergeCommit() string {
-	return r.dEnv.RepoState.Merge.Commit
-}
+func (r *repoStateReader) GetMergeCommit(ctx context.Context) (*doltdb.Commit, error) {
+	ws, err := r.dEnv.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-func (r *repoStateReader) GetPreMergeWorking() string {
-	return r.dEnv.RepoState.Merge.PreMergeWorking
+	return ws.MergeState().Commit(), nil
 }
 
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
@@ -661,8 +662,13 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, sch schema.Schema, r
 	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }
 
-func (dEnv *DoltEnv) IsMergeActive() bool {
-	return dEnv.RepoState.Merge != nil
+func (dEnv *DoltEnv) IsMergeActive(ctx context.Context) (bool, error) {
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return ws.MergeActive(), nil
 }
 
 func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, error) {

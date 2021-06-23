@@ -92,7 +92,13 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	var verr errhand.VerboseError
 	if apr.Contains(cli.AbortParam) {
-		if !dEnv.IsMergeActive() {
+		mergeActive, err := dEnv.IsMergeActive(ctx)
+		if err != nil {
+			cli.PrintErrln("fatal: %s", err.Error())
+			return 1
+		}
+
+		if !mergeActive {
 			cli.PrintErrln("fatal: There is no merge to abort")
 			return 1
 		}
@@ -110,6 +116,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		root, verr = GetWorkingWithVErr(dEnv)
 
 		if verr == nil {
+			mergeActive, err := dEnv.IsMergeActive(ctx)
+			if err != nil {
+				cli.PrintErrln("error: Merging is not possible because you have not committed an active merge: %s", err.Error())
+				return 1
+			}
+
 			if has, err := root.HasConflicts(ctx); err != nil {
 				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
 			} else if has {
@@ -118,7 +130,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
 				cli.Println("fatal: Exiting because of an unresolved conflict.")
 				return 1
-			} else if dEnv.IsMergeActive() {
+			} else if mergeActive {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
 				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using 'dolt commit -m <msg>'")
 				cli.Println("fatal: Exiting because of active merge")

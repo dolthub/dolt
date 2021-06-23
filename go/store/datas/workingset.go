@@ -87,6 +87,10 @@ func NewWorkingSet(_ context.Context, workingRef types.Ref, stagedRef, mergeStat
 	return types.NewStruct(workingRef.Format(), WorkingSetName, fields)
 }
 
+func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.Struct) (types.Struct, error) {
+		return mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit, preMergeWorking})
+}
+
 func IsWorkingSet(v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); !ok {
 		return false, nil

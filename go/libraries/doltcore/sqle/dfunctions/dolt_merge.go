@@ -68,9 +68,10 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	if apr.Contains(cli.AbortParam) {
-		if !dbData.Rsr.IsMergeActive() {
-			return 1, fmt.Errorf("fatal: There is no merge to abort")
-		}
+		// TODO: fix me (get merge state from session)
+		// if !dbData.Rsr.IsMergeActive() {
+		// 	return 1, fmt.Errorf("fatal: There is no merge to abort")
+		// }
 
 		err = abortMerge(ctx, dbData)
 
@@ -103,9 +104,10 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, doltdb.ErrUnresolvedConflicts
 	}
 
-	if dbData.Rsr.IsMergeActive() {
-		return 1, doltdb.ErrMergeActive
-	}
+	// TODO: fix me (get merge state from session)
+	// if dbData.Rsr.IsMergeActive() {
+	// 	return 1, doltdb.ErrMergeActive
+	// }
 
 	head, hh, headRoot, err := getHead(ctx, sess, dbName)
 	if err != nil {

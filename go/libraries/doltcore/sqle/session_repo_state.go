@@ -73,15 +73,15 @@ func (s SessionRepoStateReader) StagedHash() hash.Hash {
 	panic("implement me")
 }
 
-func (s SessionRepoStateReader) IsMergeActive() bool {
+func (s SessionRepoStateReader) IsMergeActive(ctx context.Context) (bool, error) {
 	panic("implement me")
 }
 
-func (s SessionRepoStateReader) GetMergeCommit() string {
+func (s SessionRepoStateReader) GetMergeCommit(ctx context.Context) (*doltdb.Commit, error) {
 	panic("implement me")
 }
 
-func (s SessionRepoStateReader) GetPreMergeWorking() string {
+func (s SessionRepoStateReader) GetPreMergeWorking(ctx context.Context) (*doltdb.RootValue, error) {
 	panic("implement me")
 }
 

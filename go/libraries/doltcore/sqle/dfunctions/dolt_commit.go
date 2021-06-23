@@ -80,9 +80,14 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
 	}
 
+	mergeActive, err := rsr.IsMergeActive(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Check if there are no changes in the working set but the -a flag is true.
 	// The -a flag is fine when a merge is active or there are staged changes as result of a merge or an add.
-	if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty && !rsr.IsMergeActive() && !hasStagedChanges {
+	if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty && !mergeActive && !hasStagedChanges {
 		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
 	}
 

@@ -84,7 +84,12 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	if len(staged) == 0 && !rsr.IsMergeActive() && !props.AllowEmpty {
+	mergeActive, err := rsr.IsMergeActive(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
 		_, notStagedDocs, err := diff.GetDocDiffs(ctx, ddb, workingRoot, rsr, drw)
 		if err != nil {
 			return "", err
@@ -92,8 +97,8 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 		return "", NothingStaged{notStaged, notStagedDocs}
 	}
 
-	var mergeCmSpec []*doltdb.CommitSpec
-	if rsr.IsMergeActive() {
+	var mergeParentCommits []*doltdb.Commit
+	if mergeActive {
 		inConflict, err := workingRoot.TablesInConflict(ctx)
 		if err != nil {
 			return "", err
@@ -102,13 +107,12 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 			return "", NewTblInConflictError(inConflict)
 		}
 
-		spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
-
+		commit, err := rsr.GetMergeCommit(ctx)
 		if err != nil {
-			panic("Corrupted repostate. Active merge state is not valid.")
+			return "", err
 		}
 
-		mergeCmSpec = []*doltdb.CommitSpec{spec}
+		mergeParentCommits = []*doltdb.Commit{commit}
 	}
 
 	srt, err := env.StagedRoot(ctx, ddb, rsr)
@@ -169,8 +173,7 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 	}
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.
-	// Any commit specs in mergeCmSpec are also resolved and added.
-	c, err := ddb.CommitWithParentSpecs(ctx, h, rsr.CWBHeadRef(), mergeCmSpec, meta)
+	c, err := ddb.CommitWithParentCommits(ctx, h, rsr.CWBHeadRef(), mergeParentCommits, meta)
 
 	if err != nil {
 		return "", err
