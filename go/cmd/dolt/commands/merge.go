@@ -94,7 +94,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if apr.Contains(cli.AbortParam) {
 		mergeActive, err := dEnv.IsMergeActive(ctx)
 		if err != nil {
-			cli.PrintErrln("fatal: %s", err.Error())
+			cli.PrintErrln("fatal:", err.Error())
 			return 1
 		}
 
@@ -118,7 +118,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		if verr == nil {
 			mergeActive, err := dEnv.IsMergeActive(ctx)
 			if err != nil {
-				cli.PrintErrln("error: Merging is not possible because you have not committed an active merge: %s", err.Error())
+				cli.PrintErrln("error: Merging is not possible because you have not committed an active merge:", err.Error())
 				return 1
 			}
 

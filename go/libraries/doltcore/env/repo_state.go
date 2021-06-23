@@ -29,7 +29,7 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
-	// TODO: rreplace with commit
+	// TODO: replace with commit
 	CWBHeadHash(ctx context.Context) (hash.Hash, error)
 	WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
 	StagedRoot(ctx context.Context) (*doltdb.RootValue, error)
@@ -72,14 +72,14 @@ type MergeState struct {
 
 type RepoState struct {
 	Head     ref.MarshalableRef      `json:"head"`
-	Merge    *MergeState             `json:"merge"`
 	Remotes  map[string]Remote       `json:"remotes"`
 	Branches map[string]BranchConfig `json:"branches"`
-	// staged and working are legacy fields left over from when Dolt repos stored this info in the repo state file, not
-	// in the DB directly. They're still here so that we can migrate existing repositories forward to the new storage
-	// format, but they should be used only for this purpose and are no longer written.
-	staged   string                  `json:"staged"`
-	working  string                  `json:"working"`
+	// |staged|, |working|, and |merge| are legacy fields left over from when Dolt repos stored this info in the repo
+	// state file, not in the DB directly. They're still here so that we can migrate existing repositories forward to the
+	// new storage format, but they should be used only for this purpose and are no longer written.
+	staged  string      `json:"staged,omitempty"`
+	working string      `json:"working,omitempty"`
+	merge   *MergeState `json:"merge,omitempty"`
 }
 
 func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
@@ -142,16 +142,19 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
 	return rs, nil
 }
 
-func (rs *RepoState) Save(fs filesys.ReadWriteFS) error {
+func (rs RepoState) Save(fs filesys.ReadWriteFS) error {
+	// clear deprecated fields on write
+	rs.merge = nil
+	rs.staged = ""
+	rs.working = ""
+
 	data, err := json.MarshalIndent(rs, "", "  ")
 
 	if err != nil {
 		return err
 	}
 
-	path := getRepoStateFile()
-
-	return fs.WriteFile(path, data)
+	return fs.WriteFile(getRepoStateFile(), data)
 }
 
 func (rs *RepoState) CWBHeadRef() ref.DoltRef {
@@ -165,14 +168,6 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 
 func (rs *RepoState) AddRemote(r Remote) {
 	rs.Remotes[r.Name] = r
-}
-
-func (rs *RepoState) IsMergeActive() bool {
-	return rs.Merge != nil
-}
-
-func (rs *RepoState) GetMergeCommit() string {
-	return rs.Merge.Commit
 }
 
 // Updates the working root.
