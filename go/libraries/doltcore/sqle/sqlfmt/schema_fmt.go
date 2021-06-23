@@ -151,6 +151,16 @@ func AlterTableAddColStmt(tableName string, newColDef string) string {
 	return b.String()
 }
 
+func AlterTableModifyColStmt(tableName string, newColDef string) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" MODIFY COLUMN ")
+	b.WriteString(newColDef)
+	b.WriteRune(';')
+	return b.String()
+}
+
 func AlterTableDropColStmt(tableName string, oldColName string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
