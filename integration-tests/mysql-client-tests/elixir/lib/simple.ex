@@ -26,6 +26,9 @@ defmodule SmokeTest do
     {:ok, result} = MyXQL.query(pid, "UPDATE test SET pk = pk where pk = 0")
     myTestFunc(result.num_rows, 1)
 
+    {:ok, result} = MyXQL.query(pid, "INSERT INTO test VALUES (1, 1) ON DUPLICATE KEY UPDATE value = value")
+    myTestFunc(result.num_rows, 1)
+
     {:ok, result} = MyXQL.query(pid, "SELECT * FROM test")
     myTestFunc(result.num_rows, 1)
     myTestFunc(result.rows, [[0,0]])
