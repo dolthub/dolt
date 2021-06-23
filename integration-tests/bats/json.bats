@@ -97,8 +97,6 @@ SQL
    run dolt diff
    [ "$status" -eq 0 ]
    [ "${lines[0]}"  = 'diff --dolt a/js b/js' ]
-   [ "${lines[1]}"  = '--- a/js @ hkngn01jojsm81hqrtbqnvr1buhooove' ]
-   [ "${lines[2]}"  = '+++ b/js @ di5agqioh8cn0osrk220vtlgs9vu02jh' ]
    [ "${lines[3]}"  = '+-----+----+-----------+' ]
    [ "${lines[4]}"  = '|     | pk | js        |' ]
    [ "${lines[5]}"  = '+-----+----+-----------+' ]

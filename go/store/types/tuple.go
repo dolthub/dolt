@@ -379,47 +379,10 @@ func (t Tuple) Compare(other Tuple) int {
 	return bytes.Compare(t.buff, other.buff)
 }
 
+var tupleType = newType(CompoundDesc{UnionKind, nil})
+
 func (t Tuple) typeOf() (*Type, error) {
-	dec, count := t.decoderSkipToFields()
-	ts := make(typeSlice, 0, count)
-	var lastType *Type
-	for i := uint64(0); i < count; i++ {
-		if lastType != nil {
-			offset := dec.offset
-			is, err := dec.isValueSameTypeForSure(t.format(), lastType)
-
-			if err != nil {
-				return nil, err
-			}
-
-			if is {
-				continue
-			}
-			dec.offset = offset
-		}
-
-		var err error
-		lastType, err = dec.readTypeOfValue(t.format())
-
-		if err != nil {
-			return nil, err
-		}
-
-		if lastType.Kind() == UnknownKind {
-			// if any of the elements are unknown, return unknown
-			return nil, ErrUnknownType
-		}
-
-		ts = append(ts, lastType)
-	}
-
-	ut, err := makeUnionType(ts...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return makeCompoundType(TupleKind, ut)
+	return tupleType, nil
 }
 
 func (t Tuple) decoderSkipToFields() (valueDecoder, uint64) {
