@@ -35,7 +35,7 @@ func CloseOutput() {
 	}
 }
 
-func outputIsCLosed() bool {
+func outputIsClosed() bool {
 	isClosed := atomic.LoadUint64(&outputClosed)
 	return isClosed == 1
 }
@@ -94,7 +94,7 @@ func InitIO() (restoreIO func()) {
 }
 
 func Println(a ...interface{}) {
-	if outputIsCLosed() {
+	if outputIsClosed() {
 		return
 	}
 
@@ -102,7 +102,7 @@ func Println(a ...interface{}) {
 }
 
 func Print(a ...interface{}) {
-	if outputIsCLosed() {
+	if outputIsClosed() {
 		return
 	}
 
@@ -110,7 +110,7 @@ func Print(a ...interface{}) {
 }
 
 func Printf(format string, a ...interface{}) {
-	if outputIsCLosed() {
+	if outputIsClosed() {
 		return
 	}
 
@@ -118,7 +118,7 @@ func Printf(format string, a ...interface{}) {
 }
 
 func PrintErrln(a ...interface{}) {
-	if outputIsCLosed() {
+	if outputIsClosed() {
 		return
 	}
 
@@ -126,7 +126,7 @@ func PrintErrln(a ...interface{}) {
 }
 
 func PrintErr(a ...interface{}) {
-	if outputIsCLosed() {
+	if outputIsClosed() {
 		return
 	}
 
@@ -134,7 +134,7 @@ func PrintErr(a ...interface{}) {
 }
 
 func PrintErrf(format string, a ...interface{}) {
-	if outputIsCLosed() {
+	if outputIsClosed() {
 		return
 	}
 
@@ -142,7 +142,7 @@ func PrintErrf(format string, a ...interface{}) {
 }
 
 func DeleteAndPrint(prevMsgLen int, msg string) int {
-	if outputIsCLosed() {
+	if outputIsClosed() {
 		return 0
 	}
 
