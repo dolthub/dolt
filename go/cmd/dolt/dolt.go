@@ -117,6 +117,7 @@ func ResetColorHandler() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
+		cli.CloseOutput()
 		color.Unset()
 		os.Exit(0)
 	}()
