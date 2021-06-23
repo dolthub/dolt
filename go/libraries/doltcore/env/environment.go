@@ -463,28 +463,6 @@ type repoStateWriter struct {
 	*DoltEnv
 }
 
-func (r *repoStateWriter) SetStagedHash(ctx context.Context, h hash.Hash) error {
-	r.RepoState.staged = h.String()
-	err := r.RepoState.Save(r.FS)
-
-	if err != nil {
-		return ErrStateUpdate
-	}
-
-	return nil
-}
-
-func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error {
-	r.RepoState.working = h.String()
-	err := r.RepoState.Save(r.FS)
-
-	if err != nil {
-		return ErrStateUpdate
-	}
-
-	return nil
-}
-
 func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
 	r.RepoState.Head = marshalableRef
 	err := r.RepoState.Save(r.FS)
@@ -496,16 +474,17 @@ func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.
 	return nil
 }
 
-func (r *repoStateWriter) AbortMerge() error {
-	return r.RepoState.AbortMerge(r.FS)
+// TODO: kill merge methods
+func (r *repoStateWriter) AbortMerge(ctx context.Context) error {
+	return r.DoltEnv.AbortMerge(ctx)
 }
 
-func (r *repoStateWriter) ClearMerge() error {
-	return r.RepoState.ClearMerge(r.FS)
+func (r *repoStateWriter) ClearMerge(ctx context.Context) error {
+	return r.DoltEnv.ClearMerge(ctx)
 }
 
-func (r *repoStateWriter) StartMerge(commitStr string) error {
-	return r.RepoState.StartMerge(commitStr, r.FS)
+func (r *repoStateWriter) StartMerge(ctx context.Context, commit *doltdb.Commit) error {
+	return r.DoltEnv.StartMerge(ctx, commit)
 }
 
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
@@ -563,6 +542,7 @@ func (dEnv *DoltEnv) DbData() DbData {
 	}
 }
 
+// StagedRoot returns the staged root value in the current working set
 func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
 		workingSet, err := dEnv.WorkingSet(ctx)
 		if err != nil {
@@ -598,6 +578,48 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 	}
 
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h)
+}
+
+func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
+	ws, err := dEnv.WorkingSet(ctx)
+   if err != nil {
+		return err
+	}
+
+	h, err := ws.HashOf()
+	if err != nil {
+		return err
+	}
+
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h)
+}
+
+func (dEnv *DoltEnv) ClearMerge(ctx context.Context) error {
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+
+	h, err := ws.HashOf()
+	if err != nil {
+		return err
+	}
+
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.ClearMerge(), h)
+}
+
+func (dEnv *DoltEnv) StartMerge(ctx context.Context, commit *doltdb.Commit) error {
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+
+	h, err := ws.HashOf()
+	if err != nil {
+		return err
+	}
+
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.StartMerge(commit), h)
 }
 
 // todo: move this out of env to actions

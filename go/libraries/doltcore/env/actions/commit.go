@@ -176,7 +176,7 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 		return "", err
 	}
 
-	err = rsw.ClearMerge()
+	err = rsw.ClearMerge(ctx)
 
 	if err != nil {
 		return "", err

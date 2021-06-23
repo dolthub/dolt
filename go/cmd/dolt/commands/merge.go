@@ -138,7 +138,7 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 	err := actions.CheckoutAllTables(ctx, doltEnv.DbData())
 
 	if err == nil {
-		err = doltEnv.RepoState.AbortMerge(doltEnv.FS)
+		err = doltEnv.AbortMerge(ctx)
 
 		if err == nil {
 			return nil
@@ -472,14 +472,8 @@ func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, me
 		}
 	}
 
-	h2, err := cm2.HashOf()
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to hash commit").AddCause(err).Build()
-	}
-
 	if !squash {
-		err = dEnv.RepoState.StartMerge(h2.String(), dEnv.FS)
+		err = dEnv.StartMerge(ctx, cm2)
 
 		if err != nil {
 			return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()

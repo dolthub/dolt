@@ -158,7 +158,7 @@ func abortMerge(ctx *sql.Context, dbData env.DbData) error {
 		return err
 	}
 
-	err = dbData.Rsw.AbortMerge()
+	err = dbData.Rsw.AbortMerge(ctx)
 	if err != nil {
 		return err
 	}
@@ -311,14 +311,9 @@ func mergeRootToWorking(
 	cm2 *doltdb.Commit,
 	mergeStats map[string]*merge.MergeStats,
 ) error {
-	h2, err := cm2.HashOf()
-	if err != nil {
-		return err
-	}
-
 	workingRoot := mergedRoot
 	if !squash {
-		err = dbData.Rsw.StartMerge(h2.String())
+		err := dbData.Rsw.StartMerge(ctx, cm2)
 
 		if err != nil {
 			return err
@@ -326,7 +321,7 @@ func mergeRootToWorking(
 	}
 
 	// TODO: this should only update the session working root
-	err = env.UpdateWorkingRoot(ctx, dbData.Rsw, workingRoot)
+	err := env.UpdateWorkingRoot(ctx, dbData.Rsw, workingRoot)
 	if err != nil {
 		return err
 	}

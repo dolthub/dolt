@@ -31,7 +31,6 @@ const (
 )
 
 type MergeState struct {
-	valueSt         types.Struct
 	commit          *Commit
 	preMergeWorking *RootValue
 }
@@ -71,6 +70,26 @@ func (ws WorkingSet) WithWorkingRoot(workingRoot *RootValue) *WorkingSet {
 	return &ws
 }
 
+func (ws WorkingSet) StartMerge(commit *Commit) *WorkingSet {
+	ws.mergeState = &MergeState{
+		commit:          commit,
+		preMergeWorking: ws.workingRoot,
+	}
+
+	return &ws
+}
+
+func (ws WorkingSet) AbortMerge() *WorkingSet {
+	ws.workingRoot = ws.mergeState.PreMergeWorkingRoot()
+	ws.mergeState = nil
+	return &ws
+}
+
+func (ws WorkingSet) ClearMerge() *WorkingSet {
+	ws.mergeState = nil
+	return &ws
+}
+
 func (ws *WorkingSet) WorkingRoot() *RootValue {
 	return ws.workingRoot
 }
@@ -81,6 +100,10 @@ func (ws *WorkingSet) StagedRoot() *RootValue {
 
 func (ws *WorkingSet) MergeState() *MergeState {
 	return ws.mergeState
+}
+
+func (ws *WorkingSet) MergeActive() bool {
+	return ws.mergeState != nil
 }
 
 // NewWorkingSet creates a new WorkingSet object.
@@ -177,6 +200,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 		return types.Ref{}, nil, nil, err
 	}
 
+	// TODO: this is never nil
 	if ws.stagedRoot != nil {
 		var stagedRootRef types.Ref
 		stagedRootRef, err = db.writeRootValue(ctx, ws.stagedRoot)
@@ -187,12 +211,22 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 	}
 
 	if ws.mergeState != nil {
-		// TODO: write nested merge state refs here?
 		var mergeStateRef types.Ref
-		mergeStateRef, err = db.writeRootValue(ctx, ws.stagedRoot)
+		preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
 		if err != nil {
 			return types.Ref{}, nil, nil, err
 		}
+
+		mergeStateRefSt, err := datas.NewMergeState(ctx, preMergeWorking, ws.mergeState.commit.commitSt)
+		if err != nil {
+			return types.Ref{}, nil, nil, err
+		}
+
+		mergeStateRef, err = db.db.WriteValue(ctx, mergeStateRefSt)
+		if err != nil {
+			return types.Ref{}, nil, nil, err
+		}
+
 		mergeState = &mergeStateRef
 	}
 

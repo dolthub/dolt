@@ -42,9 +42,9 @@ type RepoStateWriter interface {
 	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
-	AbortMerge() error
-	ClearMerge() error
-	StartMerge(commitStr string) error
+	AbortMerge(ctx context.Context) error
+	ClearMerge(ctx context.Context) error
+	StartMerge(ctx context.Context, commit *doltdb.Commit) error
 }
 
 type DocsReadWriter interface {
@@ -162,21 +162,6 @@ func (rs *RepoState) CWBHeadRef() ref.DoltRef {
 func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 	spec, _ := doltdb.NewCommitSpec("HEAD")
 	return spec
-}
-
-func (rs *RepoState) StartMerge(commit string, fs filesys.Filesys) error {
-	rs.Merge = &MergeState{commit, rs.working}
-	return rs.Save(fs)
-}
-
-func (rs *RepoState) AbortMerge(fs filesys.Filesys) error {
-	rs.working = rs.Merge.PreMergeWorking
-	return rs.ClearMerge(fs)
-}
-
-func (rs *RepoState) ClearMerge(fs filesys.Filesys) error {
-	rs.Merge = nil
-	return rs.Save(fs)
 }
 
 func (rs *RepoState) AddRemote(r Remote) {
