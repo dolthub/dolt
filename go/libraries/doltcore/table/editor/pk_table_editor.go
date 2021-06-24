@@ -154,6 +154,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 
 	err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
+			// TODO-CURR: Interject here to get the correct AI VALUE
 			te.autoIncVal, err = t.GetAutoIncrementValue(ctx)
 			if err != nil {
 				return true, err

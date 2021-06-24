@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"net"
 	"strconv"
 	"time"
@@ -134,6 +135,13 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
+	// Create the Auto Increment wrapper here
+	ait, err := newAutoIncrementTracker(sqlEngine)
+	if err != nil {
+		cli.PrintErr(err)
+		return
+	}
+
 	mySQLServer, startError = server.NewServer(
 		server.Config{
 			Protocol:         "tcp",
@@ -146,14 +154,14 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 			// to the value of mysql that we support.
 		},
 		sqlEngine,
-		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit()),
+		// In the sessionBuilder pass in the AutoIncrementManager
+		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit(), ait),
 	)
 
 	if startError != nil {
 		cli.PrintErr(startError)
 		return
 	}
-
 	serverController.registerCloseFunction(startError, mySQLServer.Close)
 	closeError = mySQLServer.Start()
 	if closeError != nil {
@@ -173,11 +181,11 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool) server.SessionBuilder {
+func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool, ait autoincr.AutoIncrementTracker) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+		doltSess, err := dsqle.NewDoltSessionWithAITracker(tmpSqlCtx, mysqlSess, username, email, ait, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
 
 		if err != nil {
 			return nil, nil, nil, err
@@ -220,6 +228,37 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 
 		return doltSess, ir, vr, nil
 	}
+}
+
+func newAutoIncrementTracker(sqlEngine *sqle.Engine) (autoincr.AutoIncrementTracker, error) {
+	dbs := sqlEngine.Catalog.AllDatabases()
+	autoIncrementTracker := autoincr.NewAutoIncrementTracker()
+	tempCtx := sql.NewEmptyContext()
+
+	for _, db := range dbs {
+		names, err := db.GetTableNames(tempCtx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, name := range names {
+			table, _, err := db.GetTableInsensitive(tempCtx, name)
+			if err != nil {
+				return nil, err
+			}
+
+			if t, ok := table.(sql.AutoIncrementTable); ok {
+				ai, err := t.GetAutoIncrementValue(tempCtx)
+				if err != nil {
+					return nil, err
+				}
+
+				autoIncrementTracker.SetAutoIncrementValueForTable(db.Name(), name, ai.(uint64))
+			}
+		}
+	}
+
+	return autoIncrementTracker, nil
 }
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
