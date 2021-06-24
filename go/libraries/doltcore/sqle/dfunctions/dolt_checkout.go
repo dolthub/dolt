@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -150,52 +149,56 @@ func checkoutNewBranch(ctx *sql.Context, dbData env.DbData, branchName, startPt 
 }
 
 func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) error {
-	if len(branchName) == 0 {
-		return ErrEmptyBranchName
-	}
-
-	// TODO: this isn't right. It updates the working root for the head ref, but needs to only update it for the
-	//  session. Otherwise this won't respect transaction boundaries.
-	err := actions.CheckoutBranchNoDocs(ctx, dbData, branchName)
-
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
-		} else if doltdb.IsRootValUnreachable(err) {
-			rt := doltdb.GetUnreachableRootType(err)
-			return fmt.Errorf("error: unable to read the %s", rt.String())
-		} else if actions.IsCheckoutWouldOverwrite(err) {
-			tbls := actions.CheckoutWouldOverwriteTables(err)
-			msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
-			for _, tbl := range tbls {
-				msg = msg + tbl + "\n"
-			}
-			return errors.New(msg)
-		} else if err == doltdb.ErrAlreadyOnBranch {
-			return nil // No need to return an error if on the same branch
-		} else {
-			return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
-		}
-	}
-
-	return updateHeadAndWorkingSessionVars(ctx, dbData)
+	return nil
+	// TODO: fix me
+	// if len(branchName) == 0 {
+	// 	return ErrEmptyBranchName
+	// }
+	//
+	// // TODO: this isn't right. It updates the working root for the head ref, but needs to only update it for the
+	// //  session. Otherwise this won't respect transaction boundaries.
+	// err := actions.CheckoutBranchNoDocs(ctx, dbData, branchName)
+	//
+	// if err != nil {
+	// 	if err == doltdb.ErrBranchNotFound {
+	// 		return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
+	// 	} else if doltdb.IsRootValUnreachable(err) {
+	// 		rt := doltdb.GetUnreachableRootType(err)
+	// 		return fmt.Errorf("error: unable to read the %s", rt.String())
+	// 	} else if actions.IsCheckoutWouldOverwrite(err) {
+	// 		tbls := actions.CheckoutWouldOverwriteTables(err)
+	// 		msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
+	// 		for _, tbl := range tbls {
+	// 			msg = msg + tbl + "\n"
+	// 		}
+	// 		return errors.New(msg)
+	// 	} else if err == doltdb.ErrAlreadyOnBranch {
+	// 		return nil // No need to return an error if on the same branch
+	// 	} else {
+	// 		return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
+	// 	}
+	// }
+	//
+	// return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
 func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error {
-	err := actions.CheckoutTables(ctx, dbData, tables)
-
-	if err != nil {
-		if doltdb.IsRootValUnreachable(err) {
-			rt := doltdb.GetUnreachableRootType(err)
-			return fmt.Errorf("error: unable to read the %s", rt.String())
-		} else if actions.IsTblNotExist(err) {
-			return fmt.Errorf("error: given tables do not exist")
-		} else {
-			return fmt.Errorf("fatal: Unexpected error checking out tables")
-		}
-	}
-
-	return updateHeadAndWorkingSessionVars(ctx, dbData)
+	return nil
+	// TODO: fix me
+	// err := actions.CheckoutTables(ctx, dbData, tables)
+	//
+	// if err != nil {
+	// 	if doltdb.IsRootValUnreachable(err) {
+	// 		rt := doltdb.GetUnreachableRootType(err)
+	// 		return fmt.Errorf("error: unable to read the %s", rt.String())
+	// 	} else if actions.IsTblNotExist(err) {
+	// 		return fmt.Errorf("error: given tables do not exist")
+	// 	} else {
+	// 		return fmt.Errorf("fatal: Unexpected error checking out tables")
+	// 	}
+	// }
+	//
+	// return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
 // updateHeadAndWorkingSessionVars explicitly sets the head and working hash.

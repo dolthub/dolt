@@ -125,10 +125,10 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, wo
 	return "", nil
 }
 
-func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) error {
+func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots doltdb.Roots) error {
 	dbData := dEnv.DbData()
 
-	newHead, err := resetHardTables(ctx, dbData, cSpecStr, workingRoot, stagedRoot, headRoot)
+	newHead, err := resetHardTables(ctx, dbData, cSpecStr, roots.Working, roots.Staged, roots.Head)
 
 	if err != nil {
 		return err

@@ -115,11 +115,11 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 
 	// Check if the user executed `dolt checkout .`
 	if apr.NArg() == 1 && name == "." {
-		working, staged, head, err := getAllRoots(ctx, dEnv)
+		roots, err := dEnv.Roots(ctx)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
 		}
-		verr := actions.ResetHard(ctx, dEnv, "HEAD", working, staged, head)
+		verr := actions.ResetHard(ctx, dEnv, "HEAD", roots)
 		return handleResetError(verr, usagePrt)
 	}
 
@@ -175,7 +175,12 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 }
 
 func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs doltdocs.Docs) errhand.VerboseError {
-	err := actions.CheckoutTablesAndDocs(ctx, dEnv.DbData(), tables, docs)
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = actions.CheckoutTablesAndDocs(ctx, roots, dEnv.DbData(), tables, docs)
 
 	if err != nil {
 		if doltdb.IsRootValUnreachable(err) {

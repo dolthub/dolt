@@ -84,12 +84,13 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return HandleDocTableVErrAndExitCode()
 	}
 
-	workingRoot, stagedRoot, headRoot, verr := getAllRoots(ctx, dEnv)
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 
-	var err error
-	if verr == nil {
 		if apr.ContainsAll(HardResetParam, SoftResetParam) {
-			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
+			verr := errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 			HandleVErrAndExitCode(verr, usage)
 		} else if apr.Contains(HardResetParam) {
 			arg := ""
@@ -99,7 +100,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				arg = apr.Arg(0)
 			}
 
-			err = actions.ResetHard(ctx, dEnv, arg, workingRoot, stagedRoot, headRoot)
+			err = actions.ResetHard(ctx, dEnv, arg, roots)
 		} else {
 			// Check whether the input argument is a ref.
 			if apr.NArg() == 1 {
@@ -116,15 +117,14 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 			tables := apr.Args()
 
-			stagedRoot, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, workingRoot, stagedRoot, headRoot)
+			roots.Staged, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, roots)
 
 			if err != nil {
 				return handleResetError(err, usage)
 			}
 
-			printNotStaged(ctx, dEnv, stagedRoot)
+			printNotStaged(ctx, dEnv, roots.Staged)
 		}
-	}
 
 	return handleResetError(err, usage)
 }

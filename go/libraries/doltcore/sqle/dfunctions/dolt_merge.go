@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -154,23 +153,25 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 }
 
 func abortMerge(ctx *sql.Context, dbData env.DbData) error {
-	err := actions.CheckoutAllTables(ctx, dbData)
-
-	if err != nil {
-		return err
-	}
-
-	err = dbData.Rsw.AbortMerge(ctx)
-	if err != nil {
-		return err
-	}
-
-	hh, err := dbData.Rsr.CWBHeadHash(ctx)
-	if err != nil {
-		return err
-	}
-
-	return setHeadAndWorkingSessionRoot(ctx, hh.String())
+	return nil
+	// TODO: fix me
+	// err := actions.CheckoutAllTables(ctx, dbData)
+	//
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// err = dbData.Rsw.AbortMerge(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// hh, err := dbData.Rsr.CWBHeadHash(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// return setHeadAndWorkingSessionRoot(ctx, hh.String())
 }
 
 func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, name string, dbData env.DbData) error {

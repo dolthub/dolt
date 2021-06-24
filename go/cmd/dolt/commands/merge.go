@@ -147,8 +147,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.CheckoutAllTables(ctx, doltEnv.DbData())
+	roots, err := doltEnv.Roots(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
+	err = actions.CheckoutAllTables(ctx, roots, doltEnv.DbData())
 	if err == nil {
 		err = doltEnv.AbortMerge(ctx)
 
