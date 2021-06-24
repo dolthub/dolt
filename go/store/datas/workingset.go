@@ -46,10 +46,6 @@ var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
 }`)
 
 var mergeStateTemplate = types.MakeStructTemplate(MergeStateName, []string{MergeStateCommitField, MergeStateWorkingPreMergeField})
-var valueMergeStateType = nomdl.MustParseType(`Struct MergeState {
-        commit:  Ref<Value>,
-				workingPreMerge:  Ref<Value>,
-}`)
 
 type WorkingSetSpec struct {
 	Meta WorkingSetMeta

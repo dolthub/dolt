@@ -235,7 +235,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 
 	assert.Equal(t, mustHash(workingRoot.HashOf()), mustHash(ws.WorkingRoot().HashOf()))
 	assert.Equal(t, mustHash(stagedRoot.HashOf()), mustHash(ws.StagedRoot().HashOf()))
-	//assert.Equal(t, mustHash(commit.HashOf()), mustHash(ws.MergeState().Commit().HashOf()))
+	assert.Equal(t, mustHash(commit.HashOf()), mustHash(ws.MergeState().Commit().HashOf()))
 	//assert.Equal(t, mustHash(workingRoot.HashOf()), mustHash(ws.MergeState().PreMergeWorkingRoot().HashOf()))
 }
 

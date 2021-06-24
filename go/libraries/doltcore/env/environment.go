@@ -200,7 +200,7 @@ func mergeStateToMergeState(ctx context.Context, mergeState *mergeState, db *dol
 		return nil, err
 	}
 
-	return doltdb.NewMergeState(commit, pmwr), nil
+	return doltdb.MergeStateFromCommitAndWorking(commit, pmwr), nil
 }
 
 // HasDoltDir returns true if the .dolt directory exists and is a valid directory

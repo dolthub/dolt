@@ -35,10 +35,46 @@ type MergeState struct {
 	preMergeWorking *RootValue
 }
 
-// NewMergeState returns a new MergeState.
+// MergeStateFromCommitAndWorking returns a new MergeState.
 // Most clients should not construct MergeState objects directly, but instead use WorkingSet.StartMerge
-func NewMergeState(commit *Commit, preMergeWorking *RootValue) *MergeState {
+func MergeStateFromCommitAndWorking(commit *Commit, preMergeWorking *RootValue) *MergeState {
 	return &MergeState{commit: commit, preMergeWorking: preMergeWorking}
+}
+
+func newMergeState(ctx context.Context, vrw types.ValueReadWriter, mergeState types.Struct) (*MergeState, error) {
+	commitSt, ok, err := mergeState.MaybeGet(datas.MergeStateCommitField)
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("corrupted MergeState struct")
+	}
+
+	commit := NewCommit(vrw, commitSt.(types.Struct))
+
+	workingRootRef, ok, err := mergeState.MaybeGet(datas.MergeStateWorkingPreMergeField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("corrupted MergeState struct")
+	}
+
+	workingRootValSt, err := workingRootRef.(types.Ref).TargetValue(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
+
+	workingRoot, err := newRootValue(vrw, workingRootValSt.(types.Struct))
+	if err != nil {
+		return nil, err
+	}
+
+	return &MergeState{
+		commit:          commit,
+		preMergeWorking: workingRoot,
+	}, nil
 }
 
 func (m MergeState) Commit() *Commit {
@@ -170,7 +206,22 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 	}
 
-	// TODO: merge state
+	var mergeState *MergeState
+	mergeStateRef, ok, err := workingSetSt.MaybeGet(datas.MergeStateField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		mergeStateValSt, err := mergeStateRef.(types.Ref).TargetValue(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
+		mergeState, err = newMergeState(ctx, vrw, mergeStateValSt.(types.Struct))
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return &WorkingSet{
 		Name:        name,
@@ -178,6 +229,7 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		st:          &workingSetSt,
 		workingRoot: workingRoot,
 		stagedRoot:  stagedRoot,
+		mergeState:  mergeState,
 	}, nil
 }
 
