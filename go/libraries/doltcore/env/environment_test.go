@@ -122,12 +122,7 @@ func TestRepoDir(t *testing.T) {
 }
 
 func TestRepoDirNoLocal(t *testing.T) {
-	dEnv, fs := createTestEnv(true, false)
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
-	require.NoError(t, err)
-
-	// Now that we have initialized the repo, try loading it
-	dEnv = Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
+	dEnv, _ := createTestEnv(true, false)
 
 	if !dEnv.HasDoltDir() {
 		t.Fatal(".dolt dir should exist.")
@@ -135,19 +130,11 @@ func TestRepoDirNoLocal(t *testing.T) {
 		t.Fatal("This should not be here before creation")
 	}
 
-	if dEnv.CfgLoadErr != nil {
-		t.Error("Only global config load / create error should result in an error")
-	}
+	require.NoError(t, dEnv.CfgLoadErr)
+	require.NoError(t, dEnv.DocsLoadErr)
+	// RSLoadErr will be set because the above method of creating the repo doesn't initialize a valid working or staged
 
-	if dEnv.RSLoadErr != nil {
-		t.Error("File doesn't exist.  There should be an error if the directory doesn't exist.")
-	}
-
-	if dEnv.DocsLoadErr != nil {
-		t.Error("Files don't exist.  There should be an error if the directory doesn't exist.")
-	}
-
-	err = dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
+	err := dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
 	require.NoError(t, err)
 
 	if !dEnv.HasLocalConfig() {
