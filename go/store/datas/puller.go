@@ -161,6 +161,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 	}
 
 	wr, err := nbs.NewCmpChunkTableWriter(tempDir)
+
 	if err != nil {
 		return nil, err
 	}
@@ -388,6 +389,11 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 
 	twDetails.ChunksBuffered = 0
 	for cmpAndRef := range processed {
+		if err != nil {
+			// drain to prevent deadlock
+			continue
+		}
+
 		twDetails.ChunksBuffered++
 
 		if twDetails.ChunksBuffered%1000 == 0 {
@@ -397,7 +403,7 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 		err = p.wr.AddCmpChunk(cmpAndRef.cmpChnk)
 
 		if ae.SetIfError(err) {
-			break
+			continue
 		}
 
 		if p.wr.Size() >= p.chunksPerTF {
@@ -405,7 +411,7 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 			p.wr, err = nbs.NewCmpChunkTableWriter(p.tempDir)
 
 			if ae.SetIfError(err) {
-				break
+				continue
 			}
 		}
 
@@ -422,9 +428,7 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 			}
 		}
 	}
-	for _ = range processed {
-		// drain to prevent deadlock
-	}
+
 	if err := ae.Get(); err != nil {
 		return nil, nil, err
 	}
