@@ -35,6 +35,12 @@ type MergeState struct {
 	preMergeWorking *RootValue
 }
 
+// NewMergeState returns a new MergeState.
+// Most clients should not construct MergeState objects directly, but instead use WorkingSet.StartMerge
+func NewMergeState(commit *Commit, preMergeWorking *RootValue) *MergeState {
+	return &MergeState{commit: commit, preMergeWorking: preMergeWorking}
+}
+
 func (m MergeState) Commit() *Commit {
 	return m.commit
 }
@@ -46,7 +52,7 @@ func (m MergeState) PreMergeWorkingRoot() *RootValue {
 type WorkingSet struct {
 	Name        string
 	format      *types.NomsBinFormat
-	st          types.Struct
+	st          *types.Struct
 	workingRoot *RootValue
 	stagedRoot  *RootValue
 	mergeState  *MergeState
@@ -56,7 +62,6 @@ func EmptyWorkingSet(wsRef ref.WorkingSetRef) *WorkingSet {
 	return &WorkingSet{
 		Name: wsRef.GetPath(),
 		format:      types.Format_Default,
-		st:          types.Struct{},
 	}
 }
 
@@ -67,6 +72,11 @@ func (ws WorkingSet) WithStagedRoot(stagedRoot *RootValue) *WorkingSet {
 
 func (ws WorkingSet) WithWorkingRoot(workingRoot *RootValue) *WorkingSet {
 	ws.workingRoot = workingRoot
+	return &ws
+}
+
+func (ws WorkingSet) WithMergeState(mergeState *MergeState) *WorkingSet {
+	ws.mergeState = mergeState
 	return &ws
 }
 
@@ -165,7 +175,7 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	return &WorkingSet{
 		Name:        name,
 		format:      vrw.Format(),
-		st:          workingSetSt,
+		st:          &workingSetSt,
 		workingRoot: workingRoot,
 		stagedRoot:  stagedRoot,
 	}, nil
@@ -179,6 +189,9 @@ func (ws *WorkingSet) RootValue() *RootValue {
 // HashOf returns the hash of the workingset struct, which is not the same as the hash of the root value stored in the
 // working set. This value is used for optimistic locking when updating a working set for a head ref.
 func (ws *WorkingSet) HashOf() (hash.Hash, error) {
+	if ws.st == nil {
+		return hash.Hash{}, nil
+	}
 	return ws.st.Hash(ws.format)
 }
 

@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -72,19 +73,26 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
 // this returns nil.
-func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string) (*DoltDB, error) {
-	return LoadDoltDBWithParams(ctx, nbf, urlStr, nil)
+func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys) (*DoltDB, error) {
+	return LoadDoltDBWithParams(ctx, nbf, urlStr, fs, nil)
 }
 
-func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]string) (*DoltDB, error) {
+func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]string) (*DoltDB, error) {
 	if urlStr == LocalDirDoltDB {
-		exists, isDir := filesys.LocalFS.Exists(dbfactory.DoltDataDir)
+		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
 
 		if !exists {
 			return nil, errors.New("missing dolt data directory")
 		} else if !isDir {
 			return nil, errors.New("file exists where the dolt data directory should be")
 		}
+
+		absPath, err := fs.Abs(dbfactory.DoltDataDir)
+		if err != nil {
+			return nil, err
+		}
+
+		urlStr = fmt.Sprintf("file://%s", filepath.ToSlash(absPath))
 	}
 
 	db, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
@@ -919,6 +927,17 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.Worki
 		MergeState:  mergeStateRef,
 	}, prevHash)
 
+	return err
+}
+
+// DeleteWorkingSet deletes the working set given
+func (ddb *DoltDB) DeleteWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef) error {
+	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.Delete(ctx, ds)
 	return err
 }
 

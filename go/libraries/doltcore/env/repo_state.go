@@ -65,11 +65,6 @@ type BranchConfig struct {
 	Remote string             `json:"remote"`
 }
 
-type MergeState struct {
-	Commit          string `json:"commit"`
-	PreMergeWorking string `json:"working_pre_merge"`
-}
-
 type RepoState struct {
 	Head     ref.MarshalableRef      `json:"head"`
 	Remotes  map[string]Remote       `json:"remotes"`
@@ -77,11 +72,60 @@ type RepoState struct {
 	// |staged|, |working|, and |merge| are legacy fields left over from when Dolt repos stored this info in the repo
 	// state file, not in the DB directly. They're still here so that we can migrate existing repositories forward to the
 	// new storage format, but they should be used only for this purpose and are no longer written.
-	staged  string      `json:"staged,omitempty"`
-	working string      `json:"working,omitempty"`
-	merge   *MergeState `json:"merge,omitempty"`
+	staged  string
+	working string
+	merge   *mergeState
 }
 
+// repoStateLegacy only exists to unmarshall legacy repo state files, since the JSON marshaller can't work with
+// unexported fields
+type repoStateLegacy struct {
+	Head     ref.MarshalableRef      `json:"head"`
+	Remotes  map[string]Remote       `json:"remotes"`
+	Branches map[string]BranchConfig `json:"branches"`
+	Staged  string                   `json:"staged,omitempty"`
+	Working string                   `json:"working,omitempty"`
+	Merge   *mergeState              `json:"merge,omitempty"`
+}
+
+// repoStateLegacyFromRepoState creates a new repoStateLegacy from a RepoState file. Only for testing.
+func repoStateLegacyFromRepoState(rs *RepoState) *repoStateLegacy {
+	return &repoStateLegacy{
+		Head:     rs.Head,
+		Remotes:  rs.Remotes,
+		Branches: rs.Branches,
+		Staged:   rs.staged,
+		Working:  rs.working,
+		Merge:    rs.merge,
+	}
+}
+
+type mergeState struct {
+	Commit          string `json:"commit"`
+	PreMergeWorking string `json:"working_pre_merge"`
+}
+
+func (rs *repoStateLegacy) toRepoState() *RepoState {
+	return &RepoState{
+		Head:     rs.Head,
+		Remotes:  rs.Remotes,
+		Branches: rs.Branches,
+		staged:   rs.Staged,
+		working:  rs.Working,
+		merge:    rs.Merge,
+	}
+}
+
+func (rs *repoStateLegacy) save(fs filesys.ReadWriteFS) error {
+	data, err := json.MarshalIndent(rs, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return fs.WriteFile(getRepoStateFile(), data)
+}
+
+// LoadRepoState parses the repo state file from the file system given
 func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 	path := getRepoStateFile()
 	data, err := fs.ReadFile(path)
@@ -90,14 +134,14 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 		return nil, err
 	}
 
-	var repoState RepoState
+	var repoState repoStateLegacy
 	err = json.Unmarshal(data, &repoState)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &repoState, nil
+	return repoState.toRepoState(), nil
 }
 
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
@@ -142,14 +186,9 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
 	return rs, nil
 }
 
+// Save writes this repo state file to disk on the filesystem given
 func (rs RepoState) Save(fs filesys.ReadWriteFS) error {
-	// clear deprecated fields on write
-	rs.merge = nil
-	rs.staged = ""
-	rs.working = ""
-
 	data, err := json.MarshalIndent(rs, "", "  ")
-
 	if err != nil {
 		return err
 	}

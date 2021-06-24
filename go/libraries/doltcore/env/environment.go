@@ -82,23 +82,22 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
-	// TODO: move repo state deprecated fields into working set on Load (if working set isn't present)
 	docs, docsErr := doltdocs.LoadDocs(fs)
-	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr)
+	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
 
 	dEnv := &DoltEnv{
-		version,
-		config,
-		cfgErr,
-		repoState,
-		rsErr,
-		docs,
-		docsErr,
-		ddb,
-		dbLoadErr,
-		fs,
-		urlStr,
-		hdp,
+		Version:     version,
+		Config:      config,
+		CfgLoadErr:  cfgErr,
+		RepoState:   repoState,
+		RSLoadErr:   rsErr,
+		Docs:        docs,
+		DocsLoadErr: docsErr,
+		DoltDB:      ddb,
+		DBLoadError: dbLoadErr,
+		FS:          fs,
+		urlStr:      urlStr,
+		hdp:         hdp,
 	}
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
@@ -126,7 +125,82 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 
 	dbfactory.InitializeFactories(dEnv)
 
+	if rsErr == nil && dbLoadErr == nil {
+		// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
+		_, err := dEnv.WorkingSet(ctx)
+		if err == doltdb.ErrWorkingSetNotFound {
+			err := dEnv.initWorkingSetFromRepoState(ctx)
+			if err != nil {
+				dEnv.RSLoadErr = err
+			}
+		} else if err != nil {
+			dEnv.RSLoadErr = err
+		}
+	}
+
 	return dEnv
+}
+
+// initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
+// This is only necessary to migrate repos written before this method was introduced, and can be removed after 1.0
+func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
+	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	wsRef, err := ref.WorkingSetRefForHead(headRef)
+	if err != nil {
+		return err
+	}
+
+	workingHash, ok := hash.MaybeParse(dEnv.RepoState.working)
+	if !ok {
+		return fmt.Errorf("Corrupt repo, invalid working hash %s", workingHash)
+	}
+
+	workingRoot, err := dEnv.DoltDB.ReadRootValue(ctx, workingHash)
+	if err != nil {
+		return err
+	}
+
+	stagedHash, ok := hash.MaybeParse(dEnv.RepoState.staged)
+	if !ok {
+		return fmt.Errorf("Corrupt repo, invalid staged hash %s", stagedHash)
+	}
+
+	stagedRoot, err := dEnv.DoltDB.ReadRootValue(ctx, stagedHash)
+	if err != nil {
+		return err
+	}
+
+	mergeState, err := mergeStateToMergeState(ctx, dEnv.RepoState.merge, dEnv.DoltDB)
+	if err != nil {
+		return err
+	}
+
+	ws := doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot).WithMergeState(mergeState)
+	return dEnv.UpdateWorkingSet(ctx, ws)
+}
+
+func mergeStateToMergeState(ctx context.Context, mergeState *mergeState, db *doltdb.DoltDB) (*doltdb.MergeState, error) {
+	if mergeState == nil {
+		return nil, nil
+	}
+
+	cs, err := doltdb.NewCommitSpec(mergeState.Commit)
+	if err != nil {
+		panic("Corrupted repostate. Active merge state is not valid.")
+	}
+
+	commit, err := db.Resolve(ctx, cs, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	pmwh := hash.Parse(mergeState.PreMergeWorking)
+	pmwr, err := db.ReadRootValue(ctx, pmwh)
+	if err != nil {
+		return nil, err
+	}
+
+	return doltdb.NewMergeState(commit, pmwr), nil
 }
 
 // HasDoltDir returns true if the .dolt directory exists and is a valid directory
@@ -232,7 +306,7 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinF
 		return err
 	}
 
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, filesys.LocalFS)
 
 	return err
 }
@@ -297,7 +371,7 @@ func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinF
 // Does not update repo state.
 func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error {
 	var err error
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
 
 	if err != nil {
 		return err

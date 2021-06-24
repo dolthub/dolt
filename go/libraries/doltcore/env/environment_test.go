@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -40,7 +42,7 @@ func testHomeDirFunc() (string, error) {
 	return testHomeDir, nil
 }
 
-func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
+func createTestEnv(isInitialized bool, hasLocalConfig bool) (*DoltEnv, *filesys.InMemFS) {
 	initialDirs := []string{testHomeDir, workingDir}
 	initialFiles := map[string][]byte{}
 
@@ -70,11 +72,18 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 	fs := filesys.NewInMemFS(initialDirs, initialFiles, workingDir)
 	dEnv := Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
 
-	return dEnv
+	return dEnv, fs
+}
+
+func createFileTestEnv(t *testing.T, path string) *DoltEnv {
+	fs, err := filesys.LocalFilesysWithWorkingDir(filepath.ToSlash(path))
+	require.NoError(t, err)
+
+	return Load(context.Background(), testHomeDirFunc, fs, doltdb.LocalDirDoltDB, "test")
 }
 
 func TestNonRepoDir(t *testing.T) {
-	dEnv := createTestEnv(false, false)
+	dEnv, _ := createTestEnv(false, false)
 
 	if !isCWDEmpty(dEnv) {
 		t.Error("Should start with a clean wd")
@@ -98,31 +107,26 @@ func TestNonRepoDir(t *testing.T) {
 }
 
 func TestRepoDir(t *testing.T) {
-	dEnv := createTestEnv(true, true)
+	dEnv, _ := createTestEnv(true, true)
+	assert.True(t, dEnv.HasDoltDir())
+	assert.True(t, dEnv.HasLocalConfig())
 
-	if !dEnv.HasDoltDir() || !dEnv.HasLocalConfig() {
-		t.Fatal("local config and .dolt dir should have been created")
-	}
+	userName, err := dEnv.Config.GetString("user.name")
+	require.NoError(t, err)
+	assert.Equal(t, "bheni", userName)
 
-	if dEnv.CfgLoadErr != nil {
-		t.Error("Only global config load / create error should result in an error")
-	}
-
-	if dEnv.RSLoadErr != nil {
-		t.Error("Repostate should be valid for an initialized directory")
-	}
-
-	if dEnv.DocsLoadErr != nil {
-		t.Error("Docs should be valid for an initialized directory")
-	}
-
-	if un, err := dEnv.Config.GetString("user.name"); err != nil || un != "bheni" {
-		t.Error("Bad local config value.")
-	}
+	assert.NoError(t, dEnv.CfgLoadErr)
+	assert.NoError(t, dEnv.DocsLoadErr)
+	// RSLoadErr will be set because the above method of creating the repo doesn't initialize a valid working or staged
 }
 
 func TestRepoDirNoLocal(t *testing.T) {
-	dEnv := createTestEnv(true, false)
+	dEnv, fs := createTestEnv(true, false)
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
+	require.NoError(t, err)
+
+	// Now that we have initialized the repo, try loading it
+	dEnv = Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
 
 	if !dEnv.HasDoltDir() {
 		t.Fatal(".dolt dir should exist.")
@@ -142,7 +146,7 @@ func TestRepoDirNoLocal(t *testing.T) {
 		t.Error("Files don't exist.  There should be an error if the directory doesn't exist.")
 	}
 
-	err := dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
+	err = dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
 	require.NoError(t, err)
 
 	if !dEnv.HasLocalConfig() {
@@ -155,24 +159,15 @@ func TestRepoDirNoLocal(t *testing.T) {
 }
 
 func TestInitRepo(t *testing.T) {
-	dEnv := createTestEnv(false, false)
+	dEnv, _ := createTestEnv(false, false)
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
-
-	if err != nil {
-		t.Error("Failed to init repo.", err.Error())
-	}
+	require.NoError(t, err)
 
 	_, err = dEnv.WorkingRoot(context.Background())
-
-	if err != nil {
-		t.Error("Failed to get working root value.")
-	}
+	require.NoError(t, err)
 
 	_, err = dEnv.StagedRoot(context.Background())
-
-	if err != nil {
-		t.Error("Failed to get staged root value.")
-	}
+	require.NoError(t, err)
 
 	for _, doc := range doltdocs.SupportedDocs {
 		docPath := doltdocs.GetDocFilePath(doc.File)
@@ -180,6 +175,68 @@ func TestInitRepo(t *testing.T) {
 			t.Error("Doc file path should exist: ", doc.File)
 		}
 	}
+}
+
+// TestMigrateWorkingSet tests migrating a repo with the old RepoState fields to a new one
+func TestMigrateWorkingSet(t *testing.T) {
+	dir := t.TempDir()
+	dEnv := createFileTestEnv(t, dir)
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
+	require.NoError(t, err)
+
+	ws, err := dEnv.WorkingSet(context.Background())
+	require.NoError(t, err)
+
+	// Make a new repo with the contents of this one, but with the working set cleared out and the repo state filled in
+	// with the legacy values
+
+	// We don't have a merge in progress, so we'll just fake one. We're only interested in seeing the fields loaded and
+	// persisted to the working set
+	commit, err := dEnv.DoltDB.ResolveCommitRef(context.Background(), dEnv.RepoState.CWBHeadRef())
+	require.NoError(t, err)
+	ws.StartMerge(commit)
+
+	workingRoot := ws.WorkingRoot()
+	stagedRoot := ws.StagedRoot()
+
+	workingHash, err := workingRoot.HashOf()
+	require.NoError(t, err)
+	stagedHash, err := stagedRoot.HashOf()
+	require.NoError(t, err)
+
+	rs := repoStateLegacyFromRepoState(dEnv.RepoState)
+	rs.Working = workingHash.String()
+	rs.Staged = stagedHash.String()
+
+	commitHash, err := commit.HashOf()
+	require.NoError(t, err)
+	rs.Merge = &mergeState{
+		Commit:          commitHash.String(),
+		PreMergeWorking: workingHash.String(),
+	}
+
+	// Clear the working set
+	require.NoError(t, dEnv.DoltDB.DeleteWorkingSet(context.Background(), ws.Ref()))
+
+	// Make sure it's gone
+	_, err = dEnv.WorkingSet(context.Background())
+	require.Equal(t, doltdb.ErrWorkingSetNotFound, err)
+
+	// Now write the repo state file to disk and re-load the repo
+	require.NoError(t, rs.save(dEnv.FS))
+
+	dEnv = Load(context.Background(), testHomeDirFunc, dEnv.FS, doltdb.LocalDirDoltDB, "test")
+	assert.NoError(t, dEnv.RSLoadErr)
+	assert.NoError(t, dEnv.CfgLoadErr)
+	assert.NoError(t, dEnv.DocsLoadErr)
+
+	ws, err = dEnv.WorkingSet(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, mustHash(workingRoot.HashOf()), mustHash(ws.WorkingRoot().HashOf()))
+	assert.Equal(t, mustHash(stagedRoot.HashOf()), mustHash(ws.StagedRoot().HashOf()))
+	//assert.Equal(t, mustHash(commit.HashOf()), mustHash(ws.MergeState().Commit().HashOf()))
+	//assert.Equal(t, mustHash(workingRoot.HashOf()), mustHash(ws.MergeState().PreMergeWorkingRoot().HashOf()))
 }
 
 func isCWDEmpty(dEnv *DoltEnv) bool {
@@ -192,8 +249,15 @@ func isCWDEmpty(dEnv *DoltEnv) bool {
 	return isEmpty
 }
 
+func mustHash(hash hash.Hash, err error) hash.Hash {
+	if err != nil {
+		panic(err)
+	}
+	return hash
+}
+
 func TestBestEffortDelete(t *testing.T) {
-	dEnv := createTestEnv(true, true)
+	dEnv, _ := createTestEnv(true, true)
 
 	if isCWDEmpty(dEnv) {
 		t.Error("Dir should not be empty before delete.")
