@@ -234,13 +234,13 @@ func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*do
 
 // Returns the staged root.
 // TODO: remove this
-func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
+func StagedRoot(ctx context.Context, rsr RepoStateReader) (*doltdb.RootValue, error) {
 	return rsr.StagedRoot(ctx)
 }
 
 // Updates the staged root.
 // TODO: remove this
-func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
+func UpdateStagedRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
 	err := rsw.UpdateStagedRoot(ctx, newRoot)
 	if err != nil {
 		return ErrStateUpdate
@@ -250,7 +250,7 @@ func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWrit
 }
 
 func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	err := UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
+	err := UpdateStagedRoot(context.Background(), rsw, updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:

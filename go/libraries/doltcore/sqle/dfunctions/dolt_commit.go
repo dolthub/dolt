@@ -20,10 +20,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
@@ -42,116 +40,118 @@ func NewDoltCommitFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression
 
 // Runs DOLT_COMMIT in the sql engine which models the behavior of `dolt commit`. Commits staged staged changes to head.
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	// TODO: fix me
+	return 0, nil
 	// Get the information for the sql context.
-	dbName := ctx.GetCurrentDatabase()
-	dSess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
-
-	if !ok {
-		return nil, fmt.Errorf("Could not load database %s", dbName)
-	}
-
-	ddb := dbData.Ddb
-	rsr := dbData.Rsr
-
-	ap := cli.CreateCommitArgParser()
-
-	// Get the args for DOLT_COMMIT.
-	args, err := getDoltArgs(ctx, row, d.Children())
-	if err != nil {
-		return nil, err
-	}
-
-	apr, err := ap.Parse(args)
-	if err != nil {
-		return nil, err
-	}
-
-	allFlag := apr.Contains(cli.AllFlag)
-	allowEmpty := apr.Contains(cli.AllowEmptyFlag)
-
-	// Check if there are no changes in the staged set but the -a flag is false
-	hasStagedChanges, err := hasStagedSetChanges(ctx, ddb, rsr)
-	if err != nil {
-		return nil, err
-	}
-
-	if !allFlag && !hasStagedChanges && !allowEmpty {
-		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
-	}
-
-	mergeActive, err := rsr.IsMergeActive(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if there are no changes in the working set but the -a flag is true.
-	// The -a flag is fine when a merge is active or there are staged changes as result of a merge or an add.
-	if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty && !mergeActive && !hasStagedChanges {
-		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
-	}
-
-	workingRoot, _ := dSess.GetRoot(dbName)
-
-	if allFlag {
-		err = actions.StageAllTables(ctx, workingRoot, dbData)
-		if err != nil {
-			return nil, fmt.Errorf(err.Error())
-		}
-	}
-
-	// Parse the author flag. Return an error if not.
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		name = dSess.Username
-		email = dSess.Email
-	}
+	// dbName := ctx.GetCurrentDatabase()
+	// dSess := sqle.DSessFromSess(ctx.Session)
+	// dbData, ok := dSess.GetDbData(dbName)
+	//
+	// if !ok {
+	// 	return nil, fmt.Errorf("Could not load database %s", dbName)
+	// }
+	//
+	// ddb := dbData.Ddb
+	// rsr := dbData.Rsr
+	//
+	// ap := cli.CreateCommitArgParser()
+	//
+	// // Get the args for DOLT_COMMIT.
+	// args, err := getDoltArgs(ctx, row, d.Children())
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// apr, err := ap.Parse(args)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// allFlag := apr.Contains(cli.AllFlag)
+	// allowEmpty := apr.Contains(cli.AllowEmptyFlag)
+	//
+	// // Check if there are no changes in the staged set but the -a flag is false
+	// hasStagedChanges, err := hasStagedSetChanges(ctx, ddb, rsr)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// if !allFlag && !hasStagedChanges && !allowEmpty {
+	// 	return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
+	// }
+	//
+	// mergeActive, err := rsr.IsMergeActive(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// // Check if there are no changes in the working set but the -a flag is true.
+	// // The -a flag is fine when a merge is active or there are staged changes as result of a merge or an add.
+	// if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty && !mergeActive && !hasStagedChanges {
+	// 	return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
+	// }
+	//
+	// workingRoot, _ := dSess.GetRoot(dbName)
+	//
+	// if allFlag {
+	// 	err = actions.StageAllTables(ctx, workingRoot, dbData)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf(err.Error())
+	// 	}
+	// }
+	//
+	// // Parse the author flag. Return an error if not.
+	// var name, email string
+	// if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+	// 	name, email, err = cli.ParseAuthor(authorStr)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// } else {
+	// 	name = dSess.Username
+	// 	email = dSess.Email
+	// }
 
 	// Get the commit message.
-	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
-	if !msgOk {
-		return nil, fmt.Errorf("Must provide commit message.")
-	}
+	// msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+	// if !msgOk {
+	// 	return nil, fmt.Errorf("Must provide commit message.")
+	// }
+	//
+	// // Specify the time if the date parameter is not.
+	// t := ctx.QueryTime()
+	// if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+	// 	var err error
+	// 	t, err = cli.ParseDate(commitTimeStr)
+	//
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf(err.Error())
+	// 	}
+	// }
 
-	// Specify the time if the date parameter is not.
-	t := ctx.QueryTime()
-	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		var err error
-		t, err = cli.ParseDate(commitTimeStr)
-
-		if err != nil {
-			return nil, fmt.Errorf(err.Error())
-		}
-	}
-
-	h, err := actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
-		Message:          msg,
-		Date:             t,
-		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
-		Name:             name,
-		Email:            email,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if allFlag {
-		err = setHeadAndWorkingSessionRoot(ctx, h)
-	} else {
-		err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return h, nil
+	// h, err := actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
+	// 	Message:          msg,
+	// 	Date:             t,
+	// 	AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
+	// 	CheckForeignKeys: !apr.Contains(cli.ForceFlag),
+	// 	Name:             name,
+	// 	Email:            email,
+	// })
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// if allFlag {
+	// 	err = setHeadAndWorkingSessionRoot(ctx, h)
+	// } else {
+	// 	err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix)
+	// }
+	//
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// return h, nil
 }
 
 func hasWorkingSetChanges(rsr env.RepoStateReader) bool {

@@ -78,7 +78,6 @@ type StatusItr struct {
 }
 
 func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
-	ddb := st.ddb
 	rsr := st.rsr
 	drw := st.drw
 
@@ -103,7 +102,9 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return &StatusItr{}, err
 	}
 
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, ddb, rsr)
+	// TODO: fix me
+	var workingTblsInConflict []string
+	// workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, ddb, rsr)
 
 	if err != nil {
 		return &StatusItr{}, err

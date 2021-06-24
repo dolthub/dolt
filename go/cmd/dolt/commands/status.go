@@ -86,7 +86,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())

@@ -134,7 +134,7 @@ func CommitStaged(ctx context.Context, roots env.Roots, dbData env.DbData, props
 	}
 
 	// TODO: combine into a single update
-	err = env.UpdateStagedRoot(ctx, ddb, rsw, stagedRoot)
+	err = env.UpdateStagedRoot(ctx, rsw, stagedRoot)
 	if err != nil {
 		return "", err
 	}

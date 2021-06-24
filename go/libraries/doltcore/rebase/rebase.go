@@ -185,7 +185,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	}
 
 	// TODO: this should be a single update to repo state, not two
-	err = env.UpdateStagedRoot(ctx, ddb, rsw, r)
+	err = env.UpdateStagedRoot(ctx, rsw, r)
 	if err != nil {
 		return err
 	}

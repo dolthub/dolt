@@ -45,10 +45,10 @@ func (a StageAll) CommandString() string { return "stage_all" }
 
 // Exec executes a StageAll command on a test dolt environment.
 func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	return actions.StageAllTables(context.Background(), workingRoot, dEnv.DbData())
+	return actions.StageAllTables(context.Background(), roots, dEnv.DbData())
 }
 
 type CommitStaged struct {
@@ -60,7 +60,7 @@ func (c CommitStaged) CommandString() string { return fmt.Sprintf("commit_staged
 
 // Exec executes a CommitStaged command on a test dolt environment.
 func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
@@ -71,7 +71,7 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(context.Background(), workingRoot, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -92,10 +92,10 @@ func (c CommitAll) CommandString() string { return fmt.Sprintf("commit: %s", c.M
 
 // Exec executes a CommitAll command on a test dolt environment.
 func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	err = actions.StageAllTables(context.Background(), workingRoot, dEnv.DbData())
+	err = actions.StageAllTables(context.Background(), roots, dEnv.DbData())
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
@@ -105,8 +105,11 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	}
 
 	dbData := dEnv.DbData()
+	// TODO: refactor StageAllTables to just modify roots in memory, not write to disk
+	roots, err = dEnv.Roots(context.Background())
+	require.NoError(t, err)
 
-	_, err = actions.CommitStaged(context.Background(), workingRoot, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,

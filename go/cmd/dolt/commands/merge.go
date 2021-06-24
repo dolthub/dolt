@@ -197,12 +197,12 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 		cli.Println("Squash commit -- not updating HEAD")
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	roots, err := dEnv.Roots(ctx)
 	if err != nil {
-		return nil
+		return errhand.VerboseErrorFromError(err)
 	}
 
-	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, workingRoot, cm2, dEnv.DbData())
+	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, roots.Working, cm2, dEnv.DbData())
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
@@ -219,7 +219,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
 		if apr.Contains(cli.NoFFParam) {
-			return execNoFFMerge(ctx, apr, dEnv, workingRoot, cm2, verr, workingDiffs)
+			return execNoFFMerge(ctx, apr, dEnv, roots, cm2, verr, workingDiffs)
 		} else {
 			return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
 		}
@@ -231,7 +231,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	}
 }
 
-func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, cm2 *doltdb.Commit, verr errhand.VerboseError, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, roots env.Roots, cm2 *doltdb.Commit, verr errhand.VerboseError, workingDiffs map[string]hash.Hash) errhand.VerboseError {
 	mergedRoot, err := cm2.GetRootValue()
 
 	if err != nil {
@@ -267,7 +267,8 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
+	// TODO: this isn't right, the new working value needs to be passed in here
+	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
@@ -319,7 +320,7 @@ func executeFFMerge(
 		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv.DbData())
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
 	}
@@ -472,7 +473,15 @@ func fkConstraintWarning(ctx context.Context, cm1, cm2 *doltdb.Commit) errhand.V
 	return nil
 }
 
-func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, mergedRoot *doltdb.RootValue, workingDiffs map[string]hash.Hash, cm2 *doltdb.Commit, tblToStats map[string]*merge.MergeStats) errhand.VerboseError {
+func mergedRootToWorking(
+		ctx context.Context,
+		squash bool,
+		dEnv *env.DoltEnv,
+		mergedRoot *doltdb.RootValue,
+		workingDiffs map[string]hash.Hash,
+		cm2 *doltdb.Commit,
+		tblToStats map[string]*merge.MergeStats,
+) errhand.VerboseError {
 	var err error
 
 	workingRoot := mergedRoot

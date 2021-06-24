@@ -241,67 +241,70 @@ func executeNoFFMerge(
 	dbData env.DbData,
 	pr, cm2 *doltdb.Commit,
 ) error {
-	mergedRoot, err := cm2.GetRootValue()
-	if err != nil {
-		return errors.New("Failed to return root value.")
-	}
+	return nil
 
-	err = mergeRootToWorking(ctx, false, dbName, dbData, mergedRoot, cm2, map[string]*merge.MergeStats{})
-	if err != nil {
-		return err
-	}
-
-	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
-	if !msgOk {
-		hh, err := pr.HashOf()
-		if err != nil {
-			return err
-		}
-
-		cmh, err := cm2.HashOf()
-		if err != nil {
-			return err
-		}
-
-		msg = fmt.Sprintf("SQL Generated commit merging %s into %s", hh.String(), cmh.String())
-	}
-
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return err
-		}
-	} else {
-		name = dSess.Username
-		email = dSess.Email
-	}
-
-	// Specify the time if the date parameter is not.
-	t := ctx.QueryTime()
-	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		var err error
-		t, err = cli.ParseDate(commitTimeStr)
-		if err != nil {
-			return err
-		}
-	}
-
-	workingRoot, _ := dSess.GetRoot(dbName)
-	h, err := actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
-		Message:          msg,
-		Date:             t,
-		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
-		Name:             name,
-		Email:            email,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return setHeadAndWorkingSessionRoot(ctx, h)
+	// TODO: fix me
+	// mergedRoot, err := cm2.GetRootValue()
+	// if err != nil {
+	// 	return errors.New("Failed to return root value.")
+	// }
+	//
+	// err = mergeRootToWorking(ctx, false, dbName, dbData, mergedRoot, cm2, map[string]*merge.MergeStats{})
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+	// if !msgOk {
+	// 	hh, err := pr.HashOf()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	//
+	// 	cmh, err := cm2.HashOf()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	//
+	// 	msg = fmt.Sprintf("SQL Generated commit merging %s into %s", hh.String(), cmh.String())
+	// }
+	//
+	// var name, email string
+	// if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+	// 	name, email, err = cli.ParseAuthor(authorStr)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// } else {
+	// 	name = dSess.Username
+	// 	email = dSess.Email
+	// }
+	//
+	// // Specify the time if the date parameter is not.
+	// t := ctx.QueryTime()
+	// if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+	// 	var err error
+	// 	t, err = cli.ParseDate(commitTimeStr)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
+	//
+	// workingRoot, _ := dSess.GetRoot(dbName)
+	// h, err := actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
+	// 	Message:          msg,
+	// 	Date:             t,
+	// 	AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
+	// 	CheckForeignKeys: !apr.Contains(cli.ForceFlag),
+	// 	Name:             name,
+	// 	Email:            email,
+	// })
+	//
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// return setHeadAndWorkingSessionRoot(ctx, h)
 }
 
 func mergeRootToWorking(
@@ -334,7 +337,7 @@ func mergeRootToWorking(
 		return doltdb.ErrUnresolvedConflicts
 	}
 
-	err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
+	err = env.UpdateStagedRoot(ctx, dbData.Rsw, workingRoot)
 	if err != nil {
 		return err
 	}

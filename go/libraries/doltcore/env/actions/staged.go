@@ -28,8 +28,6 @@ import (
 var ErrTablesInConflict = errors.New("table is in conflict")
 
 func StageTables(ctx context.Context, roots env.Roots, dbData env.DbData, tbls []string) error {
-	ddb := dbData.Ddb
-	rsr := dbData.Rsr
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
@@ -38,19 +36,14 @@ func StageTables(ctx context.Context, roots env.Roots, dbData env.DbData, tbls [
 		return err
 	}
 
-	staged, working, err := getStagedAndWorking(ctx, ddb, rsr)
-	if err != nil {
-		return err
-	}
-
 	if len(docs) > 0 {
-		working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
+		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = stageTables(ctx, ddb, rsw, tables, staged, working)
+	err = stageTables(ctx, roots, rsw, tables)
 	if err != nil {
 		env.ResetWorkingDocsToStagedDocs(ctx, roots, rsw)
 		return err
@@ -59,7 +52,6 @@ func StageTables(ctx context.Context, roots env.Roots, dbData env.DbData, tbls [
 }
 
 func StageAllTables(ctx context.Context, roots env.Roots, dbData env.DbData) error {
-	ddb := dbData.Ddb
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
@@ -68,17 +60,17 @@ func StageAllTables(ctx context.Context, roots env.Roots, dbData env.DbData) err
 		return err
 	}
 
-	working, err := doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
+	roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
 	if err != nil {
 		return err
 	}
 
-	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, working)
+	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 	if err != nil {
 		return err
 	}
 
-	err = stageTables(ctx, ddb, rsw, tbls, roots.Staged, working)
+	err = stageTables(ctx, roots, rsw, tbls)
 	if err != nil {
 		env.ResetWorkingDocsToStagedDocs(ctx, roots, rsw)
 		return err
@@ -87,18 +79,23 @@ func StageAllTables(ctx context.Context, roots env.Roots, dbData env.DbData) err
 	return nil
 }
 
-func stageTables(ctx context.Context, db *doltdb.DoltDB, rsw env.RepoStateWriter, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue) error {
-	err := ValidateTables(ctx, tbls, staged, working)
+func stageTables(
+		ctx context.Context,
+		roots env.Roots,
+		rsw env.RepoStateWriter,
+		tbls []string,
+) error {
+	err := ValidateTables(ctx, tbls, roots.Staged, roots.Working)
 	if err != nil {
 		return err
 	}
 
-	working, err = checkTablesForConflicts(ctx, tbls, working)
+	working, err := checkTablesForConflicts(ctx, tbls, roots.Working)
 	if err != nil {
 		return err
 	}
 
-	staged, err = MoveTablesBetweenRoots(ctx, tbls, working, staged)
+	staged, err := MoveTablesBetweenRoots(ctx, tbls, working, roots.Staged)
 	if err != nil {
 		return err
 	}
@@ -109,9 +106,11 @@ func stageTables(ctx context.Context, db *doltdb.DoltDB, rsw env.RepoStateWriter
 		return err
 	}
 
-	return env.UpdateStagedRoot(ctx, db, rsw, staged)
+	return env.UpdateStagedRoot(ctx, rsw, staged)
 }
 
+// checkTablesForConflicts clears any 0-row conflicts from the tables named, and returns a new root with those
+// conflicts cleared. If any tables named have real conflicts, returns an error.
 func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
 	var inConflict []string
 	for _, tblName := range tbls {
@@ -181,16 +180,6 @@ func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootVal
 	return NewTblNotExistError(missing)
 }
 
-func getStagedAndWorking(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*doltdb.RootValue, *doltdb.RootValue, error) {
-	roots, err := getRoots(ctx, ddb, rsr, doltdb.StagedRoot, doltdb.WorkingRoot)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return roots[doltdb.StagedRoot], roots[doltdb.WorkingRoot], nil
-}
-
 // getRoots returns a RootValue object for each root type passed in rootTypes.
 func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rootTypes ...doltdb.RootType) (map[doltdb.RootType]*doltdb.RootValue, error) {
 	roots := make(map[doltdb.RootType]*doltdb.RootValue)
@@ -199,7 +188,7 @@ func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, 
 		var root *doltdb.RootValue
 		switch rt {
 		case doltdb.StagedRoot:
-			root, err = env.StagedRoot(ctx, ddb, rsr)
+			root, err = env.StagedRoot(ctx, rsr)
 		case doltdb.WorkingRoot:
 			root, err = getWorkingRoot(ctx, ddb, rsr)
 		case doltdb.HeadRoot:

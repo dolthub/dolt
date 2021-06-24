@@ -76,13 +76,14 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	// Check if the -all param is provided. Stage all tables if so.
 	allFlag := apr.Contains(cli.AllFlag)
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
 	}
 
 	if allFlag {
-		err = actions.StageAllTables(ctx, workingRoot, dEnv.DbData())
+		// TODO: can't reuse roots here below, this is doing hidden global state management
+		err = actions.StageAllTables(ctx, roots, dEnv.DbData())
 	}
 
 	if err != nil {
@@ -118,7 +119,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
@@ -210,7 +211,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 
 	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}
