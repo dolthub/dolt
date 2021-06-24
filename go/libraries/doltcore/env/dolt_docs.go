@@ -24,7 +24,7 @@ import (
 // If the `dolt_docs` table does not exist on the staged root, it will be removed from the working root.
 func ResetWorkingDocsToStagedDocs(
 	ctx context.Context,
-	roots Roots,
+	roots doltdb.Roots,
 	rsw RepoStateWriter,
 ) error {
 	stgDocTbl, stgDocsFound, err := roots.Staged.GetTable(ctx, doltdb.DocTableName)

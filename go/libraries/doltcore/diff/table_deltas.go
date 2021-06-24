@@ -108,7 +108,7 @@ func (nd *DocDiffs) Len() int {
 // GetDocDiffs retrieves staged and unstaged DocDiffs.
 func GetDocDiffs(
 	ctx context.Context,
-	roots env.Roots,
+	roots doltdb.Roots,
 	drw env.DocsReadWriter,
 ) (*DocDiffs, *DocDiffs, error) {
 	docsOnDisk, err := drw.GetDocsOnDisk()
@@ -249,7 +249,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	return deltas, nil
 }
 
-func GetStagedUnstagedTableDeltas(ctx context.Context, roots env.Roots) (staged, unstaged []TableDelta, err error) {
+func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (staged, unstaged []TableDelta, err error) {
 	staged, err = GetTableDeltas(ctx, roots.Head, roots.Staged)
 	if err != nil {
 		return nil, nil, err

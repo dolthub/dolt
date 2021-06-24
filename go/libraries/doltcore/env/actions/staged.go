@@ -25,7 +25,7 @@ import (
 
 var ErrTablesInConflict = errors.New("table is in conflict")
 
-func StageTables(ctx context.Context, roots env.Roots, dbData env.DbData, tbls []string) error {
+func StageTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tbls []string) error {
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
@@ -49,7 +49,7 @@ func StageTables(ctx context.Context, roots env.Roots, dbData env.DbData, tbls [
 	return nil
 }
 
-func StageAllTables(ctx context.Context, roots env.Roots, dbData env.DbData) error {
+func StageAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) error {
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
@@ -79,7 +79,7 @@ func StageAllTables(ctx context.Context, roots env.Roots, dbData env.DbData) err
 
 func stageTables(
 		ctx context.Context,
-		roots env.Roots,
+		roots doltdb.Roots,
 		rsw env.RepoStateWriter,
 		tbls []string,
 ) error {

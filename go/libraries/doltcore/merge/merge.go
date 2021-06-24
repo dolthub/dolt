@@ -875,7 +875,7 @@ func getWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRe
 	return ws.RootValue(), nil
 }
 
-func GetTablesInConflict(ctx context.Context, roots env.Roots) (
+func GetTablesInConflict(ctx context.Context, roots doltdb.Roots) (
 		workingInConflict, stagedInConflict, headInConflict []string,
 		err error,
 ) {

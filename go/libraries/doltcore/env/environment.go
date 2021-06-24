@@ -418,29 +418,22 @@ func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
 	return nil
 }
 
-// TODO: move to doltdb package
-type Roots struct {
-	Head *doltdb.RootValue
-	Working *doltdb.RootValue
-	Staged *doltdb.RootValue
-}
-
 type RootsProvider interface {
-	GetRoots(ctx context.Context) (Roots, error)
+	GetRoots(ctx context.Context) (doltdb.Roots, error)
 }
 
-func (dEnv *DoltEnv) Roots(ctx context.Context) (Roots, error) {
+func (dEnv *DoltEnv) Roots(ctx context.Context) (doltdb.Roots, error) {
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
-		return Roots{}, err
+		return doltdb.Roots{}, err
 	}
 
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
-		return Roots{}, err
+		return doltdb.Roots{}, err
 	}
 
-	return Roots{
+	return doltdb.Roots{
 		Head:    headRoot,
 		Working: ws.WorkingRoot(),
 		Staged:  ws.StagedRoot(),

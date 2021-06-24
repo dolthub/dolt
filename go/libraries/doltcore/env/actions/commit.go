@@ -60,7 +60,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 }
 
 // CommitStaged adds a new commit to HEAD with the given props. Returns the new commit's hash as a string and an error.
-func CommitStaged(ctx context.Context, roots env.Roots, dbData env.DbData, props CommitStagedProps) (string, error) {
+func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, props CommitStagedProps) (string, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw

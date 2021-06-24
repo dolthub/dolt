@@ -151,7 +151,7 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, workingR
 	return nil
 }
 
-func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots env.Roots) (*doltdb.RootValue, error) {
+func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (*doltdb.RootValue, error) {
 	tables, err := getUnionedTables(ctx, apr.Args(), roots.Staged, roots.Head)
 	tables = RemoveDocsTable(tables)
 	if err != nil {
@@ -171,7 +171,7 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return stagedRoot, nil
 }
 
-func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots env.Roots) (*doltdb.RootValue, error) {
+func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots doltdb.Roots) (*doltdb.RootValue, error) {
 	tables, err := getUnionedTables(ctx, tables, roots.Staged, roots.Head)
 
 	if err != nil {
@@ -253,7 +253,7 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 }
 
 // resetDocs resets the working and staged docs with docs from head.
-func resetDocs(ctx context.Context, dbData env.DbData, roots env.Roots, docs doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
+func resetDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, docs doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
 	docs, err = doltdocs.GetDocsFromRoot(ctx, roots.Head, doltdocs.GetDocNamesFromDocs(docs)...)
 	if err != nil {
 		return nil, err
@@ -273,7 +273,7 @@ func resetDocs(ctx context.Context, dbData env.DbData, roots env.Roots, docs dol
 }
 
 // TODO: this should just work in memory, not write to disk
-func resetStaged(ctx context.Context, roots env.Roots, rsw env.RepoStateWriter, tbls []string) (*doltdb.RootValue, error) {
+func resetStaged(ctx context.Context, roots doltdb.Roots, rsw env.RepoStateWriter, tbls []string) (*doltdb.RootValue, error) {
 	newStaged, err := MoveTablesBetweenRoots(ctx, tbls, roots.Head, roots.Staged)
 	if err != nil {
 		return nil, err

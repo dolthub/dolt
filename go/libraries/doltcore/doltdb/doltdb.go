@@ -300,6 +300,22 @@ func getAncestor(ctx context.Context, vrw types.ValueReadWriter, commitSt types.
 	return commitSt, nil
 }
 
+// Roots is a convenience struct to package up the three roots that most library functions will need to inspect and
+// modify the working set. This struct is designed to be passed by value always: functions should take a Roots as a
+// param and return a modified one.
+//
+// It contains three root values:
+// Head: The root of the head of the current working branch
+// Working: The root of the current working set
+// Staged: The root of the staged value
+//
+// See doltEnvironment.Roots(context.Context)
+type Roots struct {
+	Head    *RootValue
+	Working *RootValue
+	Staged  *RootValue
+}
+
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
 // If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
 func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
