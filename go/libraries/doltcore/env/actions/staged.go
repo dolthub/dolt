@@ -18,10 +18,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
@@ -178,46 +176,4 @@ func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootVal
 	}
 
 	return NewTblNotExistError(missing)
-}
-
-// getRoots returns a RootValue object for each root type passed in rootTypes.
-func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rootTypes ...doltdb.RootType) (map[doltdb.RootType]*doltdb.RootValue, error) {
-	roots := make(map[doltdb.RootType]*doltdb.RootValue)
-	for _, rt := range rootTypes {
-		var err error
-		var root *doltdb.RootValue
-		switch rt {
-		case doltdb.StagedRoot:
-			root, err = env.StagedRoot(ctx, rsr)
-		case doltdb.WorkingRoot:
-			root, err = getWorkingRoot(ctx, ddb, rsr)
-		case doltdb.HeadRoot:
-			root, err = env.HeadRoot(ctx, ddb, rsr)
-		default:
-			panic("Method does not support this root type.")
-		}
-
-		if err != nil {
-			return nil, doltdb.RootValueUnreadable{RootType: rt, Cause: err}
-		}
-
-		roots[rt] = root
-	}
-
-	return roots, nil
-}
-
-// TODO: get rid of this
-func getWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*doltdb.RootValue, error) {
-	wsRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
-	if err != nil {
-		return nil, err
-	}
-
-	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return nil, err
-	}
-
-	return ws.RootValue(), nil
 }

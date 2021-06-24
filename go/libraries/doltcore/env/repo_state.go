@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -232,31 +231,12 @@ func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*do
 	return commit.GetRootValue()
 }
 
-// Returns the staged root.
-// TODO: remove this
-func StagedRoot(ctx context.Context, rsr RepoStateReader) (*doltdb.RootValue, error) {
-	return rsr.StagedRoot(ctx)
-}
-
 // Updates the staged root.
 // TODO: remove this
 func UpdateStagedRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
 	err := rsw.UpdateStagedRoot(ctx, newRoot)
 	if err != nil {
 		return ErrStateUpdate
-	}
-
-	return nil
-}
-
-func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	err := UpdateStagedRoot(context.Background(), rsw, updatedRoot)
-
-	switch err {
-	case doltdb.ErrNomsIO:
-		return errhand.BuildDError("fatal: failed to write value").Build()
-	case ErrStateUpdate:
-		return errhand.BuildDError("fatal: failed to update the staged root state").Build()
 	}
 
 	return nil
