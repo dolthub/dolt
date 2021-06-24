@@ -116,7 +116,7 @@ func VerboseErrorFromError(err error) VerboseError {
 		return verr
 	}
 
-	builder := &DErrorBuilder{err.Error(), "", nil, false}
+	builder := &DErrorBuilder{err.Error(), "", err, false}
 	return builder.Build()
 }
 

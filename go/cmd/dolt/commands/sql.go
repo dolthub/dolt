@@ -400,13 +400,13 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 		// them would overwrite these changes)
 		// TODO: this is a mess, merge conflicts need to follow the same code path as everything else
 		if err == doltdb.ErrUnresolvedConflicts || err == doltdb.ErrMergeActive {
-			return errhand.BuildDError("Error processing batch").Build()
+			return errhand.BuildDError("Error processing batch").AddCause(err).Build()
 		}
 
 		_ = flushBatchedEdits(sqlCtx, se)
 		_ = writeRoots(sqlCtx, se, mrEnv, roots)
 
-		return errhand.BuildDError("Error processing batch").Build()
+		return errhand.BuildDError("Error processing batch").AddCause(err).Build()
 	}
 
 	return writeRoots(sqlCtx, se, mrEnv, roots)
@@ -504,7 +504,7 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 		return verrBuilder.Build()
 	} else {
 		if len(message) > 0 {
-			err = fmt.Errorf("%s: %s", message, err.Error())
+			err = fmt.Errorf("%s: %+v", message, err)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1414,7 +1414,7 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	}
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
 		return dsqle.InitialDbState{}, err
 	}
@@ -1430,6 +1430,7 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 		Roots:      roots,
 		HeadCommit: headCommit,
 		WorkingSet: wsRef,
+		DbData:     dEnv.DbData(),
 	}, nil
 }
 

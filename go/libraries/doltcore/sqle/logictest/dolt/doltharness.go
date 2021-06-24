@@ -210,6 +210,7 @@ func getDbState(db sql.Database, dEnv *env.DoltEnv) dsql.InitialDbState {
 		Roots:      roots,
 		HeadCommit: headCommit,
 		WorkingSet: wsRef,
+		DbData:     dEnv.DbData(),
 	}
 }
 

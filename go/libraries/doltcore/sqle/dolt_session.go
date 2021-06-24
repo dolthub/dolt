@@ -148,6 +148,7 @@ type InitialDbState struct {
 	Roots      doltdb.Roots
 	HeadCommit *doltdb.Commit
 	WorkingSet ref.WorkingSetRef
+	DbData     env.DbData
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
@@ -697,7 +698,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	defineSystemVariables(db.Name())
 
 	// TODO: get rid of all repo state writer stuff
-	//sess.dbDatas[db.Name()] = dbData
+	sess.dbDatas[db.Name()] = dbState.DbData
 	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
 	workingRoot := dbState.Roots.Working

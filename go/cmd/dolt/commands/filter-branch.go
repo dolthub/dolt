@@ -278,6 +278,7 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 		Roots:      roots,
 		HeadCommit: headCommit,
 		WorkingSet: wsRef,
+		DbData: dEnv.DbData(),
 	}
 
 	err = dsess.AddDB(sqlCtx, dbState)

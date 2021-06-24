@@ -278,6 +278,7 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			Roots:      roots,
 			HeadCommit: headCommit,
 			WorkingSet: wsRef,
+			DbData:     dEnv.DbData(),
 		})
 	}
 

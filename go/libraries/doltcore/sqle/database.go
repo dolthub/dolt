@@ -610,6 +610,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Sc
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
+	// TODO: this is wrong right?
 	headRoot, err := db.GetHeadRoot(ctx)
 	if err != nil {
 		return err

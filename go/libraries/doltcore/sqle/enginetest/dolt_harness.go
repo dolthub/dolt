@@ -204,6 +204,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) sqle.InitialDb
 		Roots:      roots,
 		HeadCommit: headCommit,
 		WorkingSet: wsRef,
+		DbData:     dEnv.DbData(),
 	}
 }
 
