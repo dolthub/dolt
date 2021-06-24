@@ -64,7 +64,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	root, _ := dEnv.WorkingRoot(ctx)
 
 	db := NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	require.NoError(t, err)
 	DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -153,7 +153,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	root, _ := dEnv.WorkingRoot(ctx)
 
 	db := NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	require.NoError(t, err)
 	DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -192,7 +192,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	root, _ := dEnv.WorkingRoot(ctx)
 
 	db := NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	require.NoError(t, err)
 	DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 

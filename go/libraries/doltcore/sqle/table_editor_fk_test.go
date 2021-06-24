@@ -165,7 +165,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			root := testRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
-				root, err = executeModify(context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
 				require.NoError(t, err)
 			}
 
@@ -212,7 +212,7 @@ ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UP
 			root := testRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
-				root, err = executeModify(context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
 				require.NoError(t, err)
 			}
 
@@ -296,14 +296,14 @@ func TestTableEditorForeignKeyRestrict(t *testing.T) {
 					root := testRoot
 					for _, sqlStatement := range strings.Split(test.setup, ";") {
 						var err error
-						root, err = executeModify(context.Background(), dEnv, root, sqlStatement)
+						root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
 						require.NoError(t, err)
 					}
 					if test.expectedErr {
-						root, err = executeModify(context.Background(), dEnv, root, test.trigger)
+						root, err = executeModify(t, context.Background(), dEnv, root, test.trigger)
 						assert.Error(t, err)
 					} else {
-						root, err = executeModify(context.Background(), dEnv, root, test.trigger)
+						root, err = executeModify(t, context.Background(), dEnv, root, test.trigger)
 						assert.NoError(t, err)
 					}
 				})
@@ -367,10 +367,10 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			root := testRoot
 			for _, sqlStatement := range strings.Split(test.setup, ";") {
 				var err error
-				root, err = executeModify(context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
 				require.NoError(t, err)
 			}
-			root, err = executeModify(context.Background(), dEnv, root, test.trigger)
+			root, err = executeModify(t, context.Background(), dEnv, root, test.trigger)
 			assert.Error(t, err)
 		})
 	}
@@ -435,7 +435,7 @@ func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
 	}
 
 	for _, test := range sequentialTests {
-		newRoot, err := executeModify(ctx, dEnv, root, test.statement)
+		newRoot, err := executeModify(t, ctx, dEnv, root, test.statement)
 		if test.expectedErr {
 			require.Error(t, err)
 			continue
@@ -535,7 +535,7 @@ func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
 	}
 
 	for _, test := range sequentialTests {
-		newRoot, err := executeModify(ctx, dEnv, root, test.statement)
+		newRoot, err := executeModify(t, ctx, dEnv, root, test.statement)
 		if test.expectedErr {
 			require.Error(t, err)
 			continue
@@ -635,7 +635,7 @@ func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
 	}
 
 	for _, test := range sequentialTests {
-		newRoot, err := executeModify(ctx, dEnv, root, test.statement)
+		newRoot, err := executeModify(t, ctx, dEnv, root, test.statement)
 		if test.expectedErr {
 			require.Error(t, err)
 			continue

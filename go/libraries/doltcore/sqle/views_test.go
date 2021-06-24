@@ -47,7 +47,7 @@ func TestViews(t *testing.T) {
 		{int64(3)},
 		{int64(4)},
 	}
-	rows, _, err := executeSelect(context.Background(), dEnv, root, "select * from plus1")
+	rows, _, err := executeSelect(t, context.Background(), dEnv, root, "select * from plus1")
 	require.NoError(t, err)
 	assert.Equal(t, expectedRows, rows)
 

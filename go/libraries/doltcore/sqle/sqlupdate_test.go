@@ -439,7 +439,7 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 
 	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(context.Background(), dEnv, root, test.UpdateQuery)
+	root, err = executeModify(t, context.Background(), dEnv, root, test.UpdateQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return
@@ -447,7 +447,7 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, sch, err := executeSelect(context.Background(), dEnv, root, test.SelectQuery)
+	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)

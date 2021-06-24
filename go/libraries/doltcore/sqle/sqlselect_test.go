@@ -1544,7 +1544,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	}
 
 	root, _ := dEnv.WorkingRoot(context.Background())
-	actualRows, sch, err := executeSelect(context.Background(), dEnv, root, test.Query)
+	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.Query)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		// Too much work to synchronize error messages between the two implementations, so for now we'll just assert that an error occurred.
@@ -1602,7 +1602,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
 
-	actualRows, sch, err := executeSelect(ctx, dEnv, root, test.Query)
+	actualRows, sch, err := executeSelect(t, ctx, dEnv, root, test.Query)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return

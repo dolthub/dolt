@@ -124,7 +124,7 @@ UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 			root := initialRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
-				root, err = executeModify(context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
 				require.NoError(t, err)
 			}
 
@@ -282,7 +282,7 @@ UPDATE oneuni SET v1 = v1 + pk1;
 			root := initialRoot
 			var err error
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
-				root, err = executeModify(context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
 				if err != nil {
 					break
 				}

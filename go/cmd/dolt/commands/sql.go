@@ -1088,6 +1088,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *sqlEngine, query string, sql
 	}
 
 	// DOLT SQL functions like DOLT_COMMIT require an updated repo state to work correctly.
+	// TODO: kill this entire mess
 	if foundDoltSQLFunc {
 		err = updateRepoState(ctx, se)
 		if err != nil {
