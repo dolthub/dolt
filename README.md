@@ -1,3 +1,5 @@
+#BENCHMARK!
+
 # Dolt
 
 <img align="left" height="300" src="./docs/dolt_hi.svg"/>
