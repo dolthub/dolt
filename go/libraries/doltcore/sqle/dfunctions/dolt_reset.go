@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -67,7 +66,9 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	// Get all the needed roots.
 	workingRoot, _ := dSess.GetRoot(dbName)
 
-	staged, head, err := GetRoots(ctx, dbData.Ddb, dbData.Rsr)
+	// TODO: fix me
+	var staged, head *doltdb.RootValue
+	// staged, head, err := GetRoots(ctx, dbData.Ddb, dbData.Rsr)
 	if err != nil {
 		return 1, err
 	}
@@ -121,24 +122,6 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	return 0, nil
 }
-
-func GetRoots(ctx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (staged *doltdb.RootValue, head *doltdb.RootValue, err error) {
-	staged, err = env.StagedRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// TODO: replace with session var
-	head, err = env.HeadRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return staged, head, nil
-}
-
 
 func (d DoltResetFunc) Resolved() bool {
 	for _, child := range d.Children() {

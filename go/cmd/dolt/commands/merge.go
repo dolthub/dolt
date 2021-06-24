@@ -492,7 +492,7 @@ func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, me
 		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv.DbData())
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine unstaged docs").AddCause(err).Build()
 	}

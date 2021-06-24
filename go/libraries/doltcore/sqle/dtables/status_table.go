@@ -18,14 +18,13 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
@@ -88,13 +87,17 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return nil, err
 	}
 
-	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, workingRoot, rsr)
+	// TODO: fix me
+	var stagedTables, unstagedTables []diff.TableDelta
+	// stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, workingRoot, rsr)
 
 	if err != nil {
 		return &StatusItr{}, err
 	}
 
-	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, workingRoot, rsr, drw)
+	// TODO: fix me
+	// stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, workingRoot, rsr, drw)
+	var stagedDocDiffs, unStagedDocDiffs *diff.DocDiffs
 
 	if err != nil {
 		return &StatusItr{}, err

@@ -74,7 +74,13 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
 	}
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, workingRoot, dEnv.RepoStateReader())
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		cli.PrintErrln(toStatusVErr(err).Verbose())
+		return 1
+	}
+
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
@@ -87,7 +93,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv.DoltDB, workingRoot, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
+	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())

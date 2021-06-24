@@ -876,40 +876,18 @@ func getWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRe
 }
 
 // TODO: pass in roots here instead
-func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
-	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
-
-	headRoot, err = env.HeadRoot(ctx, ddb, rsr)
-
+func GetTablesInConflict(ctx context.Context, roots env.Roots, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
+	headInConflict, err = roots.Head.TablesInConflict(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	stagedRoot, err = env.StagedRoot(ctx, ddb, rsr)
-
+	stagedInConflict, err = roots.Staged.TablesInConflict(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	workingRoot, err = getWorkingRoot(ctx, ddb, rsr)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	headInConflict, err = headRoot.TablesInConflict(ctx)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	stagedInConflict, err = stagedRoot.TablesInConflict(ctx)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	workingInConflict, err = workingRoot.TablesInConflict(ctx)
-
+	workingInConflict, err = roots.Working.TablesInConflict(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}

@@ -27,7 +27,7 @@ import (
 
 var ErrTablesInConflict = errors.New("table is in conflict")
 
-func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
+func StageTables(ctx context.Context, roots env.Roots, dbData env.DbData, tbls []string) error {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
@@ -52,41 +52,35 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 
 	err = stageTables(ctx, ddb, rsw, tables, staged, working)
 	if err != nil {
-		env.ResetWorkingDocsToStagedDocs(ctx, ddb, working, rsr, rsw)
+		env.ResetWorkingDocsToStagedDocs(ctx, roots, rsw)
 		return err
 	}
 	return nil
 }
 
-func StageAllTables(ctx context.Context, working *doltdb.RootValue, dbData env.DbData) error {
+func StageAllTables(ctx context.Context, roots env.Roots, dbData env.DbData) error {
 	ddb := dbData.Ddb
-	rsr := dbData.Rsr
 	rsw := dbData.Rsw
 	drw := dbData.Drw
-
-	staged, err := env.StagedRoot(ctx, ddb, rsr)
-	if err != nil {
-		return err
-	}
 
 	docs, err := drw.GetDocsOnDisk()
 	if err != nil {
 		return err
 	}
 
-	working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
+	working, err := doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
 	if err != nil {
 		return err
 	}
 
-	tbls, err := doltdb.UnionTableNames(ctx, staged, working)
+	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, working)
 	if err != nil {
 		return err
 	}
 
-	err = stageTables(ctx, ddb, rsw, tbls, staged, working)
+	err = stageTables(ctx, ddb, rsw, tbls, roots.Staged, working)
 	if err != nil {
-		env.ResetWorkingDocsToStagedDocs(ctx, ddb, working, rsr, rsw)
+		env.ResetWorkingDocsToStagedDocs(ctx, roots, rsw)
 		return err
 	}
 

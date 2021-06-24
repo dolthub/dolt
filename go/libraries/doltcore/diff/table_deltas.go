@@ -108,9 +108,7 @@ func (nd *DocDiffs) Len() int {
 // GetDocDiffs retrieves staged and unstaged DocDiffs.
 func GetDocDiffs(
 	ctx context.Context,
-	ddb *doltdb.DoltDB,
-	workingRoot *doltdb.RootValue,
-	rsr env.RepoStateReader,
+	roots env.Roots,
 	drw env.DocsReadWriter,
 ) (*DocDiffs, *DocDiffs, error) {
 	docsOnDisk, err := drw.GetDocsOnDisk()
@@ -118,22 +116,12 @@ func GetDocDiffs(
 		return nil, nil, err
 	}
 
-	notStagedDocDiffs, err := NewDocDiffs(ctx, workingRoot, nil, docsOnDisk)
+	notStagedDocDiffs, err := NewDocDiffs(ctx, roots.Working, nil, docsOnDisk)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	headRoot, err := env.HeadRoot(ctx, ddb, rsr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	stagedRoot, err := env.StagedRoot(ctx, ddb, rsr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	stagedDocDiffs, err := NewDocDiffs(ctx, headRoot, stagedRoot, docsOnDisk)
+	stagedDocDiffs, err := NewDocDiffs(ctx, roots.Head, roots.Staged, docsOnDisk)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -261,23 +249,13 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	return deltas, nil
 }
 
-func GetStagedUnstagedTableDeltas(ctx context.Context, ddb *doltdb.DoltDB, workingRoot *doltdb.RootValue, rsr env.RepoStateReader) (staged, unstaged []TableDelta, err error) {
-	headRoot, err := env.HeadRoot(ctx, ddb, rsr)
-	if err != nil {
-		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
-	}
-
-	stagedRoot, err := env.StagedRoot(ctx, ddb, rsr)
-	if err != nil {
-		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.StagedRoot, Cause: err}
-	}
-
-	staged, err = GetTableDeltas(ctx, headRoot, stagedRoot)
+func GetStagedUnstagedTableDeltas(ctx context.Context, roots env.Roots) (staged, unstaged []TableDelta, err error) {
+	staged, err = GetTableDeltas(ctx, roots.Head, roots.Staged)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	unstaged, err = GetTableDeltas(ctx, stagedRoot, workingRoot)
+	unstaged, err = GetTableDeltas(ctx, roots.Staged, roots.Working)
 	if err != nil {
 		return nil, nil, err
 	}

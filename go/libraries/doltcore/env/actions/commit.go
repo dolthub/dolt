@@ -60,7 +60,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 }
 
 // CommitStaged adds a new commit to HEAD with the given props. Returns the new commit's hash as a string and an error.
-func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env.DbData, props CommitStagedProps) (string, error) {
+func CommitStaged(ctx context.Context, roots env.Roots, dbData env.DbData, props CommitStagedProps) (string, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
@@ -70,7 +70,7 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 		return "", doltdb.ErrEmptyCommitMessage
 	}
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, workingRoot, rsr)
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return "", err
 	}
@@ -90,7 +90,7 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 	}
 
 	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
-		_, notStagedDocs, err := diff.GetDocDiffs(ctx, ddb, workingRoot, rsr, drw)
+		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, drw)
 		if err != nil {
 			return "", err
 		}
@@ -99,7 +99,7 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 
 	var mergeParentCommits []*doltdb.Commit
 	if mergeActive {
-		inConflict, err := workingRoot.TablesInConflict(ctx)
+		inConflict, err := roots.Working.TablesInConflict(ctx)
 		if err != nil {
 			return "", err
 		}
@@ -115,44 +115,31 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 		mergeParentCommits = []*doltdb.Commit{commit}
 	}
 
-	srt, err := env.StagedRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return "", err
-	}
-
-	hrt, err := env.HeadRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return "", err
-	}
-
-	srt, err = srt.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
-
+	stagedRoot, err := roots.Staged.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
 	if err != nil {
 		return "", err
 	}
 
 	if props.CheckForeignKeys {
-		srt, err = srt.ValidateForeignKeysOnSchemas(ctx)
+		stagedRoot, err = stagedRoot.ValidateForeignKeysOnSchemas(ctx)
 
 		if err != nil {
 			return "", err
 		}
 
-		err = fkconstrain.Validate(ctx, hrt, srt)
-
+		err = fkconstrain.Validate(ctx, roots.Head, stagedRoot)
 		if err != nil {
 			return "", err
 		}
 	}
 
-	err = env.UpdateStagedRoot(ctx, ddb, rsw, srt)
+	// TODO: combine into a single update
+	err = env.UpdateStagedRoot(ctx, ddb, rsw, stagedRoot)
 	if err != nil {
 		return "", err
 	}
 
-	workingRoot, err = workingRoot.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
+	workingRoot, err := roots.Working.UpdateSuperSchemasFromOther(ctx, stagedTblNames, stagedRoot)
 	if err != nil {
 		return "", err
 	}
@@ -167,7 +154,7 @@ func CommitStaged(ctx context.Context, workingRoot *doltdb.RootValue, dbData env
 		return "", err
 	}
 
-	h, err := srt.HashOf()
+	h, err := stagedRoot.HashOf()
 	if err != nil {
 		return "", err
 	}

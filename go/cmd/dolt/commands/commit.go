@@ -198,23 +198,24 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) string {
 	return finalMsg
 }
 
+// TODO: return an error here
 func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		panic(err)
 	}
 
-	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, workingRoot, dEnv.RepoStateReader())
+	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 
 	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv.DoltDB, workingRoot, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
+	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
