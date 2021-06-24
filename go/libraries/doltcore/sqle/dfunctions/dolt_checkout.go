@@ -203,34 +203,36 @@ func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error 
 
 // updateHeadAndWorkingSessionVars explicitly sets the head and working hash.
 func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error {
-	headHash, err := dbData.Rsr.CWBHeadHash(ctx)
-	if err != nil {
-		return err
-	}
-	hs := headHash.String()
-
-	hasWorkingChanges := hasWorkingSetChanges(dbData.Rsr)
-	hasStagedChanges, err := hasStagedSetChanges(ctx, dbData.Ddb, dbData.Rsr)
-
-	if err != nil {
-		return err
-	}
-
-	// TODO: fix this
-	// workingHash := dbData.Rsr.WorkingHash().String()
-	workingHash := ""
-
-	// This will update the session table editor's root and clear its cache.
-	if !hasStagedChanges && !hasWorkingChanges {
-		return setHeadAndWorkingSessionRoot(ctx, hs)
-	}
-
-	err = setSessionRootExplicit(ctx, hs, sqle.HeadKeySuffix)
-	if err != nil {
-		return err
-	}
-
-	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix)
+	return nil
+	// TODO: fix me
+	// headHash, err := dbData.Rsr.CWBHeadHash(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	// hs := headHash.String()
+	//
+	// hasWorkingChanges := hasWorkingSetChanges(dbData.Rsr)
+	// hasStagedChanges, err := hasStagedSetChanges(ctx, dbData.Ddb, dbData.Rsr)
+	//
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// // TODO: fix this
+	// // workingHash := dbData.Rsr.WorkingHash().String()
+	// workingHash := ""
+	//
+	// // This will update the session table editor's root and clear its cache.
+	// if !hasStagedChanges && !hasWorkingChanges {
+	// 	return setHeadAndWorkingSessionRoot(ctx, hs)
+	// }
+	//
+	// err = setSessionRootExplicit(ctx, hs, sqle.HeadKeySuffix)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix)
 }
 
 func (d DoltCheckoutFunc) String() string {

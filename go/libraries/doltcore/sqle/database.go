@@ -276,7 +276,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, NewSessionRepoStateReader(sess, db.name), db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, NewSessionStateAdapter(sess, db.name), db.drw), true
 	}
 	if found {
 		return dt, found, nil
@@ -527,18 +527,7 @@ func (db Database) SetTemporaryRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 	return dsess.SetTempTableRoot(ctx, db.name, newRoot)
 }
 
-// LoadRootFromRepoState loads the root value from the repo state's working hash, then calls SetRoot with the loaded
-// root value.
-func (db Database) LoadRootFromRepoState(ctx *sql.Context) error {
-	// TODO: kill this, only used by server
-	workingRoot, err := db.rsr.WorkingRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	return db.SetRoot(ctx, workingRoot)
-}
-
+// GetHeadRoot returns root value for the current session head
 func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
 	head, _, err := dsess.GetHeadCommit(ctx, db.name)

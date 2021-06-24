@@ -192,46 +192,48 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, name s
 }
 
 func executeFFMerge(ctx *sql.Context, squash bool, dbName string, dbData env.DbData, cm2 *doltdb.Commit) error {
-	rv, err := cm2.GetRootValue()
-
-	if err != nil {
-		return errors.New("Failed to return root value.")
-	}
-
-	stagedHash, err := dbData.Ddb.WriteRootValue(ctx, rv)
-	if err != nil {
-		return err
-	}
-
-	if !squash {
-		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	// TODO: this should be a single update, not two
-	err = dbData.Rsw.UpdateWorkingRoot(ctx, rv)
-	if err != nil {
-		return err
-	}
-
-	err = dbData.Rsw.UpdateStagedRoot(ctx, rv)
-	if err != nil {
-		return err
-	}
-
-	hh, err := dbData.Rsr.CWBHeadHash(ctx)
-	if err != nil {
-		return err
-	}
-
-	if squash {
-		return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), stagedHash.String())
-	} else {
-		return setHeadAndWorkingSessionRoot(ctx, hh.String())
-	}
+	return nil
+	// TODO: fix me
+	// rv, err := cm2.GetRootValue()
+	//
+	// if err != nil {
+	// 	return errors.New("Failed to return root value.")
+	// }
+	//
+	// stagedHash, err := dbData.Ddb.WriteRootValue(ctx, rv)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// if !squash {
+	// 	err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
+	//
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
+	//
+	// // TODO: this should be a single update, not two
+	// err = dbData.Rsw.UpdateWorkingRoot(ctx, rv)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// err = dbData.Rsw.UpdateStagedRoot(ctx, rv)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// hh, err := dbData.Rsr.CWBHeadHash(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// if squash {
+	// 	return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), stagedHash.String())
+	// } else {
+	// 	return setHeadAndWorkingSessionRoot(ctx, hh.String())
+	// }
 }
 
 func executeNoFFMerge(

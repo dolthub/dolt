@@ -546,6 +546,7 @@ func (sess *DoltSession) SetTempTableRoot(ctx *sql.Context, dbName string, newRo
 }
 
 // GetHeadCommit returns the parent commit of the current session.
+// TODO: this should really use the session state directly instead of resolving anything
 func (sess *DoltSession) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
 

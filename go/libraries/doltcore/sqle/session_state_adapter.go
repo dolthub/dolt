@@ -32,7 +32,7 @@ type SessionStateAdapter struct {
 var _ env.RepoStateReader = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
-func NewSessionRepoStateReader(session *DoltSession, dbName string) SessionStateAdapter {
+func NewSessionStateAdapter(session *DoltSession, dbName string) SessionStateAdapter {
 	return SessionStateAdapter{session: session, dbName: dbName}
 }
 
