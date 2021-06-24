@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -179,9 +180,13 @@ func TestInitRepo(t *testing.T) {
 
 // TestMigrateWorkingSet tests migrating a repo with the old RepoState fields to a new one
 func TestMigrateWorkingSet(t *testing.T) {
-	dir := t.TempDir()
+	// TODO: t.TempDir breaks on windows because of automatic cleanup (files still in use)
+	// dir := t.TempDir()
+	dir, err := ioutil.TempDir("", "TestMigrateWorkingSet*")
+	require.NoError(t, err)
+
 	dEnv := createFileTestEnv(t, dir)
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
+	err = dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
 	require.NoError(t, err)
 
 	ws, err := dEnv.WorkingSet(context.Background())
@@ -236,7 +241,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 	assert.Equal(t, mustHash(workingRoot.HashOf()), mustHash(ws.WorkingRoot().HashOf()))
 	assert.Equal(t, mustHash(stagedRoot.HashOf()), mustHash(ws.StagedRoot().HashOf()))
 	assert.Equal(t, mustHash(commit.HashOf()), mustHash(ws.MergeState().Commit().HashOf()))
-	//assert.Equal(t, mustHash(workingRoot.HashOf()), mustHash(ws.MergeState().PreMergeWorkingRoot().HashOf()))
+	assert.Equal(t, mustHash(workingRoot.HashOf()), mustHash(ws.MergeState().PreMergeWorkingRoot().HashOf()))
 }
 
 func isCWDEmpty(dEnv *DoltEnv) bool {
