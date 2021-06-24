@@ -1227,7 +1227,7 @@ func doltIndexSetup(t *testing.T) map[string]DoltIndex {
 	if err != nil {
 		panic(err)
 	}
-	root, err = ExecuteSql(dEnv, root, `
+	root, err = ExecuteSql(t, dEnv, root, `
 CREATE TABLE onepk (
   pk1 BIGINT PRIMARY KEY,
   v1 BIGINT,

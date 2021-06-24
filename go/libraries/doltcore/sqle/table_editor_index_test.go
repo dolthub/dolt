@@ -36,7 +36,7 @@ func setupEditorIndexTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
 	root, err := index_dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 
-	index_initialRoot, err := ExecuteSql(index_dEnv, root, `
+	index_initialRoot, err := ExecuteSql(t, index_dEnv, root, `
 CREATE TABLE onepk (
   pk1 BIGINT PRIMARY KEY,
   v1 BIGINT,

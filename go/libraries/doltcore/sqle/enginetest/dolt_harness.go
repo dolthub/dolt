@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -33,7 +35,7 @@ type DoltHarness struct {
 	t                   *testing.T
 	session             *sqle.DoltSession
 	transactionsEnabled bool
-	databases           []sqle.Database
+	databases           []sqle.InitialDbState
 	parallelism         int
 	skippedQueries      []string
 }
@@ -135,7 +137,7 @@ func (d DoltHarness) NewSession() *sql.Context {
 		sql.WithSession(session))
 
 	for _, db := range d.databases {
-		err := session.AddDB(ctx, db, db.DbData())
+		err := session.AddDB(ctx, db)
 		require.NoError(d.t, err)
 	}
 
@@ -175,12 +177,34 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
 	for _, name := range names {
 		db := sqle.NewDatabase(name, dEnv.DbData())
-		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db, db.DbData()))
+		dbState := getDbState(d.t, db, dEnv)
+		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), dbState))
 		dbs = append(dbs, db)
-		d.databases = append(d.databases, db)
+		d.databases = append(d.databases, dbState)
 	}
 
 	return dbs
+}
+
+func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) sqle.InitialDbState {
+	ctx := context.Background()
+	roots, err := dEnv.Roots(ctx)
+	require.NoError(t, err)
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
+	require.NoError(t, err)
+
+	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	wsRef, err := ref.WorkingSetRefForHead(headRef)
+	require.NoError(t, err)
+
+	return sqle.InitialDbState{
+		Db:         db,
+		Roots:      roots,
+		HeadCommit: headCommit,
+		WorkingSet: wsRef,
+	}
 }
 
 func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) (sql.Table, error) {

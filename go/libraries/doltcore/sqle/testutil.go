@@ -20,10 +20,13 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -31,10 +34,10 @@ import (
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
-func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
+func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
 	db := NewDatabase("dolt", dEnv.DbData())
 
-	engine, ctx, err := NewTestEngine(context.Background(), db, root)
+	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	DSessFromSess(ctx.Session).EnableBatchedMode()
 	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, true)
 	if err != nil {
@@ -102,12 +105,13 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 }
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
-func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
+func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 
 	sqlCtx := NewTestSQLCtx(ctx)
-	DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, db, db.DbData())
+
+	_ = DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
 	sqlCtx.SetCurrentDatabase(db.Name())
 	err := db.SetRoot(sqlCtx, root)
 
@@ -124,8 +128,29 @@ func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*s
 	return engine, sqlCtx, nil
 }
 
+func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) InitialDbState {
+	ctx := context.Background()
+	roots, err := dEnv.Roots(ctx)
+	require.NoError(t, err)
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
+	require.NoError(t, err)
+
+	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	wsRef, err := ref.WorkingSetRefForHead(headRef)
+	require.NoError(t, err)
+
+	return InitialDbState{
+		Db:         db,
+		Roots:      roots,
+		HeadCommit: headCommit,
+		WorkingSet: wsRef,
+	}
+}
+
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
-func ExecuteSelect(dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) ([]sql.Row, error) {
+func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) ([]sql.Row, error) {
 
 	dbData := env.DbData{
 		Ddb: ddb,
@@ -135,7 +160,7 @@ func ExecuteSelect(dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue
 	}
 
 	db := NewDatabase("dolt", dbData)
-	engine, ctx, err := NewTestEngine(context.Background(), db, root)
+	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	if err != nil {
 		return nil, err
 	}

@@ -23,19 +23,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/sqllogictest/go/logictest"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
-
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var _ logictest.Harness = &DoltHarness{}
@@ -155,7 +155,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		dsqlDBs[i] = dsqlDB
 
 		sess := dsql.DSessFromSess(ctx.Session)
-		err := sess.AddDB(ctx, dsqlDB, dsqlDB.DbData())
+		err := sess.AddDB(ctx, getDbState(db, dEnv))
 
 		if err != nil {
 			return err
@@ -184,6 +184,33 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	}
 
 	return nil
+}
+
+func getDbState(db sql.Database, dEnv *env.DoltEnv) dsql.InitialDbState {
+	ctx := context.Background()
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	wsRef, err := ref.WorkingSetRefForHead(headRef)
+	if err != nil {
+		panic(err)
+	}
+
+	return dsql.InitialDbState{
+		Db:         db,
+		Roots:      roots,
+		HeadCommit: headCommit,
+		WorkingSet: wsRef,
+	}
 }
 
 // We cheat a little at these tests. A great many of them use tables without primary keys, which we don't currently

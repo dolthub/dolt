@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1356,7 +1358,8 @@ func TestMergeableIndexes(t *testing.T) {
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
 			session := DSessFromSess(sqlCtx.Session)
-			err := session.AddDB(sqlCtx, db, denv.DbData())
+			dbState := getDbState(t, db, denv)
+			err := session.AddDB(sqlCtx, dbState)
 
 			require.NoError(t, err)
 			sqlCtx.SetCurrentDatabase(db.Name())
@@ -1563,7 +1566,8 @@ func TestMergeableIndexesNulls(t *testing.T) {
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
 			session := DSessFromSess(sqlCtx.Session)
-			err := session.AddDB(sqlCtx, db, denv.DbData())
+			dbState := getDbState(t, db, denv)
+			err := session.AddDB(sqlCtx, dbState)
 			require.NoError(t, err)
 			sqlCtx.SetCurrentDatabase(db.Name())
 			err = session.SetRoot(sqlCtx, db.Name(), initialRoot)
