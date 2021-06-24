@@ -305,12 +305,10 @@ func (p *Puller) Pull(ctx context.Context) error {
 			}
 		}
 	}
-	if ae.IsSet() {
-		return ae.Get()
-	}
-
-	if p.wr.Size() > 0 {
-		completedTables <- FilledWriters{p.wr}
+	if !ae.IsSet() {
+		if p.wr.Size() > 0 {
+			completedTables <- FilledWriters{p.wr}
+		}
 	}
 
 	close(completedTables)
