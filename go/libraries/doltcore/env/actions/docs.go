@@ -124,31 +124,31 @@ func getUntrackedDocs(docs doltdocs.Docs, docDiffs *diff.DocDiffs) []string {
 	return untracked
 }
 
-func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, working, staged, head *doltdb.RootValue, docs doltdocs.Docs) (currRoot, stgRoot *doltdb.RootValue, retDocs doltdocs.Docs, err error) {
-	root := head
-	_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
+func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs) (doltdb.Roots, doltdocs.Docs, error) {
+	docsRoot := roots.Head
+	_, ok, err := roots.Staged.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
-		return nil, nil, nil, err
+		return doltdb.Roots{}, nil, err
 	} else if ok {
-		root = staged
+		docsRoot = roots.Staged
 	}
 
-	docs, err = doltdocs.GetDocsFromRoot(ctx, root, doltdocs.GetDocNamesFromDocs(docs)...)
+	docs, err = doltdocs.GetDocsFromRoot(ctx, docsRoot, doltdocs.GetDocNamesFromDocs(docs)...)
 	if err != nil {
-		return nil, nil, nil, err
+		return doltdb.Roots{}, nil, err
 	}
 
-	currRoot, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
+	roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
 	if err != nil {
-		return nil, nil, nil, err
+		return doltdb.Roots{}, nil, err
 	}
 
-	stgRoot, err = doltdocs.UpdateRootWithDocs(ctx, staged, docs)
+	roots.Staged, err = doltdocs.UpdateRootWithDocs(ctx, roots.Staged, docs)
 	if err != nil {
-		return nil, nil, nil, err
+		return doltdb.Roots{}, nil, err
 	}
 
-	return currRoot, stgRoot, docs, nil
+	return roots, docs, nil
 }
 
 // GetUnstagedDocs retrieves the unstaged docs (docs from the filesystem).

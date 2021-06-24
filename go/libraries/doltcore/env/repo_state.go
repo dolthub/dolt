@@ -31,7 +31,6 @@ type RepoStateReader interface {
 	// TODO: replace with commit
 	CWBHeadHash(ctx context.Context) (hash.Hash, error)
 	WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
-	StagedRoot(ctx context.Context) (*doltdb.RootValue, error)
 	IsMergeActive(ctx context.Context) (bool, error)
 	GetMergeCommit(ctx context.Context) (*doltdb.Commit, error)
 }

@@ -18,12 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 const DoltResetFuncName = "dolt_reset"
@@ -33,92 +28,92 @@ type DoltResetFunc struct {
 }
 
 func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	dbName := ctx.GetCurrentDatabase()
-
-	if len(dbName) == 0 {
-		return 1, fmt.Errorf("Empty database name.")
-	}
-
-	dSess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
-
-	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
-	}
-
-	ap := cli.CreateResetArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-
-	if err != nil {
-		return 1, err
-	}
-
-	apr, err := ap.Parse(args)
-	if err != nil {
-		return 1, err
-	}
-
-	// Check if problems with args first.
-	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
-		return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
-	}
+	// TOOD: fix me
+	// dbName := ctx.GetCurrentDatabase()
+	//
+	// if len(dbName) == 0 {
+	// 	return 1, fmt.Errorf("Empty database name.")
+	// }
+	//
+	// dSess := sqle.DSessFromSess(ctx.Session)
+	// dbData, ok := dSess.GetDbData(dbName)
+	//
+	// if !ok {
+	// 	return 1, fmt.Errorf("Could not load database %s", dbName)
+	// }
+	//
+	// ap := cli.CreateResetArgParser()
+	// args, err := getDoltArgs(ctx, row, d.Children())
+	//
+	// if err != nil {
+	// 	return 1, err
+	// }
+	//
+	// apr, err := ap.Parse(args)
+	// if err != nil {
+	// 	return 1, err
+	// }
+	//
+	// // Check if problems with args first.
+	// if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
+	// 	return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
+	// }
 
 	// Get all the needed roots.
-	workingRoot, _ := dSess.GetRoot(dbName)
+	// workingRoot, _ := dSess.GetRoot(dbName)
 
-	// TODO: fix me
-	var staged, head *doltdb.RootValue
-	// staged, head, err := GetRoots(ctx, dbData.Ddb, dbData.Rsr)
-	if err != nil {
-		return 1, err
-	}
-
-	if apr.Contains(cli.HardResetParam) {
-		// Get the commitSpec for the branch if it exists
-		arg := ""
-		if apr.NArg() > 1 {
-			return 1, fmt.Errorf("--hard supports at most one additional param")
-		} else if apr.NArg() == 1 {
-			arg = apr.Arg(0)
-		}
-
-		h, err := actions.ResetHardTables(ctx, dbData, arg, workingRoot, staged, head)
-		if err != nil {
-			return 1, err
-		}
-
-		// In this case we preserve untracked tables.
-		if h == "" {
-			headHash, err := dbData.Rsr.CWBHeadHash(ctx)
-			if err != nil {
-				return 1, err
-			}
-
-			h = headHash.String()
-			if err := ctx.SetSessionVariable(ctx, sqle.HeadKey(dbName), h); err != nil {
-				return 1, err
-			}
-
-			root, err := dbData.Rsr.WorkingRoot(ctx)
-			if err != nil {
-				return 1, err
-			}
-
-			err = dSess.SetRoot(ctx, dbName, root)
-			if err != nil {
-				return 1, err
-			}
-		} else {
-			if err := setHeadAndWorkingSessionRoot(ctx, h); err != nil {
-				return 1, err
-			}
-		}
-	} else {
-		_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
-		if err != nil {
-			return 1, err
-		}
-	}
+	// var staged, head *doltdb.RootValue
+	// // staged, head, err := GetRoots(ctx, dbData.Ddb, dbData.Rsr)
+	// if err != nil {
+	// 	return 1, err
+	// }
+	//
+	// if apr.Contains(cli.HardResetParam) {
+	// 	// Get the commitSpec for the branch if it exists
+	// 	arg := ""
+	// 	if apr.NArg() > 1 {
+	// 		return 1, fmt.Errorf("--hard supports at most one additional param")
+	// 	} else if apr.NArg() == 1 {
+	// 		arg = apr.Arg(0)
+	// 	}
+	//
+	// 	h, err := actions.ResetHardTables(ctx, dbData, arg, workingRoot, staged, head)
+	// 	if err != nil {
+	// 		return 1, err
+	// 	}
+	//
+	// 	// In this case we preserve untracked tables.
+	// 	if h == "" {
+	// 		headHash, err := dbData.Rsr.CWBHeadHash(ctx)
+	// 		if err != nil {
+	// 			return 1, err
+	// 		}
+	//
+	// 		h = headHash.String()
+	// 		if err := ctx.SetSessionVariable(ctx, sqle.HeadKey(dbName), h); err != nil {
+	// 			return 1, err
+	// 		}
+	//
+	// 		root, err := dbData.Rsr.WorkingRoot(ctx)
+	// 		if err != nil {
+	// 			return 1, err
+	// 		}
+	//
+	// 		err = dSess.SetRoot(ctx, dbName, root)
+	// 		if err != nil {
+	// 			return 1, err
+	// 		}
+	// 	} else {
+	// 		if err := setHeadAndWorkingSessionRoot(ctx, h); err != nil {
+	// 			return 1, err
+	// 		}
+	// 	}
+	// } else {
+	// 	_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
+	// 	if err != nil {
+	// 		return 1, err
+	// 	}
+	// }
 
 	return 0, nil
 }
