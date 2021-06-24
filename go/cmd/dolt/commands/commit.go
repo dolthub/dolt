@@ -82,7 +82,6 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	if allFlag {
-		// TODO: can't reuse roots here below, this is doing hidden global state management
 		err = actions.StageAllTables(ctx, roots, dEnv.DbData())
 	}
 
@@ -117,7 +116,12 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
+	// TODO: refactor stage to modify roots in memory instead of writing to disk
 	dbData := dEnv.DbData()
+	roots, err = dEnv.Roots(context.Background())
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
+	}
 
 	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
 		Message:          msg,
