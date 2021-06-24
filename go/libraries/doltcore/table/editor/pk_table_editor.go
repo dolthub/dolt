@@ -40,7 +40,7 @@ var (
 
 func init() {
 	if maxOpsEnv := os.Getenv("DOLT_EDIT_TABLE_BUFFER_ROWS"); maxOpsEnv != "" {
-		if v, err := strconv.ParseUint(maxOpsEnv, 10, 64); err == nil {
+		if v, err := strconv.ParseUint(maxOpsEnv, 10, 63); err == nil {
 			tableEditorMaxOps = v
 		}
 	}
@@ -64,6 +64,9 @@ type TableEditor interface {
 	Name() string
 	Format() *types.NomsBinFormat
 
+	StatementStarted(ctx context.Context)
+	StatementFinished(ctx context.Context, errored bool) error
+
 	Close() error
 }
 
@@ -84,6 +87,7 @@ type pkTableEditor struct {
 	name string
 
 	tea      *tableEditAccumulator
+	savedTea *tableEditAccumulator
 	aq       *async.ActionExecutor
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
@@ -115,13 +119,10 @@ type tableEditAccumulator struct {
 	// to be equivalent in content to prevTea, and will set prevTea to nil.
 	rowData types.Map
 
-	nbf          *types.NomsBinFormat
-	ed           types.EditAccumulator
-	opCount      uint64
-	insertedKeys map[hash.Hash]types.Value
-	addedKeys    map[hash.Hash]types.Value
-	removedKeys  map[hash.Hash]types.Value
-	affectedKeys map[hash.Hash]*doltKVP
+	nbf         *types.NomsBinFormat
+	opCount     int64
+	addedKeys   map[hash.Hash]*doltKVP
+	removedKeys map[hash.Hash]types.LesserValuable
 }
 
 func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string) (*pkTableEditor, error) {
@@ -175,28 +176,22 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 // NewFromCurrent.
 func createInitialTableEditAcc(nbf *types.NomsBinFormat, rowData types.Map) *tableEditAccumulator {
 	return &tableEditAccumulator{
-		prevTea:      nil,
-		rowData:      rowData,
-		nbf:          nbf,
-		ed:           types.CreateEditAccForMapEdits(nbf),
-		insertedKeys: make(map[hash.Hash]types.Value),
-		addedKeys:    make(map[hash.Hash]types.Value),
-		removedKeys:  make(map[hash.Hash]types.Value),
-		affectedKeys: make(map[hash.Hash]*doltKVP),
+		prevTea:     nil,
+		rowData:     rowData,
+		nbf:         nbf,
+		addedKeys:   make(map[hash.Hash]*doltKVP),
+		removedKeys: make(map[hash.Hash]types.LesserValuable),
 	}
 }
 
 // NewFromCurrent returns a new tableEditAccumulator that references the current tableEditAccumulator.
 func (tea *tableEditAccumulator) NewFromCurrent() *tableEditAccumulator {
 	return &tableEditAccumulator{
-		prevTea:      tea,
-		rowData:      types.EmptyMap,
-		nbf:          tea.nbf,
-		ed:           types.CreateEditAccForMapEdits(tea.nbf),
-		insertedKeys: make(map[hash.Hash]types.Value),
-		addedKeys:    make(map[hash.Hash]types.Value),
-		removedKeys:  make(map[hash.Hash]types.Value),
-		affectedKeys: make(map[hash.Hash]*doltKVP),
+		prevTea:     tea,
+		rowData:     types.EmptyMap,
+		nbf:         tea.nbf,
+		addedKeys:   make(map[hash.Hash]*doltKVP),
+		removedKeys: make(map[hash.Hash]types.LesserValuable),
 	}
 }
 
@@ -204,40 +199,47 @@ func (tea *tableEditAccumulator) NewFromCurrent() *tableEditAccumulator {
 // This assumes that the given hash is for the given key.
 func (tea *tableEditAccumulator) maybeGet(ctx context.Context, keyHash hash.Hash, key types.LesserValuable) (*doltKVP, bool, error) {
 	// No locks as all calls and modifications to tea are done from a lock that the caller handles
-	if kvp, ok := tea.affectedKeys[keyHash]; ok {
-		if kvp.v == nil {
-			// if the row has been deleted then return that the row doesn't exist even if it's in the row data
-			return nil, false, nil
+	if kvp, ok := tea.addedKeys[keyHash]; ok {
+		return kvp, true, nil
+	}
+	if _, ok := tea.removedKeys[keyHash]; !ok {
+		// When rowData is updated, prevTea is set to nil. Therefore, if prevTea is non-nil, we use it.
+		if tea.prevTea != nil {
+			return tea.prevTea.maybeGet(ctx, keyHash, key)
 		} else {
-			return kvp, true, nil
+			keyVal, err := key.Value(ctx)
+			if err != nil {
+				return nil, false, err
+			}
+
+			keyTup := keyVal.(types.Tuple)
+			v, ok, err := tea.rowData.MaybeGetTuple(ctx, keyTup)
+			if err != nil {
+				return nil, false, err
+			}
+			if !ok {
+				return nil, false, nil
+			}
+
+			return &doltKVP{k: keyTup, v: v}, true, err
 		}
 	}
-
-	if tea.prevTea != nil {
-		return tea.prevTea.maybeGet(ctx, keyHash, key)
-	} else {
-		keyVal, err := key.Value(ctx)
-		if err != nil {
-			return nil, false, err
-		}
-
-		keyTup := keyVal.(types.Tuple)
-		v, ok, err := tea.rowData.MaybeGetTuple(ctx, keyTup)
-		if err != nil {
-			return nil, false, err
-		}
-
-		if !ok {
-			return nil, false, nil
-		}
-
-		return &doltKVP{k: keyTup, v: v}, true, err
-	}
+	return nil, false, nil
 }
 
 // ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
 // format expected of the index, similar to searching on the index map itself.
 func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) (bool, error) {
+	// If we're working with a pkTableEditor, then we don't need to flush the table nor indexes.
+	if pkTe, ok := te.(*pkTableEditor); ok {
+		for _, indexEd := range pkTe.indexEds {
+			if indexEd.idx.Name() == indexName {
+				return indexEd.HasPartial(ctx, key)
+			}
+		}
+		return false, fmt.Errorf("an index editor for `%s` could not be found", indexName)
+	}
+
 	tbl, err := te.Table(ctx)
 	if err != nil {
 		return false, err
@@ -427,8 +429,9 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	} else if pkExists {
 		return te.keyErrForKVP(ctx, kvp, true, errFunc)
 	}
-	te.tea.insertedKeys[keyHash] = key
-	te.tea.addedKeys[keyHash] = key
+
+	delete(te.tea.removedKeys, keyHash)
+	te.tea.addedKeys[keyHash] = &doltKVP{k: key, v: val}
 
 	if te.hasAutoInc {
 		insertVal, ok := tagToVal[te.autoIncCol.Tag]
@@ -443,9 +446,6 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 			te.autoIncVal = types.Increment(te.autoIncVal)
 		}
 	}
-
-	te.tea.ed.AddEdit(key, val)
-	te.tea.affectedKeys[keyHash] = &doltKVP{k: key, v: val}
 
 	te.tea.opCount++
 	return nil
@@ -517,9 +517,7 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 
 	delete(te.tea.addedKeys, keyHash)
 	te.tea.removedKeys[keyHash] = key
-	te.tea.affectedKeys[keyHash] = &doltKVP{k: key}
 
-	te.tea.ed.AddEdit(key, nil)
 	te.tea.opCount++
 	return nil
 }
@@ -527,10 +525,6 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 // DeleteRow removes the given row from the table. This essentially acts as a convenience function for DeleteKey, while
 // ensuring proper thread safety.
 func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr error) {
-	defer te.autoFlush()
-	te.flushMutex.RLock()
-	defer te.flushMutex.RUnlock()
-
 	key, err := dRow.NomsMapKey(te.tSch).Value(ctx)
 	if err != nil {
 		return err
@@ -540,6 +534,10 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 	if err != nil {
 		return err
 	}
+
+	defer te.autoFlush()
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
 
 	// Regarding the lock's position here, refer to the comment in InsertKeyVal
 	te.writeMutex.Lock()
@@ -571,9 +569,7 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 
 	delete(te.tea.addedKeys, keyHash)
 	te.tea.removedKeys[keyHash] = key
-	te.tea.affectedKeys[keyHash] = &doltKVP{k: key}
 
-	te.tea.ed.AddEdit(key, nil)
 	te.tea.opCount++
 	return nil
 }
@@ -593,12 +589,19 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	if err != nil {
 		return err
 	}
+	dNewRowVal, err := dNewRow.NomsMapValue(te.tSch).Value(ctx)
+	if err != nil {
+		return err
+	}
 
 	newHash, err := dNewKeyVal.Hash(dNewRow.Format())
 	if err != nil {
 		return err
 	}
-	oldKeyEqualsNewKey := dOldKeyVal.Equals(dNewKeyVal)
+	oldHash, err := dOldKeyVal.Hash(dOldRow.Format())
+	if err != nil {
+		return err
+	}
 
 	// Regarding the lock's position here, refer to the comment in InsertKeyVal
 	te.writeMutex.Lock()
@@ -652,39 +655,18 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		indexOpsToUndo[i]++
 	}
 
-	// If the PK is changed then we need to delete the old value and insert the new one
-	if !oldKeyEqualsNewKey {
-		oldHash, err := dOldKeyVal.Hash(dOldRow.Format())
-		if err != nil {
-			return err
-		}
+	delete(te.tea.addedKeys, oldHash)
+	te.tea.removedKeys[oldHash] = dOldKeyVal
 
-		// If the old value of the primary key we just updated was previously inserted, then we need to remove it now.
-		if _, ok := te.tea.insertedKeys[oldHash]; ok {
-			delete(te.tea.insertedKeys, oldHash)
-			te.tea.ed.AddEdit(dOldKeyVal, nil)
-			te.tea.opCount++
-		}
-
-		// Check if the new primary key already exists
-		if kvp, pkExists, err := te.tea.maybeGet(ctx, newHash, dNewKeyVal); err != nil {
-			return err
-		} else if pkExists {
-			return te.keyErrForKVP(ctx, kvp, true, errFunc)
-		}
-		te.tea.addedKeys[newHash] = dNewKeyVal
-		te.tea.removedKeys[oldHash] = dOldKeyVal
-		te.tea.affectedKeys[oldHash] = &doltKVP{k: dOldKeyVal}
-	}
-
-	val, err := dNewRow.NomsMapValue(te.tSch).Value(ctx)
-	if err != nil {
+	if kvp, pkExists, err := te.tea.maybeGet(ctx, newHash, dNewKeyVal); err != nil {
 		return err
+	} else if pkExists {
+		return te.keyErrForKVP(ctx, kvp, true, errFunc)
 	}
 
-	te.tea.affectedKeys[newHash] = &doltKVP{k: dNewKeyVal, v: val}
-	te.tea.ed.AddEdit(dNewKeyVal, val)
-	te.tea.opCount++
+	delete(te.tea.removedKeys, newHash)
+	te.tea.addedKeys[newHash] = &doltKVP{k: dNewKeyVal, v: dNewRowVal}
+	te.tea.opCount += 2
 	return nil
 }
 
@@ -761,10 +743,92 @@ func (te *pkTableEditor) Format() *types.NomsBinFormat {
 	return te.nbf
 }
 
+// StatementStarted implements TableEditor.
+func (te *pkTableEditor) StatementStarted(ctx context.Context) {
+	te.flushMutex.Lock()
+	defer te.flushMutex.Unlock()
+	te.savedTea = te.tea
+	te.tea = te.tea.NewFromCurrent()
+	te.tea.opCount = te.savedTea.opCount
+	for i := 0; i < len(te.indexEds); i++ {
+		te.indexEds[i].StatementStarted(ctx)
+	}
+}
+
+// StatementFinished implements TableEditor.
+func (te *pkTableEditor) StatementFinished(ctx context.Context, errored bool) error {
+	// If any teas are flushing then we want them to finish first
+	err := te.aq.WaitForEmpty()
+	if err != nil {
+		return err
+	}
+	te.flushMutex.Lock()
+	defer te.flushMutex.Unlock()
+
+	if !errored {
+		// We collapse the changes in this tea to the last to reduce the number of map editors that will need to be opened
+		if te.tea.prevTea != nil {
+			targetTea := te.tea.prevTea
+
+			for keyHash, key := range te.tea.removedKeys {
+				delete(targetTea.addedKeys, keyHash)
+				targetTea.removedKeys[keyHash] = key
+			}
+			for keyHash, kvp := range te.tea.addedKeys {
+				delete(targetTea.removedKeys, keyHash)
+				targetTea.addedKeys[keyHash] = kvp
+			}
+
+			targetTea.opCount = te.tea.opCount
+			te.tea.prevTea = nil
+			te.tea.rowData = types.EmptyMap
+			te.tea.addedKeys = nil
+			te.tea.removedKeys = nil
+			te.tea = targetTea
+		}
+	} else {
+		currentTea := te.tea
+		// Loop and remove all newer teas
+		for {
+			if currentTea == nil || currentTea == te.savedTea {
+				break
+			}
+			nextTea := currentTea.prevTea
+			// We're essentially deleting currentTea, so we're closing and removing everything.
+			// Some of this is taken from the steps followed when flushing, such as the map nils.
+			currentTea.prevTea = nil
+			if currentTea.opCount != -1 {
+				currentTea.rowData = types.EmptyMap
+				currentTea.addedKeys = nil
+				currentTea.removedKeys = nil
+			}
+			currentTea = nextTea
+		}
+		// If the savedTea was processed due to a large number of ops in the statement triggering an auto flush, then we
+		// need to create a new one.
+		if te.savedTea.opCount == -1 {
+			te.tea = createInitialTableEditAcc(te.savedTea.nbf, te.savedTea.rowData)
+		} else {
+			te.tea = te.savedTea
+		}
+	}
+
+	for i := 0; i < len(te.indexEds); i++ {
+		iErr := te.indexEds[i].StatementFinished(ctx, errored)
+		if iErr != nil && err == nil {
+			err = iErr
+		}
+	}
+	if err != nil {
+		return err
+	}
+	te.savedTea = nil
+	return nil
+}
+
 // Close ensures that all goroutines that may be open are properly disposed of. Attempting to call any other function
 // on this editor after calling this function is undefined behavior.
 func (te *pkTableEditor) Close() error {
-	te.tea.ed.Close()
 	for _, indexEd := range te.indexEds {
 		err := indexEd.Close()
 		if err != nil {
@@ -791,7 +855,7 @@ func (te *pkTableEditor) flush() {
 func (te *pkTableEditor) autoFlush() {
 	te.flushMutex.RLock()
 	te.writeMutex.Lock()
-	runFlush := te.tea.opCount >= tableEditorMaxOps
+	runFlush := uint64(te.tea.opCount) >= tableEditorMaxOps
 	te.writeMutex.Unlock()
 	te.flushMutex.RUnlock()
 
@@ -802,15 +866,32 @@ func (te *pkTableEditor) autoFlush() {
 
 func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) (err error) {
 	// We don't call any locks at the function entrance since this is called from an ActionExecutor with a concurrency of 1
-	futureTea := teaInterface.(*tableEditAccumulator)
-	tea := futureTea.prevTea
-	defer tea.ed.Close()
+	updatedMap, err := processEditAccumulatorChain(ctx, teaInterface.(*tableEditAccumulator), te.writeMutex)
+	if err != nil {
+		return err
+	}
+	newTable, err := te.t.UpdateRows(ctx, updatedMap)
+	if err != nil {
+		return err
+	}
+	te.t = newTable
+	return nil
+}
 
-	// For all removed keys, remove the map entries that weren't added elsewhere by other updates
-	for keyHash, removedKey := range tea.removedKeys {
-		if _, ok := tea.addedKeys[keyHash]; !ok {
-			tea.ed.AddEdit(removedKey, nil)
-		}
+// processEditAccumulatorChain processes all previous edit accumulators for the one being flushed.
+func processEditAccumulatorChain(ctx context.Context, futureTea *tableEditAccumulator, writeMutex *sync.Mutex) (m types.Map, err error) {
+	if futureTea.prevTea == nil {
+		return futureTea.rowData, nil
+	}
+	tea := futureTea.prevTea
+
+	ed := types.CreateEditAccForMapEdits(tea.nbf)
+	defer ed.Close()
+	for _, key := range tea.removedKeys {
+		ed.AddEdit(key, nil)
+	}
+	for _, kvp := range tea.addedKeys {
+		ed.AddEdit(kvp.k, kvp.v)
 	}
 
 	// If we encounter an error and return, then we need to remove this tea from the chain and update the next's rowData
@@ -824,42 +905,42 @@ func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface 
 				err = recoveredErr.(error)
 			}
 			// All tea modifications are guarded by writeMutex locks, so we have to acquire it
-			te.writeMutex.Lock()
+			writeMutex.Lock()
 			futureTea.prevTea = nil
 			futureTea.rowData = tea.rowData
-			te.writeMutex.Unlock()
+			writeMutex.Unlock()
 		}
 	}()
 
-	accEdits, err := tea.ed.FinishedEditing()
+	if tea.prevTea != nil {
+		_, err = processEditAccumulatorChain(ctx, tea, writeMutex)
+		if err != nil {
+			return types.EmptyMap, err
+		}
+	}
+	accEdits, err := ed.FinishedEditing()
 	if err != nil {
-		return err
+		return types.EmptyMap, err
 	}
 	// We are guaranteed that rowData is valid, as we process teas sequentially.
 	updatedMap, _, err := types.ApplyEdits(ctx, accEdits, tea.rowData)
 	if err != nil {
-		return err
-	}
-	newTable, err := te.t.UpdateRows(ctx, updatedMap)
-	if err != nil {
-		return err
+		return types.EmptyMap, err
 	}
 	// No errors were encountered, so we set the bool to false. This should come after ALL calls that may error.
 	encounteredErr = false
 
-	te.t = newTable
 	// All tea modifications are guarded by writeMutex locks, so we have to acquire it here
-	te.writeMutex.Lock()
+	writeMutex.Lock()
 	futureTea.prevTea = nil
 	futureTea.rowData = updatedMap
-	te.writeMutex.Unlock()
+	writeMutex.Unlock()
+	// An opCount of -1 lets us know that this tea was processed
+	tea.opCount = -1
 	// not sure where it is, but setting these to nil fixes a memory leak
 	tea.addedKeys = nil
-	tea.affectedKeys = nil
-	tea.ed = nil
-	tea.insertedKeys = nil
 	tea.removedKeys = nil
-	return nil
+	return updatedMap, nil
 }
 
 // formatKey returns a comma-separated string representation of the key given.

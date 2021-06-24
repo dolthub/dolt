@@ -63,6 +63,8 @@ func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFo
 	return db, err
 }
 
+var NoCachingParameter = "__dolt__NO_CACHING"
+
 func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {
 	endpoint, opts, err := fact.dp.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint:     urlObj.Host,
@@ -86,6 +88,10 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 
 	if err == remotestorage.ErrInvalidDoltSpecPath {
 		return nil, fmt.Errorf("invalid dolt url '%s'", urlObj.String())
+	}
+
+	if _, ok := params[NoCachingParameter]; ok {
+		cs = cs.WithNoopChunkCache()
 	}
 
 	return cs, err

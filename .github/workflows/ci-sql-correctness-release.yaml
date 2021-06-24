@@ -1,3 +1,5 @@
+name: SQL Correctness
+
 on:
   repository_dispatch:
     types: [ release-dolt ]

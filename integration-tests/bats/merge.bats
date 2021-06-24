@@ -358,3 +358,52 @@ SQL
     [[ "$output" =~ "pkpk" ]] || false
     [[ "$output" =~ "c1c1" ]] || false
 }
+
+@test "merge: unique index conflict" {
+    dolt sql <<SQL
+CREATE TABLE test (
+    pk int PRIMARY KEY,
+    c0 int,
+    UNIQUE KEY(c0)
+);
+INSERT INTO test VALUES (0,0);
+SQL
+    dolt add -A && dolt commit -am "setup"
+
+    dolt checkout -b other
+    dolt sql -q "INSERT INTO test VALUES (2,19);"
+    dolt commit -am "added row"
+
+    dolt checkout master
+    dolt sql -q "INSERT INTO test VALUES (1,19);"
+    dolt commit -am "added row"
+
+    skip "merge fails on unique index violation, should log conflict"
+    dolt merge other
+}
+
+@test "merge: compound unique index conflict" {
+    dolt sql <<SQL
+CREATE TABLE test (
+    pk int PRIMARY KEY,
+    c0 int,
+    c1 int,
+    UNIQUE KEY(c0,c1)
+);
+INSERT INTO test VALUES (0, 0,  0);
+INSERT INTO test VALUES (1, 11, 2);
+INSERT INTO test VALUES (2, 1,  22);
+SQL
+    dolt add -A && dolt commit -am "setup"
+
+    dolt checkout -b other
+    dolt sql -q "UPDATE test SET c0 = 1 where c0 = 11"
+    dolt commit -am "added row"
+
+    dolt checkout master
+    dolt sql -q "UPDATE test SET c1 = 2 where c1 = 22"
+    dolt commit -am "added row"
+
+    skip "merge fails on unique index violation, should log conflict"
+    dolt merge other
+}

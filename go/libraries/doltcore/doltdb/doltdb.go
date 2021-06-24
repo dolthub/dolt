@@ -125,7 +125,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 		return errors.New("database already exists")
 	}
 
-	rv, err := emptyRootValue(ctx, ddb.db)
+	rv, err := EmptyRootValue(ctx, ddb.db)
 
 	if err != nil {
 		return err

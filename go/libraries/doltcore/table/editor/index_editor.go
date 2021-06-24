@@ -55,14 +55,15 @@ import (
 //
 // This type is thread-safe, and may be used in a multi-threaded environment.
 type IndexEditor struct {
-	idxSch  schema.Schema
-	tblSch  schema.Schema
-	idx     schema.Index
-	iea     *indexEditAccumulator
-	aq      *async.ActionExecutor
-	nbf     *types.NomsBinFormat
-	idxData types.Map
-	stack   indexOperationStack
+	idxSch   schema.Schema
+	tblSch   schema.Schema
+	idx      schema.Index
+	iea      *indexEditAccumulator
+	savedIea *indexEditAccumulator
+	aq       *async.ActionExecutor
+	nbf      *types.NomsBinFormat
+	idxData  types.Map
+	stack    indexOperationStack
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -93,16 +94,16 @@ type indexEditAccumulator struct {
 	rowData types.Map
 
 	nbf     *types.NomsBinFormat
-	ed      types.EditAccumulator
-	opCount uint64
+	opCount int64
 
 	// addedPartialKeys is a map of partial keys to a map of full keys that match the partial key
 	addedPartialKeys map[hash.Hash]map[hash.Hash]types.Tuple
-	addedKeys        map[hash.Hash]struct{}
-	removedKeys      map[hash.Hash]struct{}
+	addedKeys        map[hash.Hash]hashedTuple // These hashes represent the hash of the partial key, with the tuple being the full key
+	removedKeys      map[hash.Hash]hashedTuple // These hashes represent the hash of the partial key, with the tuple being the full key
 }
 
-// hashedTuple is a tuple accompanied by its hash.
+// hashedTuple is a tuple accompanied by a hash. The representing value of the hash is dependent on the function
+// it is obtained from.
 type hashedTuple struct {
 	types.Tuple
 	hash.Hash
@@ -115,10 +116,9 @@ func createInitialIndexEditAcc(indexData types.Map) *indexEditAccumulator {
 		prevIea:          nil,
 		rowData:          indexData,
 		nbf:              indexData.Format(),
-		ed:               types.CreateEditAccForMapEdits(indexData.Format()),
 		addedPartialKeys: make(map[hash.Hash]map[hash.Hash]types.Tuple),
-		addedKeys:        make(map[hash.Hash]struct{}),
-		removedKeys:      make(map[hash.Hash]struct{}),
+		addedKeys:        make(map[hash.Hash]hashedTuple),
+		removedKeys:      make(map[hash.Hash]hashedTuple),
 	}
 }
 
@@ -128,10 +128,9 @@ func (iea *indexEditAccumulator) NewFromCurrent() *indexEditAccumulator {
 		prevIea:          iea,
 		rowData:          types.EmptyMap,
 		nbf:              iea.nbf,
-		ed:               types.CreateEditAccForMapEdits(iea.nbf),
 		addedPartialKeys: make(map[hash.Hash]map[hash.Hash]types.Tuple),
-		addedKeys:        make(map[hash.Hash]struct{}),
-		removedKeys:      make(map[hash.Hash]struct{}),
+		addedKeys:        make(map[hash.Hash]hashedTuple),
+		removedKeys:      make(map[hash.Hash]hashedTuple),
 	}
 }
 
@@ -162,7 +161,7 @@ func (iea *indexEditAccumulator) Has(ctx context.Context, keyHash hash.Hash, key
 }
 
 // HasPartial returns whether the current indexEditAccumulator contains the given partial key. This assumes that the
-// given hash is for the given key.
+// given hash is for the given key. The hashes returned represent the hash of the returned tuple.
 func (iea *indexEditAccumulator) HasPartial(
 	ctx context.Context,
 	idxSch schema.Schema,
@@ -277,7 +276,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 	if _, ok := ie.iea.removedKeys[keyHash]; ok {
 		delete(ie.iea.removedKeys, keyHash)
 	} else {
-		ie.iea.addedKeys[keyHash] = struct{}{}
+		ie.iea.addedKeys[keyHash] = hashedTuple{key, partialKeyHash}
 		if matchingMap, ok := ie.iea.addedPartialKeys[partialKeyHash]; ok {
 			matchingMap[keyHash] = key
 		} else {
@@ -285,7 +284,6 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 		}
 	}
 
-	ie.iea.ed.AddEdit(key, types.EmptyTuple(key.Format()))
 	ie.iea.opCount++
 	ie.stack.Push(true, key, partialKey)
 	return nil
@@ -313,13 +311,32 @@ func (ie *IndexEditor) DeleteRow(ctx context.Context, key, partialKey types.Tupl
 		delete(ie.iea.addedKeys, keyHash)
 		delete(ie.iea.addedPartialKeys[partialKeyHash], keyHash)
 	} else {
-		ie.iea.removedKeys[keyHash] = struct{}{}
+		ie.iea.removedKeys[keyHash] = hashedTuple{key, partialKeyHash}
 	}
 
-	ie.iea.ed.AddEdit(key, nil)
 	ie.iea.opCount++
 	ie.stack.Push(false, key, partialKey)
 	return nil
+}
+
+// HasPartial returns whether the index editor has the given partial key.
+func (ie *IndexEditor) HasPartial(ctx context.Context, partialKey types.Tuple) (bool, error) {
+	ie.flushMutex.RLock()
+	defer ie.flushMutex.RUnlock()
+
+	partialKeyHash, err := partialKey.Hash(partialKey.Format())
+	if err != nil {
+		return false, err
+	}
+
+	ie.writeMutex.Lock()
+	defer ie.writeMutex.Unlock()
+
+	tpls, err := ie.iea.HasPartial(ctx, ie.idxSch, partialKeyHash, partialKey)
+	if err != nil {
+		return false, err
+	}
+	return len(tpls) > 0, nil
 }
 
 // Undo will cause the index editor to undo the last operation at the top of the stack. As Insert and Delete are called,
@@ -370,10 +387,91 @@ func (ie *IndexEditor) Index() schema.Index {
 	return ie.idx
 }
 
-// Close ensures that all goroutines that may be open are properly disposed of. Attempting to call any other function
-// on this editor after calling this function is undefined behavior.
+// StatementStarted is analogous to the TableEditor implementation, but specific to the IndexEditor.
+func (ie *IndexEditor) StatementStarted(ctx context.Context) {
+	ie.flushMutex.Lock()
+	defer ie.flushMutex.Unlock()
+	ie.savedIea = ie.iea
+	ie.iea = ie.iea.NewFromCurrent()
+	ie.iea.opCount = ie.savedIea.opCount
+}
+
+// StatementFinished is analogous to the TableEditor implementation, but specific to the IndexEditor.
+func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) error {
+	// If any ieas are flushing then we want them to finish first
+	err := ie.aq.WaitForEmpty()
+	if err != nil {
+		return err
+	}
+	ie.flushMutex.Lock()
+	defer ie.flushMutex.Unlock()
+
+	if !errored {
+		// We collapse the changes in this iea to the last to reduce the number of map editors that will need to be opened
+		if ie.iea.prevIea != nil {
+			targetIea := ie.iea.prevIea
+
+			for keyHash, hTpl := range ie.iea.removedKeys {
+				if _, ok := targetIea.addedKeys[keyHash]; ok {
+					delete(targetIea.addedKeys, keyHash)
+					delete(targetIea.addedPartialKeys[hTpl.Hash], keyHash)
+				} else {
+					targetIea.removedKeys[keyHash] = hTpl
+				}
+			}
+			for keyHash, hTpl := range ie.iea.addedKeys {
+				if _, ok := targetIea.removedKeys[keyHash]; ok {
+					delete(targetIea.removedKeys, keyHash)
+				} else {
+					targetIea.addedKeys[keyHash] = hTpl
+					if matchingMap, ok := targetIea.addedPartialKeys[hTpl.Hash]; ok {
+						matchingMap[keyHash] = hTpl.Tuple
+					} else {
+						targetIea.addedPartialKeys[hTpl.Hash] = map[hash.Hash]types.Tuple{keyHash: hTpl.Tuple}
+					}
+				}
+			}
+
+			targetIea.opCount = ie.iea.opCount
+			ie.iea.prevIea = nil
+			ie.iea.rowData = types.EmptyMap
+			ie.iea.addedKeys = nil
+			ie.iea.removedKeys = nil
+			ie.iea = targetIea
+		}
+	} else {
+		currentIea := ie.iea
+		// Loop and remove all newer ieas
+		for {
+			if currentIea == nil || currentIea == ie.savedIea {
+				break
+			}
+			nextIea := currentIea.prevIea
+			// We're essentially deleting currentIea, so we're closing and removing everything.
+			// Some of this is taken from the steps followed when flushing, such as the map nils.
+			currentIea.prevIea = nil
+			if currentIea.opCount != -1 {
+				currentIea.rowData = types.EmptyMap
+				currentIea.addedPartialKeys = nil
+				currentIea.addedKeys = nil
+				currentIea.removedKeys = nil
+			}
+			currentIea = nextIea
+		}
+		// If the savedIea was processed due to a large number of ops in the statement triggering an auto flush, then we
+		// need to create a new one.
+		if ie.savedIea.opCount == -1 {
+			ie.iea = createInitialIndexEditAcc(ie.savedIea.rowData)
+		} else {
+			ie.iea = ie.savedIea
+		}
+	}
+	ie.savedIea = nil
+	return nil
+}
+
+// Close is a no-op for an IndexEditor.
 func (ie *IndexEditor) Close() error {
-	ie.iea.ed.Close()
 	return nil
 }
 
@@ -405,46 +503,68 @@ func (ie *IndexEditor) autoFlush() {
 
 func (ie *IndexEditor) flushEditAccumulator(ctx context.Context, ieaInterface interface{}) error {
 	// We don't call any locks at the function entrance since this is called from an ActionExecutor with a concurrency of 1
-	futureIea := ieaInterface.(*indexEditAccumulator)
+	updatedMap, err := processIndexEditAccumulatorChain(ctx, ieaInterface.(*indexEditAccumulator), ie.writeMutex)
+	if err != nil {
+		return err
+	}
+	ie.idxData = updatedMap
+	return nil
+}
+
+func processIndexEditAccumulatorChain(ctx context.Context, futureIea *indexEditAccumulator, writeMutex *sync.Mutex) (m types.Map, err error) {
 	iea := futureIea.prevIea
-	defer iea.ed.Close()
+
+	ed := types.CreateEditAccForMapEdits(iea.nbf)
+	defer ed.Close()
+	for _, hTpl := range iea.removedKeys {
+		ed.AddEdit(hTpl.Tuple, nil)
+	}
+	for _, hTpl := range iea.addedKeys {
+		ed.AddEdit(hTpl.Tuple, types.EmptyTuple(hTpl.Tuple.Format()))
+	}
 
 	// If we encounter an error and return, then we need to remove this iea from the chain and update the next's rowData
 	encounteredErr := true
 	defer func() {
 		if encounteredErr {
 			// All iea modifications are guarded by writeMutex locks, so we have to acquire it
-			ie.writeMutex.Lock()
+			writeMutex.Lock()
 			futureIea.prevIea = nil
 			futureIea.rowData = iea.rowData
-			ie.writeMutex.Unlock()
+			writeMutex.Unlock()
 		}
 	}()
 
-	accEdits, err := iea.ed.FinishedEditing()
+	if iea.prevIea != nil {
+		_, err = processIndexEditAccumulatorChain(ctx, iea, writeMutex)
+		if err != nil {
+			return types.EmptyMap, err
+		}
+	}
+	accEdits, err := ed.FinishedEditing()
 	if err != nil {
-		return err
+		return types.EmptyMap, err
 	}
 	// We are guaranteed that rowData is valid, as we process ieas sequentially.
 	updatedMap, _, err := types.ApplyEdits(ctx, accEdits, iea.rowData)
 	if err != nil {
-		return err
+		return types.EmptyMap, err
 	}
 	// No errors were encountered, so we set the bool to false. This should come after ALL calls that may error.
 	encounteredErr = false
 
-	ie.idxData = updatedMap
 	// All iea modifications are guarded by writeMutex locks, so we have to acquire it here
-	ie.writeMutex.Lock()
+	writeMutex.Lock()
 	futureIea.prevIea = nil
 	futureIea.rowData = updatedMap
-	ie.writeMutex.Unlock()
+	writeMutex.Unlock()
+	// An opCount of -1 lets us know that this iea was processed
+	iea.opCount = -1
 	// there used to be a memory leak in tea and this fixed it, so we're doing it to be safe with iea
-	iea.ed = nil
 	iea.addedPartialKeys = nil
 	iea.addedKeys = nil
 	iea.removedKeys = nil
-	return nil
+	return updatedMap, nil
 }
 
 // indexTupleToTableTuple takes an index tuple and returns a tuple which matches the row on the table by its primary key.

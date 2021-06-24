@@ -52,7 +52,7 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return 1, err
 	}
 
-	apr, err := cli.ParseArgs(ap, args, nil)
+	apr, err := ap.Parse(args)
 	if err != nil {
 		return 1, err
 	}
@@ -121,11 +121,11 @@ func (d DoltAddFunc) Children() []sql.Expression {
 	return d.children
 }
 
-func (d DoltAddFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	return NewDoltAddFunc(children...)
+func (d DoltAddFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+	return NewDoltAddFunc(ctx, children...)
 }
 
 // NewDoltAddFunc creates a new DoltAddFunc expression whose children represents the args passed in DOLT_ADD.
-func NewDoltAddFunc(args ...sql.Expression) (sql.Expression, error) {
+func NewDoltAddFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
 	return &DoltAddFunc{children: args}, nil
 }

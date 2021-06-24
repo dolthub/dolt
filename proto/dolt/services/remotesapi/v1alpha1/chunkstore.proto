@@ -182,7 +182,7 @@ message ClientRepoFormat {
 
 message ListTableFilesRequest  {
   RepoId repo_id = 1;
-  bool appendix_only = 2;
+  bool appendix_only = 2 [deprecated = true];
 }
 
 message TableFileInfo {
@@ -206,6 +206,7 @@ message RefreshTableFileUrlResponse {
 message ListTableFilesResponse {
   bytes root_hash = 1;
   repeated TableFileInfo table_file_info = 2;
+  repeated TableFileInfo appendix_table_file_info = 3;
 }
 
 enum ManifestAppendixOption {

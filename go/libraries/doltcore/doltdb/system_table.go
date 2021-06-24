@@ -27,7 +27,7 @@ import (
 
 const (
 	// DoltNamespace is the name prefix of dolt system tables. We reserve all tables that begin with dolt_ for system use.
-	DoltNamespace = "dolt_"
+	DoltNamespace = "dolt"
 )
 
 var ErrSystemTableCannotBeModified = errors.New("system tables cannot be dropped or altered")
@@ -35,7 +35,7 @@ var ErrSystemTableCannotBeModified = errors.New("system tables cannot be dropped
 // HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace. Users should
 // not be able to create tables in this reserved namespace.
 func HasDoltPrefix(s string) bool {
-	return strings.HasPrefix(s, DoltNamespace)
+	return strings.HasPrefix(strings.ToLower(s), DoltNamespace)
 }
 
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line

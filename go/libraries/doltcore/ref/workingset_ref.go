@@ -54,6 +54,10 @@ func (r WorkingSetRef) GetPath() string {
 	return r.name
 }
 
+func (r WorkingSetRef) ToHeadRef() (DoltRef, error) {
+	return Parse(r.GetPath())
+}
+
 // String returns the fully qualified reference name e.g.
 // refs/workingSets/my-branch
 func (r WorkingSetRef) String() string {

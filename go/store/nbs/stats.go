@@ -98,6 +98,39 @@ func NewStats() *Stats {
 	}
 }
 
+func (s *Stats) Clone() Stats {
+	return Stats{
+		*s.OpenLatency.Clone(),
+		*s.CommitLatency.Clone(),
+		*s.IndexReadLatency.Clone(),
+		*s.IndexBytesPerRead.Clone(),
+		*s.GetLatency.Clone(),
+		*s.ChunksPerGet.Clone(),
+		*s.FileReadLatency.Clone(),
+		*s.FileBytesPerRead.Clone(),
+		*s.S3ReadLatency.Clone(),
+		*s.S3BytesPerRead.Clone(),
+		*s.MemReadLatency.Clone(),
+		*s.MemBytesPerRead.Clone(),
+		*s.DynamoReadLatency.Clone(),
+		*s.DynamoBytesPerRead.Clone(),
+		*s.HasLatency.Clone(),
+		*s.AddressesPerHas.Clone(),
+		*s.PutLatency.Clone(),
+		*s.PersistLatency.Clone(),
+		*s.BytesPerPersist.Clone(),
+		*s.ChunksPerPersist.Clone(),
+		*s.CompressedChunkBytesPerPersist.Clone(),
+		*s.UncompressedChunkBytesPerPersist.Clone(),
+		*s.ConjoinLatency.Clone(),
+		*s.BytesPerConjoin.Clone(),
+		*s.ChunksPerConjoin.Clone(),
+		*s.TablesPerConjoin.Clone(),
+		*s.ReadManifestLatency.Clone(),
+		*s.WriteManifestLatency.Clone(),
+	}
+}
+
 func (s Stats) String() string {
 	return fmt.Sprintf(`---NBS Stats---
 OpenLatecy:                       %s

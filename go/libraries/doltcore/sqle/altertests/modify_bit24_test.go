@@ -19,6 +19,7 @@ import (
 )
 
 func TestModifyTypeBit24(t *testing.T) {
+	SkipByDefaultInCI(t)
 	tests := []ModifyTypeTest{
 		{
 			"BIT(24)",

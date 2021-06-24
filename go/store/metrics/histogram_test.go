@@ -78,12 +78,12 @@ func TestHistogramLarge(t *testing.T) {
 func TestHistogramAdd(t *testing.T) {
 	assert := assert.New(t)
 
-	h := Histogram{}
+	h := &Histogram{}
 	h.Sample(1)
 	h.Sample(2)
 	h.Sample(10)
 
-	h2 := Histogram{}
+	h2 := &Histogram{}
 	h2.Sample(3)
 	h2.Sample(1073741854)
 
@@ -96,7 +96,7 @@ func TestHistogramAdd(t *testing.T) {
 func TestHistogramString(t *testing.T) {
 	assert := assert.New(t)
 
-	h := Histogram{}
+	h := &Histogram{}
 	h.Sample(1)
 	h.Sample(2)
 	h.Sample(10)

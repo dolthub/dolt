@@ -70,6 +70,10 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition)
 	return nil, errors.New("unexpected partition type")
 }
 
+func (idt *IndexedDoltTable) IsTemporary() bool {
+	return idt.table.IsTemporary()
+}
+
 type rangePartition struct {
 	partitionRange lookup.Range
 	keyBytes       []byte

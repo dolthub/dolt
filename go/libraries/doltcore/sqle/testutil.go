@@ -29,12 +29,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
-// Executes all the SQL non-select statements given in the string against the root value given and returns the updated
-// root, or an error. Statements in the input string are split by `;\n`
+// ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
+// the updated root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
-	db := NewBatchedDatabase("dolt", dEnv.DbData())
-	engine, ctx, err := NewTestEngine(context.Background(), db, root)
+	db := NewDatabase("dolt", dEnv.DbData())
 
+	engine, ctx, err := NewTestEngine(context.Background(), db, root)
+	DSessFromSess(ctx.Session).EnableBatchedMode()
+	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, true)
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +124,7 @@ func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*s
 	return engine, sqlCtx, nil
 }
 
-// Executes the select statement given and returns the resulting rows, or an error if one is encountered.
-// This uses the index functionality, which is not ready for prime time. Use with caution.
+// ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
 func ExecuteSelect(dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) ([]sql.Row, error) {
 
 	dbData := env.DbData{

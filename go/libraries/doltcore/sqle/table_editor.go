@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
@@ -40,12 +41,12 @@ type sqlTableEditor struct {
 	dbName            string
 	sch               schema.Schema
 	autoIncCol        schema.Column
-	batchMode         commitBehavior
 	vrw               types.ValueReadWriter
 	autoIncrementType typeinfo.TypeInfo
 	kvToSQLRow        *KVToSqlRowConverter
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
+	temporary         bool
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -54,7 +55,8 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	sess := t.db.TableEditSession(ctx)
+	sess := t.db.TableEditSession(ctx, t.IsTemporary())
+
 	tableEditor, err := sess.GetTableEditor(ctx, t.tableName, t.sch)
 	if err != nil {
 		return nil, err
@@ -66,11 +68,11 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		dbName:      t.db.Name(),
 		sch:         t.sch,
 		autoIncCol:  t.autoIncCol,
-		batchMode:   t.db.batchMode,
 		vrw:         t.db.ddb.ValueReadWriter(),
 		kvToSQLRow:  conv,
 		tableEditor: tableEditor,
 		sess:        sess,
+		temporary:   t.IsTemporary(),
 	}, nil
 }
 
@@ -153,11 +155,28 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 
 // Close implements Closer
 func (te *sqlTableEditor) Close(ctx *sql.Context) error {
-	// If we're running in batched mode, don't flush the edits until explicitly told to do so by the parent table.
-	if te.batchMode == batched {
+	sess := DSessFromSess(ctx.Session)
+
+	// If we're running in batched mode, don't flush the edits until explicitly told to do so
+	if sess.batchMode == batched {
 		return nil
 	}
 	return te.flush(ctx)
+}
+
+// StatementBegin implements the interface sql.TableEditor.
+func (te *sqlTableEditor) StatementBegin(ctx *sql.Context) {
+	te.tableEditor.StatementStarted(ctx)
+}
+
+// DiscardChanges implements the interface sql.TableEditor.
+func (te *sqlTableEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	return te.tableEditor.StatementFinished(ctx, true)
+}
+
+// StatementComplete implements the interface sql.TableEditor.
+func (te *sqlTableEditor) StatementComplete(ctx *sql.Context) error {
+	return te.tableEditor.StatementFinished(ctx, false)
 }
 
 func (te *sqlTableEditor) flush(ctx *sql.Context) error {
@@ -166,6 +185,15 @@ func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 		return err
 	}
 
+	return te.setRoot(ctx, newRoot)
+}
+
+func (te *sqlTableEditor) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dSess := DSessFromSess(ctx.Session)
+
+	if te.temporary {
+		return dSess.SetTempTableRoot(ctx, te.dbName, newRoot)
+	}
+
 	return dSess.SetRoot(ctx, te.dbName, newRoot)
 }

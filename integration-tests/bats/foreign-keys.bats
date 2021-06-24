@@ -1802,3 +1802,31 @@ SQL
     [[ "$output" =~ '1452' ]] || false # first ensure the proper code
     [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `(4011,"yellow")`' ]] || false
 }
+
+@test "foreign-keys: updating to null works as expected in commit" {
+    dolt sql -q "create table unprocessed_t (id int primary key);"
+    dolt sql -q "create table additional_t (id int primary key);"
+    dolt sql <<SQL
+create table t (
+  id int primary key,
+  unprocessed_id int,
+  foreign key (unprocessed_id) references unprocessed_t(id) on delete cascade on update cascade,
+  additional_id int,
+  foreign key (additional_id) references additional_t(id) on delete cascade on update cascade
+);
+SQL
+
+    dolt add .
+    dolt commit -m 'schema'
+
+    dolt sql -q 'insert into additional_t values (20)'
+    dolt sql -q 'insert into t (id, additional_id) values (1,20);'
+    dolt add .
+    dolt commit -m 'initial'
+
+    dolt sql -q 'insert into unprocessed_t values (20)'
+    dolt sql -q 'update t set additional_id = null, unprocessed_id = 20 where id = 1'
+    dolt sql -q 'delete from additional_t'
+    dolt add .
+    dolt commit -m 'this should not break'
+}
