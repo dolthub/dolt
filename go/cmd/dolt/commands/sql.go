@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/abiosoft/readline"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/memory"
@@ -1371,13 +1372,13 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		nameToDB[db.Name()] = db
 		root := roots[db.Name()]
 		engine.AddDatabase(db)
-		err := dsess.AddDB(sqlCtx, db, db.DbData())
 
+		dbState, err := getDbState(sqlCtx, db, mrEnv)
 		if err != nil {
 			return nil, err
 		}
 
-		err = db.SetRoot(sqlCtx, root)
+		err = dsess.AddDB(sqlCtx, dbState)
 		if err != nil {
 			return nil, err
 		}
@@ -1390,6 +1391,45 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 	}
 
 	return &sqlEngine{nameToDB, mrEnv, engine, format}, nil
+}
+
+func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) (dsqle.InitialDbState, error) {
+	var dEnv *env.DoltEnv
+	mrEnv.Iter(func(name string, de *env.DoltEnv) (stop bool, err error) {
+		if name == db.Name() {
+			dEnv = de
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if dEnv == nil {
+		return dsqle.InitialDbState{}, fmt.Errorf("Couldn't find environment for database %s", db.Name())
+	}
+
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return dsqle.InitialDbState{}, err
+	}
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
+	if err != nil {
+		return dsqle.InitialDbState{}, err
+	}
+
+	headRef := dEnv.RepoStateReader().CWBHeadRef()
+	wsRef, err := ref.WorkingSetRefForHead(headRef)
+	if err != nil {
+		return dsqle.InitialDbState{}, err
+	}
+
+	return dsqle.InitialDbState{
+		Db:         db,
+		Roots:      roots,
+		HeadCommit: headCommit,
+		WorkingSet: wsRef,
+	}, nil
 }
 
 func (se *sqlEngine) getDB(name string) (dsqle.Database, error) {

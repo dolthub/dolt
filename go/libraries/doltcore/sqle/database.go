@@ -500,13 +500,13 @@ var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	currRoot, dbRootOk := dsess.roots[db.name]
+	roots, dbRootOk := dsess.roots[db.name]
 
 	if !dbRootOk {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	return currRoot.root, nil
+	return roots.Working, nil
 }
 
 func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, bool) {

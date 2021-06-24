@@ -1357,6 +1357,7 @@ func TestMergeableIndexes(t *testing.T) {
 			sqlCtx := NewTestSQLCtx(ctx)
 			session := DSessFromSess(sqlCtx.Session)
 			err := session.AddDB(sqlCtx, db, denv.DbData())
+
 			require.NoError(t, err)
 			sqlCtx.SetCurrentDatabase(db.Name())
 			err = session.SetRoot(sqlCtx, db.Name(), initialRoot)

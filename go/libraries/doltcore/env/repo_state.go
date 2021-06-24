@@ -28,19 +28,23 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
-	// TODO: replace with commit
-	CWBHeadHash(ctx context.Context) (hash.Hash, error)
-	WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
+	// TODO: get rid of this
 	IsMergeActive(ctx context.Context) (bool, error)
+	// TODO: get rid of this
 	GetMergeCommit(ctx context.Context) (*doltdb.Commit, error)
 }
 
 type RepoStateWriter interface {
+	// TODO: get rid of this
 	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error
+	// TODO: get rid of this
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
+	// TODO: get rid of this
 	AbortMerge(ctx context.Context) error
+	// TODO: get rid of this
 	ClearMerge(ctx context.Context) error
+	// TODO: get rid of this
 	StartMerge(ctx context.Context, commit *doltdb.Commit) error
 }
 

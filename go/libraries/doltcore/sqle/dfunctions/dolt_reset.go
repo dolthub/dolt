@@ -28,7 +28,8 @@ type DoltResetFunc struct {
 }
 
 func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	// TOOD: fix me
+	return nil, nil
+	// TODO: fix me
 	// dbName := ctx.GetCurrentDatabase()
 	//
 	// if len(dbName) == 0 {
@@ -58,10 +59,10 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	// if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
 	// 	return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
 	// }
-
-	// Get all the needed roots.
+	//
+	// // Get all the needed roots.
 	// workingRoot, _ := dSess.GetRoot(dbName)
-
+	//
 	// var staged, head *doltdb.RootValue
 	// // staged, head, err := GetRoots(ctx, dbData.Ddb, dbData.Rsr)
 	// if err != nil {
@@ -114,8 +115,6 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	// 		return 1, err
 	// 	}
 	// }
-
-	return 0, nil
 }
 
 func (d DoltResetFunc) Resolved() bool {

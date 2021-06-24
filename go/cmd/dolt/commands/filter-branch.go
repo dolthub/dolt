@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -256,7 +257,30 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 	engine := sqle.New(cat, azr, &sqle.Config{Auth: new(auth.None)})
 	engine.AddDatabase(db)
 
-	err = dsess.AddDB(sqlCtx, db, db.DbData())
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dbState := dsqle.InitialDbState{
+		Db:         db,
+		Roots:      roots,
+		HeadCommit: headCommit,
+		WorkingSet: wsRef,
+	}
+
+	err = dsess.AddDB(sqlCtx, dbState)
 	if err != nil {
 		return nil, nil, err
 	}

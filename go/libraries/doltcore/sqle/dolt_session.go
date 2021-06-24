@@ -29,11 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type dbRoot struct {
-	hashStr string
-	root    *doltdb.RootValue
-}
-
 const (
 	HeadKeySuffix    = "_head"
 	HeadRefKeySuffix = "_head_ref"
@@ -117,7 +112,7 @@ func IsWorkingKey(key string) (bool, string) {
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	roots                 map[string]dbRoot
+	roots                 map[string]doltdb.Roots
 	workingSets           map[string]ref.WorkingSetRef
 	dbDatas               map[string]env.DbData
 	editSessions          map[string]*editor.TableEditSession
@@ -135,7 +130,7 @@ var _ sql.Session = &DoltSession{}
 func DefaultDoltSession() *DoltSession {
 	sess := &DoltSession{
 		Session:               sql.NewBaseSession(),
-		roots:                 make(map[string]dbRoot),
+		roots:                 make(map[string]doltdb.Roots),
 		dbDatas:               make(map[string]env.DbData),
 		editSessions:          make(map[string]*editor.TableEditSession),
 		dirty:                 make(map[string]bool),
@@ -148,12 +143,26 @@ func DefaultDoltSession() *DoltSession {
 	return sess
 }
 
+type InitialDbState struct {
+	Db         sql.Database
+	Roots      doltdb.Roots
+	HeadCommit *doltdb.Commit
+	WorkingSet ref.WorkingSetRef
+}
+
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
+func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email string, dbs ...InitialDbState) (*DoltSession, error) {
+
+	// TODO: kill this with fire
 	dbDatas := make(map[string]env.DbData)
 	editSessions := make(map[string]*editor.TableEditSession)
 
-	for _, db := range dbs {
+	for _, state := range dbs {
+		db, ok := state.Db.(Database)
+		if !ok {
+			return nil, fmt.Errorf("expected a sqle.Database, but got %T", state.Db)
+		}
+
 		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
 		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 	}
@@ -163,15 +172,16 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		dbDatas:               dbDatas,
 		editSessions:          editSessions,
 		dirty:                 make(map[string]bool),
-		roots:                 make(map[string]dbRoot),
+		roots:                 make(map[string]doltdb.Roots),
 		workingSets:           make(map[string]ref.WorkingSetRef),
 		Username:              username,
 		Email:                 email,
 		tempTableRoots:        make(map[string]*doltdb.RootValue),
 		tempTableEditSessions: make(map[string]*editor.TableEditSession),
 	}
+
 	for _, db := range dbs {
-		err := sess.AddDB(ctx, db, db.DbData())
+		err := sess.AddDB(ctx, db)
 
 		if err != nil {
 			return nil, err
@@ -225,9 +235,10 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 		return nil
 	}
 
-	dbRoot, ok := sess.roots[dbName]
+	roots, ok := sess.roots[dbName]
 	// It's possible that this returns false if the user has created an in-Memory database. Moreover,
 	// the analyzer will check for us whether a db exists or not.
+	// TODO: fix this
 	if !ok {
 		return nil
 	}
@@ -237,7 +248,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 	if !TransactionsEnabled(ctx) {
 		dbData := sess.dbDatas[dbName]
 		sess.dirty[dbName] = false
-		return dbData.Rsw.UpdateWorkingRoot(ctx, dbRoot.root)
+		return dbData.Rsw.UpdateWorkingRoot(ctx, roots.Working)
 	}
 
 	// Newer commit path does a concurrent merge of the current root with the one other clients are editing, then
@@ -248,7 +259,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	mergedRoot, err := dtx.Commit(ctx, dbRoot.root)
+	mergedRoot, err := dtx.Commit(ctx, roots.Working)
 	if err != nil {
 		return err
 	}
@@ -352,7 +363,7 @@ func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	dtx.CreateSavepoint(savepointName, sess.roots[dbName].root)
+	dtx.CreateSavepoint(savepointName, sess.roots[dbName].Working)
 	return nil
 }
 
@@ -477,13 +488,13 @@ func (sess *DoltSession) GetDbData(dbName string) (env.DbData, bool) {
 
 // GetRoot returns the current *RootValue for a given database associated with the session
 func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
-	dbRoot, ok := sess.roots[dbName]
+	roots, ok := sess.roots[dbName]
 
 	if !ok {
 		return nil, false
 	}
 
-	return dbRoot.root, true
+	return roots.Working, true
 }
 
 // SetRoot sets a new root value for the session for the database named. This is the primary mechanism by which data
@@ -491,7 +502,7 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 // update the session's root value via this method.
 // Data changes contained in the |newRoot| aren't persisted until this session is committed.
 func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
-	if rootsEqual(sess.roots[dbName].root, newRoot) {
+	if rootsEqual(sess.roots[dbName].Working, newRoot) {
 		return nil
 	}
 
@@ -506,7 +517,9 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 		return err
 	}
 
-	sess.roots[dbName] = dbRoot{hashStr, newRoot}
+	roots := sess.roots[dbName]
+	roots.Working = newRoot
+	sess.roots[dbName] = roots
 
 	err = sess.editSessions[dbName].SetRoot(ctx, newRoot)
 	if err != nil {
@@ -678,84 +691,34 @@ func (sess *DoltSession) SetSessionVarDirectly(ctx *sql.Context, key string, val
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
-func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbData) error {
+func (sess *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
+	db := dbState.Db
 	defineSystemVariables(db.Name())
 
-	rsr := dbData.Rsr
-	ddb := dbData.Ddb
-
-	sess.dbDatas[db.Name()] = dbData
+	// TODO: get rid of all repo state writer stuff
+	//sess.dbDatas[db.Name()] = dbData
 	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
-	cs := rsr.CWBHeadSpec()
-	headRef := rsr.CWBHeadRef()
-
-	workingRootInRepoState, err := rsr.WorkingRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	// TODO: collapse this difference
-	workingHashInRepoState, err := workingRootInRepoState.HashOf()
-	if err != nil {
-		return err
-	}
-
-	// TODO: this resolve isn't necessary in all cases and slows things down
-	cm, err := ddb.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return err
-	}
-
-	headCommitHash, err := cm.HashOf()
-	if err != nil {
-		return err
-	}
-
-	var workingRoot *doltdb.RootValue
-	// Get a working root to use for this session. This could come from the an independent working set not associated
-	// with any commit, or from the head commit itself in some use cases. Some implementors of RepoStateReader use the
-	// current HEAD hash as the working set hash, and in fact they have to -- there's not always an independently
-	// addressable root value available, only one persisted as a value in a Commit object.
-	if headCommitHash == workingHashInRepoState {
-		workingRoot, err = cm.GetRootValue()
-		if err != nil {
-			return err
-		}
-	}
-
-	if workingRoot == nil {
-		// If the root isn't a head commit value, assume it's a standalone value and look it up
-		workingRoot, err = ddb.ReadRootValue(ctx, workingHashInRepoState)
-		if err != nil {
-			return err
-		}
-	}
-
+	workingRoot := dbState.Roots.Working
 	if TransactionsEnabled(ctx) {
 		// Not all dolt commands update the working set ref yet. So until that's true, we update it here with the contents
 		// of the repo_state.json file
-		workingSetRef, err := ref.WorkingSetRefForHead(headRef)
-		if err != nil {
-			return err
-		}
-		sess.workingSets[db.Name()] = workingSetRef
-
-		_, err = ddb.ResolveWorkingSet(ctx, workingSetRef)
-		if err == doltdb.ErrWorkingSetNotFound {
-			// TODO: read a working set from repo state file
-			// no working set ref established yet
-		} else if err != nil {
-			return err
-		}
-
-		err = sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), workingSetRef.GetPath())
+		sess.workingSets[db.Name()] = dbState.WorkingSet
+		err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), dbState.WorkingSet.GetPath())
 		if err != nil {
 			return err
 		}
 	}
 
-	err = sess.SetRoot(ctx, db.Name(), workingRoot)
+	err := sess.SetRoot(ctx, db.Name(), workingRoot)
+	if err != nil {
+		return err
+	}
+
+	// This has to happen after SetRoot above, since it does a stale check before its work
+	sess.roots[db.Name()] = dbState.Roots
+
+	headCommitHash, err := dbState.HeadCommit.HashOf()
 	if err != nil {
 		return err
 	}
