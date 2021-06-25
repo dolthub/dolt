@@ -69,7 +69,6 @@ type s3ObjectReader struct {
 	s3     s3svc
 	bucket string
 	readRl chan struct{}
-	tc     tableCache
 	ns     string
 }
 
@@ -82,33 +81,6 @@ func (s3or *s3ObjectReader) key(k string) string {
 
 func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name addr, p []byte, off int64, stats *Stats) (n int, err error) {
 	t1 := time.Now()
-
-	if s3or.tc != nil {
-		var r io.ReaderAt
-		r, err = s3or.tc.checkout(name)
-
-		if err != nil {
-			return 0, err
-		}
-
-		if r != nil {
-			defer func() {
-				stats.FileBytesPerRead.Sample(uint64(len(p)))
-				stats.FileReadLatency.SampleTimeSince(t1)
-			}()
-
-			defer func() {
-				checkinErr := s3or.tc.checkin(name)
-
-				if err == nil {
-					err = checkinErr
-				}
-			}()
-
-			n, err = r.ReadAt(p, off)
-			return
-		}
-	}
 
 	defer func() {
 		stats.S3BytesPerRead.Sample(uint64(len(p)))
@@ -128,7 +100,6 @@ const maxS3ReadFromEndReqSize = 256 * 1024 * 1024       // 256MB
 const preferredS3ReadFromEndReqSize = 128 * 1024 * 1024 // 128MB
 
 func (s3or *s3ObjectReader) ReadFromEnd(ctx context.Context, name addr, p []byte, stats *Stats) (n int, sz uint64, err error) {
-	// TODO: enable this to use the tableCache. The wrinkle is the tableCache currently just returns a ReaderAt, which doesn't give you the length of the object that backs it, so you can't calculate an offset if all you know is that you want the last N bytes.
 	defer func(t1 time.Time) {
 		stats.S3BytesPerRead.Sample(uint64(len(p)))
 		stats.S3ReadLatency.SampleTimeSince(t1)
