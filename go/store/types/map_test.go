@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/hash"
 	"math/rand"
 	"sync"
 	"testing"
@@ -2095,7 +2096,6 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 
 func TestMapWithNil(t *testing.T) {
 	vrw := newTestValueStore()
-
 	assert.Panics(t, func() {
 		NewMap(context.Background(), nil, Float(42))
 	})
@@ -2108,4 +2108,35 @@ func TestMapWithNil(t *testing.T) {
 	assert.Panics(t, func() {
 		NewSet(context.Background(), vrw, String("a"), String("b"), Float(42), nil)
 	})
+}
+
+func TestVisitMapLevelOrderSized(t *testing.T) {
+	smallTestChunks()
+	defer normalProductionChunks()
+
+	assert := assert.New(t)
+	vrw := newTestValueStore()
+	kvs := []Value{}
+	for i := 0; i < testMapSize; i++ {
+		kvs = append(kvs, Float(i), Float(i+1))
+	}
+
+	m, err := NewMap(context.Background(), vrw, kvs...)
+	d.PanicIfError(err)
+
+	expectedChunkHashes := make([]hash.Hash, 0)
+	_, _, err = VisitMapLevelOrder(m, func(h hash.Hash) (int64, error) {
+		expectedChunkHashes = append(expectedChunkHashes, h)
+		return 0, nil
+	})
+	d.PanicIfError(err)
+
+	actualChunkHashes := make([]hash.Hash, 0)
+	_, _, err = VisitMapLevelOrderSized([]Map{m}, 37624, func(h hash.Hash) (int64, error) {
+		actualChunkHashes = append(actualChunkHashes, h)
+		return 0, nil
+	})
+	d.PanicIfError(err)
+
+	assert.Equal(expectedChunkHashes, actualChunkHashes)
 }

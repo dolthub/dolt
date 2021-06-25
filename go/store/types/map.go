@@ -617,12 +617,62 @@ func (m Map) HumanReadableString() string {
 	panic("unreachable")
 }
 
+// VisitMapLevelOrder writes hashes of internal node chunks to a writer
+// delimited with a newline character and returns the number or chunks written and the total number of
+// bytes written or an error if encountered
+func VisitMapLevelOrder(m Map, cb func(h hash.Hash) (int64, error)) (int64, int64, error) {
+	chunkCount := int64(0)
+	byteCount := int64(0)
+
+	curLevel := []Map{m}
+	for len(curLevel) > 0 {
+		nextLevel := []Map{}
+		for _, m := range curLevel {
+			if metaSeq, ok := m.orderedSequence.(metaSequence); ok {
+				ts, err := metaSeq.tuples()
+				if err != nil {
+					return 0, 0, err
+				}
+				for _, t := range ts {
+					r, err := t.ref()
+					if err != nil {
+						return 0, 0, err
+					}
+
+					n, err := cb(r.TargetHash())
+					if err != nil {
+						return 0, 0, err
+					}
+
+					chunkCount++
+					byteCount += n
+
+					v, err := r.TargetValue(context.Background(), m.valueReadWriter())
+					if err != nil {
+						return 0, 0, err
+					}
+
+					nextLevel = append(nextLevel, v.(Map))
+				}
+			} else if _, ok := m.orderedSequence.(mapLeafSequence); ok {
+
+			}
+		}
+		curLevel = nextLevel
+	}
+
+	return chunkCount, byteCount, nil
+}
+
 // VisitMapLevelOrderSized passes hashes of internal node chunks to a callback in level order,
 // batching and flushing chunks to prevent large levels from consuming excessive memory. It returns
 // the total number of chunks and bytes read, or an error.
-func VisitMapLevelOrderSized(ms []Map, cb func(h hash.Hash) (int64, error)) (int64, int64, error) {
+func VisitMapLevelOrderSized(ms []Map, batchSize int, cb func(h hash.Hash) (int64, error)) (int64, int64, error) {
 	if len(ms) == 0 {
 		return 0, 0, nil
+	}
+	if batchSize < 0 {
+		return 0, 0, errors.New("invalid batch size")
 	}
 
 	chunkCount := int64(0)
@@ -634,13 +684,13 @@ func VisitMapLevelOrderSized(ms []Map, cb func(h hash.Hash) (int64, error)) (int
 	flush := func() error {
 		for _, h := range chunkHashes {
 			n, err := cb(h)
-			byteCount += n
 			if err != nil {
 				return err
 			}
+			byteCount += n
 		}
 		chunkCount += int64(len(chunkHashes))
-		cc, bc, err := VisitMapLevelOrderSized(chunkMaps, cb)
+		cc, bc, err := VisitMapLevelOrderSized(chunkMaps, batchSize, cb)
 		if err != nil {
 			return err
 		}
@@ -672,7 +722,7 @@ func VisitMapLevelOrderSized(ms []Map, cb func(h hash.Hash) (int64, error)) (int
 			}
 		} else if _, ok := m.orderedSequence.(mapLeafSequence); ok {
 		}
-		if len(chunkHashes) >= 32768 {
+		if len(chunkHashes) >= batchSize {
 			if err := flush(); err != nil {
 				return 0, 0, err
 			}
