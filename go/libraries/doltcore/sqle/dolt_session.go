@@ -750,6 +750,11 @@ func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context, dbName stri
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }
 
+// CWBHeadRef returns the branch ref for this session HEAD for the database named
+func (sess *DoltSession) CWBHeadRef(dbName string) (ref.DoltRef, error) {
+	return sess.workingSets[dbName].ToHeadRef()
+}
+
 // defineSystemVariables defines dolt-session variables in the engine as necessary
 func defineSystemVariables(name string) {
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
