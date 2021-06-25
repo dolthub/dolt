@@ -266,9 +266,9 @@ func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, in
 	}
 }
 
-// GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
+// GetIndexedRowKVPs returns all matching row keys and values for the given key on the index. The key is assumed to be in the format
 // expected of the index, similar to searching on the index map itself.
-func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
+func GetIndexedRowKVPs(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([][2]types.Tuple, error) {
 	tbl, err := te.Table(ctx)
 	if err != nil {
 		return nil, err
@@ -290,17 +290,17 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 		return nil, err
 	}
 
-	var rows []row.Row
+	var rowKVPS [][2]types.Tuple
 	for {
-		r, err := indexIter.ReadRow(ctx)
+		k, err := indexIter.ReadKey(ctx)
+
 		if err == io.EOF {
 			break
-		}
-		if err != nil {
+		} else if err != nil {
 			return nil, err
 		}
 
-		indexRowTaggedValues, err := r.TaggedValues()
+		indexRowTaggedValues, err := row.ParseTaggedValues(k)
 		if err != nil {
 			return nil, err
 		}
@@ -315,6 +315,7 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 		if err != nil {
 			return nil, err
 		}
+
 		if fieldsVal == nil {
 			keyStr, err := formatKey(ctx, key)
 			if err != nil {
@@ -323,12 +324,27 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 			return nil, fmt.Errorf("index key `%s` does not have a corresponding entry in table", keyStr)
 		}
 
-		tableRow, err := row.FromNoms(te.Schema(), pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple))
+		rowKVPS = append(rowKVPS, [2]types.Tuple{pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple)})
+	}
+
+	return rowKVPS, nil
+
+}
+
+// GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
+// expected of the index, similar to searching on the index map itself.
+func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
+	rowKVPS, err := GetIndexedRowKVPs(ctx, te, key, indexName, idxSch)
+	if err != nil {
+		return nil, err
+	}
+
+	rows := make([]row.Row, len(rowKVPS))
+	for i, rowKVP := range rowKVPS {
+		rows[i], err = row.FromNoms(te.Schema(), rowKVP[0], rowKVP[1])
 		if err != nil {
 			return nil, err
 		}
-
-		rows = append(rows, tableRow)
 	}
 
 	return rows, nil

@@ -257,3 +257,22 @@ func AreEqual(row1, row2 Row, sch schema.Schema) bool {
 
 	return true
 }
+
+func TaggedValsEqualForSch(tv, other TaggedValues, sch schema.Schema) bool {
+	if tv == nil && other == nil {
+		return true
+	} else if tv == nil || other == nil {
+		return false
+	}
+
+	for _, tag := range sch.GetAllCols().Tags {
+		val1, _ := tv[tag]
+		val2, _ := other[tag]
+
+		if !valutil.NilSafeEqCheck(val1, val2) {
+			return false
+		}
+	}
+
+	return true
+}
