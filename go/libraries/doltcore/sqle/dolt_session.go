@@ -113,6 +113,7 @@ func IsWorkingKey(key string) (bool, string) {
 type DoltSession struct {
 	sql.Session
 	roots                 map[string]doltdb.Roots
+	headCommits           map[string]*doltdb.Commit
 	workingSets           map[string]ref.WorkingSetRef
 	dbDatas               map[string]env.DbData
 	editSessions          map[string]*editor.TableEditSession
@@ -174,6 +175,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		editSessions:          editSessions,
 		dirty:                 make(map[string]bool),
 		roots:                 make(map[string]doltdb.Roots),
+		headCommits: 					 make(map[string]*doltdb.Commit),
 		workingSets:           make(map[string]ref.WorkingSetRef),
 		Username:              username,
 		Email:                 email,
@@ -547,7 +549,8 @@ func (sess *DoltSession) SetTempTableRoot(ctx *sql.Context, dbName string, newRo
 }
 
 // GetHeadCommit returns the parent commit of the current session.
-// TODO: this should really use the session state directly instead of resolving anything
+// TODO: this should really use the session state directly instead of resolving anything, but we need to keep
+//  supporting detached head
 func (sess *DoltSession) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
 
@@ -719,6 +722,8 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// This has to happen after SetRoot above, since it does a stale check before its work
 	sess.roots[db.Name()] = dbState.Roots
+	// TODO: this needs to be kept up to date as the working set ref changes
+	sess.headCommits[db.Name()] = dbState.HeadCommit
 
 	headCommitHash, err := dbState.HeadCommit.HashOf()
 	if err != nil {

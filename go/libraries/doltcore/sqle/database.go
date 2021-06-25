@@ -232,16 +232,16 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	lwrName := strings.ToLower(tblName)
 
 	sess := DSessFromSess(ctx.Session)
-	head, _, err := sess.GetHeadCommit(ctx, db.name)
-	if err != nil {
-		return nil, false, err
-	}
 
 	// NOTE: system tables are not suitable for caching
 	switch {
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
 		found = true
+		head, _, err := sess.GetHeadCommit(ctx, db.name)
+		if err != nil {
+			return nil, false, err
+		}
 		dt, err = dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
 	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
@@ -250,6 +250,10 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
 		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
 		found = true
+		head, _, err := sess.GetHeadCommit(ctx, db.name)
+		if err != nil {
+			return nil, false, err
+		}
 		dt, err = dtables.NewHistoryTable(ctx, suffix, db.ddb, root, head)
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
@@ -266,6 +270,10 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	// NOTE: system tables are not suitable for caching
 	switch lwrName {
 	case doltdb.LogTableName:
+		head, _, err := sess.GetHeadCommit(ctx, db.name)
+		if err != nil {
+			return nil, false, err
+		}
 		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.ddb, root), true
