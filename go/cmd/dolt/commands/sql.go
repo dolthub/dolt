@@ -1263,7 +1263,7 @@ func hasDoltSQLFunction(node sqlparser.SQLNode) bool {
 }
 
 func HasTopLevelOrderByClause(query string) bool {
-	st, _:= sqlparser.Parse(query)
+	st, _ := sqlparser.Parse(query)
 
 	switch s := st.(type) {
 	case *sqlparser.Select:
