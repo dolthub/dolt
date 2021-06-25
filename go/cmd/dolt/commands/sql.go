@@ -1270,9 +1270,9 @@ func HasTopLevelOrderByClause(query string) bool {
 		return s.OrderBy != nil
 	case *sqlparser.Union:
 		return s.OrderBy != nil
+	default:
+		return false
 	}
-
-	return false
 }
 
 // parses the query to check if it inserts into a table with AUTO_INCREMENT
