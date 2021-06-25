@@ -442,7 +442,15 @@ func (tps *tabularPipelineStages) getFixWidthStageFunc(samples int) func(context
 				bufferring = false
 				fwf = fwt.NewFixedWidthFormatter(fwt.HashFillWhenTooLong, idxMapToSlice(idxToMaxWidth), idxMapToSlice(idxToMaxNumRunes))
 				tps.rowSep = genRowSepString(fwf)
-				return tps.formatItems(fwf, buffer)
+				ret, err := tps.formatItems(fwf, buffer)
+
+				if err != nil {
+					return nil, err
+				}
+
+				// clear the buffer
+				buffer = make([]pipeline.ItemWithProps, 0, samples)
+				return ret, nil
 			}
 
 			return nil, nil
