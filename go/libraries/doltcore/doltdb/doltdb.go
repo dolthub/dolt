@@ -753,6 +753,13 @@ func (ddb *DoltDB) GetWorkspaces(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, workspacesRefFilter)
 }
 
+var remotesRefFilter = map[ref.RefType]struct{}{ref.RemoteRefType: {}}
+
+// GetRemotes returns a list of all remotes in the database.
+func (ddb *DoltDB) GetRemotes(ctx context.Context) ([]ref.DoltRef, error) {
+	return ddb.GetRefsOfType(ctx, remotesRefFilter)
+}
+
 // GetHeadRefs returns a list of all refs that point to a Commit
 func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.HeadRefTypes)
