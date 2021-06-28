@@ -60,10 +60,10 @@ type Database struct {
 	drw  env.DocsReadWriter
 }
 
-var _ sql.Database = (*Database)(nil)
-var _ sql.TableCreator = (*Database)(nil)
-var _ sql.TemporaryTableCreator = (*Database)(nil)
-var _ sql.TemporaryTableDatabase = (*Database)(nil)
+var _ sql.Database = Database{}
+var _ sql.TableCreator = Database{}
+var _ sql.TemporaryTableCreator = Database{}
+var _ sql.TemporaryTableDatabase = Database{}
 
 // DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
 type DisabledTransaction struct{}
