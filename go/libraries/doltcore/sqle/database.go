@@ -228,7 +228,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 	return db.GetTableInsensitiveWithRoot(ctx, root, tblName)
 }
 
-func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (dt sql.Table, found bool, err error) {
+func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
 	sess := DSessFromSess(ctx.Session)
@@ -237,37 +237,45 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	switch {
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
-		found = true
 		head, _, err := sess.GetHeadCommit(ctx, db.name)
 		if err != nil {
 			return nil, false, err
 		}
-		dt, err = dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
+		dt, err := dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
+		if err != nil {
+			return nil, false, err
+		}
+		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
-		found = true
-		dt, err = dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root)
+		dt, err := dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
 		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
-		found = true
 		head, _, err := sess.GetHeadCommit(ctx, db.name)
 		if err != nil {
 			return nil, false, err
 		}
-		dt, err = dtables.NewHistoryTable(ctx, suffix, db.ddb, root, head)
+		dt, err := dtables.NewHistoryTable(ctx, suffix, db.ddb, root, head)
+		if err != nil {
+			return nil, false, err
+		}
+		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
-		found = true
-		dt, err = dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
-	}
-	if err != nil {
-		return nil, false, err
-	}
-	if found {
-		return dt, found, nil
+		dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
+		if err != nil {
+			return nil, false, err
+		}
+		return dt, true, nil
 	}
 
 	// NOTE: system tables are not suitable for caching
+	var dt sql.Table
+	found := false
 	switch lwrName {
 	case doltdb.LogTableName:
 		head, _, err := sess.GetHeadCommit(ctx, db.name)
