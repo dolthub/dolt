@@ -49,6 +49,10 @@ func StageTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tbl
 	return nil
 }
 
+func StageTablesNoDocs(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
+	return stageTablesNoEnvUpdate(ctx, roots, tbls)
+}
+
 func StageAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) error {
 	rsw := dbData.Rsw
 	drw := dbData.Drw
@@ -77,34 +81,58 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) 
 	return nil
 }
 
+func StageAllTablesNoDocs(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return stageTablesNoEnvUpdate(ctx, roots, tbls)
+}
+
+func stageTablesNoEnvUpdate(
+	ctx context.Context,
+	roots doltdb.Roots,
+	tbls []string,
+) (doltdb.Roots, error) {
+	var err error
+	err = ValidateTables(ctx, tbls, roots.Staged, roots.Working)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	roots.Working, err = checkTablesForConflicts(ctx, tbls, roots.Working)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	roots.Staged, err = MoveTablesBetweenRoots(ctx, tbls, roots.Working, roots.Staged)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return roots, nil
+}
+
 func stageTables(
 		ctx context.Context,
 		roots doltdb.Roots,
 		rsw env.RepoStateWriter,
 		tbls []string,
 ) error {
-	err := ValidateTables(ctx, tbls, roots.Staged, roots.Working)
-	if err != nil {
-		return err
-	}
-
-	working, err := checkTablesForConflicts(ctx, tbls, roots.Working)
-	if err != nil {
-		return err
-	}
-
-	staged, err := MoveTablesBetweenRoots(ctx, tbls, working, roots.Staged)
+	var err error
+	roots, err = stageTablesNoEnvUpdate(ctx, roots, tbls)
 	if err != nil {
 		return err
 	}
 
 	// TODO: combine to single operation
-	err = env.UpdateWorkingRoot(ctx, rsw, working)
+	err = env.UpdateWorkingRoot(ctx, rsw, roots.Working)
 	if err != nil {
 		return err
 	}
 
-	return env.UpdateStagedRoot(ctx, rsw, staged)
+	return env.UpdateStagedRoot(ctx, rsw, roots.Staged)
 }
 
 // checkTablesForConflicts clears any 0-row conflicts from the tables named, and returns a new root with those

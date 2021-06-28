@@ -253,7 +253,7 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 		})
 
 		if dEnv == nil {
-			return nil, fmt.Errorf("Couldn't find environment for database %s", db.Name())
+			return nil, fmt.Errorf("couldn't find environment for database %s", db.Name())
 		}
 
 		roots, err := dEnv.Roots(ctx)

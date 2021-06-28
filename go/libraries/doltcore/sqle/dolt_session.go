@@ -34,6 +34,7 @@ const (
 	HeadKeySuffix    = "_head"
 	HeadRefKeySuffix = "_head_ref"
 	WorkingKeySuffix = "_working"
+	StagedKeySuffix  = "_staged"
 )
 
 const (
@@ -113,10 +114,10 @@ func IsWorkingKey(key string) (bool, string) {
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	batchMode             batchMode
-	Username              string
-	Email                 string
-	dbStates map[string]*DatabaseSessionState
+	batchMode batchMode
+	Username  string
+	Email     string
+	dbStates  map[string]*DatabaseSessionState
 }
 
 type DatabaseSessionState struct {
@@ -136,9 +137,9 @@ var _ sql.Session = &DoltSession{}
 // DefaultDoltSession creates a DoltSession object with default values
 func DefaultDoltSession() *DoltSession {
 	sess := &DoltSession{
-		Session:               sql.NewBaseSession(),
-		Username:              "",
-		Email:                 "",
+		Session:  sql.NewBaseSession(),
+		Username: "",
+		Email:    "",
 		dbStates: make(map[string]*DatabaseSessionState),
 	}
 	return sess
@@ -170,9 +171,9 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 	}
 
 	sess := &DoltSession{
-		Session:               sqlSess,
-		Username:              username,
-		Email:                 email,
+		Session:  sqlSess,
+		Username: username,
+		Email:    email,
 		dbStates: make(map[string]*DatabaseSessionState),
 	}
 
@@ -256,7 +257,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 	}
 
 	// TODO: actual logging
-//	logrus.Infof("working root to commit is %s", dbstate.roots.Working.DebugString(ctx, true))
+	//	logrus.Infof("working root to commit is %s", dbstate.roots.Working.DebugString(ctx, true))
 
 	mergedRoot, err := dtx.Commit(ctx, dbstate.roots.Working)
 	if err != nil {
@@ -481,7 +482,7 @@ func (sess *DoltSession) GetDbData(dbName string) (env.DbData, bool) {
 	}, true
 }
 
-// GetRoot returns the current *RootValue for a given database associated with the session
+// GetRoot returns the current working *RootValue for a given database associated with the session
 func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	dbstate, ok := sess.dbStates[dbName]
 	if !ok {
@@ -489,6 +490,16 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	}
 
 	return dbstate.roots.Working, true
+}
+
+// GetRoot returns the current *RootValue for a given database associated with the session
+func (sess *DoltSession) GetRoots(dbName string) (doltdb.Roots, bool) {
+	dbstate, ok := sess.dbStates[dbName]
+	if !ok {
+		return doltdb.Roots{}, false
+	}
+
+	return dbstate.roots, true
 }
 
 // SetRoot sets a new root value for the session for the database named. This is the primary mechanism by which data
@@ -516,6 +527,27 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 	sess.dbStates[dbName].roots = roots
 
 	err = sess.dbStates[dbName].editSession.SetRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	sess.dbStates[dbName].dirty = true
+	return nil
+}
+
+// SetRoots sets new roots for the session for the database named. This is the primary mechanism by which data
+// changes are communicated to the engine and persisted back to disk. All data changes should be followed by a call to
+// update the session's root value via this method.
+// Data changes contained in |roots| aren't persisted until this session is committed.
+func (sess *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
+	sess.dbStates[dbName].roots = roots
+
+	err := sess.setSessionVarsForRoots(ctx, dbName, roots)
+	if err != nil {
+		return err
+	}
+
+	err = sess.dbStates[dbName].editSession.SetRoot(ctx, roots.Working)
 	if err != nil {
 		return err
 	}
@@ -754,6 +786,38 @@ func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context, dbName stri
 // CWBHeadRef returns the branch ref for this session HEAD for the database named
 func (sess *DoltSession) CWBHeadRef(dbName string) (ref.DoltRef, error) {
 	return sess.dbStates[dbName].workingSet.ToHeadRef()
+}
+
+// setSessionVarsForRoots updates the three session vars that track the value of the session root hashes
+func (sess *DoltSession) setSessionVarsForRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
+	h, err := roots.Working.HashOf()
+	if err != nil {
+		return err
+	}
+	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
+	if err != nil {
+		return err
+	}
+
+	h, err = roots.Staged.HashOf()
+	if err != nil {
+		return err
+	}
+	err = sess.Session.SetSessionVariable(ctx, StagedKey(dbName), h.String())
+	if err != nil {
+		return err
+	}
+
+	h, err = roots.Head.HashOf()
+	if err != nil {
+		return err
+	}
+	err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), h.String())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // defineSystemVariables defines dolt-session variables in the engine as necessary

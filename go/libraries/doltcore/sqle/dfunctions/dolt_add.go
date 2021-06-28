@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -28,57 +31,50 @@ type DoltAddFunc struct {
 }
 
 func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	// dbName := ctx.GetCurrentDatabase()
-	//
-	// if len(dbName) == 0 {
-	// 	return 1, fmt.Errorf("Empty database name.")
-	// }
-	//
-	// dSess := sqle.DSessFromSess(ctx.Session)
-	// dbData, ok := dSess.GetDbData(dbName)
-	//
-	// if !ok {
-	// 	return 1, fmt.Errorf("Could not load database %s", dbName)
-	// }
-	//
-	// ap := cli.CreateAddArgParser()
-	// args, err := getDoltArgs(ctx, row, d.Children())
-	//
-	// if err != nil {
-	// 	return 1, err
-	// }
-	//
-	// apr, err := ap.Parse(args)
-	// if err != nil {
-	// 	return 1, err
-	// }
-	//
-	// allFlag := apr.Contains(cli.AllFlag)
-	//
-	// if apr.NArg() == 0 && !allFlag {
-	// 	return 1, fmt.Errorf("Nothing specified, nothing added. Maybe you wanted to say 'dolt add .'?")
-	// } else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-	// 	workingRoot, _ := dSess.GetRoot(dbName)
-	// 	err = actions.StageAllTables(ctx, workingRoot, dbData)
-	// 	if err != nil {
-	// 		return 1, err
-	// 	}
-	//
-	// 	// TODO: get this from a session provider
-	// 	stagedRoot, err := dbData.Rsr.StagedRoot(ctx)
-	// 	if err != nil {
-	// 		return 1, err
-	// 	}
-	//
-	// 	err = dSess.SetRoot(ctx, dbName, stagedRoot)
-	// } else {
-	// 	err = actions.StageTables(ctx, dbData, apr.Args())
-	// }
-	//
-	// if err != nil {
-	// 	return 1, err
-	// }
-	//
+	dbName := ctx.GetCurrentDatabase()
+
+	if len(dbName) == 0 {
+		return 1, fmt.Errorf("Empty database name.")
+	}
+
+	ap := cli.CreateAddArgParser()
+	args, err := getDoltArgs(ctx, row, d.Children())
+
+	if err != nil {
+		return 1, err
+	}
+
+	apr, err := ap.Parse(args)
+	if err != nil {
+		return 1, err
+	}
+
+	allFlag := apr.Contains(cli.AllFlag)
+
+	dSess := sqle.DSessFromSess(ctx.Session)
+	roots, ok := dSess.GetRoots(dbName)
+	if apr.NArg() == 0 && !allFlag {
+		return 1, fmt.Errorf("Nothing specified, nothing added. Maybe you wanted to say 'dolt add .'?")
+	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
+		if !ok {
+			return 1, fmt.Errorf("db session not found")
+		}
+
+		roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+		if err != nil {
+			return 1, err
+		}
+
+		err = dSess.SetRoots(ctx, dbName, roots)
+	} else {
+		roots, err = actions.StageTablesNoDocs(ctx, roots, apr.Args())
+		if err != nil {
+			return 1, err
+		}
+
+		err = dSess.SetRoots(ctx, dbName, roots)
+	}
+
 	return 0, nil
 }
 

@@ -511,6 +511,10 @@ func WorkingKey(dbName string) string {
 	return dbName + WorkingKeySuffix
 }
 
+func StagedKey(dbName string) string {
+	return dbName + StagedKeySuffix
+}
+
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
 // GetRoot returns the root value for this database session
