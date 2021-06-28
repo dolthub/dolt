@@ -18,7 +18,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -136,7 +135,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 		},
 	})
 
-	db := harness.databases[0].Db.(sqle.Database).GetDoltDB()
+	db := harness.databases[0].GetDoltDB()
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	require.NoError(t, err)
 	headRefs, err := db.GetHeadRefs(context.Background())
@@ -253,7 +252,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			},
 		},
 	})
-	db := harness.databases[0].Db.(sqle.Database).GetDoltDB()
+	db := harness.databases[0].GetDoltDB()
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	require.NoError(t, err)
 	headRefs, err := db.GetHeadRefs(context.Background())
@@ -316,7 +315,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 			},
 		},
 	})
-	db := harness.databases[0].Db.(sqle.Database).GetDoltDB()
+	db := harness.databases[0].GetDoltDB()
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	require.NoError(t, err)
 	headRefs, err := db.GetHeadRefs(context.Background())

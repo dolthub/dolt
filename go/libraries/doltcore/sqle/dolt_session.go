@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -253,6 +254,9 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 	if !ok {
 		return fmt.Errorf("expected a DoltTransaction")
 	}
+
+	// TODO: actual logging
+//	logrus.Infof("working root to commit is %s", dbstate.roots.Working.DebugString(ctx, true))
 
 	mergedRoot, err := dtx.Commit(ctx, dbstate.roots.Working)
 	if err != nil {
@@ -526,6 +530,10 @@ func (sess *DoltSession) GetTempTableRootValue(ctx *sql.Context, dbName string) 
 		return nil, false
 	}
 
+	if dbstate.tempTableRoot == nil {
+		return nil, false
+	}
+
 	return dbstate.tempTableRoot, true
 }
 
@@ -692,6 +700,8 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.editSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
 	workingRoot := dbState.Roots.Working
+	logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
+
 	if TransactionsEnabled(ctx) {
 		// Not all dolt commands update the working set ref yet. So until that's true, we update it here with the contents
 		// of the repo_state.json file

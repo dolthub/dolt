@@ -134,7 +134,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) InitialDbState
 	require.NoError(t, err)
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
 	require.NoError(t, err)
 
 	headRef := dEnv.RepoStateReader().CWBHeadRef()

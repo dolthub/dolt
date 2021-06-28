@@ -33,9 +33,10 @@ import (
 
 type DoltHarness struct {
 	t                   *testing.T
+	env                 *env.DoltEnv
 	session             *sqle.DoltSession
 	transactionsEnabled bool
-	databases           []sqle.InitialDbState
+	databases           []sqle.Database
 	parallelism         int
 	skippedQueries      []string
 }
@@ -137,7 +138,8 @@ func (d DoltHarness) NewSession() *sql.Context {
 		sql.WithSession(session))
 
 	for _, db := range d.databases {
-		err := session.AddDB(ctx, db)
+		dbState := getDbState(d.t, db, d.env)
+		err := session.AddDB(ctx, dbState)
 		require.NoError(d.t, err)
 	}
 
@@ -162,6 +164,7 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	dEnv := dtestutils.CreateTestEnv()
+	d.env = dEnv
 
 	// TODO: it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
 	//  have a database that only ever receives read queries, and then you re-use its session for a new database with
@@ -180,7 +183,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		dbState := getDbState(d.t, db, dEnv)
 		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), dbState))
 		dbs = append(dbs, db)
-		d.databases = append(d.databases, dbState)
+		d.databases = append(d.databases, db)
 	}
 
 	return dbs
@@ -192,7 +195,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) sqle.InitialDb
 	require.NoError(t, err)
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
 	require.NoError(t, err)
 
 	headRef := dEnv.RepoStateReader().CWBHeadRef()
