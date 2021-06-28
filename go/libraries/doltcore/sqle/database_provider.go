@@ -24,7 +24,7 @@ type DoltDatabaseProvider struct {
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
 
-func NewDoltDatabaseProvider(databases ...Database) sql.DatabaseProvider {
+func NewDoltDatabaseProvider(databases ...Database) sql.MutableDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[db.Name()] = db
