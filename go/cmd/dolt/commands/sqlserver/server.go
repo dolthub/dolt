@@ -262,7 +262,7 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 		}
 
 		head := dEnv.RepoStateReader().CWBHeadSpec()
-		headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
+		headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
 		if err != nil {
 			return nil, err
 		}
