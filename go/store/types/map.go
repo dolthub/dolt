@@ -720,7 +720,9 @@ func VisitMapLevelOrderSized(ms []Map, batchSize int, cb func(h hash.Hash) (int6
 				if err != nil {
 					return 0, 0, err
 				}
-				chunkMaps = append(chunkMaps, v.(Map))
+				if cm, ok := v.(Map); ok {
+					chunkMaps = append(chunkMaps, cm)
+				}
 			}
 		} else if _, ok := m.orderedSequence.(mapLeafSequence); ok {
 		}
