@@ -28,8 +28,6 @@ type DoltAddFunc struct {
 }
 
 func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	// TODO: fix me
-
 	// dbName := ctx.GetCurrentDatabase()
 	//
 	// if len(dbName) == 0 {
@@ -42,7 +40,7 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	// if !ok {
 	// 	return 1, fmt.Errorf("Could not load database %s", dbName)
 	// }
-
+	//
 	// ap := cli.CreateAddArgParser()
 	// args, err := getDoltArgs(ctx, row, d.Children())
 	//
@@ -54,7 +52,7 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	// if err != nil {
 	// 	return 1, err
 	// }
-
+	//
 	// allFlag := apr.Contains(cli.AllFlag)
 	//
 	// if apr.NArg() == 0 && !allFlag {
@@ -80,7 +78,7 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	// if err != nil {
 	// 	return 1, err
 	// }
-
+	//
 	return 0, nil
 }
 
