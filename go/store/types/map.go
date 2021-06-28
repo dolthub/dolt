@@ -25,9 +25,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
-	"golang.org/x/sync/errgroup"
 )
 
 type ValueInRange func(Value) (bool, error)
