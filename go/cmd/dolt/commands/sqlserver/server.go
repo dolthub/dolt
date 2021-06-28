@@ -215,7 +215,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 	}
 }
 
-
 func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	dsqlDBs := make([]dsqle.Database, 0, len(dbs))
 

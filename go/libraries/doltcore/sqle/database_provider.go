@@ -1,11 +1,8 @@
-
-
 package sqle
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
-
 
 type DoltDatabaseProvider struct {
 	databases map[string]sql.Database
@@ -51,5 +48,5 @@ func (p DoltDatabaseProvider) AddDatabase(db sql.Database) {
 }
 
 func (p DoltDatabaseProvider) DropDatabase(name string) {
-	 delete(p.databases, name)
+	delete(p.databases, name)
 }
