@@ -261,7 +261,7 @@ func (bWr remoteWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	}
 
 	ddb := bWr.bt.ddb
-	refs, err := ddb.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
+	refs, err := ddb.GetRemotes(ctx)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
