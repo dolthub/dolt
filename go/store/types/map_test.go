@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"github.com/dolthub/dolt/go/store/hash"
 	"math/rand"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -2115,28 +2116,60 @@ func TestVisitMapLevelOrderSized(t *testing.T) {
 	defer normalProductionChunks()
 
 	assert := assert.New(t)
-	vrw := newTestValueStore()
-	kvs := []Value{}
-	for i := 0; i < testMapSize; i++ {
-		kvs = append(kvs, Float(i), Float(i+1))
+
+	tests := []struct {
+		description string
+		mapSize     int
+		batchSize   int
+	}{
+		{
+			description: "large batch",
+			mapSize:     testMapSize * 4,
+			batchSize:   200,
+		},
+		{
+			description: "medium batch",
+			mapSize:     testMapSize * 2,
+			batchSize:   20,
+		},
+		{
+			description: "small batch",
+			mapSize:     testMapSize,
+			batchSize:   2,
+		},
 	}
 
-	m, err := NewMap(context.Background(), vrw, kvs...)
-	d.PanicIfError(err)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			vrw := newTestValueStore()
+			kvs := []Value{}
+			for i := 0; i < test.mapSize; i++ {
+				kvs = append(kvs, Float(i), Float(i+1))
+			}
 
-	expectedChunkHashes := make([]hash.Hash, 0)
-	_, _, err = VisitMapLevelOrder(m, func(h hash.Hash) (int64, error) {
-		expectedChunkHashes = append(expectedChunkHashes, h)
-		return 0, nil
-	})
-	d.PanicIfError(err)
+			m, err := NewMap(context.Background(), vrw, kvs...)
+			d.PanicIfError(err)
 
-	actualChunkHashes := make([]hash.Hash, 0)
-	_, _, err = VisitMapLevelOrderSized([]Map{m}, 37624, func(h hash.Hash) (int64, error) {
-		actualChunkHashes = append(actualChunkHashes, h)
-		return 0, nil
-	})
-	d.PanicIfError(err)
+			expectedChunkHashes := make([]hash.Hash, 0)
+			_, _, err = VisitMapLevelOrder(m, func(h hash.Hash) (int64, error) {
+				expectedChunkHashes = append(expectedChunkHashes, h)
+				return 0, nil
+			})
+			d.PanicIfError(err)
 
-	assert.Equal(expectedChunkHashes, actualChunkHashes)
+			actualChunkHashes := make([]hash.Hash, 0)
+			_, _, err = VisitMapLevelOrderSized([]Map{m}, test.batchSize, func(h hash.Hash) (int64, error) {
+				actualChunkHashes = append(actualChunkHashes, h)
+				return 0, nil
+			})
+			d.PanicIfError(err)
+			sort.Slice(expectedChunkHashes, func(i, j int) bool {
+				return expectedChunkHashes[i].Less(expectedChunkHashes[j])
+			})
+			sort.Slice(actualChunkHashes, func(i, j int) bool {
+				return actualChunkHashes[i].Less(actualChunkHashes[j])
+			})
+			assert.Equal(expectedChunkHashes, actualChunkHashes)
+		})
+	}
 }
