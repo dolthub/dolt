@@ -228,7 +228,8 @@ func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema
 func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf interface{}) error {
 	switch db.(type) {
 	case sqle.ReadOnlyDatabase:
-		// TODO: insert query can't be performed against ReadOnlyDatabase
+		// TODO: insert query to dolt_branches table (below)
+		// can't be performed against ReadOnlyDatabase
 		d.t.Skip("can't create SnaphotTables for ReadOnlyDatabases")
 	case sqle.Database:
 	default:
