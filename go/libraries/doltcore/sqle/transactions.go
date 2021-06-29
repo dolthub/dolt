@@ -102,15 +102,15 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 			}
 		}
 
-		mergdworkingSet := workingSet.WithWorkingRoot(mergedRoot)
-		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergdworkingSet, hash)
+		mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
+		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash)
 		if err == datas.ErrOptimisticLockFailed {
 			continue
 		} else if err != nil {
 			return nil, err
 		}
 
-		return mergdworkingSet, nil
+		return mergedWorkingSet, nil
 	}
 
 	// TODO: different error type for retries exhausted

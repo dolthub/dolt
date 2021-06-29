@@ -87,18 +87,12 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return nil, err
 	}
 
-	// logrus.Tracef("starting transcation with working root %s", ws.WorkingRoot().DebugString(ctx, true))
+	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
 
 	dsess := DSessFromSess(ctx.Session)
-	err = dsess.SetWorkingSet(ctx, db.name, ws)
-	if err != nil {
-		return nil, err
-	}
 
-	err = dsess.setRoot(ctx, db.name, ws.WorkingRoot())
-	if err != nil {
-		return nil, err
-	}
+	// TODO: this is going to do 2 resolves to get the head root, not ideal
+	err = dsess.SetWorkingSet(ctx, db.name, ws, nil)
 
 	return NewDoltTransaction(ws, wsRef, db.DbData()), nil
 }
@@ -239,7 +233,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	switch {
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
-		head, _, err := sess.GetHeadCommit(ctx, db.name)
+		head, err := sess.GetHeadCommit(ctx, db.name)
 		if err != nil {
 			return nil, false, err
 		}
@@ -257,7 +251,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
 		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
-		head, _, err := sess.GetHeadCommit(ctx, db.name)
+		head, err := sess.GetHeadCommit(ctx, db.name)
 		if err != nil {
 			return nil, false, err
 		}
@@ -280,7 +274,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	found := false
 	switch lwrName {
 	case doltdb.LogTableName:
-		head, _, err := sess.GetHeadCommit(ctx, db.name)
+		head, err := sess.GetHeadCommit(ctx, db.name)
 		if err != nil {
 			return nil, false, err
 		}
@@ -551,7 +545,7 @@ func (db Database) SetTemporaryRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 // GetHeadRoot returns root value for the current session head
 func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	head, _, err := dsess.GetHeadCommit(ctx, db.name)
+	head, err := dsess.GetHeadCommit(ctx, db.name)
 	if err != nil {
 		return nil, err
 	}

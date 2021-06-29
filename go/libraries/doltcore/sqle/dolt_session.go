@@ -274,7 +274,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 
 	// logrus.Errorf("committed merged working root %s", dbstate.workingSet.WorkingRoot().DebugString(ctx, true))
 
-	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet)
+	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet, nil)
 	if err != nil {
 		return err
 	}
@@ -554,36 +554,51 @@ func (sess *DoltSession) setRoot(ctx *sql.Context, dbName string, newRoot *doltd
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
+// Unlike setting the only the working root, this method always marks the database state dirty.
 func (sess *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
 	// TODO: handle HEAD here?
-	sess.dbStates[dbName].workingSet = sess.dbStates[dbName].workingSet.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
+	workingSet := sess.dbStates[dbName].workingSet.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
+	return sess.SetWorkingSet(ctx, dbName, workingSet, nil)
+}
 
-	err := sess.setSessionVarsForRoots(ctx, dbName, roots)
+// SetWorkingSet sets the working set for this session.  Unlike setting the working root alone, this method always
+// marks the session dirty.
+func (sess *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet, headRoot *doltdb.RootValue) error {
+	sessionState := sess.dbStates[dbName]
+	sessionState.workingSet = ws
+
+	if headRoot == nil {
+		cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
+		if err != nil {
+			return err
+		}
+
+		cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, nil)
+		if err != nil {
+			return err
+		}
+
+		// TODO: protect this for commit() detached head state
+		sessionState.headCommit = cm
+
+		headRoot, err = cm.GetRootValue()
+		if err != nil {
+			return err
+		}
+	}
+
+	sessionState.headRoot = headRoot
+	err := sess.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	err = sess.dbStates[dbName].editSession.SetRoot(ctx, roots.Working)
+	// setRoot updates any edit sessions in use
+	err = sess.setRoot(ctx, dbName, ws.WorkingRoot())
 	if err != nil {
-		return err
+		return nil
 	}
 
-	// TODO: could check this more optimistically
-	sess.dbStates[dbName].dirty = true
-	return nil
-}
-
-// SetWorkingSetRef sets the working set ref for this session, without attempting to load the data from this working
-// set into memory.
-// TODO: fix this, it needs to do a lot of bookkeeping
-func (sess *DoltSession) SetWorkingSetRef(ctx *sql.Context, dbName string, wsRef ref.WorkingSetRef) error {
-	return nil
-}
-
-// SetWorkingSet sets the working set for this session
-// TODO: fix this, it needs to do a lot of bookkeeping
-func (sess *DoltSession) SetWorkingSet(ctx *sql.Context, name string, ws *doltdb.WorkingSet) error {
-	sess.dbStates[name].workingSet = ws
 	return nil
 }
 
@@ -606,53 +621,29 @@ func (sess *DoltSession) SetTempTableRoot(ctx *sql.Context, dbName string, newRo
 }
 
 // GetHeadCommit returns the parent commit of the current session.
-// TODO: this should really use the session state directly instead of resolving anything, but we need to keep
-//  supporting detached head
-func (sess *DoltSession) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
+func (sess *DoltSession) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, error) {
 	dbState, dbFound := sess.dbStates[dbName]
 	if !dbFound {
-		return nil, hash.Hash{}, sql.ErrDatabaseNotFound.New(dbName)
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	value, err := sess.Session.GetSessionVariable(ctx, dbName+HeadKeySuffix)
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-
-	valStr, isStr := value.(string)
-
-	if !isStr || !hash.IsValid(valStr) {
-		return nil, hash.Hash{}, doltdb.ErrInvalidHash
-	}
-
-	h := hash.Parse(valStr)
-	cs, err := doltdb.NewCommitSpec(valStr)
-
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-
-	cm, err := dbState.dbData.Ddb.Resolve(ctx, cs, nil)
-
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-
-	return cm, h, nil
+	return dbState.headCommit, nil
 }
 
 // SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
 // vars that we define. Otherwise we pass it on to the base implementation.
 func (sess *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
-	// TODO: is working head ref
+	// TODO: working set ref
 
 	if isHead, dbName := IsHeadKey(key); isHead {
-		return sess.setHeadSessionVar(ctx, key, value, dbName)
+		return sess.setHeadSessionVar(ctx, value, dbName)
 	}
 
 	if isWorking, dbName := IsWorkingKey(key); isWorking {
 		return sess.setWorkingSessionVar(ctx, value, dbName)
 	}
+
+	// TODO: allow setting staged directly via var? seems like no
 
 	if strings.ToLower(key) == "foreign_key_checks" {
 		return sess.setForeignKeyChecksSessionVar(ctx, key, value)
@@ -691,7 +682,6 @@ func (sess *DoltSession) setWorkingSessionVar(ctx *sql.Context, value interface{
 		return doltdb.ErrInvalidHash
 	}
 
-	// If there's a Root Value that's associated with this hash update dbRoots to include it
 	dbstate, dbFound := sess.dbStates[dbName]
 	if !dbFound {
 		return sql.ErrDatabaseNotFound.New(dbName)
@@ -707,7 +697,7 @@ func (sess *DoltSession) setWorkingSessionVar(ctx *sql.Context, value interface{
 	return sess.SetRoot(ctx, dbName, root)
 }
 
-func (sess *DoltSession) setHeadSessionVar(ctx *sql.Context, key string, value interface{}, dbName string) error {
+func (sess *DoltSession) setHeadSessionVar(ctx *sql.Context, value interface{}, dbName string) error {
 	dbstate, dbFound := sess.dbStates[dbName]
 	if !dbFound {
 		return sql.ErrDatabaseNotFound.New(dbName)
@@ -728,6 +718,8 @@ func (sess *DoltSession) setHeadSessionVar(ctx *sql.Context, key string, value i
 	if err != nil {
 		return err
 	}
+
+	dbstate.headCommit = cm
 
 	root, err := cm.GetRootValue()
 	if err != nil {
@@ -814,8 +806,11 @@ func (sess *DoltSession) CWBHeadRef(dbName string) (ref.DoltRef, error) {
 	return sess.dbStates[dbName].workingSet.Ref().ToHeadRef()
 }
 
-// setSessionVarsForRoots updates the three session vars that track the value of the session root hashes
-func (sess *DoltSession) setSessionVarsForRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
+// setSessionVarsForDb updates the three session vars that track the value of the session root hashes
+func (sess *DoltSession) setSessionVarsForDb(ctx *sql.Context, dbName string) error {
+	state := sess.dbStates[dbName]
+	roots := state.GetRoots()
+
 	h, err := roots.Working.HashOf()
 	if err != nil {
 		return err
@@ -834,7 +829,7 @@ func (sess *DoltSession) setSessionVarsForRoots(ctx *sql.Context, dbName string,
 		return err
 	}
 
-	h, err = roots.Head.HashOf()
+	h, err = state.headCommit.HashOf()
 	if err != nil {
 		return err
 	}

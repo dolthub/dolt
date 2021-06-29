@@ -176,18 +176,21 @@ func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData 
 		}
 	}
 
-	err = updateHeadAndWorkingSessionVars(ctx, dbName, roots)
-	if err != nil {
-		return err
-	}
-
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
 	}
 
+	ws, err := dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return err
+	}
+
 	dSess := sqle.DSessFromSess(ctx.Session)
-	return dSess.SetWorkingSetRef(ctx, dbName, wsRef)
+	// TODO: this may not be right for the SQL context, need to not take working set changes with us, maybe die if the
+	//  working set is dirty, or force a commit first
+	newWorkingSet := ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
+	return dSess.SetWorkingSet(ctx, dbName, newWorkingSet, branchRoot)
 }
 
 func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {

@@ -72,7 +72,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if strings.ToUpper(name) == "HEAD" {
 		sess := sqle.DSessFromSess(ctx.Session)
 
-		cm, _, err = sess.GetHeadCommit(ctx, dbName)
+		cm, err = sess.GetHeadCommit(ctx, dbName)
 		if err != nil {
 			return nil, err
 		}
