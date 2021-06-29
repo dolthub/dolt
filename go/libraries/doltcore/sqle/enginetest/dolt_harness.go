@@ -44,6 +44,7 @@ var _ enginetest.IndexHarness = (*DoltHarness)(nil)
 var _ enginetest.VersionedDBHarness = (*DoltHarness)(nil)
 var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
 var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
+var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
@@ -183,15 +184,25 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	return dbs
 }
 
+func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyDatabase) {
+	for _, db := range d.NewDatabases(names...) {
+		dbs = append(dbs, sqle.ReadOnlyDatabase{Database: db.(sqle.Database)})
+	}
+	return
+}
+
 func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) (sql.Table, error) {
-	doltDatabase := db.(sqle.Database)
-	err := doltDatabase.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema)
+	var err error
+	if ro, ok := db.(sqle.ReadOnlyDatabase); ok {
+		err = ro.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema)
+	} else {
+		err = db.(sqle.Database).CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	table, ok, err := doltDatabase.GetTableInsensitive(enginetest.NewContext(d).WithCurrentDB(db.Name()), name)
-
+	table, ok, err := db.GetTableInsensitive(enginetest.NewContext(d).WithCurrentDB(db.Name()), name)
 	require.NoError(d.t, err)
 	require.True(d.t, ok, "table %s not found after creation", name)
 	return table, nil
@@ -215,7 +226,16 @@ func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
 func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf interface{}) error {
-	ddb := db.(sqle.Database)
+	switch db.(type) {
+	case sqle.ReadOnlyDatabase:
+		// TODO: insert query to dolt_branches table (below)
+		// can't be performed against ReadOnlyDatabase
+		d.t.Skip("can't create SnaphotTables for ReadOnlyDatabases")
+	case sqle.Database:
+	default:
+		panic("not a Dolt SQL Database")
+	}
+
 	e := enginetest.NewEngineWithDbs(d.t, d, []sql.Database{db}, nil)
 
 	if _, err := e.Catalog.FunctionRegistry.Function(dfunctions.CommitFuncName); sql.ErrFunctionNotFound.Is(err) {
@@ -228,12 +248,12 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
-		"set @@"+sqle.HeadKey(ddb.Name())+" = COMMIT('-m', 'test commit');")
+		"set @@"+sqle.HeadKey(db.Name())+" = COMMIT('-m', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)
 
-	headHash, err := ctx.GetSessionVariable(ctx, sqle.HeadKey(ddb.Name()))
+	headHash, err := ctx.GetSessionVariable(ctx, sqle.HeadKey(db.Name()))
 	require.NoError(d.t, err)
 
 	ctx = enginetest.NewContext(d)
