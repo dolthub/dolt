@@ -123,7 +123,7 @@ type DoltSession struct {
 type DatabaseSessionState struct {
 	dbName               string
 	headCommit           *doltdb.Commit
-	// TODO: fill this in and update its state as headCommit changes
+	detachedHead         bool
 	headRoot             *doltdb.RootValue
 	workingSet           *doltdb.WorkingSet
 	dbData               env.DbData
@@ -567,7 +567,7 @@ func (sess *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *dolt
 	sessionState := sess.dbStates[dbName]
 	sessionState.workingSet = ws
 
-	if headRoot == nil {
+	if headRoot == nil && !sessionState.detachedHead {
 		cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
 		if err != nil {
 			return err
@@ -578,7 +578,6 @@ func (sess *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *dolt
 			return err
 		}
 
-		// TODO: protect this for commit() detached head state
 		sessionState.headCommit = cm
 
 		headRoot, err = cm.GetRootValue()
@@ -587,7 +586,10 @@ func (sess *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *dolt
 		}
 	}
 
-	sessionState.headRoot = headRoot
+	if headRoot != nil{
+		sessionState.headRoot = headRoot
+	}
+
 	err := sess.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
 		return err
@@ -636,7 +638,13 @@ func (sess *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value 
 	// TODO: working set ref
 
 	if isHead, dbName := IsHeadKey(key); isHead {
-		return sess.setHeadSessionVar(ctx, value, dbName)
+		err := sess.setHeadSessionVar(ctx, value, dbName)
+		if err != nil {
+			return err
+		}
+
+		sess.dbStates[dbName].detachedHead = true
+		return nil
 	}
 
 	if isWorking, dbName := IsWorkingKey(key); isWorking {
@@ -725,6 +733,8 @@ func (sess *DoltSession) setHeadSessionVar(ctx *sql.Context, value interface{}, 
 	if err != nil {
 		return err
 	}
+
+	dbstate.headRoot = root
 
 	err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), value)
 	if err != nil {
