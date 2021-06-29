@@ -613,6 +613,7 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 	if !t.autoIncCol.AutoIncrement {
 		return nil, sql.ErrNoAutoIncrementCol
 	}
+
 	if t.ed != nil {
 		return t.ed.GetAutoIncrementValue()
 	}

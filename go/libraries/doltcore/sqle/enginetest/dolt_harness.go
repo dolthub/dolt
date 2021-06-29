@@ -181,44 +181,9 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		dbs = append(dbs, db)
 		d.databases = append(d.databases, db)
 	}
-	//
-	//err = d.updateAutoIncrTacker(sql.NewEmptyContext(), ait)
-	//require.NoError(d.t, err)
 
 	return dbs
 }
-
-//func (d *DoltHarness) updateAutoIncrTacker(ctx *sql.Context, ait autoincr.AutoIncrementTracker) error {
-//	for _, db := range d.databases {
-//		names, err := db.GetTableNames(ctx)
-//		if err != nil {
-//			return err
-//		}
-//
-//		for _, name := range names {
-//			table, _, err := db.GetTableInsensitive(ctx, name)
-//			if err != nil {
-//				return err
-//			}
-//
-//			if t, ok := table.(sql.AutoIncrementTable); ok {
-//				aiv, err := t.GetAutoIncrementValue(ctx)
-//				if !errors.Is(err, sql.ErrNoAutoIncrementCol) && err != nil {
-//					return err
-//				} else if errors.Is(err, sql.ErrNoAutoIncrementCol) {
-//					continue
-//				}
-//
-//				dbname := db.Name()
-//				asInt := aiv.(int32)
-//
-//				ait.SetAutoIncrementValueForTable(dbname, name, uint64(asInt))
-//			}
-//		}
-//	}
-//
-//	return nil
-//}
 
 func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) (sql.Table, error) {
 	doltDatabase := db.(sqle.Database)
