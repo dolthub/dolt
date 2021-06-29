@@ -65,6 +65,16 @@ var _ sql.TableCreator = Database{}
 var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TemporaryTableDatabase = Database{}
 
+type ReadOnlyDatabase struct {
+	Database
+}
+
+var _ sql.ReadOnlyDatabase = ReadOnlyDatabase{}
+
+func (r ReadOnlyDatabase) IsReadOnly() bool {
+	return true
+}
+
 // DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
 type DisabledTransaction struct{}
 
