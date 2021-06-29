@@ -70,7 +70,7 @@ type TableEditor interface {
 	Close() error
 }
 
-func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTracker, name string) (TableEditor, error) {
+func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTrackerSubscriber, name string) (TableEditor, error) {
 	if schema.IsKeyless(tableSch) {
 		return newKeylessTableEditor(ctx, t, tableSch, name)
 	}
@@ -95,7 +95,7 @@ type pkTableEditor struct {
 	hasAutoInc bool
 	autoIncCol schema.Column
 	autoIncVal types.Value
-	aiTracker autoincr.AutoIncrementTracker
+	aiTracker autoincr.AutoIncrementTrackerSubscriber
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -126,7 +126,7 @@ type tableEditAccumulator struct {
 	removedKeys map[hash.Hash]types.LesserValuable
 }
 
-func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTracker, name string) (*pkTableEditor, error) {
+func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTrackerSubscriber, name string) (*pkTableEditor, error) {
 	te := &pkTableEditor{
 		t:          t,
 		tSch:       tableSch,
@@ -634,6 +634,16 @@ func (te *pkTableEditor) GetAutoIncrementValue() types.Value {
 func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 	te.autoIncVal = v
 	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
+	if err != nil {
+		return
+	}
+
+	val, err := te.autoIncCol.TypeInfo.ConvertNomsValueToValue(te.autoIncVal)
+	if err != nil {
+		return err
+	}
+
+	err = te.updateAutoIncrementTracker(val)
 	return
 }
 
@@ -654,14 +664,15 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 			return nil, err
 		}
 
-		i32, err := te.autoIncCol.TypeInfo.ConvertNomsValueToValue(te.autoIncVal)
+		val, err := te.autoIncCol.TypeInfo.ConvertNomsValueToValue(te.autoIncVal)
 		if err != nil {
 			return nil, err
 		}
 
-		asInt := i32.(int32)
-
-		te.aiTracker.SetAutoIncrementValueForTable("dsimple", te.name, uint64(asInt))
+		err = te.updateAutoIncrementTracker(val)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	tbl := te.t
@@ -695,6 +706,45 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 	te.t = tbl
 
 	return te.t, nil
+}
+
+func (te *pkTableEditor) updateAutoIncrementTracker(val interface{}) error {
+	// If the auto increment tracker is passed in be sure to update it with the most recent value.
+	if te.aiTracker != nil {
+		newValue, err := convertIntToUint(val)
+		if err != nil {
+			return err
+		}
+
+		te.aiTracker.SetAutoIncrementValueForTable(te.name, newValue)
+	}
+
+	return nil
+}
+
+func convertIntToUint(val interface{}) (uint64, error) {
+	switch t := val.(type) {
+	case int8:
+		return uint64(t), nil
+	case int16:
+		return uint64(t), nil
+	case int32:
+		return uint64(t), nil
+	case int64:
+		return uint64(t), nil
+	case uint:
+		return uint64(t), nil
+	case uint8:
+		return uint64(t), nil
+	case uint16:
+		return uint64(t), nil
+	case uint32:
+		return uint64(t), nil
+	case uint64:
+		return t, nil
+	default:
+		return 0, fmt.Errorf("error: auto increment is not int type")
+	}
 }
 
 func (te *pkTableEditor) Schema() schema.Schema {

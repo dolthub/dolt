@@ -136,7 +136,6 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
-	ait := autoincr.NewAutoIncrementTracker()
 
 	mySQLServer, startError = server.NewServer(
 		server.Config{
@@ -151,7 +150,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		},
 		sqlEngine,
 		// In the sessionBuilder pass in the AutoIncrementManager
-		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit(), ait),
+		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit(), autoincr.NewAutoIncrementTracker()),
 	)
 
 	if startError != nil {
@@ -181,8 +180,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-
-		doltSess, err := dsqle.NewDoltSessionWithAITracker(tmpSqlCtx, mysqlSess, username, email, ait, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, ait, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
 
 		if err != nil {
 			return nil, nil, nil, err
@@ -203,7 +201,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 			sql.WithSession(doltSess),
 			sql.WithTracer(tracing.Tracer(ctx)))
 
-		// Create the Auto Increment wrapper here
+		// Update the auto increment tracker with loaded session
 		err = updateAutoIncTracker(sqlEngine, sqlCtx, doltSess.GetAutoIncTracker())
 		if err != nil {
 			return nil, nil, nil, err
@@ -259,7 +257,7 @@ func updateAutoIncTracker(sqlEngine *sqle.Engine, ctx *sql.Context, ait autoincr
 				dbname := db.Name()
 				asInt := aiv.(int32)
 
-				ait.SetAutoIncrementValueForTable(dbname, name, uint64(asInt))
+				ait.Set(dbname, name, uint64(asInt))
 			}
 		}
 	}

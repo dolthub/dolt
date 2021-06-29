@@ -152,13 +152,14 @@ func DefaultDoltSession() *DoltSession {
 }
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
+func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email string, ai autoincr.AutoIncrementTracker, dbs ...Database) (*DoltSession, error) {
 	dbDatas := make(map[string]env.DbData)
 	editSessions := make(map[string]*editor.TableEditSession)
 
 	for _, db := range dbs {
+		newAIVal := autoincr.NewAutoIncrementTableSubscriber(db.Name(), ai)
 		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
-		editSessions[db.Name()] = editor.CreateTableEditSession(nil, nil, editor.TableEditSessionProps{})
+		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{AutoIncrTracker: newAIVal})
 	}
 
 	sess := &DoltSession{
@@ -172,7 +173,9 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		Email:                 email,
 		tempTableRoots:        make(map[string]*doltdb.RootValue),
 		tempTableEditSessions: make(map[string]*editor.TableEditSession),
+		autoIncTracker: ai,
 	}
+
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db, db.DbData())
 
@@ -190,7 +193,7 @@ func NewDoltSessionWithAITracker(ctx *sql.Context, sqlSess sql.Session, username
 
 	for _, db := range dbs {
 		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
-		editSessions[db.Name()] = editor.CreateTableEditSession(nil, ai, editor.TableEditSessionProps{})
+		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 	}
 
 	sess := &DoltSession{
@@ -215,18 +218,6 @@ func NewDoltSessionWithAITracker(ctx *sql.Context, sqlSess sql.Session, username
 	}
 
 	return sess, nil
-}
-
-func (sess *DoltSession) AddAITracker(ai autoincr.AutoIncrementTracker) {
-	sess.autoIncTracker = ai
-
-	for _, v := range sess.tempTableEditSessions {
-		v.SetAIValue(ai)
-	}
-}
-
-func (sess *DoltSession) GetAutoIncTracker() autoincr.AutoIncrementTracker {
-	return sess.autoIncTracker
 }
 
 // EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
@@ -732,8 +723,9 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	rsr := dbData.Rsr
 	ddb := dbData.Ddb
 
+	newAIVal := autoincr.NewAutoIncrementTableSubscriber(db.Name(), sess.autoIncTracker)
 	sess.dbDatas[db.Name()] = dbData
-	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, sess.autoIncTracker, editor.TableEditSessionProps{})
+	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{AutoIncrTracker: newAIVal})
 
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()
@@ -830,9 +822,15 @@ func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context, dbName stri
 		return err
 	}
 
-	sess.tempTableEditSessions[dbName] = editor.CreateTableEditSession(newRoot, nil, editor.TableEditSessionProps{})
+	sess.tempTableEditSessions[dbName] = editor.CreateTableEditSession(newRoot, editor.TableEditSessionProps{})
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
+}
+
+// GetAutoIncTracker returns the auto increment tracker that manages the next auto increment value for tables across a
+// session.
+func (sess *DoltSession) GetAutoIncTracker() autoincr.AutoIncrementTracker {
+	return sess.autoIncTracker
 }
 
 // defineSystemVariables defines dolt-session variables in the engine as necessary

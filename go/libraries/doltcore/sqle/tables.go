@@ -618,7 +618,8 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 	}
 
    if sess.autoIncTracker != nil {
-	   val, _ := sess.autoIncTracker.GetAutoIncrementValueForTable(t.db.name, t.tableName)
+   	   // TODO: Cleanup
+	   val, _ := sess.autoIncTracker.Get(t.db.name, t.tableName)
 	   currVal, _ := t.DoltTable.GetAutoIncrementValue(ctx)
 	   asInt := currVal.(int32)
 

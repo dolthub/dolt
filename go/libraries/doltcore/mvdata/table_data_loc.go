@@ -86,7 +86,7 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, err
 	}
 
-	sess := editor.CreateTableEditSession(updatedRoot, nil, editor.TableEditSessionProps{})
+	sess := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{})
 	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, outSch)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, err
 	}
 
-	sess := editor.CreateTableEditSession(root, nil, editor.TableEditSessionProps{})
+	sess := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
 	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
@@ -167,7 +167,7 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 		return nil, err
 	}
 
-	sess := editor.CreateTableEditSession(updatedRoot, nil, editor.TableEditSessionProps{})
+	sess := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{})
 	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err

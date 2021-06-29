@@ -789,7 +789,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	tblToStats := make(map[string]*MergeStats)
 
 	newRoot := ourRoot
-	tableEditSession := editor.CreateTableEditSession(ourRoot, nil, editor.TableEditSessionProps{
+	tableEditSession := editor.CreateTableEditSession(ourRoot, editor.TableEditSessionProps{
 		ForeignKeyChecksDisabled: true,
 	})
 	// need to validate merges can be done on all tables before starting the actual merges.
