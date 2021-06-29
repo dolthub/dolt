@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"net"
@@ -135,12 +136,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
-	// Create the Auto Increment wrapper here
-	ait, err := newAutoIncrementTracker(sqlEngine)
-	if err != nil {
-		cli.PrintErr(err)
-		return
-	}
+	ait := autoincr.NewAutoIncrementTracker()
 
 	mySQLServer, startError = server.NewServer(
 		server.Config{
@@ -185,6 +181,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
+
 		doltSess, err := dsqle.NewDoltSessionWithAITracker(tmpSqlCtx, mysqlSess, username, email, ait, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
 
 		if err != nil {
@@ -205,6 +202,12 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 			sql.WithViewRegistry(vr),
 			sql.WithSession(doltSess),
 			sql.WithTracer(tracing.Tracer(ctx)))
+
+		// Create the Auto Increment wrapper here
+		err = updateAutoIncTracker(sqlEngine, sqlCtx, doltSess.GetAutoIncTracker())
+		if err != nil {
+			return nil, nil, nil, err
+		}
 
 		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		for _, db := range dbs {
@@ -230,35 +233,38 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 	}
 }
 
-func newAutoIncrementTracker(sqlEngine *sqle.Engine) (autoincr.AutoIncrementTracker, error) {
+func updateAutoIncTracker(sqlEngine *sqle.Engine, ctx *sql.Context, ait autoincr.AutoIncrementTracker) error {
 	dbs := sqlEngine.Catalog.AllDatabases()
-	autoIncrementTracker := autoincr.NewAutoIncrementTracker()
-	tempCtx := sql.NewEmptyContext()
 
 	for _, db := range dbs {
-		names, err := db.GetTableNames(tempCtx)
+		names, err := db.GetTableNames(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		for _, name := range names {
-			table, _, err := db.GetTableInsensitive(tempCtx, name)
+			table, _, err := db.GetTableInsensitive(ctx, name)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			if t, ok := table.(sql.AutoIncrementTable); ok {
-				ai, err := t.GetAutoIncrementValue(tempCtx)
-				if err != nil {
-					return nil, err
+				aiv, err := t.GetAutoIncrementValue(ctx)
+				if !errors.Is(err, sql.ErrNoAutoIncrementCol) && err != nil {
+					return err
+				} else if errors.Is(err, sql.ErrNoAutoIncrementCol) {
+					continue
 				}
 
-				autoIncrementTracker.SetAutoIncrementValueForTable(db.Name(), name, ai.(uint64))
+				dbname := db.Name()
+				asInt := aiv.(int32)
+
+				ait.SetAutoIncrementValueForTable(dbname, name, uint64(asInt))
 			}
 		}
 	}
 
-	return autoIncrementTracker, nil
+	return nil
 }
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {

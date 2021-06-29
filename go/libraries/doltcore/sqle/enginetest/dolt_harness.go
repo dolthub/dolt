@@ -16,6 +16,8 @@ package enginetest
 
 import (
 	"context"
+	"errors"
+	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"runtime"
 	"strings"
 	"testing"
@@ -46,7 +48,8 @@ var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
 var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
-	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	ait := autoincr.NewAutoIncrementTracker()
+	session, err := sqle.NewDoltSessionWithAITracker(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com", ait)
 	require.NoError(t, err)
 	return &DoltHarness{
 		t:              t,
@@ -125,7 +128,8 @@ func (d *DoltHarness) NewContext() *sql.Context {
 }
 
 func (d DoltHarness) NewSession() *sql.Context {
-	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	ait := autoincr.NewAutoIncrementTracker()
+	session, err := sqle.NewDoltSessionWithAITracker(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com", ait)
 	require.NoError(d.t, err)
 
 	d.setTransactionSessionVar(session, d.transactionsEnabled)
@@ -160,13 +164,13 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	dEnv := dtestutils.CreateTestEnv()
-
+	ait := autoincr.NewAutoIncrementTracker()
 	// TODO: it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
 	//  have a database that only ever receives read queries, and then you re-use its session for a new database with
 	//  the same name, the first write query will panic on dangling references in the noms layer. Not sure why this is
 	//  happening, but it only happens as a result of this test setup.
 	var err error
-	d.session, err = sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	d.session, err = sqle.NewDoltSessionWithAITracker(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com", ait)
 	require.NoError(d.t, err)
 
 	d.setTransactionSessionVar(d.session, d.transactionsEnabled)
@@ -179,8 +183,43 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		dbs = append(dbs, db)
 		d.databases = append(d.databases, db)
 	}
+	//
+	//err = d.updateAutoIncrTacker(sql.NewEmptyContext(), ait)
+	//require.NoError(d.t, err)
 
 	return dbs
+}
+
+func (d *DoltHarness) updateAutoIncrTacker(ctx *sql.Context, ait autoincr.AutoIncrementTracker) error {
+	for _, db := range d.databases {
+		names, err := db.GetTableNames(ctx)
+		if err != nil {
+			return err
+		}
+
+		for _, name := range names {
+			table, _, err := db.GetTableInsensitive(ctx, name)
+			if err != nil {
+				return err
+			}
+
+			if t, ok := table.(sql.AutoIncrementTable); ok {
+				aiv, err := t.GetAutoIncrementValue(ctx)
+				if !errors.Is(err, sql.ErrNoAutoIncrementCol) && err != nil {
+					return err
+				} else if errors.Is(err, sql.ErrNoAutoIncrementCol) {
+					continue
+				}
+
+				dbname := db.Name()
+				asInt := aiv.(int32)
+
+				ait.SetAutoIncrementValueForTable(dbname, name, uint64(asInt))
+			}
+		}
+	}
+
+	return nil
 }
 
 func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) (sql.Table, error) {

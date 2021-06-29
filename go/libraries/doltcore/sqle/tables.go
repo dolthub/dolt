@@ -608,13 +608,26 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
 func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+	sess := DSessFromSess(ctx.Session)
+
 	if !t.autoIncCol.AutoIncrement {
 		return nil, sql.ErrNoAutoIncrementCol
 	}
 	if t.ed != nil {
 		return t.ed.GetAutoIncrementValue()
 	}
-	return t.DoltTable.GetAutoIncrementValue(ctx)
+
+   if sess.autoIncTracker != nil {
+	   val, _ := sess.autoIncTracker.GetAutoIncrementValueForTable(t.db.name, t.tableName)
+	   currVal, _ := t.DoltTable.GetAutoIncrementValue(ctx)
+	   asInt := currVal.(int32)
+
+	   if val > uint64(asInt) {
+		   return val, nil
+	   }
+   }
+
+   return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
 func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {

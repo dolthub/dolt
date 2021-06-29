@@ -22,7 +22,14 @@ func (a *autoIncrementTracker) GetAutoIncrementValueForTable(dbname, tableName s
 }
 
 func (a *autoIncrementTracker) SetAutoIncrementValueForTable(dbname, tableName string, val uint64) bool {
-	a.tables[dbname][tableName] = val
+	dbTable := a.tables[dbname]
+	if dbTable == nil {
+		a.tables[dbname] = make(map[string]uint64)
+		dbTable = a.tables[dbname]
+	}
+
+	dbTable[tableName] = val
+
 	return true
 }
 

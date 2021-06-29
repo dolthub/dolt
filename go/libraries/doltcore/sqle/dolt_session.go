@@ -158,7 +158,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 
 	for _, db := range dbs {
 		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
-		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
+		editSessions[db.Name()] = editor.CreateTableEditSession(nil, nil, editor.TableEditSessionProps{})
 	}
 
 	sess := &DoltSession{
@@ -190,7 +190,7 @@ func NewDoltSessionWithAITracker(ctx *sql.Context, sqlSess sql.Session, username
 
 	for _, db := range dbs {
 		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
-		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
+		editSessions[db.Name()] = editor.CreateTableEditSession(nil, ai, editor.TableEditSessionProps{})
 	}
 
 	sess := &DoltSession{
@@ -217,7 +217,17 @@ func NewDoltSessionWithAITracker(ctx *sql.Context, sqlSess sql.Session, username
 	return sess, nil
 }
 
+func (sess *DoltSession) AddAITracker(ai autoincr.AutoIncrementTracker) {
+	sess.autoIncTracker = ai
 
+	for _, v := range sess.tempTableEditSessions {
+		v.SetAIValue(ai)
+	}
+}
+
+func (sess *DoltSession) GetAutoIncTracker() autoincr.AutoIncrementTracker {
+	return sess.autoIncTracker
+}
 
 // EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
 // Sessions operating in batched mode don't flush any edit buffers except when told to do so explicitly, or when a
@@ -723,7 +733,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	ddb := dbData.Ddb
 
 	sess.dbDatas[db.Name()] = dbData
-	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
+	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, sess.autoIncTracker, editor.TableEditSessionProps{})
 
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()
@@ -820,7 +830,7 @@ func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context, dbName stri
 		return err
 	}
 
-	sess.tempTableEditSessions[dbName] = editor.CreateTableEditSession(newRoot, editor.TableEditSessionProps{})
+	sess.tempTableEditSessions[dbName] = editor.CreateTableEditSession(newRoot, nil, editor.TableEditSessionProps{})
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }

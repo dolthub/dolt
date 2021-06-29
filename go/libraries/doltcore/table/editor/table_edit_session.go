@@ -17,6 +17,7 @@ package editor
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -33,6 +34,7 @@ type TableEditSession struct {
 	root       *doltdb.RootValue
 	tables     map[string]*sessionedTableEditor
 	writeMutex *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
+	aiTracker  autoincr.AutoIncrementTracker
 }
 
 // TableEditSessionProps are properties that define different functionality for the TableEditSession.
@@ -43,12 +45,13 @@ type TableEditSessionProps struct {
 // CreateTableEditSession creates and returns a TableEditSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
-func CreateTableEditSession(root *doltdb.RootValue, props TableEditSessionProps) *TableEditSession {
+func CreateTableEditSession(root *doltdb.RootValue, aiTracker autoincr.AutoIncrementTracker, props TableEditSessionProps) *TableEditSession {
 	return &TableEditSession{
 		Props:      props,
 		root:       root,
 		tables:     make(map[string]*sessionedTableEditor),
 		writeMutex: &sync.RWMutex{},
+		aiTracker: aiTracker,
 	}
 }
 
@@ -67,6 +70,10 @@ func (tes *TableEditSession) Flush(ctx context.Context) (*doltdb.RootValue, erro
 	defer tes.writeMutex.Unlock()
 
 	return tes.flush(ctx)
+}
+
+func (tes *TableEditSession) SetAIValue(ai autoincr.AutoIncrementTracker) {
+	tes.aiTracker = ai
 }
 
 // SetRoot uses the given root to set all open table editors to the state as represented in the root. If any
@@ -116,7 +123,7 @@ func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
 		// Otherwise, to preserve this edit session would create a much larger (and more difficult to understand) block
 		// of code. The primary perf hit comes from foreign keys that reference tables that declare foreign keys of
 		// their own, which is not common, so the average perf hit is relatively minimal.
-		validationTes := CreateTableEditSession(tes.root, TableEditSessionProps{})
+		validationTes := CreateTableEditSession(tes.root, tes.aiTracker, TableEditSessionProps{})
 		for tableName, _ := range tes.tables {
 			_, err = validationTes.getTableEditor(ctx, tableName, nil)
 			if err != nil {
@@ -242,7 +249,7 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		}
 	}
 
-	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName)
+	tableEditor, err := NewTableEditor(ctx, t, tableSch, tes.aiTracker, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +318,7 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		if err != nil {
 			return err
 		}
-		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName)
+		newTableEditor, err := NewTableEditor(ctx, t, tSch, tes.aiTracker, tableName)
 		if err != nil {
 			return err
 		}
