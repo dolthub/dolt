@@ -211,7 +211,7 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 	}
 
 	//remote := env.NewRemote(name, url, params)
-	remote := env.Remote{name, url, fetchSpecs, params}
+	remote := env.Remote{Name: name, Url: url, FetchSpecs: fetchSpecs, Params: params}
 	return &remote, nil
 
 }
