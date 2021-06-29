@@ -723,9 +723,9 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	rsr := dbData.Rsr
 	ddb := dbData.Ddb
 
-	newAIVal := autoincr.NewAutoIncrementTableSubscriber(db.Name(), sess.autoIncTracker)
+	aiSubscriber := autoincr.NewAutoIncrementTableSubscriber(db.Name(), sess.autoIncTracker)
 	sess.dbDatas[db.Name()] = dbData
-	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{AutoIncrTracker: newAIVal})
+	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{AutoIncrTracker: aiSubscriber})
 
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()

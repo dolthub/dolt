@@ -57,9 +57,16 @@ type autoIncrementTableSubscriber struct {
 var _ AutoIncrementTrackerSubscriber = (*autoIncrementTableSubscriber)(nil)
 
 func (a *autoIncrementTableSubscriber) GetAutoIncrementValueForTable(tableName string) (uint64, bool) {
+	if a.ai == nil {
+		return 0, false
+	}
 	return a.ai.Get(a.dbName, tableName)
 }
 
 func (a *autoIncrementTableSubscriber) SetAutoIncrementValueForTable(tableName string, val uint64) bool {
+	if a.ai == nil {
+		return false
+	}
+
 	return a.ai.Set(a.dbName, tableName, val)
 }
