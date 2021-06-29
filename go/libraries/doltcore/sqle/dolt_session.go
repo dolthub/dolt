@@ -848,6 +848,14 @@ func defineSystemVariables(name string) {
 				Type:              sql.NewSystemStringType(WorkingKey(name)),
 				Default:           "",
 			},
+			{
+				Name:              StagedKey(name),
+				Scope:             sql.SystemVariableScope_Session,
+				Dynamic:           true,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(StagedKey(name)),
+				Default:           "",
+			},
 		})
 	}
 }
