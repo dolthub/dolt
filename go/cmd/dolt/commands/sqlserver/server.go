@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/server"
@@ -256,28 +255,21 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			return nil, fmt.Errorf("couldn't find environment for database %s", db.Name())
 		}
 
-		roots, err := dEnv.Roots(ctx)
-		if err != nil {
-			return nil, err
-		}
-
 		head := dEnv.RepoStateReader().CWBHeadSpec()
 		headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
 		if err != nil {
 			return nil, err
 		}
 
-		headRef := dEnv.RepoStateReader().CWBHeadRef()
-		wsRef, err := ref.WorkingSetRefForHead(headRef)
+		ws, err := dEnv.WorkingSet(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		dbStates = append(dbStates, dsqle.InitialDbState{
 			Db:         db,
-			Roots:      roots,
 			HeadCommit: headCommit,
-			WorkingSet: wsRef,
+			WorkingSet: ws,
 			DbData:     dEnv.DbData(),
 		})
 	}

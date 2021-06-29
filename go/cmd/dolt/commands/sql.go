@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/abiosoft/readline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/memory"
@@ -1408,28 +1407,21 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 		return dsqle.InitialDbState{}, fmt.Errorf("Couldn't find environment for database %s", db.Name())
 	}
 
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return dsqle.InitialDbState{}, err
-	}
-
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
 		return dsqle.InitialDbState{}, err
 	}
 
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
-	wsRef, err := ref.WorkingSetRefForHead(headRef)
+	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return dsqle.InitialDbState{}, err
 	}
 
 	return dsqle.InitialDbState{
 		Db:         db,
-		Roots:      roots,
 		HeadCommit: headCommit,
-		WorkingSet: wsRef,
+		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
 	}, nil
 }

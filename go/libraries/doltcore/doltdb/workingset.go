@@ -234,6 +234,7 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 }
 
 // RootValue returns the root value stored by this workingset
+// TODO: rename to WorkingRoot
 func (ws *WorkingSet) RootValue() *RootValue {
 	return ws.workingRoot
 }

@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
@@ -33,10 +32,10 @@ const (
 )
 
 type DoltTransaction struct {
-	startState *doltdb.WorkingSet
-	workingSet ref.WorkingSetRef
-	dbData     env.DbData
-	savepoints []savepoint
+	startState    *doltdb.WorkingSet
+	workingSetRef ref.WorkingSetRef
+	dbData        env.DbData
+	savepoints    []savepoint
 }
 
 type savepoint struct {
@@ -46,9 +45,9 @@ type savepoint struct {
 
 func NewDoltTransaction(startState *doltdb.WorkingSet, workingSet ref.WorkingSetRef, dbData env.DbData) *DoltTransaction {
 	return &DoltTransaction{
-		startState: startState,
-		workingSet: workingSet,
-		dbData:     dbData,
+		startState:    startState,
+		workingSetRef: workingSet,
+		dbData:        dbData,
 	}
 }
 
@@ -63,42 +62,35 @@ func (tx DoltTransaction) String() string {
 // |newRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
 // if working set == ancRoot, attempt a fast-forward merge
-// TODO: this needs to take the entire working set state, not just the new working root
-func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+// TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
+//  strategies for staged as well as merge state.
+func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
 	for i := 0; i < maxTxCommitRetries; i++ {
-		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSet)
-		if err == doltdb.ErrWorkingSetNotFound {
-			// initial commit
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, tx.startState.WithWorkingRoot(newRoot), hash.Hash{})
-			if err == datas.ErrOptimisticLockFailed {
-				continue
-			}
-		}
-
+		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
 		if err != nil {
 			return nil, err
 		}
 
-		root := ws.RootValue()
+		existingWorkingRoot := ws.RootValue()
 
 		hash, err := ws.HashOf()
 		if err != nil {
 			return nil, err
 		}
 
-		if rootsEqual(root, tx.startState.WorkingRoot()) {
+		if rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
 			// ff merge
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, tx.startState.WithWorkingRoot(newRoot), hash)
+			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash)
 			if err == datas.ErrOptimisticLockFailed {
 				continue
 			} else if err != nil {
 				return nil, err
 			}
 
-			return tx.updateRepoStateFile(ctx, newRoot)
+			return workingSet, nil
 		}
 
-		mergedRoot, stats, err := merge.MergeRoots(ctx, root, newRoot, tx.startState.WorkingRoot())
+		mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot())
 		if err != nil {
 			return nil, err
 		}
@@ -110,29 +102,19 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			}
 		}
 
-		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, tx.startState.WithWorkingRoot(mergedRoot), hash)
+		mergdworkingSet := workingSet.WithWorkingRoot(mergedRoot)
+		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergdworkingSet, hash)
 		if err == datas.ErrOptimisticLockFailed {
 			continue
 		} else if err != nil {
 			return nil, err
 		}
 
-		// TODO: this is not thread safe, but will not be necessary after migrating all clients away from using the
-		//  working set stored in repo_state.json, so should be good enough for now
-		return tx.updateRepoStateFile(ctx, mergedRoot)
+		return mergdworkingSet, nil
 	}
 
 	// TODO: different error type for retries exhausted
 	return nil, datas.ErrOptimisticLockFailed
-}
-
-func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-	err := tx.dbData.Rsw.UpdateWorkingRoot(ctx, mergedRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	return mergedRoot, err
 }
 
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given

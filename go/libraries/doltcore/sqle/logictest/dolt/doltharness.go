@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -188,10 +187,6 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 
 func getDbState(db sql.Database, dEnv *env.DoltEnv) dsql.InitialDbState {
 	ctx := context.Background()
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		panic(err)
-	}
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
@@ -199,17 +194,15 @@ func getDbState(db sql.Database, dEnv *env.DoltEnv) dsql.InitialDbState {
 		panic(err)
 	}
 
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
-	wsRef, err := ref.WorkingSetRefForHead(headRef)
+	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		panic(err)
 	}
 
 	return dsql.InitialDbState{
 		Db:         db,
-		Roots:      roots,
 		HeadCommit: headCommit,
-		WorkingSet: wsRef,
+		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
 	}
 }

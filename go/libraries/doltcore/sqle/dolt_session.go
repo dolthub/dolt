@@ -122,15 +122,23 @@ type DoltSession struct {
 
 type DatabaseSessionState struct {
 	dbName               string
-	roots                doltdb.Roots
 	headCommit           *doltdb.Commit
-	// TODO: make this into an actual working set so we can track merge state in memory
-	workingSet           ref.WorkingSetRef
+	// TODO: fill this in and update its state as headCommit changes
+	headRoot             *doltdb.RootValue
+	workingSet           *doltdb.WorkingSet
 	dbData               env.DbData
 	editSession          *editor.TableEditSession
 	dirty                bool
 	tempTableRoot        *doltdb.RootValue
 	tempTableEditSession *editor.TableEditSession
+}
+
+func (d DatabaseSessionState) GetRoots() doltdb.Roots {
+	return doltdb.Roots{
+		Head:    d.headRoot,
+		Working: d.workingSet.WorkingRoot(),
+		Staged:  d.workingSet.StagedRoot(),
+	}
 }
 
 var _ sql.Session = &DoltSession{}
@@ -148,9 +156,8 @@ func DefaultDoltSession() *DoltSession {
 
 type InitialDbState struct {
 	Db         sql.Database
-	Roots      doltdb.Roots
 	HeadCommit *doltdb.Commit
-	WorkingSet ref.WorkingSetRef
+	WorkingSet *doltdb.WorkingSet
 	DbData     env.DbData
 }
 
@@ -246,7 +253,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 	if !TransactionsEnabled(ctx) {
 		dbData := dbstate.dbData
 		dbstate.dirty = false
-		return dbData.Rsw.UpdateWorkingRoot(ctx, dbstate.roots.Working)
+		return dbData.Rsw.UpdateWorkingRoot(ctx, dbstate.GetRoots().Working)
 	}
 
 	// Newer commit path does a concurrent merge of the current root with the one other clients are editing, then
@@ -258,14 +265,16 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 	}
 
 	// TODO: actual logging
-	//	logrus.Infof("working root to commit is %s", dbstate.roots.Working.DebugString(ctx, true))
+	// logrus.Errorf("working root to commit is %s", dbstate.workingSet.WorkingRoot().DebugString(ctx, true))
 
-	mergedRoot, err := dtx.Commit(ctx, dbstate.roots.Working)
+	mergedWorkingSet, err := dtx.Commit(ctx, dbstate.workingSet)
 	if err != nil {
 		return err
 	}
 
-	err = sess.SetRoot(ctx, dbName, mergedRoot)
+	// logrus.Errorf("committed merged working root %s", dbstate.workingSet.WorkingRoot().DebugString(ctx, true))
+
+	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet)
 	if err != nil {
 		return err
 	}
@@ -364,7 +373,7 @@ func (sess *DoltSession) CreateSavepoint(ctx *sql.Context, savepointName, dbName
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	dtx.CreateSavepoint(savepointName, sess.dbStates[dbName].roots.Working)
+	dtx.CreateSavepoint(savepointName, sess.dbStates[dbName].GetRoots().Working)
 	return nil
 }
 
@@ -490,27 +499,36 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 		return nil, false
 	}
 
-	return dbstate.roots.Working, true
+	return dbstate.GetRoots().Working, true
 }
 
-// GetRoot returns the current *RootValue for a given database associated with the session
+// GetRoots returns the current roots for a given database associated with the session
 func (sess *DoltSession) GetRoots(dbName string) (doltdb.Roots, bool) {
 	dbstate, ok := sess.dbStates[dbName]
 	if !ok {
 		return doltdb.Roots{}, false
 	}
 
-	return dbstate.roots, true
+	return dbstate.GetRoots(), true
 }
 
 // SetRoot sets a new root value for the session for the database named. This is the primary mechanism by which data
 // changes are communicated to the engine and persisted back to disk. All data changes should be followed by a call to
 // update the session's root value via this method.
 // Data changes contained in the |newRoot| aren't persisted until this session is committed.
+// TODO: rename to SetWorkingRoot
 func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
-	if rootsEqual(sess.dbStates[dbName].roots.Working, newRoot) {
+	sessionState := sess.dbStates[dbName]
+	if rootsEqual(sessionState.GetRoots().Working, newRoot) {
 		return nil
 	}
+
+	return sess.setRoot(ctx, dbName, newRoot)
+}
+
+// setRoot is like its exported version, but skips the consistency check
+func (sess *DoltSession) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+	sessionState := sess.dbStates[dbName]
 
 	h, err := newRoot.HashOf()
 	if err != nil {
@@ -523,23 +541,22 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 		return err
 	}
 
-	roots := sess.dbStates[dbName].roots
-	roots.Working = newRoot
-	sess.dbStates[dbName].roots = roots
+	sessionState.workingSet = sessionState.workingSet.WithWorkingRoot(newRoot)
 
-	err = sess.dbStates[dbName].editSession.SetRoot(ctx, newRoot)
+	err = sessionState.editSession.SetRoot(ctx, newRoot)
 	if err != nil {
 		return err
 	}
 
-	sess.dbStates[dbName].dirty = true
+	sessionState.dirty = true
 	return nil
 }
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 func (sess *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
-	sess.dbStates[dbName].roots = roots
+	// TODO: handle HEAD here?
+	sess.dbStates[dbName].workingSet = sess.dbStates[dbName].workingSet.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
 
 	err := sess.setSessionVarsForRoots(ctx, dbName, roots)
 	if err != nil {
@@ -560,7 +577,13 @@ func (sess *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.
 // set into memory.
 // TODO: fix this, it needs to do a lot of bookkeeping
 func (sess *DoltSession) SetWorkingSetRef(ctx *sql.Context, dbName string, wsRef ref.WorkingSetRef) error {
-	sess.dbStates[dbName].workingSet = wsRef
+	return nil
+}
+
+// SetWorkingSet sets the working set for this session
+// TODO: fix this, it needs to do a lot of bookkeeping
+func (sess *DoltSession) SetWorkingSet(ctx *sql.Context, name string, ws *doltdb.WorkingSet) error {
+	sess.dbStates[name].workingSet = ws
 	return nil
 }
 
@@ -739,26 +762,21 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.dbData = dbState.DbData
 	sessionState.editSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
-	workingRoot := dbState.Roots.Working
-	logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
-
-	if TransactionsEnabled(ctx) {
-		// Not all dolt commands update the working set ref yet. So until that's true, we update it here with the contents
-		// of the repo_state.json file
-		sessionState.workingSet = dbState.WorkingSet
-		err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), dbState.WorkingSet.GetPath())
-		if err != nil {
-			return err
-		}
+	err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), dbState.WorkingSet.Ref().GetPath())
+	if err != nil {
+		return err
 	}
 
-	err := sess.SetRoot(ctx, db.Name(), workingRoot)
+	sessionState.workingSet = dbState.WorkingSet
+	workingRoot := dbState.WorkingSet.WorkingRoot()
+	logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
+
+	err = sess.setRoot(ctx, db.Name(), workingRoot)
 	if err != nil {
 		return err
 	}
 
 	// This has to happen after SetRoot above, since it does a stale check before its work
-	sessionState.roots = dbState.Roots
 	// TODO: this needs to be kept up to date as the working set ref changes
 	sessionState.headCommit = dbState.HeadCommit
 
@@ -793,7 +811,7 @@ func (sess *DoltSession) CreateTemporaryTablesRoot(ctx *sql.Context, dbName stri
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named
 func (sess *DoltSession) CWBHeadRef(dbName string) (ref.DoltRef, error) {
-	return sess.dbStates[dbName].workingSet.ToHeadRef()
+	return sess.dbStates[dbName].workingSet.Ref().ToHeadRef()
 }
 
 // setSessionVarsForRoots updates the three session vars that track the value of the session root hashes

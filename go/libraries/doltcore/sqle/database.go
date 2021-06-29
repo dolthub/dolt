@@ -81,19 +81,21 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 
 	// When we begin the transaction, we must synchronize the state of this session with the global state for the
 	// current head ref. Any pending transaction has already been committed before this happens.
-	wsRef := dsession.dbStates[ctx.GetCurrentDatabase()].workingSet
-
+	wsRef := dsession.dbStates[ctx.GetCurrentDatabase()].workingSet.Ref()
 	ws, err := db.ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return nil, err
 	}
 
-	err = db.SetRoot(ctx, ws.RootValue())
+	// logrus.Tracef("starting transcation with working root %s", ws.WorkingRoot().DebugString(ctx, true))
+
+	dsess := DSessFromSess(ctx.Session)
+	err = dsess.SetWorkingSet(ctx, db.name, ws)
 	if err != nil {
 		return nil, err
 	}
 
-	err = db.setHeadHash(ctx, wsRef)
+	err = dsess.setRoot(ctx, db.name, ws.WorkingRoot())
 	if err != nil {
 		return nil, err
 	}
@@ -525,7 +527,7 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	return dbState.roots.Working, nil
+	return dbState.workingSet.WorkingRoot(), nil
 }
 
 func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, bool) {

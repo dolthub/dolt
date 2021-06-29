@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -191,22 +190,18 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 
 func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) sqle.InitialDbState {
 	ctx := context.Background()
-	roots, err := dEnv.Roots(ctx)
-	require.NoError(t, err)
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
 	require.NoError(t, err)
 
-	headRef := dEnv.RepoStateReader().CWBHeadRef()
-	wsRef, err := ref.WorkingSetRefForHead(headRef)
+	ws, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
 
 	return sqle.InitialDbState{
 		Db:         db,
-		Roots:      roots,
 		HeadCommit: headCommit,
-		WorkingSet: wsRef,
+		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
 	}
 }
