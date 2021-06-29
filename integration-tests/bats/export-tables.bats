@@ -169,8 +169,20 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] ||  false
 
-    # output will be slit over two lines
-    cat export.csv
+    # output will be split over two lines
     grep 'id,j' export.csv
     tail -n 1 export.csv | awk -F "," '{print $2}' | jq --slurp '.[1]' | grep "hi"
+}
+
+@test "export-tables: uint schema parsing for writer_test.go backwards compatibility" {
+    dolt sql -q "create table t2 (name text, age int unsigned, title text)"
+    dolt sql -q "insert into t2 values ('Bill Billerson', 32, 'Senior Dufus')"
+
+    run dolt table export t2 export.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] ||  false
+
+    # output will be split over two lines
+    grep 'name,age,title' export.csv
+    grep 'Bill Billerson,32,Senior Dufus' export.csv
 }
