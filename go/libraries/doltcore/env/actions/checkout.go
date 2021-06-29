@@ -42,23 +42,35 @@ func CheckoutTablesAndDocs(ctx context.Context, roots doltdb.Roots, dbData env.D
 }
 
 func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string) error {
-	unknownTbls := []string{}
+	roots, err := MoveTablesFromHeadToWorking(ctx, roots, tbls)
+	if err != nil {
+		return err
+	}
 
+	// update the working root
+	return env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
+}
+
+// MoveTablesFromHeadToWorking replaces the tables named from the given head to the given working root, overwriting any
+// working changes, and returns the new resulting roots
+func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
+	var unknownTbls []string
 	for _, tblName := range tbls {
+		// TODO: not at all clear why this should be excluded (this code was moved from elsewhere)
 		if tblName == doltdb.DocTableName {
 			continue
 		}
 		tbl, ok, err := roots.Staged.GetTable(ctx, tblName)
 
 		if err != nil {
-			return err
+			return doltdb.Roots{}, err
 		}
 
 		if !ok {
 			tbl, ok, err = roots.Head.GetTable(ctx, tblName)
 
 			if err != nil {
-				return err
+				return doltdb.Roots{}, err
 			}
 
 			if !ok {
@@ -70,7 +82,7 @@ func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, 
 		roots.Working, err = roots.Working.PutTable(ctx, tblName, tbl)
 
 		if err != nil {
-			return err
+			return doltdb.Roots{}, err
 		}
 	}
 
@@ -78,18 +90,17 @@ func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, 
 		// Return table not exist error before RemoveTables, which fails silently if the table is not on the root.
 		err := validateTablesExist(ctx, roots.Working, unknownTbls)
 		if err != nil {
-			return err
+			return doltdb.Roots{}, err
 		}
 
 		roots.Working, err = roots.Working.RemoveTables(ctx, unknownTbls...)
 
 		if err != nil {
-			return err
+			return doltdb.Roots{}, err
 		}
 	}
 
-	// update the working root
-	return env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
+	return roots, nil
 }
 
 func checkoutDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, docs doltdocs.Docs) error {

@@ -535,10 +535,8 @@ func (sess *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltd
 	return nil
 }
 
-// SetRoots sets new roots for the session for the database named. This is the primary mechanism by which data
-// changes are communicated to the engine and persisted back to disk. All data changes should be followed by a call to
-// update the session's root value via this method.
-// Data changes contained in |roots| aren't persisted until this session is committed.
+// SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
+// via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 func (sess *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
 	sess.dbStates[dbName].roots = roots
 
@@ -552,7 +550,16 @@ func (sess *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.
 		return err
 	}
 
+	// TODO: could check this more optimistically
 	sess.dbStates[dbName].dirty = true
+	return nil
+}
+
+// SetWorkingSetRef sets the working set ref for this session, without attempting to load the data from this working
+// set into memory.
+// TODO: fix this, it needs to do a lot of bookkeeping
+func (sess *DoltSession) SetWorkingSetRef(ctx *sql.Cogntext, dbName string, wsRef ref.WorkingSetRef) error {
+	sess.dbStates[dbName].workingSet = wsRef
 	return nil
 }
 
