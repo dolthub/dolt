@@ -160,3 +160,17 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     run dolt table import -u person_info export-csv.csv
     [ "$status" -eq 0 ]
 }
+
+@test "export-tables: export a table with a json string to csv" {
+    dolt sql -q "create table t2 (id int primary key, j JSON)"
+    dolt sql -q "insert into t2 values (0, '[\"hi\"]')"
+
+    run dolt table export t2 export.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] ||  false
+
+    # output will be slit over two lines
+    cat export.csv
+    grep 'id,j' export.csv
+    tail -n 1 export.csv | awk -F "," '{print $2}' | jq --slurp '.[1]' | grep "hi"
+}
