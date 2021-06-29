@@ -18,11 +18,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -36,7 +34,6 @@ const (
 	titleColTag  = 2
 )
 
-var _, outSch = untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
 var inCols = []schema.Column{
 	{Name: nameColName, Tag: nameColTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil, TypeInfo: typeinfo.StringDefaultType},
 	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, Constraints: nil, TypeInfo: typeinfo.Uint64Type},
