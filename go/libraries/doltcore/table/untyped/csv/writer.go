@@ -18,13 +18,14 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
