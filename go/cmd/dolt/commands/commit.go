@@ -116,7 +116,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	// TODO: refactor stage to modify roots in memory instead of writing to disk
+	// TODO: refactor above stage funcs to modify roots in memory instead of writing to disk
 	dbData := dEnv.DbData()
 	roots, err = dEnv.Roots(context.Background())
 	if err != nil {

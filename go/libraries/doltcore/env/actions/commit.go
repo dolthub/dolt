@@ -60,19 +60,19 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 }
 
 // CommitStaged adds a new commit to HEAD with the given props. Returns the new commit's hash as a string and an error.
-func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, props CommitStagedProps) (string, error) {
+func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, props CommitStagedProps) (*doltdb.Commit, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
 	if props.Message == "" {
-		return "", doltdb.ErrEmptyCommitMessage
+		return nil, doltdb.ErrEmptyCommitMessage
 	}
 
 	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var stagedTblNames []string
@@ -86,30 +86,30 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 
 	mergeActive, err := rsr.IsMergeActive(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
 		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, drw)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return "", NothingStaged{notStaged, notStagedDocs}
+		return nil, NothingStaged{notStaged, notStagedDocs}
 	}
 
 	var mergeParentCommits []*doltdb.Commit
 	if mergeActive {
 		inConflict, err := roots.Working.TablesInConflict(ctx)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if len(inConflict) > 0 {
-			return "", NewTblInConflictError(inConflict)
+			return nil, NewTblInConflictError(inConflict)
 		}
 
 		commit, err := rsr.GetMergeCommit(ctx)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		mergeParentCommits = []*doltdb.Commit{commit}
@@ -117,68 +117,60 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 
 	stagedRoot, err := roots.Staged.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if props.CheckForeignKeys {
 		stagedRoot, err = stagedRoot.ValidateForeignKeysOnSchemas(ctx)
 
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		err = fkconstrain.Validate(ctx, roots.Head, stagedRoot)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 
 	// TODO: combine into a single update
 	err = env.UpdateStagedRoot(ctx, rsw, stagedRoot)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	workingRoot, err := roots.Working.UpdateSuperSchemasFromOther(ctx, stagedTblNames, stagedRoot)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	err = env.UpdateWorkingRoot(ctx, rsw, workingRoot)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	meta, err := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	h, err := stagedRoot.HashOf()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.
 	c, err := ddb.CommitWithParentCommits(ctx, h, rsr.CWBHeadRef(), mergeParentCommits, meta)
-
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	err = rsw.ClearMerge(ctx)
-
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	h, err = c.HashOf()
-
-	if err != nil {
-		return "", err
-	}
-
-	return h.String(), nil
+	return c, nil
 }
 
 func ValidateForeignKeysOnCommit(ctx context.Context, srt *doltdb.RootValue, stagedTblNames []string) (*doltdb.RootValue, error) {

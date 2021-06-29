@@ -18,11 +18,10 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
@@ -56,14 +55,11 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, err
 	}
 
-	allFlag := apr.Contains(cli.AllFlag)
-	allowEmpty := apr.Contains(cli.AllowEmptyFlag)
-
 	dSess := sqle.DSessFromSess(ctx.Session)
-	// dbData, ok := dSess.GetDbData(dbName)
-	// if !ok {
-	// 	return nil, fmt.Errorf("Could not load database %s", dbName)
-	// }
+	dbData, ok := dSess.GetDbData(dbName)
+	if !ok {
+		return nil, fmt.Errorf("Could not load database %s", dbName)
+	}
 
 	// ddb := dbData.Ddb
 	roots, ok := dSess.GetRoots(dbName)
@@ -71,110 +67,67 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	// Check if there are no changes in the staged set but the -a flag is false
-	hasStagedChanges, err := hasStagedSetChanges(ctx, roots)
+	if apr.Contains(cli.AllFlag) {
+		roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+		if err != nil {
+			return nil, fmt.Errorf(err.Error())
+		}
+	}
+
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		name = dSess.Username
+		email = dSess.Email
+	}
+
+	// Get the commit message.
+	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+	if !msgOk {
+		return nil, fmt.Errorf("Must provide commit message.")
+	}
+
+	// Specify the time if the date parameter is not.
+	t := ctx.QueryTime()
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+		var err error
+		t, err = cli.ParseDate(commitTimeStr)
+
+		if err != nil {
+			return nil, fmt.Errorf(err.Error())
+		}
+	}
+
+	// TODO: this does several session state updates, and it really needs to just do one
+	//  We also need to commit any pending transaction before we do this.
+	commit, err := actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
+		Message:          msg,
+		Date:             t,
+		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
+		Name:             name,
+		Email:            email,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if !allFlag && !hasStagedChanges && !allowEmpty {
-		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
-	}
-
-	// TODO: fix me
-	return 0, nil
-	// mergeActive, err := rsr.IsMergeActive(ctx)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// Check if there are no changes in the working set but the -a flag is true.
-	// The -a flag is fine when a merge is active or there are staged changes as result of a merge or an add.
-	// if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty && !mergeActive && !hasStagedChanges {
-	// 	return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
-	// }
-	//
-	// workingRoot, _ := dSess.GetRoot(dbName)
-	//
-	// if allFlag {
-	// 	err = actions.StageAllTables(ctx, workingRoot, dbData)
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf(err.Error())
-	// 	}
-	// }
-	//
-	// // Parse the author flag. Return an error if not.
-	// var name, email string
-	// if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-	// 	name, email, err = cli.ParseAuthor(authorStr)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// } else {
-	// 	name = dSess.Username
-	// 	email = dSess.Email
-	// }
-	//
-	// // Get the commit message.
-	// msg, msgOk := apr.GetValue(cli.CommitMessageArg)
-	// if !msgOk {
-	// 	return nil, fmt.Errorf("Must provide commit message.")
-	// }
-	//
-	// // Specify the time if the date parameter is not.
-	// t := ctx.QueryTime()
-	// if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-	// 	var err error
-	// 	t, err = cli.ParseDate(commitTimeStr)
-	//
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf(err.Error())
-	// 	}
-	// }
-	//
-	// h, err := actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
-	// 	Message:          msg,
-	// 	Date:             t,
-	// 	AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
-	// 	CheckForeignKeys: !apr.Contains(cli.ForceFlag),
-	// 	Name:             name,
-	// 	Email:            email,
-	// })
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//
-	// if allFlag {
-	// 	err = setHeadAndWorkingSessionRoot(ctx, h)
-	// } else {
-	// 	err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix)
-	// }
-	//
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//
-	// return h, nil
-}
-
-func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
-	// TODO: fix me
-	return false
-}
-
-// TODO: We should not be dealing with root objects here but commit specs.
-func hasStagedSetChanges(ctx *sql.Context, roots doltdb.Roots) (bool, error) {
-	workingHash, err := roots.Working.HashOf()
+	ws := dSess.WorkingSet(ctx, dbName)
+	err = dSess.SetWorkingSet(ctx, dbName, ws, nil)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	stagedHash, err := roots.Staged.HashOf()
+	cmHash, err := commit.HashOf()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	return workingHash != stagedHash, nil
+	return cmHash.String(), nil
 }
 
 func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {
@@ -230,21 +183,4 @@ func (d DoltCommitFunc) Resolved() bool {
 
 func (d DoltCommitFunc) Children() []sql.Expression {
 	return d.children
-}
-
-// setHeadAndWorkingSessionRoot takes in a ctx and the new head hashstring and updates the session head and working hashes.
-func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
-	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
-	dsess := sqle.DSessFromSess(ctx.Session)
-
-	return dsess.SetSessionVariable(ctx, key, headHashStr)
-}
-
-// setSessionRootExplicit sets a session variable (either HEAD or WORKING) to a hash string. For HEAD, the hash string
-// should come from the commit string. For working the commit string needs to come from the root.
-func setSessionRootExplicit(ctx *sql.Context, hashString string, suffix string) error {
-	key := ctx.GetCurrentDatabase() + suffix
-	dsess := sqle.DSessFromSess(ctx.Session)
-
-	return dsess.SetSessionVarDirectly(ctx, key, hashString)
 }

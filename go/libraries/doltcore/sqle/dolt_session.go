@@ -604,6 +604,12 @@ func (sess *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *dolt
 	return nil
 }
 
+func (sess *DoltSession) WorkingSet(ctx *sql.Context, dbName string) *doltdb.WorkingSet {
+	sessionState := sess.dbStates[dbName]
+	return sessionState.workingSet
+}
+
+
 func (sess *DoltSession) GetTempTableRootValue(ctx *sql.Context, dbName string) (*doltdb.RootValue, bool) {
 	dbstate, ok := sess.dbStates[dbName]
 	if !ok {
