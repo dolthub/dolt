@@ -17,6 +17,7 @@ package dfunctions
 import (
 	"fmt"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
@@ -40,53 +41,55 @@ func NewDoltCommitFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression
 
 // Runs DOLT_COMMIT in the sql engine which models the behavior of `dolt commit`. Commits staged staged changes to head.
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	// TODO: fix me
-	return 0, nil
 	// Get the information for the sql context.
-	// dbName := ctx.GetCurrentDatabase()
-	// dSess := sqle.DSessFromSess(ctx.Session)
+	dbName := ctx.GetCurrentDatabase()
+	ap := cli.CreateCommitArgParser()
+
+	// Get the args for DOLT_COMMIT.
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return nil, err
+	}
+
+	apr, err := ap.Parse(args)
+	if err != nil {
+		return nil, err
+	}
+
+	allFlag := apr.Contains(cli.AllFlag)
+	allowEmpty := apr.Contains(cli.AllowEmptyFlag)
+
+	dSess := sqle.DSessFromSess(ctx.Session)
 	// dbData, ok := dSess.GetDbData(dbName)
-	//
 	// if !ok {
 	// 	return nil, fmt.Errorf("Could not load database %s", dbName)
 	// }
-	//
+
 	// ddb := dbData.Ddb
-	// rsr := dbData.Rsr
-	//
-	// ap := cli.CreateCommitArgParser()
-	//
-	// // Get the args for DOLT_COMMIT.
-	// args, err := getDoltArgs(ctx, row, d.Children())
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//
-	// apr, err := ap.Parse(args)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//
-	// allFlag := apr.Contains(cli.AllFlag)
-	// allowEmpty := apr.Contains(cli.AllowEmptyFlag)
-	//
-	// // Check if there are no changes in the staged set but the -a flag is false
-	// hasStagedChanges, err := hasStagedSetChanges(ctx, ddb, rsr)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//
-	// if !allFlag && !hasStagedChanges && !allowEmpty {
-	// 	return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
-	// }
-	//
+	roots, ok := dSess.GetRoots(dbName)
+	if !ok {
+		return nil, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	// Check if there are no changes in the staged set but the -a flag is false
+	hasStagedChanges, err := hasStagedSetChanges(ctx, roots)
+	if err != nil {
+		return nil, err
+	}
+
+	if !allFlag && !hasStagedChanges && !allowEmpty {
+		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
+	}
+
+	// TODO: fix me
+	return 0, nil
 	// mergeActive, err := rsr.IsMergeActive(ctx)
 	// if err != nil {
 	// 	return nil, err
 	// }
-	//
-	// // Check if there are no changes in the working set but the -a flag is true.
-	// // The -a flag is fine when a merge is active or there are staged changes as result of a merge or an add.
+
+	// Check if there are no changes in the working set but the -a flag is true.
+	// The -a flag is fine when a merge is active or there are staged changes as result of a merge or an add.
 	// if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty && !mergeActive && !hasStagedChanges {
 	// 	return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
 	// }
@@ -111,8 +114,8 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// 	name = dSess.Username
 	// 	email = dSess.Email
 	// }
-
-	// Get the commit message.
+	//
+	// // Get the commit message.
 	// msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	// if !msgOk {
 	// 	return nil, fmt.Errorf("Must provide commit message.")
@@ -128,7 +131,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// 		return nil, fmt.Errorf(err.Error())
 	// 	}
 	// }
-
+	//
 	// h, err := actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
 	// 	Message:          msg,
 	// 	Date:             t,
@@ -160,9 +163,18 @@ func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
 }
 
 // TODO: We should not be dealing with root objects here but commit specs.
-func hasStagedSetChanges(ctx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
-	// TODO: fix me
-	return false, nil
+func hasStagedSetChanges(ctx *sql.Context, roots doltdb.Roots) (bool, error) {
+	workingHash, err := roots.Working.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	stagedHash, err := roots.Staged.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	return workingHash != stagedHash, nil
 }
 
 func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {

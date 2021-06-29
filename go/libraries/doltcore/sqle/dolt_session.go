@@ -124,6 +124,7 @@ type DatabaseSessionState struct {
 	dbName               string
 	roots                doltdb.Roots
 	headCommit           *doltdb.Commit
+	// TODO: make this into an actual working set so we can track merge state in memory
 	workingSet           ref.WorkingSetRef
 	dbData               env.DbData
 	editSession          *editor.TableEditSession
@@ -558,7 +559,7 @@ func (sess *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.
 // SetWorkingSetRef sets the working set ref for this session, without attempting to load the data from this working
 // set into memory.
 // TODO: fix this, it needs to do a lot of bookkeeping
-func (sess *DoltSession) SetWorkingSetRef(ctx *sql.Cogntext, dbName string, wsRef ref.WorkingSetRef) error {
+func (sess *DoltSession) SetWorkingSetRef(ctx *sql.Context, dbName string, wsRef ref.WorkingSetRef) error {
 	sess.dbStates[dbName].workingSet = wsRef
 	return nil
 }
