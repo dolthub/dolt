@@ -1,6 +1,8 @@
 package autoincr
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type AutoIncrementTracker interface {
 	Reserve(tableName string, val interface{}, force bool) (bool, error)
@@ -11,36 +13,44 @@ type AutoIncrementTracker interface {
 func NewAutoIncrementTracker() AutoIncrementTracker {
 	return &autoIncrementTracker{
 		tables: make(map[string]uint64),
+		written: make(map[string]bool),
 	}
 }
 
 type autoIncrementTracker struct {
 	tables map[string]uint64
+	written map[string]bool
 }
 
 var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
 
-func (a *autoIncrementTracker) Reserve(tableName string, val interface{}, force bool) (bool, error) {
-	currVal, ok := a.tables[tableName]
-	if !ok {
-		currVal = 1 // Auto Increment starts at 1
-	}
-
-	newVal, err := ConvertIntTypeToUint(val)
+// Reserve tells an integrator whether the wanted auto increment key toReserved has already been used by another transaction.
+// A key has already been used if the tracker has a larger or equal to value.
+func (a *autoIncrementTracker) Reserve(tableName string, toReserveKey interface{}, force bool) (bool, error) {
+	newVal, err := ConvertIntTypeToUint(toReserveKey)
 	if err != nil {
 		return false, err
 	}
 
 	if force {
 		a.tables[tableName] = newVal
+		a.written[tableName] = true
 		return true, nil
 	}
 
-	if currVal != 1 && newVal <= currVal {
+	currVal := a.tables[tableName]
+	written := a.written[tableName]
+
+	if !written {
+		return true, nil
+	}
+
+	if newVal <= currVal {
 		return false, nil
 	}
 
 	a.tables[tableName] = newVal
+	a.written[tableName] = false
 	return true, nil
 }
 

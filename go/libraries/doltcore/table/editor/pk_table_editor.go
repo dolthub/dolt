@@ -445,11 +445,12 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 			}
 			if less {
 				te.autoIncVal = types.Round(insertVal)
-				err = te.updateAutoIncrementTracker(te.autoIncVal)
-				if err != nil {
-					return err
-				}
 			}
+			err = te.updateAutoIncrementTracker(te.autoIncVal)
+			if err != nil {
+				return err
+			}
+
 			te.autoIncVal = types.Increment(te.autoIncVal)
 		}
 	}
