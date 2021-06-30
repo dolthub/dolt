@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"

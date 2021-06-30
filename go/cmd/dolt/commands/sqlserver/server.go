@@ -153,6 +153,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		cli.PrintErr(startError)
 		return
 	}
+
 	serverController.registerCloseFunction(startError, mySQLServer.Close)
 	closeError = mySQLServer.Start()
 	if closeError != nil {

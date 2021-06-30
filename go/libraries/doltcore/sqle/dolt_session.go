@@ -17,7 +17,6 @@ package sqle
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"os"
 	"strings"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 

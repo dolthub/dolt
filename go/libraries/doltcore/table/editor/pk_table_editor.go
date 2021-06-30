@@ -18,12 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"io"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -95,7 +96,7 @@ type pkTableEditor struct {
 	hasAutoInc bool
 	autoIncCol schema.Column
 	autoIncVal types.Value
-	aiTracker autoincr.AutoIncrementTracker
+	aiTracker  autoincr.AutoIncrementTracker
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -135,7 +136,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
 		writeMutex: &sync.Mutex{},
 		flushMutex: &sync.RWMutex{},
-		aiTracker: aiTracker,
+		aiTracker:  aiTracker,
 	}
 	var err error
 	rowData, err := t.GetRowData(ctx)
