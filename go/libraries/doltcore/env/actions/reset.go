@@ -119,7 +119,7 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots do
 		return err
 	}
 
-	return dEnv.UpdateWorkingSet(ctx, ws)
+	return dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(roots.Working))
 }
 
 func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
