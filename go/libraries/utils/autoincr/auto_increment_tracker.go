@@ -22,7 +22,7 @@ var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
 
 func (a *autoIncrementTracker) Reserve(tableName string, val interface{}) (bool, error) {
 	currVal := a.tables[tableName]
-	newVal, err := convertIntToUint(val)
+	newVal, err := ConvertIntTypeToUint(val)
 	if err != nil {
 		return false, err
 	}
@@ -35,7 +35,7 @@ func (a *autoIncrementTracker) Reserve(tableName string, val interface{}) (bool,
 	return true, nil
 }
 
-func convertIntToUint(val interface{}) (uint64, error) {
+func ConvertIntTypeToUint(val interface{}) (uint64, error) {
 	switch t := val.(type) {
 	case int8:
 		return uint64(t), nil

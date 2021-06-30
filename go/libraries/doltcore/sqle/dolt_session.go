@@ -17,6 +17,7 @@ package sqle
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"os"
 	"strings"
 
@@ -442,6 +443,16 @@ func (sess *DoltSession) GetDoltDBDocsReadWriter(dbName string) (env.DocsReadWri
 	}
 
 	return d.Drw, true
+}
+
+func (sess *DoltSession) GetDoltDbAutoIncrementTracker(dbName string) (autoincr.AutoIncrementTracker, bool) {
+	d, ok := sess.dbDatas[dbName]
+
+	if !ok {
+		return nil, false
+	}
+
+	return d.Ait, true
 }
 
 func (sess *DoltSession) GetDbData(dbName string) (env.DbData, bool) {

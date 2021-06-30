@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"io"
 	"os"
 	"runtime"
@@ -614,10 +615,8 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 		return nil, sql.ErrNoAutoIncrementCol
 	}
 
-
-	autoIncTracker := sess.dbDatas[t.db.name].Ait
-
-	if autoIncTracker == nil {
+	autoIncTracker, foundAit := sess.GetDoltDbAutoIncrementTracker(t.db.Name())
+	if !foundAit || autoIncTracker == nil {
 		return t.getAutoIncrementValue(ctx)
 	}
 
@@ -626,7 +625,7 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 		return nil, err
 	}
 
-	stored, err := convertIntToUint(storedVal)
+	stored, err := autoincr.ConvertIntTypeToUint(storedVal)
 	if err != nil {
 		return nil, err
 	}
@@ -646,31 +645,6 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 	}
 
 	return stored, nil
-}
-
-func convertIntToUint(val interface{}) (uint64, error) {
-	switch t := val.(type) {
-	case int8:
-		return uint64(t), nil
-	case int16:
-		return uint64(t), nil
-	case int32:
-		return uint64(t), nil
-	case int64:
-		return uint64(t), nil
-	case uint:
-		return uint64(t), nil
-	case uint8:
-		return uint64(t), nil
-	case uint16:
-		return uint64(t), nil
-	case uint32:
-		return uint64(t), nil
-	case uint64:
-		return t, nil
-	default:
-		return 0, fmt.Errorf("error: auto increment is not int type")
-	}
 }
 
 func (t *WritableDoltTable) getAutoIncrementValue(ctx *sql.Context) (interface{}, error) {

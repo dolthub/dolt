@@ -134,7 +134,6 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
-
 	mySQLServer, startError = server.NewServer(
 		server.Config{
 			Protocol:         "tcp",
@@ -147,7 +146,6 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 			// to the value of mysql that we support.
 		},
 		sqlEngine,
-		// In the sessionBuilder pass in the AutoIncrementManager
 		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit()),
 	)
 
