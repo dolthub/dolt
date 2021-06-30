@@ -187,39 +187,6 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 	return sess, nil
 }
 
-func NewDoltSessionWithAITracker(ctx *sql.Context, sqlSess sql.Session, username, email string, ai autoincr.AutoIncrementTracker, dbs ...Database) (*DoltSession, error) {
-	dbDatas := make(map[string]env.DbData)
-	editSessions := make(map[string]*editor.TableEditSession)
-
-	for _, db := range dbs {
-		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
-		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
-	}
-
-	sess := &DoltSession{
-		Session:               sqlSess,
-		dbDatas:               dbDatas,
-		editSessions:          editSessions,
-		dirty:                 make(map[string]bool),
-		roots:                 make(map[string]dbRoot),
-		workingSets:           make(map[string]ref.WorkingSetRef),
-		Username:              username,
-		Email:                 email,
-		tempTableRoots:        make(map[string]*doltdb.RootValue),
-		tempTableEditSessions: make(map[string]*editor.TableEditSession),
-		autoIncTracker: ai,
-	}
-	for _, db := range dbs {
-		err := sess.AddDB(ctx, db, db.DbData())
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return sess, nil
-}
-
 // EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
 // Sessions operating in batched mode don't flush any edit buffers except when told to do so explicitly, or when a
 // transaction commits. Disable @@autocommit to prevent edit buffers from being flushed prematurely in this mode.

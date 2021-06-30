@@ -128,7 +128,7 @@ func (d *DoltHarness) NewContext() *sql.Context {
 }
 
 func (d DoltHarness) NewSession() *sql.Context {
-	session, err := sqle.NewDoltSessionWithAITracker(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com", d.autoincrementTracker)
+	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com", d.autoincrementTracker)
 	require.NoError(d.t, err)
 
 	d.setTransactionSessionVar(session, d.transactionsEnabled)
@@ -168,7 +168,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	//  the same name, the first write query will panic on dangling references in the noms layer. Not sure why this is
 	//  happening, but it only happens as a result of this test setup.
 	var err error
-	d.session, err = sqle.NewDoltSessionWithAITracker(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com", d.autoincrementTracker)
+	d.session, err = sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com", d.autoincrementTracker)
 	require.NoError(d.t, err)
 
 	d.setTransactionSessionVar(d.session, d.transactionsEnabled)

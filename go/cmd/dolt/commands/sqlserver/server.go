@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"net"
@@ -201,12 +200,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 			sql.WithSession(doltSess),
 			sql.WithTracer(tracing.Tracer(ctx)))
 
-		// Update the auto increment tracker with loaded session
-		err = updateAutoIncTracker(sqlEngine, sqlCtx, doltSess.GetAutoIncTracker())
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
 		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		for _, db := range dbs {
 			err := db.LoadRootFromRepoState(sqlCtx)
@@ -229,40 +222,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 
 		return doltSess, ir, vr, nil
 	}
-}
-
-func updateAutoIncTracker(sqlEngine *sqle.Engine, ctx *sql.Context, ait autoincr.AutoIncrementTracker) error {
-	dbs := sqlEngine.Catalog.AllDatabases()
-
-	for _, db := range dbs {
-		names, err := db.GetTableNames(ctx)
-		if err != nil {
-			return err
-		}
-
-		for _, name := range names {
-			table, _, err := db.GetTableInsensitive(ctx, name)
-			if err != nil {
-				return err
-			}
-
-			if t, ok := table.(sql.AutoIncrementTable); ok {
-				aiv, err := t.GetAutoIncrementValue(ctx)
-				if !errors.Is(err, sql.ErrNoAutoIncrementCol) && err != nil {
-					return err
-				} else if errors.Is(err, sql.ErrNoAutoIncrementCol) {
-					continue
-				}
-
-				dbname := db.Name()
-				asInt := aiv.(int32)
-
-				ait.Set(dbname, name, uint64(asInt))
-			}
-		}
-	}
-
-	return nil
 }
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
