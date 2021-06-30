@@ -1,13 +1,13 @@
 package autoincr
 
+import "fmt"
+
 type AutoIncrementTracker interface {
-	Get(dbname, tableName string) (uint64, bool)
-	Set(dbname, tableName string, val uint64) bool
+	Reserve(dbname, tablename string, val interface{}) (bool, error)
 }
 
 type AutoIncrementTrackerSubscriber interface {
-	GetAutoIncrementValueForTable(tableName string) (uint64, bool)
-	SetAutoIncrementValueForTable(tableName string, val uint64) bool
+	ReserveAutoIncrementValueForTable(tableName string, val interface{}) (bool, error)
 }
 
 // AutoIncrementTracker is a global map that tracks the next auto increment value for each table in each database.
@@ -49,6 +49,27 @@ func (a *autoIncrementTracker) Set(dbname, tableName string, val uint64) bool {
 	return true
 }
 
+func (a *autoIncrementTracker) Reserve(dbname, tableName string, val interface{}) (bool, error) {
+	dbTable := a.tables[dbname]
+	if dbTable == nil {
+		a.tables[dbname] = make(map[string]uint64)
+		dbTable = a.tables[dbname]
+	}
+
+	currVal := dbTable[tableName]
+	newVal, err := convertIntToUint(val)
+	if err != nil {
+		return false, err
+	}
+
+	if newVal <= currVal {
+		return false, nil
+	}
+
+	dbTable[tableName] = newVal
+	return true, nil
+}
+
 type autoIncrementTableSubscriber struct {
 	dbName string
 	ai AutoIncrementTracker
@@ -56,17 +77,35 @@ type autoIncrementTableSubscriber struct {
 
 var _ AutoIncrementTrackerSubscriber = (*autoIncrementTableSubscriber)(nil)
 
-func (a *autoIncrementTableSubscriber) GetAutoIncrementValueForTable(tableName string) (uint64, bool) {
+func (a *autoIncrementTableSubscriber) ReserveAutoIncrementValueForTable(tableName string, val interface{}) (bool, error) {
 	if a.ai == nil {
-		return 0, false
+		return false, nil
 	}
-	return a.ai.Get(a.dbName, tableName)
+
+	return a.ai.Reserve(a.dbName, tableName, val)
 }
 
-func (a *autoIncrementTableSubscriber) SetAutoIncrementValueForTable(tableName string, val uint64) bool {
-	if a.ai == nil {
-		return false
+func convertIntToUint(val interface{}) (uint64, error) {
+	switch t := val.(type) {
+	case int8:
+		return uint64(t), nil
+	case int16:
+		return uint64(t), nil
+	case int32:
+		return uint64(t), nil
+	case int64:
+		return uint64(t), nil
+	case uint:
+		return uint64(t), nil
+	case uint8:
+		return uint64(t), nil
+	case uint16:
+		return uint64(t), nil
+	case uint32:
+		return uint64(t), nil
+	case uint64:
+		return t, nil
+	default:
+		return 0, fmt.Errorf("error: auto increment is not int type")
 	}
-
-	return a.ai.Set(a.dbName, tableName, val)
 }
