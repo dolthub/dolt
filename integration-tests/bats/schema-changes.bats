@@ -32,7 +32,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "BIGINT" ]] || false
     [[ "$output" =~ "LONGTEXT" ]] || false
-    [[ ! "$ouput" =~ "Failed to merge schemas" ]] || false
+    [[ ! "$ouput" =~ "Cannot merge schemas with different primary key sets" ]] || false
 }
 
 @test "schema-changes: dolt schema rename column" {
