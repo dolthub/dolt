@@ -752,25 +752,21 @@ func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *dol
 
 func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
 	ancCommit, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	ourRoot, err := commit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	theirRoot, err := mergeCommit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	ancRoot, err := ancCommit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}

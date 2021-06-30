@@ -149,6 +149,7 @@ func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootVal
 		return err
 	}
 
+	// TODO: yes you can, fix this
 	if rh != hrh {
 		return errors.New("cannot merge with uncommitted changes")
 	}

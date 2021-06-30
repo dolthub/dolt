@@ -47,7 +47,6 @@ func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, 
 		return err
 	}
 
-	// update the working root
 	return env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
 }
 
