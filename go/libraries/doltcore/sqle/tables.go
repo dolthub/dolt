@@ -630,7 +630,7 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 		return nil, err
 	}
 
-	ok, err := autoIncTracker.Reserve(t.tableName, stored)
+	ok, err := autoIncTracker.Reserve(t.tableName, stored, false)
 	if err != nil {
 		return nil, err
 	}
@@ -638,7 +638,7 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 	for !ok {
 		stored += 1
 
-		ok, err = autoIncTracker.Reserve(t.tableName, stored)
+		ok, err = autoIncTracker.Reserve(t.tableName, stored, false)
 		if err != nil {
 			return nil, err
 		}

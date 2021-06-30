@@ -3,7 +3,7 @@ package autoincr
 import "fmt"
 
 type AutoIncrementTracker interface {
-	Reserve(tableName string, val interface{}) (bool, error)
+	Reserve(tableName string, val interface{}, force bool) (bool, error)
 }
 
 // AutoIncrementTracker is a global map that tracks the next auto increment value for each table in each database.
@@ -20,14 +20,23 @@ type autoIncrementTracker struct {
 
 var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
 
-func (a *autoIncrementTracker) Reserve(tableName string, val interface{}) (bool, error) {
-	currVal := a.tables[tableName]
+func (a *autoIncrementTracker) Reserve(tableName string, val interface{}, force bool) (bool, error) {
+	currVal, ok := a.tables[tableName]
+	if !ok {
+		currVal = 1 // Auto Increment starts at 1
+	}
+
 	newVal, err := ConvertIntTypeToUint(val)
 	if err != nil {
 		return false, err
 	}
 
-	if newVal <= currVal {
+	if force {
+		a.tables[tableName] = newVal
+		return true, nil
+	}
+
+	if currVal != 1 && newVal <= currVal {
 		return false, nil
 	}
 

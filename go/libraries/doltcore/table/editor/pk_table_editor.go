@@ -706,7 +706,7 @@ func (te *pkTableEditor) updateAutoIncrementTracker(value types.Value) error {
 			return err
 		}
 
-		_, err = te.aiTracker.Reserve(te.name, val)
+		_, err = te.aiTracker.Reserve(te.name, val, true)
 		if err != nil {
 			return err
 		}
