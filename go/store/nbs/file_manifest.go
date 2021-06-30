@@ -468,7 +468,12 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 		return manifestContents{}, err
 	}
 
-	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
+	defer func() {
+		rerr := os.Remove(tempManifestPath) // If we rename below, this will be a no-op
+		if err == nil {
+			err = rerr
+		}
+	}()
 
 	// Take manifest file lock
 	lck := newLock(dir)
@@ -499,10 +504,10 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 	// Read current manifest (if it exists). The closure ensures that the file is closed before moving on, so we can rename over it later if need be.
 	manifestPath := filepath.Join(dir, manifestFileName)
 	upstream, err = func() (upstream manifestContents, ferr error) {
-		if f, ferr := openIfExists(manifestPath); ferr == nil && f != nil {
+		var f *os.File
+		if f, ferr = openIfExists(manifestPath); ferr == nil && f != nil {
 			defer func() {
 				closeErr := f.Close()
-
 				if ferr == nil {
 					ferr = closeErr
 				}
