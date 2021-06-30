@@ -1150,6 +1150,7 @@ ALTER TABLE t2 ADD CONSTRAINT chk2 CHECK (b > a);
 SQL
 
     dolt sql -q "insert into t2 values (5, 6)"
+    dolt sql -q "insert into t2 values (6, NULL)"
 
     run dolt sql -q "insert into t2 values (3, 4)"
     [ $status -eq 1 ]
@@ -1232,6 +1233,14 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| COUNT(*) |" ]] || false
     [[ "$output" =~ "| 3        |" ]] || false
+}
+
+@test "sql: update against joins fail with error" {
+    dolt sql -q "CREATE TABLE mytable(pk int primary key, val int);"
+
+    run dolt sql -q "UPDATE mytable one, mytable two SET one.val = 1 WHERE one.pk = two.pk + 1;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "table doesn't support UPDATE" ]] || false
 }
 
 get_head_commit() {

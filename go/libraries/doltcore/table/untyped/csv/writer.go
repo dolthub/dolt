@@ -25,10 +25,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // writeBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all
@@ -104,31 +105,20 @@ func (csvw *CSVWriter) GetSchema() schema.Schema {
 // WriteRow will write a row to a table
 func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := csvw.sch.GetAllCols()
+	colValStrs := make([]*string, allCols.Size())
 
-	colValStrs := make([]*string, 0, allCols.Size())
-	_, err := r.IterSchema(csvw.sch, func(tag uint64, val types.Value) (stop bool, err error) {
-		val, ok := r.GetColVal(tag)
-		if !ok || types.IsNull(val) {
-			colValStrs = append(colValStrs, nil)
-			return false, nil
-		}
-
-		var v string
-		if val.Kind() == types.StringKind {
-			v = string(val.(types.String))
-		} else {
-			v, err = types.EncodedValue(ctx, val)
-			if err != nil {
-				return false, err
-			}
-		}
-		colValStrs = append(colValStrs, &v)
-
-		return false, nil
-	})
-
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, csvw.GetSchema())
 	if err != nil {
 		return err
+	}
+
+	for i, val := range sqlRow {
+		if val == nil {
+			colValStrs[i] = nil
+		} else {
+			v := sqlutil.SqlColToStr(ctx, val)
+			colValStrs[i] = &v
+		}
 	}
 
 	return csvw.write(colValStrs)

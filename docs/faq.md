@@ -83,13 +83,13 @@ SQL](https://www.dolthub.com/blog/2021-03-15-programmatic-merge-and-resolve/)
 
 ## Does Dolt support transactions?
 
-Not really, in the way that normal databases do. That's a work in
-progress. Until then, you can't `ROLLBACK` or create `SAVEPOINTS`, and
-things like row-level locking with `SELECT FOR UPDATE` don't work. You
-manage concurrency explicitly by creating branches / merging them back
-in to `master` when you're done with a unit of work (which can span
-any amount of time and any number of SQL sessions). `COMMIT` does
-something, but it's not a real transaction (see questions above).
+Yes, but it's an alpha release that may have some rough edges, so it's
+not enabled by default. To turn it on, set an environment variable:
+
+`export DOLT_ENABLE_TRANSACTIONS=true`
+
+See [this blog post](https://www.dolthub.com/blog/2021-05-19-dolt-transactions/) 
+for more details.
 
 Named locks work, via `GET_LOCK()` and `RELEASE_LOCK()` functions.
 

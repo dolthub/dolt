@@ -620,3 +620,7 @@ func TestSingleTransactionScript(t *testing.T) {
 func TestSystemTableQueries(t *testing.T) {
 	enginetest.RunQueryTests(t, newDoltHarness(t), BrokenSystemTableQueries)
 }
+
+func TestTestReadOnlyDatabases(t *testing.T) {
+	enginetest.TestReadOnlyDatabases(t, newDoltHarness(t))
+}

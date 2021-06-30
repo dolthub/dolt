@@ -57,7 +57,6 @@ type awsTablePersister struct {
 	s3         s3svc
 	bucket     string
 	rl         chan struct{}
-	tc         tableCache
 	ddb        *ddbTableStore
 	limits     awsLimits
 	indexCache *indexCache
@@ -86,7 +85,7 @@ func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 	return newAWSChunkSource(
 		ctx,
 		s3p.ddb,
-		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc, ns: s3p.ns},
+		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
 		s3p.limits,
 		name,
 		chunkCount,
@@ -129,20 +128,13 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		return newReaderFromIndexData(s3p.indexCache, data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name}, s3BlockSize)
 	}
 
-	if s3p.tc != nil {
-		go func() {
-			// Ignore errors.  Will be reloaded on read if needed, or error will occur at that time.
-			_ = s3p.tc.store(name, bytes.NewReader(data), uint64(len(data)))
-		}()
-	}
-
 	err = s3p.multipartUpload(ctx, data, name.String())
 
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
 
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc, ns: s3p.ns}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
 	return newReaderFromIndexData(s3p.indexCache, data, name, tra, s3BlockSize)
 }
 
@@ -317,31 +309,8 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 	verbose.Logger(ctx).Sugar().Debugf("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
-	if s3p.tc != nil {
-		go func() {
-			// load conjoined table to the cache.  Ignore errors.  Will be reloaded on read if needed, or error will occur
-			// at that time.
-			_ = s3p.loadIntoCache(ctx, name)
-		}()
-	}
-
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc, ns: s3p.ns}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
 	return newReaderFromIndexData(s3p.indexCache, plan.mergedIndex, name, tra, s3BlockSize)
-}
-
-func (s3p awsTablePersister) loadIntoCache(ctx context.Context, name addr) error {
-	input := &s3.GetObjectInput{
-		Bucket: aws.String(s3p.bucket),
-		Key:    aws.String(name.String()),
-	}
-	result, err := s3p.s3.GetObjectWithContext(ctx, input)
-
-	if err != nil {
-		return err
-	}
-	defer result.Body.Close()
-
-	return s3p.tc.store(name, result.Body, uint64(*result.ContentLength))
 }
 
 func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, plan compactionPlan, key string) error {

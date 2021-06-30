@@ -84,16 +84,6 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions), auth.NewAuditLog(logrus.StandardLogger()))
 
-	c := sql.NewCatalog()
-	a := analyzer.NewBuilder(c).WithParallelism(serverConfig.QueryParallelism()).Build()
-	sqlEngine := sqle.New(c, a, nil)
-
-	err := sqlEngine.Catalog.Register(dfunctions.DoltFunctions...)
-
-	if err != nil {
-		return nil, err
-	}
-
 	var username string
 	var email string
 	var mrEnv env.MultiRepoEnv
@@ -117,12 +107,15 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 
 	dbs := commands.CollectDBs(mrEnv)
+	cat := sql.NewCatalogWithDbProvider(dsqle.NewDoltDatabaseProvider(dbs...))
+	cat.AddDatabase(information_schema.NewInformationSchemaDatabase(cat))
 
-	for _, db := range dbs {
-		sqlEngine.AddDatabase(db)
+	a := analyzer.NewBuilder(cat).WithParallelism(serverConfig.QueryParallelism()).Build()
+	sqlEngine := sqle.New(cat, a, nil)
+
+	if err := sqlEngine.Catalog.Register(dfunctions.DoltFunctions...); err != nil {
+		return nil, err
 	}
-
-	sqlEngine.AddDatabase(information_schema.NewInformationSchemaDatabase(sqlEngine.Catalog))
 
 	portAsString := strconv.Itoa(serverConfig.Port())
 	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
