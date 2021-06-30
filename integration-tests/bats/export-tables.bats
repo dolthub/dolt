@@ -171,7 +171,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 
     # output will be split over two lines
     grep 'id,j' export.csv
-    tail -n 1 export.csv | awk -F "," '{print $2}' | jq --slurp '.[1]' | grep "hi"
+    grep '"\[""hi""\]"' export.csv
 }
 
 @test "export-tables: uint schema parsing for writer_test.go backwards compatibility" {
