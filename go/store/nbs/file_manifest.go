@@ -469,9 +469,11 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 	}
 
 	defer func() {
-		rerr := os.Remove(tempManifestPath) // If we rename below, this will be a no-op
-		if err == nil {
-			err = rerr
+		if _, serr := os.Stat(tempManifestPath); serr == nil {
+			rerr := os.Remove(tempManifestPath) // If we rename below, this will be a no-op
+			if err == nil {
+				err = rerr
+			}
 		}
 	}()
 
