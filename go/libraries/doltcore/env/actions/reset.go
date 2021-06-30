@@ -122,24 +122,24 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots do
 	return dEnv.UpdateWorkingSet(ctx, ws)
 }
 
-func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (*doltdb.RootValue, error) {
+func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
 	tables, err := getUnionedTables(ctx, apr.Args(), roots.Staged, roots.Head)
 	tables = RemoveDocsTable(tables)
 	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
 	err = ValidateTables(context.TODO(), tables, roots.Staged, roots.Head)
 	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
-	stagedRoot, err := resetStaged(ctx, roots, dbData.Rsw, tables)
+	roots.Staged, err = MoveTablesBetweenRoots(ctx, tables, roots.Head, roots.Staged)
 	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
-	return stagedRoot, nil
+	return roots, nil
 }
 
 func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots doltdb.Roots) (*doltdb.RootValue, error) {

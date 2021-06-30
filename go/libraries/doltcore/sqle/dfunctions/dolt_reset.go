@@ -83,51 +83,31 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			return 1, err
 		}
 
+		// TODO: this overrides the transaction setting, needs to happen at commit, not here
 		if newHead != nil {
-			if err := ddb.SetHeadToCommit(ctx, rsr.CWBHeadRef(), newHead); err != nil {
-				return nil, doltdb.Roots{}, err
+			if err := dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
+				return 1, err
 			}
-
-			h, err := newHead.HashOf()
-			if err != nil {
-				return nil, doltdb.Roots{}, err
-			}
-
-			return h.String(), nil
 		}
 
-		// In this case we preserve untracked tables.
-		if h == "" {
-			headHash, err := dbData.Rsr.CWBHeadHash(ctx)
-			if err != nil {
-				return 1, err
-			}
-
-			h = headHash.String()
-			if err := ctx.SetSessionVariable(ctx, sqle.HeadKey(dbName), h); err != nil {
-				return 1, err
-			}
-
-			root, err := dbData.Rsr.WorkingRoot(ctx)
-			if err != nil {
-				return 1, err
-			}
-
-			err = dSess.SetRoot(ctx, dbName, root)
-			if err != nil {
-				return 1, err
-			}
-		} else {
-			if err := setHeadAndWorkingSessionRoot(ctx, h); err != nil {
-				return 1, err
-			}
+		ws := dSess.WorkingSet(ctx, dbName)
+		err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged), nil)
+		if err != nil {
+			return 1, err
 		}
 	} else {
-		_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
+		roots, err = actions.ResetSoftTables(ctx, dbData, apr, roots)
+		if err != nil {
+			return 1, err
+		}
+
+		err = dSess.SetRoots(ctx, dbName, roots)
 		if err != nil {
 			return 1, err
 		}
 	}
+
+	return 0, nil
 }
 
 func (d DoltResetFunc) Resolved() bool {
