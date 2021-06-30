@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -60,6 +61,7 @@ type DbData struct {
 	Rsw RepoStateWriter
 	Rsr RepoStateReader
 	Drw DocsReadWriter
+	Ait autoincr.AutoIncrementTracker
 }
 
 type BranchConfig struct {

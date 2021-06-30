@@ -70,7 +70,7 @@ type TableEditor interface {
 	Close() error
 }
 
-func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTrackerSubscriber, name string) (TableEditor, error) {
+func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTracker, name string) (TableEditor, error) {
 	if schema.IsKeyless(tableSch) {
 		return newKeylessTableEditor(ctx, t, tableSch, name)
 	}
@@ -95,7 +95,7 @@ type pkTableEditor struct {
 	hasAutoInc bool
 	autoIncCol schema.Column
 	autoIncVal types.Value
-	aiTracker autoincr.AutoIncrementTrackerSubscriber
+	aiTracker autoincr.AutoIncrementTracker
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -126,7 +126,7 @@ type tableEditAccumulator struct {
 	removedKeys map[hash.Hash]types.LesserValuable
 }
 
-func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTrackerSubscriber, name string) (*pkTableEditor, error) {
+func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTracker, name string) (*pkTableEditor, error) {
 	te := &pkTableEditor{
 		t:          t,
 		tSch:       tableSch,
@@ -705,7 +705,7 @@ func (te *pkTableEditor) updateAutoIncrementTracker(value types.Value) error {
 			return err
 		}
 
-		_, err = te.aiTracker.ReserveAutoIncrementValueForTable(te.name, val)
+		_, err = te.aiTracker.Reserve(te.name, val)
 		if err != nil {
 			return err
 		}

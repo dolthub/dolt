@@ -39,7 +39,7 @@ type TableEditSession struct {
 // TableEditSessionProps are properties that define different functionality for the TableEditSession.
 type TableEditSessionProps struct {
 	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
-	AutoIncrTracker autoincr.AutoIncrementTrackerSubscriber // If not nil, passes in a server level tracker for auto increment values. Useful for transactions.
+	AutoIncrTracker autoincr.AutoIncrementTracker // If not nil, passes in a server level tracker for auto increment values. Useful for transactions.
 }
 
 // CreateTableEditSession creates and returns a TableEditSession. Inserting a nil root is not an error, as there are

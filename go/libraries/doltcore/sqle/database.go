@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"io"
 	"strings"
 	"time"
@@ -58,6 +59,7 @@ type Database struct {
 	rsr  env.RepoStateReader
 	rsw  env.RepoStateWriter
 	drw  env.DocsReadWriter
+	ait  autoincr.AutoIncrementTracker
 }
 
 var _ sql.Database = (*Database)(nil)
@@ -171,6 +173,7 @@ func NewDatabase(name string, dbData env.DbData) Database {
 		rsr:  dbData.Rsr,
 		rsw:  dbData.Rsw,
 		drw:  dbData.Drw,
+		ait:  autoincr.NewAutoIncrementTracker(),
 	}
 }
 
@@ -198,12 +201,17 @@ func (db Database) GetDocsReadWriter() env.DocsReadWriter {
 	return db.drw
 }
 
+func (db Database) GetAutoIncrementTracker() autoincr.AutoIncrementTracker {
+	return db.ait
+}
+
 func (db Database) DbData() env.DbData {
 	return env.DbData{
 		Ddb: db.ddb,
 		Rsw: db.rsw,
 		Rsr: db.rsr,
 		Drw: db.drw,
+		Ait: db.ait,
 	}
 }
 

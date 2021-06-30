@@ -17,7 +17,6 @@ package sqlserver
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"net"
 	"strconv"
 	"time"
@@ -149,7 +148,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		},
 		sqlEngine,
 		// In the sessionBuilder pass in the AutoIncrementManager
-		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit(), autoincr.NewAutoIncrementTracker()),
+		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit()),
 	)
 
 	if startError != nil {
@@ -175,11 +174,11 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool, ait autoincr.AutoIncrementTracker) server.SessionBuilder {
+func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, ait, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
 
 		if err != nil {
 			return nil, nil, nil, err

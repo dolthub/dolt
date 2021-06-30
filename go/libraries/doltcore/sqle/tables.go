@@ -615,7 +615,9 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 	}
 
 
-	if sess.autoIncTracker == nil {
+	autoIncTracker := sess.dbDatas[t.db.name].Ait
+
+	if autoIncTracker == nil {
 		return t.getAutoIncrementValue(ctx)
 	}
 
@@ -629,7 +631,7 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 		return nil, err
 	}
 
-	ok, err := sess.autoIncTracker.Reserve(t.db.name, t.tableName, stored)
+	ok, err := autoIncTracker.Reserve(t.tableName, stored)
 	if err != nil {
 		return nil, err
 	}
@@ -637,7 +639,7 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 	for !ok {
 		stored += 1
 
-		ok, err = sess.autoIncTracker.Reserve(t.db.name, t.tableName, stored)
+		ok, err = autoIncTracker.Reserve(t.tableName, stored)
 		if err != nil {
 			return nil, err
 		}
