@@ -563,7 +563,13 @@ func (sess *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.
 
 // SetWorkingSet sets the working set for this session.  Unlike setting the working root alone, this method always
 // marks the session dirty.
-func (sess *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet, headRoot *doltdb.RootValue) error {
+// |headRoot| will be set to the working sets's corresponding HEAD if nil
+func (sess *DoltSession) SetWorkingSet(
+	ctx *sql.Context,
+	dbName string,
+	ws *doltdb.WorkingSet,
+	headRoot *doltdb.RootValue,
+) error {
 	sessionState := sess.dbStates[dbName]
 	sessionState.workingSet = ws
 

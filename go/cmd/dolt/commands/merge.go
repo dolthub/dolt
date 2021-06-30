@@ -269,10 +269,13 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return errhand.BuildDError("error: committing").AddCause(err).Build()
 	}
 
-	dbData := dEnv.DbData()
+	// Reload roots since the above method writes new values to the working set
+	roots, err = dEnv.Roots(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
-	// TODO: this isn't right, the new working value needs to be passed in here
-	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, roots, dEnv.DbData(), actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
@@ -477,6 +480,7 @@ func fkConstraintWarning(ctx context.Context, cm1, cm2 *doltdb.Commit) errhand.V
 	return nil
 }
 
+// TODO: change this to be functional and not write to repo state
 func mergedRootToWorking(
 		ctx context.Context,
 		squash bool,
