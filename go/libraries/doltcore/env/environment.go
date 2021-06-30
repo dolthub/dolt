@@ -490,7 +490,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 	}
 
 	// TODO: add actual trace logging here
-	//logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), true))
+	// logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), true))
 
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h)
 }

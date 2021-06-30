@@ -32,22 +32,23 @@ func CheckoutAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbDat
 	return checkoutTablesAndDocs(ctx, dbData, roots, tbls, docs)
 }
 
-func CheckoutTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tables []string) error {
-	return checkoutTables(ctx, dbData, roots, tables)
-}
-
 // CheckoutTablesAndDocs takes in a set of tables and docs and checks them out to another branch.
 func CheckoutTablesAndDocs(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tables []string, docs doltdocs.Docs) error {
 	return checkoutTablesAndDocs(ctx, dbData, roots, tables, docs)
 }
 
-func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string) error {
+func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
 	roots, err := MoveTablesFromHeadToWorking(ctx, roots, tbls)
 	if err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
-	return env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
+	err = env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return roots, nil
 }
 
 // MoveTablesFromHeadToWorking replaces the tables named from the given head to the given working root, overwriting any
@@ -120,15 +121,11 @@ func checkoutDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, do
 }
 
 func checkoutTablesAndDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string, docs doltdocs.Docs) error {
-	err := checkoutTables(ctx, dbData, roots, tbls)
+	var err error
+	roots, err = checkoutTables(ctx, dbData, roots, tbls)
 	if err != nil {
 		return err
 	}
-
-	// roots, err = getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.WorkingRoot, doltdb.StagedRoot, doltdb.HeadRoot)
-	// if err != nil {
-	// 	return err
-	// }
 
 	return checkoutDocs(ctx, dbData, roots, docs)
 }

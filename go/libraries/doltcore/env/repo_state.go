@@ -213,7 +213,7 @@ func (rs *RepoState) AddRemote(r Remote) {
 
 // Updates the working root.
 func UpdateWorkingRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
-	//logrus.Infof("Updating working root with value %s", newRoot.DebugString(ctx, true))
+	// logrus.Infof("Updating working root with value %s", newRoot.DebugString(ctx, true))
 
 	err := rsw.UpdateWorkingRoot(ctx, newRoot)
 	if err != nil {
