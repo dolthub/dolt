@@ -456,7 +456,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 			if err != nil {
 				return err
 			}
-			if !less {
+			if !less || te.autoIncVal.Kind() == types.FloatKind {
 				te.autoIncVal = types.Increment(te.autoIncVal)
 			}
 		}

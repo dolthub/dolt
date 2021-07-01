@@ -172,6 +172,7 @@ SQL
 
     run dolt sql -q "SELECT * FROM auto_float;" -r csv
     [ "$status" -eq 0 ]
+    echo $output
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2.1,2" ]] || false
     [[ "$output" =~ "3,3" ]] || false
