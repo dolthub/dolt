@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"

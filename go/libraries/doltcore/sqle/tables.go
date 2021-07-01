@@ -34,9 +34,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -630,7 +630,7 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 		return nil, err
 	}
 
-	ok, err := autoIncTracker.Reserve(t.tableName, stored, false)
+	ok, err := autoIncTracker.Request(t.tableName, stored)
 	if err != nil {
 		return nil, err
 	}
@@ -638,10 +638,9 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 	// If the current session cannot automatically reserve the next auto increment key, keep iterating values until its
 	// done.
 	for !ok {
-		// TODO: I almost prefer the Get method here.
 		stored += 1
 
-		ok, err = autoIncTracker.Reserve(t.tableName, stored, false)
+		ok, err = autoIncTracker.Request(t.tableName, stored)
 		if err != nil {
 			return nil, err
 		}

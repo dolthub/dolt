@@ -24,7 +24,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -439,24 +439,24 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	if te.hasAutoInc {
 		insertVal, ok := tagToVal[te.autoIncCol.Tag]
 		if ok {
-			less, err := te.autoIncVal.Less(te.nbf, insertVal)
-			if err != nil {
-				return err
-			}
-			if less {
-				te.autoIncVal = types.Round(insertVal)
-			}
-			err = te.updateAutoIncrementTracker(te.autoIncVal)
-			if err != nil {
-				return err
+			var less bool
+
+			// float auto increment values should be rounded before comparing to the current auto increment values
+			if te.autoIncVal.Kind() == types.FloatKind {
+				rounded := types.Round(insertVal)
+				less, err = rounded.Less(te.nbf, te.autoIncVal)
+			} else {
+				less, err = insertVal.Less(te.nbf, te.autoIncVal)
 			}
 
-			// Do not increment the key if the inserted value is less than the auto incremented value
-			less, err = insertVal.Less(te.nbf, te.autoIncVal)
-			if err != nil {
-				return err
-			}
-			if !less || te.autoIncVal.Kind() == types.FloatKind {
+			if !less {
+				te.autoIncVal = types.Round(insertVal)
+
+				err = te.updateAutoIncrementTracker(te.autoIncVal)
+				if err != nil {
+					return err
+				}
+
 				te.autoIncVal = types.Increment(te.autoIncVal)
 			}
 		}
@@ -713,10 +713,7 @@ func (te *pkTableEditor) updateAutoIncrementTracker(value types.Value) error {
 			return err
 		}
 
-		_, err = te.aiTracker.Reserve(te.name, val, true)
-		if err != nil {
-			return err
-		}
+		te.aiTracker.Confirm(te.name, val)
 	}
 
 	return nil

@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/utils/autoincr"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"

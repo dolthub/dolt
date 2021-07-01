@@ -6,7 +6,8 @@ import (
 )
 
 type AutoIncrementTracker interface {
-	Reserve(tableName string, val interface{}, force bool) (bool, error)
+	Request(tableName string, val interface{}) (bool, error)
+	Confirm(tableName string, val interface{})
 }
 
 // AutoIncrementTracker is a global map that tracks the next auto increment value for each table in each database.
@@ -26,22 +27,17 @@ type autoIncrementTracker struct {
 
 var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
 
-// Reserve tells an integrator whether the wanted auto increment key toReserved has already been used by another transaction.
-// A key has already been used if the tracker has a larger or equal to value. Force is used when an autoincrement value
-// is actually written to a table.
-func (a *autoIncrementTracker) Reserve(tableName string, toReserveKey interface{}, force bool) (bool, error) {
+// Request is used by an integrator to request whether the wanted auto increment key is valid for use. Requests do not
+// necessarily update the tracker as an integrator may query the same auto increment value multiple times (in the
+// information schema for example). A request updates the tracker when it is greater than the current value stored for
+// the table.
+func (a *autoIncrementTracker) Request(tableName string, val interface{}) (bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	newVal, err := ConvertIntTypeToUint(toReserveKey)
+	newVal, err := ConvertIntTypeToUint(val)
 	if err != nil {
 		return false, err
-	}
-
-	if force {
-		a.tables[tableName] = newVal
-		a.written[tableName] = true
-		return true, nil
 	}
 
 	currVal := a.tables[tableName]
@@ -60,9 +56,18 @@ func (a *autoIncrementTracker) Reserve(tableName string, toReserveKey interface{
 		return false, nil
 	}
 
-	a.tables[tableName] = newVal
+	a.tables[tableName] = val
 	a.written[tableName] = false
 	return true, nil
+}
+
+// Confirm is used when an auto increment has actually been written to a table.
+func (a *autoIncrementTracker) Confirm(tableName string, key interface{}) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.tables[tableName] = key
+	a.written[tableName] = true
 }
 
 func ConvertIntTypeToUint(val interface{}) (uint64, error) {
@@ -90,6 +95,6 @@ func ConvertIntTypeToUint(val interface{}) (uint64, error) {
 	case float64:
 		return uint64(t), nil
 	default:
-		return 0, fmt.Errorf("error: auto increment is not int type")
+		return 0, fmt.Errorf("error: auto increment is not a numeric type")
 	}
 }
