@@ -359,6 +359,9 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 			}
 		}
 	case headCommitSpec:
+		if cwb == nil {
+			return nil, fmt.Errorf("cannot use a nil current working branch with a HEAD commit spec")
+		}
 		commitSt, err = getCommitStForRefStr(ctx, ddb.db, cwb.String())
 	default:
 		panic("unrecognized commit spec csType: " + cs.csType)
