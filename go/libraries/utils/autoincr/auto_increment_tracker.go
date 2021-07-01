@@ -2,6 +2,7 @@ package autoincr
 
 import (
 	"fmt"
+	"sync"
 )
 
 type AutoIncrementTracker interface {
@@ -12,22 +13,26 @@ type AutoIncrementTracker interface {
 // It is primarily used for concurrent transactions on an auto incremented table.
 func NewAutoIncrementTracker() AutoIncrementTracker {
 	return &autoIncrementTracker{
-		tables: make(map[string]interface{}),
+		tables:  make(map[string]interface{}),
 		written: make(map[string]bool),
 	}
 }
 
 type autoIncrementTracker struct {
-	tables map[string]interface{}
+	tables  map[string]interface{}
 	written map[string]bool
+	mu      sync.Mutex
 }
 
 var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
 
 // Reserve tells an integrator whether the wanted auto increment key toReserved has already been used by another transaction.
 // A key has already been used if the tracker has a larger or equal to value. Force is used when an autoincrement value
-// actually written to a table.
+// is actually written to a table.
 func (a *autoIncrementTracker) Reserve(tableName string, toReserveKey interface{}, force bool) (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	newVal, err := ConvertIntTypeToUint(toReserveKey)
 	if err != nil {
 		return false, err

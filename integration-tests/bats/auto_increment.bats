@@ -381,7 +381,7 @@ SQL
     [[ "${lines[6]}" =~ "6,6" ]] || false
 }
 
-@test "auto_increment: skiping works" {
+@test "auto_increment: skipping works" {
 dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,

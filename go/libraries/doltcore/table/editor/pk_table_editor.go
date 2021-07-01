@@ -701,7 +701,6 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 func (te *pkTableEditor) updateAutoIncrementTracker(value types.Value) error {
 	// If the auto increment tracker is passed in be sure to update it with the most recent value.
 	if te.aiTracker != nil {
-
 		val, err := te.autoIncCol.TypeInfo.ConvertNomsValueToValue(value)
 		if err != nil {
 			return err
