@@ -256,18 +256,14 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
+	roots := make(map[string]*doltdb.RootValue)
+
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(dsess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
 	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	roots := make(map[string]*doltdb.RootValue)
-
 	var name string
 	var root *doltdb.RootValue
 	for name, root = range initialRoots {
@@ -999,20 +995,23 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 		}
 
 		dsess := dsqle.DSessFromSess(ctx.Session)
-		rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
-		if ok {
-			err = rsw.SetWorkingHash(ctx, h)
-			if err != nil {
-				return false, err
-			}
+		dbData, err := dsess.GetDbData(ctx, db.Name())
+		if err != nil {
+			return false, err
+		}
+		err = dbData.Rsw.SetWorkingHash(ctx, h)
+		if err != nil {
+			return false, err
 		}
 
-		ddb, ok := dsess.GetDoltDB(db.Name())
-		if ok {
-			_, err = ddb.WriteRootValue(ctx, root)
-			if err != nil {
-				return false, err
-			}
+		ddb, err := dsess.GetDoltDB(ctx, db.Name())
+		if err != nil {
+			return false, err
+		}
+
+		_, err = ddb.WriteRootValue(ctx, root)
+		if err != nil {
+			return false, err
 		}
 
 		return false, nil
@@ -1349,7 +1348,7 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
 func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat, dbs ...dsqle.Database) (*sqlEngine, error) {
-	c := sql.NewCatalog()
+	c := sql.NewCatalogWithDbProvider(dsqle.NewDoltDatabaseProvider(dbs...))
 	var au auth.Auth
 
 	if readOnly {

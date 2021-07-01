@@ -55,7 +55,10 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	sess := t.db.TableEditSession(ctx, t.IsTemporary())
+	sess, err := t.db.TableEditSession(ctx, t.IsTemporary())
+	if err != nil {
+		return nil, err
+	}
 
 	tableEditor, err := sess.GetTableEditor(ctx, t.tableName, t.sch)
 	if err != nil {

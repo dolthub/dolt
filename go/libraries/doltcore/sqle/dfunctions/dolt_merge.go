@@ -45,9 +45,8 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	sess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(dbName)
-
-	if !ok {
+	dbData, err := sess.GetDbData(ctx, dbName)
+	if err != nil {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
@@ -84,14 +83,14 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	// The first argument should be the branch name.
 	branchName := apr.Arg(0)
 
-	ddb, ok := sess.GetDoltDB(dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	ddb, err := sess.GetDoltDB(ctx, dbName)
+	if err != nil {
+		return nil, err
 	}
 
-	root, ok := sess.GetRoot(dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	root, err := sess.GetRoot(ctx, dbName)
+	if err != nil {
+		return nil, err
 	}
 
 	hasConflicts, err := root.HasConflicts(ctx)

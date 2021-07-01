@@ -63,10 +63,11 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	dbName := ctx.GetCurrentDatabase()
-	ddb, ok := sqle.DSessFromSess(ctx.Session).GetDoltDB(dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	dbData, err := sqle.DSessFromSess(ctx.Session).GetDbData(ctx, dbName)
+	if err != nil {
+		return nil, err
 	}
+	ddb := dbData.Ddb
 
 	var cm *doltdb.Commit
 	if strings.ToUpper(name) == "HEAD" {

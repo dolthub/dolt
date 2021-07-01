@@ -48,7 +48,7 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
-	GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool)
+	GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool, error)
 }
 
 // Database implements sql.Database for a dolt DB.
@@ -91,7 +91,10 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 
 	// When we begin the transaction, we must synchronize the state of this session with the global state for the
 	// current head ref. Any pending transaction has already been committed before this happens.
-	dbState, _ := dsess.lookupDbState(db.Name())
+	dbState, err := dsess.lookupDbState(ctx, db.Name())
+	if err != nil {
+		return nil, err
+	}
 	wsRef := dbState.workingRef
 
 	ws, err := db.ddb.ResolveWorkingSet(ctx, wsRef)
@@ -223,7 +226,10 @@ func (db Database) DbData() env.DbData {
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
-	tempTableRootValue, tempRootExists := db.GetTemporaryTablesRoot(ctx)
+	tempTableRootValue, tempRootExists, err := db.GetTemporaryTablesRoot(ctx)
+	if err != nil {
+		return nil, false, err
+	}
 	if tempRootExists {
 		tbl, tempTableFound, err := db.getTable(ctx, tempTableRootValue, tblName, true)
 		if err != nil {
@@ -515,17 +521,25 @@ var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	dbState, ok := dsess.lookupDbState(db.Name())
-	if !ok {
-		return nil, fmt.Errorf("no root value found in session")
+	dbState, err := dsess.lookupDbState(ctx, db.Name())
+	if err != nil {
+		return nil, err
 	}
 
 	return dbState.workingRoot, nil
 }
 
-func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, bool) {
+func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, bool, error) {
 	dsess := DSessFromSess(ctx.Session)
-	return dsess.GetTempTableRootValue(ctx, db.Name())
+	dbstate, err := dsess.lookupDbState(ctx, db.Name())
+	if err != nil {
+		return nil, false, err
+	}
+	if dbstate.tempTableRoot == nil {
+		return nil, false, nil
+	}
+
+	return dbstate.tempTableRoot, true, nil
 }
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
@@ -570,7 +584,10 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	// Temporary Tables Get Precedence over schema tables
-	tempTableRoot, tempRootExists := db.GetTemporaryTablesRoot(ctx)
+	tempTableRoot, tempRootExists, err := db.GetTemporaryTablesRoot(ctx)
+	if err != nil {
+		return err
+	}
 	if tempRootExists {
 		tempTableExists, err := tempTableRoot.HasTable(ctx, tableName)
 		if err != nil {
@@ -697,16 +714,16 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch 
 func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	// Get temporary root value
 	dsess := DSessFromSess(ctx.Session)
-	tempTableRootValue, exists := db.GetTemporaryTablesRoot(ctx)
-
+	tempTableRootValue, exists, err := db.GetTemporaryTablesRoot(ctx)
+	if err != nil {
+		return err
+	}
 	// create the root value only when needed.
 	if !exists {
-		err := dsess.CreateTemporaryTablesRoot(ctx, db.Name(), db.GetDoltDB())
+		tempTableRootValue, err = dsess.CreateTemporaryTablesRoot(ctx, db.Name(), db.GetDoltDB())
 		if err != nil {
 			return err
 		}
-
-		tempTableRootValue, _ = db.GetTemporaryTablesRoot(ctx)
 	}
 
 	doltSch, err := sqlutil.ToDoltSchema(ctx, tempTableRootValue, tableName, sch, nil)
@@ -779,7 +796,10 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db Database) Flush(ctx *sql.Context) error {
 	dsess := DSessFromSess(ctx.Session)
-	dbState, _ := dsess.lookupDbState(db.Name())
+	dbState, err := dsess.lookupDbState(ctx, db.Name())
+	if err != nil {
+		return err
+	}
 	editSession := dbState.editSession
 
 	newRoot, err := editSession.Flush(ctx)
@@ -998,7 +1018,11 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 
 	// If rows exist, then grab the highest id and add 1 to get the new id
 	indexToUse := int64(1)
-	te, err := db.TableEditSession(ctx, tbl.IsTemporary()).GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
+	ts, err := db.TableEditSession(ctx, tbl.IsTemporary())
+	if err != nil {
+		return err
+	}
+	te, err := ts.GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
 	if err != nil {
 		return err
 	}
@@ -1062,12 +1086,15 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 }
 
 // TableEditSession returns the TableEditSession for this database from the given context.
-func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) *editor.TableEditSession {
-	dbState, _ := DSessFromSess(ctx.Session).lookupDbState(db.name)
-	if isTemporary {
-		return dbState.tempTableEditSession
+func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (*editor.TableEditSession, error) {
+	dbState, err := DSessFromSess(ctx.Session).lookupDbState(ctx, db.name)
+	if err != nil {
+		return nil, err
 	}
-	return dbState.editSession
+	if isTemporary {
+		return dbState.tempTableEditSession, nil
+	}
+	return dbState.editSession, nil
 }
 
 // GetAllTemporaryTables returns all temporary tables

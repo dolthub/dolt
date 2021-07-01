@@ -84,20 +84,17 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 	sess := sqle.DSessFromSess(ctx.Session)
 	dbName := ctx.GetCurrentDatabase()
 
-	dbData, ok := sess.GetDbData(dbName)
-	if !ok {
-		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-	doltDB, ok := sess.GetDoltDB(dbName)
-	if !ok {
-		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	left, err = doltDB.Resolve(ctx, lcs, dbData.Rsr.CWBHeadRef())
+	dbData, err := sess.GetDbData(ctx, dbName)
 	if err != nil {
 		return nil, nil, err
 	}
-	right, err = doltDB.Resolve(ctx, rcs, dbData.Rsr.CWBHeadRef())
+	ddb := dbData.Ddb
+
+	left, err = ddb.Resolve(ctx, lcs, dbData.Rsr.CWBHeadRef())
+	if err != nil {
+		return nil, nil, err
+	}
+	right, err = ddb.Resolve(ctx, rcs, dbData.Rsr.CWBHeadRef())
 	if err != nil {
 		return nil, nil, err
 	}

@@ -72,6 +72,6 @@ func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
 	return db.RootValue, nil
 }
 
-func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool) {
+func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool, error) {
 	panic("UserSpaceDatabase should not contain any temporary tables")
 }

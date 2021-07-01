@@ -163,7 +163,10 @@ func (t *DoltTable) doltTable(ctx *sql.Context) (*doltdb.Table, error) {
 // is whether this is a temporary table or not.
 func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	if t.temporary {
-		root, ok := t.db.GetTemporaryTablesRoot(ctx)
+		root, ok, err := t.db.GetTemporaryTablesRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, fmt.Errorf("error: manipulating temporary table root when it does not exist")
 		}

@@ -22,6 +22,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
 const (
@@ -41,14 +43,19 @@ func init() {
 	}
 }
 
+type RevisionDatabaseProvider interface {
+	DatabaseAtRevision(name string) (sql.Database, InitialDbState, bool)
+}
+
 type DoltDatabaseProvider struct {
-	databases   map[string]sql.Database
-	revisionDBs map[string]Database
+	databases map[string]sql.Database
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
+var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
+var _ RevisionDatabaseProvider = DoltDatabaseProvider{}
 
-func NewDoltDatabaseProvider(databases ...Database) sql.MutableDatabaseProvider {
+func NewDoltDatabaseProvider(databases ...Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[db.Name()] = db
@@ -64,8 +71,9 @@ func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error)
 	}
 
 	if dbRevisionsEnabled { // feature flagged
-		db, _, ok = p.databaseAtRevision(name)
+		db, _, ok = p.DatabaseAtRevision(name)
 		if ok {
+			p.databases[name] = db
 			return db, err
 		}
 	}
@@ -96,11 +104,11 @@ func (p DoltDatabaseProvider) DropDatabase(name string) {
 	delete(p.databases, name)
 }
 
-func (p DoltDatabaseProvider) databaseAtRevision(name string) (sql.Database, *doltdb.RootValue, bool) {
+func (p DoltDatabaseProvider) DatabaseAtRevision(name string) (db sql.Database, init InitialDbState, ok bool) {
 	ctx := context.Background()
 
 	if !strings.Contains(name, dbRevisionDelimiter) {
-		return nil, nil, false
+		return nil, InitialDbState{}, false
 	}
 
 	parts := strings.SplitN(name, dbRevisionDelimiter, 2)
@@ -108,69 +116,120 @@ func (p DoltDatabaseProvider) databaseAtRevision(name string) (sql.Database, *do
 
 	candidate, ok := p.databases[dbName]
 	if !ok {
-		return nil, nil, false
+		return nil, InitialDbState{}, false
 	}
-	db, ok := candidate.(Database)
+	srcDb, ok := candidate.(Database)
 	if !ok {
-		return nil, nil, false
+		return nil, InitialDbState{}, false
 	}
 
-	readOnly := true
-	if isBranch(ctx, db.ddb, revSpec) {
+	var err error
+	if br, ok := branchFromRevSpec(ctx, srcDb.ddb, revSpec); ok {
 		// if the requested revision is a branch we can
 		// write to it, otherwise make read-only
-		readOnly = false
+		db, init, err = dbRevisionForBranch(ctx, srcDb, br)
+	} else if doltdb.IsValidCommitHash(revSpec) {
+		db, init, err = dbRevisionForCommit(ctx, srcDb, revSpec)
+	}
+	if err != nil {
+		return nil, InitialDbState{}, false
 	}
 
-	var root *doltdb.RootValue
-	db, root, ok = makeDatabaseAtRevision(ctx, db, revSpec)
-	if !ok {
-		return nil, nil, false
-	}
-
-	if readOnly {
-		return ReadOnlyDatabase{Database: db}, root, ok
-	}
-	return db, nil, ok
+	return db, init, ok
 }
 
-func isBranch(ctx context.Context, ddb *doltdb.DoltDB, name string) bool {
+func branchFromRevSpec(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) (ref.BranchRef, bool) {
 	branches, err := ddb.GetBranches(ctx)
 	if err != nil {
-		return false
+		return ref.BranchRef{}, false
 	}
 
-	for _, branch := range branches {
-		if name == branch.String() {
-			return true
+	for _, br := range branches {
+		if revSpec == br.String() {
+			return br.(ref.BranchRef), true
 		}
 	}
-	return false
+
+	return ref.BranchRef{}, false
 }
 
-func makeDatabaseAtRevision(ctx context.Context, srcDb Database, revSpec string) (Database, *doltdb.RootValue, bool) {
-	spec, err := doltdb.NewCommitSpec(revSpec)
+func dbRevisionForBranch(ctx context.Context, srcDb Database, branch ref.BranchRef) (Database, InitialDbState, error) {
+	cm, err := srcDb.ddb.ResolveCommitRef(ctx, branch)
 	if err != nil {
-		return Database{}, nil, false
+		return Database{}, InitialDbState{}, err
 	}
 
-	cm, err := srcDb.ddb.Resolve(ctx, spec, srcDb.rsr.CWBHeadRef())
+	wsRef, err := ref.WorkingSetRefForHead(branch)
 	if err != nil {
-		return Database{}, nil, false
+		return Database{}, InitialDbState{}, err
 	}
 
-	root, err := cm.GetRootValue()
+	ws, err := srcDb.ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
-		return Database{}, nil, false
+		return Database{}, InitialDbState{}, err
 	}
+	root := ws.RootValue()
 
+	name := srcDb.Name() + dbRevisionDelimiter + branch.String()
 	db := Database{
-		name: srcDb.Name() + dbRevisionDelimiter + revSpec,
+		name: name,
 		ddb:  srcDb.ddb,
 		rsr:  srcDb.rsr,
 		rsw:  srcDb.rsw,
 		drw:  srcDb.drw,
 	}
 
-	return db, root, true
+	init := InitialDbState{
+		Db:          db,
+		HeadCommit:  cm,
+		WorkingRoot: root,
+		DbData: env.DbData{
+			Ddb: srcDb.ddb,
+			Rsw: srcDb.rsw,
+			Rsr: srcDb.rsr,
+			Drw: srcDb.drw,
+		},
+	}
+
+	return db, init, nil
+}
+
+func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (ReadOnlyDatabase, InitialDbState, error) {
+	spec, err := doltdb.NewCommitSpec(revSpec)
+	if err != nil {
+		return ReadOnlyDatabase{}, InitialDbState{}, err
+	}
+
+	cm, err := srcDb.ddb.Resolve(ctx, spec, srcDb.rsr.CWBHeadRef())
+	if err != nil {
+		return ReadOnlyDatabase{}, InitialDbState{}, err
+	}
+
+	root, err := cm.GetRootValue()
+	if err != nil {
+		return ReadOnlyDatabase{}, InitialDbState{}, err
+	}
+
+	name := srcDb.Name() + dbRevisionDelimiter + revSpec
+	db := ReadOnlyDatabase{Database: Database{
+		name: name,
+		ddb:  srcDb.ddb,
+		rsr:  srcDb.rsr,
+		rsw:  srcDb.rsw,
+		drw:  srcDb.drw,
+	}}
+
+	init := InitialDbState{
+		Db:          db,
+		HeadCommit:  cm,
+		WorkingRoot: root,
+		DbData: env.DbData{
+			Ddb: srcDb.ddb,
+			Rsw: srcDb.rsw,
+			Rsr: srcDb.rsr,
+			Drw: srcDb.drw,
+		},
+	}
+
+	return db, init, nil
 }

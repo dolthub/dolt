@@ -45,10 +45,9 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 	}
 
 	dSess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
-
-	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
+	dbData, err := dSess.GetDbData(ctx, dbName)
+	if err != nil {
+		return nil, err
 	}
 
 	ap := cli.CreateCheckoutArgParser()

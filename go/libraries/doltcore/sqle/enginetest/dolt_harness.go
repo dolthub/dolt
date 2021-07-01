@@ -49,7 +49,13 @@ var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
 var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
-	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	session, err := sqle.NewDoltSession(
+		sql.NewEmptyContext(),
+		enginetest.NewBaseSession(),
+		"test",
+		"email@test.com",
+		sqle.NewDoltDatabaseProvider(),
+	)
 	require.NoError(t, err)
 	return &DoltHarness{
 		t:              t,
@@ -128,7 +134,14 @@ func (d *DoltHarness) NewContext() *sql.Context {
 }
 
 func (d DoltHarness) NewSession() *sql.Context {
-	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	pro := sqle.NewDoltDatabaseProvider()
+	session, err := sqle.NewDoltSession(
+		sql.NewEmptyContext(),
+		enginetest.NewBaseSession(),
+		"test",
+		"email@test.com",
+		pro,
+	)
 	require.NoError(d.t, err)
 
 	d.setTransactionSessionVar(session, d.transactionsEnabled)
@@ -171,7 +184,14 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	//  the same name, the first write query will panic on dangling references in the noms layer. Not sure why this is
 	//  happening, but it only happens as a result of this test setup.
 	var err error
-	d.session, err = sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	pro := sqle.NewDoltDatabaseProvider()
+	d.session, err = sqle.NewDoltSession(
+		sql.NewEmptyContext(),
+		enginetest.NewBaseSession(),
+		"test",
+		"email@test.com",
+		pro,
+	)
 	require.NoError(d.t, err)
 
 	d.setTransactionSessionVar(d.session, d.transactionsEnabled)

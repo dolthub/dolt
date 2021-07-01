@@ -48,13 +48,13 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	dbName := sess.GetCurrentDatabase()
-	ddb, ok := sess.GetDoltDB(dbName)
-	if !ok {
+	ddb, err := sess.GetDoltDB(ctx, dbName)
+	if err != nil {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	root, ok := sess.GetRoot(dbName)
-	if !ok {
+	root, err := sess.GetRoot(ctx, dbName)
+	if err != nil {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 

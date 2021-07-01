@@ -244,7 +244,7 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 
 	db := dsqle.NewDatabase(dbName, dEnv.DbData())
 
-	cat := sql.NewCatalog()
+	cat := sql.NewCatalogWithDbProvider(dsqle.NewDoltDatabaseProvider(db))
 	err = cat.Register(dfunctions.DoltFunctions...)
 	if err != nil {
 		return nil, nil, err
