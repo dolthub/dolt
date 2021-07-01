@@ -16,14 +16,17 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
@@ -74,7 +77,7 @@ func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error)
 		db, _, ok = p.DatabaseAtRevision(name)
 		if ok {
 			p.databases[name] = db
-			return db, err
+			return db, nil
 		}
 	}
 
@@ -104,7 +107,7 @@ func (p DoltDatabaseProvider) DropDatabase(name string) {
 	delete(p.databases, name)
 }
 
-func (p DoltDatabaseProvider) DatabaseAtRevision(name string) (db sql.Database, init InitialDbState, ok bool) {
+func (p DoltDatabaseProvider) DatabaseAtRevision(name string) (sql.Database, InitialDbState, bool) {
 	ctx := context.Background()
 
 	if !strings.Contains(name, dbRevisionDelimiter) {
@@ -123,61 +126,66 @@ func (p DoltDatabaseProvider) DatabaseAtRevision(name string) (db sql.Database, 
 		return nil, InitialDbState{}, false
 	}
 
-	var err error
-	if br, ok := branchFromRevSpec(ctx, srcDb.ddb, revSpec); ok {
-		// if the requested revision is a branch we can
+	if isBranch(ctx, srcDb.ddb, revSpec) {
+		// if the requested revision is a br we can
 		// write to it, otherwise make read-only
-		db, init, err = dbRevisionForBranch(ctx, srcDb, br)
-	} else if doltdb.IsValidCommitHash(revSpec) {
-		db, init, err = dbRevisionForCommit(ctx, srcDb, revSpec)
-	}
-	if err != nil {
-		return nil, InitialDbState{}, false
-	}
-
-	return db, init, ok
-}
-
-func branchFromRevSpec(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) (ref.BranchRef, bool) {
-	branches, err := ddb.GetBranches(ctx)
-	if err != nil {
-		return ref.BranchRef{}, false
-	}
-
-	for _, br := range branches {
-		if revSpec == br.String() {
-			return br.(ref.BranchRef), true
+		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
+		if err == nil {
+			return db, init, true
 		}
 	}
 
-	return ref.BranchRef{}, false
+	if doltdb.IsValidCommitHash(revSpec) {
+		db, init, err := dbRevisionForCommit(ctx, srcDb, revSpec)
+		if err == nil {
+			return db, init, true
+		}
+	}
+
+	return nil, InitialDbState{}, false
 }
 
-func dbRevisionForBranch(ctx context.Context, srcDb Database, branch ref.BranchRef) (Database, InitialDbState, error) {
+func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {
+	branches, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return false
+	}
+
+	for _, br := range branches {
+		if revSpec == br.GetPath() {
+			return true
+		}
+	}
+
+	return false
+}
+
+func dbRevisionForBranch(ctx context.Context, srcDb Database, name string) (ReadOnlyDatabase, InitialDbState, error) {
+	branch := ref.NewBranchRef(name)
 	cm, err := srcDb.ddb.ResolveCommitRef(ctx, branch)
 	if err != nil {
-		return Database{}, InitialDbState{}, err
+		return ReadOnlyDatabase{}, InitialDbState{}, err
 	}
 
 	wsRef, err := ref.WorkingSetRefForHead(branch)
 	if err != nil {
-		return Database{}, InitialDbState{}, err
+		return ReadOnlyDatabase{}, InitialDbState{}, err
 	}
 
 	ws, err := srcDb.ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
-		return Database{}, InitialDbState{}, err
+		return ReadOnlyDatabase{}, InitialDbState{}, err
 	}
 	root := ws.RootValue()
 
-	name := srcDb.Name() + dbRevisionDelimiter + branch.String()
-	db := Database{
-		name: name,
+	dbName := srcDb.Name() + dbRevisionDelimiter + name
+	db := ReadOnlyDatabase{Database: Database{
+		name: dbName,
 		ddb:  srcDb.ddb,
-		rsr:  srcDb.rsr,
-		rsw:  srcDb.rsw,
-		drw:  srcDb.drw,
-	}
+		rsr:  errRepoState{},
+		rsw:  errRepoState{},
+		drw:  errRepoState{},
+	}}
 
 	init := InitialDbState{
 		Db:          db,
@@ -185,9 +193,9 @@ func dbRevisionForBranch(ctx context.Context, srcDb Database, branch ref.BranchR
 		WorkingRoot: root,
 		DbData: env.DbData{
 			Ddb: srcDb.ddb,
-			Rsw: srcDb.rsw,
-			Rsr: srcDb.rsr,
-			Drw: srcDb.drw,
+			Rsw: errRepoState{},
+			Rsr: errRepoState{},
+			Drw: errRepoState{},
 		},
 	}
 
@@ -214,9 +222,9 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 	db := ReadOnlyDatabase{Database: Database{
 		name: name,
 		ddb:  srcDb.ddb,
-		rsr:  srcDb.rsr,
-		rsw:  srcDb.rsw,
-		drw:  srcDb.drw,
+		rsr:  errRepoState{},
+		rsw:  errRepoState{},
+		drw:  errRepoState{},
 	}}
 
 	init := InitialDbState{
@@ -225,11 +233,83 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		WorkingRoot: root,
 		DbData: env.DbData{
 			Ddb: srcDb.ddb,
-			Rsw: srcDb.rsw,
-			Rsr: srcDb.rsr,
-			Drw: srcDb.drw,
+			Rsw: errRepoState{},
+			Rsr: errRepoState{},
+			Drw: errRepoState{},
 		},
 	}
 
 	return db, init, nil
+}
+
+type errRepoState struct{}
+
+var _ env.RepoStateReader = errRepoState{}
+var _ env.RepoStateWriter = errRepoState{}
+var _ env.DocsReadWriter = errRepoState{}
+
+var errDont = errors.New("no don't be doing that")
+
+func (s errRepoState) CWBHeadRef() ref.DoltRef {
+	panic(errDont)
+}
+
+func (s errRepoState) CWBHeadSpec() *doltdb.CommitSpec {
+	panic(errDont)
+}
+
+func (s errRepoState) CWBHeadHash(ctx context.Context) (hash.Hash, error) {
+	return hash.Hash{}, errDont
+}
+
+func (s errRepoState) WorkingHash() hash.Hash {
+	panic(errDont)
+}
+
+func (s errRepoState) StagedHash() hash.Hash {
+	panic(errDont)
+}
+
+func (s errRepoState) IsMergeActive() bool {
+	panic(errDont)
+}
+
+func (s errRepoState) GetMergeCommit() string {
+	panic(errDont)
+}
+
+func (s errRepoState) GetPreMergeWorking() string {
+	panic(errDont)
+}
+
+func (s errRepoState) SetStagedHash(context.Context, hash.Hash) error {
+	return errDont
+}
+
+func (s errRepoState) SetWorkingHash(context.Context, hash.Hash) error {
+	return errDont
+}
+
+func (s errRepoState) SetCWBHeadRef(context.Context, ref.MarshalableRef) error {
+	return errDont
+}
+
+func (s errRepoState) AbortMerge() error {
+	return errDont
+}
+
+func (s errRepoState) ClearMerge() error {
+	return errDont
+}
+
+func (s errRepoState) StartMerge(commitStr string) error {
+	return errDont
+}
+
+func (s errRepoState) GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error) {
+	return nil, errDont
+}
+
+func (s errRepoState) WriteDocsToDisk(docs doltdocs.Docs) error {
+	return errDont
 }

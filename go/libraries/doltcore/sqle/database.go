@@ -121,17 +121,12 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 }
 
 func (db Database) setHeadHash(ctx *sql.Context, ref ref.WorkingSetRef) error {
-	// TODO: use the session HEAD ref here instead of the repo state one
-	// headRef, err := ref.ToHeadRef()
-	// if err != nil {
-	// 	return err
-	// }
-
-	headCommit, err := db.ddb.Resolve(ctx, db.rsr.CWBHeadSpec(), db.rsr.CWBHeadRef())
+	dbState, err := DSessFromSess(ctx.Session).lookupDbState(ctx, db.Name())
 	if err != nil {
 		return err
 	}
-	headHash, err := headCommit.HashOf()
+
+	headHash, err := dbState.headCommit.HashOf()
 	if err != nil {
 		return err
 	}
