@@ -629,8 +629,7 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 		return nil, err
 	}
 
-	// If the current session cannot automatically reserve the next auto increment key, keep iterating values until its
-	// done.
+	// If the current session cannot requests its current key than ask for the next one and request again.
 	if !ok {
 		next, err := autoIncTracker.Next(t.tableName)
 		if err != nil {
