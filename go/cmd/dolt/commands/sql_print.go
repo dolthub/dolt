@@ -449,7 +449,7 @@ func (tps *tabularPipelineStages) getFixWidthStageFunc(samples int) func(context
 				}
 
 				// clear the buffer
-				buffer = make([]pipeline.ItemWithProps, 0, samples)
+				buffer = buffer[:0]
 				return ret, nil
 			}
 

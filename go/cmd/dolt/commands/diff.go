@@ -526,7 +526,8 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 	}
 
 	if !schema.ColCollsAreCompatible(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		panic("primary key sets must be the same")
+		pkSetVErr := errhand.BuildDError("cannot diff tables with different primary key sets").Build()
+		return errhand.VerboseError(pkSetVErr)
 	}
 	pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
 	cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr))

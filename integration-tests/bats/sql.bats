@@ -1263,6 +1263,14 @@ SQL
     [ "${lines[20]}" = "20" ]
 }
 
+@test "sql: update against joins fail with error" {
+    dolt sql -q "CREATE TABLE mytable(pk int primary key, val int);"
+
+    run dolt sql -q "UPDATE mytable one, mytable two SET one.val = 1 WHERE one.pk = two.pk + 1;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "table doesn't support UPDATE" ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }
