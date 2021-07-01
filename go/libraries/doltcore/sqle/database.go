@@ -87,11 +87,12 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return DisabledTransaction{}, nil
 	}
 
-	dsession := DSessFromSess(ctx.Session)
+	dsess := DSessFromSess(ctx.Session)
 
 	// When we begin the transaction, we must synchronize the state of this session with the global state for the
 	// current head ref. Any pending transaction has already been committed before this happens.
-	wsRef := dsession.dbStates[ctx.GetCurrentDatabase()].workingRef
+	dbState, _ := dsess.lookupDbState(db.Name())
+	wsRef := dbState.workingRef
 
 	ws, err := db.ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
@@ -514,7 +515,7 @@ var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	dbState, ok := dsess.dbStates[db.name]
+	dbState, ok := dsess.lookupDbState(db.Name())
 	if !ok {
 		return nil, fmt.Errorf("no root value found in session")
 	}
@@ -778,7 +779,8 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db Database) Flush(ctx *sql.Context) error {
 	dsess := DSessFromSess(ctx.Session)
-	editSession := dsess.dbStates[db.name].editSession
+	dbState, _ := dsess.lookupDbState(db.Name())
+	editSession := dbState.editSession
 
 	newRoot, err := editSession.Flush(ctx)
 	if err != nil {
@@ -792,7 +794,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 
 	// Flush any changes made to temporary tables
 	// TODO: Shouldn't always be updating both roots. Needs to update either both roots or neither of them, atomically
-	tempTableEditSession := dsess.dbStates[db.Name()].tempTableEditSession
+	tempTableEditSession := dbState.tempTableEditSession
 	if tempTableEditSession != nil {
 		newTempTableRoot, err := tempTableEditSession.Flush(ctx)
 		if err != nil {
@@ -1061,7 +1063,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) *editor.TableEditSession {
-	dbState := DSessFromSess(ctx.Session).dbStates[db.name]
+	dbState, _ := DSessFromSess(ctx.Session).lookupDbState(db.name)
 	if isTemporary {
 		return dbState.tempTableEditSession
 	}
