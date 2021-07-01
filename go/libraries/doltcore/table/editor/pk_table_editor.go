@@ -449,6 +449,10 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 				less, err = insertVal.Less(te.nbf, te.autoIncVal)
 			}
 
+			if err != nil {
+				return err
+			}
+
 			if !less {
 				te.autoIncVal = types.Round(insertVal)
 
