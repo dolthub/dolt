@@ -29,13 +29,13 @@ import (
 const (
 	dbRevisionDelimiter = "/"
 
-	dbRevisionsEnabledSysVar = "dolt_db_revisions_enabled"
+	enableDbRevisionsEnvKey = "DOLT_ENABLE_DB_REVISIONS"
 )
 
 var dbRevisionsEnabled = false
 
 func init() {
-	val, ok := os.LookupEnv(dbRevisionsEnabledSysVar)
+	val, ok := os.LookupEnv(enableDbRevisionsEnvKey)
 	if ok {
 		if strings.ToLower(val) == "true" {
 			dbRevisionsEnabled = true
