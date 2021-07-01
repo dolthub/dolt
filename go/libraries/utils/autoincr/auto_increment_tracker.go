@@ -12,20 +12,21 @@ type AutoIncrementTracker interface {
 // It is primarily used for concurrent transactions on an auto incremented table.
 func NewAutoIncrementTracker() AutoIncrementTracker {
 	return &autoIncrementTracker{
-		tables: make(map[string]uint64),
+		tables: make(map[string]interface{}),
 		written: make(map[string]bool),
 	}
 }
 
 type autoIncrementTracker struct {
-	tables map[string]uint64
+	tables map[string]interface{}
 	written map[string]bool
 }
 
 var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
 
 // Reserve tells an integrator whether the wanted auto increment key toReserved has already been used by another transaction.
-// A key has already been used if the tracker has a larger or equal to value.
+// A key has already been used if the tracker has a larger or equal to value. Force is used when an autoincrement value
+// actually written to a table.
 func (a *autoIncrementTracker) Reserve(tableName string, toReserveKey interface{}, force bool) (bool, error) {
 	newVal, err := ConvertIntTypeToUint(toReserveKey)
 	if err != nil {
@@ -45,7 +46,12 @@ func (a *autoIncrementTracker) Reserve(tableName string, toReserveKey interface{
 		return true, nil
 	}
 
-	if newVal <= currVal {
+	currentValTyped, err := ConvertIntTypeToUint(currVal)
+	if err != nil {
+		return false, err
+	}
+
+	if newVal <= currentValTyped {
 		return false, nil
 	}
 
@@ -74,6 +80,10 @@ func ConvertIntTypeToUint(val interface{}) (uint64, error) {
 		return uint64(t), nil
 	case uint64:
 		return t, nil
+	case float32:
+		return uint64(t), nil
+	case float64:
+		return uint64(t), nil
 	default:
 		return 0, fmt.Errorf("error: auto increment is not int type")
 	}
