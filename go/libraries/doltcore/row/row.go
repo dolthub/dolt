@@ -57,8 +57,7 @@ type Row interface {
 	// TaggedValues returns the row as TaggedValues.
 	TaggedValues() (TaggedValues, error)
 
-	ReduceToIndexPartialKey(idx schema.Index) (types.Tuple, error)
-
+	// ReduceToIndexKeys returns full and partial index keys
 	ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, error)
 }
 
@@ -186,25 +185,6 @@ func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstra
 	return badCol, badCnst, err
 }
 
-func AreEqual(row1, row2 Row, sch schema.Schema) bool {
-	if row1 == nil && row2 == nil {
-		return true
-	} else if row1 == nil || row2 == nil {
-		return false
-	}
-
-	for _, tag := range sch.GetAllCols().Tags {
-		val1, _ := row1.GetColVal(tag)
-		val2, _ := row2.GetColVal(tag)
-
-		if !valutil.NilSafeEqCheck(val1, val2) {
-			return false
-		}
-	}
-
-	return true
-}
-
 // ReduceToIndexKeysFromTagMap creates a full key and a partial key from the given map of tags (first tuple being the
 // full key). Please refer to the note in the index editor for more information regarding partial keys.
 func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tagToVal map[uint64]types.Value) (types.Tuple, types.Tuple, error) {
@@ -225,4 +205,36 @@ func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tag
 		return types.Tuple{}, types.Tuple{}, err
 	}
 	return fullKey, partialKey, nil
+}
+
+// ReduceToIndexPartialKey creates an index record from a primary storage record.
+func ReduceToIndexPartialKey(idx schema.Index, r Row) (types.Tuple, error) {
+	var vals []types.Value
+	for _, tag := range idx.IndexedColumnTags() {
+		val, ok := r.GetColVal(tag)
+		if !ok {
+			val = types.NullValue
+		}
+		vals = append(vals, types.Uint(tag), val)
+	}
+	return types.NewTuple(r.Format(), vals...)
+}
+
+func AreEqual(row1, row2 Row, sch schema.Schema) bool {
+	if row1 == nil && row2 == nil {
+		return true
+	} else if row1 == nil || row2 == nil {
+		return false
+	}
+
+	for _, tag := range sch.GetAllCols().Tags {
+		val1, _ := row1.GetColVal(tag)
+		val2, _ := row2.GetColVal(tag)
+
+		if !valutil.NilSafeEqCheck(val1, val2) {
+			return false
+		}
+	}
+
+	return true
 }

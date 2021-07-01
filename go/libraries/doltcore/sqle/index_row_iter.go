@@ -129,9 +129,6 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context, epoch int) {
 			return
 		}
 
-		//x, err := i.processKey(indexKey)
-		//fmt.Print(x)
-
 		lookup := toLookup{
 			idx:        idx,
 			t:          indexKey,

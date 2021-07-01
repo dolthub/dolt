@@ -82,7 +82,7 @@ func TestIndexEditorConcurrency(t *testing.T) {
 					1: types.Int(val),
 				})
 				require.NoError(t, err)
-				fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+				fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
 				require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 				wg.Done()
@@ -103,10 +103,10 @@ func TestIndexEditorConcurrency(t *testing.T) {
 					1: types.Int(val + 1),
 				})
 				require.NoError(t, err)
-				oldFullKey, oldPartialKey, err := row.ReduceToIndexKeys(index, dOldRow)
+				oldFullKey, oldPartialKey, err := dOldRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
 				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey))
-				newFullKey, newPartialKey, err := row.ReduceToIndexKeys(index, dNewRow)
+				newFullKey, newPartialKey, err := dNewRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
 				require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey))
 				wg.Done()
@@ -122,7 +122,7 @@ func TestIndexEditorConcurrency(t *testing.T) {
 					1: types.Int(val),
 				})
 				require.NoError(t, err)
-				fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+				fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
 				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey))
 				wg.Done()
@@ -173,7 +173,7 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 			1: types.Int(i),
 		})
 		require.NoError(t, err)
-		fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+		fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
 		require.NoError(t, err)
 		require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 	}
@@ -197,10 +197,10 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 					1: types.Int(val + 1),
 				})
 				require.NoError(t, err)
-				oldFullKey, oldPartialKey, err := row.ReduceToIndexKeys(index, dOldRow)
+				oldFullKey, oldPartialKey, err := dOldRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
 				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey))
-				newFullKey, newPartialKey, err := row.ReduceToIndexKeys(index, dNewRow)
+				newFullKey, newPartialKey, err := dNewRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
 				require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey))
 				wg.Done()
@@ -215,7 +215,7 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 					1: types.Int(val),
 				})
 				require.NoError(t, err)
-				fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+				fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
 				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey))
 				wg.Done()
@@ -265,7 +265,7 @@ func TestIndexEditorUniqueMultipleNil(t *testing.T) {
 			1: types.Int(i),
 		})
 		require.NoError(t, err)
-		fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+		fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
 		require.NoError(t, err)
 		require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 	}
@@ -312,7 +312,7 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 			1: types.Int(i),
 		})
 		require.NoError(t, err)
-		fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+		fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
 		require.NoError(t, err)
 		require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 	}
@@ -326,7 +326,7 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 			1: types.Int(i),
 		})
 		require.NoError(t, err)
-		fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+		fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
 		require.NoError(t, err)
 		require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey))
 	}
@@ -375,7 +375,7 @@ func TestIndexEditorUniqueErrorDoesntPersist(t *testing.T) {
 		1: types.Int(1),
 	})
 	require.NoError(t, err)
-	fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+	fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
 	require.NoError(t, err)
 	require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 	dRow, err = row.New(format, indexSch, row.TaggedValues{
@@ -383,7 +383,7 @@ func TestIndexEditorUniqueErrorDoesntPersist(t *testing.T) {
 		1: types.Int(1),
 	})
 	require.NoError(t, err)
-	fullKey, partialKey, err = row.ReduceToIndexKeys(index, dRow)
+	fullKey, partialKey, err = dRow.ReduceToIndexKeys(index)
 	require.NoError(t, err)
 	require.Error(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 	dRow, err = row.New(format, indexSch, row.TaggedValues{
@@ -391,7 +391,7 @@ func TestIndexEditorUniqueErrorDoesntPersist(t *testing.T) {
 		1: types.Int(2),
 	})
 	require.NoError(t, err)
-	fullKey, partialKey, err = row.ReduceToIndexKeys(index, dRow)
+	fullKey, partialKey, err = dRow.ReduceToIndexKeys(index)
 	require.NoError(t, err)
 	require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey))
 }

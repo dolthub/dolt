@@ -265,7 +265,6 @@ func (r keylessRow) Format() *types.NomsBinFormat {
 	return r.val.Format()
 }
 
-
 // ReduceToIndexKeys creates a full key and a partial key from the given row (first tuple being the full key). Please
 // refer to the note in the index editor for more information regarding partial keys.
 func (r keylessRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, error) {
@@ -295,17 +294,3 @@ func (r keylessRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tupl
 	}
 	return fullKey, partialKey, nil
 }
-
-// ReduceToIndexPartialKey creates an index record from a primary storage record.
-func (r keylessRow) ReduceToIndexPartialKey(idx schema.Index) (types.Tuple, error) {
-	var vals []types.Value
-	for _, tag := range idx.IndexedColumnTags() {
-		val, ok := r.GetColVal(tag)
-		if !ok {
-			val = types.NullValue
-		}
-		vals = append(vals, types.Uint(tag), val)
-	}
-	return types.NewTuple(r.Format(), vals...)
-}
-
