@@ -8,6 +8,7 @@ import (
 type AutoIncrementTracker interface {
 	Request(tableName string, val interface{}) (bool, error)
 	Confirm(tableName string, val interface{})
+	Next(tableName string) (interface{}, error)
 }
 
 // AutoIncrementTracker is a global map that tracks the next auto increment value for each table in each database.
@@ -68,6 +69,25 @@ func (a *autoIncrementTracker) Confirm(tableName string, key interface{}) {
 
 	a.tables[tableName] = key
 	a.written[tableName] = true
+}
+
+func (a *autoIncrementTracker) Next(tableName string) (interface{}, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	val := a.tables[tableName]
+	written := a.written[tableName]
+
+	if !written {
+		return val, nil
+	}
+
+	newVal, err := ConvertIntTypeToUint(val)
+	if err != nil {
+		return nil, err
+	}
+
+	return newVal + 1, nil
 }
 
 func ConvertIntTypeToUint(val interface{}) (uint64, error) {
