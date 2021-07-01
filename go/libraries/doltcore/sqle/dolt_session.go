@@ -819,3 +819,7 @@ func defineSystemVariables(name string) {
 		})
 	}
 }
+
+func (sess *DoltSession) SetCurrentDatabase(dbName string) {
+	sess.Session.SetCurrentDatabase(dbName)
+}

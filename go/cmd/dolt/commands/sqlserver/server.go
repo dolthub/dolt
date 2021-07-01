@@ -170,7 +170,8 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+		dbs := dsqle.DsqlDBsFromSqlDBs(sqlEngine.Catalog.AllDatabases())
+		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbs...)
 
 		if err != nil {
 			return nil, nil, nil, err
@@ -191,7 +192,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 			sql.WithSession(doltSess),
 			sql.WithTracer(tracing.Tracer(ctx)))
 
-		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		for _, db := range dbs {
 			err := db.LoadRootFromRepoState(sqlCtx)
 			if err != nil {
@@ -213,18 +213,4 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 
 		return doltSess, ir, vr, nil
 	}
-}
-
-func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
-	dsqlDBs := make([]dsqle.Database, 0, len(dbs))
-
-	for _, db := range dbs {
-		dsqlDB, ok := db.(dsqle.Database)
-
-		if ok {
-			dsqlDBs = append(dsqlDBs, dsqlDB)
-		}
-	}
-
-	return dsqlDBs
 }

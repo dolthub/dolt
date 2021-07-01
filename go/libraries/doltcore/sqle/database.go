@@ -1155,3 +1155,18 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 
 	return nil
 }
+
+
+func DsqlDBsFromSqlDBs(dbs []sql.Database) []Database {
+	dsqlDBs := make([]Database, 0, len(dbs))
+
+	for _, db := range dbs {
+		dsqlDB, ok := db.(Database)
+
+		if ok {
+			dsqlDBs = append(dsqlDBs, dsqlDB)
+		}
+	}
+
+	return dsqlDBs
+}
