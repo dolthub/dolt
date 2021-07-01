@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -620,12 +619,7 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 		return t.getAutoIncrementValue(ctx)
 	}
 
-	storedVal, err := t.getAutoIncrementValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	stored, err := autoincr.ConvertIntTypeToUint(storedVal)
+	stored, err := t.getAutoIncrementValue(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -36,7 +36,7 @@ func (a *autoIncrementTracker) Request(tableName string, val interface{}) (bool,
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	newVal, err := ConvertIntTypeToUint(val)
+	newVal, err := convertIntTypeToUint(val)
 	if err != nil {
 		return false, err
 	}
@@ -48,7 +48,7 @@ func (a *autoIncrementTracker) Request(tableName string, val interface{}) (bool,
 		return true, nil
 	}
 
-	currentValTyped, err := ConvertIntTypeToUint(currVal)
+	currentValTyped, err := convertIntTypeToUint(currVal)
 	if err != nil {
 		return false, err
 	}
@@ -82,7 +82,7 @@ func (a *autoIncrementTracker) Next(tableName string) (interface{}, error) {
 		return val, nil
 	}
 
-	newVal, err := ConvertIntTypeToUint(val)
+	newVal, err := convertIntTypeToUint(val)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (a *autoIncrementTracker) Next(tableName string) (interface{}, error) {
 	return newVal + 1, nil
 }
 
-func ConvertIntTypeToUint(val interface{}) (uint64, error) {
+func convertIntTypeToUint(val interface{}) (uint64, error) {
 	switch t := val.(type) {
 	case int8:
 		return uint64(t), nil
