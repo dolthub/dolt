@@ -420,7 +420,6 @@ SQL
 
     run dolt sql -q "SELECT * FROM t;" -r csv
     [ "$status" -eq 0 ]
-    echo $output
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
     [[ "${lines[2]}" =~ "2,2" ]] || false
