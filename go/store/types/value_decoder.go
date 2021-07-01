@@ -685,15 +685,13 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 	case StructKind:
 		return r.readStructType(seenStructs)
 	case TupleKind:
-		r.skipTypeInner()
-		return tupleType, nil
-		/*t, err := r.readTypeInner(seenStructs)
+		t, err := r.readTypeInner(seenStructs)
 
 		if err != nil {
 			return nil, err
 		}
 
-		return makeCompoundType(TupleKind, t)*/
+		return makeCompoundType(TupleKind, t)
 	case JSONKind:
 		t, err := r.readTypeInner(seenStructs)
 
