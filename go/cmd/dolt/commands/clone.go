@@ -376,11 +376,12 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	ws, err := dEnv.WorkingSet(ctx)
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branch))
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	ws := doltdb.EmptyWorkingSet(wsRef)
 	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(rootVal).WithStagedRoot(rootVal))
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
