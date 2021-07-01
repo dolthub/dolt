@@ -38,7 +38,7 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	db := NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := NewTestEngine(context.Background(), db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, context.Background(), db, root)
 	require.NoError(t, err)
 
 	_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (

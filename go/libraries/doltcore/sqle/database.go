@@ -91,7 +91,7 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 
 	// When we begin the transaction, we must synchronize the state of this session with the global state for the
 	// current head ref. Any pending transaction has already been committed before this happens.
-	wsRef := dsession.workingSets[ctx.GetCurrentDatabase()]
+	wsRef := dsession.dbStates[ctx.GetCurrentDatabase()].workingRef
 
 	ws, err := db.ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
@@ -246,7 +246,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (dt sql.Table, found bool, err error) {
 	lwrName := strings.ToLower(tblName)
 
-	head, _, err := DSessFromSess(ctx.Session).GetHeadCommit(ctx, db.name)
+	head, err := DSessFromSess(ctx.Session).GetHeadCommit(ctx, db.name)
 	if err != nil {
 		return nil, false, err
 	}
@@ -514,13 +514,12 @@ var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	currRoot, dbRootOk := dsess.roots[db.name]
-
-	if !dbRootOk {
+	dbState, ok := dsess.dbStates[db.name]
+	if !ok {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	return currRoot.root, nil
+	return dbState.workingRoot, nil
 }
 
 func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, bool) {
@@ -555,7 +554,7 @@ func (db Database) LoadRootFromRepoState(ctx *sql.Context) error {
 
 func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	head, _, err := dsess.GetHeadCommit(ctx, db.name)
+	head, err := dsess.GetHeadCommit(ctx, db.name)
 	if err != nil {
 		return nil, err
 	}
@@ -779,7 +778,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db Database) Flush(ctx *sql.Context) error {
 	dsess := DSessFromSess(ctx.Session)
-	editSession := dsess.editSessions[db.name]
+	editSession := dsess.dbStates[db.name].editSession
 
 	newRoot, err := editSession.Flush(ctx)
 	if err != nil {
@@ -793,8 +792,8 @@ func (db Database) Flush(ctx *sql.Context) error {
 
 	// Flush any changes made to temporary tables
 	// TODO: Shouldn't always be updating both roots. Needs to update either both roots or neither of them, atomically
-	tempTableEditSession, sessionExists := dsess.tempTableEditSessions[db.Name()]
-	if sessionExists {
+	tempTableEditSession := dsess.dbStates[db.Name()].tempTableEditSession
+	if tempTableEditSession != nil {
 		newTempTableRoot, err := tempTableEditSession.Flush(ctx)
 		if err != nil {
 			return nil
@@ -1062,20 +1061,19 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) *editor.TableEditSession {
+	dbState := DSessFromSess(ctx.Session).dbStates[db.name]
 	if isTemporary {
-		return DSessFromSess(ctx.Session).tempTableEditSessions[db.name]
+		return dbState.tempTableEditSession
 	}
-	return DSessFromSess(ctx.Session).editSessions[db.name]
+	return dbState.editSession
 }
 
 // GetAllTemporaryTables returns all temporary tables
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
-	dsess := DSessFromSess(ctx.Session)
 
-	tables := make([]sql.Table, 0)
-
-	for _, root := range dsess.tempTableRoots {
-		tNames, err := root.GetTableNames(ctx)
+	var tables []sql.Table
+	for _, dbState := range DSessFromSess(ctx.Session).dbStates {
+		tNames, err := dbState.tempTableRoot.GetTableNames(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -1155,7 +1153,6 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 
 	return nil
 }
-
 
 func DsqlDBsFromSqlDBs(dbs []sql.Database) []Database {
 	dsqlDBs := make([]Database, 0, len(dbs))

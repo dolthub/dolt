@@ -58,7 +58,7 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	head, _, headRoot, err := getHead(ctx, sess, dbName)
+	head, headRoot, err := getHead(ctx, sess, dbName)
 	if err != nil {
 		return nil, err
 	}

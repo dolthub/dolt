@@ -256,12 +256,30 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 	engine := sqle.New(cat, azr, &sqle.Config{Auth: new(auth.None)})
 	engine.AddDatabase(db)
 
-	err = dsess.AddDB(sqlCtx, db, db.DbData())
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	root, err := cm.GetRootValue()
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dbState := dsqle.InitialDbState{
+		Db:          db,
+		HeadCommit:  headCommit,
+		WorkingRoot: root,
+		DbData:      dEnv.DbData(),
+	}
+
+	err = dsess.AddDB(sqlCtx, dbState)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root, err = cm.GetRootValue()
 	if err != nil {
 		return nil, nil, err
 	}

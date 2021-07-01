@@ -34,7 +34,7 @@ import (
 func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
 	db := NewDatabase("dolt", dEnv.DbData())
 
-	engine, ctx, err := NewTestEngine(context.Background(), db, root)
+	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db, root)
 	DSessFromSess(ctx.Session).EnableBatchedMode()
 	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, true)
 	if err != nil {
@@ -102,12 +102,13 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 }
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
-func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
+func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 
 	sqlCtx := NewTestSQLCtx(ctx)
-	DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, db, db.DbData())
+
+	_ = DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(db, dEnv))
 	sqlCtx.SetCurrentDatabase(db.Name())
 	err := db.SetRoot(sqlCtx, root)
 
@@ -124,6 +125,28 @@ func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*s
 	return engine, sqlCtx, nil
 }
 
+func getDbState(db sql.Database, dEnv *env.DoltEnv) InitialDbState {
+	ctx := context.Background()
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		panic(err)
+	}
+
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	return InitialDbState{
+		Db:          db,
+		HeadCommit:  headCommit,
+		WorkingRoot: root,
+		DbData:      dEnv.DbData(),
+	}
+}
+
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
 func ExecuteSelect(dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) ([]sql.Row, error) {
 
@@ -135,7 +158,7 @@ func ExecuteSelect(dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue
 	}
 
 	db := NewDatabase("dolt", dbData)
-	engine, ctx, err := NewTestEngine(context.Background(), db, root)
+	engine, ctx, err := NewTestEngine(dEnv, context.Background(), db, root)
 	if err != nil {
 		return nil, err
 	}

@@ -340,6 +340,20 @@ func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
 	return dEnv.DoltDB.ReadRootValue(ctx, dEnv.RepoState.WorkingHash())
 }
 
+func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
+	workingSetRef, err := ref.WorkingSetRefForHead(dEnv.RepoState.CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+
+	workingSet, err := dEnv.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return workingSet, nil
+}
+
 func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
 	h, err := dEnv.DoltDB.WriteRootValue(ctx, newRoot)
 

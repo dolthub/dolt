@@ -147,7 +147,7 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	sqlDb := dsqle.NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
+	engine, sqlCtx, err := dsqle.NewTestEngine(dEnv, context.Background(), sqlDb, root)
 	require.NoError(t, err)
 
 	_, iter, err := engine.Query(sqlCtx, q.Query)

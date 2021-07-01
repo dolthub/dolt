@@ -81,7 +81,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	head, hh, headRoot, err := getHead(ctx, sess, dbName)
+	head, headRoot, err := getHead(ctx, sess, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +113,11 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	h, err := ddb.WriteRootValue(ctx, mergeRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	hh, err := head.HashOf()
 	if err != nil {
 		return nil, err
 	}
@@ -184,18 +189,18 @@ func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*do
 	return cm, cmh, nil
 }
 
-func getHead(ctx *sql.Context, sess *sqle.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
-	head, hh, err := sess.GetHeadCommit(ctx, dbName)
+func getHead(ctx *sql.Context, sess *sqle.DoltSession, dbName string) (*doltdb.Commit, *doltdb.RootValue, error) {
+	head, err := sess.GetHeadCommit(ctx, dbName)
 	if err != nil {
-		return nil, hash.Hash{}, nil, err
+		return nil, nil, err
 	}
 
 	headRoot, err := head.GetRootValue()
 	if err != nil {
-		return nil, hash.Hash{}, nil, err
+		return nil, nil, err
 	}
 
-	return head, hh, headRoot, nil
+	return head, headRoot, nil
 }
 
 // String implements the Stringer interface.

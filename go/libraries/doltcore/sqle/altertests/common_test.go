@@ -116,7 +116,7 @@ func parseTime(timestampLayout bool, value string) time.Time {
 func executeSelect(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]interface{}, error) {
 	var err error
 	db := sqle.NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := sqle.NewTestEngine(ctx, db, root)
+	engine, sqlCtx, err := sqle.NewTestEngine(dEnv, ctx, db, root)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 
 func executeModify(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
 	db := sqle.NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := sqle.NewTestEngine(ctx, db, root)
+	engine, sqlCtx, err := sqle.NewTestEngine(dEnv, ctx, db, root)
 	if err != nil {
 		return nil, err
 	}

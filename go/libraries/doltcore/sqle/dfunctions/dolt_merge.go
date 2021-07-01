@@ -107,7 +107,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, doltdb.ErrMergeActive
 	}
 
-	head, hh, headRoot, err := getHead(ctx, sess, dbName)
+	head, headRoot, err := getHead(ctx, sess, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,12 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, err
 	}
 
-	returnMsg := fmt.Sprintf("Updating %s..%s", cmh.String(), hh.String())
+	h, err := head.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	returnMsg := fmt.Sprintf("Updating %s..%s", cmh.String(), h.String())
 
 	return returnMsg, nil
 }

@@ -43,7 +43,7 @@ type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
 func executeSelect(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, sql.Schema, error) {
 	var err error
 	db := NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -69,7 +69,7 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 // Runs the query given and returns the error (if any).
 func executeModify(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
 	db := NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
+	engine, sqlCtx, err := NewTestEngine(dEnv, ctx, db, root)
 
 	if err != nil {
 		return nil, err

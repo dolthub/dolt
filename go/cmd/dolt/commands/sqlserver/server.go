@@ -139,7 +139,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 			// to the value of mysql that we support.
 		},
 		sqlEngine,
-		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit()),
+		newSessionBuilder(sqlEngine, username, email, mrEnv, serverConfig.AutoCommit()),
 	)
 
 	if startError != nil {
@@ -166,12 +166,18 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool) server.SessionBuilder {
+func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-		dbs := dsqle.DsqlDBsFromSqlDBs(sqlEngine.Catalog.AllDatabases())
-		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbs...)
+
+		doltDbs := dsqle.DsqlDBsFromSqlDBs(sqlEngine.Catalog.AllDatabases())
+		dbStates, err := getDbStates(ctx, mrEnv, doltDbs)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbStates...)
 
 		if err != nil {
 			return nil, nil, nil, err
@@ -192,7 +198,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 			sql.WithSession(doltSess),
 			sql.WithTracer(tracing.Tracer(ctx)))
 
-		for _, db := range dbs {
+		for _, db := range doltDbs {
 			err := db.LoadRootFromRepoState(sqlCtx)
 			if err != nil {
 				return nil, nil, nil, err
@@ -213,4 +219,46 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 
 		return doltSess, ir, vr, nil
 	}
+}
+
+func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Database) ([]dsqle.InitialDbState, error) {
+	var dbStates []dsqle.InitialDbState
+
+	for _, db := range dbs {
+		var dEnv *env.DoltEnv
+		err := mrEnv.Iter(func(name string, de *env.DoltEnv) (stop bool, err error) {
+			if name == db.Name() {
+				dEnv = de
+				return true, nil
+			}
+			return false, nil
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if dEnv == nil {
+			return nil, fmt.Errorf("couldn't find environment for database %s", db.Name())
+		}
+
+		head := dEnv.RepoStateReader().CWBHeadSpec()
+		headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+		if err != nil {
+			return nil, err
+		}
+
+		root, err := dEnv.WorkingRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		dbStates = append(dbStates, dsqle.InitialDbState{
+			Db:          db,
+			HeadCommit:  headCommit,
+			WorkingRoot: root,
+			DbData:      dEnv.DbData(),
+		})
+	}
+
+	return dbStates, nil
 }

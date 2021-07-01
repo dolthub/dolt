@@ -16,10 +16,12 @@ package sqle
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/go-mysql-server/sql"
 	"os"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 const (
@@ -39,9 +41,8 @@ func init() {
 	}
 }
 
-
 type DoltDatabaseProvider struct {
-	databases 	map[string]sql.Database
+	databases   map[string]sql.Database
 	revisionDBs map[string]Database
 }
 
@@ -164,11 +165,11 @@ func makeDatabaseAtRevision(ctx context.Context, srcDb Database, revSpec string)
 	}
 
 	db := Database{
-		name: srcDb.Name()+dbRevisionDelimiter+revSpec,
-		ddb: srcDb.ddb,
-		rsr: srcDb.rsr,
-		rsw: srcDb.rsw,
-		drw: srcDb.drw,
+		name: srcDb.Name() + dbRevisionDelimiter + revSpec,
+		ddb:  srcDb.ddb,
+		rsr:  srcDb.rsr,
+		rsw:  srcDb.rsw,
+		drw:  srcDb.drw,
 	}
 
 	return db, root, true

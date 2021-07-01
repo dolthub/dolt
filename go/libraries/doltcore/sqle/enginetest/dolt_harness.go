@@ -25,12 +25,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
 type DoltHarness struct {
 	t                   *testing.T
+	env                 *env.DoltEnv
 	session             *sqle.DoltSession
 	transactionsEnabled bool
 	databases           []sqle.Database
@@ -136,7 +138,8 @@ func (d DoltHarness) NewSession() *sql.Context {
 		sql.WithSession(session))
 
 	for _, db := range d.databases {
-		err := session.AddDB(ctx, db, db.DbData())
+		dbState := getDbState(d.t, db, d.env)
+		err := session.AddDB(ctx, dbState)
 		require.NoError(d.t, err)
 	}
 
@@ -161,6 +164,7 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	dEnv := dtestutils.CreateTestEnv()
+	d.env = dEnv
 
 	// TODO: it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
 	//  have a database that only ever receives read queries, and then you re-use its session for a new database with
@@ -176,7 +180,8 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
 	for _, name := range names {
 		db := sqle.NewDatabase(name, dEnv.DbData())
-		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db, db.DbData()))
+		dbState := getDbState(d.t, db, dEnv)
+		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), dbState))
 		dbs = append(dbs, db)
 		d.databases = append(d.databases, db)
 	}
@@ -189,6 +194,24 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 		dbs = append(dbs, sqle.ReadOnlyDatabase{Database: db.(sqle.Database)})
 	}
 	return
+}
+
+func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) sqle.InitialDbState {
+	ctx := context.Background()
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+	require.NoError(t, err)
+
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+
+	return sqle.InitialDbState{
+		Db:          db,
+		HeadCommit:  headCommit,
+		WorkingRoot: root,
+		DbData:      dEnv.DbData(),
+	}
 }
 
 func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) (sql.Table, error) {
