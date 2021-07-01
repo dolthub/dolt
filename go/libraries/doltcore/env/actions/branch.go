@@ -284,12 +284,12 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	err = CheckoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef)
+	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
-	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv)
+	err = CheckoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef)
 	if err != nil {
 		return err
 	}
