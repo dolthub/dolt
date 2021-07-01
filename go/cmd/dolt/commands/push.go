@@ -399,7 +399,11 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateM
 					cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
 					cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
 				}
-				return errhand.BuildDError("error: push failed").AddCause(err).Build()
+				if rpcErr, ok := err.(*remotestorage.RpcError); ok {
+					return errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
+				} else {
+					return errhand.BuildDError("error: push failed").AddCause(err).Build()
+				}
 			}
 		}
 	}
@@ -433,6 +437,12 @@ func pushTagToRemote(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef ref
 
 func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
 	var pos int
+	var currentTreeLevel int
+	//var percentBuffered float64
+	var tableFilesBuffered int
+	var filesUploaded int
+	uploadRate := "No Uploads started yet"
+
 	for evt := range pullerEventCh {
 		switch evt.EventType {
 		case datas.NewLevelTWEvent:
@@ -440,45 +450,55 @@ func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
 				continue
 			}
 
-			pos = cli.DeleteAndPrint(0, fmt.Sprintf("Tree Level: %d has %d new chunks. Determining how many are needed.", evt.TWEventDetails.TreeLevel, evt.TWEventDetails.ChunksInLevel))
+			currentTreeLevel = evt.TWEventDetails.TreeLevel
+			//percentBuffered = 0
+			//pos = cli.DeleteAndPrint(0, fmt.Sprintf("Tree Level: %d has %d new chunks. Determining how many are needed.", evt.TWEventDetails.TreeLevel, evt.TWEventDetails.ChunksInLevel))
 		case datas.DestDBHasTWEvent:
 			if evt.TWEventDetails.TreeLevel == -1 {
 				continue
 			}
 
-			cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d has %d new chunks of which %d already exist in the database. Buffering %d chunks.\n", evt.TWEventDetails.TreeLevel, evt.TWEventDetails.ChunksInLevel, evt.TWEventDetails.ChunksAlreadyHad, evt.TWEventDetails.ChunksInLevel-evt.TWEventDetails.ChunksAlreadyHad))
-			pos = 0
+			currentTreeLevel = evt.TWEventDetails.TreeLevel
+			//cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d has %d new chunks of which %d already exist in the database. Buffering %d chunks.\n", evt.TWEventDetails.TreeLevel, evt.TWEventDetails.ChunksInLevel, evt.TWEventDetails.ChunksAlreadyHad, evt.TWEventDetails.ChunksInLevel-evt.TWEventDetails.ChunksAlreadyHad))
 
 		case datas.LevelUpdateTWEvent:
 			if evt.TWEventDetails.TreeLevel == -1 {
 				continue
 			}
 
-			toBuffer := evt.TWEventDetails.ChunksInLevel - evt.TWEventDetails.ChunksAlreadyHad
+			//toBuffer := evt.TWEventDetails.ChunksInLevel - evt.TWEventDetails.ChunksAlreadyHad
 
-			var percentBuffered float64
-			if toBuffer > 0 {
-				percentBuffered = 100 * float64(evt.TWEventDetails.ChunksBuffered) / float64(toBuffer)
-			}
+			//if toBuffer > 0 {
+			//	percentBuffered = 100 * float64(evt.TWEventDetails.ChunksBuffered) / float64(toBuffer)
+			//}
 
-			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, percentBuffered))
+			currentTreeLevel = evt.TWEventDetails.TreeLevel
+			//pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, percentBuffered))
 
 		case datas.LevelDoneTWEvent:
 			if evt.TWEventDetails.TreeLevel == -1 {
 				continue
 			}
 
-			_ = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, 100.0))
+			//percentBuffered = 0
+			//_ = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, 100.0))
 
-			pos = 0
-			cli.Println("")
+		case datas.TableFileClosedEvent:
+			tableFilesBuffered += 1
 
-		case datas.StartUploadTableFile:
-			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Uploading file %d of %d. File size: %s.", evt.TFEventDetails.TableFilesUploaded+1, evt.TFEventDetails.TableFileCount, humanize.Bytes(uint64(evt.TFEventDetails.CurrentFileSize))))
+		case datas.StartUploadTableFileEvent:
+			continue
 
-		case datas.EndUpdateTableFile:
-			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Successfully uploaded %d of %d file(s).", evt.TFEventDetails.TableFilesUploaded, evt.TFEventDetails.TableFileCount))
+		case datas.UploadTableFileUpdateEvent:
+			bps := float64(evt.TFEventDetails.Stats.Read) / evt.TFEventDetails.Stats.Elapsed.Seconds()
+			uploadRate = humanize.Bytes(uint64(bps)) + "/s"
+
+		case datas.EndUploadTableFileEvent:
+			filesUploaded += 1
 		}
+
+		msg := fmt.Sprintf("Tree Level: %d, Files Buffered: %d, Files Uploaded: %d, Current Upload Speed: %s", currentTreeLevel, tableFilesBuffered, filesUploaded, uploadRate)
+		pos = cli.DeleteAndPrint(pos, msg)
 	}
 }
 

@@ -18,6 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"golang.org/x/sync/semaphore"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -29,15 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type FileReaderWithSize struct {
-	*os.File
-	size int64
-}
-
-func (rd FileReaderWithSize) Size() int64 {
-	return rd.size
-}
-
 // ErrDBUpToDate is the error code returned from NewPuller in the event that there is no work to do.
 var ErrDBUpToDate = errors.New("the database does not need to be pulled as it's already up to date")
 
@@ -46,7 +40,8 @@ var ErrDBUpToDate = errors.New("the database does not need to be pulled as it's 
 var ErrIncompatibleSourceChunkStore = errors.New("the chunk store of the source database does not implement NBSCompressedChunkStore.")
 
 const (
-	maxChunkWorkers = 2
+	maxChunkWorkers       = 2
+	outstandingTableFiles = 2
 )
 
 // FilledWriters store CmpChunkTableWriter that have been filled and are ready to be flushed.  In the future will likely
@@ -72,15 +67,17 @@ type Puller struct {
 
 	srcDB         Database
 	srcChunkStore NBSCompressedChunkStore
-	sinkDB        Database
+	sinkDBCS      chunks.ChunkStore
 	rootChunkHash hash.Hash
 	downloaded    hash.HashSet
 
-	wr          *nbs.CmpChunkTableWriter
-	tempDir     string
-	chunksPerTF int
+	wr            *nbs.CmpChunkTableWriter
+	tablefileSema *semaphore.Weighted
+	tempDir       string
+	chunksPerTF   int
 
 	eventCh chan PullerEvent
+	pushLog *log.Logger
 }
 
 type PullerEventType int
@@ -90,23 +87,24 @@ const (
 	DestDBHasTWEvent
 	LevelUpdateTWEvent
 	LevelDoneTWEvent
-	StartUploadTableFile
-	EndUpdateTableFile
+
+	TableFileClosedEvent
+	StartUploadTableFileEvent
+	UploadTableFileUpdateEvent
+	EndUploadTableFileEvent
 )
 
 type TreeWalkEventDetails struct {
-	TreeLevel           int
-	ChunksInLevel       int
-	ChunksAlreadyHad    int
-	ChunksBuffered      int
-	ChildrenFound       int
-	TableFilesGenerated int
+	TreeLevel        int
+	ChunksInLevel    int
+	ChunksAlreadyHad int
+	ChunksBuffered   int
+	ChildrenFound    int
 }
 
 type TableFileEventDetails struct {
-	TableFileCount     int
-	TableFilesUploaded int
-	CurrentFileSize    int64
+	CurrentFileSize int64
+	Stats           iohelp.ReadStats
 }
 
 type PullerEvent struct {
@@ -141,7 +139,9 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, errors.New("not found")
 	}
 
-	exists, err = sinkDB.chunkStore().Has(ctx, rootChunkHash)
+	sinkDBCS := sinkDB.chunkStore()
+
+	exists, err = sinkDBCS.Has(ctx, rootChunkHash)
 
 	if err != nil {
 		return nil, err
@@ -166,36 +166,104 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, err
 	}
 
-	return &Puller{
+	logFilePath := filepath.Join(tempDir, "push.log")
+	f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+
+	var pushLogger *log.Logger
+	if err == nil {
+		pushLogger = log.New(f, "", log.Lmicroseconds)
+	}
+
+	p := &Puller{
 		fmt:           srcDB.Format(),
 		srcDB:         srcDB,
 		srcChunkStore: srcChunkStore,
-		sinkDB:        sinkDB,
+		sinkDBCS:      sinkDBCS,
 		rootChunkHash: rootChunkHash,
 		downloaded:    hash.HashSet{},
+		tablefileSema: semaphore.NewWeighted(outstandingTableFiles),
 		tempDir:       tempDir,
 		wr:            wr,
 		chunksPerTF:   chunksPerTF,
 		eventCh:       eventCh,
-	}, nil
+		pushLog:       pushLogger,
+	}
+
+	lcs, ok := sinkDBCS.(interface {
+		SetLogFunc(func(string, ...interface{}))
+	})
+
+	if ok {
+		lcs.SetLogFunc(p.log)
+	}
+
+	return p, nil
+}
+
+func (p *Puller) log(fmt string, args ...interface{}) {
+	if p.pushLog != nil {
+		if len(args) > 0 {
+			p.pushLog.Printf(fmt, args...)
+		} else {
+			p.pushLog.Print(fmt)
+		}
+	}
+}
+
+type tempTblFile struct {
+	id          string
+	path        string
+	numChunks   int
+	contentLen  uint64
+	contentHash []byte
+}
+
+func (p *Puller) uploadTempTableFile(ctx context.Context, ae *atomicerr.AtomicError, tmpTblFile tempTblFile) error {
+	fi, err := os.Stat(tmpTblFile.path)
+
+	if ae.SetIfError(err) {
+		return err
+	}
+
+	f, err := os.Open(tmpTblFile.path)
+
+	if ae.SetIfError(err) {
+		return err
+	}
+
+	fileSize := fi.Size()
+	fWithStats := iohelp.NewReaderWithStats(f, fileSize)
+	fWithStats.Start(func(stats iohelp.ReadStats) {
+		p.eventCh <- NewTFPullerEvent(UploadTableFileUpdateEvent, &TableFileEventDetails{
+			CurrentFileSize: fileSize,
+			Stats:           stats,
+		})
+	})
+	defer func() {
+		fWithStats.Stop()
+
+		go func() {
+			_ = os.Remove(tmpTblFile.path)
+		}()
+	}()
+
+	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, fWithStats, tmpTblFile.contentLen, tmpTblFile.contentHash)
 }
 
 func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.AtomicError, completedTables <-chan FilledWriters) {
-	type tempTblFile struct {
-		id          string
-		path        string
-		numChunks   int
-		contentLen  uint64
-		contentHash []byte
-	}
-
-	var tblFiles []tempTblFile
+	fileIdToNumChunks := make(map[string]int)
 
 	var err error
 	for tblFile := range completedTables {
+		p.tablefileSema.Release(1)
+
 		if err != nil {
 			continue // drain
 		}
+
+		p.eventCh <- NewTFPullerEvent(StartUploadTableFileEvent, &TableFileEventDetails{
+			CurrentFileSize: int64(tblFile.wr.ContentLength()),
+		})
 
 		var id string
 		id, err = tblFile.wr.Finish()
@@ -211,55 +279,32 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 			continue
 		}
 
-		tblFiles = append(tblFiles, tempTblFile{
+		ttf := tempTblFile{
 			id:          id,
 			path:        path,
 			numChunks:   tblFile.wr.Size(),
 			contentLen:  tblFile.wr.ContentLength(),
 			contentHash: tblFile.wr.GetMD5(),
+		}
+
+		err = p.uploadTempTableFile(ctx, ae, ttf)
+		if ae.SetIfError(err) {
+			continue
+		}
+
+		p.eventCh <- NewTFPullerEvent(EndUploadTableFileEvent, &TableFileEventDetails{
+			CurrentFileSize: int64(ttf.contentLen),
 		})
+
+		fileIdToNumChunks[id] = ttf.numChunks
 	}
 
-	if ae.IsSet() {
+	if err != nil {
 		return
 	}
 
-	details := &TableFileEventDetails{TableFileCount: len(tblFiles)}
-
-	// Write tables in reverse order so that on a partial success, it will still be true that if a db has a chunk, it
-	// also has all of that chunks references.
-	for i := len(tblFiles) - 1; i >= 0; i-- {
-		tmpTblFile := tblFiles[i]
-
-		fi, err := os.Stat(tmpTblFile.path)
-
-		if ae.SetIfError(err) {
-			return
-		}
-
-		f, err := os.Open(tmpTblFile.path)
-
-		if ae.SetIfError(err) {
-			return
-		}
-
-		details.CurrentFileSize = fi.Size()
-		p.eventCh <- NewTFPullerEvent(StartUploadTableFile, details)
-
-		fWithSize := FileReaderWithSize{f, fi.Size()}
-		err = p.sinkDB.chunkStore().(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, fWithSize, tmpTblFile.contentLen, tmpTblFile.contentHash)
-
-		go func() {
-			_ = os.Remove(tmpTblFile.path)
-		}()
-
-		if ae.SetIfError(err) {
-			return
-		}
-
-		details.TableFilesUploaded++
-		p.eventCh <- NewTFPullerEvent(EndUpdateTableFile, details)
-	}
+	err = p.sinkDBCS.(nbs.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
+	ae.SetIfError(err)
 }
 
 // Pull executes the sync operation
@@ -280,6 +325,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 		p.processCompletedTables(ctx, ae, completedTables)
 	}()
 
+	p.tablefileSema.Acquire(ctx, 1)
 	for len(absent) > 0 {
 		limitToNewChunks(absent, p.downloaded)
 
@@ -288,7 +334,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 		p.eventCh <- NewTWPullerEvent(NewLevelTWEvent, twDetails)
 
 		var err error
-		absent, err = p.sinkDB.chunkStore().HasMany(ctx, absent)
+		absent, err = p.sinkDBCS.HasMany(ctx, absent)
 
 		if ae.SetIfError(err) {
 			break
@@ -305,6 +351,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 			}
 		}
 	}
+
 	if !ae.IsSet() && p.wr.Size() > 0 {
 		// p.wr may be nil in the error case
 		completedTables <- FilledWriters{p.wr}
@@ -404,12 +451,20 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 		}
 
 		if p.wr.Size() >= p.chunksPerTF {
+			p.eventCh <- NewTFPullerEvent(TableFileClosedEvent, &TableFileEventDetails{
+				CurrentFileSize: int64(p.wr.ContentLength()),
+			})
+
 			completedTables <- FilledWriters{p.wr}
+			p.wr = nil
+
+			p.tablefileSema.Acquire(ctx, 1)
 			p.wr, err = nbs.NewCmpChunkTableWriter(p.tempDir)
 
 			if ae.SetIfError(err) {
 				continue
 			}
+
 		}
 
 		for h, height := range cmpAndRef.refs {

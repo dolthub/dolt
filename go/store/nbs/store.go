@@ -1282,7 +1282,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 
 	path := filepath.Join(fsPersister.dir, fileId)
 
-	err := func() (err error) {
+	f := func() (err error) {
 		var f *os.File
 		f, err = os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
@@ -1299,20 +1299,25 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 		}()
 
 		return writeTo(f, rd, copyTableFileBufferSize)
-	}()
-
-	if err != nil {
-		return err
 	}
 
-	fileIdHash, ok := hash.MaybeParse(fileId)
+	return f()
+}
 
-	if !ok {
-		return errors.New("invalid base32 encoded hash: " + fileId)
+// AddTableFilesToManifest adds table files to the manifest
+func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
+	fileIdHashToNumChunks := make(map[hash.Hash]uint32)
+	for fileId, numChunks := range fileIdToNumChunks {
+		fileIdHash, ok := hash.MaybeParse(fileId)
+
+		if !ok {
+			return errors.New("invalid base32 encoded hash: " + fileId)
+		}
+
+		fileIdHashToNumChunks[fileIdHash] = uint32(numChunks)
 	}
 
-	_, err = nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash: uint32(numChunks)})
-
+	_, err := nbs.UpdateManifest(ctx, fileIdHashToNumChunks)
 	return err
 }
 
