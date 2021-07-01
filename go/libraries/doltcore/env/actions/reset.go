@@ -102,24 +102,29 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots do
 		return err
 	}
 
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged))
+	if err != nil {
+		return err
+	}
+
 	err = SaveTrackedDocsFromWorking(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
 	if newHead != nil {
-		err := dEnv.DoltDB.SetHeadToCommit(ctx, dEnv.RepoStateReader().CWBHeadRef(), newHead)
+		err = dEnv.DoltDB.SetHeadToCommit(ctx, dEnv.RepoStateReader().CWBHeadRef(), newHead)
 		if err != nil {
 			return err
 		}
 	}
 
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return err
-	}
-
-	return dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(roots.Working))
+	return nil
 }
 
 func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
