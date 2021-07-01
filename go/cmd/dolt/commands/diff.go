@@ -875,7 +875,7 @@ func createSplitter(ctx context.Context, vrw types.ValueReadWriter, fromSch sche
 
 		unionSch, err = untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
 		if err != nil {
-			return nil, nil, errhand.BuildDError("Failed to merge schemas").AddCause(err).Build()
+			return nil, nil, errhand.BuildDError("Merge failed. Tables with different primary keys cannot be merged.").AddCause(err).Build()
 		}
 
 	} else {
