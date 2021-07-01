@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -629,19 +630,24 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 		return nil, err
 	}
 
-	// If the current session cannot requests its current key than ask for the next one and request again.
 	if !ok {
-		next, err := autoIncTracker.Next(t.tableName)
+		convertedVal, err := autoincr.ConvertIntTypeToUint(stored)
 		if err != nil {
 			return nil, err
 		}
 
-		_, err = autoIncTracker.Request(t.tableName, next)
-		if err != nil {
-			return nil, err
+		// If the current session cannot automatically reserve the next auto increment key, keep iterating values until its
+		// done.
+		for !ok {
+			convertedVal += 1
+
+			ok, err = autoIncTracker.Request(t.tableName, convertedVal)
+			if err != nil {
+				return nil, err
+			}
 		}
 
-		return next, nil
+		return convertedVal, nil
 	}
 
 	return stored, nil
