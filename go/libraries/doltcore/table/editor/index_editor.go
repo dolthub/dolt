@@ -683,14 +683,17 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 		if err != nil {
 			return err
 		}
-		fullKey, partialKey, err := row.ReduceToIndexKeys(index, dRow)
+
+		fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
 		if err != nil {
 			return err
 		}
+
 		err = indexEditor.InsertRow(ctx, fullKey, partialKey)
 		if err != nil {
 			return err
 		}
+
 		return nil
 	})
 	if err != nil {

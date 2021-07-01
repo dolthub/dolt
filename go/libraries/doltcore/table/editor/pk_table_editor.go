@@ -509,7 +509,7 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := row.ReduceToIndexKeys(indexEd.Index(), dRow)
+		fullKey, partialKey, err := dRow.ReduceToIndexKeys(indexEd.Index())
 		if err != nil {
 			return err
 		}
@@ -573,7 +573,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	}()
 
 	for i, indexEd := range te.indexEds {
-		oldFullKey, oldPartialKey, err := row.ReduceToIndexKeys(indexEd.Index(), dOldRow)
+		oldFullKey, oldPartialKey, err := dOldRow.ReduceToIndexKeys(indexEd.Index())
 		if err != nil {
 			return err
 		}
@@ -582,7 +582,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 			return err
 		}
 		indexOpsToUndo[i]++
-		newFullKey, newPartialKey, err := row.ReduceToIndexKeys(indexEd.Index(), dNewRow)
+		newFullKey, newPartialKey, err := dNewRow.ReduceToIndexKeys(indexEd.Index())
 		if err != nil {
 			return err
 		}

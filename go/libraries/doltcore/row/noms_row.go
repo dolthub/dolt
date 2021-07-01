@@ -248,6 +248,41 @@ func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
 	return nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
 }
 
+// ReduceToIndexKeys creates a full key and a partial key from the given row (first tuple being the full key). Please
+// refer to the note in the index editor for more information regarding partial keys.
+func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, error) {
+	vals := make([]types.Value, 0, len(idx.AllTags())*2)
+	for _, tag := range idx.AllTags() {
+		val, ok := nr.GetColVal(tag)
+		if !ok {
+			val = types.NullValue
+		}
+		vals = append(vals, types.Uint(tag), val)
+	}
+	fullKey, err := types.NewTuple(nr.Format(), vals...)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, err
+	}
+	partialKey, err := types.NewTuple(nr.Format(), vals[:idx.Count()*2]...)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, err
+	}
+	return fullKey, partialKey, nil
+}
+
+// ReduceToIndexPartialKey creates an index record from a primary storage record.
+func (nr nomsRow) ReduceToIndexPartialKey(idx schema.Index) (types.Tuple, error) {
+	var vals []types.Value
+	for _, tag := range idx.IndexedColumnTags() {
+		val, ok := nr.GetColVal(tag)
+		if !ok {
+			val = types.NullValue
+		}
+		vals = append(vals, types.Uint(tag), val)
+	}
+	return types.NewTuple(nr.Format(), vals...)
+}
+
 func IterPkTuple(tvs types.TupleValueSlice, cb func(tag uint64, val types.Value) (stop bool, err error)) error {
 	if len(tvs)%2 != 0 {
 		return fmt.Errorf("expected len(TupleValueSlice) to be even, got %d", len(tvs))

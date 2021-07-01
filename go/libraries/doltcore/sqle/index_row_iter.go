@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"io"
+	"math"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -128,6 +129,9 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context, epoch int) {
 			return
 		}
 
+		//x, err := i.processKey(indexKey)
+		//fmt.Print(x)
+
 		lookup := toLookup{
 			idx:        idx,
 			t:          indexKey,
@@ -157,7 +161,7 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 		return types.Tuple{}, err
 	}
 
-	resVals := make([]types.Value, len(i.pkTags)*2)
+	resVals := make([]types.Value, int(math.Max(2, float64(len(i.pkTags)*2))))
 	for {
 		_, tag, err := tplItr.NextUint64()
 
@@ -171,7 +175,7 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 
 		idx, inPK := i.pkTags[tag]
 
-		if inPK {
+		if inPK || (tag == schema.KeylessRowIdTag) {
 			_, valVal, err := tplItr.Next()
 
 			if err != nil {
@@ -195,8 +199,8 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 // processKey is called within queueRows and processes each key, sending the resulting row to the row channel.
 func (i *indexLookupRowIterAdapter) processKey(indexKey types.Tuple) (sql.Row, error) {
 	tableData := i.idx.TableData()
-	pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), indexKey)
 
+	pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), indexKey)
 	if err != nil {
 		return nil, err
 	}

@@ -497,7 +497,7 @@ func (fk ForeignKey) ValidateData(ctx context.Context, childIdx, parentIdx types
 			continue
 		}
 
-		partial, err := row.ReduceToIndexPartialKey(parentDef, parentIdxRow)
+		partial, err := parentIdxRow.ReduceToIndexPartialKey(parentDef)
 		if err != nil {
 			return err
 		}
