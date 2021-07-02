@@ -13,8 +13,12 @@ setup() {
     cd $REPO_NAME
 
     dolt init
+
     dolt sql -q "CREATE TABLE mysqldump_table(pk int)"
     dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext)"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+
     let PORT="$$ % (65536-1024) + 1024"
     USER="dolt"
     dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
@@ -113,4 +117,37 @@ cmake ..
 
 @test "mysqldump works" {
     mysqldump $REPO_NAME -P $PORT -h 0.0.0.0 -u $USER
+}
+
+@test "mysql_fdw read path" {
+    service postgresql start
+    run su -c "psql -U postgres <<EOF
+\x
+CREATE EXTENSION mysql_fdw;
+
+-- create server object
+CREATE SERVER mysql_server
+	FOREIGN DATA WRAPPER mysql_fdw
+	OPTIONS (host '0.0.0.0', port '$PORT');
+
+-- create user mapping
+CREATE USER MAPPING FOR postgres
+	SERVER mysql_server
+	OPTIONS (username '$USER', password '');
+
+-- create foreign table
+CREATE FOREIGN TABLE warehouse
+	(
+		warehouse_id int,
+		warehouse_name text
+	)
+	SERVER mysql_server
+	OPTIONS (dbname '$REPO_NAME', table_name 'warehouse');
+
+SELECT * FROM warehouse;
+EOF" -m "postgres"
+
+    [[ "$output" =~ "UPS" ]] || false
+    [[ "$output" =~ "TV" ]] || false
+    [[ "$output" =~ "Table" ]] || false
 }
