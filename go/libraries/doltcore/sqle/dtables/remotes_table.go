@@ -16,6 +16,8 @@ package dtables
 
 import (
 	"errors"
+	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -84,22 +86,20 @@ type RemoteItr struct {
 }
 
 // NewRemoteItr creates a RemoteItr from the current environment.
-func NewRemoteItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
-	// TODO : dEnv.FS
+func NewRemoteItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
+	dbName := ctx.GetCurrentDatabase()
 
-	repoState, err := env.LoadRepoState(filesys.LocalFS)
-	if err != nil {
-		return nil, err
+	if len(dbName) == 0 {
+		return nil, fmt.Errorf("Empty database name.")
 	}
 
-	idx := 0
-	remotes := make([]env.Remote, len(repoState.Remotes))
-	for _, remote := range repoState.Remotes {
-		remotes[idx] = remote
-		idx++
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := sess.GetDbData(dbName)
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	return &RemoteItr{remotes, 0}, nil
+	return &RemoteItr{dbData.Rsr.GetRemotes(), 0}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -220,7 +220,6 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 		}
 	}
 
-	//remote := env.NewRemote(name, url, params)
 	remote := env.Remote{Name: name, Url: url, FetchSpecs: fetchSpecs, Params: params}
 	return &remote, nil
 }
@@ -229,22 +228,27 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 // for the insert operation, which may involve many rows. After all rows in an operation have been processed, Close
 // is called.
 func (bWr remoteWriter) Insert(ctx *sql.Context, r sql.Row) error {
+	dbName := ctx.GetCurrentDatabase()
+
+	if len(dbName) == 0 {
+		return fmt.Errorf("Empty database name.")
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := sess.GetDbData(dbName)
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+
 	remote, err := validateRow(ctx, r)
 
 	if err != nil {
 		return err
 	}
 
-	// TODO: fix filesys.LocalFS
-	repoState, err := env.LoadRepoState(filesys.LocalFS)
+	err = dbData.Rsw.AddRemote(*remote)
 	if err != nil {
 		return err
-	}
-
-	repoState.AddRemote(*remote)
-	err = repoState.Save(filesys.LocalFS)
-	if err != nil {
-		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}
 
 	return nil

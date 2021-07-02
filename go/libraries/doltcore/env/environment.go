@@ -554,6 +554,15 @@ func (r *repoStateReader) GetMergeCommit(ctx context.Context) (*doltdb.Commit, e
 	return ws.MergeState().Commit(), nil
 }
 
+func (r *repoStateReader) GetRemotes() ([]Remote) {
+	remoteMap := r.dEnv.RepoState.Remotes
+	remotes := make([]Remote, len(remoteMap))
+	for _, r := range remoteMap {
+		remotes = append(remotes, r)
+	}
+	return remotes
+}
+
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
 	return &repoStateReader{dEnv}
 }
@@ -584,6 +593,10 @@ func (r *repoStateWriter) ClearMerge(ctx context.Context) error {
 
 func (r *repoStateWriter) StartMerge(ctx context.Context, commit *doltdb.Commit) error {
 	return r.DoltEnv.StartMerge(ctx, commit)
+}
+
+func (r *repoStateWriter) AddRemote(remote Remote) error {
+	return r.DoltEnv.AddRemote(remote)
 }
 
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
@@ -875,6 +888,15 @@ func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 	}
 
 	return dEnv.RepoState.Remotes, nil
+}
+
+func (dEnv *DoltEnv) AddRemote(remote Remote) (error) {
+	dEnv.RepoState.AddRemote(remote)
+	err := dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 var ErrNotACred = errors.New("not a valid credential key id or public key")

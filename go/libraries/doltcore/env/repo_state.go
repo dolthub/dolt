@@ -32,6 +32,7 @@ type RepoStateReader interface {
 	IsMergeActive(ctx context.Context) (bool, error)
 	// TODO: get rid of this
 	GetMergeCommit(ctx context.Context) (*doltdb.Commit, error)
+	GetRemotes() ([]Remote)
 }
 
 type RepoStateWriter interface {
@@ -46,6 +47,8 @@ type RepoStateWriter interface {
 	ClearMerge(ctx context.Context) error
 	// TODO: get rid of this
 	StartMerge(ctx context.Context, commit *doltdb.Commit) error
+	AddRemote(r Remote) error
+
 }
 
 type DocsReadWriter interface {

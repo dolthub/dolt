@@ -271,9 +271,7 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 	}
 
 	r := env.NewRemote(remoteName, absRemoteUrl, params)
-	dEnv.RepoState.AddRemote(r)
-	err = dEnv.RepoState.Save(dEnv.FS)
-
+	err = dEnv.AddRemote(r)
 	if err != nil {
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}

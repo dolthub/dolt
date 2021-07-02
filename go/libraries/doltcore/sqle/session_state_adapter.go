@@ -72,3 +72,7 @@ func (s SessionStateAdapter) GetMergeCommit(ctx context.Context) (*doltdb.Commit
 func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.RootValue, error) {
 	panic("implement me")
 }
+
+func (s SessionStateAdapter) GetRemotes() ([]env.Remote) {
+	panic("implement me")
+}
