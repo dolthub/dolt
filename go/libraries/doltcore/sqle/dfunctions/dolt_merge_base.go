@@ -16,13 +16,13 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 const DoltMergeBaseFuncName = "dolt_merge_base"
@@ -81,7 +81,7 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 		return nil, nil, err
 	}
 
-	sess := sqle.DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 	dbName := ctx.GetCurrentDatabase()
 
 	dbData, ok := sess.GetDbData(dbName)

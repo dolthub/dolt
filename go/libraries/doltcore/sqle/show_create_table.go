@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,17 +27,17 @@ import (
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
 
-func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *DoltSession) {
-	dsess := DefaultDoltSession()
+func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *dsess.Session) {
+	sess := dsess.DefaultSession()
 	sqlCtx := sql.NewContext(ctx,
-		sql.WithSession(dsess),
+		sql.WithSession(sess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
 	engine := sqle.NewDefault()
 	engine.AddDatabase(sqlDb)
-	dsess.SetCurrentDatabase(sqlDb.Name())
-	return sqlCtx, engine, dsess
+	sqlCtx.SetCurrentDatabase(sqlDb.Name())
+	return sqlCtx, engine, sess
 }
 
 func GetCreateTableStmt(ctx *sql.Context, engine *sqle.Engine, tableName string) (string, error) {

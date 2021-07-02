@@ -17,6 +17,7 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 const DoltCheckoutFuncName = "dolt_checkout"
@@ -64,7 +64,7 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 	}
 
 	// Checking out new branch.
-	dSess := sqle.DSessFromSess(ctx.Session)
+	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
@@ -186,7 +186,7 @@ func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData 
 		return err
 	}
 
-	dSess := sqle.DSessFromSess(ctx.Session)
+	dSess := dsess.DSessFromSess(ctx.Session)
 	// TODO: this may not be right for the SQL context, need to not take working set changes with us, maybe die if the
 	//  working set is dirty, or force a commit first
 	newWorkingSet := ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
@@ -212,7 +212,7 @@ func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []
 
 // updateHeadAndWorkingSessionVars explicitly sets the head and working hash.
 func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
-	dSess := sqle.DSessFromSess(ctx.Session)
+	dSess := dsess.DSessFromSess(ctx.Session)
 	return dSess.SetRoots(ctx, dbName, roots)
 }
 
