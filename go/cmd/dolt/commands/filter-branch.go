@@ -142,7 +142,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 		return nil, err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +256,25 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 	engine := sqle.New(cat, azr, &sqle.Config{Auth: new(auth.None)})
 	engine.AddDatabase(db)
 
-	err = dsess.AddDB(sqlCtx, db, db.DbData())
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dbState := dsqle.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+	}
+
+	err = dsess.AddDB(sqlCtx, dbState)
 	if err != nil {
 		return nil, nil, err
 	}

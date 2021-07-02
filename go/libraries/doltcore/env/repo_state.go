@@ -17,9 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -30,22 +28,24 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
-	CWBHeadHash(ctx context.Context) (hash.Hash, error)
-	WorkingHash() hash.Hash
-	StagedHash() hash.Hash
-	IsMergeActive() bool
-	GetMergeCommit() string
-	GetPreMergeWorking() string
+	// TODO: get rid of this
+	IsMergeActive(ctx context.Context) (bool, error)
+	// TODO: get rid of this
+	GetMergeCommit(ctx context.Context) (*doltdb.Commit, error)
 }
 
 type RepoStateWriter interface {
-	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
-	SetStagedHash(context.Context, hash.Hash) error
-	SetWorkingHash(context.Context, hash.Hash) error
+	// TODO: get rid of this
+	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error
+	// TODO: get rid of this
+	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
-	AbortMerge() error
-	ClearMerge() error
-	StartMerge(commitStr string) error
+	// TODO: get rid of this
+	AbortMerge(ctx context.Context) error
+	// TODO: get rid of this
+	ClearMerge(ctx context.Context) error
+	// TODO: get rid of this
+	StartMerge(ctx context.Context, commit *doltdb.Commit) error
 }
 
 type DocsReadWriter interface {
@@ -67,20 +67,67 @@ type BranchConfig struct {
 	Remote string             `json:"remote"`
 }
 
-type MergeState struct {
+type RepoState struct {
+	Head     ref.MarshalableRef      `json:"head"`
+	Remotes  map[string]Remote       `json:"remotes"`
+	Branches map[string]BranchConfig `json:"branches"`
+	// |staged|, |working|, and |merge| are legacy fields left over from when Dolt repos stored this info in the repo
+	// state file, not in the DB directly. They're still here so that we can migrate existing repositories forward to the
+	// new storage format, but they should be used only for this purpose and are no longer written.
+	staged  string
+	working string
+	merge   *mergeState
+}
+
+// repoStateLegacy only exists to unmarshall legacy repo state files, since the JSON marshaller can't work with
+// unexported fields
+type repoStateLegacy struct {
+	Head     ref.MarshalableRef      `json:"head"`
+	Remotes  map[string]Remote       `json:"remotes"`
+	Branches map[string]BranchConfig `json:"branches"`
+	Staged   string                  `json:"staged,omitempty"`
+	Working  string                  `json:"working,omitempty"`
+	Merge    *mergeState             `json:"merge,omitempty"`
+}
+
+// repoStateLegacyFromRepoState creates a new repoStateLegacy from a RepoState file. Only for testing.
+func repoStateLegacyFromRepoState(rs *RepoState) *repoStateLegacy {
+	return &repoStateLegacy{
+		Head:     rs.Head,
+		Remotes:  rs.Remotes,
+		Branches: rs.Branches,
+		Staged:   rs.staged,
+		Working:  rs.working,
+		Merge:    rs.merge,
+	}
+}
+
+type mergeState struct {
 	Commit          string `json:"commit"`
 	PreMergeWorking string `json:"working_pre_merge"`
 }
 
-type RepoState struct {
-	Head     ref.MarshalableRef      `json:"head"`
-	Staged   string                  `json:"staged"`
-	Working  string                  `json:"working"`
-	Merge    *MergeState             `json:"merge"`
-	Remotes  map[string]Remote       `json:"remotes"`
-	Branches map[string]BranchConfig `json:"branches"`
+func (rs *repoStateLegacy) toRepoState() *RepoState {
+	return &RepoState{
+		Head:     rs.Head,
+		Remotes:  rs.Remotes,
+		Branches: rs.Branches,
+		staged:   rs.Staged,
+		working:  rs.Working,
+		merge:    rs.Merge,
+	}
 }
 
+func (rs *repoStateLegacy) save(fs filesys.ReadWriteFS) error {
+	data, err := json.MarshalIndent(rs, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return fs.WriteFile(getRepoStateFile(), data)
+}
+
+// LoadRepoState parses the repo state file from the file system given
 func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 	path := getRepoStateFile()
 	data, err := fs.ReadFile(path)
@@ -89,26 +136,25 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 		return nil, err
 	}
 
-	var repoState RepoState
+	var repoState repoStateLegacy
 	err = json.Unmarshal(data, &repoState)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &repoState, nil
+	return repoState.toRepoState(), nil
 }
 
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
-	rs := &RepoState{ref.MarshalableRef{
+	rs := &RepoState{Head: ref.MarshalableRef{
 		Ref: ref.NewBranchRef("master")},
-		hashStr,
-		hashStr,
-		nil,
-		map[string]Remote{r.Name: r},
-		make(map[string]BranchConfig),
+		staged:   hashStr,
+		working:  hashStr,
+		Remotes:  map[string]Remote{r.Name: r},
+		Branches: make(map[string]BranchConfig),
 	}
 
 	err := rs.Save(fs)
@@ -120,8 +166,7 @@ func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	return rs, nil
 }
 
-func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*RepoState, error) {
-	hashStr := rootHash.String()
+func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
 	headRef, err := ref.Parse(br)
 
 	if err != nil {
@@ -129,12 +174,9 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 	}
 
 	rs := &RepoState{
-		ref.MarshalableRef{Ref: headRef},
-		hashStr,
-		hashStr,
-		nil,
-		make(map[string]Remote),
-		make(map[string]BranchConfig),
+		Head:     ref.MarshalableRef{Ref: headRef},
+		Remotes:  make(map[string]Remote),
+		Branches: make(map[string]BranchConfig),
 	}
 
 	err = rs.Save(fs)
@@ -146,16 +188,14 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 	return rs, nil
 }
 
-func (rs *RepoState) Save(fs filesys.ReadWriteFS) error {
+// Save writes this repo state file to disk on the filesystem given
+func (rs RepoState) Save(fs filesys.ReadWriteFS) error {
 	data, err := json.MarshalIndent(rs, "", "  ")
-
 	if err != nil {
 		return err
 	}
 
-	path := getRepoStateFile()
-
-	return fs.WriteFile(path, data)
+	return fs.WriteFile(getRepoStateFile(), data)
 }
 
 func (rs *RepoState) CWBHeadRef() ref.DoltRef {
@@ -167,61 +207,20 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 	return spec
 }
 
-func (rs *RepoState) StartMerge(commit string, fs filesys.Filesys) error {
-	rs.Merge = &MergeState{commit, rs.Working}
-	return rs.Save(fs)
-}
-
-func (rs *RepoState) AbortMerge(fs filesys.Filesys) error {
-	rs.Working = rs.Merge.PreMergeWorking
-	return rs.ClearMerge(fs)
-}
-
-func (rs *RepoState) ClearMerge(fs filesys.Filesys) error {
-	rs.Merge = nil
-	return rs.Save(fs)
-}
-
 func (rs *RepoState) AddRemote(r Remote) {
 	rs.Remotes[r.Name] = r
 }
 
-func (rs *RepoState) WorkingHash() hash.Hash {
-	return hash.Parse(rs.Working)
-}
-
-func (rs *RepoState) StagedHash() hash.Hash {
-	return hash.Parse(rs.Staged)
-}
-
-func (rs *RepoState) IsMergeActive() bool {
-	return rs.Merge != nil
-}
-
-func (rs *RepoState) GetMergeCommit() string {
-	return rs.Merge.Commit
-}
-
-// Returns the working root.
-func WorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
-	return ddb.ReadRootValue(ctx, rsr.WorkingHash())
-}
-
 // Updates the working root.
-func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
-	h, err := ddb.WriteRootValue(ctx, newRoot)
+func UpdateWorkingRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
+	// logrus.Infof("Updating working root with value %s", newRoot.DebugString(ctx, true))
 
+	err := rsw.UpdateWorkingRoot(ctx, newRoot)
 	if err != nil {
-		return hash.Hash{}, doltdb.ErrNomsIO
+		return ErrStateUpdate
 	}
 
-	err = rsw.SetWorkingHash(ctx, h)
-
-	if err != nil {
-		return hash.Hash{}, ErrStateUpdate
-	}
-
-	return h, nil
+	return nil
 }
 
 // Returns the head root.
@@ -235,106 +234,50 @@ func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*do
 	return commit.GetRootValue()
 }
 
-// Returns the staged root.
-func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
-	return ddb.ReadRootValue(ctx, rsr.StagedHash())
-}
-
 // Updates the staged root.
-func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
-	h, err := ddb.WriteRootValue(ctx, newRoot)
-
+// TODO: remove this
+func UpdateStagedRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
+	err := rsw.UpdateStagedRoot(ctx, newRoot)
 	if err != nil {
-		return hash.Hash{}, doltdb.ErrNomsIO
-	}
-
-	err = rsw.SetStagedHash(ctx, h)
-
-	if err != nil {
-		return hash.Hash{}, ErrStateUpdate
-	}
-
-	return h, nil
-}
-
-func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	_, err := UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
-
-	switch err {
-	case doltdb.ErrNomsIO:
-		return errhand.BuildDError("fatal: failed to write value").Build()
-	case ErrStateUpdate:
-		return errhand.BuildDError("fatal: failed to update the staged root state").Build()
+		return ErrStateUpdate
 	}
 
 	return nil
 }
 
-func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (working *doltdb.RootValue, staged *doltdb.RootValue, head *doltdb.RootValue, err error) {
-	working, err = WorkingRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	staged, err = StagedRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	head, err = HeadRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return working, staged, head, nil
-}
-
-func MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
+// TODO: this needs to be a function in the merge package, not repo state
+func MergeWouldStompChanges(ctx context.Context, workingRoot *doltdb.RootValue, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
 	headRoot, err := HeadRoot(ctx, dbData.Ddb, dbData.Rsr)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	workingRoot, err := WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	mergeRoot, err := mergeCommit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	headTableHashes, err := mapTableHashes(ctx, headRoot)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	workingTableHashes, err := mapTableHashes(ctx, workingRoot)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	mergeTableHashes, err := mapTableHashes(ctx, mergeRoot)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
-	mergeWorkingDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
+	mergedHeadDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
 
 	stompedTables := make([]string, 0, len(headWorkingDiffs))
 	for tName, _ := range headWorkingDiffs {
-		if _, ok := mergeWorkingDiffs[tName]; ok {
+		if _, ok := mergedHeadDiffs[tName]; ok {
 			// even if the working changes match the merge changes, don't allow (matches git behavior).
 			stompedTables = append(stompedTables, tName)
 		}
@@ -344,38 +287,57 @@ func MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit, dbD
 }
 
 // GetGCKeepers queries |rsr| to find a list of values that need to be temporarily saved during GC.
-func GetGCKeepers(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) ([]hash.Hash, error) {
-	keepers := []hash.Hash{
-		rsr.WorkingHash(),
-		rsr.StagedHash(),
+// TODO: move this out of repo_state.go
+func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
+	workingRoot, err := env.WorkingRoot(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	if rsr.IsMergeActive() {
-		spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
+	workingHash, err := workingRoot.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	stagedRoot, err := env.StagedRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	stagedHash, err := stagedRoot.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	keepers := []hash.Hash{
+		workingHash,
+		stagedHash,
+	}
+
+	mergeActive, err := env.IsMergeActive(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if mergeActive {
+		ws, err := env.WorkingSet(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		cm, err := ddb.Resolve(ctx, spec, nil)
-		if err != nil {
-			return nil, err
-		}
-
+		cm := ws.MergeState().Commit()
 		ch, err := cm.HashOf()
 		if err != nil {
 			return nil, err
 		}
 
-		pmw := hash.Parse(rsr.GetPreMergeWorking())
-		val, err := ddb.ValueReadWriter().ReadValue(ctx, pmw)
+		pmw := ws.MergeState().PreMergeWorkingRoot()
+		pmwh, err := pmw.HashOf()
 		if err != nil {
 			return nil, err
 		}
-		if val == nil {
-			return nil, fmt.Errorf("MergeState.PreMergeWorking is a dangling hash")
-		}
 
-		keepers = append(keepers, ch, pmw)
+		keepers = append(keepers, ch, pmwh)
 	}
 
 	return keepers, nil

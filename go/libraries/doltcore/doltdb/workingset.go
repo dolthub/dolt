@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -29,11 +30,126 @@ const (
 	workingMetaVersion       = "1.0"
 )
 
+type MergeState struct {
+	commit          *Commit
+	preMergeWorking *RootValue
+}
+
+// MergeStateFromCommitAndWorking returns a new MergeState.
+// Most clients should not construct MergeState objects directly, but instead use WorkingSet.StartMerge
+func MergeStateFromCommitAndWorking(commit *Commit, preMergeWorking *RootValue) *MergeState {
+	return &MergeState{commit: commit, preMergeWorking: preMergeWorking}
+}
+
+func newMergeState(ctx context.Context, vrw types.ValueReadWriter, mergeState types.Struct) (*MergeState, error) {
+	commitSt, ok, err := mergeState.MaybeGet(datas.MergeStateCommitField)
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("corrupted MergeState struct")
+	}
+
+	commit := NewCommit(vrw, commitSt.(types.Struct))
+
+	workingRootRef, ok, err := mergeState.MaybeGet(datas.MergeStateWorkingPreMergeField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("corrupted MergeState struct")
+	}
+
+	workingRootValSt, err := workingRootRef.(types.Ref).TargetValue(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
+
+	workingRoot, err := newRootValue(vrw, workingRootValSt.(types.Struct))
+	if err != nil {
+		return nil, err
+	}
+
+	return &MergeState{
+		commit:          commit,
+		preMergeWorking: workingRoot,
+	}, nil
+}
+
+func (m MergeState) Commit() *Commit {
+	return m.commit
+}
+
+func (m MergeState) PreMergeWorkingRoot() *RootValue {
+	return m.preMergeWorking
+}
+
 type WorkingSet struct {
-	Name      string
-	format    *types.NomsBinFormat
-	st        types.Struct
-	rootValue *RootValue
+	Name        string
+	format      *types.NomsBinFormat
+	st          *types.Struct
+	workingRoot *RootValue
+	stagedRoot  *RootValue
+	mergeState  *MergeState
+}
+
+func EmptyWorkingSet(wsRef ref.WorkingSetRef) *WorkingSet {
+	return &WorkingSet{
+		Name:   wsRef.GetPath(),
+		format: types.Format_Default,
+	}
+}
+
+func (ws WorkingSet) WithStagedRoot(stagedRoot *RootValue) *WorkingSet {
+	ws.stagedRoot = stagedRoot
+	return &ws
+}
+
+func (ws WorkingSet) WithWorkingRoot(workingRoot *RootValue) *WorkingSet {
+	ws.workingRoot = workingRoot
+	return &ws
+}
+
+func (ws WorkingSet) WithMergeState(mergeState *MergeState) *WorkingSet {
+	ws.mergeState = mergeState
+	return &ws
+}
+
+func (ws WorkingSet) StartMerge(commit *Commit) *WorkingSet {
+	ws.mergeState = &MergeState{
+		commit:          commit,
+		preMergeWorking: ws.workingRoot,
+	}
+
+	return &ws
+}
+
+func (ws WorkingSet) AbortMerge() *WorkingSet {
+	ws.workingRoot = ws.mergeState.PreMergeWorkingRoot()
+	ws.mergeState = nil
+	return &ws
+}
+
+func (ws WorkingSet) ClearMerge() *WorkingSet {
+	ws.mergeState = nil
+	return &ws
+}
+
+func (ws *WorkingSet) WorkingRoot() *RootValue {
+	return ws.workingRoot
+}
+
+func (ws *WorkingSet) StagedRoot() *RootValue {
+	return ws.stagedRoot
+}
+
+func (ws *WorkingSet) MergeState() *MergeState {
+	return ws.mergeState
+}
+
+func (ws *WorkingSet) MergeActive() bool {
+	return ws.mergeState != nil
 }
 
 // NewWorkingSet creates a new WorkingSet object.
@@ -54,45 +170,133 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	// 	return nil, err
 	// }
 
-	rootRef, ok, err := workingSetSt.MaybeGet(datas.WorkingSetRefField)
+	workingRootRef, ok, err := workingSetSt.MaybeGet(datas.WorkingRootRefField)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("workingset struct does not have field %s", datas.WorkingSetRefField)
+		return nil, fmt.Errorf("workingset struct does not have field %s", datas.WorkingRootRefField)
 	}
 
-	rootValSt, err := rootRef.(types.Ref).TargetValue(ctx, vrw)
+	workingRootValSt, err := workingRootRef.(types.Ref).TargetValue(ctx, vrw)
 	if err != nil {
 		return nil, err
 	}
 
-	rootVal, err := newRootValue(vrw, rootValSt.(types.Struct))
+	workingRoot, err := newRootValue(vrw, workingRootValSt.(types.Struct))
 	if err != nil {
 		return nil, err
+	}
+
+	stagedRootRef, ok, err := workingSetSt.MaybeGet(datas.StagedRootRefField)
+	if err != nil {
+		return nil, err
+	}
+
+	var stagedRoot *RootValue
+	if ok {
+		stagedRootValSt, err := stagedRootRef.(types.Ref).TargetValue(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
+		stagedRoot, err = newRootValue(vrw, stagedRootValSt.(types.Struct))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var mergeState *MergeState
+	mergeStateRef, ok, err := workingSetSt.MaybeGet(datas.MergeStateField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		mergeStateValSt, err := mergeStateRef.(types.Ref).TargetValue(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
+		mergeState, err = newMergeState(ctx, vrw, mergeStateValSt.(types.Struct))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &WorkingSet{
-		Name:      name,
-		format:    vrw.Format(),
-		st:        workingSetSt,
-		rootValue: rootVal,
+		Name:        name,
+		format:      vrw.Format(),
+		st:          &workingSetSt,
+		workingRoot: workingRoot,
+		stagedRoot:  stagedRoot,
+		mergeState:  mergeState,
 	}, nil
 }
 
 // RootValue returns the root value stored by this workingset
-func (t *WorkingSet) RootValue() *RootValue {
-	return t.rootValue
+// TODO: replace references with calls to WorkingRoot
+func (ws *WorkingSet) RootValue() *RootValue {
+	return ws.workingRoot
 }
 
-// Struct returns the struct used to construct this WorkingSet.
-func (t *WorkingSet) Struct() types.Struct {
-	return t.st
+// HashOf returns the hash of the workingset struct, which is not the same as the hash of the root value stored in the
+// working set. This value is used for optimistic locking when updating a working set for a head ref.
+func (ws *WorkingSet) HashOf() (hash.Hash, error) {
+	if ws.st == nil {
+		return hash.Hash{}, nil
+	}
+	return ws.st.Hash(ws.format)
 }
 
 // Ref returns a WorkingSetRef for this WorkingSet.
-func (t *WorkingSet) Ref() ref.WorkingSetRef {
-	return ref.NewWorkingSetRef(t.Name)
+func (ws *WorkingSet) Ref() ref.WorkingSetRef {
+	return ref.NewWorkingSetRef(ws.Name)
+}
+
+// writeValues write the values in this working set to the database and returns them
+func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
+	workingRoot types.Ref,
+	stagedRoot *types.Ref,
+	mergeState *types.Ref,
+	err error,
+) {
+
+	workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
+	if err != nil {
+		return types.Ref{}, nil, nil, err
+	}
+
+	// TODO: this is never nil
+	if ws.stagedRoot != nil {
+		var stagedRootRef types.Ref
+		stagedRootRef, err = db.writeRootValue(ctx, ws.stagedRoot)
+		if err != nil {
+			return types.Ref{}, nil, nil, err
+		}
+		stagedRoot = &stagedRootRef
+	}
+
+	if ws.mergeState != nil {
+		var mergeStateRef types.Ref
+		preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
+		if err != nil {
+			return types.Ref{}, nil, nil, err
+		}
+
+		mergeStateRefSt, err := datas.NewMergeState(ctx, preMergeWorking, ws.mergeState.commit.commitSt)
+		if err != nil {
+			return types.Ref{}, nil, nil, err
+		}
+
+		mergeStateRef, err = db.db.WriteValue(ctx, mergeStateRefSt)
+		if err != nil {
+			return types.Ref{}, nil, nil, err
+		}
+
+		mergeState = &mergeStateRef
+	}
+
+	return workingRoot, stagedRoot, mergeState, nil
 }
 
 // WorkingSetMeta contains all the metadata that is associated with a working set

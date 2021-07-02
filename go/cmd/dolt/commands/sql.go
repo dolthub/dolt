@@ -211,7 +211,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				return HandleVErrAndExitCode(errhand.BuildDError("Invalid commit %s", apr.Arg(0)).SetPrintUsage().Build(), usage)
 			}
 
-			cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+			cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 
 			if err != nil {
 				return HandleVErrAndExitCode(errhand.BuildDError("Invalid commit %s", apr.Arg(0)).SetPrintUsage().Build(), usage)
@@ -354,7 +354,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func parseCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, error) {
 	if apr.NArg() == 0 || apr.Arg(0) == "--" {
-		return dEnv.RepoState.CWBHeadSpec(), nil
+		return dEnv.RepoStateReader().CWBHeadSpec(), nil
 	}
 
 	comSpecStr := apr.Arg(0)
@@ -402,13 +402,13 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, continueOnErr bool, mrEnv env
 		// them would overwrite these changes)
 		// TODO: this is a mess, merge conflicts need to follow the same code path as everything else
 		if err == doltdb.ErrUnresolvedConflicts || err == doltdb.ErrMergeActive {
-			return errhand.BuildDError("Error processing batch").Build()
+			return errhand.BuildDError("Error processing batch").AddCause(err).Build()
 		}
 
 		_ = flushBatchedEdits(sqlCtx, se)
 		_ = writeRoots(sqlCtx, se, mrEnv, roots)
 
-		return errhand.BuildDError("Error processing batch").Build()
+		return errhand.BuildDError("Error processing batch").AddCause(err).Build()
 	}
 
 	return writeRoots(sqlCtx, se, mrEnv, roots)
@@ -418,7 +418,14 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData())
 }
 
-func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) errhand.VerboseError {
+func execQuery(
+	sqlCtx *sql.Context,
+	readOnly bool,
+	mrEnv env.MultiRepoEnv,
+	roots map[string]*doltdb.RootValue,
+	query string,
+	format resultFormat,
+) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -506,7 +513,7 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 		return verrBuilder.Build()
 	} else {
 		if len(message) > 0 {
-			err = fmt.Errorf("%s: %s", message, err.Error())
+			err = fmt.Errorf("%s: %+v", message, err)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -993,15 +1000,10 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 			return false, err
 		}
 
-		h, err := root.HashOf()
-		if err != nil {
-			return false, err
-		}
-
 		dsess := dsqle.DSessFromSess(ctx.Session)
 		rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
 		if ok {
-			err = rsw.SetWorkingHash(ctx, h)
+			err = rsw.UpdateWorkingRoot(ctx, root)
 			if err != nil {
 				return false, err
 			}
@@ -1098,6 +1100,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *sqlEngine, query string, sql
 	}
 
 	// DOLT SQL functions like DOLT_COMMIT require an updated repo state to work correctly.
+	// TODO: kill this entire mess
 	if foundDoltSQLFunc {
 		err = updateRepoState(ctx, se)
 		if err != nil {
@@ -1382,13 +1385,16 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		nameToDB[db.Name()] = db
 		root := roots[db.Name()]
 		engine.AddDatabase(db)
-		err := dsess.AddDB(sqlCtx, db, db.DbData())
 
+		// TODO: this doesn't consider the root above, which may not be the HEAD of the branch
+		//  To fix this, we need to pass a commit here as a separate param, and install a read-only database on it
+		//  since it isn't a current HEAD.
+		dbState, err := getDbState(sqlCtx, db, mrEnv)
 		if err != nil {
 			return nil, err
 		}
 
-		err = db.SetRoot(sqlCtx, root)
+		err = dsess.AddDB(sqlCtx, dbState)
 		if err != nil {
 			return nil, err
 		}
@@ -1401,6 +1407,39 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 	}
 
 	return &sqlEngine{nameToDB, mrEnv, engine, format}, nil
+}
+
+func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) (dsqle.InitialDbState, error) {
+	var dEnv *env.DoltEnv
+	mrEnv.Iter(func(name string, de *env.DoltEnv) (stop bool, err error) {
+		if name == db.Name() {
+			dEnv = de
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if dEnv == nil {
+		return dsqle.InitialDbState{}, fmt.Errorf("Couldn't find environment for database %s", db.Name())
+	}
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		return dsqle.InitialDbState{}, err
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return dsqle.InitialDbState{}, err
+	}
+
+	return dsqle.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+	}, nil
 }
 
 func (se *sqlEngine) getDB(name string) (dsqle.Database, error) {

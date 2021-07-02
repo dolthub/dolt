@@ -55,7 +55,7 @@ func (r WorkingSetRef) GetPath() string {
 }
 
 func (r WorkingSetRef) ToHeadRef() (DoltRef, error) {
-	return Parse(r.GetPath())
+	return Parse(refPrefix + r.GetPath())
 }
 
 // String returns the fully qualified reference name e.g.

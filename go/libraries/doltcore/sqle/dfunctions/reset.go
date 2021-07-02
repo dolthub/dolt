@@ -41,6 +41,7 @@ func NewResetFunc(ctx *sql.Context, e sql.Expression) sql.Expression {
 }
 
 // Eval implements the Expression interface.
+// TODO: this doesn't seem to do anything
 func (rf ResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	val, err := rf.Child.Eval(ctx, row)
 	if err != nil {
@@ -59,7 +60,7 @@ func (rf ResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, fmt.Errorf("invalid arugument to %s(): %s", resetFuncName, arg)
 	}
 
-	parent, _, err := dSess.GetHeadCommit(ctx, dbName)
+	parent, err := dSess.GetHeadCommit(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}

@@ -82,7 +82,7 @@ func pullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 		return errhand.BuildDError("dolt pull takes at most one arg").SetPrintUsage().Build()
 	}
 
-	branch := dEnv.RepoState.CWBHeadRef()
+	branch := dEnv.RepoStateReader().CWBHeadRef()
 
 	var remoteName string
 	if apr.NArg() == 1 {

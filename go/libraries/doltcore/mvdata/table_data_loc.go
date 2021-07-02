@@ -299,7 +299,7 @@ func (te *tableEditorWriteCloser) GC(ctx context.Context) error {
 		return err
 	}
 
-	keepers, err := env.GetGCKeepers(ctx, te.dEnv.RepoStateReader(), te.dEnv.DoltDB)
+	keepers, err := env.GetGCKeepers(ctx, te.dEnv)
 	if err != nil {
 		return err
 	}

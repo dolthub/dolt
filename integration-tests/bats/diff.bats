@@ -460,3 +460,32 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ "CONSTRAINT \`fk_named\` FOREIGN KEY (\`cv1\`) REFERENCES \`parent\` (\`pv1\`)" ]] || false
 }
+
+@test "diff: table with same name on different branches with different primary key sets" {
+    dolt branch another-branch
+    dolt sql <<SQL
+CREATE TABLE a (
+  id int PRIMARY KEY,
+  pv1 int,
+  pv2 int
+);
+SQL
+    dolt add -A
+    dolt commit -m "hi"
+    dolt checkout another-branch
+    dolt sql <<SQL
+CREATE TABLE a (
+  id int primary key,
+  cv1 int primary key,
+  cv2 int
+);
+SQL
+    dolt add -A
+    dolt commit -m "hello"
+    run dolt diff master another-branch
+    echo $output
+    ! [[ "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "pv1" ]] || false
+    [[ "$output" =~ "cv1" ]] || false
+    [ $status -eq 0 ]
+}

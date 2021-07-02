@@ -134,6 +134,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 			},
 		},
 	})
+
 	db := harness.databases[0].GetDoltDB()
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	require.NoError(t, err)

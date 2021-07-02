@@ -33,7 +33,8 @@ func TestSchemaTableRecreation(t *testing.T) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	db := NewDatabase("dolt", dEnv.DbData())
-	err := DSessFromSess(ctx.Session).AddDB(ctx, db, db.DbData())
+	dbState := getDbState(t, db, dEnv)
+	err := DSessFromSess(ctx.Session).AddDB(ctx, dbState)
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
 

@@ -149,6 +149,7 @@ func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootVal
 		return err
 	}
 
+	// TODO: yes you can, fix this
 	if rh != hrh {
 		return errors.New("cannot merge with uncommitted changes")
 	}
@@ -185,7 +186,12 @@ func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*do
 }
 
 func getHead(ctx *sql.Context, sess *sqle.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
-	head, hh, err := sess.GetHeadCommit(ctx, dbName)
+	head, err := sess.GetHeadCommit(ctx, dbName)
+	if err != nil {
+		return nil, hash.Hash{}, nil, err
+	}
+
+	hh, err := head.HashOf()
 	if err != nil {
 		return nil, hash.Hash{}, nil, err
 	}

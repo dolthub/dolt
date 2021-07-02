@@ -481,7 +481,7 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 
 	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(context.Background(), dEnv, root, test.InsertQuery)
+	root, err = executeModify(t, context.Background(), dEnv, root, test.InsertQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return
@@ -489,7 +489,7 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, sch, err := executeSelect(context.Background(), dEnv, root, test.SelectQuery)
+	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)

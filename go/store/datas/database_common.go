@@ -521,12 +521,12 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 	return tryCommitErr
 }
 
-func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, ref types.Ref, meta WorkingSetMeta, prevHash hash.Hash) (Dataset, error) {
+func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
 	return db.doHeadUpdate(
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			workspace, err := NewWorkingSet(ctx, ref)
+			workspace, err := NewWorkingSet(ctx, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
 			if err != nil {
 				return err
 			}
@@ -764,12 +764,12 @@ func (db *database) validateWorkingSet(t types.Struct) error {
 		return fmt.Errorf("WorkingSet struct %s is malformed, IsWorkingSet() == false", t.String())
 	}
 
-	_, ok, err := t.MaybeGet(WorkingSetRefField)
+	_, ok, err := t.MaybeGet(WorkingRootRefField)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("WorkingSet is missing field %s", WorkingSetRefField)
+		return fmt.Errorf("WorkingSet is missing field %s", WorkingRootRefField)
 	}
 
 	return nil

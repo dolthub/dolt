@@ -26,6 +26,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -38,6 +39,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const testMapSize = 8000
@@ -2095,7 +2097,6 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 
 func TestMapWithNil(t *testing.T) {
 	vrw := newTestValueStore()
-
 	assert.Panics(t, func() {
 		NewMap(context.Background(), nil, Float(42))
 	})
@@ -2108,4 +2109,67 @@ func TestMapWithNil(t *testing.T) {
 	assert.Panics(t, func() {
 		NewSet(context.Background(), vrw, String("a"), String("b"), Float(42), nil)
 	})
+}
+
+func TestVisitMapLevelOrderSized(t *testing.T) {
+	smallTestChunks()
+	defer normalProductionChunks()
+
+	assert := assert.New(t)
+
+	tests := []struct {
+		description string
+		mapSize     int
+		batchSize   int
+	}{
+		{
+			description: "large batch",
+			mapSize:     testMapSize * 4,
+			batchSize:   200,
+		},
+		{
+			description: "medium batch",
+			mapSize:     testMapSize * 2,
+			batchSize:   20,
+		},
+		{
+			description: "small batch",
+			mapSize:     testMapSize,
+			batchSize:   2,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			vrw := newTestValueStore()
+			kvs := []Value{}
+			for i := 0; i < test.mapSize; i++ {
+				kvs = append(kvs, Float(i), Float(i+1))
+			}
+
+			m, err := NewMap(context.Background(), vrw, kvs...)
+			d.PanicIfError(err)
+
+			expectedChunkHashes := make([]hash.Hash, 0)
+			_, _, err = VisitMapLevelOrder(m, func(h hash.Hash) (int64, error) {
+				expectedChunkHashes = append(expectedChunkHashes, h)
+				return 0, nil
+			})
+			d.PanicIfError(err)
+
+			actualChunkHashes := make([]hash.Hash, 0)
+			_, _, err = VisitMapLevelOrderSized([]Map{m}, test.batchSize, func(h hash.Hash) (int64, error) {
+				actualChunkHashes = append(actualChunkHashes, h)
+				return 0, nil
+			})
+			d.PanicIfError(err)
+			sort.Slice(expectedChunkHashes, func(i, j int) bool {
+				return expectedChunkHashes[i].Less(expectedChunkHashes[j])
+			})
+			sort.Slice(actualChunkHashes, func(i, j int) bool {
+				return actualChunkHashes[i].Less(actualChunkHashes[j])
+			})
+			assert.Equal(expectedChunkHashes, actualChunkHashes)
+		})
+	}
 }

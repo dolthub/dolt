@@ -67,34 +67,39 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 	}
 
+	ws := sess.WorkingSet(ctx, dbName)
+	roots, ok := sess.GetRoots(dbName)
+	if !ok {
+		return 1, fmt.Errorf("Could not load database %s", dbName)
+	}
+
 	if apr.Contains(cli.AbortParam) {
-		if !dbData.Rsr.IsMergeActive() {
+		// TODO: fix me (get merge state from session)
+		if !ws.MergeActive() {
 			return 1, fmt.Errorf("fatal: There is no merge to abort")
 		}
 
-		err = abortMerge(ctx, dbData)
-
+		ws, err = abortMerge(ctx, ws, roots)
 		if err != nil {
 			return 1, err
 		}
 
+		err := sess.SetWorkingSet(ctx, dbName, ws, nil)
+		if err != nil {
+			return nil, err
+		}
+
 		return "Merge aborted", nil
 	}
-
-	// The first argument should be the branch name.
-	branchName := apr.Arg(0)
 
 	ddb, ok := sess.GetDoltDB(dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	root, ok := sess.GetRoot(dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
+	working := roots.Working
 
-	hasConflicts, err := root.HasConflicts(ctx)
+	hasConflicts, err := working.HasConflicts(ctx)
 	if err != nil {
 		return 1, err
 	}
@@ -103,36 +108,36 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, doltdb.ErrUnresolvedConflicts
 	}
 
-	if dbData.Rsr.IsMergeActive() {
+	if ws.MergeActive() {
 		return 1, doltdb.ErrMergeActive
 	}
 
-	head, hh, headRoot, err := getHead(ctx, sess, dbName)
+	err = checkForUncommittedChanges(working, roots.Head)
 	if err != nil {
 		return nil, err
 	}
 
-	err = checkForUncommittedChanges(root, headRoot)
+	branchName := apr.Arg(0)
+	mergeCommit, cmh, err := getBranchCommit(ctx, branchName, ddb)
 	if err != nil {
 		return nil, err
 	}
 
-	cm, cmh, err := getBranchCommit(ctx, branchName, ddb)
+	headCommit, err := sess.GetHeadCommit(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	// No need to write a merge commit, if the head can ffw to the commit coming from the branch.
-	canFF, err := head.CanFastForwardTo(ctx, cm)
+	canFF, err := headCommit.CanFastForwardTo(ctx, mergeCommit)
 	if err != nil {
 		return nil, err
 	}
 
 	if canFF {
 		if apr.Contains(cli.NoFFParam) {
-			err = executeNoFFMerge(ctx, sess, apr, dbName, dbData, head, cm)
+			err = executeNoFFMerge(ctx, sess, apr, dbName, ws, dbData, headCommit, mergeCommit)
 		} else {
-			err = executeFFMerge(ctx, apr.Contains(cli.SquashParam), dbName, dbData, cm)
+			err = executeFFMerge(ctx, sess, apr.Contains(cli.SquashParam), dbName, ws, dbData, mergeCommit)
 		}
 
 		if err != nil {
@@ -141,67 +146,66 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmh.String(), err
 	}
 
-	err = executeMerge(ctx, apr.Contains(cli.SquashParam), head, cm, dbName, dbData)
+	ws, err = executeMerge(ctx, apr.Contains(cli.SquashParam), headCommit, mergeCommit, dbName, dbData, ws)
 	if err != nil {
 		return nil, err
 	}
 
-	returnMsg := fmt.Sprintf("Updating %s..%s", cmh.String(), hh.String())
+	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+	if err != nil {
+		return nil, err
+	}
 
+	hch, err := headCommit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	returnMsg := fmt.Sprintf("Updating %s..%s", hch.String(), cmh.String())
 	return returnMsg, nil
 }
 
-func abortMerge(ctx *sql.Context, dbData env.DbData) error {
-	err := actions.CheckoutAllTables(ctx, dbData)
-
+func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Roots) (*doltdb.WorkingSet, error) {
+	tbls, err := doltdb.UnionTableNames(ctx, roots.Working, roots.Staged, roots.Head)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = dbData.Rsw.AbortMerge()
+	roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, tbls)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	hh, err := dbData.Rsr.CWBHeadHash(ctx)
-	if err != nil {
-		return err
-	}
-
-	return setHeadAndWorkingSessionRoot(ctx, hh.String())
+	// TODO: this doesn't seem right, it sets the root that we already edited above
+	workingSet = workingSet.AbortMerge()
+	return workingSet, nil
 }
 
-func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, name string, dbData env.DbData) error {
+func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, name string, dbData env.DbData, ws *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
 	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm)
 
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
-			return errors.New("Already up to date.")
+			return nil, errors.New("Already up to date.")
 		case merge.ErrFastForward:
 			panic("fast forward merge")
 		default:
-			return errors.New("Bad merge")
+			return nil, errors.New("Bad merge")
 		}
 	}
 
-	return mergeRootToWorking(ctx, squash, name, dbData, mergeRoot, cm, mergeStats)
+	return mergeRootToWorking(squash, ws, mergeRoot, cm, mergeStats)
 }
 
-func executeFFMerge(ctx *sql.Context, squash bool, dbName string, dbData env.DbData, cm2 *doltdb.Commit) error {
+func executeFFMerge(ctx *sql.Context, sess *sqle.DoltSession, squash bool, dbName string, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) error {
 	rv, err := cm2.GetRootValue()
-
-	if err != nil {
-		return errors.New("Failed to return root value.")
-	}
-
-	stagedHash, err := dbData.Ddb.WriteRootValue(ctx, rv)
-
 	if err != nil {
 		return err
 	}
 
-	workingHash := stagedHash
+	// TODO: This is all incredibly suspect, needs to be replaced with library code that is functional instead of
+	//  altering global state
 	if !squash {
 		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
 
@@ -210,26 +214,9 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbName string, dbData env.DbD
 		}
 	}
 
-	err = dbData.Rsw.SetWorkingHash(ctx, workingHash)
-	if err != nil {
-		return err
-	}
+	ws = ws.WithWorkingRoot(rv).WithStagedRoot(rv)
 
-	err = dbData.Rsw.SetStagedHash(ctx, stagedHash)
-	if err != nil {
-		return err
-	}
-
-	hh, err := dbData.Rsr.CWBHeadHash(ctx)
-	if err != nil {
-		return err
-	}
-
-	if squash {
-		return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String())
-	} else {
-		return setHeadAndWorkingSessionRoot(ctx, hh.String())
-	}
+	return sess.SetWorkingSet(ctx, dbName, ws, nil)
 }
 
 func executeNoFFMerge(
@@ -237,15 +224,16 @@ func executeNoFFMerge(
 	dSess *sqle.DoltSession,
 	apr *argparser.ArgParseResults,
 	dbName string,
+	ws *doltdb.WorkingSet,
 	dbData env.DbData,
 	pr, cm2 *doltdb.Commit,
 ) error {
 	mergedRoot, err := cm2.GetRootValue()
 	if err != nil {
-		return errors.New("Failed to return root value.")
+		return err
 	}
 
-	err = mergeRootToWorking(ctx, false, dbName, dbData, mergedRoot, cm2, map[string]*merge.MergeStats{})
+	ws, err = mergeRootToWorking(false, ws, mergedRoot, cm2, map[string]*merge.MergeStats{})
 	if err != nil {
 		return err
 	}
@@ -265,6 +253,7 @@ func executeNoFFMerge(
 		msg = fmt.Sprintf("SQL Generated commit merging %s into %s", hh.String(), cmh.String())
 	}
 
+	// TODO: remove, redundant
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
@@ -276,7 +265,6 @@ func executeNoFFMerge(
 		email = dSess.Email
 	}
 
-	// Specify the time if the date parameter is not.
 	t := ctx.QueryTime()
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
@@ -286,7 +274,14 @@ func executeNoFFMerge(
 		}
 	}
 
-	h, err := actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+	// The roots from the sessoin haven't been updated with the work we did above, so do it now
+	roots, _ := dSess.GetRoots(dbName)
+	roots.Working = ws.WorkingRoot()
+	roots.Staged = ws.StagedRoot()
+
+	// TODO: this does several session state updates, and it really needs to just do one
+	//  We also need to commit any pending transaction before we do this.
+	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
@@ -294,61 +289,35 @@ func executeNoFFMerge(
 		Name:             name,
 		Email:            email,
 	})
-
 	if err != nil {
 		return err
 	}
 
-	return setHeadAndWorkingSessionRoot(ctx, h)
+	return dSess.SetWorkingSet(ctx, dbName, ws, nil)
 }
 
+// TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.
 func mergeRootToWorking(
-	ctx *sql.Context,
 	squash bool,
-	dbName string,
-	dbData env.DbData,
+	ws *doltdb.WorkingSet,
 	mergedRoot *doltdb.RootValue,
 	cm2 *doltdb.Commit,
 	mergeStats map[string]*merge.MergeStats,
-) error {
-	h2, err := cm2.HashOf()
-	if err != nil {
-		return err
-	}
+) (*doltdb.WorkingSet, error) {
 
 	workingRoot := mergedRoot
 	if !squash {
-		err = dbData.Rsw.StartMerge(h2.String())
-
-		if err != nil {
-			return err
-		}
+		// TODO: is this a bug? where does the merge get cleared?
+		ws.StartMerge(cm2)
 	}
 
-	workingHash, err := env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
-	if err != nil {
-		return err
+	// TODO: merge conflicts are fine in some cases, make it possible to commit them with a flag
+	if checkForConflicts(mergeStats) {
+		return nil, doltdb.ErrUnresolvedConflicts
 	}
 
-	hasConflicts := checkForConflicts(mergeStats)
-
-	if hasConflicts {
-		// If there are conflicts write them to the working root anyway too allow for merge resolution via the dolt_conflicts
-		// table.
-		err := ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String())
-		if err != nil {
-			return err
-		}
-
-		return doltdb.ErrUnresolvedConflicts
-	}
-
-	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
-	if err != nil {
-		return err
-	}
-
-	return ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String())
+	ws = ws.WithWorkingRoot(workingRoot).WithStagedRoot(workingRoot)
+	return ws, nil
 }
 
 func checkForConflicts(tblToStats map[string]*merge.MergeStats) bool {

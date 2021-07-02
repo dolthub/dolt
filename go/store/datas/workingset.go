@@ -22,21 +22,37 @@ import (
 )
 
 const (
-	WorkspaceMetaField = "meta"
-	WorkingSetRefField = "ref"
-	WorkingSetName     = "WorkingSet"
+	WorkingSetName      = "WorkingSet"
+	WorkspaceMetaField  = "meta"
+	WorkingRootRefField = "workingRootRef"
+	StagedRootRefField  = "stagedRootRef"
+	MergeStateField     = "mergeState"
+)
+
+const (
+	MergeStateName                 = "MergeState"
+	MergeStateCommitField          = "commit"
+	MergeStateWorkingPreMergeField = "workingPreMerge"
 )
 
 type WorkingSetMeta struct {
 	Meta types.Struct
 }
 
-var workingSetTemplate = types.MakeStructTemplate(WorkingSetName, []string{WorkingSetRefField})
-
-// ref is a Ref<Value>, any Value
 var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
-        ref:  Ref<Value>,
+				mergeState?: Ref<Value>,
+				stagedRootRef?:  Ref<Value>,
+        workingRootRef:  Ref<Value>,
 }`)
+
+var mergeStateTemplate = types.MakeStructTemplate(MergeStateName, []string{MergeStateCommitField, MergeStateWorkingPreMergeField})
+
+type WorkingSetSpec struct {
+	Meta        WorkingSetMeta
+	WorkingRoot types.Ref
+	StagedRoot  *types.Ref
+	MergeState  *types.Ref
+}
 
 // NewWorkingSet creates a new working set object.
 // A working set is a value that has been persisted but is not necessarily referenced by a Commit. As the name implies,
@@ -47,12 +63,28 @@ var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
 // ```
 // struct WorkingSet {
 //   meta: M,
-//   ref: R,
+//   workingRootRef: R,
+//   stagedRootRef: R,
+//   mergeState: R,
 // }
 // ```
 // where M is a struct type and R is a ref type.
-func NewWorkingSet(_ context.Context, valueRef types.Ref) (types.Struct, error) {
-	return workingSetTemplate.NewStruct(valueRef.Format(), []types.Value{valueRef})
+func NewWorkingSet(_ context.Context, workingRef types.Ref, stagedRef, mergeStateRef *types.Ref) (types.Struct, error) {
+	fields := make(types.StructData)
+	fields[WorkingRootRefField] = workingRef
+
+	if stagedRef != nil {
+		fields[StagedRootRefField] = stagedRef
+	}
+	if mergeStateRef != nil {
+		fields[MergeStateField] = mergeStateRef
+	}
+
+	return types.NewStruct(workingRef.Format(), WorkingSetName, fields)
+}
+
+func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.Struct) (types.Struct, error) {
+	return mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit, preMergeWorking})
 }
 
 func IsWorkingSet(v types.Value) (bool, error) {

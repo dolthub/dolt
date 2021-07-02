@@ -155,7 +155,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		dsqlDBs[i] = dsqlDB
 
 		sess := dsql.DSessFromSess(ctx.Session)
-		err := sess.AddDB(ctx, dsqlDB, dsqlDB.DbData())
+		err := sess.AddDB(ctx, getDbState(db, dEnv))
 
 		if err != nil {
 			return err
@@ -184,6 +184,28 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	}
 
 	return nil
+}
+
+func getDbState(db sql.Database, dEnv *env.DoltEnv) dsql.InitialDbState {
+	ctx := context.Background()
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		panic(err)
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	return dsql.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+	}
 }
 
 // We cheat a little at these tests. A great many of them use tables without primary keys, which we don't currently
