@@ -89,42 +89,42 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-		if apr.ContainsAll(HardResetParam, SoftResetParam) {
-			verr := errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
-			HandleVErrAndExitCode(verr, usage)
-		} else if apr.Contains(HardResetParam) {
-			arg := ""
-			if apr.NArg() > 1 {
-				return handleResetError(fmt.Errorf("--hard supports at most one additional param"), usage)
-			} else if apr.NArg() == 1 {
-				arg = apr.Arg(0)
-			}
+	if apr.ContainsAll(HardResetParam, SoftResetParam) {
+		verr := errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
+		HandleVErrAndExitCode(verr, usage)
+	} else if apr.Contains(HardResetParam) {
+		arg := ""
+		if apr.NArg() > 1 {
+			return handleResetError(fmt.Errorf("--hard supports at most one additional param"), usage)
+		} else if apr.NArg() == 1 {
+			arg = apr.Arg(0)
+		}
 
-			err = actions.ResetHard(ctx, dEnv, arg, roots)
-		} else {
-			// Check whether the input argument is a ref.
-			if apr.NArg() == 1 {
-				argToCheck := apr.Arg(0)
+		err = actions.ResetHard(ctx, dEnv, arg, roots)
+	} else {
+		// Check whether the input argument is a ref.
+		if apr.NArg() == 1 {
+			argToCheck := apr.Arg(0)
 
-				ok := actions.ValidateIsRef(ctx, argToCheck, dEnv.DoltDB, dEnv.RepoStateReader())
+			ok := actions.ValidateIsRef(ctx, argToCheck, dEnv.DoltDB, dEnv.RepoStateReader())
 
-				// This is a valid ref
-				if ok {
-					err = actions.ResetSoftToRef(ctx, dEnv.DbData(), apr.Arg(0))
-					return handleResetError(err, usage)
-				}
-			}
-
-			tables := apr.Args()
-
-			roots.Staged, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, roots)
-
-			if err != nil {
+			// This is a valid ref
+			if ok {
+				err = actions.ResetSoftToRef(ctx, dEnv.DbData(), apr.Arg(0))
 				return handleResetError(err, usage)
 			}
-
-			printNotStaged(ctx, dEnv, roots.Staged)
 		}
+
+		tables := apr.Args()
+
+		roots.Staged, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, roots)
+
+		if err != nil {
+			return handleResetError(err, usage)
+		}
+
+		printNotStaged(ctx, dEnv, roots.Staged)
+	}
 
 	return handleResetError(err, usage)
 }

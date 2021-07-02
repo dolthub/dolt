@@ -115,10 +115,10 @@ func stageTablesNoEnvUpdate(
 }
 
 func stageTables(
-		ctx context.Context,
-		roots doltdb.Roots,
-		rsw env.RepoStateWriter,
-		tbls []string,
+	ctx context.Context,
+	roots doltdb.Roots,
+	rsw env.RepoStateWriter,
+	tbls []string,
 ) error {
 	var err error
 	roots, err = stageTablesNoEnvUpdate(ctx, roots, tbls)

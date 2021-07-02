@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -872,8 +872,8 @@ func getWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRe
 }
 
 func GetTablesInConflict(ctx context.Context, roots doltdb.Roots) (
-		workingInConflict, stagedInConflict, headInConflict []string,
-		err error,
+	workingInConflict, stagedInConflict, headInConflict []string,
+	err error,
 ) {
 	headInConflict, err = roots.Head.TablesInConflict(ctx)
 	if err != nil {

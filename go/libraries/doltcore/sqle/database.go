@@ -1076,22 +1076,22 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 
 	root := dsess.dbStates[db.name].tempTableRoot
 	if root != nil {
-			tNames, err := root.GetTableNames(ctx)
+		tNames, err := root.GetTableNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, tName := range tNames {
+			tbl, ok, err := db.GetTableInsensitive(ctx, tName)
 			if err != nil {
 				return nil, err
 			}
 
-			for _, tName := range tNames {
-				tbl, ok, err := db.GetTableInsensitive(ctx, tName)
-				if err != nil {
-					return nil, err
-				}
-
-				if ok {
-					tables = append(tables, tbl)
-				}
+			if ok {
+				tables = append(tables, tbl)
 			}
 		}
+	}
 
 	return tables, nil
 }

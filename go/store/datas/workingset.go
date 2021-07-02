@@ -48,10 +48,10 @@ var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
 var mergeStateTemplate = types.MakeStructTemplate(MergeStateName, []string{MergeStateCommitField, MergeStateWorkingPreMergeField})
 
 type WorkingSetSpec struct {
-	Meta WorkingSetMeta
+	Meta        WorkingSetMeta
 	WorkingRoot types.Ref
-	StagedRoot *types.Ref
-	MergeState *types.Ref
+	StagedRoot  *types.Ref
+	MergeState  *types.Ref
 }
 
 // NewWorkingSet creates a new working set object.
@@ -84,7 +84,7 @@ func NewWorkingSet(_ context.Context, workingRef types.Ref, stagedRef, mergeStat
 }
 
 func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.Struct) (types.Struct, error) {
-		return mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit, preMergeWorking})
+	return mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit, preMergeWorking})
 }
 
 func IsWorkingSet(v types.Value) (bool, error) {

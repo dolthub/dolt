@@ -593,7 +593,7 @@ func (sess *DoltSession) SetWorkingSet(
 		}
 	}
 
-	if headRoot != nil{
+	if headRoot != nil {
 		sessionState.headRoot = headRoot
 	}
 
@@ -615,7 +615,6 @@ func (sess *DoltSession) WorkingSet(ctx *sql.Context, dbName string) *doltdb.Wor
 	sessionState := sess.dbStates[dbName]
 	return sessionState.workingSet
 }
-
 
 func (sess *DoltSession) GetTempTableRootValue(ctx *sql.Context, dbName string) (*doltdb.RootValue, bool) {
 	dbstate, ok := sess.dbStates[dbName]
