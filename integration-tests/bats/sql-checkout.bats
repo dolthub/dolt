@@ -42,28 +42,40 @@ teardown() {
 }
 
 @test "sql-checkout: DOLT_CHECKOUT properly carries unstaged and staged changes between new and existing branches." {
-    run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
+    dolt add . && dolt commit -m "0, 1, and 2 in test table"
+    dolt sql -q "insert into test values (4);"
+    
+    dolt sql << SQL 
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+select * from test where pk > 3;
+SQL
     [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
 
-    run dolt ls
+    run dolt branch
     [ $status -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "feature-branch" ]] || false
 
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "On branch feature-branch" ]] || false
+    [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "Untracked files" ]] || false
     [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
 
-    run dolt add .
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('-b', 'feature-branch2');
+insert into test values (5);
+select * from test where pk > 3;
+SQL
     [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "5" ]] || false
 
-    run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch2')"
+    # working set from master has 4, but not 5
+    run dolt sql -q "select * from test where pk > 3"
     [ $status -eq 0 ]
-
-    run dolt ls
-    [ $status -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ ! "$output" =~ "5" ]] || false
 
     run dolt status
     [ $status -eq 0 ]
