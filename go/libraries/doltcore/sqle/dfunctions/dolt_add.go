@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 )
 
 const DoltAddFuncName = "dolt_add"
@@ -65,7 +66,13 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return 1, err
 		}
 
+		logrus.Errorf("working is %s", roots.Working.DebugString(ctx, true))
+		logrus.Errorf("staged is %s", roots.Staged.DebugString(ctx, true))
+
 		err = dSess.SetRoots(ctx, dbName, roots)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		roots, err = actions.StageTablesNoDocs(ctx, roots, apr.Args())
 		if err != nil {
@@ -73,6 +80,9 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		}
 
 		err = dSess.SetRoots(ctx, dbName, roots)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return 0, nil

@@ -101,6 +101,8 @@ teardown() {
 }
 
 @test "sql-add: Check that Dolt add works with docs" {
+    skip "We don't know if this use case makes sense or not"
+    
      echo readme-text > README.md
      run ls
      [[ "$output" =~ "README.md" ]] || false

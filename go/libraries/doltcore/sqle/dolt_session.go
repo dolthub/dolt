@@ -52,7 +52,7 @@ const (
 const TransactionsEnabledSysVar = "dolt_transactions_enabled"
 
 func init() {
-	txEnabledSessionVar := int8(0)
+	txEnabledSessionVar := int8(1)
 	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
 	if ok {
 		if strings.ToLower(enableTx) == "true" {
@@ -250,6 +250,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string, tx s
 
 	// Old "commit" path, which just writes whatever the root for this session is to the repo state file with no care
 	// for concurrency. Over time we will disable this path.
+	// TODO: remove me
 	if !TransactionsEnabled(ctx) {
 		dbData := dbstate.dbData
 		dbstate.dirty = false
