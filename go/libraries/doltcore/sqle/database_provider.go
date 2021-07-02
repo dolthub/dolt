@@ -44,7 +44,7 @@ func init() {
 }
 
 type RevisionDatabaseProvider interface {
-	DatabaseAtRevision(name string) (sql.Database, InitialDbState, bool)
+	DatabaseAtRevision(ctx context.Context, name string) (sql.Database, InitialDbState, error)
 }
 
 type DoltDatabaseProvider struct {
@@ -71,8 +71,11 @@ func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error)
 	}
 
 	if dbRevisionsEnabled { // feature flagged
-		db, _, ok = p.DatabaseAtRevision(name)
-		if ok {
+		db, _, err = p.DatabaseAtRevision(context.Background(), name)
+		if err != nil {
+			return nil, err
+		}
+		if db != nil {
 			p.databases[name] = db
 			return db, nil
 		}
@@ -104,11 +107,9 @@ func (p DoltDatabaseProvider) DropDatabase(name string) {
 	delete(p.databases, name)
 }
 
-func (p DoltDatabaseProvider) DatabaseAtRevision(name string) (sql.Database, InitialDbState, bool) {
-	ctx := context.Background()
-
+func (p DoltDatabaseProvider) DatabaseAtRevision(ctx context.Context, name string) (sql.Database, InitialDbState, error) {
 	if !strings.Contains(name, dbRevisionDelimiter) {
-		return nil, InitialDbState{}, false
+		return nil, InitialDbState{}, nil
 	}
 
 	parts := strings.SplitN(name, dbRevisionDelimiter, 2)
@@ -116,30 +117,32 @@ func (p DoltDatabaseProvider) DatabaseAtRevision(name string) (sql.Database, Ini
 
 	candidate, ok := p.databases[dbName]
 	if !ok {
-		return nil, InitialDbState{}, false
+		return nil, InitialDbState{}, nil
 	}
 	srcDb, ok := candidate.(Database)
 	if !ok {
-		return nil, InitialDbState{}, false
+		return nil, InitialDbState{}, nil
 	}
 
 	if isBranch(ctx, srcDb.ddb, revSpec) {
 		// if the requested revision is a br we can
 		// write to it, otherwise make read-only
 		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
-		if err == nil {
-			return db, init, true
+		if err != nil {
+			return nil, InitialDbState{}, err
 		}
+		return db, init, nil
 	}
 
 	if doltdb.IsValidCommitHash(revSpec) {
 		db, init, err := dbRevisionForCommit(ctx, srcDb, revSpec)
-		if err == nil {
-			return db, init, true
+		if err != nil {
+			return nil, InitialDbState{}, err
 		}
+		return db, init, nil
 	}
 
-	return nil, InitialDbState{}, false
+	return nil, InitialDbState{}, nil
 }
 
 func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {

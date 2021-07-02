@@ -88,7 +88,7 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 	}
 
 	dsess := DSessFromSess(ctx.Session)
-	dbState, _, err := dsess.lookupDbState(db.Name())
+	dbState, _, err := dsess.lookupDbState(ctx, db.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +300,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, NewSessionStateAdapter(sess, db.name), db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, NewSessionStateAdapter(ctx, sess, db.name), db.drw), true
 	}
 	if found {
 		return dt, found, nil
@@ -528,7 +528,7 @@ var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	dbState, _, err := dsess.lookupDbState(db.Name())
+	dbState, _, err := dsess.lookupDbState(ctx, db.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -781,7 +781,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db Database) Flush(ctx *sql.Context) error {
 	dsess := DSessFromSess(ctx.Session)
-	dbState, _, err := dsess.lookupDbState(db.Name())
+	dbState, _, err := dsess.lookupDbState(ctx, db.Name())
 	if err != nil {
 		return err
 	}
@@ -1072,7 +1072,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (*editor.TableEditSession, error) {
 	dsess := DSessFromSess(ctx.Session)
-	dbState, _, err := dsess.lookupDbState(db.Name())
+	dbState, _, err := dsess.lookupDbState(ctx, db.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -1086,7 +1086,7 @@ func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (*editor
 // GetAllTemporaryTables returns all temporary tables
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
 	dsess := DSessFromSess(ctx.Session)
-	dbState, _, err := dsess.lookupDbState(db.Name())
+	dbState, _, err := dsess.lookupDbState(ctx, db.Name())
 	if err != nil {
 		return nil, err
 	}

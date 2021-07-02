@@ -75,7 +75,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	root, ok := dSess.GetRoot(dbName)
+	root, ok := dSess.GetRoot(ctx, dbName)
 	if !ok {
 		return nil, fmt.Errorf("unknown database '%s'", dbName)
 	}
@@ -91,7 +91,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	ddb, ok := dSess.GetDoltDB(dbName)
+	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)

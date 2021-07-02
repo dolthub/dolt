@@ -40,7 +40,7 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	dSess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
+	dbData, ok := dSess.GetDbData(ctx, dbName)
 
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
@@ -64,7 +64,7 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	// Get all the needed roots.
-	roots, ok := dSess.GetRoots(dbName)
+	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}

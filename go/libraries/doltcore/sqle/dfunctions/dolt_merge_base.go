@@ -84,11 +84,11 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 	sess := sqle.DSessFromSess(ctx.Session)
 	dbName := ctx.GetCurrentDatabase()
 
-	dbData, ok := sess.GetDbData(dbName)
+	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
 		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
-	doltDB, ok := sess.GetDoltDB(dbName)
+	doltDB, ok := sess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
 	}

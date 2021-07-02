@@ -45,7 +45,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	sess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(dbName)
+	dbData, ok := sess.GetDbData(ctx, dbName)
 
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
@@ -71,7 +71,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	if err != nil {
 		return nil, err
 	}
-	roots, ok := sess.GetRoots(dbName)
+	roots, ok := sess.GetRoots(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
@@ -95,7 +95,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return "Merge aborted", nil
 	}
 
-	ddb, ok := sess.GetDoltDB(dbName)
+	ddb, ok := sess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
@@ -278,7 +278,7 @@ func executeNoFFMerge(
 	}
 
 	// The roots from the sessoin haven't been updated with the work we did above, so do it now
-	roots, _ := dSess.GetRoots(dbName)
+	roots, _ := dSess.GetRoots(ctx, dbName)
 	roots.Working = ws.WorkingRoot()
 	roots.Staged = ws.StagedRoot()
 

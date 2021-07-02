@@ -17,6 +17,8 @@ package sqle
 import (
 	"context"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -25,6 +27,7 @@ import (
 // SessionStateAdapter is an adapter for env.RepoStateReader in SQL contexts, getting information about the repo state
 // from the session.
 type SessionStateAdapter struct {
+	ctx     *sql.Context
 	session *DoltSession
 	dbName  string
 }
@@ -32,12 +35,12 @@ type SessionStateAdapter struct {
 var _ env.RepoStateReader = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
-func NewSessionStateAdapter(session *DoltSession, dbName string) SessionStateAdapter {
-	return SessionStateAdapter{session: session, dbName: dbName}
+func NewSessionStateAdapter(ctx *sql.Context, session *DoltSession, dbName string) SessionStateAdapter {
+	return SessionStateAdapter{ctx: ctx, session: session, dbName: dbName}
 }
 
 func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
-	dbState, _, err := s.session.lookupDbState(s.dbName)
+	dbState, _, err := s.session.lookupDbState(s.ctx, s.dbName)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -46,7 +49,7 @@ func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error)
 }
 
 func (s SessionStateAdapter) CWBHeadRef() ref.DoltRef {
-	dbState, _, err := s.session.lookupDbState(s.dbName)
+	dbState, _, err := s.session.lookupDbState(s.ctx, s.dbName)
 	if err != nil {
 		// TODO: fix this interface
 		panic(err)

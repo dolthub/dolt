@@ -1001,7 +1001,7 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 		}
 
 		dsess := dsqle.DSessFromSess(ctx.Session)
-		dbData, ok := dsess.GetDbData(db.Name())
+		dbData, ok := dsess.GetDbData(ctx, db.Name())
 		if ok {
 			err = dbData.Rsw.UpdateWorkingRoot(ctx, root)
 			if err != nil {
@@ -1009,7 +1009,7 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 			}
 		}
 
-		ddb, ok := dsess.GetDoltDB(db.Name())
+		ddb, ok := dsess.GetDoltDB(ctx, db.Name())
 		if ok {
 			_, err = ddb.WriteRootValue(ctx, root)
 			if err != nil {

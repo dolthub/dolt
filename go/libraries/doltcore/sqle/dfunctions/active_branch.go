@@ -38,13 +38,13 @@ func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
 
-	ddb, ok := dSess.GetDoltDB(dbName)
+	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	currentBranchRef, err := dSess.CWBHeadRef(dbName)
+	currentBranchRef, err := dSess.CWBHeadRef(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}

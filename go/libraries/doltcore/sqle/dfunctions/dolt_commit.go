@@ -56,13 +56,13 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	dSess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
+	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	// ddb := dbData.Ddb
-	roots, ok := dSess.GetRoots(dbName)
+	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
