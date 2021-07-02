@@ -305,11 +305,11 @@ func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[
 }
 
 func executeFFMerge(
-		ctx context.Context,
-		squash bool,
-		dEnv *env.DoltEnv,
-		mergeCommit *doltdb.Commit,
-		workingDiffs map[string]hash.Hash,
+	ctx context.Context,
+	squash bool,
+	dEnv *env.DoltEnv,
+	mergeCommit *doltdb.Commit,
+	workingDiffs map[string]hash.Hash,
 ) errhand.VerboseError {
 	cli.Println("Fast-forward")
 
@@ -482,13 +482,13 @@ func fkConstraintWarning(ctx context.Context, cm1, cm2 *doltdb.Commit) errhand.V
 
 // TODO: change this to be functional and not write to repo state
 func mergedRootToWorking(
-		ctx context.Context,
-		squash bool,
-		dEnv *env.DoltEnv,
-		mergedRoot *doltdb.RootValue,
-		workingDiffs map[string]hash.Hash,
-		cm2 *doltdb.Commit,
-		tblToStats map[string]*merge.MergeStats,
+	ctx context.Context,
+	squash bool,
+	dEnv *env.DoltEnv,
+	mergedRoot *doltdb.RootValue,
+	workingDiffs map[string]hash.Hash,
+	cm2 *doltdb.Commit,
+	tblToStats map[string]*merge.MergeStats,
 ) errhand.VerboseError {
 	var err error
 

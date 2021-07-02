@@ -19,14 +19,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
@@ -215,7 +215,6 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbName string, roots dolt
 	dSess := sqle.DSessFromSess(ctx.Session)
 	return dSess.SetRoots(ctx, dbName, roots)
 }
-
 
 func (d DoltCheckoutFunc) String() string {
 	childrenStrings := make([]string, len(d.Children()))

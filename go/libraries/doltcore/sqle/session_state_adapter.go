@@ -26,7 +26,7 @@ import (
 // from the session.
 type SessionStateAdapter struct {
 	session *DoltSession
-	dbName string
+	dbName  string
 }
 
 var _ env.RepoStateReader = SessionStateAdapter{}
@@ -71,5 +71,3 @@ func (s SessionStateAdapter) GetMergeCommit(ctx context.Context) (*doltdb.Commit
 func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.RootValue, error) {
 	panic("implement me")
 }
-
-

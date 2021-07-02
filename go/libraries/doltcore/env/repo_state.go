@@ -85,9 +85,9 @@ type repoStateLegacy struct {
 	Head     ref.MarshalableRef      `json:"head"`
 	Remotes  map[string]Remote       `json:"remotes"`
 	Branches map[string]BranchConfig `json:"branches"`
-	Staged  string                   `json:"staged,omitempty"`
-	Working string                   `json:"working,omitempty"`
-	Merge   *mergeState              `json:"merge,omitempty"`
+	Staged   string                  `json:"staged,omitempty"`
+	Working  string                  `json:"working,omitempty"`
+	Merge    *mergeState             `json:"merge,omitempty"`
 }
 
 // repoStateLegacyFromRepoState creates a new repoStateLegacy from a RepoState file. Only for testing.

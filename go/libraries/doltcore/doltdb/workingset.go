@@ -96,8 +96,8 @@ type WorkingSet struct {
 
 func EmptyWorkingSet(wsRef ref.WorkingSetRef) *WorkingSet {
 	return &WorkingSet{
-		Name: wsRef.GetPath(),
-		format:      types.Format_Default,
+		Name:   wsRef.GetPath(),
+		format: types.Format_Default,
 	}
 }
 
@@ -255,11 +255,11 @@ func (ws *WorkingSet) Ref() ref.WorkingSetRef {
 
 // writeValues write the values in this working set to the database and returns them
 func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
-		workingRoot types.Ref,
-		stagedRoot *types.Ref,
-		mergeState *types.Ref,
-		err error,
-){
+	workingRoot types.Ref,
+	stagedRoot *types.Ref,
+	mergeState *types.Ref,
+	err error,
+) {
 
 	workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
 	if err != nil {

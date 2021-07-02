@@ -643,12 +643,12 @@ func (dEnv *DoltEnv) DbData() DbData {
 
 // StagedRoot returns the staged root value in the current working set
 func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
-		workingSet, err := dEnv.WorkingSet(ctx)
-		if err != nil {
-			return nil, err
-		}
+	workingSet, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-		return workingSet.StagedRoot(), nil
+	return workingSet.StagedRoot(), nil
 }
 
 // UpdateStagedRoot updates the staged root for the current working branch. This can fail if multiple clients attempt
@@ -681,7 +681,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 
 func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
 	ws, err := dEnv.WorkingSet(ctx)
-   if err != nil {
+	if err != nil {
 		return err
 	}
 
