@@ -18,6 +18,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -145,10 +146,10 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 
 // Close implements Closer
 func (te *sqlTableEditor) Close(ctx *sql.Context) error {
-	sess := DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	// If we're running in batched mode, don't flush the edits until explicitly told to do so
-	if sess.batchMode == batched {
+	if sess.BatchMode == dsess.Batched {
 		return nil
 	}
 	return te.flush(ctx)
@@ -179,11 +180,11 @@ func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 }
 
 func (te *sqlTableEditor) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	dSess := DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	if te.temporary {
-		return dSess.SetTempTableRoot(ctx, te.dbName, newRoot)
+		return sess.SetTempTableRoot(ctx, te.dbName, newRoot)
 	}
 
-	return dSess.SetRoot(ctx, te.dbName, newRoot)
+	return sess.SetRoot(ctx, te.dbName, newRoot)
 }

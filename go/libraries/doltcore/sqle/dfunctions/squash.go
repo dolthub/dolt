@@ -16,12 +16,12 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 const SquashFuncName = "squash"
@@ -35,7 +35,7 @@ func NewSquashFunc(ctx *sql.Context, child sql.Expression) sql.Expression {
 }
 
 func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	sess := sqle.DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	branchVal, err := s.Child.Eval(ctx, row)
 	if err != nil {

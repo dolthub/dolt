@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"os"
 	"path/filepath"
@@ -189,7 +190,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	dsess := dsqle.DefaultDoltSession()
+	sess := dsess.DefaultSession()
 
 	var mrEnv env.MultiRepoEnv
 	var initialRoots map[string]*doltdb.RootValue
@@ -236,8 +237,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 		}
 
-		dsess.Username = *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
-		dsess.Email = *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
+		sess.Username = *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
+		sess.Email = *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	} else {
 		if apr.NArg() > 0 {
 			return HandleVErrAndExitCode(errhand.BuildDError("Specifying a commit is not compatible with the --multi-db-dir flag.").SetPrintUsage().Build(), usage)
@@ -257,7 +258,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	sqlCtx := sql.NewContext(ctx,
-		sql.WithSession(dsess),
+		sql.WithSession(sess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
@@ -389,7 +390,7 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, continueOnErr bool, mrEnv env
 	}
 
 	// In batch mode, we need to set a couple flags on the session to prevent flushes to disk after every commit
-	dsqle.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
+	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -1000,8 +1001,8 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 			return false, err
 		}
 
-		dsess := dsqle.DSessFromSess(ctx.Session)
-		rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
+		sess := dsess.DSessFromSess(ctx.Session)
+		rsw, ok := sess.GetDoltDBRepoStateWriter(db.Name())
 		if ok {
 			err = rsw.UpdateWorkingRoot(ctx, root)
 			if err != nil {
@@ -1009,7 +1010,7 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 			}
 		}
 
-		ddb, ok := dsess.GetDoltDB(db.Name())
+		ddb, ok := sess.GetDoltDB(db.Name())
 		if ok {
 			_, err = ddb.WriteRootValue(ctx, root)
 			if err != nil {
@@ -1378,7 +1379,7 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		}
 	}
 
-	dsess := dsqle.DSessFromSess(sqlCtx.Session)
+	sess := dsess.DSessFromSess(sqlCtx.Session)
 
 	nameToDB := make(map[string]dsqle.Database)
 	for _, db := range dbs {
@@ -1394,7 +1395,7 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 			return nil, err
 		}
 
-		err = dsess.AddDB(sqlCtx, dbState)
+		err = sess.AddDB(sqlCtx, dbState)
 		if err != nil {
 			return nil, err
 		}
@@ -1409,7 +1410,7 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 	return &sqlEngine{nameToDB, mrEnv, engine, format}, nil
 }
 
-func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) (dsqle.InitialDbState, error) {
+func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) (dsess.InitialDbState, error) {
 	var dEnv *env.DoltEnv
 	mrEnv.Iter(func(name string, de *env.DoltEnv) (stop bool, err error) {
 		if name == db.Name() {
@@ -1420,21 +1421,21 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	})
 
 	if dEnv == nil {
-		return dsqle.InitialDbState{}, fmt.Errorf("Couldn't find environment for database %s", db.Name())
+		return dsess.InitialDbState{}, fmt.Errorf("Couldn't find environment for database %s", db.Name())
 	}
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
-		return dsqle.InitialDbState{}, err
+		return dsess.InitialDbState{}, err
 	}
 
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
-		return dsqle.InitialDbState{}, err
+		return dsess.InitialDbState{}, err
 	}
 
-	return dsqle.InitialDbState{
+	return dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,

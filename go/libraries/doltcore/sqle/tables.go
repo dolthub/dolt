@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"os"
 	"runtime"
@@ -501,10 +502,10 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 }
 
 func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, error) {
-	sess := DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
-	if sess.batchMode == batched {
+	if sess.BatchMode == dsess.Batched {
 		if t.ed != nil {
 			return t.ed, nil
 		}

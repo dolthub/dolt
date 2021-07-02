@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -83,15 +84,15 @@ func (d DisabledTransaction) String() string {
 }
 
 func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
-	if !TransactionsEnabled(ctx) {
+	if !dsess.TransactionsEnabled(ctx) {
 		return DisabledTransaction{}, nil
 	}
 
-	dsession := DSessFromSess(ctx.Session)
+	dsession := dsess.DSessFromSess(ctx.Session)
 
 	// When we begin the transaction, we must synchronize the state of this session with the global state for the
 	// current head ref. Any pending transaction has already been committed before this happens.
-	wsRef := dsession.dbStates[ctx.GetCurrentDatabase()].workingSet.Ref()
+	wsRef := dsession.DbStates[ctx.GetCurrentDatabase()].WorkingSet.Ref()
 	ws, err := db.ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return nil, err
@@ -99,12 +100,12 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 
 	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
 
-	dsess := DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	// TODO: this is going to do 2 resolves to get the head root, not ideal
-	err = dsess.SetWorkingSet(ctx, db.name, ws, nil)
+	err = sess.SetWorkingSet(ctx, db.name, ws, nil)
 
-	return NewDoltTransaction(ws, wsRef, db.DbData()), nil
+	return dsess.NewDoltTransaction(ws, wsRef, db.DbData()), nil
 }
 
 func (db Database) setHeadHash(ctx *sql.Context, ref ref.WorkingSetRef) error {
@@ -122,35 +123,35 @@ func (db Database) setHeadHash(ctx *sql.Context, ref ref.WorkingSetRef) error {
 	if err != nil {
 		return err
 	}
-	if doltSession, ok := ctx.Session.(*DoltSession); ok {
-		return doltSession.SetSessionVarDirectly(ctx, HeadKey(db.name), headHash.String())
+	if doltSession, ok := ctx.Session.(*dsess.Session); ok {
+		return doltSession.SetSessionVarDirectly(ctx, dsess.HeadKey(db.name), headHash.String())
 	} else {
-		return ctx.SetSessionVariable(ctx, HeadKey(db.name), headHash.String())
+		return ctx.SetSessionVariable(ctx, dsess.HeadKey(db.name), headHash.String())
 	}
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
-	dsession := DSessFromSess(ctx.Session)
+	dsession := dsess.DSessFromSess(ctx.Session)
 	return dsession.CommitTransaction(ctx, db.name, tx)
 }
 
 func (db Database) Rollback(ctx *sql.Context, tx sql.Transaction) error {
-	dsession := DSessFromSess(ctx.Session)
+	dsession := dsess.DSessFromSess(ctx.Session)
 	return dsession.RollbackTransaction(ctx, db.name, tx)
 }
 
 func (db Database) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := DSessFromSess(ctx.Session)
+	dsession := dsess.DSessFromSess(ctx.Session)
 	return dsession.CreateSavepoint(ctx, name, db.name, tx)
 }
 
 func (db Database) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := DSessFromSess(ctx.Session)
+	dsession := dsess.DSessFromSess(ctx.Session)
 	return dsession.RollbackToSavepoint(ctx, name, db.name, tx)
 }
 
 func (db Database) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
-	dsession := DSessFromSess(ctx.Session)
+	dsession := dsess.DSessFromSess(ctx.Session)
 	return dsession.ReleaseSavepoint(ctx, name, db.name, tx)
 }
 
@@ -237,7 +238,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
-	sess := DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	// NOTE: system tables are not suitable for caching
 	switch {
@@ -505,57 +506,41 @@ func filterDoltInternalTables(tblNames []string) []string {
 	return result
 }
 
-func HeadKey(dbName string) string {
-	return dbName + HeadKeySuffix
-}
-
-func HeadRefKey(dbName string) string {
-	return dbName + HeadRefKeySuffix
-}
-
-func WorkingKey(dbName string) string {
-	return dbName + WorkingKeySuffix
-}
-
-func StagedKey(dbName string) string {
-	return dbName + StagedKeySuffix
-}
-
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
-	dsess := DSessFromSess(ctx.Session)
-	dbState, dbRootOk := dsess.dbStates[db.name]
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, dbRootOk := sess.DbStates[db.name]
 	if !dbRootOk {
 		return nil, fmt.Errorf("no root value found in session")
 	}
 
-	return dbState.workingSet.WorkingRoot(), nil
+	return dbState.WorkingSet.WorkingRoot(), nil
 }
 
 func (db Database) GetTemporaryTablesRoot(ctx *sql.Context) (*doltdb.RootValue, bool) {
-	dsess := DSessFromSess(ctx.Session)
-	return dsess.GetTempTableRootValue(ctx, db.Name())
+	sess := dsess.DSessFromSess(ctx.Session)
+	return sess.GetTempTableRootValue(ctx, db.Name())
 }
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
 // convenience.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	dsess := DSessFromSess(ctx.Session)
-	return dsess.SetRoot(ctx, db.name, newRoot)
+	sess := dsess.DSessFromSess(ctx.Session)
+	return sess.SetRoot(ctx, db.name, newRoot)
 }
 
 // SetTemporaryRoot sets the root value holding temporary tables not persisted to the repo state after the session.
 func (db Database) SetTemporaryRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	dsess := DSessFromSess(ctx.Session)
-	return dsess.SetTempTableRoot(ctx, db.name, newRoot)
+	sess := dsess.DSessFromSess(ctx.Session)
+	return sess.SetTempTableRoot(ctx, db.name, newRoot)
 }
 
 // GetHeadRoot returns root value for the current session head
 func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
-	dsess := DSessFromSess(ctx.Session)
-	head, err := dsess.GetHeadCommit(ctx, db.name)
+	sess := dsess.DSessFromSess(ctx.Session)
+	head, err := sess.GetHeadCommit(ctx, db.name)
 	if err != nil {
 		return nil, err
 	}
@@ -696,12 +681,12 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch 
 
 func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	// Get temporary root value
-	dsess := DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 	tempTableRootValue, exists := db.GetTemporaryTablesRoot(ctx)
 
 	// create the root value only when needed.
 	if !exists {
-		err := dsess.CreateTemporaryTablesRoot(ctx, db.Name(), db.GetDoltDB())
+		err := sess.CreateTemporaryTablesRoot(ctx, db.Name(), db.GetDoltDB())
 		if err != nil {
 			return err
 		}
@@ -714,10 +699,10 @@ func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sq
 		return err
 	}
 
-	return db.createTempDoltTable(ctx, tableName, tempTableRootValue, doltSch, dsess)
+	return db.createTempDoltTable(ctx, tableName, tempTableRootValue, doltSch, sess)
 }
 
-func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema, dsess *DoltSession) error {
+func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema, dsess *dsess.Session) error {
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -778,8 +763,8 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db Database) Flush(ctx *sql.Context) error {
-	dsess := DSessFromSess(ctx.Session)
-	editSession := dsess.dbStates[db.name].editSession
+	sess := dsess.DSessFromSess(ctx.Session)
+	editSession := sess.DbStates[db.name].EditSession
 
 	newRoot, err := editSession.Flush(ctx)
 	if err != nil {
@@ -793,14 +778,14 @@ func (db Database) Flush(ctx *sql.Context) error {
 
 	// Flush any changes made to temporary tables
 	// TODO: Shouldn't always be updating both roots. Needs to update either both roots or neither of them, atomically
-	tempTableEditSession := dsess.dbStates[db.name].tempTableEditSession
+	tempTableEditSession := sess.DbStates[db.name].TempTableEditSession
 	if tempTableEditSession != nil {
 		newTempTableRoot, err := tempTableEditSession.Flush(ctx)
 		if err != nil {
 			return nil
 		}
 
-		return dsess.SetTempTableRoot(ctx, db.Name(), newTempTableRoot)
+		return sess.SetTempTableRoot(ctx, db.Name(), newTempTableRoot)
 	}
 
 	return nil
@@ -1063,18 +1048,18 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) *editor.TableEditSession {
 	if isTemporary {
-		return DSessFromSess(ctx.Session).dbStates[db.name].tempTableEditSession
+		return dsess.DSessFromSess(ctx.Session).DbStates[db.name].TempTableEditSession
 	}
-	return DSessFromSess(ctx.Session).dbStates[db.name].editSession
+	return dsess.DSessFromSess(ctx.Session).DbStates[db.name].EditSession
 }
 
 // GetAllTemporaryTables returns all temporary tables
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
-	dsess := DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	tables := make([]sql.Table, 0)
 
-	root := dsess.dbStates[db.name].tempTableRoot
+	root := sess.DbStates[db.name].TempTableRoot
 	if root != nil {
 		tNames, err := root.GetTableNames(ctx)
 		if err != nil {

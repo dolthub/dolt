@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -25,23 +26,23 @@ import (
 // SessionStateAdapter is an adapter for env.RepoStateReader in SQL contexts, getting information about the repo state
 // from the session.
 type SessionStateAdapter struct {
-	session *DoltSession
+	session *dsess.Session
 	dbName  string
 }
 
 var _ env.RepoStateReader = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
-func NewSessionStateAdapter(session *DoltSession, dbName string) SessionStateAdapter {
+func NewSessionStateAdapter(session *dsess.Session, dbName string) SessionStateAdapter {
 	return SessionStateAdapter{session: session, dbName: dbName}
 }
 
 func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
-	return s.session.dbStates[s.dbName].GetRoots(), nil
+	return s.session.DbStates[s.dbName].GetRoots(), nil
 }
 
 func (s SessionStateAdapter) CWBHeadRef() ref.DoltRef {
-	workingSet := s.session.dbStates[s.dbName].workingSet
+	workingSet := s.session.DbStates[s.dbName].WorkingSet
 	headRef, err := workingSet.Ref().ToHeadRef()
 	// TODO: fix this interface
 	if err != nil {

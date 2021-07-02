@@ -16,12 +16,12 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -53,7 +53,7 @@ func (rf ResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	dbName := ctx.GetCurrentDatabase()
-	dSess := sqle.DSessFromSess(ctx.Session)
+	dSess := dsess.DSessFromSess(ctx.Session)
 
 	var h hash.Hash
 	if strings.ToLower(arg) != resetHardParameter {
