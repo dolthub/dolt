@@ -820,3 +820,25 @@ SQL
     [[ "${lines[3]}" = "1,1" ]] || false
     [ "${#lines[@]}" -eq 4 ]
 }
+
+@test "keyless: secondary index" {
+    dolt sql -q "create index idx on keyless (c1)"
+
+    run dolt sql -q "show index from keyless" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "Table,Non_unique,Key_name,Seq_in_index,Column_name,Collation,Cardinality,Sub_part,Packed,Null,Index_type,Comment,Index_comment,Visible,Expression" ]] || false
+    [[ "${lines[1]}" = "keyless,1,idx,1,c1,,0,,,YES,BTREE,\"\",\"\",YES," ]] || false
+
+    run dolt sql -q "select * from keyless where c1 > 0 order by c0" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0,c1" ]] || false
+    [[ "${lines[1]}" = "1,1" ]] || false
+    [[ "${lines[2]}" = "2,2" ]] || false
+    [ "${#lines[@]}" -eq 3 ]
+
+    run dolt sql -q "select c0 from keyless where c1 = 1" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0" ]] || false
+    [[ "${lines[1]}" = "1" ]] || false
+    [ "${#lines[@]}" -eq 2 ]
+}
