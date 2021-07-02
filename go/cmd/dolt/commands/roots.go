@@ -104,13 +104,15 @@ func (cmd RootsCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified time.Time, fs filesys.Filesys) error {
 	cli.Printf("Processing '%s' last modified: %v\n", path, modified)
-	bytes, err := fs.ReadFile(path)
+	rdCloser, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return err
 	}
 
-	nbs.IterChunks(bytes, func(chunk chunks.Chunk) (stop bool, err error) {
+	defer rdCloser.Close()
+
+	return nbs.IterChunks(rdCloser.(io.ReadSeeker), func(chunk chunks.Chunk) (stop bool, err error) {
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
 		db := sp.GetDatabase(ctx)
@@ -148,7 +150,6 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 
 		return false, nil
 	})
-	return nil
 }
 
 type fileAndTime struct {

@@ -15,12 +15,16 @@
 package nbs
 
 import (
+	"io"
+
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func IterChunks(bytes []byte, cb func(chunk chunks.Chunk) (stop bool, err error)) error {
-	idx, err := parseTableIndex(bytes)
+func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err error)) error {
+	idx, err := ReadTableIndex(rd)
 	if err != nil {
 		return err
 	}
@@ -33,7 +37,11 @@ func IterChunks(bytes []byte, cb func(chunk chunks.Chunk) (stop bool, err error)
 		ie := idx.IndexEntry(i, &a)
 		if _, ok := seen[a]; !ok {
 			seen[a] = true
-			chunkBytes := bytes[ie.Offset() : ie.Offset()+uint64(ie.Length())]
+			chunkBytes, err := readNFrom(rd, ie.Offset(), ie.Length())
+			if err != nil {
+				return err
+			}
+
 			cmpChnk, err := NewCompressedChunk(hash.Hash(a), chunkBytes)
 			if err != nil {
 				return err
@@ -54,4 +62,14 @@ func IterChunks(bytes []byte, cb func(chunk chunks.Chunk) (stop bool, err error)
 	}
 
 	return nil
+}
+
+func readNFrom(rd io.ReadSeeker, offset uint64, length uint32) ([]byte, error) {
+	_, err := rd.Seek(int64(offset), io.SeekStart)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return iohelp.ReadNBytes(rd, int(length))
 }
