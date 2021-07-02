@@ -54,6 +54,7 @@ var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
 var InMemDoltDB = "mem://"
 
 var ErrNoRootValAtHash = errors.New("there is no dolt root value at that hash")
+var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 // Additionally the noms codebase uses panics in a way that is non idiomatic and We've opted to recover and return
@@ -828,6 +829,16 @@ func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef) error {
 
 	if !ds.HasHead() {
 		return ErrBranchNotFound
+	}
+
+	if dref.GetType() == ref.BranchRefType {
+		branches, err := ddb.GetBranches(ctx)
+		if err != nil {
+			return err
+		}
+		if len(branches) == 1 {
+			return ErrCannotDeleteLastBranch
+		}
 	}
 
 	_, err = ddb.db.Delete(ctx, ds)
