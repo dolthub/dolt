@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"math/rand"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	db := NewDatabase("dolt", dEnv.DbData())
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	require.NoError(t, err)
-	DSessFromSess(sqlCtx.Session).EnableBatchedMode()
+	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
 	for _, stmt := range insertStatements {
 		_, rowIter, err := engine.Query(sqlCtx, stmt)
@@ -155,7 +156,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	db := NewDatabase("dolt", dEnv.DbData())
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	require.NoError(t, err)
-	DSessFromSess(sqlCtx.Session).EnableBatchedMode()
+	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
 	for _, stmt := range insertStatements {
 		_, rowIter, err := engine.Query(sqlCtx, stmt)
@@ -194,7 +195,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	db := NewDatabase("dolt", dEnv.DbData())
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	require.NoError(t, err)
-	DSessFromSess(sqlCtx.Session).EnableBatchedMode()
+	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
 	_, rowIter, err := engine.Query(sqlCtx, `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`)

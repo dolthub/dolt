@@ -17,6 +17,7 @@ package dolt
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"math/rand"
 	"strconv"
@@ -49,7 +50,7 @@ type DoltHarness struct {
 	Version string
 	engine  *sqle.Engine
 
-	sess    *dsql.DoltSession
+	sess    *dsess.Session
 	idxReg  *sql.IndexRegistry
 	viewReg *sql.ViewRegistry
 }
@@ -138,7 +139,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	h.sess = dsql.DefaultDoltSession()
+	h.sess = dsess.DefaultSession()
 	h.idxReg = sql.NewIndexRegistry()
 	h.viewReg = sql.NewViewRegistry()
 
@@ -154,7 +155,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		dsqlDB := db.(dsql.Database)
 		dsqlDBs[i] = dsqlDB
 
-		sess := dsql.DSessFromSess(ctx.Session)
+		sess := dsess.DSessFromSess(ctx.Session)
 		err := sess.AddDB(ctx, getDbState(db, dEnv))
 
 		if err != nil {
@@ -186,7 +187,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	return nil
 }
 
-func getDbState(db sql.Database, dEnv *env.DoltEnv) dsql.InitialDbState {
+func getDbState(db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
@@ -200,7 +201,7 @@ func getDbState(db sql.Database, dEnv *env.DoltEnv) dsql.InitialDbState {
 		panic(err)
 	}
 
-	return dsql.InitialDbState{
+	return dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,

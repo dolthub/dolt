@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,10 +28,10 @@ func testKeyFunc(t *testing.T, keyFunc func(string) (bool, string), testVal stri
 }
 
 func TestIsKeyFuncs(t *testing.T) {
-	testKeyFunc(t, IsHeadKey, "", false, "")
-	testKeyFunc(t, IsWorkingKey, "", false, "")
-	testKeyFunc(t, IsHeadKey, "dolt_head", true, "dolt")
-	testKeyFunc(t, IsWorkingKey, "dolt_head", false, "")
-	testKeyFunc(t, IsHeadKey, "dolt_working", false, "")
-	testKeyFunc(t, IsWorkingKey, "dolt_working", true, "dolt")
+	testKeyFunc(t, dsess.IsHeadKey, "", false, "")
+	testKeyFunc(t, dsess.IsWorkingKey, "", false, "")
+	testKeyFunc(t, dsess.IsHeadKey, "dolt_head", true, "dolt")
+	testKeyFunc(t, dsess.IsWorkingKey, "dolt_head", false, "")
+	testKeyFunc(t, dsess.IsHeadKey, "dolt_working", false, "")
+	testKeyFunc(t, dsess.IsWorkingKey, "dolt_working", true, "dolt")
 }
