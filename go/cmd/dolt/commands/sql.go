@@ -418,7 +418,14 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData())
 }
 
-func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) errhand.VerboseError {
+func execQuery(
+	sqlCtx *sql.Context,
+	readOnly bool,
+	mrEnv env.MultiRepoEnv,
+	roots map[string]*doltdb.RootValue,
+	query string,
+	format resultFormat,
+) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -1379,6 +1386,9 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		root := roots[db.Name()]
 		engine.AddDatabase(db)
 
+		// TODO: this doesn't consider the root above, which may not be the HEAD of the branch
+		//  To fix this, we need to pass a commit here as a separate param, and install a read-only database on it
+		//  since it isn't a current HEAD.
 		dbState, err := getDbState(sqlCtx, db, mrEnv)
 		if err != nil {
 			return nil, err

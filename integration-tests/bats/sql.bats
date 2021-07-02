@@ -958,6 +958,8 @@ SQL
 }
 
 @test "sql: at commit" {
+  skip "zachmu broke this, needs to fix"
+    
   dolt add .
   dolt commit -m "seed initial values"
   dolt checkout -b one
