@@ -179,21 +179,6 @@ type InitialDbState struct {
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
 func NewSession(ctx *sql.Context, sqlSess sql.Session, username, email string, dbs ...InitialDbState) (*Session, error) {
-
-	// TODO: kill this with fire
-	//dbDatas := make(map[string]env.DbData)
-	//editSessions := make(map[string]*editor.TableEditSession)
-
-	//for _, state := range dbs {
-		//db, ok := state.Db.(Database)
-		//if !ok {
-			//return nil, fmt.Errorf("expected a sqle.Database, but got %T", state.Db)
-		//}
-
-		//dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
-		//editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
-	//}
-
 	sess := &Session{
 		Session:  sqlSess,
 		Username: username,
