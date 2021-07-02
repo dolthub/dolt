@@ -188,6 +188,9 @@ func dbRevisionForBranch(ctx context.Context, srcDb Database, name string) (Data
 		WorkingSet: ws,
 		DbData: env.DbData{
 			Ddb: srcDb.ddb,
+			Rsw: srcDb.rsw,
+			Rsr: srcDb.rsr,
+			Drw: srcDb.drw,
 		},
 	}
 
@@ -215,6 +218,9 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		HeadCommit: cm,
 		DbData: env.DbData{
 			Ddb: srcDb.ddb,
+			Rsw: srcDb.rsw,
+			Rsr: srcDb.rsr,
+			Drw: srcDb.drw,
 		},
 	}
 
