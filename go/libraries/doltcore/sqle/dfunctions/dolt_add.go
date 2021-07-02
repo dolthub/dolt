@@ -66,9 +66,6 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return 1, err
 		}
 
-		logrus.Errorf("working is %s", roots.Working.DebugString(ctx, true))
-		logrus.Errorf("staged is %s", roots.Staged.DebugString(ctx, true))
-
 		err = dSess.SetRoots(ctx, dbName, roots)
 		if err != nil {
 			return nil, err
