@@ -739,3 +739,7 @@ func VisitMapLevelOrderSized(ms []Map, batchSize int, cb func(h hash.Hash) (int6
 
 	return chunkCount, byteCount, nil
 }
+
+func IsMapLeaf(m Map) bool {
+	return m.isLeaf()
+}
