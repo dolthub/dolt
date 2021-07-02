@@ -389,9 +389,9 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, continueOnErr bool, mrEnv env
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// In batch mode, we need to set a couple flags on the session to prevent flushes to disk after every commit
+	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
-	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
+	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -407,11 +407,13 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, continueOnErr bool, mrEnv env
 		}
 
 		_ = flushBatchedEdits(sqlCtx, se)
+		// TODO: this should no longer be necessary, right?
 		_ = writeRoots(sqlCtx, se, mrEnv, roots)
 
 		return errhand.BuildDError("Error processing batch").AddCause(err).Build()
 	}
 
+	// TODO: this should no longer be necessary, right?
 	return writeRoots(sqlCtx, se, mrEnv, roots)
 }
 
@@ -1025,8 +1027,17 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 }
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
 	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
-		err := db.Flush(ctx)
+		_, rowIter, err := se.engine.Query(ctx, "COMMIT;")
+		if err != nil {
+			return false, err
+		}
 
+		err = rowIter.Close(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		err = db.Flush(ctx)
 		if err != nil {
 			return false, err
 		}

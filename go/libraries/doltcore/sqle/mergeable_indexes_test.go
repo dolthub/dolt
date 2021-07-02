@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -1355,7 +1356,7 @@ func TestMergeableIndexes(t *testing.T) {
 
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
-			session := DSessFromSess(sqlCtx.Session)
+			session := dsess.DSessFromSess(sqlCtx.Session)
 			dbState := getDbState(t, db, denv)
 			err := session.AddDB(sqlCtx, dbState)
 
@@ -1563,7 +1564,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
-			session := DSessFromSess(sqlCtx.Session)
+			session := dsess.DSessFromSess(sqlCtx.Session)
 			dbState := getDbState(t, db, denv)
 			err := session.AddDB(sqlCtx, dbState)
 			require.NoError(t, err)

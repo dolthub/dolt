@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -159,7 +160,7 @@ func TestTableEditor(t *testing.T) {
 			ctx := NewTestSQLCtx(context.Background())
 			root, _ := dEnv.WorkingRoot(context.Background())
 			db := NewDatabase("dolt", dEnv.DbData())
-			err := DSessFromSess(ctx.Session).AddDB(ctx, getDbState(t, db, dEnv))
+			err := dsess.DSessFromSess(ctx.Session).AddDB(ctx, getDbState(t, db, dEnv))
 			require.NoError(t, err)
 
 			ctx.SetCurrentDatabase(db.Name())
