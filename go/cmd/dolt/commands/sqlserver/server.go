@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"net"
 	"strconv"
 	"time"
@@ -177,7 +178,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, mrEnv env
 			return nil, nil, nil, err
 		}
 
-		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbStates...)
+		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, username, email, dbStates...)
 
 		if err != nil {
 			return nil, nil, nil, err
@@ -231,8 +232,8 @@ func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	return dsqlDBs
 }
 
-func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Database) ([]dsqle.InitialDbState, error) {
-	var dbStates []dsqle.InitialDbState
+func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Database) ([]dsess.InitialDbState, error) {
+	var dbStates []dsess.InitialDbState
 
 	for _, db := range dbs {
 		var dEnv *env.DoltEnv
@@ -259,7 +260,7 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			return nil, err
 		}
 
-		dbStates = append(dbStates, dsqle.InitialDbState{
+		dbStates = append(dbStates, dsess.InitialDbState{
 			Db:         db,
 			HeadCommit: headCommit,
 			WorkingSet: ws,

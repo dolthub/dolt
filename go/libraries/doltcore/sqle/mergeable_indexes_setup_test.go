@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"strings"
 	"testing"
 
@@ -99,7 +100,7 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	engine.AddDatabase(mergeableDb)
 
 	// Get an updated root to use for the rest of the test
-	root, _ = DSessFromSess(sqlCtx.Session).GetRoot(mergeableDb.Name())
+	root, _ = dsess.DSessFromSess(sqlCtx.Session).GetRoot(mergeableDb.Name())
 
 	return engine, dEnv, mergeableDb, []*indexTuple{
 		idxv1ToTuple,

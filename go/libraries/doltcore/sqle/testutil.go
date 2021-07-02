@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"strings"
 	"testing"
@@ -37,7 +38,7 @@ func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, stateme
 	db := NewDatabase("dolt", dEnv.DbData())
 
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
-	DSessFromSess(ctx.Session).EnableBatchedMode()
+	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
 	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, true)
 	if err != nil {
 		return nil, err
@@ -92,7 +93,7 @@ func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, stateme
 
 // NewTestSQLCtx returns a new *sql.Context with a default DoltSession, a new IndexRegistry, and a new ViewRegistry
 func NewTestSQLCtx(ctx context.Context) *sql.Context {
-	session := DefaultDoltSession()
+	session := dsess.DefaultSession()
 	sqlCtx := sql.NewContext(
 		ctx,
 		sql.WithSession(session),
@@ -110,7 +111,7 @@ func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Data
 
 	sqlCtx := NewTestSQLCtx(ctx)
 
-	_ = DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
+	_ = dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
 	sqlCtx.SetCurrentDatabase(db.Name())
 	err := db.SetRoot(sqlCtx, root)
 
@@ -127,7 +128,7 @@ func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Data
 	return engine, sqlCtx, nil
 }
 
-func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) InitialDbState {
+func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
@@ -137,7 +138,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) InitialDbState
 	ws, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
 
-	return InitialDbState{
+	return dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,

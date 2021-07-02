@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 const HashOfFuncName = "hashof"
@@ -63,14 +63,14 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	dbName := ctx.GetCurrentDatabase()
-	ddb, ok := sqle.DSessFromSess(ctx.Session).GetDoltDB(dbName)
+	ddb, ok := dsess.DSessFromSess(ctx.Session).GetDoltDB(dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	var cm *doltdb.Commit
 	if strings.ToUpper(name) == "HEAD" {
-		sess := sqle.DSessFromSess(ctx.Session)
+		sess := dsess.DSessFromSess(ctx.Session)
 
 		cm, err = sess.GetHeadCommit(ctx, dbName)
 		if err != nil {

@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"runtime"
 	"strings"
@@ -230,10 +231,10 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 
 // monoSqlEngine packages up the context necessary to run sql queries against single root.
 func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *sqlEngine, error) {
-	dsess := dsqle.DefaultDoltSession()
+	sess := dsess.DefaultSession()
 
 	sqlCtx := sql.NewContext(ctx,
-		sql.WithSession(dsess),
+		sql.WithSession(sess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
@@ -267,14 +268,14 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 		return nil, nil, err
 	}
 
-	dbState := dsqle.InitialDbState{
+	dbState := dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
 	}
 
-	err = dsess.AddDB(sqlCtx, dbState)
+	err = sess.AddDB(sqlCtx, dbState)
 	if err != nil {
 		return nil, nil, err
 	}

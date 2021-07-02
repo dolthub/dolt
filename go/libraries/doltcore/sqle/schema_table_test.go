@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -34,7 +35,7 @@ func TestSchemaTableRecreation(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	db := NewDatabase("dolt", dEnv.DbData())
 	dbState := getDbState(t, db, dEnv)
-	err := DSessFromSess(ctx.Session).AddDB(ctx, dbState)
+	err := dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
 

@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"runtime"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ import (
 type DoltHarness struct {
 	t                   *testing.T
 	env                 *env.DoltEnv
-	session             *sqle.DoltSession
+	session             *dsess.Session
 	transactionsEnabled bool
 	databases           []sqle.Database
 	parallelism         int
@@ -49,7 +50,7 @@ var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
 var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
-	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	session, err := dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(t, err)
 	return &DoltHarness{
 		t:              t,
@@ -65,8 +66,8 @@ func (d DoltHarness) withTransactionsEnabled(enabled bool) *DoltHarness {
 	return &d
 }
 
-func (d DoltHarness) setTransactionSessionVar(session *sqle.DoltSession, enabled bool) {
-	err := session.SetSessionVariable(sql.NewEmptyContext(), sqle.TransactionsEnabledSysVar, enabled)
+func (d DoltHarness) setTransactionSessionVar(session *dsess.Session, enabled bool) {
+	err := session.SetSessionVariable(sql.NewEmptyContext(), dsess.TransactionsEnabledSysVar, enabled)
 	require.NoError(d.t, err)
 }
 
@@ -128,7 +129,7 @@ func (d *DoltHarness) NewContext() *sql.Context {
 }
 
 func (d DoltHarness) NewSession() *sql.Context {
-	session, err := sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	session, err := dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(d.t, err)
 
 	d.setTransactionSessionVar(session, d.transactionsEnabled)
@@ -171,7 +172,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	//  the same name, the first write query will panic on dangling references in the noms layer. Not sure why this is
 	//  happening, but it only happens as a result of this test setup.
 	var err error
-	d.session, err = sqle.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
+	d.session, err = dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(d.t, err)
 
 	d.setTransactionSessionVar(d.session, d.transactionsEnabled)
@@ -196,7 +197,7 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 	return
 }
 
-func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) sqle.InitialDbState {
+func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
@@ -206,7 +207,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) sqle.InitialDb
 	ws, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
 
-	return sqle.InitialDbState{
+	return dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,
@@ -271,18 +272,18 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
-		"set @@"+sqle.HeadKey(db.Name())+" = COMMIT('-m', 'test commit');")
+		"set @@"+dsess.HeadKey(db.Name())+" = COMMIT('-m', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)
 
-	headHash, err := ctx.GetSessionVariable(ctx, sqle.HeadKey(db.Name()))
+	headHash, err := ctx.GetSessionVariable(ctx, dsess.HeadKey(db.Name()))
 	require.NoError(d.t, err)
 
 	ctx = enginetest.NewContext(d)
 	// TODO: there's a bug in test setup with transactions, where the HEAD session var gets overwritten on transaction
 	//  start, so we quote it here instead
-	// query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', @@" + sqle.HeadKey(ddb.Name()) + ")"
+	// query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', @@" + dsess.HeadKey(ddb.Name()) + ")"
 	query := "insert into dolt_branches (name, hash) values ('" + asOfString + "', '" + headHash.(string) + "')"
 
 	_, iter, err = e.Query(ctx,

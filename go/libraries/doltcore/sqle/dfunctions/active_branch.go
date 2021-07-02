@@ -16,11 +16,11 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 const ActiveBranchFuncName = "active_branch"
@@ -36,7 +36,7 @@ func NewActiveBranchFunc(ctx *sql.Context) sql.Expression {
 // Eval implements the Expression interface.
 func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
-	dSess := sqle.DSessFromSess(ctx.Session)
+	dSess := dsess.DSessFromSess(ctx.Session)
 
 	ddb, ok := dSess.GetDoltDB(dbName)
 

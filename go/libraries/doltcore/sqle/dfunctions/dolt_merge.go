@@ -17,6 +17,7 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -44,7 +44,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	sess := sqle.DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(dbName)
 
 	if !ok {
@@ -198,7 +198,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, name s
 	return mergeRootToWorking(squash, ws, mergeRoot, cm, mergeStats)
 }
 
-func executeFFMerge(ctx *sql.Context, sess *sqle.DoltSession, squash bool, dbName string, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) error {
+func executeFFMerge(ctx *sql.Context, sess *dsess.Session, squash bool, dbName string, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) error {
 	rv, err := cm2.GetRootValue()
 	if err != nil {
 		return err
@@ -221,7 +221,7 @@ func executeFFMerge(ctx *sql.Context, sess *sqle.DoltSession, squash bool, dbNam
 
 func executeNoFFMerge(
 	ctx *sql.Context,
-	dSess *sqle.DoltSession,
+	dSess *dsess.Session,
 	apr *argparser.ArgParseResults,
 	dbName string,
 	ws *doltdb.WorkingSet,
