@@ -146,8 +146,8 @@ CREATE FOREIGN TABLE warehouse
 
 SELECT * FROM warehouse;
 EOF" -m "postgres"
-
     [[ "$output" =~ "UPS" ]] || false
     [[ "$output" =~ "TV" ]] || false
     [[ "$output" =~ "Table" ]] || false
+    service postgresql stop
 }
