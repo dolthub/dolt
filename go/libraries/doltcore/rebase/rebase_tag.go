@@ -145,12 +145,6 @@ func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, 
 		return nil, err
 	}
 
-	err = ddb.DeleteBranch(ctx, dRef)
-
-	if err != nil {
-		return nil, err
-	}
-
 	err = ddb.NewBranchAtCommit(ctx, dRef, rebasedCommits[0])
 
 	if err != nil {
