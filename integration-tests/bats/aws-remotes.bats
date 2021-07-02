@@ -69,7 +69,7 @@ skip_if_no_aws_tests() {
     dolt commit -m 'creating a test table'
     dolt push origin master:master
     dolt fetch origin
-    dolt push origin :master
     dolt push origin master:another-branch
+    dolt fetch origin
     dolt push origin :another-branch
 }
