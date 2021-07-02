@@ -162,6 +162,27 @@ teardown() {
     [[ "${lines[1]}" =~ origin,file://.*/remote,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
 }
 
+@test "system-tables: insert/delete dolt_remotes system table" {
+    dolt sql -q "insert into dolt_remotes (name, url) values ('origin', 'file://remote')"
+
+    dolt sql -q "select count(*) from dolt_remotes" -r csv
+    exit
+    [ $status -eq 0 ]
+    [[ "$output" =~ 1 ]] || false
+
+    regex='file://.*/remote'
+    run dolt sql -q "select * from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
+    [[ "${lines[1]}" =~ origin,file://.*/remote,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+
+    dolt sql -q "delete from dolt_remotes where name = 'origin'"
+
+    run dolt sql -q "select count(*) from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ 0 ]] || false
+}
+
 @test "system-tables: query dolt_diff_ system table" {
     dolt sql -q "CREATE TABLE test (pk INT, c1 INT, PRIMARY KEY(pk))"
     dolt add test

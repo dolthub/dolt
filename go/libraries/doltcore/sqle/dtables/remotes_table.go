@@ -169,21 +169,26 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 		return nil, errors.New("invalid value type for url")
 	}
 
-	fetchSpecsDoc, ok := r[2].(sql.JSONValue)
+	var fetchSpecs []string
+	if r[2] == nil {
+		fetchSpecs = []string{"refs/heads/*:refs/remotes/" + name + "/*"}
+	} else {
+		fetchSpecsDoc, ok := r[2].(sql.JSONValue)
 
-	if !ok {
-		return nil, errors.New("invalid value type for fetch_specs")
-	}
+		if !ok {
+			return nil, errors.New("invalid value type for fetch_specs")
+		}
 
-	fetchSpecsInterface, err := fetchSpecsDoc.Unmarshall(ctx)
-	if err != nil {
-		return nil, err
-	}
+		fetchSpecsInterface, err := fetchSpecsDoc.Unmarshall(ctx)
+		if err != nil {
+			return nil, err
+		}
 
-	fetchSpecs, ok := fetchSpecsInterface.Val.([]string)
+		fetchSpecs, ok = fetchSpecsInterface.Val.([]string)
 
-	if !ok {
-		return nil, errors.New("invalid value type for params json")
+		if !ok {
+			return nil, errors.New("invalid value type for params json")
+		}
 	}
 
 	for _, fetchSpec := range fetchSpecs {
@@ -193,27 +198,31 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 		}
 	}
 
-	paramsDoc, ok := r[3].(sql.JSONValue)
+	var params map[string]string
+	if r[3] == nil {
+		params = map[string]string{}
+	} else{
+		paramsDoc, ok := r[3].(sql.JSONValue)
 
-	if !ok {
-		return nil, errors.New("invalid value type for params")
-	}
+		if !ok {
+			return nil, errors.New("invalid value type for params")
+		}
 
-	paramsInterface, err := paramsDoc.Unmarshall(ctx)
-	if err != nil {
-		return nil, err
-	}
+		paramsInterface, err := paramsDoc.Unmarshall(ctx)
+		if err != nil {
+			return nil, err
+		}
 
-	params, ok := paramsInterface.Val.(map[string]string)
+		params, ok = paramsInterface.Val.(map[string]string)
 
-	if !ok {
-		return nil, errors.New("invalid value type for params json")
+		if !ok {
+			return nil, errors.New("invalid value type for params json")
+		}
 	}
 
 	//remote := env.NewRemote(name, url, params)
 	remote := env.Remote{Name: name, Url: url, FetchSpecs: fetchSpecs, Params: params}
 	return &remote, nil
-
 }
 
 // Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process
@@ -226,12 +235,17 @@ func (bWr remoteWriter) Insert(ctx *sql.Context, r sql.Row) error {
 		return err
 	}
 
+	// TODO: fix filesys.LocalFS
 	repoState, err := env.LoadRepoState(filesys.LocalFS)
 	if err != nil {
 		return err
 	}
 
 	repoState.AddRemote(*remote)
+	err = repoState.Save(filesys.LocalFS)
+	if err != nil {
+		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
+	}
 
 	return nil
 }
