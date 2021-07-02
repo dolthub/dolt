@@ -181,8 +181,12 @@ func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData 
 		return err
 	}
 
-	ws, err := dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
+	var ws *doltdb.WorkingSet
+	ws, err = dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// newly created branch
+		ws = doltdb.EmptyWorkingSet(wsRef)
+	} else if err != nil {
 		return err
 	}
 
