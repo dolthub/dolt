@@ -91,7 +91,10 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			}
 		}
 
-		ws := dSess.WorkingSet(ctx, dbName)
+		ws, err := dSess.WorkingSet(ctx, dbName)
+		if err != nil {
+			return nil, err
+		}
 		err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged), nil)
 		if err != nil {
 			return 1, err

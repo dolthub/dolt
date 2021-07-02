@@ -67,7 +67,10 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 	}
 
-	ws := sess.WorkingSet(ctx, dbName)
+	ws, err := sess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
 	roots, ok := sess.GetRoots(dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)

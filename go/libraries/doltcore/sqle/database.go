@@ -87,19 +87,21 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		return DisabledTransaction{}, nil
 	}
 
-	dsession := DSessFromSess(ctx.Session)
+	dsess := DSessFromSess(ctx.Session)
+	dbState, _, err := dsess.lookupDbState(db.Name())
+	if err != nil {
+		return nil, err
+	}
 
 	// When we begin the transaction, we must synchronize the state of this session with the global state for the
 	// current head ref. Any pending transaction has already been committed before this happens.
-	wsRef := dsession.dbStates[ctx.GetCurrentDatabase()].workingSet.Ref()
+	wsRef := dbState.workingSet.Ref()
 	ws, err := db.ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return nil, err
 	}
 
 	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
-
-	dsess := DSessFromSess(ctx.Session)
 
 	// TODO: this is going to do 2 resolves to get the head root, not ideal
 	err = dsess.SetWorkingSet(ctx, db.name, ws, nil)
@@ -526,9 +528,9 @@ var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
-	dbState, dbRootOk := dsess.dbStates[db.name]
-	if !dbRootOk {
-		return nil, fmt.Errorf("no root value found in session")
+	dbState, _, err := dsess.lookupDbState(db.Name())
+	if err != nil {
+		return nil, err
 	}
 
 	return dbState.workingSet.WorkingRoot(), nil
@@ -779,9 +781,12 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db Database) Flush(ctx *sql.Context) error {
 	dsess := DSessFromSess(ctx.Session)
-	editSession := dsess.dbStates[db.name].editSession
+	dbState, _, err := dsess.lookupDbState(db.Name())
+	if err != nil {
+		return err
+	}
 
-	newRoot, err := editSession.Flush(ctx)
+	newRoot, err := dbState.editSession.Flush(ctx)
 	if err != nil {
 		return err
 	}
@@ -793,7 +798,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 
 	// Flush any changes made to temporary tables
 	// TODO: Shouldn't always be updating both roots. Needs to update either both roots or neither of them, atomically
-	tempTableEditSession := dsess.dbStates[db.name].tempTableEditSession
+	tempTableEditSession := dbState.tempTableEditSession
 	if tempTableEditSession != nil {
 		newTempTableRoot, err := tempTableEditSession.Flush(ctx)
 		if err != nil {
@@ -997,7 +1002,11 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 
 	// If rows exist, then grab the highest id and add 1 to get the new id
 	indexToUse := int64(1)
-	te, err := db.TableEditSession(ctx, tbl.IsTemporary()).GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
+	ts, err := db.TableEditSession(ctx, tbl.IsTemporary())
+	if err != nil {
+		return err
+	}
+	te, err := ts.GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
 	if err != nil {
 		return err
 	}
@@ -1061,20 +1070,29 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 }
 
 // TableEditSession returns the TableEditSession for this database from the given context.
-func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) *editor.TableEditSession {
-	if isTemporary {
-		return DSessFromSess(ctx.Session).dbStates[db.name].tempTableEditSession
+func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (*editor.TableEditSession, error) {
+	dsess := DSessFromSess(ctx.Session)
+	dbState, _, err := dsess.lookupDbState(db.Name())
+	if err != nil {
+		return nil, err
 	}
-	return DSessFromSess(ctx.Session).dbStates[db.name].editSession
+
+	if isTemporary {
+		return dbState.tempTableEditSession, nil
+	}
+	return dbState.editSession, nil
 }
 
 // GetAllTemporaryTables returns all temporary tables
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
 	dsess := DSessFromSess(ctx.Session)
+	dbState, _, err := dsess.lookupDbState(db.Name())
+	if err != nil {
+		return nil, err
+	}
 
 	tables := make([]sql.Table, 0)
-
-	root := dsess.dbStates[db.name].tempTableRoot
+	root := dbState.tempTableRoot
 	if root != nil {
 		tNames, err := root.GetTableNames(ctx)
 		if err != nil {

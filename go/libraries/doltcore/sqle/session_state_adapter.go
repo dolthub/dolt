@@ -37,14 +37,24 @@ func NewSessionStateAdapter(session *DoltSession, dbName string) SessionStateAda
 }
 
 func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
-	return s.session.dbStates[s.dbName].GetRoots(), nil
+	dbState, _, err := s.session.lookupDbState(s.dbName)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return dbState.GetRoots(), nil
 }
 
 func (s SessionStateAdapter) CWBHeadRef() ref.DoltRef {
-	workingSet := s.session.dbStates[s.dbName].workingSet
-	headRef, err := workingSet.Ref().ToHeadRef()
-	// TODO: fix this interface
+	dbState, _, err := s.session.lookupDbState(s.dbName)
 	if err != nil {
+		// TODO: fix this interface
+		panic(err)
+	}
+	workingSet := dbState.workingSet
+	headRef, err := workingSet.Ref().ToHeadRef()
+	if err != nil {
+		// TODO: fix this interface
 		panic(err)
 	}
 	return headRef

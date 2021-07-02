@@ -116,7 +116,11 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, err
 	}
 
-	ws := dSess.WorkingSet(ctx, dbName)
+	ws, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
 	err = dSess.SetWorkingSet(ctx, dbName, ws, nil)
 	if err != nil {
 		return nil, err
