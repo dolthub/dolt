@@ -18,13 +18,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"golang.org/x/sync/semaphore"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
 
+	"golang.org/x/sync/semaphore"
+
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"

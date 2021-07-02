@@ -21,7 +21,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,6 +31,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/dustin/go-humanize"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/sync/errgroup"
 
