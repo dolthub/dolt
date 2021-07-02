@@ -31,15 +31,15 @@ teardown() {
 
 @test "keyless: feature indexes and foreign keys" {
     run dolt sql -q "ALTER TABLE keyless ADD INDEX (c1);"
-    [ $status -ne 0 ]
+    [ $status -eq 0 ]
     [[ ! "$output" =~ "panic" ]] || false
 
     run dolt sql -q "CREATE TABLE bad (a int, b int, INDEX (b));"
-    [ $status -ne 0 ]
+    [ $status -eq 0 ]
     [[ ! "$output" =~ "panic" ]] || false
 
     run dolt sql -q "CREATE TABLE worse (a int, b int, FOREIGN KEY (b) REFERENCES keyless(c1));"
-    [ $status -ne 0 ]
+    [ $status -eq 0 ]
     [[ ! "$output" =~ "panic" ]] || false
 }
 
