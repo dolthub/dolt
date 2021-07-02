@@ -440,7 +440,7 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 
 		twDetails.ChunksBuffered++
 
-		if twDetails.ChunksBuffered%1000 == 0 {
+		if twDetails.ChunksBuffered%100 == 0 {
 			p.eventCh <- NewTWPullerEvent(LevelUpdateTWEvent, twDetails)
 		}
 

@@ -435,59 +435,66 @@ func pushTagToRemote(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef ref
 	return nil
 }
 
+const minUpdate = 100 * time.Millisecond
+
+var spinnerSeq = []rune{'|', '/', '-', '\\'}
+
+type TextSpinner struct {
+	seqPos     int
+	lastUpdate time.Time
+}
+
+func (ts *TextSpinner) next() string {
+	now := time.Now()
+	if now.Sub(ts.lastUpdate) > minUpdate {
+		ts.seqPos = (ts.seqPos + 1) % len(spinnerSeq)
+		ts.lastUpdate = now
+	}
+
+	return string([]rune{spinnerSeq[ts.seqPos]})
+}
+
 func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
 	var pos int
 	var currentTreeLevel int
-	//var percentBuffered float64
+	var percentBuffered float64
 	var tableFilesBuffered int
 	var filesUploaded int
-	uploadRate := "No Uploads started yet"
+	var ts TextSpinner
+
+	uploadRate := ""
 
 	for evt := range pullerEventCh {
 		switch evt.EventType {
 		case datas.NewLevelTWEvent:
-			if evt.TWEventDetails.TreeLevel == -1 {
-				continue
+			if evt.TWEventDetails.TreeLevel != 1 {
+				currentTreeLevel = evt.TWEventDetails.TreeLevel
+				percentBuffered = 0
 			}
-
-			currentTreeLevel = evt.TWEventDetails.TreeLevel
-			//percentBuffered = 0
-			//pos = cli.DeleteAndPrint(0, fmt.Sprintf("Tree Level: %d has %d new chunks. Determining how many are needed.", evt.TWEventDetails.TreeLevel, evt.TWEventDetails.ChunksInLevel))
 		case datas.DestDBHasTWEvent:
-			if evt.TWEventDetails.TreeLevel == -1 {
-				continue
+			if evt.TWEventDetails.TreeLevel != -1 {
+				currentTreeLevel = evt.TWEventDetails.TreeLevel
 			}
-
-			currentTreeLevel = evt.TWEventDetails.TreeLevel
-			//cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d has %d new chunks of which %d already exist in the database. Buffering %d chunks.\n", evt.TWEventDetails.TreeLevel, evt.TWEventDetails.ChunksInLevel, evt.TWEventDetails.ChunksAlreadyHad, evt.TWEventDetails.ChunksInLevel-evt.TWEventDetails.ChunksAlreadyHad))
 
 		case datas.LevelUpdateTWEvent:
-			if evt.TWEventDetails.TreeLevel == -1 {
-				continue
+			if evt.TWEventDetails.TreeLevel != -1 {
+				currentTreeLevel = evt.TWEventDetails.TreeLevel
+				toBuffer := evt.TWEventDetails.ChunksInLevel - evt.TWEventDetails.ChunksAlreadyHad
+
+				if toBuffer > 0 {
+					percentBuffered = 100 * float64(evt.TWEventDetails.ChunksBuffered) / float64(toBuffer)
+				}
 			}
-
-			//toBuffer := evt.TWEventDetails.ChunksInLevel - evt.TWEventDetails.ChunksAlreadyHad
-
-			//if toBuffer > 0 {
-			//	percentBuffered = 100 * float64(evt.TWEventDetails.ChunksBuffered) / float64(toBuffer)
-			//}
-
-			currentTreeLevel = evt.TWEventDetails.TreeLevel
-			//pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, percentBuffered))
 
 		case datas.LevelDoneTWEvent:
-			if evt.TWEventDetails.TreeLevel == -1 {
-				continue
+			if evt.TWEventDetails.TreeLevel != -1 {
+				//_ = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, 100.0))
 			}
-
-			//percentBuffered = 0
-			//_ = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, 100.0))
 
 		case datas.TableFileClosedEvent:
 			tableFilesBuffered += 1
 
 		case datas.StartUploadTableFileEvent:
-			continue
 
 		case datas.UploadTableFileUpdateEvent:
 			bps := float64(evt.TFEventDetails.Stats.Read) / evt.TFEventDetails.Stats.Elapsed.Seconds()
@@ -497,7 +504,17 @@ func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
 			filesUploaded += 1
 		}
 
-		msg := fmt.Sprintf("Tree Level: %d, Files Buffered: %d, Files Uploaded: %d, Current Upload Speed: %s", currentTreeLevel, tableFilesBuffered, filesUploaded, uploadRate)
+		if currentTreeLevel == -1 {
+			continue
+		}
+
+		var msg string
+		if len(uploadRate) > 0 {
+			msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%%, Files Written: %d, Files Uploaded: %d, Current Upload Speed: %s", ts.next(), currentTreeLevel, percentBuffered, tableFilesBuffered, filesUploaded, uploadRate)
+		} else {
+			msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%% Files Written: %d, Files Uploaded: %d", ts.next(), currentTreeLevel, percentBuffered, tableFilesBuffered, filesUploaded)
+		}
+
 		pos = cli.DeleteAndPrint(pos, msg)
 	}
 }

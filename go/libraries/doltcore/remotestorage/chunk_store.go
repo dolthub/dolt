@@ -1194,15 +1194,20 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 	loc := resp.Locs[0]
 	switch typedLoc := loc.Location.(type) {
 	case *remotesapi.UploadLoc_HttpPost:
-		dcs.logFunc("uploading %s to %s", fileId, typedLoc.HttpPost.Url)
+		urlStr := typedLoc.HttpPost.Url
+		qmIdx := strings.IndexRune(urlStr, '?')
+		if qmIdx != -1 {
+			urlStr = urlStr[:qmIdx]
+		}
+		dcs.logFunc("uploading %s to %s", fileId, urlStr)
 		err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, rd, contentHash)
 
 		if err != nil {
-			dcs.logFunc("failed to upload %s to %s. err: %s", fileId, typedLoc.HttpPost.Url, err.Error())
+			dcs.logFunc("failed to upload %s to %s. err: %s", fileId, urlStr, err.Error())
 			return err
 		}
 
-		dcs.logFunc("successfully uploaded %s to %s", fileId, typedLoc.HttpPost.Url)
+		dcs.logFunc("successfully uploaded %s to %s", fileId, urlStr)
 
 	default:
 		return errors.New("unsupported upload location")

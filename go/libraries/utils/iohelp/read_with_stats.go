@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const updateFrequency = 2 * time.Second
+const updateFrequency = 500 * time.Millisecond
 
 type ReadStats struct {
 	Read    uint64

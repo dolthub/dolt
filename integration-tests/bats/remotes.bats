@@ -156,7 +156,7 @@ SQL
 
     cd dolt-repo-clones/test-repo
     run dolt pull
-    [[ "$output" =~ "Successfully" ]] || false
+    [ "$status" -eq 0 ]
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
@@ -186,7 +186,7 @@ SQL
 
     cd dolt-repo-clones/test-repo
     run dolt pull
-    [[ "$output" =~ "Successfully" ]] || false
+    [ "$status" -eq 0 ]
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
