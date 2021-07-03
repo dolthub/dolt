@@ -32,7 +32,7 @@ type RepoStateReader interface {
 	IsMergeActive(ctx context.Context) (bool, error)
 	// TODO: get rid of this
 	GetMergeCommit(ctx context.Context) (*doltdb.Commit, error)
-	GetRemotes() ([]Remote)
+	GetRemotes() (map[string]Remote, error)
 }
 
 type RepoStateWriter interface {
@@ -47,8 +47,8 @@ type RepoStateWriter interface {
 	ClearMerge(ctx context.Context) error
 	// TODO: get rid of this
 	StartMerge(ctx context.Context, commit *doltdb.Commit) error
-	AddRemote(r Remote) error
-
+	AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error
+	RemoveRemote(ctx context.Context, name string) error
 }
 
 type DocsReadWriter interface {
@@ -212,6 +212,10 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 
 func (rs *RepoState) AddRemote(r Remote) {
 	rs.Remotes[r.Name] = r
+}
+
+func (rs *RepoState) RemoveRemote(r Remote) {
+	delete(rs.Remotes, r.Name)
 }
 
 // Updates the working root.

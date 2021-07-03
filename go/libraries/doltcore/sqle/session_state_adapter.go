@@ -73,6 +73,6 @@ func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.Ro
 	panic("implement me")
 }
 
-func (s SessionStateAdapter) GetRemotes() ([]env.Remote) {
+func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
 	panic("implement me")
 }

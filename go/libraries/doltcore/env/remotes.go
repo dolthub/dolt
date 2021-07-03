@@ -16,6 +16,11 @@ package env
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"path"
+	"path/filepath"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -67,3 +72,67 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 	params[dbfactory.NoCachingParameter] = "true"
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
+
+
+func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {
+	u, err := earl.Parse(urlArg)
+
+	if err != nil {
+		return "", "", err
+	}
+
+	if u.Scheme != "" {
+		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
+			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, fs)
+
+			if err != nil {
+				return "", "", err
+			}
+
+			return u.Scheme, absUrl, err
+		}
+
+		return u.Scheme, urlArg, nil
+	} else if u.Host != "" {
+		return dbfactory.HTTPSScheme, "https://" + urlArg, nil
+	}
+
+	hostName, err := cfg.GetString(RemotesApiHostKey)
+
+	if err != nil {
+		if err != config.ErrConfigParamNotFound {
+			return "", "", err
+		}
+
+		hostName = DefaultRemotesApiHost
+	}
+
+	hostName = strings.TrimSpace(hostName)
+
+	return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, u.Path), nil
+}
+
+func getAbsFileRemoteUrl(urlStr string, fs filesys2.Filesys) (string, error) {
+	var err error
+	urlStr = filepath.Clean(urlStr)
+	urlStr, err = fs.Abs(urlStr)
+
+	if err != nil {
+		return "", err
+	}
+
+	exists, isDir := fs.Exists(urlStr)
+
+	if !exists {
+		return "", filesys2.ErrDirNotExist
+	} else if !isDir {
+		return "", filesys2.ErrIsFile
+	}
+
+	urlStr = strings.ReplaceAll(urlStr, `\`, "/")
+	if !strings.HasPrefix(urlStr, "/") {
+		urlStr = "/" + urlStr
+	}
+	return dbfactory.FileScheme + "://" + urlStr, nil
+}
+

@@ -22,12 +22,9 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -99,7 +96,18 @@ func NewRemoteItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	return &RemoteItr{dbData.Rsr.GetRemotes(), 0}, nil
+	remoteMap, err := dbData.Rsr.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+	remotes := make([]env.Remote, len(remoteMap))
+	i := 0
+	for _, r := range remoteMap {
+		remotes[i] = r
+		i++
+	}
+
+	return &RemoteItr{remotes, 0}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -158,28 +166,18 @@ type remoteWriter struct {
 
 func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 	name, ok := r[0].(string)
-
 	if !ok {
 		return nil, errors.New("invalid type for name")
 	}
 
 	url, ok := r[1].(string)
-
 	if !ok {
 		return nil, errors.New("invalid value type for url")
 	}
 
 	var fetchSpecs []string
-	if r[2] == nil {
-		fetchSpecs = []string{"refs/heads/*:refs/remotes/" + name + "/*"}
-	} else {
-		fetchSpecsDoc, ok := r[2].(sql.JSONValue)
-
-		if !ok {
-			return nil, errors.New("invalid value type for fetch_specs")
-		}
-
-		fetchSpecsInterface, err := fetchSpecsDoc.Unmarshall(ctx)
+	if v, ok := r[2].(sql.JSONValue); ok {
+		fetchSpecsInterface, err := v.Unmarshall(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -189,35 +187,29 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 		if !ok {
 			return nil, errors.New("invalid value type for params json")
 		}
-	}
-
-	for _, fetchSpec := range fetchSpecs {
-		_, err := ref.ParseRefSpecForRemote(name, fetchSpec)
-		if err != nil {
-			return nil, err
-		}
+	} else if v, ok := r[2].([]string); ok {
+		fetchSpecs = v
+	} else {
+		fetchSpecs = []string{"refs/heads/*:refs/remotes/" + name + "/*"}
 	}
 
 	var params map[string]string
-	if r[3] == nil {
+	//if v, ok := r[3].(sql.JSONValue); ok {
+	//	paramsInterface, err := v.Unmarshall(ctx)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	params, ok = paramsInterface.Val.(map[string]string)
+	//
+	//	if !ok {
+	//		return nil, errors.New("invalid value type for params json")
+	//	}
+	//} else
+	if v, ok := r[3].(map[string]string); ok {
+		params = v
+	} else {
 		params = map[string]string{}
-	} else{
-		paramsDoc, ok := r[3].(sql.JSONValue)
-
-		if !ok {
-			return nil, errors.New("invalid value type for params")
-		}
-
-		paramsInterface, err := paramsDoc.Unmarshall(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		params, ok = paramsInterface.Val.(map[string]string)
-
-		if !ok {
-			return nil, errors.New("invalid value type for params json")
-		}
 	}
 
 	remote := env.Remote{Name: name, Url: url, FetchSpecs: fetchSpecs, Params: params}
@@ -246,7 +238,7 @@ func (bWr remoteWriter) Insert(ctx *sql.Context, r sql.Row) error {
 		return err
 	}
 
-	err = dbData.Rsw.AddRemote(*remote)
+	err = dbData.Rsw.AddRemote(remote.Name, remote.Url, remote.FetchSpecs, remote.Params)
 	if err != nil {
 		return err
 	}
@@ -264,46 +256,34 @@ func (bWr remoteWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error
 // Close is called.
 func (bWr remoteWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	remote, err := validateRow(ctx, r)
+
+	if err != nil {
+		return err
+	}
+	dbName := ctx.GetCurrentDatabase()
+
+	if len(dbName) == 0 {
+		return fmt.Errorf("Empty database name.")
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := sess.GetDbData(dbName)
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	err = dbData.Rsw.RemoveRemote(ctx, remote.Name)
 	if err != nil {
 		return err
 	}
 
+	//delete(repoState.Remotes, remote.Name)
 	// TODO : dEnv.FS
-	repoState, err := env.LoadRepoState(filesys.LocalFS)
-	if err != nil {
-		return err
-	}
+	//err = repoState.Save(filesys.LocalFS)
 
-	if _, ok := repoState.Remotes[remote.Name]; !ok {
-		return errhand.BuildDError("error: unknown remote " + remote.Name).Build()
-	}
-
-	ddb := bWr.bt.ddb
-	refs, err := ddb.GetRemotes(ctx)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
-	}
-
-	for _, r := range refs {
-		rr := r.(ref.RemoteRef)
-
-		if rr.GetRemote() == remote.Name {
-			err = ddb.DeleteBranch(ctx, rr)
-
-			if err != nil {
-				return errhand.BuildDError("error: failed to delete remote tracking ref '%s'", rr.String()).Build()
-			}
-		}
-	}
-
-	delete(repoState.Remotes, remote.Name)
-	// TODO : dEnv.FS
-	err = repoState.Save(filesys.LocalFS)
-
-	if err != nil {
-		return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
-	}
+	//if err != nil {
+	//	return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
+	//}
 
 	return nil
 }

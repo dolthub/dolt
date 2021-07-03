@@ -34,7 +34,7 @@ teardown() {
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_query_catalog" ]] || false
     [[ "$output" =~ "dolt_status" ]] || false
-    [[ ! "$output" =~ " test" ]] || false  # spaces are impt!
+    [[ ! "$output" =~ " test" ]] || false  spaces are impt!
     run dolt ls --all
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
@@ -159,14 +159,37 @@ teardown() {
     run dolt sql -q "select * from dolt_remotes" -r csv
     [ $status -eq 0 ]
     [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
-    [[ "${lines[1]}" =~ origin,file://.*/remote,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+    [[ "${lines[1]}" =~ origin,$regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
 }
 
-@test "system-tables: insert/delete dolt_remotes system table" {
-    dolt sql -q "insert into dolt_remotes (name, url) values ('origin', 'file://remote')"
+@test "system-tables: insert into dolt_remotes system table" {
+    run dolt sql -q "insert into dolt_remotes (name, url) values ('origin', 'file://remote')"
+    [ $status -ne 0 ]
+    [[ ! "$output" =~ panic ]] || false
 
-    dolt sql -q "select count(*) from dolt_remotes" -r csv
-    exit
+    mkdir remote
+    dolt sql -q "insert into dolt_remotes (name, url) values ('origin1', 'file://remote')"
+    dolt sql -q "insert into dolt_remotes (name, url) values ('origin2', 'aws://[dynamo_db_table:s3_bucket]/repo_name')"
+
+    run dolt sql -q "select count(*) from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ 2 ]] || false
+
+    file_regex='file://.*/remote'
+    aws_regex='aws://.*/repo_name'
+    run dolt sql -q "select * from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
+    [[ "${lines[1]}" =~ origin1,$file_regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+    [[ "${lines[2]}" =~ origin2,$aws_regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+
+}
+
+@test "system-tables: delete from dolt_remotes system table" {
+    mkdir remote
+    dolt remote add origin file://remote/
+
+    run dolt sql -q "select count(*) from dolt_remotes"
     [ $status -eq 0 ]
     [[ "$output" =~ 1 ]] || false
 
@@ -174,7 +197,13 @@ teardown() {
     run dolt sql -q "select * from dolt_remotes" -r csv
     [ $status -eq 0 ]
     [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
-    [[ "${lines[1]}" =~ origin,file://.*/remote,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+    [[ "${lines[1]}" =~ origin,$regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+
+    dolt sql -q "delete from dolt_remotes where name = 'origin1'"
+
+    run dolt sql -q "select count(*) from dolt_remotes"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 1 ]] || false
 
     dolt sql -q "delete from dolt_remotes where name = 'origin'"
 
