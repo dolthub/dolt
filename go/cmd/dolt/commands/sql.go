@@ -963,36 +963,6 @@ func (s *stats) shouldFlush() bool {
 	return s.unflushedEdits >= maxBatchSize
 }
 
-// updateRepoState takes in a context and database and updates repo state.
-func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
-	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
-		root, err := db.GetRoot(ctx)
-		if err != nil {
-			return false, err
-		}
-
-		sess := dsess.DSessFromSess(ctx.Session)
-		rsw, ok := sess.GetDoltDBRepoStateWriter(db.Name())
-		if ok {
-			err = rsw.UpdateWorkingRoot(ctx, root)
-			if err != nil {
-				return false, err
-			}
-		}
-
-		ddb, ok := sess.GetDoltDB(db.Name())
-		if ok {
-			_, err = ddb.WriteRootValue(ctx, root)
-			if err != nil {
-				return false, err
-			}
-		}
-
-		return false, nil
-	})
-
-	return err
-}
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
 	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
 		_, rowIter, err := se.engine.Query(ctx, "COMMIT;")
@@ -1074,20 +1044,6 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 }
 
 func processNonBatchableQuery(ctx *sql.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
-	foundDoltSQLFunc, err := checkForDoltSQLFunction(sqlStatement)
-	if err != nil {
-		return err
-	}
-
-	// DOLT SQL functions like DOLT_COMMIT require an updated repo state to work correctly.
-	// TODO: kill this entire mess
-	if foundDoltSQLFunc {
-		err = updateRepoState(ctx, se)
-		if err != nil {
-			return err
-		}
-	}
-
 	sqlSch, rowIter, err := processQuery(ctx, query, se)
 	if err != nil {
 		return err
@@ -1218,30 +1174,6 @@ func foundSubquery(node sqlparser.SQLNode) bool {
 		}
 		return true, nil
 	}, node)
-	return has
-}
-
-func checkForDoltSQLFunction(statement sqlparser.Statement) (bool, error) {
-	switch node := statement.(type) {
-	default:
-		return hasDoltSQLFunction(node), nil
-	}
-}
-
-// hasDoltSQLFunction checks if a function is a dolt SQL function as defined in the dfunc package.
-func hasDoltSQLFunction(node sqlparser.SQLNode) bool {
-	has := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (keepGoing bool, err error) {
-		if f, ok := node.(*sqlparser.FuncExpr); ok {
-			name := strings.ToLower(f.Name.String())
-			if strings.HasPrefix(name, "dolt_") {
-				has = true
-			}
-			return false, nil
-		}
-		return true, nil
-	}, node)
-
 	return has
 }
 
