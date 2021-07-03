@@ -150,34 +150,6 @@ func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData 
 	if len(branchName) == 0 {
 		return ErrEmptyBranchName
 	}
-
-	branchRoot, err := actions.BranchRoot(ctx, dbData.Ddb, branchName)
-	if err != nil {
-		return err
-	}
-
-	// TODO: this is almost certainly wrong, rip it out
-	roots, err = actions.UpdateRootsForBranch(ctx, roots, branchRoot)
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
-		} else if doltdb.IsRootValUnreachable(err) {
-			rt := doltdb.GetUnreachableRootType(err)
-			return fmt.Errorf("error: unable to read the %s", rt.String())
-		} else if actions.IsCheckoutWouldOverwrite(err) {
-			tbls := actions.CheckoutWouldOverwriteTables(err)
-			msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
-			for _, tbl := range tbls {
-				msg = msg + tbl + "\n"
-			}
-			return errors.New(msg)
-		} else if err == doltdb.ErrAlreadyOnBranch {
-			return nil // No need to return an error if on the same branch
-		} else {
-			return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
-		}
-	}
-
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err

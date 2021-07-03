@@ -226,12 +226,12 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 		return doltdb.Roots{}, CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	roots.Working, err = writeRoot(ctx, branchRoot, wrkTblHashes)
+	roots.Working, err = overwriteRoot(ctx, branchRoot, wrkTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	roots.Staged, err = writeRoot(ctx, branchRoot, stgTblHashes)
+	roots.Staged, err = overwriteRoot(ctx, branchRoot, stgTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -387,7 +387,9 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 	return resultMap, nil
 }
 
-func writeRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
+// overwriteRoot writes new table hash values for the root given and returns it.
+// This is an inexpensive and convenient way of replacing all the tables at once.
+func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
 	names, err := head.GetTableNames(ctx)
 	if err != nil {
 		return nil, err

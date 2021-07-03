@@ -845,7 +845,8 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	// Create an empty working set at the same time
+	// Create a corresponding working set at the same time
+	// TODO: find all the places HEAD can change, update working set too
 	commitRoot, err := commit.GetRootValue()
 	wsRef, _ := ref.WorkingSetRefForHead(branchRef)
 	ws := EmptyWorkingSet(wsRef).WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)

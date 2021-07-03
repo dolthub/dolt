@@ -194,6 +194,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	sess := dsess.DefaultSession()
+	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
+	sess.Username = *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
+	sess.Email = *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 
 	var mrEnv env.MultiRepoEnv
 	var initialRoots map[string]*doltdb.RootValue
@@ -239,9 +242,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
 		}
-
-		sess.Username = *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
-		sess.Email = *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	} else {
 		if apr.NArg() > 0 {
 			return HandleVErrAndExitCode(errhand.BuildDError("Specifying a commit is not compatible with the --multi-db-dir flag.").SetPrintUsage().Build(), usage)

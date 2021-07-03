@@ -16,6 +16,7 @@ package dfunctions
 
 import (
 	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -102,8 +103,34 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
+	// Commit any pending transaction before a dolt_commit
+	tx := ctx.Session.GetTransaction()
+	_, ok = tx.(*dsess.DoltTransaction)
+	if !ok {
+		return nil, fmt.Errorf("expected a DoltTransaction, got %T", tx)
+	}
+
+	err = dSess.SetRoots(ctx, dbName, roots)
+	if err != nil {
+		return nil, err
+	}
+
+	err = dSess.CommitTransaction(ctx, dbName, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
+	ctx.SetTransaction(nil)
+
+	// Now do a Dolt commit
 	// TODO: this does several session state updates, and it really needs to just do one
-	//  We also need to commit any pending transaction before we do this.
+	//  It's also not atomic with the above commit. We need a way to set both new HEAD and update the working
+	//  set together, atomically. We can't easily do this in noms right now, because the the data set is the unit of
+	//  atomic update at the API layer. There's a root value which is the unit of atomic updates at the storage layer,
+	//  just no API which allows one to update more than one dataset in the same atomic transaction. We need to write
+	//  one.
+	//  Meanwhile, this is all kinds of thread-unsafe
 	commit, err := actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
@@ -116,6 +143,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, err
 	}
 
+	// Updating the working set like this also updates the head commit and root info for the session
 	ws := dSess.WorkingSet(ctx, dbName)
 	err = dSess.SetWorkingSet(ctx, dbName, ws, nil)
 	if err != nil {
