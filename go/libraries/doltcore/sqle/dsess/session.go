@@ -693,6 +693,7 @@ func (sess *Session) SwitchWorkingSet(
 		return err
 	}
 
+	// TODO: just call SetWorkingSet?
 	sessionState.WorkingSet = ws
 
 	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())

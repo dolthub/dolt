@@ -17,13 +17,14 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
@@ -169,6 +170,8 @@ func (cmd SqlCmd) RequiresRepo() bool {
 }
 
 // Exec executes the command
+// Unlike other commands, sql doesn't set a new working root directly, as the SQL layer updates the working set as
+// necessary when committing work.
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
@@ -407,14 +410,11 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, continueOnErr bool, mrEnv env
 		}
 
 		_ = flushBatchedEdits(sqlCtx, se)
-		// TODO: this should no longer be necessary, right?
-		_ = writeRoots(sqlCtx, se, mrEnv, roots)
 
 		return errhand.BuildDError("Error processing batch").AddCause(err).Build()
 	}
 
-	// TODO: this should no longer be necessary, right?
-	return writeRoots(sqlCtx, se, mrEnv, roots)
+	return nil
 }
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
@@ -447,7 +447,7 @@ func execQuery(
 		}
 	}
 
-	return writeRoots(sqlCtx, se, mrEnv, roots)
+	return nil
 }
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
@@ -754,13 +754,6 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 					shell.Println(color.RedString(err.Error()))
 				}
 			}
-
-			if err == nil {
-				returnedVerr = writeRoots(ctx, se, mrEnv, initialRoots)
-				if returnedVerr != nil {
-					return
-				}
-			}
 		}
 
 		currPrompt := fmt.Sprintf("%s> ", ctx.GetCurrentDatabase())
@@ -772,31 +765,6 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
 	return returnedVerr
-}
-
-// writeRoots updates the working root values using the sql context, the sql engine, a multi repo env and a root_val map.
-func writeRoots(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRoots map[string]*doltdb.RootValue) errhand.VerboseError {
-	roots, err := se.getRoots(ctx)
-
-	if err != nil {
-		return errhand.BuildDError("failed to get roots").AddCause(err).Build()
-	}
-
-	// If the SQL session wrote a new root value, update the working set with it
-	var verr errhand.VerboseError
-	for name, origRoot := range initialRoots {
-		root := roots[name]
-		if origRoot != root {
-			currEnv := mrEnv[name]
-			verr = UpdateWorkingWithVErr(currEnv, root)
-
-			if verr != nil {
-				return verr
-			}
-		}
-	}
-
-	return verr
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.

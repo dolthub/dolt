@@ -94,6 +94,7 @@ type WorkingSet struct {
 	mergeState  *MergeState
 }
 
+// TODO: remove this, require working and staged
 func EmptyWorkingSet(wsRef ref.WorkingSetRef) *WorkingSet {
 	return &WorkingSet{
 		Name:   wsRef.GetPath(),

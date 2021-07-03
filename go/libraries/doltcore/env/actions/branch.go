@@ -171,9 +171,8 @@ func CreateBranchWithStartPt(ctx context.Context, dbData env.DbData, newBranch, 
 }
 
 func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, startingPoint string, force bool, headRef ref.DoltRef) error {
-	newRef := ref.NewBranchRef(newBranch)
-	hasRef, err := ddb.HasRef(ctx, newRef)
-
+	branchRef := ref.NewBranchRef(newBranch)
+	hasRef, err := ddb.HasRef(ctx, branchRef)
 	if err != nil {
 		return err
 	}
@@ -187,18 +186,21 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 	}
 
 	cs, err := doltdb.NewCommitSpec(startingPoint)
-
 	if err != nil {
 		return err
 	}
 
 	cm, err := ddb.Resolve(ctx, cs, headRef)
-
 	if err != nil {
 		return err
 	}
 
-	return ddb.NewBranchAtCommit(ctx, newRef, cm)
+	err = ddb.NewBranchAtCommit(ctx, branchRef, cm)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoint string, force bool) error {

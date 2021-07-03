@@ -825,26 +825,32 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 }
 
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
-func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, commit *Commit) error {
-	if !IsValidBranchRef(dref) {
-		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", dref.String()))
+func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit) error {
+	if !IsValidBranchRef(branchRef) {
+		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", branchRef.String()))
 	}
 
-	ds, err := ddb.db.GetDataset(ctx, dref.String())
-
+	ds, err := ddb.db.GetDataset(ctx, branchRef.String())
 	if err != nil {
 		return err
 	}
 
 	rf, err := types.NewRef(commit.commitSt, ddb.db.Format())
-
 	if err != nil {
 		return err
 	}
 
 	_, err = ddb.db.SetHead(ctx, ds, rf)
+	if err != nil {
+		return err
+	}
 
-	return err
+	// Create an empty working set at the same time
+	commitRoot, err := commit.GetRootValue()
+	wsRef, _ := ref.WorkingSetRefForHead(branchRef)
+	ws := EmptyWorkingSet(wsRef).WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, hash.Hash{})
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.

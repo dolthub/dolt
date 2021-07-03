@@ -156,6 +156,7 @@ func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData 
 		return err
 	}
 
+	// TODO: this is almost certainly wrong, rip it out
 	roots, err = actions.UpdateRootsForBranch(ctx, roots, branchRoot)
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
