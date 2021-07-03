@@ -162,8 +162,8 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 		return verr
 	}
 
-	fetchSpecs := []string{"refs/heads/*:refs/remotes/" + remoteName + "/*"}
-	err = dEnv.AddRemote(remoteName, remoteUrl, fetchSpecs, params)
+	r := env.NewRemote(remoteName, remoteUrl, params)
+	err = dEnv.AddRemote(r.Name, r.Url, r.FetchSpecs, r.Params)
 	if err != nil {
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}

@@ -788,8 +788,8 @@ func (ddb *DoltDB) GetWorkspaces(ctx context.Context) ([]ref.DoltRef, error) {
 
 var remotesRefFilter = map[ref.RefType]struct{}{ref.RemoteRefType: {}}
 
-// GetRemotes returns a list of all remotes in the database.
-func (ddb *DoltDB) GetRemotes(ctx context.Context) ([]ref.DoltRef, error) {
+// GetRemoteRefs returns a list of all remotes in the database.
+func (ddb *DoltDB) GetRemoteRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, remotesRefFilter)
 }
 

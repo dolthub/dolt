@@ -34,7 +34,7 @@ teardown() {
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_query_catalog" ]] || false
     [[ "$output" =~ "dolt_status" ]] || false
-    [[ ! "$output" =~ " test" ]] || false  spaces are impt!
+    [[ ! "$output" =~ " test" ]] || false  # spaces are impt!
     run dolt ls --all
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
