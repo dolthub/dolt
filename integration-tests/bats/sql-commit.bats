@@ -156,7 +156,7 @@ SQL
     [[ "$output" =~ $head_commit ]] || false
 }
 
-@test "sql-commit: DOLT_COMMIT with unstaged tables correctly gets new head root but does not overwrite working" {
+@test "sql-commit: DOLT_COMMIT with unstaged tables leaves them in the working set" {
     head_variable=@@dolt_repo_$$_head
 
     run dolt sql << SQL
@@ -164,16 +164,55 @@ CREATE TABLE test2 (
     pk int primary key
 );
 SELECT DOLT_ADD('test');
-SELECT DOLT_COMMIT('-m', 'Commit1');
+SELECT DOLT_COMMIT('-m', '0, 1, 2 in test');
 SELECT $head_variable = HASHOF('head');
 SQL
 
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
 
+    run dolt log -n1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0, 1, 2" ]] || false    
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test2) ]] || false
+
+    run dolt sql -r csv -q "show tables"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'test2' ]] || false
+    
     run dolt sql -r csv -q "select * from dolt_status;"
     [ $status -eq 0 ]
     [[ "$output" =~ 'test2,false,new table' ]] || false
+
+    # Now another partial commit
+    run dolt sql << SQL
+SELECT DOLT_ADD('test2');
+insert into test values (20);
+SELECT DOLT_COMMIT('-m', 'added test2 table');
+SELECT $head_variable = HASHOF('head');
+SQL
+
+    [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+
+    run dolt log -n1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "added test2 table" ]] || false    
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "20" ]] || false
+    
+    run dolt sql -r csv -q "select * from dolt_status;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'test,false,modified' ]] || false
 }
 
 @test "sql-commit: The -f parameter is properly parsed and executes" {
