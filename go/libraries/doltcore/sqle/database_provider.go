@@ -178,9 +178,19 @@ func dbRevisionForBranch(ctx context.Context, srcDb Database, name string) (Data
 	}
 
 	dbName := srcDb.Name() + dbRevisionDelimiter + name
+
+	static := staticRepoState{
+		branch:          branch,
+		RepoStateWriter: srcDb.rsw,
+		RepoStateReader: srcDb.rsr,
+		DocsReadWriter:  srcDb.drw,
+	}
 	db := Database{
 		name: dbName,
 		ddb:  srcDb.ddb,
+		rsw:  static,
+		rsr:  static,
+		drw:  static,
 	}
 	init := InitialDbState{
 		Db:         db,
@@ -188,9 +198,9 @@ func dbRevisionForBranch(ctx context.Context, srcDb Database, name string) (Data
 		WorkingSet: ws,
 		DbData: env.DbData{
 			Ddb: srcDb.ddb,
-			Rsw: srcDb.rsw,
-			Rsr: srcDb.rsr,
-			Drw: srcDb.drw,
+			Rsw: static,
+			Rsr: static,
+			Drw: static,
 		},
 	}
 
@@ -212,6 +222,9 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 	db := ReadOnlyDatabase{Database: Database{
 		name: name,
 		ddb:  srcDb.ddb,
+		rsw:  srcDb.rsw,
+		rsr:  srcDb.rsr,
+		drw:  srcDb.drw,
 	}}
 	init := InitialDbState{
 		Db:         db,
@@ -225,4 +238,15 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 	}
 
 	return db, init, nil
+}
+
+type staticRepoState struct {
+	branch ref.DoltRef
+	env.RepoStateWriter
+	env.RepoStateReader
+	env.DocsReadWriter
+}
+
+func (s staticRepoState) CWBHeadRef() ref.DoltRef {
+	return s.branch
 }
