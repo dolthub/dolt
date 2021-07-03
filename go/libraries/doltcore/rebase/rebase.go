@@ -154,11 +154,10 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 
 		switch dRef.(type) {
 		case ref.BranchRef:
-			err = ddb.DeleteBranch(ctx, dRef)
+			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i])
 			if err != nil {
 				return err
 			}
-			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i])
 
 		default:
 			return fmt.Errorf("cannot rebase ref: %s", ref.String(dRef))
