@@ -50,7 +50,7 @@ var mergeStateTemplate = types.MakeStructTemplate(MergeStateName, []string{Merge
 type WorkingSetSpec struct {
 	Meta        WorkingSetMeta
 	WorkingRoot types.Ref
-	StagedRoot  *types.Ref
+	StagedRoot  types.Ref
 	MergeState  *types.Ref
 }
 
@@ -69,14 +69,12 @@ type WorkingSetSpec struct {
 // }
 // ```
 // where M is a struct type and R is a ref type.
-func NewWorkingSet(_ context.Context, workingRef types.Ref, stagedRef, mergeStateRef *types.Ref) (types.Struct, error) {
+func NewWorkingSet(_ context.Context, workingRef, stagedRef types.Ref, mergeStateRef *types.Ref) (types.Struct, error) {
 	fields := make(types.StructData)
 	fields[WorkingRootRefField] = workingRef
+	fields[StagedRootRefField] = stagedRef
 
-	if stagedRef != nil {
-		fields[StagedRootRefField] = stagedRef
-	}
-	if mergeStateRef != nil {
+	 if mergeStateRef != nil {
 		fields[MergeStateField] = mergeStateRef
 	}
 

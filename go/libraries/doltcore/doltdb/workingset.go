@@ -256,41 +256,40 @@ func (ws *WorkingSet) Ref() ref.WorkingSetRef {
 // writeValues write the values in this working set to the database and returns them
 func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 	workingRoot types.Ref,
-	stagedRoot *types.Ref,
+	stagedRoot types.Ref,
 	mergeState *types.Ref,
 	err error,
 ) {
 
-	workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
-	if err != nil {
-		return types.Ref{}, nil, nil, err
+	if ws.stagedRoot == nil || ws.workingRoot == nil {
+		return types.Ref{}, types.Ref{}, nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
 	}
 
-	// TODO: this is never nil
-	if ws.stagedRoot != nil {
-		var stagedRootRef types.Ref
-		stagedRootRef, err = db.writeRootValue(ctx, ws.stagedRoot)
-		if err != nil {
-			return types.Ref{}, nil, nil, err
-		}
-		stagedRoot = &stagedRootRef
+	workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
+	if err != nil {
+		return types.Ref{}, types.Ref{}, nil, err
+	}
+
+	stagedRoot, err = db.writeRootValue(ctx, ws.stagedRoot)
+	if err != nil {
+		return types.Ref{}, types.Ref{}, nil, err
 	}
 
 	if ws.mergeState != nil {
 		var mergeStateRef types.Ref
 		preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
 		if err != nil {
-			return types.Ref{}, nil, nil, err
+			return types.Ref{}, types.Ref{}, nil, err
 		}
 
 		mergeStateRefSt, err := datas.NewMergeState(ctx, preMergeWorking, ws.mergeState.commit.commitSt)
 		if err != nil {
-			return types.Ref{}, nil, nil, err
+			return types.Ref{}, types.Ref{}, nil, err
 		}
 
 		mergeStateRef, err = db.db.WriteValue(ctx, mergeStateRefSt)
 		if err != nil {
-			return types.Ref{}, nil, nil, err
+			return types.Ref{}, types.Ref{}, nil, err
 		}
 
 		mergeState = &mergeStateRef

@@ -133,6 +133,7 @@ type Session struct {
 	BatchMode batchMode
 	Username  string
 	Email     string
+	// TODO: make this private again
 	DbStates  map[string]*DatabaseSessionState
 }
 
@@ -220,6 +221,54 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 	}
 
 	return sess.SetRoot(ctx, dbName, newRoot)
+}
+
+// CommitTransaction commits the in-progress transaction for the database named
+func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (*DoltTransaction, error) {
+	sessionState := sess.DbStates[dbName]
+
+	wsRef := sessionState.WorkingSet.Ref()
+	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
+	if err == doltdb.ErrWorkingSetNotFound {
+		ws, err = sess.newWorkingSetForHead(ctx, wsRef, dbName)
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+
+	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
+
+	// TODO: this is going to do 2 resolves to get the head root, not ideal
+	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+
+	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
+	sessionState.dirty = false
+
+	return NewDoltTransaction(ws, wsRef, sessionState.dbData), nil
+}
+
+func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
+	dbData, _ := sess.GetDbData(dbName)
+
+	headSpec, _ := doltdb.NewCommitSpec("HEAD")
+	headRef, err := wsRef.ToHeadRef()
+	if err != nil {
+		return nil, err
+	}
+
+	headCommit, err := dbData.Ddb.Resolve(ctx, headSpec, headRef)
+	if err != nil {
+		return nil, err
+	}
+
+	headRoot, err := headCommit.GetRootValue()
+	if err != nil {
+		return nil, err
+	}
+
+	return doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(headRoot).WithStagedRoot(headRoot), nil
 }
 
 // CommitTransaction commits the in-progress transaction for the database named
@@ -581,7 +630,12 @@ func (sess *Session) SetWorkingSet(
 			return err
 		}
 
-		cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, nil)
+		branchRef, err := ws.Ref().ToHeadRef()
+		if err != nil {
+			return err
+		}
+
+		cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
 		if err != nil {
 			return err
 		}
@@ -608,6 +662,76 @@ func (sess *Session) SetWorkingSet(
 	if err != nil {
 		return nil
 	}
+
+	return nil
+}
+
+// SwitchWorkingSet switches to a new working set for this session. Unlike SetWorkingSet, this method expresses no
+// intention to eventually persist any uncommitted changes. Rather, this method only changes the in memory state of
+// this session. It's equivalent to starting a new session with the working set reference provided. If the current
+// session is dirty, this method returns an error. Clients can only switch branches with a clean working set, and so
+// must either commit or rollback any changes before attempting to switch working sets.
+func (sess *Session) SwitchWorkingSet(
+	ctx *sql.Context,
+	dbName string,
+	wsRef ref.WorkingSetRef) error {
+	sessionState := sess.DbStates [dbName]
+
+	if sessionState.dirty {
+		return fmt.Errorf("Cannot switch working set, session state is dirty. " +
+			"Rollback or commit changes before changing working sets.")
+	}
+
+	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// no working set for this HEAD yet
+		ws, err = sess.newWorkingSetForHead(ctx, wsRef, dbName)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	sessionState.WorkingSet = ws
+
+	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
+	if err != nil {
+		return err
+	}
+
+	branchRef, err := ws.Ref().ToHeadRef()
+	if err != nil {
+		return err
+	}
+
+	cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
+	if err != nil {
+		return err
+	}
+
+	sessionState.headCommit = cm
+	sessionState.headRoot, err = cm.GetRootValue()
+	if err != nil {
+		return err
+	}
+
+	err = sess.setSessionVarsForDb(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	// setRoot updates any edit sessions in use
+	err = sess.setRoot(ctx, dbName, ws.WorkingRoot())
+	if err != nil {
+		return nil
+	}
+
+	// After switching to a new working set, we are by definition clean
+	sessionState.dirty = false
+
+	// the current transaction, if there is one, needs to be restarted
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData))
 
 	return nil
 }
