@@ -41,34 +41,47 @@ teardown() {
     [ $status -eq 1 ]
 }
 
-@test "sql-checkout: DOLT_CHECKOUT properly carries unstaged and staged changes between new and existing branches." {
+@test "sql-checkout: DOLT_CHECKOUT changes branches, leaves behind working set unmodified." {
     dolt add . && dolt commit -m "0, 1, and 2 in test table"
     dolt sql -q "insert into test values (4);"
-    
-    dolt sql << SQL 
-SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-select * from test where pk > 3;
-SQL
-    [ $status -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
-
-    run dolt branch
-    [ $status -eq 0 ]
-    [[ "$output" =~ "feature-branch" ]] || false
 
     run dolt status
     [ $status -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
-    [[ "$output" =~ "Untracked files" ]] || false
-    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 
+    # After switching to a new branch, we don't see working set changes
+    run dolt sql << SQL 
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+select * from test where pk > 3;
+SQL
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "4" ]] || false
+
+    # the branch was created by dolt_checkout
+    run dolt branch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "feature-branch" ]] || false
+
+    # but the shell is still on branch master, with the same changes as before
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    run dolt sql << SQL 
+select * from test where pk > 3;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+    
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch2');
 insert into test values (5);
 select * from test where pk > 3;
 SQL
     [ $status -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
     [[ "$output" =~ "5" ]] || false
 
     # working set from master has 4, but not 5
@@ -79,52 +92,64 @@ SQL
 
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "Changes to be committed" ]] || false
-    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 
+    # In a new session, the value inserted should still be there
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('feature-branch2');
+select * from test where pk > 3;
+SQL
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "4" ]] || false
+    [[ "$output" =~ "5" ]] || false
+
+    # This is an error on the command line, but not in SQL
     run dolt sql -q "SELECT DOLT_CHECKOUT('master')"
     [ $status -eq 0 ]
-
-    run dolt ls
-    [ $status -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
-
-    run dolt status
-    [ $status -eq 0 ]
-    [[ "$output" =~ "Changes to be committed" ]] || false
-    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
 }
 
-@test "sql-checkout: DOLT CHECKOUT -b properly maintains session variables" {
-    head_variable=@@dolt_repo_$$_head
-    head_hash=$(get_head_commit)
-    working_variable=@@dolt_repo_$$_working
-    working_hash=$(get_working_hash)
+@test "sql-checkout: DOLT_CHECKOUT works with dolt_diff tables" {
+    dolt add . && dolt commit -m "1, 2, and 3 in test table"
 
-    run dolt sql << SQL
-SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-SELECT $working_variable;
-SQL
-
-    [ $status -eq 0 ]
-    [[ "$output" =~ "$working_hash" ]] || false
-
-    run dolt sql -q "SELECT $head_variable"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "$head_hash" ]] || false
-}
-
-@test "sql-checkout: DOLT_CHECKOUT -b maintains system tables between two branches" {
     run dolt sql -q "SELECT * FROM dolt_diff_test";
     [ $status -eq 0 ]
-    diff=$output
+    emptydiff=$output
 
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT * FROM dolt_diff_test;
 SQL
     [ $status -eq 0 ]
-    [[ "$output" =~ "$diff" ]] || false
+    [[ "$output" =~ "$emptydiff" ]] || false
+
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('feature-branch');
+SELECT * FROM dolt_diff_test;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "$emptydiff" ]] || false
+    
+    # add some changes to the working set
+    dolt sql -q "insert into test values (4)"
+    run dolt sql -q "SELECT * FROM dolt_diff_test";
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "$emptydiff" ]] || false
+
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('-b', 'feature-branch2');
+SELECT * FROM dolt_diff_test;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "$emptydiff" ]] || false
+
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('feature-branch2');
+SELECT * FROM dolt_diff_test;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "$emptydiff" ]] || false
+
 }
 
 @test "sql-checkout: DOLT_CHECKOUT paired with commit, add, reset, and merge works with no problems." {
