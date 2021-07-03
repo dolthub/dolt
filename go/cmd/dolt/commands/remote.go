@@ -141,41 +141,6 @@ func removeRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return err.(errhand.VerboseError)
 	}
 
-	//remotes, err := dEnv.GetRemotes()
-	//
-	//if err != nil {
-	//	return errhand.BuildDError("error: unable to read remotes").Build()
-	//}
-	//
-	//if _, ok := remotes[old]; !ok {
-	//	return errhand.BuildDError("error: unknown remote " + old).Build()
-	//}
-	//
-	//refs, err := dEnv.DoltDB.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
-	//
-	//if err != nil {
-	//	return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
-	//}
-	//
-	//for _, r := range refs {
-	//	rr := r.(ref.RemoteRef)
-	//
-	//	if rr.GetRemote() == old {
-	//		err = dEnv.DoltDB.DeleteBranch(ctx, rr)
-	//
-	//		if err != nil {
-	//			return errhand.BuildDError("error: failed to delete remote tracking ref '%s'", rr.String()).Build()
-	//		}
-	//	}
-	//}
-	//
-	//delete(dEnv.RepoState.Remotes, old)
-	//err = dEnv.RepoState.Save(dEnv.FS)
-
-	//if err != nil {
-	//	return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
-	//}
-
 	return nil
 }
 
@@ -186,25 +151,17 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 
 	remoteName := strings.TrimSpace(apr.Arg(1))
 
-	//if _, ok := dEnv.RepoState.Remotes[remoteName]; ok {
-	//	return errhand.BuildDError("error: A remote named '%s' already exists.", remoteName).AddDetails("remove it before running this command again").Build()
-	//}
-
 	remoteUrl := apr.Arg(2)
 	scheme, absRemoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, remoteUrl)
-
 	if err != nil {
 		return errhand.BuildDError("error: '%s' is not valid.", remoteUrl).AddCause(err).Build()
 	}
 
 	params, verr := parseRemoteArgs(apr, scheme, absRemoteUrl)
-
 	if verr != nil {
 		return verr
 	}
 
-	//r := env.NewRemote(remoteName, absRemoteUrl, params)
-	//err = dEnv.AddRemote(r)
 	fetchSpecs := []string{"refs/heads/*:refs/remotes/" + remoteName + "/*"}
 	err = dEnv.AddRemote(remoteName, remoteUrl, fetchSpecs, params)
 	if err != nil {

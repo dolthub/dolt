@@ -16,11 +16,12 @@ package env
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -72,7 +73,6 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 	params[dbfactory.NoCachingParameter] = "true"
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
-
 
 func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {
 	u, err := earl.Parse(urlArg)
@@ -135,4 +135,3 @@ func getAbsFileRemoteUrl(urlStr string, fs filesys2.Filesys) (string, error) {
 	}
 	return dbfactory.FileScheme + "://" + urlStr, nil
 }
-

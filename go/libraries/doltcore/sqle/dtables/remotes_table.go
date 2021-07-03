@@ -17,13 +17,13 @@ package dtables
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -183,7 +183,6 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 		}
 
 		fetchSpecs, ok = fetchSpecsInterface.Val.([]string)
-
 		if !ok {
 			return nil, errors.New("invalid value type for params json")
 		}
@@ -194,18 +193,6 @@ func validateRow(ctx *sql.Context, r sql.Row) (*env.Remote, error) {
 	}
 
 	var params map[string]string
-	//if v, ok := r[3].(sql.JSONValue); ok {
-	//	paramsInterface, err := v.Unmarshall(ctx)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	params, ok = paramsInterface.Val.(map[string]string)
-	//
-	//	if !ok {
-	//		return nil, errors.New("invalid value type for params json")
-	//	}
-	//} else
 	if v, ok := r[3].(map[string]string); ok {
 		params = v
 	} else {
@@ -276,14 +263,6 @@ func (bWr remoteWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	if err != nil {
 		return err
 	}
-
-	//delete(repoState.Remotes, remote.Name)
-	// TODO : dEnv.FS
-	//err = repoState.Save(filesys.LocalFS)
-
-	//if err != nil {
-	//	return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
-	//}
 
 	return nil
 }
