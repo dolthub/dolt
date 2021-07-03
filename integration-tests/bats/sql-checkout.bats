@@ -152,22 +152,30 @@ SQL
 
 }
 
-@test "sql-checkout: DOLT_CHECKOUT paired with commit, add, reset, and merge works with no problems." {
+@test "sql-checkout: DOLT_CHECKOUT followed by DOLT_COMMIT" {
+    dolt add . && dolt commit -m "0, 1, and 2 in test table"    
+    
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (4);
 SELECT DOLT_ADD('.');
-SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>');
+SELECT DOLT_COMMIT('-m', 'Added 4', '--author', 'John Doe <john@doe.com>');
 SQL
-
     [ $status -eq 0 ]
 
+    dolt status
+
+    # on branch master, no changes visible
+    run dolt log -n 1
+    [[ ! "$output" =~ "Added 4" ]] || false
+    [[ "$output" =~ "0, 1, and 2" ]] || false
+
+    dolt checkout feature-branch
     run dolt log -n 1
     [ $status -eq 0 ]
-    [[ "$output" =~ "Commit1" ]] || false
+    [[ "$output" =~ "Added 4" ]] || false
     [[ "$output" =~ "John Doe" ]] || false
 
-    dolt log -n 1
     dolt checkout master
     run dolt merge feature-branch
 
@@ -177,22 +185,25 @@ SQL
     [[ "$output" =~ "John Doe" ]] || false
 }
 
-@test "sql-checkout: DOLT_CHECKOUT works with tables." {
+@test "sql-checkout: DOLT_CHECKOUT with table name clears working set changes" {
+    dolt add . && dolt commit -m "0, 1, and 2 in test table"
+    
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-SELECT DOLT_COMMIT('-a', '-m', 'commit');
 INSERT INTO test VALUES (4);
-SELECT DOLT_CHECKOUT('test');
+select * from test where pk > 3;
 SQL
 
     [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
 
-    run dolt sql -q "SELECT * FROM test;" -r csv
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('feature-branch');
+SELECT DOLT_CHECKOUT('test');
+select * from test where pk > 3;
+SQL
+
     [ $status -eq 0 ]
-    [[ "$output" =~ "pk" ]] || false
-    [[ "$output" =~ "0" ]] || false
-    [[ "$output" =~ "1" ]] || false
-    [[ "$output" =~ "2" ]] || false
     [[ ! "$output" =~ "4" ]] || false
 }
 
@@ -217,16 +228,15 @@ SQL
     run dolt sql -q "SELECT * FROM one_pk" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "pk1,c1,c2" ]] || false
-    [[ "$output" =~ "0,1,1" ]] || false
-    [[ ! "$output" =~ "0,0,0" ]] || false
+    [[ ! "$output" =~ "0,1,1" ]] || false
+    [[ "$output" =~ "0,0,0" ]] || false
 
-    dolt commit -a -m "changed feature branch"
-    dolt checkout master
+    dolt checkout feature-branch
     run dolt sql -q "SELECT * FROM one_pk" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "pk1,c1,c2" ]] || false
-    [[ ! "$output" =~ "0,1,1" ]] || false
-    [[ "$output" =~ "0,0,0" ]] || false
+    [[ "$output" =~ "0,1,1" ]] || false
+    [[ ! "$output" =~ "0,0,0" ]] || false
 }
 
 @test "sql-checkout: DOLT_CHECKOUT does not throw an error when checking out to the same branch" {
