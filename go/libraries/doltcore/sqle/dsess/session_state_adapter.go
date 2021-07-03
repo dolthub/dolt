@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dsess
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -26,14 +26,39 @@ import (
 // SessionStateAdapter is an adapter for env.RepoStateReader in SQL contexts, getting information about the repo state
 // from the session.
 type SessionStateAdapter struct {
-	session *dsess.Session
+	session *Session
 	dbName  string
 }
 
+func (s SessionStateAdapter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	return fmt.Errorf("Cannot update staged root with a SessionStateAdapter")
+}
+
+func (s SessionStateAdapter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	return fmt.Errorf("Cannot update working root with a SessionStateAdapter")
+}
+
+func (s SessionStateAdapter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
+	return fmt.Errorf("Cannot set cwb head ref with a SessionStateAdapter")
+}
+
+func (s SessionStateAdapter) AbortMerge(ctx context.Context) error {
+	return fmt.Errorf("Cannot abort merge with a SessionStateAdapter")
+}
+
+func (s SessionStateAdapter) ClearMerge(ctx context.Context) error {
+	return fmt.Errorf("Cannot clear merge with a SessionStateAdapter")
+}
+
+func (s SessionStateAdapter) StartMerge(ctx context.Context, commit *doltdb.Commit) error {
+	return fmt.Errorf("Cannot start merge with a SessionStateAdapter")
+}
+
 var _ env.RepoStateReader = SessionStateAdapter{}
+var _ env.RepoStateWriter = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
-func NewSessionStateAdapter(session *dsess.Session, dbName string) SessionStateAdapter {
+func NewSessionStateAdapter(session *Session, dbName string) SessionStateAdapter {
 	return SessionStateAdapter{session: session, dbName: dbName}
 }
 

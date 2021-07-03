@@ -898,8 +898,13 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState := &DatabaseSessionState{}
 	sess.DbStates[db.Name()] = sessionState
 
-	// TODO: get rid of all repo state writer stuff
+	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
+	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
+	adapter := NewSessionStateAdapter(sess, db.Name())
+	sessionState.dbData.Rsr = adapter
+	sessionState.dbData.Rsw = adapter
+
 	sessionState.EditSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
 	err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), dbState.WorkingSet.Ref().GetPath())
