@@ -246,8 +246,8 @@ SQL
     [[ "$output" =~ "0,1,1" ]] || false    
 }
 
-@test "sql-merge: DOLT_MERGE properly detects merge conflicts and renders the conflicts in dolt_conflicts." {
-    run dolt sql << SQL
+@test "sql-merge: DOLT_MERGE detects merge conflicts returns conflicts in dolt_conflicts table" {
+    run dolt sql --disable-batch << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
   c1 BIGINT,
@@ -265,35 +265,38 @@ SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
 SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch');
 SQL
-
     [ $status -eq 1 ]
     [[ $output =~ "merge has unresolved conflicts" ]] || false
 
+    # back on the command line, our session state is clean
     run dolt status
     [ $status -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
-    [[ "$output" =~ "You have unmerged tables" ]] || false
-    [[ "$output" =~ ([[:space:]]*both modified:[[:space:]]*one_pk) ]] || false
+    [[ "$output" =~ "working tree clean" ]] || false    
+    [[ ! "$output" =~ "You have unmerged tables" ]] || false
+    [[ ! "$output" =~ ([[:space:]]*both modified:[[:space:]]*one_pk) ]] || false
 
-    run dolt sql -q "SELECT * FROM dolt_conflicts" -r csv
+    # now merge, examine the conflicts, and abort
+    run dolt sql -r csv --disable-batch << SQL
+SET autocommit = off;
+SELECT DOLT_MERGE('feature-branch');
+SELECT * FROM dolt_conflicts;
+SELECT DOLT_MERGE('--abort');
+SQL
+    
     [ $status -eq 0 ]
     [[ "$output" =~ "table,num_conflicts" ]] || false
     [[ "$output" =~ "one_pk,1" ]] || false
 
-    # Go through the process of resolving commits
-    run dolt sql << SQL
+    # now resolve commits
+    run dolt sql --disable-batch << SQL
+SET autocommit = off;
+SELECT DOLT_MERGE('feature-branch');
 REPLACE INTO one_pk (pk1, c1, c2) SELECT their_pk1, their_c1, their_c2 FROM dolt_conflicts_one_pk WHERE their_pk1 IS NOT NULL;
 DELETE FROM one_pk WHERE pk1 in (SELECT base_pk1 FROM dolt_conflicts_one_pk WHERE their_pk1 IS NULL);
 DELETE FROM dolt_conflicts_one_pk;
+SELECT DOLT_COMMIT('-a', '-m', 'Finish Resolving');
 SQL
-    [ $status -eq 0 ]
-
-    run dolt sql -q "SELECT * FROM dolt_conflicts" -r csv
-    [ $status -eq 0 ]
-    [[ "$output" =~ "table,num_conflicts" ]] || false
-    [[ "$output" =~ "one_pk,0" ]] || false
-
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Finish Resolving');"
     [ $status -eq 0 ]
 
     run dolt sql -q "SELECT * FROM one_pk" -r csv
