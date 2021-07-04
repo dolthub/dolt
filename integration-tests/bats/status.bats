@@ -404,7 +404,7 @@ get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }
 
-@test "roots runs even if status fails" {
+@test "status: roots runs even if status fails" {
   mv .dolt/repo_state.json .dolt/repo_state.backup
 
   run dolt status
