@@ -181,7 +181,7 @@ SQL
 
     [ $status -eq 0 ]
     run dolt log -n 1
-    [[ "$output" =~ "Commit1" ]] || false
+    [[ "$output" =~ "Added 4" ]] || false
     [[ "$output" =~ "John Doe" ]] || false
 }
 
@@ -222,6 +222,7 @@ INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
 SELECT DOLT_COMMIT('-a', '-m', 'changed master');
 SELECT DOLT_CHECKOUT('feature-branch');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
+select dolt_commit('-a', '-m', "changed feature-branch");
 SQL
     [ $status -eq 0 ]
 
