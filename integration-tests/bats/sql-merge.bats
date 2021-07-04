@@ -246,7 +246,7 @@ SQL
     [[ "$output" =~ "0,1,1" ]] || false    
 }
 
-@test "sql-merge: DOLT_MERGE detects merge conflicts returns conflicts in dolt_conflicts table" {
+@test "sql-merge: DOLT_MERGE detects conflicts, returns them in dolt_conflicts table" {
     run dolt sql --disable-batch << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
@@ -526,7 +526,8 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE with conflicts renders the dolt_conflicts table" {
-      run dolt sql --continue << SQL
+      run dolt sql --disable-batch --continue << SQL
+set autocommit = off;
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
   c1 BIGINT,
@@ -544,6 +545,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
 SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch');
 SELECT COUNT(*) FROM dolt_conflicts where num_conflicts > 0;
+rollback;
 SQL
     [ $status -eq 0 ]
     [[ $output =~ "merge has unresolved conflicts. please use the dolt_conflicts table to resolve" ]] || false
