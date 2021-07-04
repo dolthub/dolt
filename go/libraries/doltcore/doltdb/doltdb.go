@@ -845,13 +845,28 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	// Create a corresponding working set at the same time
-	// TODO: find all the places HEAD can change, update working set too
+	// Update the corresponding working set at the same time, either by updating it or creating a new one
+	// TODO: find all the places HEAD can change, update working set too. This is only necessary when we don't already
+	//  update the working set when the head changes.
 	commitRoot, err := commit.GetRootValue()
 	wsRef, _ := ref.WorkingSetRefForHead(branchRef)
-	ws := EmptyWorkingSet(wsRef).WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
 
-	return ddb.UpdateWorkingSet(ctx, wsRef, ws, hash.Hash{})
+	var ws *WorkingSet
+	var currWsHash hash.Hash
+	ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
+	if err == ErrWorkingSetNotFound {
+		ws = EmptyWorkingSet(wsRef)
+	} else if err != nil {
+		return err
+	} else {
+		currWsHash, err = ws.HashOf()
+		if err != nil {
+			return err
+		}
+	}
+
+	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash)
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
