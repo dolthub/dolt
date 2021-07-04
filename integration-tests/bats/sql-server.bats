@@ -391,8 +391,9 @@ teardown() {
     [ "$status" -eq 1 ]
 
     multi_query 0 "
-    SET @@repo1_head=hashof('master');
-    INSERT INTO one_pk values (8,8,8);"
+    SELECT DOLT_CHECKOUT('master');
+    INSERT INTO one_pk values (8,8,8);
+    COMMIT;"
 
     # check that squash with uncommitted changes throws an error
     run server_query 0 "SET @@repo1_working = squash('test_branch');" ""
