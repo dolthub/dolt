@@ -156,13 +156,14 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// Updating the working set like this also updates the head commit and root info for the session
 	logrus.Errorf("new head root is %s", newHeadRoot.DebugString(ctx, true))
 
+	ws := dSess.WorkingSet(ctx, dbName)
+	// StartTransaction sets the working set for the session, and we want the one we previous had, not the one on disk
 	tx, err = dSess.StartTransaction(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	ws := dSess.WorkingSet(ctx, dbName)
-	err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(newHeadRoot).WithStagedRoot(newHeadRoot).ClearMerge(), nil)
+	err = dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
 	if err != nil {
 		return nil, err
 	}
