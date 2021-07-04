@@ -45,6 +45,11 @@ func IsValidTagRef(dref ref.DoltRef) bool {
 		ref.IsValidTagName(s)
 }
 
+func IsValidCommitHash(s string) bool {
+	return hashRegex.MatchString(s)
+}
+
+
 type commitSpecType string
 
 const (
