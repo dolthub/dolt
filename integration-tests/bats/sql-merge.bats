@@ -26,7 +26,7 @@ teardown() {
 }
 
 @test "sql-merge: DOLT_MERGE works with ff" {
-        dolt sql << SQL
+    dolt sql <<SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
@@ -84,6 +84,8 @@ INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
 SQL
     head_variable=@@dolt_repo_$$_head
+
+    dolt checkout feature-branch
     head_hash=$(get_head_commit)
 
     dolt sql << SQL
@@ -94,6 +96,11 @@ SQL
     run dolt sql -q "SELECT $head_variable"
     [ $status -eq 0 ]
     [[ "$output" =~ $head_hash ]] || false
+
+    dolt checkout master
+    run dolt sql -q "SELECT $head_variable"
+    [ $status -eq 0 ]
+    [[ "$output" =~ $head_hash ]] || false    
 }
 
 @test "sql-merge: DOLT_MERGE correctly merges branches with differing content in same table without conflicts" {
