@@ -74,12 +74,7 @@ var sqlDocs = cli.CommandDocumentationContent{
 
 By default, {{.EmphasisLeft}}-q{{.EmphasisRight}} executes a single statement. To execute multiple SQL statements separated by semicolons, use {{.EmphasisLeft}}-b{{.EmphasisRight}} to enable batch mode. Queries can be saved with {{.EmphasisLeft}}-s{{.EmphasisRight}}. Alternatively {{.EmphasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name. Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update script. 
 
-By default this command uses the dolt data repository in the current working directory as the one and only database. Running with {{.EmphasisLeft}}--multi-db-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored. Known limitations: 
-	- No support for creating indexes 
-	- No support for foreign keys 
-	- No support for column constraints besides NOT NULL 
-	- No support for default values 
-	- Joins can only use indexes for two table joins. Three or more tables in a join query will use a non-indexed join, which is very slow.`,
+By default this command uses the dolt data repository in the current working directory as the one and only database. Running with {{.EmphasisLeft}}--multi-db-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
 
 	Synopsis: []string{
 		"[--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r {{.LessThan}}result format{{.GreaterThan}}]",
@@ -91,16 +86,17 @@ By default this command uses the dolt data repository in the current working dir
 }
 
 const (
-	QueryFlag      = "query"
-	FormatFlag     = "result-format"
-	saveFlag       = "save"
-	executeFlag    = "execute"
-	listSavedFlag  = "list-saved"
-	messageFlag    = "message"
-	BatchFlag      = "batch"
-	multiDBDirFlag = "multi-db-dir"
-	continueFlag   = "continue"
-	welcomeMsg     = `# Welcome to the DoltSQL shell.
+	QueryFlag        = "query"
+	FormatFlag       = "result-format"
+	saveFlag         = "save"
+	executeFlag      = "execute"
+	listSavedFlag    = "list-saved"
+	messageFlag      = "message"
+	BatchFlag        = "batch"
+	disableBatchFlag = "disable-batch"
+	multiDBDirFlag   = "multi-db-dir"
+	continueFlag     = "continue"
+	welcomeMsg       = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
@@ -124,7 +120,7 @@ type SqlCmd struct {
 	VersionStr string
 }
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd SqlCmd) Name() string {
 	return "sql"
 }
@@ -150,6 +146,7 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(listSavedFlag, "l", "Lists all saved queries")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
+	ap.SupportsFlag(disableBatchFlag, "", "When issuing multiple statements, used to override more efficient batch processing to give finer control over session")
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
 	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. Used for batch mode only.")
 	return ap
@@ -286,8 +283,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	_, continueOnError := apr.GetValue(continueFlag)
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		batchMode := apr.Contains(BatchFlag)
+		multiStatementMode := apr.Contains(disableBatchFlag)
 
-		if batchMode {
+		if multiStatementMode {
+			batchInput := strings.NewReader(query)
+			verr = execMultiStatements(sqlCtx, readOnly, continueOnError, mrEnv, roots, batchInput, format)
+		} else if batchMode {
 			batchInput := strings.NewReader(query)
 			verr = execBatch(sqlCtx, readOnly, continueOnError, mrEnv, roots, batchInput, format)
 		} else {
@@ -331,6 +332,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		runInBatchMode := true
+		multiStatementMode := apr.Contains(disableBatchFlag)
 		fi, err := os.Stdin.Stat()
 
 		if err != nil {
@@ -341,7 +343,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			runInBatchMode = fi.Mode()&os.ModeCharDevice == 0
 		}
 
-		if runInBatchMode {
+		if multiStatementMode {
+			verr = execMultiStatements(sqlCtx, readOnly, continueOnError, mrEnv, roots, os.Stdin, format)
+		} else if runInBatchMode {
 			verr = execBatch(sqlCtx, readOnly, continueOnError, mrEnv, roots, os.Stdin, format)
 		} else {
 			verr = execShell(sqlCtx, readOnly, mrEnv, roots, format)
@@ -410,6 +414,30 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, continueOnErr bool, mrEnv env
 	}
 
 	return nil
+}
+
+func execMultiStatements(
+	sqlCtx *sql.Context,
+	readOnly bool,
+	continueOnErr bool,
+	mrEnv env.MultiRepoEnv,
+	roots map[string]*doltdb.RootValue,
+	batchInput io.Reader,
+	format resultFormat,
+) errhand.VerboseError {
+	dbs := CollectDBs(mrEnv)
+	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
+	if err != nil {
+		// If we encounter an error, attempt to flush what we have so far to disk before exiting
+		return errhand.BuildDError("Error processing batch").AddCause(err).Build()
+	}
+
+	return errhand.VerboseErrorFromError(err)
 }
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
@@ -612,6 +640,59 @@ func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name s
 	return newRoot, nil
 }
 
+// runMultiStatementMode alows for the execution of more than one query, but it doesn't attempt any batch optimizations
+func runMultiStatementMode(ctx *sql.Context, se *sqlEngine, input io.Reader, continueOnErr bool) error {
+	scanner := NewSqlStatementScanner(input)
+
+	var query string
+	for scanner.Scan() {
+		query += scanner.Text()
+		if len(query) == 0 || query == "\n" {
+			continue
+		}
+		shouldProcessQuery := true
+		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 3 {
+			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
+			scanner.Delimiter = matches[1]
+			shouldProcessQuery = false
+		}
+		if shouldProcessQuery {
+			sqlSch, rowIter, err := processQuery(ctx, query, se)
+			if err != nil {
+				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
+				cli.PrintErrln(verr.Verbose())
+				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+				if !continueOnErr {
+					return err
+				}
+			}
+
+			if rowIter != nil {
+				err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				if err != nil {
+					return errhand.VerboseErrorFromError(err)
+				}
+				if err != nil {
+					verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
+					cli.PrintErrln(verr.Verbose())
+					// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+					if !continueOnErr {
+						return err
+					}
+				}
+			}
+		}
+		query = ""
+	}
+
+	cli.Println() // need a newline after all statements are executed
+	if err := scanner.Err(); err != nil {
+		cli.Println(err.Error())
+	}
+
+	return nil
+}
+
 // runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
 func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader, continueOnErr bool) error {
 	scanner := NewSqlStatementScanner(input)
@@ -632,9 +713,9 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader, continueOnEr
 			if err := processBatchQuery(ctx, query, se); err != nil {
 				// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
 				//  to processing the query)
-				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
 				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
 				cli.PrintErrln(verr.Verbose())
+				// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
 				if !continueOnErr {
 					return err
 				}
