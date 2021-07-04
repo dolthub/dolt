@@ -20,8 +20,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
@@ -72,14 +70,13 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	ws := sess.WorkingSet(ctx, dbName)
 	roots, ok := sess.GetRoots(dbName)
 
-	logrus.Errorf("heads are working: %s\nhead: %s", roots.Working.DebugString(ctx, true), roots.Head.DebugString(ctx, true))
+	// logrus.Errorf("heads are working: %s\nhead: %s", roots.Working.DebugString(ctx, true), roots.Head.DebugString(ctx, true))
 
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	if apr.Contains(cli.AbortParam) {
-		// TODO: fix me (get merge state from session)
 		if !ws.MergeActive() {
 			return 1, fmt.Errorf("fatal: There is no merge to abort")
 		}
