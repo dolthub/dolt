@@ -49,7 +49,6 @@ func IsValidCommitHash(s string) bool {
 	return hashRegex.MatchString(s)
 }
 
-
 type commitSpecType string
 
 const (

@@ -63,12 +63,12 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 
 	// Checking out new branch.
 	dSess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
+	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	roots, ok := dSess.GetRoots(dbName)
+	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}

@@ -290,4 +290,3 @@ type staticRepoState struct {
 func (s staticRepoState) CWBHeadRef() ref.DoltRef {
 	return s.branch
 }
-

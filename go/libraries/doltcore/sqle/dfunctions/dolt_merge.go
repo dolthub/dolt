@@ -46,7 +46,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(dbName)
+	dbData, ok := sess.GetDbData(nil, dbName)
 
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
@@ -68,8 +68,11 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 	}
 
-	ws := sess.WorkingSet(ctx, dbName)
-	roots, ok := sess.GetRoots(dbName)
+	ws, err := sess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+	roots, ok := sess.GetRoots(nil, dbName)
 
 	// logrus.Errorf("heads are working: %s\nhead: %s", roots.Working.DebugString(ctx, true), roots.Head.DebugString(ctx, true))
 
@@ -95,7 +98,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return "Merge aborted", nil
 	}
 
-	ddb, ok := sess.GetDoltDB(dbName)
+	ddb, ok := sess.GetDoltDB(nil, dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
@@ -317,7 +320,7 @@ func executeNoFFMerge(
 	}
 
 	// The roots need refreshing after the above
-	roots, _ := dSess.GetRoots(dbName)
+	roots, _ := dSess.GetRoots(ctx, dbName)
 
 	// TODO: this does several session state updates, and it really needs to just do one
 	//  We also need to commit any pending transaction before we do this.
