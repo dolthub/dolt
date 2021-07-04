@@ -597,6 +597,10 @@ func (sess *Session) SetWorkingSet(
 	ws *doltdb.WorkingSet,
 	headRoot *doltdb.RootValue,
 ) error {
+	if ws == nil {
+		panic("attempted to set a nil working set for the session")
+	}
+
 	sessionState := sess.DbStates[dbName]
 	sessionState.WorkingSet = ws
 

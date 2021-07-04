@@ -400,15 +400,11 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, continueOnErr bool, mrEnv env
 
 	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr)
 	if err != nil {
-		// If we encounter an error, flush what we have so far to disk before exiting, except in the case of merge
-		// errors, which have already updated the repo state all they're going to (and writing session root on top of
-		// them would overwrite these changes)
-		// TODO: this is a mess, merge conflicts need to follow the same code path as everything else
-		if err == doltdb.ErrUnresolvedConflicts || err == doltdb.ErrMergeActive {
-			return errhand.BuildDError("Error processing batch").AddCause(err).Build()
+		// If we encounter an error, attempt to flush what we have so far to disk before exiting
+		flushErr := flushBatchedEdits(sqlCtx, se)
+		if flushErr != nil {
+			cli.PrintErrf("Could not flush batch: %s", err.Error())
 		}
-
-		_ = flushBatchedEdits(sqlCtx, se)
 
 		return errhand.BuildDError("Error processing batch").AddCause(err).Build()
 	}

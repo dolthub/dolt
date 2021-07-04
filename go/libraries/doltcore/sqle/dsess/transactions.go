@@ -65,6 +65,16 @@ func (tx DoltTransaction) String() string {
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
 //  strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
+	// Don't allow a root value with conflicts to be committed. Later we may open this up via configuration
+	hasConflicts, err := workingSet.WorkingRoot().HasConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if hasConflicts {
+		return nil, doltdb.ErrUnresolvedConflicts
+	}
+
 	for i := 0; i < maxTxCommitRetries; i++ {
 		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
 		if err != nil {

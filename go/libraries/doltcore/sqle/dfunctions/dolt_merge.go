@@ -135,7 +135,17 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	if canFF {
 		if apr.Contains(cli.NoFFParam) {
-			err = executeNoFFMerge(ctx, sess, apr, dbName, ws, dbData, headCommit, mergeCommit)
+			ws, err = executeNoFFMerge(ctx, sess, apr, dbName, ws, dbData, headCommit, mergeCommit)
+			if err == doltdb.ErrUnresolvedConflicts {
+				// if there are unresolved conflicts, write the resulting working set back to the session and return an
+				// error message
+				wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
+				if wsErr != nil {
+					return nil, wsErr
+				}
+
+				return err.Error(), nil
+			}
 		} else {
 			err = executeFFMerge(ctx, sess, apr.Contains(cli.SquashParam), dbName, ws, dbData, mergeCommit)
 		}
@@ -146,8 +156,17 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmh.String(), err
 	}
 
-	ws, err = executeMerge(ctx, apr.Contains(cli.SquashParam), headCommit, mergeCommit, dbName, dbData, ws)
-	if err != nil {
+	ws, err = executeMerge(ctx, apr.Contains(cli.SquashParam), headCommit, mergeCommit, ws)
+	if err == doltdb.ErrUnresolvedConflicts {
+		// if there are unresolved conflicts, write the resulting working set back to the session and return an
+		// error message
+		wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
+		if wsErr != nil {
+			return nil, wsErr
+		}
+
+		return err.Error(), nil
+	} else if err != nil {
 		return nil, err
 	}
 
@@ -181,7 +200,7 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	return workingSet, nil
 }
 
-func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, name string, dbData env.DbData, ws *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
+func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
 	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm)
 
 	if err != nil {
@@ -208,7 +227,6 @@ func executeFFMerge(ctx *sql.Context, sess *dsess.Session, squash bool, dbName s
 	//  altering global state
 	if !squash {
 		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
-
 		if err != nil {
 			return err
 		}
@@ -227,38 +245,39 @@ func executeNoFFMerge(
 	ws *doltdb.WorkingSet,
 	dbData env.DbData,
 	headCommit, mergeCommit *doltdb.Commit,
-) error {
+) (*doltdb.WorkingSet, error) {
 	mergeRoot, err := mergeCommit.GetRootValue()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ws, err = mergeRootToWorking(false, ws, mergeRoot, mergeCommit, map[string]*merge.MergeStats{})
 	if err != nil {
-		return err
+		// This error is recoverable, so we return a working set value along with the error
+		return ws, err
 	}
 
 	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
 		hh, err := headCommit.HashOf()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		cmh, err := mergeCommit.HashOf()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		msg = fmt.Sprintf("SQL Generated commit merging %s into %s", hh.String(), cmh.String())
 	}
 
-	// TODO: remove, redundant
+	// TODO: refactor, redundant
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		name = dSess.Username
@@ -270,7 +289,7 @@ func executeNoFFMerge(
 		var err error
 		t, err = cli.ParseDate(commitTimeStr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -278,7 +297,7 @@ func executeNoFFMerge(
 	// refactoring)
 	err = dSess.SetWorkingSet(ctx, dbName, ws, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// The roots need refreshing after the above
@@ -295,10 +314,10 @@ func executeNoFFMerge(
 		Email:            email,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return dSess.SetWorkingSet(ctx, dbName, ws, nil)
+	return ws, dSess.SetWorkingSet(ctx, dbName, ws, nil)
 }
 
 // TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.
@@ -315,12 +334,12 @@ func mergeRootToWorking(
 		ws = ws.StartMerge(cm2)
 	}
 
-	// TODO: merge conflicts are fine in some cases, make it possible to commit them with a flag
+	ws = ws.WithWorkingRoot(workingRoot).WithStagedRoot(workingRoot)
 	if checkForConflicts(mergeStats) {
-		return nil, doltdb.ErrUnresolvedConflicts
+		// this error is recoverable in-session, so we return the new ws along with the error
+		return ws, doltdb.ErrUnresolvedConflicts
 	}
 
-	ws = ws.WithWorkingRoot(workingRoot).WithStagedRoot(workingRoot)
 	return ws, nil
 }
 
