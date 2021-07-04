@@ -441,7 +441,7 @@ func execQuery(
 	}
 
 	if rowIter != nil {
-		err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter)
+		err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -749,7 +749,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
+				err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
@@ -1063,7 +1063,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *sqlEngine, query string, sql
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
+			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 			if err != nil {
 				return err
 			}
@@ -1175,6 +1175,19 @@ func foundSubquery(node sqlparser.SQLNode) bool {
 		return true, nil
 	}, node)
 	return has
+}
+
+func HasTopLevelOrderByClause(query string) bool {
+	st, _ := sqlparser.Parse(query)
+
+	switch s := st.(type) {
+	case *sqlparser.Select:
+		return s.OrderBy != nil
+	case *sqlparser.Union:
+		return s.OrderBy != nil
+	default:
+		return false
+	}
 }
 
 // parses the query to check if it inserts into a table with AUTO_INCREMENT

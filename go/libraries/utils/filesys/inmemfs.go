@@ -255,7 +255,7 @@ func (fs *InMemFS) OpenForRead(fp string) (io.ReadCloser, error) {
 	}
 
 	fileObj := fs.objs[fp].(*memFile)
-	buf := bytes.NewBuffer(fileObj.data)
+	buf := bytes.NewReader(fileObj.data)
 
 	return ioutil.NopCloser(buf), nil
 }
