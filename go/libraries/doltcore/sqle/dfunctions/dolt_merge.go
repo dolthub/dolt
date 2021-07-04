@@ -17,8 +17,10 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -69,6 +71,9 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	ws := sess.WorkingSet(ctx, dbName)
 	roots, ok := sess.GetRoots(dbName)
+
+	logrus.Errorf("heads are working: %s\nhead: %s", roots.Working.DebugString(ctx, true), roots.Head.DebugString(ctx, true))
+
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
@@ -97,9 +102,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	working := roots.Working
-
-	hasConflicts, err := working.HasConflicts(ctx)
+	hasConflicts, err := roots.Working.HasConflicts(ctx)
 	if err != nil {
 		return 1, err
 	}
@@ -112,7 +115,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, doltdb.ErrMergeActive
 	}
 
-	err = checkForUncommittedChanges(working, roots.Head)
+	err = checkForUncommittedChanges(roots.Working, roots.Head)
 	if err != nil {
 		return nil, err
 	}

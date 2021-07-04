@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -143,12 +144,37 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, err
 	}
 
-	// Updating the working set like this also updates the head commit and root info for the session
-	ws := dSess.WorkingSet(ctx, dbName)
-	err = dSess.SetWorkingSet(ctx, dbName, ws, nil)
+	// Now we have to do *another* SQL transaction, because CommitStaged currently modifies the super schema of the root
+	// value before committing what it's given. We need that exact same root in our working set to stay consistent. It
+	// doesn't happen automatically like outside the SQL context because CommitStaged is writing to a session-based
+	// repo state writer, so we're never persisting the new working set to disk like in a command line context.
+	// TODO: fix this mess
+	newHeadRoot, err := commit.GetRootValue()
 	if err != nil {
 		return nil, err
 	}
+
+	// Updating the working set like this also updates the head commit and root info for the session
+	logrus.Errorf("new head root is %s", newHeadRoot.DebugString(ctx, true))
+
+	tx, err = dSess.StartTransaction(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	ws := dSess.WorkingSet(ctx, dbName)
+	err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(newHeadRoot).WithStagedRoot(newHeadRoot), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	err = dSess.CommitTransaction(ctx, dbName, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
+	ctx.SetTransaction(nil)
 
 	cmHash, err := commit.HashOf()
 	if err != nil {
