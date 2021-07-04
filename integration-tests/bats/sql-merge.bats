@@ -334,7 +334,7 @@ commit;
 SQL
     [ $status -eq 0 ]
 
-    # back on the command line, our session state is clean
+    # We can see the latest inserted row back on the command line
     run dolt status
     [ $status -eq 0 ]
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*one_pk) ]] || false
