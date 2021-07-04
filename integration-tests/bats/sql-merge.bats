@@ -196,7 +196,8 @@ SQL
     [[ ! "$output" =~ $working_hash ]] || false
 }
 
-@test "sql-merge: DOLT_MERGE properly detects merge conflicts, returns and error and then aborts." {
+@test "sql-merge: DOLT_MERGE detects merge conflicts, fails to commit and leaves working set clean" {
+    # The dolt_merge fails here, and leaves the working set clean, no conflicts, no merge in progress
     run dolt sql << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
@@ -218,18 +219,31 @@ SQL
     [ $status -eq 1 ]
     [[ $output =~ "merge has unresolved conflicts" ]] || false
 
-    run dolt sql -q "SELECT DOLT_MERGE('--abort');"
-    [ $status -eq 0 ]
-
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    [[ $output =~ "working tree clean" ]] || false    
+    
+    run dolt merge --abort
+    [ $status -eq 1 ]
+    [[ $output =~ "no merge to abort" ]] || false    
+
+    # make sure a clean SQL session doesn't have any merge going
+    run dolt sql -q "SELECT DOLT_MERGE('--abort');"
+    [ $status -eq 1 ]
+    [[ $output =~ "no merge to abort" ]] || false
 
     run dolt sql -q "SELECT * FROM one_pk;" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "pk1,c1,c2" ]] || false
     [[ "$output" =~ "0,0,0" ]] || false
     [[ ! "$output" =~ "0,1,1" ]] || false
+
+    dolt checkout feature-branch
+    run dolt sql -q "SELECT * FROM one_pk;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk1,c1,c2" ]] || false
+    [[ ! "$output" =~ "0,0,0" ]] || false
+    [[ "$output" =~ "0,1,1" ]] || false    
 }
 
 @test "sql-merge: DOLT_MERGE properly detects merge conflicts and renders the conflicts in dolt_conflicts." {
