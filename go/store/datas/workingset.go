@@ -74,7 +74,7 @@ func NewWorkingSet(_ context.Context, workingRef, stagedRef types.Ref, mergeStat
 	fields[WorkingRootRefField] = workingRef
 	fields[StagedRootRefField] = stagedRef
 
-	 if mergeStateRef != nil {
+	if mergeStateRef != nil {
 		fields[MergeStateField] = mergeStateRef
 	}
 

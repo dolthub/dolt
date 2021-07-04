@@ -20,8 +20,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -30,15 +28,16 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 type DoltHarness struct {
-	t                   *testing.T
-	env                 *env.DoltEnv
-	session             *dsess.Session
-	databases           []sqle.Database
-	parallelism         int
-	skippedQueries      []string
+	t              *testing.T
+	env            *env.DoltEnv
+	session        *dsess.Session
+	databases      []sqle.Database
+	parallelism    int
+	skippedQueries []string
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
