@@ -162,7 +162,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	ws := dSess.WorkingSet(ctx, dbName)
-	err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(newHeadRoot).WithStagedRoot(newHeadRoot), nil)
+	err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(newHeadRoot).WithStagedRoot(newHeadRoot).ClearMerge(), nil)
 	if err != nil {
 		return nil, err
 	}

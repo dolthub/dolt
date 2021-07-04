@@ -307,8 +307,7 @@ func mergeRootToWorking(
 
 	workingRoot := mergedRoot
 	if !squash {
-		// TODO: is this a bug? where does the merge get cleared?
-		ws.StartMerge(cm2)
+		ws = ws.StartMerge(cm2)
 	}
 
 	// TODO: merge conflicts are fine in some cases, make it possible to commit them with a flag
