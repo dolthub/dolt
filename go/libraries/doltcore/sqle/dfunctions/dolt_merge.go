@@ -226,26 +226,26 @@ func executeNoFFMerge(
 	dbName string,
 	ws *doltdb.WorkingSet,
 	dbData env.DbData,
-	pr, cm2 *doltdb.Commit,
+	headCommit, mergeCommit *doltdb.Commit,
 ) error {
-	mergedRoot, err := cm2.GetRootValue()
+	mergeRoot, err := mergeCommit.GetRootValue()
 	if err != nil {
 		return err
 	}
 
-	ws, err = mergeRootToWorking(false, ws, mergedRoot, cm2, map[string]*merge.MergeStats{})
+	ws, err = mergeRootToWorking(false, ws, mergeRoot, mergeCommit, map[string]*merge.MergeStats{})
 	if err != nil {
 		return err
 	}
 
 	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
-		hh, err := pr.HashOf()
+		hh, err := headCommit.HashOf()
 		if err != nil {
 			return err
 		}
 
-		cmh, err := cm2.HashOf()
+		cmh, err := mergeCommit.HashOf()
 		if err != nil {
 			return err
 		}
@@ -274,10 +274,15 @@ func executeNoFFMerge(
 		}
 	}
 
-	// The roots from the sessoin haven't been updated with the work we did above, so do it now
+	// Save our work so far in the session, as it will be referenced by the commit call below (badly in need of a
+	// refactoring)
+	err = dSess.SetWorkingSet(ctx, dbName, ws, nil)
+	if err != nil {
+		return err
+	}
+
+	// The roots need refreshing after the above
 	roots, _ := dSess.GetRoots(dbName)
-	roots.Working = ws.WorkingRoot()
-	roots.Staged = ws.StagedRoot()
 
 	// TODO: this does several session state updates, and it really needs to just do one
 	//  We also need to commit any pending transaction before we do this.

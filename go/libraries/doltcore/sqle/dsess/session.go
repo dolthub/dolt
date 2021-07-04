@@ -511,36 +511,12 @@ func (sess *Session) GetDoltDBDocsReadWriter(dbName string) (env.DocsReadWriter,
 }
 
 func (sess *Session) GetDbData(dbName string) (env.DbData, bool) {
-	ddb, ok := sess.GetDoltDB(dbName)
-
+	sessionState, ok := sess.DbStates[dbName]
 	if !ok {
 		return env.DbData{}, false
 	}
 
-	rsr, ok := sess.GetDoltDBRepoStateReader(dbName)
-
-	if !ok {
-		return env.DbData{}, false
-	}
-
-	rsw, ok := sess.GetDoltDBRepoStateWriter(dbName)
-
-	if !ok {
-		return env.DbData{}, false
-	}
-
-	drw, ok := sess.GetDoltDBDocsReadWriter(dbName)
-
-	if !ok {
-		return env.DbData{}, false
-	}
-
-	return env.DbData{
-		Ddb: ddb,
-		Rsr: rsr,
-		Rsw: rsw,
-		Drw: drw,
-	}, true
+	return sessionState.dbData, true
 }
 
 // GetRoot returns the current working *RootValue for a given database associated with the session
