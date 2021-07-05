@@ -396,7 +396,7 @@ teardown() {
     SELECT DOLT_CHECKOUT('master');
     INSERT INTO one_pk values (8,8,8);"
 
-    skip "Unclear behavior below here, not sure why this behavior should do"
+    skip "Unclear behavior below here, need a simpler test of these assertions"
     
     # check that squash with uncommitted changes throws an error
     run server_query 0 "SET @@repo1_working = squash('test_branch');" ""
@@ -580,8 +580,8 @@ SQL
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
-#     cd repo1
-#     start_sql_server repo1
+     cd repo1
+     start_sql_server repo1
 
      multi_query 1 "
      CREATE TABLE test (
@@ -594,10 +594,6 @@ SQL
      "
 
      server_query 1 "SELECT * FROM test" "pk\n0\n1\n2"
-#     run dolt branch
-     # [ "$status" -eq 0 ]
-     # [[ "$output" =~ "* master" ]] || false
-     # [[ "$output" =~ "feature-branch" ]] || false
 
      multi_query 1 "
      SELECT DOLT_CHECKOUT('feature-branch');
@@ -612,26 +608,8 @@ SQL
      
      multi_query 1 "
      SELECT DOLT_CHECKOUT('feature-branch');
-     SELECT * FROM test;
-     "
-
-     multi_query 1 "
-     SELECT DOLT_CHECKOUT('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
-     
-     # server_query 1 "SELECT * FROM test" "pk\n0\n1\n2"
-     server_query 1 "SELECT * FROM test" "pk\n0\n1\n2"
-     # dolt checkout feature-branch
-
-     # # running server sees master state (has not been affected by checkout)
-     server_query 1 "SELECT * FROM test" "pk\n0\n1\n2"
-     # dolt checkout master
-
-     multi_query 1 "
-     SELECT DOLT_CHECKOUT('feature-branch');
-     SELECT * FROM test;
-     " "pk\n0\n1\n2\n3\n21"
      
      multi_query 1 "
      INSERT INTO test VALUES (500000);
@@ -644,7 +622,7 @@ SQL
      SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
      "
      
-     server_query 1 "SELECT * FROM test" "pk\n0\n1\n2\n3\n21\n60"
+     server_query 1 "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
 
      run dolt status
      [ $status -eq 0 ]
