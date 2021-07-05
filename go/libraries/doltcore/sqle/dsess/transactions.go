@@ -18,13 +18,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const (
@@ -65,7 +64,7 @@ func (tx DoltTransaction) String() string {
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
 //  strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
-	// logrus.Tracef("Committing working root %s", workingSet.WorkingRoot().DebugString(ctx, true))
+	// logrus.Errorf("Committing working root %s", workingSet.WorkingRoot().DebugString(ctx, true))
 
 	// Don't allow a root value with conflicts to be committed. Later we may open this up via configuration
 	hasConflicts, err := workingSet.WorkingRoot().HasConflicts(ctx)
