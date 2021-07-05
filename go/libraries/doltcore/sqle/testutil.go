@@ -39,7 +39,7 @@ func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, stateme
 
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
-	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, true)
+	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
 	if err != nil {
 		return nil, err
 	}
@@ -84,11 +84,12 @@ func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, stateme
 		}
 	}
 
-	if err := db.Flush(ctx); err == nil {
-		return db.GetRoot(ctx)
-	} else {
+	err = db.CommitTransaction(ctx, ctx.GetTransaction())
+	if err != nil {
 		return nil, err
 	}
+
+	return db.GetRoot(ctx)
 }
 
 // NewTestSQLCtx returns a new *sql.Context with a default DoltSession, a new IndexRegistry, and a new ViewRegistry
