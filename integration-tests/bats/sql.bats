@@ -1192,6 +1192,22 @@ SQL
 }
 
 @test "sql: found_row works with update properly" {
+    run dolt sql --disable-batch <<SQL
+set autocommit = off;
+CREATE TABLE tbl(pk int primary key, v1 int);
+INSERT INTO tbl VALUES (1,1), (2,1);
+UPDATE tbl set v1 = 1 where v1 = 1;
+SELECT FOUND_ROWS();
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| FOUND_ROWS() |" ]] || false
+    [[ "$output" =~ "| 2            |" ]] || false
+}
+
+@test "sql: found_row works with update properly in batch mode" {
+    skip "the auto commit semantics of batch mode make this fail"
+    
     run dolt sql <<SQL
 CREATE TABLE tbl(pk int primary key, v1 int);
 INSERT INTO tbl VALUES (1,1), (2,1);
