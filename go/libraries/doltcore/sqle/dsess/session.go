@@ -553,6 +553,8 @@ func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 // setRoot is like its exported version, but skips the consistency check
 func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+	// logrus.Tracef("setting root value %s", newRoot.DebugString(ctx, true))
+
 	sessionState := sess.DbStates[dbName]
 
 	h, err := newRoot.HashOf()
