@@ -76,13 +76,6 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
 }
 
-// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
-type DisabledTransaction struct{}
-
-func (d DisabledTransaction) String() string {
-	return "Disabled transaction"
-}
-
 func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 	dsession := dsess.DSessFromSess(ctx.Session)
 	return dsession.StartTransaction(ctx, db.Name())

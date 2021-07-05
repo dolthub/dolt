@@ -17,7 +17,6 @@ package dsess
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -49,7 +48,7 @@ const (
 	Batched
 )
 
-const TransactionsEnabledSysVar = "dolt_transactions_enabled"
+const TransactionsDisabledSysVar = "dolt_transactions_disabled"
 
 func HeadKey(dbName string) string {
 	return dbName + HeadKeySuffix
@@ -68,13 +67,6 @@ func StagedKey(dbName string) string {
 }
 
 func init() {
-	txEnabledSessionVar := int8(1)
-	enableTx, ok := os.LookupEnv(EnableTransactionsEnvKey)
-	if ok {
-		if strings.ToLower(enableTx) == "true" {
-			txEnabledSessionVar = int8(1)
-		}
-	}
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{
 			Name:              DoltCommitOnTransactionCommit,
@@ -85,18 +77,18 @@ func init() {
 			Default:           int8(0),
 		},
 		{
-			Name:              TransactionsEnabledSysVar,
+			Name:              TransactionsDisabledSysVar,
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(TransactionsEnabledSysVar),
-			Default:           txEnabledSessionVar,
+			Type:              sql.NewSystemBoolType(TransactionsDisabledSysVar),
+			Default: 		   int8(0),
 		},
 	})
 }
 
-func TransactionsEnabled(ctx *sql.Context) bool {
-	enabled, err := ctx.GetSessionVariable(ctx, TransactionsEnabledSysVar)
+func TransactionsDisabled(ctx *sql.Context) bool {
+	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
 	if err != nil {
 		panic(err)
 	}
@@ -223,8 +215,19 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 	return sess.SetRoot(ctx, dbName, newRoot)
 }
 
+// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
+type DisabledTransaction struct{}
+
+func (d DisabledTransaction) String() string {
+	return "Disabled transaction"
+}
+
 // CommitTransaction commits the in-progress transaction for the database named
-func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (*DoltTransaction, error) {
+func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (sql.Transaction, error) {
+	if TransactionsDisabled(ctx) {
+		return DisabledTransaction{}, nil
+	}
+
 	sessionState := sess.DbStates[dbName]
 
 	wsRef := sessionState.WorkingSet.Ref()
@@ -280,6 +283,10 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 		}
 	}
 
+	if TransactionsDisabled(ctx) {
+		return nil
+	}
+
 	if !sess.DbStates[dbName].dirty {
 		return nil
 	}
@@ -296,15 +303,6 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 	// TODO: fix this
 	if !ok {
 		return nil
-	}
-
-	// Old "commit" path, which just writes whatever the root for this session is to the repo state file with no care
-	// for concurrency. Over time we will disable this path.
-	// TODO: remove me
-	if !TransactionsEnabled(ctx) {
-		dbData := dbstate.dbData
-		dbstate.dirty = false
-		return dbData.Rsw.UpdateWorkingRoot(ctx, dbstate.GetRoots().Working)
 	}
 
 	// Newer commit path does a concurrent merge of the current root with the one other clients are editing, then
@@ -390,7 +388,7 @@ func (sess *Session) CommitWorkingSetToDolt(ctx *sql.Context, dbData env.DbData,
 
 // RollbackTransaction rolls the given transaction back
 func (sess *Session) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if !TransactionsEnabled(ctx) || dbName == "" {
+	if !TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
 
@@ -415,7 +413,7 @@ func (sess *Session) RollbackTransaction(ctx *sql.Context, dbName string, tx sql
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
 func (sess *Session) CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !TransactionsEnabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
 
@@ -431,7 +429,7 @@ func (sess *Session) CreateSavepoint(ctx *sql.Context, savepointName, dbName str
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
 func (sess *Session) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !TransactionsEnabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
 
@@ -456,7 +454,7 @@ func (sess *Session) RollbackToSavepoint(ctx *sql.Context, savepointName, dbName
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
 func (sess *Session) ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error {
-	if !TransactionsEnabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
 

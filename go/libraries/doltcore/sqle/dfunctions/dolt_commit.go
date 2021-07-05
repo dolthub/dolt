@@ -17,13 +17,11 @@ package dfunctions
 import (
 	"fmt"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/vt/proto/query"
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 const DoltCommitFuncName = "dolt_commit"
@@ -148,16 +146,10 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// doesn't happen automatically like outside the SQL context because CommitStaged is writing to a session-based
 	// repo state writer, so we're never persisting the new working set to disk like in a command line context.
 	// TODO: fix this mess
-	newHeadRoot, err := commit.GetRootValue()
-	if err != nil {
-		return nil, err
-	}
-
-	// Updating the working set like this also updates the head commit and root info for the session
-	logrus.Errorf("new head root is %s", newHeadRoot.DebugString(ctx, true))
 
 	ws := dSess.WorkingSet(ctx, dbName)
 	// StartTransaction sets the working set for the session, and we want the one we previous had, not the one on disk
+	// Updating the working set like this also updates the head commit and root info for the session
 	tx, err = dSess.StartTransaction(ctx, dbName)
 	if err != nil {
 		return nil, err
