@@ -82,7 +82,7 @@ func init() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(TransactionsDisabledSysVar),
-			Default: 		   int8(0),
+			Default:           int8(0),
 		},
 	})
 }
