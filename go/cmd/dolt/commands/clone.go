@@ -371,7 +371,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	// TODO: make this interface take a DoltRef and marshal it automatically
-	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{ref.NewBranchRef(branch)})
+	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: ref.NewBranchRef(branch)})
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
