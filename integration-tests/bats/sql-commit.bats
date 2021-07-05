@@ -75,7 +75,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 
     # Check that dolt_log has the same hash as the output of DOLT_COMMIT
-    run dolt sql -r csv -q "SELECT commit_hash from dolt_log LIMIT 1"
+    run dolt sql -r csv -q "SELECT commit_hash from dolt_log order by date desc LIMIT 1"
     [ $status -eq 0 ]
     [[ "$output" =~ "$DCOMMIT" ]] || false
 
