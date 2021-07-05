@@ -16,7 +16,11 @@ package dfunctions
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
@@ -56,12 +60,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
-	if !ok {
-		return nil, fmt.Errorf("Could not load database %s", dbName)
-	}
 
-	// ddb := dbData.Ddb
 	roots, ok := dSess.GetRoots(dbName)
 	if !ok {
 		return nil, fmt.Errorf("Could not load database %s", dbName)
@@ -90,8 +89,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	if !msgOk {
 		return nil, fmt.Errorf("Must provide commit message.")
 	}
-
-	// Specify the time if the date parameter is not.
+	
 	t := ctx.QueryTime()
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
@@ -123,6 +121,38 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	ctx.SetTransaction(nil)
 
 	// Now do a Dolt commit
+	commit, err := dSess.CommitToDolt(ctx, roots, dbName, actions.CommitStagedProps{
+		Message:          msg,
+		Date:             t,
+		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
+		Name:             name,
+		Email:            email,
+	})
+	if err != nil {
+		return 1, err
+	}
+
+	cmHash, err := commit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	return cmHash.String(), nil
+}
+
+func CommitToDolt(
+	ctx *sql.Context,
+	roots doltdb.Roots,
+	dbData env.DbData,
+	msg string,
+	t time.Time,
+	apr *argparser.ArgParseResults,
+	name string,
+	email string,
+	dSess *dsess.Session,
+	dbName string,
+) (*doltdb.Commit, error) {
 	// TODO: this does several session state updates, and it really needs to just do one
 	//  It's also not atomic with the above commit. We need a way to set both new HEAD and update the working
 	//  set together, atomically. We can't easily do this in noms right now, because the the data set is the unit of
@@ -151,7 +181,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	ws := dSess.WorkingSet(ctx, dbName)
 	// StartTransaction sets the working set for the session, and we want the one we previous had, not the one on disk
 	// Updating the working set like this also updates the head commit and root info for the session
-	tx, err = dSess.StartTransaction(ctx, dbName)
+	tx, err := dSess.StartTransaction(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -168,13 +198,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
 	ctx.SetTransaction(nil)
-
-	cmHash, err := commit.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	return cmHash.String(), nil
+	return commit, err
 }
 
 func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {

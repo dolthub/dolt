@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 
@@ -328,7 +329,7 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 		return err
 	}
 
-	err = sess.CommitWorkingSetToDolt(ctx, dtx.dbData, dbName)
+	err = sess.CreateDoltCommit(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -337,53 +338,93 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 	return nil
 }
 
-// CommitWorkingSetToDolt stages the working set and then immediately commits the staged changes. This is a Dolt commit
-// rather than a transaction commit. If there are no changes to be staged, then no commit is created.
-func (sess *Session) CommitWorkingSetToDolt(ctx *sql.Context, dbData env.DbData, dbName string) error {
-	return nil
+func (sess *Session)  CommitToDolt(
+	ctx *sql.Context,
+	roots doltdb.Roots,
+	dbName string,
+	props actions.CommitStagedProps,
+) (*doltdb.Commit, error) {
+	sessionState := sess.DbStates[dbName]
+	dbData := sessionState.dbData
 
-	// TODO: fix me
-	// if commitBool, err := sess.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit); err != nil {
-	// 	return err
-	// } else if commitBool.(int8) == 1 {
-	// 	fkChecks, err := sess.Session.GetSessionVariable(ctx, "foreign_key_checks")
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	//
-	// 	workingRoot := sess.roots[dbName].root
-	//
-	// 	err = actions.StageAllTables(ctx, workingRoot, dbData)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	queryTime := ctx.QueryTime()
-	// 	_, err = actions.CommitStaged(ctx, workingRoot, dbData, actions.CommitStagedProps{
-	// 		Message:          fmt.Sprintf("Transaction commit at %s", queryTime.UTC().Format("2006-01-02T15:04:05Z")),
-	// 		Date:             queryTime,
-	// 		AllowEmpty:       false,
-	// 		CheckForeignKeys: fkChecks.(int8) == 1,
-	// 		Name:             sess.Username,
-	// 		Email:            sess.Email,
-	// 	})
-	// 	if _, ok := err.(actions.NothingStaged); err != nil && !ok {
-	// 		return err
-	// 	}
-	//
-	// 	headCommit, err := dbData.Ddb.Resolve(ctx, dbData.Rsr.CWBHeadSpec(), dbData.Rsr.CWBHeadRef())
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	headHash, err := headCommit.HashOf()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), headHash.String())
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
-	// return nil
+	// TODO: this does several session state updates, and it really needs to just do one
+	//  It's also not atomic with the above commit. We need a way to set both new HEAD and update the working
+	//  set together, atomically. We can't easily do this in noms right now, because the the data set is the unit of
+	//  atomic update at the API layer. There's a root value which is the unit of atomic updates at the storage layer,
+	//  just no API which allows one to update more than one dataset in the same atomic transaction. We need to write
+	//  one.
+	//  Meanwhile, this is all kinds of thread-unsafe
+	commit, err := actions.CommitStaged(ctx, roots, dbData, props)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now we have to do *another* SQL transaction, because CommitStaged currently modifies the super schema of the root
+	// value before committing what it's given. We need that exact same root in our working set to stay consistent. It
+	// doesn't happen automatically like outside the SQL context because CommitStaged is writing to a session-based
+	// repo state writer, so we're never persisting the new working set to disk like in a command line context.
+	// TODO: fix this mess
+
+	ws := sess.WorkingSet(ctx, dbName)
+	// StartTransaction sets the working set for the session, and we want the one we previous had, not the one on disk
+	// Updating the working set like this also updates the head commit and root info for the session
+	tx, err := sess.StartTransaction(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	err = sess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	err = sess.CommitTransaction(ctx, dbName, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
+	ctx.SetTransaction(nil)
+	return commit, err
+}
+
+
+// CreateDoltCommit stages the working set and then immediately commits the staged changes. This is a Dolt commit
+// rather than a transaction commit. If there are no changes to be staged, then no commit is created.
+func (sess *Session) CreateDoltCommit(ctx *sql.Context, dbName string) error {
+	commitBool, err := sess.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
+	if err != nil {
+		return err
+	} else if commitBool.(int8) != 1 {
+		return nil
+	}
+
+	fkChecks, err := sess.Session.GetSessionVariable(ctx, "foreign_key_checks")
+	if err != nil {
+		return err
+	}
+
+	sessionState := sess.DbStates[dbName]
+	roots := sessionState.GetRoots()
+
+	roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+	if err != nil {
+		return err
+	}
+
+	_, err = sess.CommitToDolt(ctx, roots, dbName, actions.CommitStagedProps{
+		Message:          fmt.Sprintf("Transaction commit at %s", ctx.QueryTime().UTC().Format("2006-01-02T15:04:05Z")),
+		Date:             ctx.QueryTime(),
+		AllowEmpty:       false,
+		CheckForeignKeys: fkChecks.(int8) == 1,
+		Name:             sess.Username,
+		Email:            sess.Email,
+	})
+	if _, ok := err.(actions.NothingStaged); err != nil && !ok {
+		return err
+	}
+
+	return nil
 }
 
 // RollbackTransaction rolls the given transaction back
