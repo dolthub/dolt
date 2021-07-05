@@ -19,12 +19,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -338,7 +338,7 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 	return nil
 }
 
-func (sess *Session)  CommitToDolt(
+func (sess *Session) CommitToDolt(
 	ctx *sql.Context,
 	roots doltdb.Roots,
 	dbName string,
@@ -387,7 +387,6 @@ func (sess *Session)  CommitToDolt(
 	ctx.SetTransaction(nil)
 	return commit, err
 }
-
 
 // CreateDoltCommit stages the working set and then immediately commits the staged changes. This is a Dolt commit
 // rather than a transaction commit. If there are no changes to be staged, then no commit is created.
