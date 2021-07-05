@@ -117,17 +117,21 @@ function test_forward_compatibility() {
   fi
   
   cd repos
-  PATH="`pwd`"/"$bin":"$PATH" dolt clone "file://$REMOTE" $ver
+  # Make sure these clone and setup commands are run with the version of dolt under test
+  relpath="`pwd`"/../"$bin":"$PATH"
+  echo "cloning current dolt repo with " `PATH=$relpath dolt version`
+  echo PATH="$relpath" dolt clone "file://$REMOTE" $ver
+  PATH="$relpath" dolt clone "file://$REMOTE" $ver
   cd $ver
-  PATH="`pwd`"/"$bin":"$PATH" dolt branch no-data origin/no-data
-  PATH="`pwd`"/"$bin":"$PATH" dolt branch init origin/init
-  PATH="`pwd`"/"$bin":"$PATH" dolt branch other origin/other
+  PATH="$relpath" dolt branch no-data origin/no-data
+  PATH="$relpath" dolt branch init origin/init
+  PATH="$relpath" dolt branch other origin/other
   # Also copy the files exported by setup_repo
   cp ../../repos/HEAD/*.csv ./
   cp ../../repos/HEAD/*.json ./
   cd ../../
 
-  # Run the bats test.
+  # Run the bats tests
   PATH="`pwd`"/"$bin":"$PATH" dolt version
   echo PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
   PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
