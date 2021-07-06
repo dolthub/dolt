@@ -31,11 +31,11 @@ type MergeState struct {
 
 // WorkingSetMeta contains all the metadata that is associated with a working set
 type WorkingSetMeta struct {
-	User string
-	Email string
-	Timestamp uint64
+	User        string
+	Email       string
+	Timestamp   uint64
 	Description string
-	Version string
+	Version     string
 }
 
 func (wsm *WorkingSetMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
@@ -245,7 +245,7 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 
 	return &WorkingSet{
 		Name:        name,
-		meta:  meta,
+		meta:        meta,
 		format:      vrw.Format(),
 		st:          &workingSetSt,
 		workingRoot: workingRoot,
