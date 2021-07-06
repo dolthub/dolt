@@ -68,6 +68,7 @@ var globalHttpFetcher HTTPFetcher = &http.Client{}
 var _ nbs.TableFileStore = (*DoltChunkStore)(nil)
 var _ datas.NBSCompressedChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.ChunkStore = (*DoltChunkStore)(nil)
+var _ chunks.LoggingChunkStore = (*DoltChunkStore)(nil)
 
 // We may need this to be configurable for users with really bad internet
 var downThroughputCheck = iohelp.MinThroughputCheckParams{
@@ -217,7 +218,7 @@ func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency ConcurrencyParams
 	}
 }
 
-func (dcs *DoltChunkStore) SetDebugLogger(logger chunks.DebugLogger) {
+func (dcs *DoltChunkStore) SetLogger(logger chunks.DebugLogger) {
 	dcs.logger = logger
 }
 
