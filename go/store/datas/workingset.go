@@ -23,7 +23,7 @@ import (
 
 const (
 	WorkingSetName      = "WorkingSet"
-	WorkspaceMetaField  = "meta"
+	WorkingSetMetaField = "meta"
 	WorkingRootRefField = "workingRootRef"
 	StagedRootRefField  = "stagedRootRef"
 	MergeStateField     = "mergeState"
@@ -35,13 +35,25 @@ const (
 	MergeStateWorkingPreMergeField = "workingPreMerge"
 )
 
+const (
+	WorkingSetMetaName             = "WorkingSetMeta"
+	WorkingSetMetaNameField        = "name"
+	WorkingSetMetaEmailField       = "email"
+	WorkingSetMetaTimestampField   = "timestamp"
+	WorkingSetMetaDescriptionField = "description"
+	WorkingSetMetaVersionField     = "version"
+)
+
+const workingSetMetaVersion = "1.0"
+
 type WorkingSetMeta struct {
 	Meta types.Struct
 }
 
 var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
-				mergeState?: Ref<Value>,
-				stagedRootRef?:  Ref<Value>,
+		mergeState?: Ref<Value>,
+		meta: Struct {},
+		stagedRootRef?:  Ref<Value>,
         workingRootRef:  Ref<Value>,
 }`)
 
@@ -69,8 +81,9 @@ type WorkingSetSpec struct {
 // }
 // ```
 // where M is a struct type and R is a ref type.
-func NewWorkingSet(_ context.Context, workingRef, stagedRef types.Ref, mergeStateRef *types.Ref) (types.Struct, error) {
+func NewWorkingSet(_ context.Context, meta WorkingSetMeta, workingRef, stagedRef types.Ref, mergeStateRef *types.Ref) (types.Struct, error) {
 	fields := make(types.StructData)
+	fields[WorkingSetMetaField] = meta.Meta
 	fields[WorkingRootRefField] = workingRef
 	fields[StagedRootRefField] = stagedRef
 
@@ -83,6 +96,17 @@ func NewWorkingSet(_ context.Context, workingRef, stagedRef types.Ref, mergeStat
 
 func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.Struct) (types.Struct, error) {
 	return mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit, preMergeWorking})
+}
+
+func NewWorkingSetMeta(_ context.Context, name, email string, timestamp uint64, description string) (types.Struct, error) {
+	fields := make(types.StructData)
+	fields[WorkingSetMetaNameField] = types.String(name)
+	fields[WorkingSetMetaEmailField] = types.String(email)
+	fields[WorkingSetMetaTimestampField] = types.Uint(timestamp)
+	fields[WorkingSetMetaDescriptionField] = types.String(description)
+	fields[WorkingSetMetaVersionField] = types.String(workingSetMetaVersion)
+
+	return types.NewStruct(types.Format_Default, WorkingSetMetaName, fields)
 }
 
 func IsWorkingSet(v types.Value) (bool, error) {

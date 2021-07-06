@@ -974,8 +974,14 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.Worki
 	// h, err = wsRef.Hash(wsRef.Format())
 	// fmt.Sprintf("%v", h)
 
+	// TODO: fill in with param
+	meta, err := datas.NewWorkingSetMeta(ctx, "test", "test", 123, "hello")
+	if err != nil {
+		return err
+	}
+
 	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
-		Meta:        datas.WorkingSetMeta{},
+		Meta:        datas.WorkingSetMeta{Meta: meta},
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,
