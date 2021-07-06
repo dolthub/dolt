@@ -24,15 +24,22 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	workingMetaStName        = "workingset"
-	workingMetaVersionStName = "version"
-	workingMetaVersion       = "1.0"
-)
-
 type MergeState struct {
 	commit          *Commit
 	preMergeWorking *RootValue
+}
+
+// WorkingSetMeta contains all the metadata that is associated with a working set
+type WorkingSetMeta struct {
+	User string
+	Email string
+	Timestamp uint64
+	Description string
+	Version string
+}
+
+func (wsm *WorkingSetMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
+	return datas.NewWorkingSetMeta(nbf, wsm.User, wsm.Email, wsm.Timestamp, wsm.Description)
 }
 
 // MergeStateFromCommitAndWorking returns a new MergeState.
@@ -87,6 +94,7 @@ func (m MergeState) PreMergeWorkingRoot() *RootValue {
 
 type WorkingSet struct {
 	Name        string
+	meta        WorkingSetMeta
 	format      *types.NomsBinFormat
 	st          *types.Struct
 	workingRoot *RootValue
@@ -153,23 +161,24 @@ func (ws *WorkingSet) MergeActive() bool {
 	return ws.mergeState != nil
 }
 
+func (ws WorkingSet) Meta() WorkingSetMeta {
+	return ws.meta
+}
+
 // NewWorkingSet creates a new WorkingSet object.
 func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, workingSetSt types.Struct) (*WorkingSet, error) {
-	// TODO: meta struct
-	// metaSt, ok, err := workingSetSt.MaybeGet(datas.TagMetaField)
-	//
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// if !ok {
-	// 	return nil, fmt.Errorf("tag struct does not have field %s", datas.TagMetaField)
-	// }
-	//
-	// meta, err := tagMetaFromNomsSt(metaSt.(types.Struct))
-	//
-	// if err != nil {
-	// 	return nil, err
-	// }
+	metaSt, ok, err := workingSetSt.MaybeGet(datas.WorkingSetMetaField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("workingset struct does not have field %s", datas.WorkingSetMetaField)
+	}
+
+	meta, err := workingSetMetaFromNomsSt(metaSt.(types.Struct))
+	if err != nil {
+		return nil, err
+	}
 
 	workingRootRef, ok, err := workingSetSt.MaybeGet(datas.WorkingRootRefField)
 	if err != nil {
@@ -226,11 +235,62 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 
 	return &WorkingSet{
 		Name:        name,
+		meta:  meta,
 		format:      vrw.Format(),
 		st:          &workingSetSt,
 		workingRoot: workingRoot,
 		stagedRoot:  stagedRoot,
 		mergeState:  mergeState,
+	}, nil
+}
+
+func workingSetMetaFromNomsSt(st types.Struct) (WorkingSetMeta, error) {
+	name, ok, err := st.MaybeGet(datas.WorkingSetMetaNameField)
+	if err != nil {
+		return WorkingSetMeta{}, err
+	}
+	if !ok {
+		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaNameField)
+	}
+
+	email, ok, err := st.MaybeGet(datas.WorkingSetMetaEmailField)
+	if err != nil {
+		return WorkingSetMeta{}, err
+	}
+	if !ok {
+		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaEmailField)
+	}
+
+	timestamp, ok, err := st.MaybeGet(datas.WorkingSetMetaTimestampField)
+	if err != nil {
+		return WorkingSetMeta{}, err
+	}
+	if !ok {
+		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaTimestampField)
+	}
+
+	description, ok, err := st.MaybeGet(datas.WorkingSetMetaDescriptionField)
+	if err != nil {
+		return WorkingSetMeta{}, err
+	}
+	if !ok {
+		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaDescriptionField)
+	}
+
+	version, ok, err := st.MaybeGet(datas.WorkingSetMetaVersionField)
+	if err != nil {
+		return WorkingSetMeta{}, err
+	}
+	if !ok {
+		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaVersionField)
+	}
+
+	return WorkingSetMeta{
+		User:        string(name.(types.String)),
+		Email:       string(email.(types.String)),
+		Timestamp:   uint64(timestamp.(types.Uint)),
+		Description: string(description.(types.String)),
+		Version:     string(version.(types.String)),
 	}, nil
 }
 
@@ -297,21 +357,4 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 	}
 
 	return workingRoot, stagedRoot, mergeState, nil
-}
-
-// WorkingSetMeta contains all the metadata that is associated with a working set
-type WorkingSetMeta struct {
-	// empty for now
-}
-
-func NewWorkingSetMeta() *WorkingSetMeta {
-	return &WorkingSetMeta{}
-}
-
-func (tm *WorkingSetMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
-	metadata := types.StructData{
-		workingMetaVersionStName: types.String(workingMetaVersion),
-	}
-
-	return types.NewStruct(nbf, workingMetaStName, metadata)
 }

@@ -867,7 +867,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	}
 
 	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash)
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, nil)
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
@@ -942,17 +942,17 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 
 // UpdateWorkingSet updates the working set with the ref given to the root value given
 // |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
-// TODO: remove workingsetref, it's redundant
-func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, prevHash hash.Hash) error {
+func (ddb *DoltDB) UpdateWorkingSet(
+	ctx context.Context,
+	workingSetRef ref.WorkingSetRef,
+	workingSet *WorkingSet,
+	prevHash hash.Hash,
+	meta *WorkingSetMeta,
+) error {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
 		return err
 	}
-
-	// st, err := NewWorkingSetMeta().toNomsStruct(ddb.Format())
-	// if err != nil {
-	// 	return err
-	// }
 
 	// logrus.Tracef("Updating working set with root %s", workingSet.RootValue().DebugString(ctx, true))
 
@@ -961,27 +961,22 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.Worki
 		return err
 	}
 
-	// workspaceStruct, err := datas.NewWorkspace(ctx, rootRef, st)
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// wsRef, err := types.NewRef(workspaceStruct, ddb.Format())
-	// if err != nil {
-	// 	return err
-	// }
-
-	// h, err = wsRef.Hash(wsRef.Format())
-	// fmt.Sprintf("%v", h)
-
-	// TODO: fill in with param
-	meta, err := datas.NewWorkingSetMeta(ctx, "test", "test", 123, "hello")
-	if err != nil {
-		return err
+	// While we still have places that need user info threaded through, we're lenient on providing the meta
+	var metaSt types.Struct
+	if meta != nil {
+		metaSt, err = meta.toNomsStruct(types.Format_Default)
+		if err != nil {
+			return err
+		}
+	} else {
+		metaSt, err = datas.NewWorkingSetMeta(types.Format_Default, "incomplete", "incomplete", uint64(time.Now().Unix()), "incomplete")
+		if err != nil {
+			return err
+		}
 	}
 
 	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
-		Meta:        datas.WorkingSetMeta{Meta: meta},
+		Meta:        datas.WorkingSetMeta{Meta: metaSt},
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,

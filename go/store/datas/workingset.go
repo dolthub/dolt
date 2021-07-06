@@ -98,7 +98,7 @@ func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.St
 	return mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit, preMergeWorking})
 }
 
-func NewWorkingSetMeta(_ context.Context, name, email string, timestamp uint64, description string) (types.Struct, error) {
+func NewWorkingSetMeta(format *types.NomsBinFormat, name, email string, timestamp uint64, description string) (types.Struct, error) {
 	fields := make(types.StructData)
 	fields[WorkingSetMetaNameField] = types.String(name)
 	fields[WorkingSetMetaEmailField] = types.String(email)
@@ -106,7 +106,7 @@ func NewWorkingSetMeta(_ context.Context, name, email string, timestamp uint64, 
 	fields[WorkingSetMetaDescriptionField] = types.String(description)
 	fields[WorkingSetMetaVersionField] = types.String(workingSetMetaVersion)
 
-	return types.NewStruct(types.Format_Default, WorkingSetMetaName, fields)
+	return types.NewStruct(format, WorkingSetMetaName, fields)
 }
 
 func IsWorkingSet(v types.Value) (bool, error) {
