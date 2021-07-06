@@ -113,6 +113,9 @@ func IsWorkingSet(v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); !ok {
 		return false, nil
 	} else {
-		return types.IsValueSubtypeOf(s.Format(), v, valueWorkingSetType)
+		// We're being more lenient here than in other checks, to make it more likely we can release changes to the
+		// working set data description in a backwards compatible way.
+		// types.IsValueSubtypeOf is very strict about the type description.
+		return s.Name() == WorkingSetName, nil
 	}
 }

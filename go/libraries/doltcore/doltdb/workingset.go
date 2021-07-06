@@ -171,13 +171,23 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
-		return nil, fmt.Errorf("workingset struct does not have field %s", datas.WorkingSetMetaField)
-	}
 
-	meta, err := workingSetMetaFromNomsSt(metaSt.(types.Struct))
-	if err != nil {
-		return nil, err
+	// We're very lenient about the working set meta being here, in expectation of a time when we change how the
+	// working set info is stored and this field changes in a backwards incompatible way
+	var meta WorkingSetMeta
+	if ok {
+		meta, err = workingSetMetaFromNomsSt(metaSt.(types.Struct))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		meta = WorkingSetMeta{
+			User:        "not present",
+			Email:       "not present",
+			Timestamp:   0,
+			Description: "not present",
+			Version:     "not present",
+		}
 	}
 
 	workingRootRef, ok, err := workingSetSt.MaybeGet(datas.WorkingRootRefField)
@@ -245,12 +255,14 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 }
 
 func workingSetMetaFromNomsSt(st types.Struct) (WorkingSetMeta, error) {
+	// Like other places that deal with working set meta, we err on the side of leniency w.r.t. this data structure's
+	// contents
 	name, ok, err := st.MaybeGet(datas.WorkingSetMetaNameField)
 	if err != nil {
 		return WorkingSetMeta{}, err
 	}
 	if !ok {
-		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaNameField)
+		name = types.String("not present")
 	}
 
 	email, ok, err := st.MaybeGet(datas.WorkingSetMetaEmailField)
@@ -258,7 +270,7 @@ func workingSetMetaFromNomsSt(st types.Struct) (WorkingSetMeta, error) {
 		return WorkingSetMeta{}, err
 	}
 	if !ok {
-		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaEmailField)
+		email = types.String("not present")
 	}
 
 	timestamp, ok, err := st.MaybeGet(datas.WorkingSetMetaTimestampField)
@@ -266,7 +278,7 @@ func workingSetMetaFromNomsSt(st types.Struct) (WorkingSetMeta, error) {
 		return WorkingSetMeta{}, err
 	}
 	if !ok {
-		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaTimestampField)
+		timestamp = types.Uint(0)
 	}
 
 	description, ok, err := st.MaybeGet(datas.WorkingSetMetaDescriptionField)
@@ -274,7 +286,7 @@ func workingSetMetaFromNomsSt(st types.Struct) (WorkingSetMeta, error) {
 		return WorkingSetMeta{}, err
 	}
 	if !ok {
-		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaDescriptionField)
+		description = types.String("not present")
 	}
 
 	version, ok, err := st.MaybeGet(datas.WorkingSetMetaVersionField)
@@ -282,7 +294,7 @@ func workingSetMetaFromNomsSt(st types.Struct) (WorkingSetMeta, error) {
 		return WorkingSetMeta{}, err
 	}
 	if !ok {
-		return WorkingSetMeta{}, fmt.Errorf("workingsetmeta does not have expected field %s", datas.WorkingSetMetaVersionField)
+		version = types.String("not present")
 	}
 
 	return WorkingSetMeta{
