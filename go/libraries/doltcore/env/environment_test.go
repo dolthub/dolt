@@ -76,11 +76,13 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) (*DoltEnv, *filesys.
 	return dEnv, fs
 }
 
-func createFileTestEnv(t *testing.T, path string) *DoltEnv {
-	fs, err := filesys.LocalFilesysWithWorkingDir(filepath.ToSlash(path))
+func createFileTestEnv(t *testing.T, workingDir, homeDir string) *DoltEnv {
+	fs, err := filesys.LocalFilesysWithWorkingDir(filepath.ToSlash(workingDir))
 	require.NoError(t, err)
 
-	return Load(context.Background(), testHomeDirFunc, fs, doltdb.LocalDirDoltDB, "test")
+	return Load(context.Background(), func() (string, error) {
+		return homeDir, nil
+	}, fs, doltdb.LocalDirDoltDB, "test")
 }
 
 func TestNonRepoDir(t *testing.T) {
@@ -169,10 +171,13 @@ func TestInitRepo(t *testing.T) {
 func TestMigrateWorkingSet(t *testing.T) {
 	// TODO: t.TempDir breaks on windows because of automatic cleanup (files still in use)
 	// dir := t.TempDir()
-	dir, err := ioutil.TempDir("", "TestMigrateWorkingSet*")
+	working, err := ioutil.TempDir("", "TestMigrateWorkingSet*")
 	require.NoError(t, err)
 
-	dEnv := createFileTestEnv(t, dir)
+	homeDir, err := ioutil.TempDir("", "TestMigrateWorkingSet*")
+	require.NoError(t, err)
+
+	dEnv := createFileTestEnv(t, working, homeDir)
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
 	require.NoError(t, err)
 
