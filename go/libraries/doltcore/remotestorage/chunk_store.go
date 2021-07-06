@@ -60,8 +60,6 @@ func init() {
 	)
 }
 
-func NULLLogFunc(fmt string, args ...interface{}) {}
-
 var ErrUploadFailed = errors.New("upload failed")
 var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
@@ -116,7 +114,7 @@ type DoltChunkStore struct {
 	httpFetcher HTTPFetcher
 	concurrency ConcurrencyParams
 	stats       cacheStats
-	logFunc     func(string, ...interface{})
+	logger      chunks.DebugLogger
 }
 
 func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
@@ -183,7 +181,7 @@ func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
 		httpFetcher: dcs.httpFetcher,
 		concurrency: dcs.concurrency,
 		stats:       dcs.stats,
-		logFunc:     NULLLogFunc,
+		logger:      dcs.logger,
 	}
 }
 
@@ -199,7 +197,7 @@ func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
 		httpFetcher: dcs.httpFetcher,
 		concurrency: dcs.concurrency,
 		stats:       dcs.stats,
-		logFunc:     NULLLogFunc,
+		logger:      dcs.logger,
 	}
 }
 
@@ -215,12 +213,18 @@ func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency ConcurrencyParams
 		httpFetcher: dcs.httpFetcher,
 		concurrency: concurrency,
 		stats:       dcs.stats,
-		logFunc:     NULLLogFunc,
+		logger:      dcs.logger,
 	}
 }
 
-func (dcs *DoltChunkStore) SetLogFunc(newLogFunc func(string, ...interface{})) {
-	dcs.logFunc = newLogFunc
+func (dcs *DoltChunkStore) SetDebugLogger(logger chunks.DebugLogger) {
+	dcs.logger = logger
+}
+
+func (dcs *DoltChunkStore) logf(fmt string, args ...interface{}) {
+	if dcs.logger != nil {
+		dcs.logger.Logf(fmt, args...)
+	}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -1166,7 +1170,7 @@ func (dcs *DoltChunkStore) SupportedOperations() nbs.TableFileStoreOps {
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
 func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
-	dcs.logFunc("getting upload location for file %s with %d chunks and size %s", fileId, numChunks, humanize.Bytes(contentLength))
+	dcs.logf("getting upload location for file %s with %d chunks and size %s", fileId, numChunks, humanize.Bytes(contentLength))
 
 	fileIdBytes := hash.Parse(fileId)
 	tfd := &remotesapi.TableFileDetails{
@@ -1195,19 +1199,23 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 	switch typedLoc := loc.Location.(type) {
 	case *remotesapi.UploadLoc_HttpPost:
 		urlStr := typedLoc.HttpPost.Url
+
+		// strip off the query parameters as they clutter the logs. We only really care about being able to verify the table
+		// files are being uploaded to the correct places on S3.
 		qmIdx := strings.IndexRune(urlStr, '?')
 		if qmIdx != -1 {
 			urlStr = urlStr[:qmIdx]
 		}
-		dcs.logFunc("uploading %s to %s", fileId, urlStr)
+		dcs.logf("uploading %s to %s", fileId, urlStr)
+
 		err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, rd, contentHash)
 
 		if err != nil {
-			dcs.logFunc("failed to upload %s to %s. err: %s", fileId, urlStr, err.Error())
+			dcs.logf("failed to upload %s to %s. err: %s", fileId, urlStr, err.Error())
 			return err
 		}
 
-		dcs.logFunc("successfully uploaded %s to %s", fileId, urlStr)
+		dcs.logf("successfully uploaded %s to %s", fileId, urlStr)
 
 	default:
 		return errors.New("unsupported upload location")
@@ -1227,7 +1235,7 @@ func (dcs *DoltChunkStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 		chnkTblInfo = append(chnkTblInfo, &remotesapi.ChunkTableInfo{Hash: fileIdBytes[:], ChunkCount: uint32(numChunks)})
 	}
 
-	dcs.logFunc("Adding Table files to repo: %s/%s -\n%s", dcs.getRepoId().Org, dcs.getRepoId().RepoName, debugStr)
+	dcs.logf("Adding Table files to repo: %s/%s -\n%s", dcs.getRepoId().Org, dcs.getRepoId().RepoName, debugStr)
 	atReq := &remotesapi.AddTableFilesRequest{
 		RepoId:         dcs.getRepoId(),
 		ChunkTableInfo: chnkTblInfo,

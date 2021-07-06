@@ -487,9 +487,6 @@ func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
 			}
 
 		case datas.LevelDoneTWEvent:
-			if evt.TWEventDetails.TreeLevel != -1 {
-				//_ = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, 100.0))
-			}
 
 		case datas.TableFileClosedEvent:
 			tableFilesBuffered += 1

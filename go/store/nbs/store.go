@@ -1281,27 +1281,21 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 	}
 
 	path := filepath.Join(fsPersister.dir, fileId)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
-	f := func() (err error) {
-		var f *os.File
-		f, err = os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
-
-		if err != nil {
-			return err
-		}
-
-		defer func() {
-			closeErr := f.Close()
-
-			if err == nil {
-				err = closeErr
-			}
-		}()
-
-		return writeTo(f, rd, copyTableFileBufferSize)
+	if err != nil {
+		return err
 	}
 
-	return f()
+	defer func() {
+		closeErr := f.Close()
+
+		if err == nil {
+			err = closeErr
+		}
+	}()
+
+	return writeTo(f, rd, copyTableFileBufferSize)
 }
 
 // AddTableFilesToManifest adds table files to the manifest

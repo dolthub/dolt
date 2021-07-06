@@ -190,24 +190,16 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		pushLog:       pushLogger,
 	}
 
-	lcs, ok := sinkDBCS.(interface {
-		SetLogFunc(func(string, ...interface{}))
-	})
-
-	if ok {
-		lcs.SetLogFunc(p.log)
+	if lcs, ok := sinkDBCS.(chunks.LoggingChunkStore); ok {
+		lcs.SetLogger(p)
 	}
 
 	return p, nil
 }
 
-func (p *Puller) log(fmt string, args ...interface{}) {
+func (p *Puller) Logf(fmt string, args ...interface{}) {
 	if p.pushLog != nil {
-		if len(args) > 0 {
-			p.pushLog.Printf(fmt, args...)
-		} else {
-			p.pushLog.Print(fmt)
-		}
+		p.pushLog.Printf(fmt, args...)
 	}
 }
 
@@ -258,7 +250,7 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 	for tblFile := range completedTables {
 		p.tablefileSema.Release(1)
 
-		if err != nil {
+		if ae.IsSet() {
 			continue // drain
 		}
 
@@ -300,7 +292,7 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 		fileIdToNumChunks[id] = ttf.numChunks
 	}
 
-	if err != nil {
+	if ae.IsSet() {
 		return
 	}
 
