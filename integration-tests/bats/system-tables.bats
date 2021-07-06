@@ -480,3 +480,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
 }
+
+@test "system-tables: cannot delete last branch in dolt_branches" {
+    run dolt sql -q "DELETE FROM dolt_branches"
+    [ "$status" -ne 0 ]
+}

@@ -526,7 +526,7 @@ func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			workspace, err := NewWorkingSet(ctx, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
+			workspace, err := NewWorkingSet(ctx, workingSet.Meta, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
 			if err != nil {
 				return err
 			}

@@ -55,6 +55,7 @@ var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
 var InMemDoltDB = "mem://"
 
 var ErrNoRootValAtHash = errors.New("there is no dolt root value at that hash")
+var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 // Additionally the noms codebase uses panics in a way that is non idiomatic and We've opted to recover and return
@@ -832,26 +833,48 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 }
 
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
-func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, commit *Commit) error {
-	if !IsValidBranchRef(dref) {
-		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", dref.String()))
+func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit) error {
+	if !IsValidBranchRef(branchRef) {
+		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", branchRef.String()))
 	}
 
-	ds, err := ddb.db.GetDataset(ctx, dref.String())
-
+	ds, err := ddb.db.GetDataset(ctx, branchRef.String())
 	if err != nil {
 		return err
 	}
 
 	rf, err := types.NewRef(commit.commitSt, ddb.db.Format())
-
 	if err != nil {
 		return err
 	}
 
 	_, err = ddb.db.SetHead(ctx, ds, rf)
+	if err != nil {
+		return err
+	}
 
-	return err
+	// Update the corresponding working set at the same time, either by updating it or creating a new one
+	// TODO: find all the places HEAD can change, update working set too. This is only necessary when we don't already
+	//  update the working set when the head changes.
+	commitRoot, err := commit.GetRootValue()
+	wsRef, _ := ref.WorkingSetRefForHead(branchRef)
+
+	var ws *WorkingSet
+	var currWsHash hash.Hash
+	ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
+	if err == ErrWorkingSetNotFound {
+		ws = EmptyWorkingSet(wsRef)
+	} else if err != nil {
+		return err
+	} else {
+		currWsHash, err = ws.HashOf()
+		if err != nil {
+			return err
+		}
+	}
+
+	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, nil)
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
@@ -868,6 +891,16 @@ func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef) error {
 
 	if !ds.HasHead() {
 		return ErrBranchNotFound
+	}
+
+	if dref.GetType() == ref.BranchRefType {
+		branches, err := ddb.GetBranches(ctx)
+		if err != nil {
+			return err
+		}
+		if len(branches) == 1 {
+			return ErrCannotDeleteLastBranch
+		}
 	}
 
 	_, err = ddb.db.Delete(ctx, ds)
@@ -916,17 +949,17 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 
 // UpdateWorkingSet updates the working set with the ref given to the root value given
 // |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
-// TODO: remove workingsetref, it's redundant
-func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, prevHash hash.Hash) error {
+func (ddb *DoltDB) UpdateWorkingSet(
+	ctx context.Context,
+	workingSetRef ref.WorkingSetRef,
+	workingSet *WorkingSet,
+	prevHash hash.Hash,
+	meta *WorkingSetMeta,
+) error {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
 		return err
 	}
-
-	// st, err := NewWorkingSetMeta().toNomsStruct(ddb.Format())
-	// if err != nil {
-	// 	return err
-	// }
 
 	// logrus.Tracef("Updating working set with root %s", workingSet.RootValue().DebugString(ctx, true))
 
@@ -935,21 +968,22 @@ func (ddb *DoltDB) UpdateWorkingSet(ctx context.Context, workingSetRef ref.Worki
 		return err
 	}
 
-	// workspaceStruct, err := datas.NewWorkspace(ctx, rootRef, st)
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// wsRef, err := types.NewRef(workspaceStruct, ddb.Format())
-	// if err != nil {
-	// 	return err
-	// }
-
-	// h, err = wsRef.Hash(wsRef.Format())
-	// fmt.Sprintf("%v", h)
+	// While we still have places that need user info threaded through, we're lenient on providing the meta
+	var metaSt types.Struct
+	if meta != nil {
+		metaSt, err = meta.toNomsStruct(types.Format_Default)
+		if err != nil {
+			return err
+		}
+	} else {
+		metaSt, err = datas.NewWorkingSetMeta(types.Format_Default, "incomplete", "incomplete", uint64(time.Now().Unix()), "incomplete")
+		if err != nil {
+			return err
+		}
+	}
 
 	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
-		Meta:        datas.WorkingSetMeta{},
+		Meta:        datas.WorkingSetMeta{Meta: metaSt},
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,

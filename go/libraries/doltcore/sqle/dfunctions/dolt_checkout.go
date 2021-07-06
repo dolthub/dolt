@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
@@ -29,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const DoltCheckoutFuncName = "dolt_checkout"
@@ -150,52 +149,13 @@ func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData 
 	if len(branchName) == 0 {
 		return ErrEmptyBranchName
 	}
-
-	branchRoot, err := actions.BranchRoot(ctx, dbData.Ddb, branchName)
-	if err != nil {
-		return err
-	}
-
-	roots, err = actions.UpdateRootsForBranch(ctx, roots, branchRoot)
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
-		} else if doltdb.IsRootValUnreachable(err) {
-			rt := doltdb.GetUnreachableRootType(err)
-			return fmt.Errorf("error: unable to read the %s", rt.String())
-		} else if actions.IsCheckoutWouldOverwrite(err) {
-			tbls := actions.CheckoutWouldOverwriteTables(err)
-			msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
-			for _, tbl := range tbls {
-				msg = msg + tbl + "\n"
-			}
-			return errors.New(msg)
-		} else if err == doltdb.ErrAlreadyOnBranch {
-			return nil // No need to return an error if on the same branch
-		} else {
-			return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
-		}
-	}
-
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
 	}
 
-	var ws *doltdb.WorkingSet
-	ws, err = dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
-	if err == doltdb.ErrWorkingSetNotFound {
-		// newly created branch
-		ws = doltdb.EmptyWorkingSet(wsRef)
-	} else if err != nil {
-		return err
-	}
-
 	dSess := dsess.DSessFromSess(ctx.Session)
-	// TODO: this may not be right for the SQL context, need to not take working set changes with us, maybe die if the
-	//  working set is dirty, or force a commit first
-	newWorkingSet := ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
-	return dSess.SetWorkingSet(ctx, dbName, newWorkingSet, branchRoot)
+	return dSess.SwitchWorkingSet(ctx, dbName, wsRef)
 }
 
 func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {

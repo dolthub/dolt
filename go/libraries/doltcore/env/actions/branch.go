@@ -171,9 +171,8 @@ func CreateBranchWithStartPt(ctx context.Context, dbData env.DbData, newBranch, 
 }
 
 func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, startingPoint string, force bool, headRef ref.DoltRef) error {
-	newRef := ref.NewBranchRef(newBranch)
-	hasRef, err := ddb.HasRef(ctx, newRef)
-
+	branchRef := ref.NewBranchRef(newBranch)
+	hasRef, err := ddb.HasRef(ctx, branchRef)
 	if err != nil {
 		return err
 	}
@@ -187,18 +186,21 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 	}
 
 	cs, err := doltdb.NewCommitSpec(startingPoint)
-
 	if err != nil {
 		return err
 	}
 
 	cm, err := ddb.Resolve(ctx, cs, headRef)
-
 	if err != nil {
 		return err
 	}
 
-	return ddb.NewBranchAtCommit(ctx, newRef, cm)
+	err = ddb.NewBranchAtCommit(ctx, branchRef, cm)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoint string, force bool) error {
@@ -224,12 +226,12 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 		return doltdb.Roots{}, CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	roots.Working, err = writeRoot(ctx, branchRoot, wrkTblHashes)
+	roots.Working, err = overwriteRoot(ctx, branchRoot, wrkTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	roots.Staged, err = writeRoot(ctx, branchRoot, stgTblHashes)
+	roots.Staged, err = overwriteRoot(ctx, branchRoot, stgTblHashes)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -385,7 +387,9 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 	return resultMap, nil
 }
 
-func writeRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
+// overwriteRoot writes new table hash values for the root given and returns it.
+// This is an inexpensive and convenient way of replacing all the tables at once.
+func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
 	names, err := head.GetTableNames(ctx)
 	if err != nil {
 		return nil, err

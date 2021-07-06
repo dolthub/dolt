@@ -87,34 +87,22 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return nil, err
 	}
 
-	workingRoot := roots.Working
-
-	// TODO: fix me
-	var stagedTables, unstagedTables []diff.TableDelta
-	// stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, workingRoot, rsr)
-
+	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return &StatusItr{}, err
 	}
 
-	// TODO: fix me
-	// stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, workingRoot, rsr, drw)
-	var stagedDocDiffs, unStagedDocDiffs *diff.DocDiffs
-
+	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, drw)
 	if err != nil {
 		return &StatusItr{}, err
 	}
 
-	// TODO: fix me
-	var workingTblsInConflict []string
-	// workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, ddb, rsr)
-
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
 	if err != nil {
 		return &StatusItr{}, err
 	}
 
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, workingRoot, drw)
-
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, roots.Working, drw)
 	if err != nil {
 		return &StatusItr{}, err
 	}

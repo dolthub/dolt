@@ -46,7 +46,7 @@ const (
 	writeBatchSize = 1
 )
 
-func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
+func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter, hasTopLevelOrderBy bool) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
@@ -63,9 +63,9 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.
 	var p *pipeline.Pipeline
 	switch resultFormat {
 	case FormatCsv:
-		p = createCSVPipeline(ctx, sqlSch, rowIter)
+		p = createCSVPipeline(ctx, sqlSch, rowIter, hasTopLevelOrderBy)
 	case FormatJson:
-		p = createJSONPipeline(ctx, sqlSch, rowIter)
+		p = createJSONPipeline(ctx, sqlSch, rowIter, hasTopLevelOrderBy)
 	case FormatTabular:
 		p = createTabularPipeline(ctx, sqlSch, rowIter)
 	case FormatNull:
@@ -172,10 +172,17 @@ func dropOnFloor(ctx context.Context, items []pipeline.ItemWithProps) ([]pipelin
 
 // CSV Pipeline creation and stage functions
 
-func createCSVPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
+func createCSVPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter, hasTopLevelOrderBy bool) *pipeline.Pipeline {
+	parallelism := 2
+
+	// On order by clauses do not turn on parallelism so results are processed in the correct order.
+	if hasTopLevelOrderBy {
+		parallelism = 0
+	}
+
 	p := pipeline.NewPipeline(
 		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("process", nil, csvProcessStageFunc, 2, 1000, readBatchSize),
+		pipeline.NewStage("process", nil, csvProcessStageFunc, parallelism, 1000, readBatchSize),
 		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
 	)
 
@@ -231,10 +238,17 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 }
 
 // JSON pipeline creation and stage functions
-func createJSONPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
+func createJSONPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter, hasTopLevelOrderBy bool) *pipeline.Pipeline {
+	parallelism := 2
+
+	// On order by clauses do not turn on parallelism so results are processed in the correct order.
+	if hasTopLevelOrderBy {
+		parallelism = 0
+	}
+
 	p := pipeline.NewPipeline(
 		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("process", nil, getJSONProcessFunc(sch), 2, 1000, readBatchSize),
+		pipeline.NewStage("process", nil, getJSONProcessFunc(sch), parallelism, 1000, readBatchSize),
 		pipeline.NewStage("write", noParallelizationInitFunc, writeJSONToCliOutStageFunc, 0, 100, writeBatchSize),
 	)
 
@@ -428,7 +442,15 @@ func (tps *tabularPipelineStages) getFixWidthStageFunc(samples int) func(context
 				bufferring = false
 				fwf = fwt.NewFixedWidthFormatter(fwt.HashFillWhenTooLong, idxMapToSlice(idxToMaxWidth), idxMapToSlice(idxToMaxNumRunes))
 				tps.rowSep = genRowSepString(fwf)
-				return tps.formatItems(fwf, buffer)
+				ret, err := tps.formatItems(fwf, buffer)
+
+				if err != nil {
+					return nil, err
+				}
+
+				// clear the buffer
+				buffer = buffer[:0]
+				return ret, nil
 			}
 
 			return nil, nil

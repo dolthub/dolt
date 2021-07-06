@@ -16,7 +16,6 @@ package enginetest
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"runtime"
 	"strings"
 	"testing"
@@ -29,16 +28,16 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 type DoltHarness struct {
-	t                   *testing.T
-	env                 *env.DoltEnv
-	session             *dsess.Session
-	transactionsEnabled bool
-	databases           []sqle.Database
-	parallelism         int
-	skippedQueries      []string
+	t              *testing.T
+	env            *env.DoltEnv
+	session        *dsess.Session
+	databases      []sqle.Database
+	parallelism    int
+	skippedQueries []string
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -57,18 +56,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
 	}
-}
-
-// withTransactionsEnabled returns a copy of this harness with transactions enabled or not for all sessions
-func (d DoltHarness) withTransactionsEnabled(enabled bool) *DoltHarness {
-	d.transactionsEnabled = enabled
-	d.setTransactionSessionVar(d.session, enabled)
-	return &d
-}
-
-func (d DoltHarness) setTransactionSessionVar(session *dsess.Session, enabled bool) {
-	err := session.SetSessionVariable(sql.NewEmptyContext(), dsess.TransactionsEnabledSysVar, enabled)
-	require.NoError(d.t, err)
 }
 
 var defaultSkippedQueries = []string{
@@ -132,8 +119,6 @@ func (d DoltHarness) NewSession() *sql.Context {
 	session, err := dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(d.t, err)
 
-	d.setTransactionSessionVar(session, d.transactionsEnabled)
-
 	ctx := sql.NewContext(
 		context.Background(),
 		sql.WithSession(session))
@@ -174,8 +159,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	var err error
 	d.session, err = dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(d.t, err)
-
-	d.setTransactionSessionVar(d.session, d.transactionsEnabled)
 
 	var dbs []sql.Database
 	d.databases = nil

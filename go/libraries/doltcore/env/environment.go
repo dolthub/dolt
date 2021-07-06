@@ -477,7 +477,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		if err != nil {
 			return err
 		}
-		ws = doltdb.EmptyWorkingSet(wsRef)
+		ws = doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(newRoot).WithStagedRoot(newRoot)
 	} else if err != nil {
 		return err
 	} else {
@@ -492,7 +492,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 	// TODO: add actual trace logging here
 	// logrus.Infof("Updating working root to %s", newRoot.DebugString(context.Background(), true))
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h)
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta())
 }
 
 // UpdateWorkingSet updates the working set for the current working branch to the value given.
@@ -503,7 +503,7 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 		return err
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h)
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta())
 }
 
 type repoStateReader struct {
@@ -676,7 +676,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 		if err != nil {
 			return err
 		}
-		ws = doltdb.EmptyWorkingSet(wsRef)
+		ws = doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(newRoot).WithStagedRoot(newRoot)
 	} else if err != nil {
 		return err
 	} else {
@@ -688,7 +688,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h)
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, dEnv.workingSetMeta())
 }
 
 func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
@@ -702,7 +702,16 @@ func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
 		return err
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h)
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta())
+}
+
+func (dEnv *DoltEnv) workingSetMeta() *doltdb.WorkingSetMeta {
+	return &doltdb.WorkingSetMeta{
+		User:        *dEnv.Config.GetStringOrDefault(UserNameKey, ""),
+		Email:       *dEnv.Config.GetStringOrDefault(UserEmailKey, ""),
+		Timestamp:   uint64(time.Now().Unix()),
+		Description: "updated from dolt environment",
+	}
 }
 
 func (dEnv *DoltEnv) ClearMerge(ctx context.Context) error {
@@ -716,7 +725,7 @@ func (dEnv *DoltEnv) ClearMerge(ctx context.Context) error {
 		return err
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.ClearMerge(), h)
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.ClearMerge(), h, dEnv.workingSetMeta())
 }
 
 func (dEnv *DoltEnv) StartMerge(ctx context.Context, commit *doltdb.Commit) error {
@@ -730,7 +739,7 @@ func (dEnv *DoltEnv) StartMerge(ctx context.Context, commit *doltdb.Commit) erro
 		return err
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.StartMerge(commit), h)
+	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.StartMerge(commit), h, dEnv.workingSetMeta())
 }
 
 // todo: move this out of env to actions

@@ -17,7 +17,6 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -149,11 +149,9 @@ func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootVal
 		return err
 	}
 
-	// TODO: yes you can, fix this
 	if rh != hrh {
 		return errors.New("cannot merge with uncommitted changes")
 	}
-
 	return nil
 }
 

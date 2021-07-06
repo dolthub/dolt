@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"runtime"
 	"strings"
@@ -39,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
@@ -157,7 +157,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		return nil, err
 	}
 
-	sqlCtx, eng, err := monoSqlEngine(ctx, dEnv, cm)
+	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv, cm)
 	if err != nil {
 		return nil, err
 	}
@@ -229,8 +229,11 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	return roots[dbName], nil
 }
 
-// monoSqlEngine packages up the context necessary to run sql queries against single root.
-func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *sqlEngine, error) {
+// rebaseSqlEngine packages up the context necessary to run sql queries against single root
+// The SQL engine returned has transactions disabled. This is to prevent transactions starts from overwriting the root
+// we set manually with the one at the working set of the HEAD being rebased.
+// Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
+func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *sqlEngine, error) {
 	sess := dsess.DefaultSession()
 
 	sqlCtx := sql.NewContext(ctx,
@@ -238,7 +241,12 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
-	err := sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
+	err := sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = sqlCtx.SetSessionVariable(sqlCtx, dsess.TransactionsDisabledSysVar, true)
 	if err != nil {
 		return nil, nil, err
 	}

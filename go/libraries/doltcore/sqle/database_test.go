@@ -15,8 +15,9 @@
 package sqle
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
 	"github.com/stretchr/testify/assert"
 )

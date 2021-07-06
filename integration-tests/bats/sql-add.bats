@@ -68,8 +68,8 @@ teardown() {
 }
 
 @test "sql-add: DOLT_ADD can take in one table" {
-    run dolt sql -q "SELECT DOLT_ADD('test')"
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    dolt sql -q "SELECT DOLT_ADD('test')"
+    dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
 
     # Check that just test was added and not test2.
     run dolt status

@@ -20,11 +20,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/fkconstrain"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/fkconstrain"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -154,10 +153,14 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		return nil, err
 	}
 
-	h, err := stagedRoot.HashOf()
+	// TODO: this is only necessary in some contexts (SQL). Come up with a more coherent set of interfaces to
+	//  rationalize where the root value writes happen before a commit is created.
+	h, err := ddb.WriteRootValue(ctx, stagedRoot)
 	if err != nil {
 		return nil, err
 	}
+
+	// logrus.Errorf("staged root is %s", stagedRoot.DebugString(ctx, true))
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.
 	c, err := ddb.CommitWithParentCommits(ctx, h, rsr.CWBHeadRef(), mergeParentCommits, meta)

@@ -76,36 +76,9 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
 }
 
-// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
-type DisabledTransaction struct{}
-
-func (d DisabledTransaction) String() string {
-	return "Disabled transaction"
-}
-
 func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
-	if !dsess.TransactionsEnabled(ctx) {
-		return DisabledTransaction{}, nil
-	}
-
 	dsession := dsess.DSessFromSess(ctx.Session)
-
-	// When we begin the transaction, we must synchronize the state of this session with the global state for the
-	// current head ref. Any pending transaction has already been committed before this happens.
-	wsRef := dsession.DbStates[ctx.GetCurrentDatabase()].WorkingSet.Ref()
-	ws, err := db.ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return nil, err
-	}
-
-	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
-
-	sess := dsess.DSessFromSess(ctx.Session)
-
-	// TODO: this is going to do 2 resolves to get the head root, not ideal
-	err = sess.SetWorkingSet(ctx, db.name, ws, nil)
-
-	return dsess.NewDoltTransaction(ws, wsRef, db.DbData()), nil
+	return dsession.StartTransaction(ctx, db.Name())
 }
 
 func (db Database) setHeadHash(ctx *sql.Context, ref ref.WorkingSetRef) error {
@@ -301,7 +274,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, NewSessionStateAdapter(sess, db.name), db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name), db.drw), true
 	}
 	if found {
 		return dt, found, nil

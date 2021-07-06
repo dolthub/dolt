@@ -17,6 +17,7 @@ package dsess
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -65,6 +66,18 @@ func (tx DoltTransaction) String() string {
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
 //  strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
+	// logrus.Errorf("Committing working root %s", workingSet.WorkingRoot().DebugString(ctx, true))
+
+	// Don't allow a root value with conflicts to be committed. Later we may open this up via configuration
+	hasConflicts, err := workingSet.WorkingRoot().HasConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if hasConflicts {
+		return nil, doltdb.ErrUnresolvedConflicts
+	}
+
 	for i := 0; i < maxTxCommitRetries; i++ {
 		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
 		if err != nil {
@@ -80,7 +93,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 
 		if rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
 			// ff merge
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash)
+			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
 			if err == datas.ErrOptimisticLockFailed {
 				continue
 			} else if err != nil {
@@ -103,7 +116,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 		}
 
 		mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
-		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash)
+		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash, tx.getWorkingSetMeta(ctx))
 		if err == datas.ErrOptimisticLockFailed {
 			continue
 		} else if err != nil {
@@ -159,6 +172,16 @@ func (tx *DoltTransaction) ClearSavepoint(name string) *doltdb.RootValue {
 		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
 	}
 	return existingRoot
+}
+
+func (tx DoltTransaction) getWorkingSetMeta(ctx *sql.Context) *doltdb.WorkingSetMeta {
+	sess := DSessFromSess(ctx.Session)
+	return &doltdb.WorkingSetMeta{
+		User:        sess.Username,
+		Email:       sess.Email,
+		Timestamp:   uint64(time.Now().Unix()),
+		Description: "sql transaction",
+	}
 }
 
 func rootsEqual(left, right *doltdb.RootValue) bool {
