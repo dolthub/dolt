@@ -178,6 +178,8 @@ func TestMigrateWorkingSet(t *testing.T) {
 	require.NoError(t, err)
 
 	dEnv := createFileTestEnv(t, working, homeDir)
+	assert.NoError(t, dEnv.CfgLoadErr)
+
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
 	require.NoError(t, err)
 
