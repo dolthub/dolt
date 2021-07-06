@@ -105,5 +105,14 @@ func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.Ro
 }
 
 func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
-	panic("implement me")
+	return nil, fmt.Errorf("Cannot get remotes with a SessionStateAdapter")
+}
+
+func (s SessionStateAdapter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
+	return fmt.Errorf("Cannot add remote with a SessionStateAdapter")
+}
+
+
+func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) error {
+	return fmt.Errorf("Cannot remove remote with a SessionStateAdapter")
 }
