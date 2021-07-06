@@ -35,6 +35,7 @@ import (
 	"github.com/golang/snappy"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -364,60 +365,49 @@ var _ tableIndex = mmapTableIndex{}
 // and footer, though it may contain an unspecified number of bytes before that data.
 // |tableIndex| doesn't keep alive any references to |buff|.
 func parseTableIndex(buff []byte) (onHeapTableIndex, error) {
-	pos := int64(len(buff))
+	return ReadTableIndex(bytes.NewReader(buff))
+}
 
-	// footer
-	pos -= magicNumberSize
+func ReadTableIndex(rd io.ReadSeeker) (onHeapTableIndex, error) {
+	footerSize := int64(magicNumberSize + uint64Size + uint32Size)
+	_, err := rd.Seek(-footerSize, io.SeekEnd)
 
-	if string(buff[pos:]) != magicNumber {
+	if err != nil {
+		return onHeapTableIndex{}, err
+	}
+
+	footer, err := iohelp.ReadNBytes(rd, int(footerSize))
+
+	if err != nil {
+		return onHeapTableIndex{}, err
+	}
+
+	if string(footer[uint32Size+uint64Size:]) != magicNumber {
 		return onHeapTableIndex{}, ErrInvalidTableFile
 	}
 
-	// total uncompressed chunk data
-	pos -= uint64Size
-
-	if pos < 0 {
-		return onHeapTableIndex{}, ErrInvalidTableFile
-	}
-
-	totalUncompressedData := binary.BigEndian.Uint64(buff[pos:])
-
-	pos -= uint32Size
-
-	if pos < 0 {
-		return onHeapTableIndex{}, ErrInvalidTableFile
-	}
-
-	chunkCount := binary.BigEndian.Uint32(buff[pos:])
+	chunkCount := binary.BigEndian.Uint32(footer)
+	totalUncompressedData := binary.BigEndian.Uint64(footer[uint32Size:])
 
 	// index
 	suffixesSize := int64(chunkCount) * addrSuffixSize
-	pos -= suffixesSize
-
-	if pos < 0 {
-		return onHeapTableIndex{}, ErrInvalidTableFile
-	}
-
-	suffixes := make([]byte, suffixesSize)
-	copy(suffixes, buff[pos:])
-
 	lengthsSize := int64(chunkCount) * lengthSize
-	pos -= lengthsSize
-
-	if pos < 0 {
-		return onHeapTableIndex{}, ErrInvalidTableFile
-	}
-
-	lengths, offsets := computeOffsets(chunkCount, buff[pos:pos+lengthsSize])
-
 	tuplesSize := int64(chunkCount) * prefixTupleSize
-	pos -= tuplesSize
+	indexSize := suffixesSize + lengthsSize + tuplesSize
 
-	if pos < 0 {
+	_, err = rd.Seek(-(indexSize + footerSize), io.SeekEnd)
+	if err != nil {
 		return onHeapTableIndex{}, ErrInvalidTableFile
 	}
 
-	prefixes, ordinals := computePrefixes(chunkCount, buff[pos:pos+tuplesSize])
+	indexBytes, err := iohelp.ReadNBytes(rd, int(indexSize))
+	if err != nil {
+		return onHeapTableIndex{}, ErrInvalidTableFile
+	}
+
+	prefixes, ordinals := computePrefixes(chunkCount, indexBytes[:tuplesSize])
+	lengths, offsets := computeOffsets(chunkCount, indexBytes[tuplesSize:tuplesSize+lengthsSize])
+	suffixes := indexBytes[tuplesSize+lengthsSize:]
 
 	return onHeapTableIndex{
 		chunkCount, totalUncompressedData,

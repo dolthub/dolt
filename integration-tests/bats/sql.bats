@@ -1235,6 +1235,42 @@ SQL
     [[ "$output" =~ "| 3        |" ]] || false
 }
 
+@test "sql: sql print on order by returns the correct result" {
+    dolt sql -q "CREATE TABLE mytable(pk int primary key);"
+    dolt sql -q "INSERT INTO mytable VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20)"
+
+    # This is a valid test since the batch side for reading is 10. If race conditions exist than this test will be flaky.
+    run dolt sql -r csv -q "SELECT * FROM mytable ORDER BY pk"
+    [ "${lines[1]}" = "1" ]
+    [ "${lines[2]}" = "2" ]
+    [ "${lines[3]}" = "3" ]
+    [ "${lines[4]}" = "4" ]
+    [ "${lines[5]}" = "5" ]
+    [ "${lines[6]}" = "6" ]
+    [ "${lines[7]}" = "7" ]
+    [ "${lines[8]}" = "8" ]
+    [ "${lines[9]}" = "9" ]
+    [ "${lines[10]}" = "10" ]
+    [ "${lines[11]}" = "11" ]
+    [ "${lines[12]}" = "12" ]
+    [ "${lines[13]}" = "13" ]
+    [ "${lines[14]}" = "14" ]
+    [ "${lines[15]}" = "15" ]
+    [ "${lines[16]}" = "16" ]
+    [ "${lines[17]}" = "17" ]
+    [ "${lines[18]}" = "18" ]
+    [ "${lines[19]}" = "19" ]
+    [ "${lines[20]}" = "20" ]
+}
+
+@test "sql: update against joins fail with error" {
+    dolt sql -q "CREATE TABLE mytable(pk int primary key, val int);"
+
+    run dolt sql -q "UPDATE mytable one, mytable two SET one.val = 1 WHERE one.pk = two.pk + 1;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "table doesn't support UPDATE" ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }
