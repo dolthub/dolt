@@ -15,12 +15,13 @@
 package sqle
 
 import (
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -47,7 +48,7 @@ type sqlTableEditor struct {
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
 	temporary         bool
-	aiTracker		  autoincr.AutoIncrementTracker
+	aiTracker         autoincr.AutoIncrementTracker
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -63,7 +64,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		return nil, err
 	}
 
-	dsess := DSessFromSess( ctx.Session)
+	dsess := DSessFromSess(ctx.Session)
 	ait, _ := dsess.GetDoltDbAutoIncrementTracker(t.db.Name())
 
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
@@ -132,7 +133,7 @@ func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) (sql.Row, error)
 
 			if greaterThan {
 				toInit, _ := autoincr.ConvertIntTypeToUint(r[i])
-				te.aiTracker.InitTable(te.tableName, toInit + 1)
+				te.aiTracker.InitTable(te.tableName, toInit+1)
 			}
 		}
 	}

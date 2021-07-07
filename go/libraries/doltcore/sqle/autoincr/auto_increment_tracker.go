@@ -22,13 +22,13 @@ var ErrTableNotInitialized = errors.New("Table not initializaed")
 // it hands out the current key.
 func NewAutoIncrementTracker() AutoIncrementTracker {
 	return &autoIncrementTracker{
-		tables:  make(map[string]interface{}),
+		tables: make(map[string]interface{}),
 	}
 }
 
 type autoIncrementTracker struct {
-	tables  map[string]interface{}
-	mu      sync.Mutex
+	tables map[string]interface{}
+	mu     sync.Mutex
 }
 
 var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
