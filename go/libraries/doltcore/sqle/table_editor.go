@@ -18,8 +18,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -47,6 +47,7 @@ type sqlTableEditor struct {
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
 	temporary         bool
+	aiTracker		  autoincr.AutoIncrementTracker
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -62,6 +63,9 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		return nil, err
 	}
 
+	dsess := DSessFromSess( ctx.Session)
+	ait, _ := dsess.GetDoltDbAutoIncrementTracker(t.db.Name())
+
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
 		tableName:   t.Name(),
@@ -73,6 +77,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		tableEditor: tableEditor,
 		sess:        sess,
 		temporary:   t.IsTemporary(),
+		aiTracker:   ait,
 	}, nil
 }
 
@@ -87,6 +92,11 @@ func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if !schema.IsKeyless(te.sch) {
+		sqlRow, err := te.updateAutoIncrementValueFromTracker(sqlRow)
+		if err != nil {
+			return err
+		}
+
 		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
 
 		if err != nil {
@@ -103,6 +113,24 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	}
 
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
+}
+
+func (te *sqlTableEditor) updateAutoIncrementValueFromTracker(r sql.Row) (sql.Row, error) {
+	allCols := te.sch.GetAllCols()
+	numCols := allCols.Size()
+
+	for i := 0; i < numCols; i++ {
+		schCol := allCols.GetAtIndex(i)
+
+		if schCol.IsPartOfPK && schCol.AutoIncrement {
+			if te.aiTracker.Greater(r[i], te.aiTracker.Current(te.tableName)) {
+				toInit, _ := autoincr.ConvertIntTypeToUint(r[i])
+				te.aiTracker.InitTable(te.tableName, toInit + 1)
+			}
+		}
+	}
+
+	return r, nil
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {

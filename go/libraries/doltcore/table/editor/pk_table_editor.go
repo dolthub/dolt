@@ -438,6 +438,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 
 	if te.hasAutoInc {
 		insertVal, ok := tagToVal[te.autoIncCol.Tag]
+
 		if ok {
 			var less bool
 
@@ -455,12 +456,6 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 
 			if !less {
 				te.autoIncVal = types.Round(insertVal)
-
-				err = te.updateAutoIncrementTracker(te.autoIncVal)
-				if err != nil {
-					return err
-				}
-
 				te.autoIncVal = types.Increment(te.autoIncVal)
 			}
 		}
@@ -649,12 +644,12 @@ func (te *pkTableEditor) GetAutoIncrementValue() types.Value {
 
 func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 	te.autoIncVal = v
-	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
-	if err != nil {
-		return
-	}
-
-	err = te.updateAutoIncrementTracker(v)
+	//te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
+	//if err != nil {
+	//	return
+	//}
+	//
+	//err = te.updateAutoIncrementTracker(v)
 	return
 }
 
@@ -707,20 +702,6 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 	te.t = tbl
 
 	return te.t, nil
-}
-
-func (te *pkTableEditor) updateAutoIncrementTracker(value types.Value) error {
-	// If the auto increment tracker is passed in be sure to update it with the most recent value.
-	if te.aiTracker != nil {
-		val, err := te.autoIncCol.TypeInfo.ConvertNomsValueToValue(value)
-		if err != nil {
-			return err
-		}
-
-		te.aiTracker.Confirm(te.name, val)
-	}
-
-	return nil
 }
 
 func (te *pkTableEditor) Schema() schema.Schema {

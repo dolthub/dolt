@@ -118,7 +118,6 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 	}
 
 	nonPKVals = nonPKVals[:nonPKIdx]
-
 	nbf := vrw.Format()
 	keyTuple, err := types.NewTuple(nbf, pkVals...)
 

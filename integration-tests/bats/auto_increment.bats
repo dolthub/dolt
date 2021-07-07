@@ -29,6 +29,7 @@ teardown() {
 
     run dolt sql -q "INSERT INTO test (c0) VALUES (55),(66);"
     [ "$status" -eq 0 ]
+
     run dolt sql -q "SELECT * FROM test WHERE c0 > 50;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "5,55" ]] || false
@@ -69,6 +70,7 @@ SQL
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM test;" -r csv
     [ "$status" -eq 0 ]
+
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
     [[ "$output" =~ "100,100" ]] || false
@@ -172,6 +174,7 @@ SQL
 
     run dolt sql -q "SELECT * FROM auto_float;" -r csv
     [ "$status" -eq 0 ]
+    echo $output
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2.1,2" ]] || false
     [[ "$output" =~ "3,3" ]] || false

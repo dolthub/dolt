@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"io"
 	"os"
 	"runtime"
@@ -34,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -568,6 +568,14 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	// Reset the auto increment trackers
+	ed, err := t.getTableEditor(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	ed.aiTracker.InitTable(t.Name(), 1)
+
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
 	if err != nil {
 		return 0, err
@@ -609,56 +617,33 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
 func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	sess := DSessFromSess(ctx.Session)
-
 	if !t.autoIncCol.AutoIncrement {
 		return nil, sql.ErrNoAutoIncrementCol
 	}
 
-	autoIncTracker, foundAit := sess.GetDoltDbAutoIncrementTracker(t.db.Name())
-	if !foundAit || autoIncTracker == nil {
-		return t.getAutoIncrementValue(ctx)
-	}
+	return t.getAutoIncrementValue(ctx)
+}
 
-	stored, err := t.getAutoIncrementValue(ctx)
+func (t *WritableDoltTable) getAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+	ed, err := t.getTableEditor(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	ok, err := autoIncTracker.Request(t.tableName, stored)
-	if err != nil {
-		return nil, err
-	}
-
-	if !ok {
-		convertedVal, err := autoincr.ConvertIntTypeToUint(stored)
+	trackerVal, err := ed.aiTracker.Next(t.tableName)
+	if errors.Is(err, autoincr.ErrTableNotInitialized) {
+		tableVal, err := t.DoltTable.GetAutoIncrementValue(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		// If the current session cannot automatically reserve the next auto increment key, keep iterating values until its
-		// done.
-		for !ok {
-			convertedVal += 1
-
-			ok, err = autoIncTracker.Request(t.tableName, convertedVal)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return convertedVal, nil
+		ed.aiTracker.InitTable(t.tableName, tableVal)
+		trackerVal, err = ed.aiTracker.Next(t.tableName)
+	} else if err != nil {
+		return nil, err
 	}
 
-	return stored, nil
-}
-
-func (t *WritableDoltTable) getAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	if t.ed != nil {
-		return t.ed.GetAutoIncrementValue()
-	}
-
-	return t.DoltTable.GetAutoIncrementValue(ctx)
+	return trackerVal, nil
 }
 
 func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
