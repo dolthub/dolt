@@ -224,6 +224,12 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 		if err != nil {
 			return typeinfo.UnknownType
 		}
+
+		// handle leading zero case
+		if len(strVal) > 1 && strVal[0] == '0' {
+			return typeinfo.StringDefaultType
+		}
+
 		if ui <= math.MaxUint32 {
 			return typeinfo.Uint32Type
 		} else {

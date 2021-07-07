@@ -45,6 +45,14 @@ CREATE TABLE test (
 );
 SQL
 
+    cat <<DELIM > people.csv
+pk,first,last,age,street,city,state,zip,dollar,color,date
+1,Oscar,Rodgers,38,Zapib View,Vervutce,OH,03020,$1200.09,RED,11/12/1928
+2,Estella,Cannon,33,Kubta Manor,Tocunuz,OH,04943,$1296.25,YELLOW,03/05/2016
+3,Dora,Stanley,27,Bidohe Boulevard,Siguhazep,CA,53768,$9744.06,WHITE,07/31/1993
+4,Brian,Newman,41,Koef Court,Abemivu,OH,44534,$3808.15,YELLOW,03/29/2064
+DELIM
+
 }
 
 teardown() {
@@ -97,6 +105,15 @@ teardown() {
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
+}
+
+@test "import-create-tables: import data from csv and create the table different types" {
+    run dolt table import -c --pk=pk test people.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
 }
 
 @test "import-create-tables: use -f to overwrite data in existing table" {
