@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -855,20 +854,6 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	}
 
 	return newRoot, tblToStats, nil
-}
-
-func getWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*doltdb.RootValue, error) {
-	wsRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
-	if err != nil {
-		return nil, err
-	}
-
-	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return nil, err
-	}
-
-	return ws.RootValue(), nil
 }
 
 func GetTablesInConflict(ctx context.Context, roots doltdb.Roots) (
