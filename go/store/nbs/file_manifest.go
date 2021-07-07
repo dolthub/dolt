@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -54,9 +55,15 @@ type manifestWriter func(temp io.Writer, contents manifestContents) error
 type manifestChecker func(upstream, contents manifestContents) error
 
 // ParseManifest parses s a manifest file from the supplied reader
-func ParseManifest(r io.Reader) (ManifestInfo, error) {
-	fm4 := fileManifestV4{}
-	return fm4.parseManifest(r)
+func ParseManifest(version int, r io.Reader) (ManifestInfo, error) {
+	switch version {
+	case 4:
+		return fileManifestV4{}.parseManifest(r)
+	case 5:
+		return fileManifestV5{}.parseManifest(r)
+	default:
+		return nil, fmt.Errorf("unknown manifest version: %d", version)
+	}
 }
 
 func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
