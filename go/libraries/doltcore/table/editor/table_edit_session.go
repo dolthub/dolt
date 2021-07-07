@@ -37,7 +37,7 @@ type TableEditSession struct {
 
 // TableEditSessionProps are properties that define different functionality for the TableEditSession.
 type TableEditSessionProps struct {
-	ForeignKeyChecksDisabled bool                          // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
+	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
 }
 
 // CreateTableEditSession creates and returns a TableEditSession. Inserting a nil root is not an error, as there are
