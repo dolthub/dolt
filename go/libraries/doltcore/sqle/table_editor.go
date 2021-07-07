@@ -129,7 +129,7 @@ func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) (sql.Row, error)
 			if err != nil {
 				return nil, err
 			}
-			
+
 			if greaterThan {
 				toInit, _ := autoincr.ConvertIntTypeToUint(r[i])
 				te.aiTracker.InitTable(te.tableName, toInit + 1)
