@@ -9,7 +9,7 @@ import (
 type AutoIncrementTracker interface {
 	// Next return the next auto increment value to be used by a table and increments its internal map
 	Next(tableName string) (interface{}, error)
-	// InitTable initializes the next autoincrement value to be bal
+	// InitTable initializes the next autoincrement value to be val
 	InitTable(tableName string, val interface{})
 	// Peek returns the expected next auto increment value. It is useful at insert time when an insert is larger
 	// than the currently stored next auto increment key.
