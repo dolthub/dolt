@@ -226,7 +226,7 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 		}
 
 		// handle leading zero case
-		if strVal[0] == '0' {
+		if len(strVal) > 1 && strVal[0] == '0' {
 			return typeinfo.StringDefaultType
 		}
 
