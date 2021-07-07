@@ -80,6 +80,7 @@ func TestLeastPermissiveNumericType(t *testing.T) {
 		{"zero float with floatThreshold of 0.1", "0.0", 0.1, typeinfo.Int32Type},
 		{"negative float", "-1.3451234", 0.0, typeinfo.Float32Type},
 		{"double decimal point", "0.00.0", 0.0, typeinfo.UnknownType},
+		{"leading zero floats", "05.78", 0.0, typeinfo.Float32Type},
 		{"zero float with high precision", "0.0000", 0.0, typeinfo.Float32Type},
 		{"all zeroes", "0000", 0.0, typeinfo.StringDefaultType},
 		{"leading zeroes", "01", 0.0, typeinfo.StringDefaultType},
