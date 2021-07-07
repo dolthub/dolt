@@ -33,7 +33,6 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2" ]] || false
 
-    dolt sql -q "SELECT max(pk), max(c0) FROM dolt_history_test;" -r csv
     run dolt sql -q "SELECT max(pk), max(c0) FROM dolt_history_test;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false

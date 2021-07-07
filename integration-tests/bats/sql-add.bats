@@ -68,8 +68,8 @@ teardown() {
 }
 
 @test "sql-add: DOLT_ADD can take in one table" {
-    run dolt sql -q "SELECT DOLT_ADD('test')"
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    dolt sql -q "SELECT DOLT_ADD('test')"
+    dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
 
     # Check that just test was added and not test2.
     run dolt status
@@ -101,6 +101,8 @@ teardown() {
 }
 
 @test "sql-add: Check that Dolt add works with docs" {
+    skip "We don't know if this use case makes sense or not"
+    
      echo readme-text > README.md
      run ls
      [[ "$output" =~ "README.md" ]] || false

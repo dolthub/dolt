@@ -403,7 +403,6 @@ func (t *Table) GetRowData(ctx context.Context) (types.Map, error) {
 func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
 	removed := 0
 	_, confData, err := t.GetConflicts(ctx)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -425,24 +424,36 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 	}
 
 	conflicts, err := confEdit.Map(ctx)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	conflictsRef, err := WriteValAndGetRef(ctx, t.vrw, conflicts)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	updatedSt, err := t.tableStruct.Set(conflictsKey, conflictsRef)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	return invalid, notFound, &Table{t.vrw, updatedSt}, nil
+	newTbl := &Table{t.vrw, updatedSt}
+
+	// If we resolved the last conflict, mark the table conflict free
+	numRowsInConflict, err := newTbl.NumRowsInConflict(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if numRowsInConflict == 0 {
+		newTbl, err = newTbl.ClearConflicts()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	return invalid, notFound, newTbl, nil
 }
 
 // GetIndexData returns the internal index map which goes from index name to a ref of the row data map.

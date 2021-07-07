@@ -751,25 +751,21 @@ func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *dol
 
 func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
 	ancCommit, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	ourRoot, err := commit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	theirRoot, err := mergeCommit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	ancRoot, err := ancCommit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -860,41 +856,21 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	return newRoot, tblToStats, nil
 }
 
-func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
-	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
-
-	headRoot, err = env.HeadRoot(ctx, ddb, rsr)
-
+func GetTablesInConflict(ctx context.Context, roots doltdb.Roots) (
+	workingInConflict, stagedInConflict, headInConflict []string,
+	err error,
+) {
+	headInConflict, err = roots.Head.TablesInConflict(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	stagedRoot, err = env.StagedRoot(ctx, ddb, rsr)
-
+	stagedInConflict, err = roots.Staged.TablesInConflict(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	workingRoot, err = env.WorkingRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	headInConflict, err = headRoot.TablesInConflict(ctx)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	stagedInConflict, err = stagedRoot.TablesInConflict(ctx)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	workingInConflict, err = workingRoot.TablesInConflict(ctx)
-
+	workingInConflict, err = roots.Working.TablesInConflict(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -902,13 +878,8 @@ func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoSt
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
 
-func GetDocsInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
+func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
 	docs, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return nil, err
-	}
-
-	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, err
 	}

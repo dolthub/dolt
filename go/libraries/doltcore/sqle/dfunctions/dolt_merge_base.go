@@ -22,7 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const DoltMergeBaseFuncName = "dolt_merge_base"
@@ -81,7 +81,7 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 		return nil, nil, err
 	}
 
-	sess := sqle.DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 	dbName := ctx.GetCurrentDatabase()
 
 	dbData, ok := sess.GetDbData(dbName)

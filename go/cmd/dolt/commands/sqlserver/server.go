@@ -36,6 +36,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
@@ -139,7 +140,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 			// to the value of mysql that we support.
 		},
 		sqlEngine,
-		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit()),
+		newSessionBuilder(sqlEngine, username, email, mrEnv, serverConfig.AutoCommit()),
 	)
 
 	if startError != nil {
@@ -166,11 +167,18 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool) server.SessionBuilder {
+func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-		doltSess, err := dsqle.NewDoltSession(tmpSqlCtx, mysqlSess, username, email, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+
+		doltDbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
+		dbStates, err := getDbStates(ctx, mrEnv, doltDbs)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, username, email, dbStates...)
 
 		if err != nil {
 			return nil, nil, nil, err
@@ -193,11 +201,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 
 		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		for _, db := range dbs {
-			err := db.LoadRootFromRepoState(sqlCtx)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
 			root, err := db.GetRoot(sqlCtx)
 			if err != err {
 				cli.PrintErrln(err)
@@ -227,4 +230,43 @@ func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	}
 
 	return dsqlDBs
+}
+
+func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Database) ([]dsess.InitialDbState, error) {
+	var dbStates []dsess.InitialDbState
+
+	for _, db := range dbs {
+		var dEnv *env.DoltEnv
+		mrEnv.Iter(func(name string, de *env.DoltEnv) (stop bool, err error) {
+			if name == db.Name() {
+				dEnv = de
+				return true, nil
+			}
+			return false, nil
+		})
+
+		if dEnv == nil {
+			return nil, fmt.Errorf("couldn't find environment for database %s", db.Name())
+		}
+
+		head := dEnv.RepoStateReader().CWBHeadSpec()
+		headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+		if err != nil {
+			return nil, err
+		}
+
+		ws, err := dEnv.WorkingSet(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		dbStates = append(dbStates, dsess.InitialDbState{
+			Db:         db,
+			HeadCommit: headCommit,
+			WorkingSet: ws,
+			DbData:     dEnv.DbData(),
+		})
+	}
+
+	return dbStates, nil
 }

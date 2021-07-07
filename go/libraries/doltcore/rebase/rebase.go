@@ -105,7 +105,7 @@ func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, 
 
 // CurrentBranch rewrites the history of the current branch using the |replay| function.
 func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
-	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, dEnv.RepoState.CWBHeadRef())
+	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, dEnv.RepoStateReader().CWBHeadRef())
 }
 
 // AllBranchesByRoots rewrites the history of all branches in the repo using the |replay| function.
@@ -122,7 +122,7 @@ func AllBranchesByRoots(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRoo
 // CurrentBranchByRoot rewrites the history of the current branch using the |replay| function.
 func CurrentBranchByRoot(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRootFn, nerf NeedsRebaseFn) error {
 	replayCommit := wrapReplayRootFn(replay)
-	return rebaseRefs(ctx, dEnv.DbData(), replayCommit, nerf, dEnv.RepoState.CWBHeadRef())
+	return rebaseRefs(ctx, dEnv.DbData(), replayCommit, nerf, dEnv.RepoStateReader().CWBHeadRef())
 }
 
 func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
@@ -183,17 +183,13 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		return err
 	}
 
-	_, err = env.UpdateStagedRoot(ctx, ddb, rsw, r)
+	// TODO: this should be a single update to repo state, not two
+	err = env.UpdateStagedRoot(ctx, rsw, r)
 	if err != nil {
 		return err
 	}
 
-	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, r)
-	if err != nil {
-		return err
-	}
-
-	return err
+	return env.UpdateWorkingRoot(ctx, rsw, r)
 }
 
 func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf NeedsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {

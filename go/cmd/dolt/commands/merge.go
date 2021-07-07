@@ -92,7 +92,13 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	var verr errhand.VerboseError
 	if apr.Contains(cli.AbortParam) {
-		if !dEnv.IsMergeActive() {
+		mergeActive, err := dEnv.IsMergeActive(ctx)
+		if err != nil {
+			cli.PrintErrln("fatal:", err.Error())
+			return 1
+		}
+
+		if !mergeActive {
 			cli.PrintErrln("fatal: There is no merge to abort")
 			return 1
 		}
@@ -110,6 +116,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		root, verr = GetWorkingWithVErr(dEnv)
 
 		if verr == nil {
+			mergeActive, err := dEnv.IsMergeActive(ctx)
+			if err != nil {
+				cli.PrintErrln(err.Error())
+				return 1
+			}
+
 			if has, err := root.HasConflicts(ctx); err != nil {
 				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
 			} else if has {
@@ -118,7 +130,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
 				cli.Println("fatal: Exiting because of an unresolved conflict.")
 				return 1
-			} else if dEnv.IsMergeActive() {
+			} else if mergeActive {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
 				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using 'dolt commit -m <msg>'")
 				cli.Println("fatal: Exiting because of active merge")
@@ -135,10 +147,14 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.CheckoutAllTables(ctx, doltEnv.DbData())
+	roots, err := doltEnv.Roots(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
+	err = actions.CheckoutAllTables(ctx, roots, doltEnv.DbData())
 	if err == nil {
-		err = doltEnv.RepoState.AbortMerge(doltEnv.FS)
+		err = doltEnv.AbortMerge(ctx)
 
 		if err == nil {
 			return nil
@@ -185,7 +201,12 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 		cli.Println("Squash commit -- not updating HEAD")
 	}
 
-	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, cm2, dEnv.DbData())
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, roots.Working, cm2, dEnv.DbData())
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
@@ -202,7 +223,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
 		if apr.Contains(cli.NoFFParam) {
-			return execNoFFMerge(ctx, apr, dEnv, cm2, verr, workingDiffs)
+			return execNoFFMerge(ctx, apr, dEnv, roots, cm2, verr, workingDiffs)
 		} else {
 			return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
 		}
@@ -214,7 +235,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	}
 }
 
-func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cm2 *doltdb.Commit, verr errhand.VerboseError, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, roots doltdb.Roots, cm2 *doltdb.Commit, verr errhand.VerboseError, workingDiffs map[string]hash.Hash) errhand.VerboseError {
 	mergedRoot, err := cm2.GetRootValue()
 
 	if err != nil {
@@ -248,9 +269,13 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return errhand.BuildDError("error: committing").AddCause(err).Build()
 	}
 
-	dbData := dEnv.DbData()
+	// Reload roots since the above method writes new values to the working set
+	roots, err = dEnv.Roots(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
-	_, err = actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, roots, dEnv.DbData(), actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
@@ -279,52 +304,48 @@ func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[
 	return root, nil
 }
 
-func executeFFMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func executeFFMerge(
+	ctx context.Context,
+	squash bool,
+	dEnv *env.DoltEnv,
+	mergeCommit *doltdb.Commit,
+	workingDiffs map[string]hash.Hash,
+) errhand.VerboseError {
 	cli.Println("Fast-forward")
 
-	rv, err := cm2.GetRootValue()
-
+	stagedRoot, err := mergeCommit.GetRootValue()
 	if err != nil {
 		return errhand.BuildDError("error: failed to get root value").AddCause(err).Build()
 	}
 
-	stagedHash, err := dEnv.DoltDB.WriteRootValue(ctx, rv)
-	if err != nil {
-		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
-	}
-
-	workingHash := stagedHash
+	workingRoot := stagedRoot
 	if len(workingDiffs) > 0 {
-		rv, err = applyChanges(ctx, rv, workingDiffs)
+		workingRoot, err = applyChanges(ctx, stagedRoot, workingDiffs)
 
 		if err != nil {
 			return errhand.BuildDError("Failed to re-apply working changes.").AddCause(err).Build()
 		}
-
-		workingHash, err = dEnv.DoltDB.WriteRootValue(ctx, rv)
-
-		if err != nil {
-			return errhand.BuildDError("Failed to write database").AddCause(err).Build()
-		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv.DbData())
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
 	}
 
 	if !squash {
-		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.CWBHeadRef(), cm2)
+		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoStateReader().CWBHeadRef(), mergeCommit)
 
 		if err != nil {
 			return errhand.BuildDError("Failed to write database").AddCause(err).Build()
 		}
 	}
 
-	dEnv.RepoState.Working = workingHash.String()
-	dEnv.RepoState.Staged = stagedHash.String()
+	workingSet, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
-	err = dEnv.RepoState.Save(dEnv.FS)
+	err = dEnv.UpdateWorkingSet(ctx, workingSet.WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot))
 	if err != nil {
 		return errhand.BuildDError("unable to execute repo state update.").
 			AddDetails(`As a result your .dolt/repo_state.json file may have invalid values for "staged" and "working".
@@ -459,7 +480,16 @@ func fkConstraintWarning(ctx context.Context, cm1, cm2 *doltdb.Commit) errhand.V
 	return nil
 }
 
-func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, mergedRoot *doltdb.RootValue, workingDiffs map[string]hash.Hash, cm2 *doltdb.Commit, tblToStats map[string]*merge.MergeStats) errhand.VerboseError {
+// TODO: change this to be functional and not write to repo state
+func mergedRootToWorking(
+	ctx context.Context,
+	squash bool,
+	dEnv *env.DoltEnv,
+	mergedRoot *doltdb.RootValue,
+	workingDiffs map[string]hash.Hash,
+	cm2 *doltdb.Commit,
+	tblToStats map[string]*merge.MergeStats,
+) errhand.VerboseError {
 	var err error
 
 	workingRoot := mergedRoot
@@ -471,21 +501,15 @@ func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, me
 		}
 	}
 
-	h2, err := cm2.HashOf()
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to hash commit").AddCause(err).Build()
-	}
-
 	if !squash {
-		err = dEnv.RepoState.StartMerge(h2.String(), dEnv.FS)
+		err = dEnv.StartMerge(ctx, cm2)
 
 		if err != nil {
 			return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
 		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv.DbData())
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine unstaged docs").AddCause(err).Build()
 	}
@@ -502,7 +526,7 @@ func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, me
 			if err != nil {
 				return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
 			}
-			verr = UpdateStagedWithVErr(dEnv.DoltDB, dEnv.RepoStateWriter(), mergedRoot)
+			verr = UpdateStagedWithVErr(dEnv, mergedRoot)
 			if verr != nil {
 				// Log a new message here to indicate that merge was successful, only staging failed.
 				cli.Println("Unable to stage changes: add and commit to finish merge")

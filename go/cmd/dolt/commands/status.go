@@ -66,37 +66,53 @@ func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
-
+	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
-		cli.PrintErrln(toStatusVErr(err).Verbose())
-		return 1
-	}
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
-
-	if err != nil {
-		cli.PrintErrln(toStatusVErr(err).Verbose())
-		return 1
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
-
+	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
+
+	if err != nil {
+		cli.PrintErrln(toStatusVErr(err).Verbose())
+		return 1
+	}
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 
-	printStatus(ctx, dEnv, staged, notStaged, workingTblsInConflict, workingDocsInConflict, stagedDocDiffs, notStagedDocDiffs)
+	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
+
+	if err != nil {
+		cli.PrintErrln(toStatusVErr(err).Verbose())
+		return 1
+	}
+
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, workingRoot, dEnv.DocsReadWriter())
+
+	if err != nil {
+		cli.PrintErrln(toStatusVErr(err).Verbose())
+		return 1
+	}
+
+	err = printStatus(ctx, dEnv, staged, notStaged, workingTblsInConflict, workingDocsInConflict, stagedDocDiffs, notStagedDocDiffs)
+	if err != nil {
+		cli.PrintErrln(toStatusVErr(err).Verbose())
+		return 1
+	}
+
 	return 0
 }
 
@@ -325,10 +341,16 @@ func getAddedNotStaged(notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocD
 	return lines
 }
 
-func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict []string, workingDocsInConflict *diff.DocDiffs, stagedDocs, notStagedDocs *diff.DocDiffs) {
-	cli.Printf(branchHeader, dEnv.RepoState.CWBHeadRef().GetPath())
+// TODO: working docs in conflict param not used here
+func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict []string, workingDocsInConflict *diff.DocDiffs, stagedDocs, notStagedDocs *diff.DocDiffs) error {
+	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
 
-	if dEnv.RepoState.Merge != nil {
+	mergeActive, err := dEnv.IsMergeActive(ctx)
+	if err != nil {
+		return err
+	}
+
+	if mergeActive {
 		if len(workingTblsInConflict) > 0 {
 			cli.Println(unmergedTablesHeader)
 		} else {
@@ -339,9 +361,11 @@ func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTb
 	n := printStagedDiffs(cli.CliOut, stagedTbls, stagedDocs, true)
 	n = printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, true, n, workingTblsInConflict)
 
-	if dEnv.RepoState.Merge == nil && n == 0 {
+	if !mergeActive && n == 0 {
 		cli.Println("nothing to commit, working tree clean")
 	}
+
+	return nil
 }
 
 func toStatusVErr(err error) errhand.VerboseError {

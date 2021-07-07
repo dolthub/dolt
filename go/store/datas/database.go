@@ -112,7 +112,7 @@ type Database interface {
 	// The returned Dataset is always the newest snapshot, regardless of
 	// success or failure, and Datasets() is updated to match backing storage
 	// upon return as well.
-	UpdateWorkingSet(ctx context.Context, ds Dataset, workingSetValue types.Ref, meta WorkingSetMeta, prevHash hash.Hash) (Dataset, error)
+	UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error)
 
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. The Dataset data is not necessarily cleaned up at this

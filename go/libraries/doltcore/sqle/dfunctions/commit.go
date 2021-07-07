@@ -22,7 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const CommitFuncName = "commit"
@@ -39,7 +39,7 @@ func NewCommitFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, er
 // Eval implements the Expression interface.
 func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
-	dSess := sqle.DSessFromSess(ctx.Session)
+	dSess := dsess.DSessFromSess(ctx.Session)
 
 	//  Get the params associated with COMMIT.
 	ap := cli.CreateCommitArgParser()
@@ -70,8 +70,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, fmt.Errorf("Must provide commit message.")
 	}
 
-	parent, _, err := dSess.GetHeadCommit(ctx, dbName)
-
+	parent, err := dSess.GetHeadCommit(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}

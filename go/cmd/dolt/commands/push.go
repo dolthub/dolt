@@ -134,7 +134,7 @@ func parsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	}
 
 	remote, remoteOK := remotes[remoteName]
-	currentBranch := dEnv.RepoState.CWBHeadRef()
+	currentBranch := dEnv.RepoStateReader().CWBHeadRef()
 	upstream, hasUpstream := dEnv.RepoState.Branches[currentBranch.GetPath()]
 
 	var refSpec ref.RefSpec
@@ -373,7 +373,7 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateM
 	}
 
 	cs, _ := doltdb.NewCommitSpec(srcRef.GetPath())
-	cm, err := localDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := localDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 
 	if err != nil {
 		return errhand.BuildDError("error: refspec '%v' not found.", srcRef.GetPath()).Build()

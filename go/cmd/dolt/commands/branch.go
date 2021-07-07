@@ -149,7 +149,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)
 	}
 
-	currentBranch := dEnv.RepoState.CWBHeadRef()
+	currentBranch := dEnv.RepoStateReader().CWBHeadRef()
 	sort.Slice(branches, func(i, j int) bool {
 		return branches[i].String() < branches[j].String()
 	})
@@ -184,7 +184,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		}
 
 		if verbose {
-			cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+			cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 
 			if err == nil {
 				h, err := cm.HashOf()
@@ -207,7 +207,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 }
 
 func printCurrentBranch(dEnv *env.DoltEnv) int {
-	cli.Println(dEnv.RepoState.CWBHeadRef().GetPath())
+	cli.Println(dEnv.RepoStateReader().CWBHeadRef().GetPath())
 	return 0
 }
 
@@ -220,7 +220,7 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.MoveBranch(ctx, dEnv, src, apr.Arg(1), force)
+	err := actions.RenameBranch(ctx, dEnv, src, apr.Arg(1), force)
 
 	var verr errhand.VerboseError
 	if err != nil {
