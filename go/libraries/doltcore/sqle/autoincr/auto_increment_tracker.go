@@ -7,26 +7,27 @@ import (
 )
 
 type AutoIncrementTracker interface {
+	// Next return the next auto increment value to be used by a table and increments its internal map
 	Next(tableName string) (interface{}, error)
+	// InitTable initializes the next autoincrement value to be bal
 	InitTable(tableName string, val interface{})
-	Greater(val1 interface{}, val2 interface{}) bool
-	Current(tableName string) interface{}
+	// Peek returns the expected next auto increment value. It is useful at insert time when an insert is larger
+	// than the currently stored next auto increment key.
+	Peek(tableName string) interface{}
 }
 
 var ErrTableNotInitialized = errors.New("Table not initializaed")
 
-// AutoIncrementTracker is a global map that tracks the next auto increment value for each table in each database.
-// It is primarily used for concurrent transactions on an auto incremented table.
+// AutoIncrementTracker is a global map that tracks which auto increment keys have been given for each table. At runtime
+// it hands out the current key.
 func NewAutoIncrementTracker() AutoIncrementTracker {
 	return &autoIncrementTracker{
 		tables:  make(map[string]interface{}),
-		written: make(map[string]bool),
 	}
 }
 
 type autoIncrementTracker struct {
 	tables  map[string]interface{}
-	written map[string]bool
 	mu      sync.Mutex
 }
 
@@ -58,14 +59,7 @@ func (a *autoIncrementTracker) InitTable(tableName string, val interface{}) {
 	a.tables[tableName] = val
 }
 
-func (a *autoIncrementTracker) Greater(val1 interface{}, val2 interface{}) bool {
-	v1, _ := ConvertIntTypeToUint(val1)
-	v2, _ := ConvertIntTypeToUint(val2)
-
-	return v1 > v2
-}
-
-func (a *autoIncrementTracker) Current(tableName string) interface{} {
+func (a *autoIncrementTracker) Peek(tableName string) interface{} {
 	return a.tables[tableName]
 }
 

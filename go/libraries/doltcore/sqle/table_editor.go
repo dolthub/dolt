@@ -125,7 +125,7 @@ func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) (sql.Row, error)
 		schCol := allCols.GetAtIndex(i)
 
 		if schCol.IsPartOfPK && schCol.AutoIncrement {
-			greaterThan, err := greater(r[i], te.aiTracker.Current(te.tableName))
+			greaterThan, err := greater(r[i], te.aiTracker.Peek(te.tableName))
 			if err != nil {
 				return nil, err
 			}
@@ -173,7 +173,6 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 		return err
 	}
 
-	// TODO: Do AI key update here?
 	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
 }
 
