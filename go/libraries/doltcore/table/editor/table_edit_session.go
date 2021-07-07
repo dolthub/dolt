@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -40,7 +38,6 @@ type TableEditSession struct {
 // TableEditSessionProps are properties that define different functionality for the TableEditSession.
 type TableEditSessionProps struct {
 	ForeignKeyChecksDisabled bool                          // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
-	AutoIncrTracker          autoincr.AutoIncrementTracker // If not nil, passes in a server level tracker for auto increment values. Useful for transactions.
 }
 
 // CreateTableEditSession creates and returns a TableEditSession. Inserting a nil root is not an error, as there are
@@ -245,7 +242,7 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		}
 	}
 
-	tableEditor, err := NewTableEditor(ctx, t, tableSch, tes.Props.AutoIncrTracker, tableName)
+	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +311,7 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		if err != nil {
 			return err
 		}
-		newTableEditor, err := NewTableEditor(ctx, t, tSch, tes.Props.AutoIncrTracker, tableName)
+		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName)
 		if err != nil {
 			return err
 		}

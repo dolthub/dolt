@@ -24,8 +24,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -71,11 +69,11 @@ type TableEditor interface {
 	Close() error
 }
 
-func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTracker, name string) (TableEditor, error) {
+func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string) (TableEditor, error) {
 	if schema.IsKeyless(tableSch) {
 		return newKeylessTableEditor(ctx, t, tableSch, name)
 	}
-	return newPkTableEditor(ctx, t, tableSch, aiTracker, name)
+	return newPkTableEditor(ctx, t, tableSch, name)
 }
 
 // pkTableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
@@ -96,7 +94,6 @@ type pkTableEditor struct {
 	hasAutoInc bool
 	autoIncCol schema.Column
 	autoIncVal types.Value
-	aiTracker  autoincr.AutoIncrementTracker
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -127,7 +124,7 @@ type tableEditAccumulator struct {
 	removedKeys map[hash.Hash]types.LesserValuable
 }
 
-func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, aiTracker autoincr.AutoIncrementTracker, name string) (*pkTableEditor, error) {
+func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string) (*pkTableEditor, error) {
 	te := &pkTableEditor{
 		t:          t,
 		tSch:       tableSch,
@@ -136,7 +133,6 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
 		writeMutex: &sync.Mutex{},
 		flushMutex: &sync.RWMutex{},
-		aiTracker:  aiTracker,
 	}
 	var err error
 	rowData, err := t.GetRowData(ctx)

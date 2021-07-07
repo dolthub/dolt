@@ -157,7 +157,7 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 
 	for _, db := range dbs {
 		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw, Ait: db.ait}
-		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{AutoIncrTracker: db.ait})
+		editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 	}
 
 	sess := &DoltSession{
@@ -698,7 +698,7 @@ func (sess *DoltSession) AddDB(ctx *sql.Context, db sql.Database, dbData env.DbD
 	ddb := dbData.Ddb
 
 	sess.dbDatas[db.Name()] = dbData
-	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{AutoIncrTracker: dbData.Ait})
+	sess.editSessions[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
 	cs := rsr.CWBHeadSpec()
 	headRef := rsr.CWBHeadRef()

@@ -93,7 +93,7 @@ func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if !schema.IsKeyless(te.sch) {
-		sqlRow, err := te.updateAutoIncrementTracker(sqlRow)
+		err := te.updateAutoIncrementTracker(sqlRow)
 		if err != nil {
 			return err
 		}
@@ -116,9 +116,9 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
-// updateAutoIncrementTracker reinitializes the auto increment tracker if an insert occurs that is greater than the
-// current auto increment tracker's value.
-func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) (sql.Row, error) {
+// updateAutoIncrementTracker reinitializes the auto increment tracker if an insert occurs that is greater than or equal too the
+// the current auto increment tracker's value.
+func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) error {
 	allCols := te.sch.GetAllCols()
 	numCols := allCols.Size()
 
@@ -126,15 +126,15 @@ func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) (sql.Row, error)
 		schCol := allCols.GetAtIndex(i)
 
 		if schCol.IsPartOfPK && schCol.AutoIncrement {
-			greaterThan, err := greater(r[i], te.aiTracker.Peek(te.tableName))
+			greaterThan, err := geq(r[i], te.aiTracker.Peek(te.tableName))
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			if greaterThan {
 				toInit, err := autoincr.ConvertIntTypeToUint(r[i])
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				te.aiTracker.InitTable(te.tableName, toInit+1)
@@ -142,10 +142,10 @@ func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) (sql.Row, error)
 		}
 	}
 
-	return r, nil
+	return nil
 }
 
-func greater(val1 interface{}, val2 interface{}) (bool, error) {
+func geq(val1 interface{}, val2 interface{}) (bool, error) {
 	v1, err := autoincr.ConvertIntTypeToUint(val1)
 	if err != nil {
 		return false, err
@@ -156,7 +156,7 @@ func greater(val1 interface{}, val2 interface{}) (bool, error) {
 		return false, err
 	}
 
-	return v1 > v2, nil
+	return v1 >= v2, nil
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
@@ -173,6 +173,12 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 	if err != nil {
 		return err
 	}
+
+	err = te.updateAutoIncrementTracker(newRow)
+	if err != nil {
+		return err
+	}
+
 	dNewRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, newRow, te.sch)
 	if err != nil {
 		return err
