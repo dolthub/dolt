@@ -92,7 +92,7 @@ func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if !schema.IsKeyless(te.sch) {
-		sqlRow, err := te.updateAutoIncrementValueFromTracker(sqlRow)
+		sqlRow, err := te.updateAutoIncrementTracker(sqlRow)
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,9 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
-func (te *sqlTableEditor) updateAutoIncrementValueFromTracker(r sql.Row) (sql.Row, error) {
+// updateAutoIncrementTracker reinitializes the auto increment tracker if an insert occurs that is greater than the
+// current auto increment tracker's value.
+func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) (sql.Row, error) {
 	allCols := te.sch.GetAllCols()
 	numCols := allCols.Size()
 
@@ -123,7 +125,12 @@ func (te *sqlTableEditor) updateAutoIncrementValueFromTracker(r sql.Row) (sql.Ro
 		schCol := allCols.GetAtIndex(i)
 
 		if schCol.IsPartOfPK && schCol.AutoIncrement {
-			if te.aiTracker.Greater(r[i], te.aiTracker.Current(te.tableName)) {
+			greaterThan, err := greater(r[i], te.aiTracker.Current(te.tableName))
+			if err != nil {
+				return nil, err
+			}
+			
+			if greaterThan {
 				toInit, _ := autoincr.ConvertIntTypeToUint(r[i])
 				te.aiTracker.InitTable(te.tableName, toInit + 1)
 			}
@@ -131,6 +138,20 @@ func (te *sqlTableEditor) updateAutoIncrementValueFromTracker(r sql.Row) (sql.Ro
 	}
 
 	return r, nil
+}
+
+func greater(val1 interface{}, val2 interface{}) (bool, error) {
+	v1, err := autoincr.ConvertIntTypeToUint(val1)
+	if err != nil {
+		return false, err
+	}
+
+	v2, err := autoincr.ConvertIntTypeToUint(val2)
+	if err != nil {
+		return false, err
+	}
+
+	return v1 > v2, nil
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
@@ -152,6 +173,7 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 		return err
 	}
 
+	// TODO: Do AI key update here?
 	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
 }
 
