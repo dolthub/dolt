@@ -112,7 +112,6 @@ func (s SessionStateAdapter) AddRemote(name string, url string, fetchSpecs []str
 	return fmt.Errorf("Cannot add remote with a SessionStateAdapter")
 }
 
-
 func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) error {
 	return fmt.Errorf("Cannot remove remote with a SessionStateAdapter")
 }
