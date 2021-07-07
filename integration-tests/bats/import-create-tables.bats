@@ -108,7 +108,6 @@ teardown() {
 }
 
 @test "import-create-tables: import data from csv and create the table different types" {
-    skip "unable to cast to uint64, parse error"
     run dolt table import -c --pk=pk test people.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
