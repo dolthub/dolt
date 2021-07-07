@@ -236,7 +236,7 @@ func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, 
 	return tableSpec{h, cnt}, conjoinees, keepers, nil
 }
 
-// Peek approach is to choose the smallest N tables which, when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
+// Current approach is to choose the smallest N tables which, when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
 func chooseConjoinees(upstream chunkSources) (toConjoin, toKeep chunkSources, err error) {
 	sortedUpstream := make(chunkSources, len(upstream))
 	copy(sortedUpstream, upstream)

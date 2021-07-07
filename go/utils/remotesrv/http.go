@@ -270,7 +270,7 @@ func readLocalRange(logger func(string), org, repo, fileId string, offset, lengt
 		return nil, http.StatusInternalServerError
 	}
 
-	logger(fmt.Sprintf("Seek succeeded.  Peek position is %d", pos))
+	logger(fmt.Sprintf("Seek succeeded.  Current position is %d", pos))
 	diff := offset - pos
 	data, err := iohelp.ReadNBytes(f, int(diff+int64(length)))
 

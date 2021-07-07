@@ -638,7 +638,11 @@ func (t *WritableDoltTable) getAutoIncrementValue(ctx *sql.Context) (interface{}
 		}
 
 		ed.aiTracker.InitTable(t.tableName, tableVal)
+
 		trackerVal, err = ed.aiTracker.Next(t.tableName)
+		if err != nil {
+			return nil, err
+		}
 	} else if err != nil {
 		return nil, err
 	}

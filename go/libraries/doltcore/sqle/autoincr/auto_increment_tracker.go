@@ -22,13 +22,13 @@ var ErrTableNotInitialized = errors.New("Table not initializaed")
 // it hands out the current key.
 func NewAutoIncrementTracker() AutoIncrementTracker {
 	return &autoIncrementTracker{
-		tables: make(map[string]interface{}),
+		valuePerTable: make(map[string]interface{}),
 	}
 }
 
 type autoIncrementTracker struct {
-	tables map[string]interface{}
-	mu     sync.Mutex
+	valuePerTable map[string]interface{}
+	mu            sync.Mutex
 }
 
 var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
@@ -37,7 +37,7 @@ func (a *autoIncrementTracker) Next(tableName string) (interface{}, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	it, ok := a.tables[tableName]
+	it, ok := a.valuePerTable[tableName]
 	if !ok {
 		return nil, ErrTableNotInitialized
 	}
@@ -47,7 +47,7 @@ func (a *autoIncrementTracker) Next(tableName string) (interface{}, error) {
 		return nil, err
 	}
 
-	a.tables[tableName] = val + 1
+	a.valuePerTable[tableName] = val + 1
 
 	return val, nil
 }
@@ -56,11 +56,11 @@ func (a *autoIncrementTracker) InitTable(tableName string, val interface{}) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	a.tables[tableName] = val
+	a.valuePerTable[tableName] = val
 }
 
 func (a *autoIncrementTracker) Peek(tableName string) interface{} {
-	return a.tables[tableName]
+	return a.valuePerTable[tableName]
 }
 
 func ConvertIntTypeToUint(val interface{}) (uint64, error) {
@@ -89,7 +89,7 @@ func ConvertIntTypeToUint(val interface{}) (uint64, error) {
 		return uint64(t), nil
 	case float64:
 		return uint64(t), nil
-	case interface{}:
+	case nil:
 		return 0, nil
 	default:
 		return 0, fmt.Errorf("error: auto increment is not a numeric type")
