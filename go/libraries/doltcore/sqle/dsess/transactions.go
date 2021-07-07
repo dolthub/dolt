@@ -79,8 +79,15 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 	}
 
 	for i := 0; i < maxTxCommitRetries; i++ {
+		newWorkingSet := false
+
 		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
-		if err != nil {
+		if err == doltdb.ErrWorkingSetNotFound {
+			// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
+			// first time. Can be removed and called an error post 1.0
+			ws = doltdb.EmptyWorkingSet(tx.workingSetRef)
+			newWorkingSet = true
+		} else if err != nil {
 			return nil, err
 		}
 
@@ -91,7 +98,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 			return nil, err
 		}
 
-		if rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
+		if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
 			// ff merge
 			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
 			if err == datas.ErrOptimisticLockFailed {
