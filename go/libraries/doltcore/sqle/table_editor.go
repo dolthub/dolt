@@ -126,18 +126,9 @@ func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) error {
 		schCol := allCols.GetAtIndex(i)
 
 		if schCol.IsPartOfPK && schCol.AutoIncrement {
-			greaterThan, err := geq(r[i], te.aiTracker.Peek(te.tableName))
+			err := te.aiTracker.Mark(te.tableName, r[i])
 			if err != nil {
 				return err
-			}
-
-			if greaterThan {
-				toInit, err := autoincr.ConvertIntTypeToUint(r[i])
-				if err != nil {
-					return err
-				}
-
-				te.aiTracker.InitTable(te.tableName, toInit+1)
 			}
 		}
 	}

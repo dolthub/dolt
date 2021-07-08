@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -574,7 +573,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 
-	ed.aiTracker.InitTable(t.Name(), 1)
+	ed.aiTracker.Reset(t.Name(), 1)
 
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
 	if err != nil {
@@ -630,20 +629,13 @@ func (t *WritableDoltTable) getAutoIncrementValue(ctx *sql.Context) (interface{}
 		return nil, err
 	}
 
-	trackerVal, err := ed.aiTracker.Next(t.tableName)
-	if errors.Is(err, autoincr.ErrTableNotInitialized) {
-		tableVal, err := t.DoltTable.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return nil, err
-		}
+	tableVal, err := t.DoltTable.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-		ed.aiTracker.InitTable(t.tableName, tableVal)
-
-		trackerVal, err = ed.aiTracker.Next(t.tableName)
-		if err != nil {
-			return nil, err
-		}
-	} else if err != nil {
+	 trackerVal, err := ed.aiTracker.NextOrInit(t.tableName, tableVal)
+	 if err != nil {
 		return nil, err
 	}
 

@@ -7,13 +7,12 @@ import (
 )
 
 type AutoIncrementTracker interface {
-	// Next return the next auto increment value to be used by a table and increments its internal map
-	Next(tableName string) (interface{}, error)
-	// InitTable initializes the next autoincrement value to be val
-	InitTable(tableName string, val interface{})
-	// Peek returns the expected next auto increment value. It is useful at insert time when an insert is larger
-	// than the currently stored next auto increment key.
-	Peek(tableName string) interface{}
+	Mark(tableName string, val interface{}) error
+	// NextOrInit returns the next auto increment value to be used by a table. If a table is not initialized in the counter
+	// it will used the value stored in disk.
+	NextOrInit(tableName string, val interface{}) (interface{}, error)
+
+	Reset(tableName string, val interface{})
 }
 
 var ErrTableNotInitialized = errors.New("Table not initializaed")
@@ -33,18 +32,18 @@ type autoIncrementTracker struct {
 
 var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
 
-func (a *autoIncrementTracker) Next(tableName string) (interface{}, error) {
+func (a *autoIncrementTracker) NextOrInit(tableName string, expected interface{}) (interface{}, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	it, ok := a.valuePerTable[tableName]
 	if !ok {
-		return nil, ErrTableNotInitialized
+		it = expected
 	}
 
 	val, err := ConvertIntTypeToUint(it)
 	if err != nil {
-		return nil, err
+		return val, err
 	}
 
 	a.valuePerTable[tableName] = val + 1
@@ -52,15 +51,47 @@ func (a *autoIncrementTracker) Next(tableName string) (interface{}, error) {
 	return val, nil
 }
 
-func (a *autoIncrementTracker) InitTable(tableName string, val interface{}) {
+func (a *autoIncrementTracker) Mark(tableName string, val interface{}) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	currentVal := a.valuePerTable[tableName]
+	ok, err := geq(val, currentVal)
+	if err != nil {
+		return err
+	}
+
+	if ok {
+		toInt, err := ConvertIntTypeToUint(val)
+		if err != nil {
+			return err
+		}
+
+		a.valuePerTable[tableName] = toInt + 1
+	}
+
+	return nil
+}
+
+func (a *autoIncrementTracker) Reset(tableName string, val interface{}) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	a.valuePerTable[tableName] = val
 }
 
-func (a *autoIncrementTracker) Peek(tableName string) interface{} {
-	return a.valuePerTable[tableName]
+func geq(val1 interface{}, val2 interface{}) (bool, error) {
+	v1, err := ConvertIntTypeToUint(val1)
+	if err != nil {
+		return false, err
+	}
+
+	v2, err := ConvertIntTypeToUint(val2)
+	if err != nil {
+		return false, err
+	}
+
+	return v1 >= v2, nil
 }
 
 func ConvertIntTypeToUint(val interface{}) (uint64, error) {
