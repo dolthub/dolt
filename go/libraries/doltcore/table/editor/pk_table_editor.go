@@ -640,6 +640,7 @@ func (te *pkTableEditor) GetAutoIncrementValue() types.Value {
 
 func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 	te.autoIncVal = v
+	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
 	return
 }
 
