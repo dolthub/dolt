@@ -7,12 +7,12 @@ import (
 )
 
 type AutoIncrementTracker interface {
-	Mark(tableName string, val interface{}) error
 	// NextOrInit returns the next auto increment value to be used by a table. If a table is not initialized in the counter
 	// it will used the value stored in disk.
 	NextOrInit(tableName string, val interface{}) (interface{}, error)
-
-	Reset(tableName string, val interface{})
+	// Mark updates the auto increment tracker if a value is inserted that is larger than the expected next auto increment
+	// value. If the value is less than the expected next auto increment value, than the
+	Mark(tableName string, val interface{}) error
 }
 
 var ErrTableNotInitialized = errors.New("Table not initializaed")
@@ -71,13 +71,6 @@ func (a *autoIncrementTracker) Mark(tableName string, val interface{}) error {
 	}
 
 	return nil
-}
-
-func (a *autoIncrementTracker) Reset(tableName string, val interface{}) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.valuePerTable[tableName] = val
 }
 
 func geq(val1 interface{}, val2 interface{}) (bool, error) {

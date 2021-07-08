@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"io"
 	"os"
 	"runtime"
@@ -573,7 +574,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 
-	ed.aiTracker.Reset(t.Name(), 1)
+	ed.aiTracker = autoincr.NewAutoIncrementTracker()
 
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
 	if err != nil {
