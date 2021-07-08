@@ -218,6 +218,21 @@ func (t *Type) HumanReadableString() string {
 
 	case PrimitiveDesc:
 		return typedDesc.Kind().String()
+
+	case StructDesc:
+		str := typedDesc.Name + "{"
+		for i, f := range typedDesc.fields {
+			if i != 0 {
+				str += ","
+			}
+			str += f.Name + " " + f.Type.Desc.Kind().String()
+		}
+		str += "}"
+
+		return str
+
+	case CycleDesc:
+		return string(typedDesc) + "(Cycle)"
 	}
 
 	panic("implement type desc in switch")
