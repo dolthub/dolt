@@ -125,7 +125,6 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 	if err != nil {
 		return err
 	}
-
 	dNewRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, newRow, te.sch)
 	if err != nil {
 		return err

@@ -172,7 +172,6 @@ func NewDoltSession(ctx *sql.Context, sqlSess sql.Session, username, email strin
 		tempTableRoots:        make(map[string]*doltdb.RootValue),
 		tempTableEditSessions: make(map[string]*editor.TableEditSession),
 	}
-
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db, db.DbData())
 
