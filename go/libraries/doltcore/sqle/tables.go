@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -574,7 +573,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 
-	ed.aiTracker = autoincr.NewAutoIncrementTracker()
+	ed.aiTracker.Reset(t.tableName, 1)
 
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
 	if err != nil {

@@ -13,6 +13,8 @@ type AutoIncrementTracker interface {
 	// Mark updates the auto increment tracker if a value is inserted that is larger than the expected next auto increment
 	// value. If the value is less than the expected next auto increment value, than the
 	Mark(tableName string, val interface{}) error
+	// Reset resets the auto increment tracker value for a table. Typically used in truncate statements.
+	Reset(tableName string, val interface{})
 }
 
 var ErrTableNotInitialized = errors.New("Table not initializaed")
@@ -71,6 +73,13 @@ func (a *autoIncrementTracker) Mark(tableName string, val interface{}) error {
 	}
 
 	return nil
+}
+
+func (a *autoIncrementTracker) Reset(tableName string, val interface{}) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.valuePerTable[tableName] = val
 }
 
 func geq(val1 interface{}, val2 interface{}) (bool, error) {

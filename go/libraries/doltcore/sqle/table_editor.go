@@ -116,8 +116,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
-// updateAutoIncrementTracker reinitializes the auto increment tracker if an insert occurs that is greater than or equal too the
-// the current auto increment tracker's value.
+// updateAutoIncrementTracker tells the auto increment tracker to mark an insert value at runtime.
 func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) error {
 	allCols := te.sch.GetAllCols()
 	numCols := allCols.Size()
@@ -134,20 +133,6 @@ func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) error {
 	}
 
 	return nil
-}
-
-func geq(val1 interface{}, val2 interface{}) (bool, error) {
-	v1, err := autoincr.ConvertIntTypeToUint(val1)
-	if err != nil {
-		return false, err
-	}
-
-	v2, err := autoincr.ConvertIntTypeToUint(val2)
-	if err != nil {
-		return false, err
-	}
-
-	return v1 >= v2, nil
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
