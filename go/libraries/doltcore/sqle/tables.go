@@ -614,16 +614,21 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 	return te
 }
 
-// GetAutoIncrementValue gets the last AUTO_INCREMENT value
-func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+// PeekNextAutoIncrementValue implements sql.AutoIncrementTable
+func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if !t.autoIncCol.AutoIncrement {
 		return nil, sql.ErrNoAutoIncrementCol
 	}
 
-	return t.getAutoIncrementValue(ctx)
+	return t.getTableAutoIncrementValue(ctx)
 }
 
-func (t *WritableDoltTable) getAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+// GetNextAutoIncrementValue implements sql.AutoIncrementTable
+func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentialVal interface{}) (interface{}, error) {
+	if !t.autoIncCol.AutoIncrement {
+		return nil, sql.ErrNoAutoIncrementCol
+	}
+
 	ed, err := t.getTableEditor(ctx)
 	if err != nil {
 		return nil, err
@@ -634,12 +639,15 @@ func (t *WritableDoltTable) getAutoIncrementValue(ctx *sql.Context) (interface{}
 		return nil, err
 	}
 
-	trackerVal, err := ed.aiTracker.NextOrInit(t.tableName, tableVal)
-	if err != nil {
-		return nil, err
+	return ed.aiTracker.Next(t.tableName, potentialVal, tableVal)
+}
+
+func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+	if t.ed != nil {
+		return t.ed.GetAutoIncrementValue()
 	}
 
-	return trackerVal, nil
+	return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
 func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {

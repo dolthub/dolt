@@ -93,11 +93,6 @@ func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if !schema.IsKeyless(te.sch) {
-		err := te.updateAutoIncrementTracker(sqlRow)
-		if err != nil {
-			return err
-		}
-
 		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
 
 		if err != nil {
@@ -116,25 +111,6 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
-// updateAutoIncrementTracker tells the auto increment tracker to mark an insert value at runtime.
-func (te *sqlTableEditor) updateAutoIncrementTracker(r sql.Row) error {
-	allCols := te.sch.GetAllCols()
-	numCols := allCols.Size()
-
-	for i := 0; i < numCols; i++ {
-		schCol := allCols.GetAtIndex(i)
-
-		if schCol.IsPartOfPK && schCol.AutoIncrement {
-			err := te.aiTracker.Mark(te.tableName, r[i])
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 	if err != nil {
@@ -146,11 +122,6 @@ func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
 	dOldRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, oldRow, te.sch)
-	if err != nil {
-		return err
-	}
-
-	err = te.updateAutoIncrementTracker(newRow)
 	if err != nil {
 		return err
 	}

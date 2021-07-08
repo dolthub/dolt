@@ -430,24 +430,3 @@ SQL
     [[ "${lines[7]}" =~ "7,7" ]] || false
     [[ "${lines[8]}" =~ "8,8" ]] || false
 }
-
-@test "auto_increment: update operation on an auto_increment key" {
-    dolt sql <<SQL
-CREATE TABLE t (
-    pk int PRIMARY KEY AUTO_INCREMENT,
-    c0 int
-);
-
-INSERT INTO t (c0) VALUES (1), (2), (3);
-UPDATE t SET pk=pk + 1 WHERE c0= 3;
-INSERT INTO t (c0) VALUES (5);
-SQL
-
-    run dolt sql -q "SELECT * FROM t;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "pk,c0" ]] || false
-    [[ "${lines[1]}" =~ "1,1" ]] || false
-    [[ "${lines[2]}" =~ "2,2" ]] || false
-    [[ "${lines[3]}" =~ "4,3" ]] || false
-    [[ "${lines[4]}" =~ "5,5" ]] || false
-}

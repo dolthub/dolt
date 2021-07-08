@@ -1,23 +1,17 @@
 package autoincr
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 )
 
 type AutoIncrementTracker interface {
-	// NextOrInit returns the next auto increment value to be used by a table. If a table is not initialized in the counter
+	// Next returns the next auto increment value to be used by a table. If a table is not initialized in the counter
 	// it will used the value stored in disk.
-	NextOrInit(tableName string, val interface{}) (interface{}, error)
-	// Mark updates the auto increment tracker if a value is inserted that is larger than the expected next auto increment
-	// value. If the value is less than the expected next auto increment value, than the
-	Mark(tableName string, val interface{}) error
+	Next(tableName string, insertVal interface{}, diskVal interface{}) (interface{}, error)
 	// Reset resets the auto increment tracker value for a table. Typically used in truncate statements.
 	Reset(tableName string, val interface{})
 }
-
-var ErrTableNotInitialized = errors.New("Table not initializaed")
 
 // AutoIncrementTracker is a global map that tracks which auto increment keys have been given for each table. At runtime
 // it hands out the current key.
@@ -34,45 +28,36 @@ type autoIncrementTracker struct {
 
 var _ AutoIncrementTracker = (*autoIncrementTracker)(nil)
 
-func (a *autoIncrementTracker) NextOrInit(tableName string, expected interface{}) (interface{}, error) {
+func (a *autoIncrementTracker) Next(tableName string, insertVal interface{}, diskVal interface{}) (interface{}, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	it, ok := a.valuePerTable[tableName]
 	if !ok {
-		it = expected
+		// Use the disk val if the table has not been initialized yet.
+		it = diskVal
 	}
 
-	val, err := ConvertIntTypeToUint(it)
+	if insertVal != nil {
+		it = insertVal
+	}
+
+	// update the table only if val >= existing
+	isGeq, err := geq(it, a.valuePerTable[tableName])
 	if err != nil {
-		return val, err
+		return 0, err
 	}
 
-	a.valuePerTable[tableName] = val + 1
-
-	return val, nil
-}
-
-func (a *autoIncrementTracker) Mark(tableName string, val interface{}) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	currentVal := a.valuePerTable[tableName]
-	ok, err := geq(val, currentVal)
-	if err != nil {
-		return err
-	}
-
-	if ok {
-		toInt, err := ConvertIntTypeToUint(val)
+	if isGeq {
+		val, err := convertIntTypeToUint(it)
 		if err != nil {
-			return err
+			return val, err
 		}
 
-		a.valuePerTable[tableName] = toInt + 1
+		a.valuePerTable[tableName] = val + 1
 	}
 
-	return nil
+	return it, nil
 }
 
 func (a *autoIncrementTracker) Reset(tableName string, val interface{}) {
@@ -83,12 +68,12 @@ func (a *autoIncrementTracker) Reset(tableName string, val interface{}) {
 }
 
 func geq(val1 interface{}, val2 interface{}) (bool, error) {
-	v1, err := ConvertIntTypeToUint(val1)
+	v1, err := convertIntTypeToUint(val1)
 	if err != nil {
 		return false, err
 	}
 
-	v2, err := ConvertIntTypeToUint(val2)
+	v2, err := convertIntTypeToUint(val2)
 	if err != nil {
 		return false, err
 	}
@@ -96,7 +81,7 @@ func geq(val1 interface{}, val2 interface{}) (bool, error) {
 	return v1 >= v2, nil
 }
 
-func ConvertIntTypeToUint(val interface{}) (uint64, error) {
+func convertIntTypeToUint(val interface{}) (uint64, error) {
 	switch t := val.(type) {
 	case int:
 		return uint64(t), nil
