@@ -1,0 +1,34 @@
+package autoincr
+
+import (
+	"github.com/stretchr/testify/require"
+	"sync"
+	"testing"
+)
+
+func TestNextHasNoRepeats(t *testing.T) {
+	allVals := make(map[uint64]int)
+	var mu sync.Mutex
+
+	aiTracker := NewAutoIncrementTracker()
+
+	for i := 0; i < 100; i++ {
+		go func() {
+			for j := 0; j < 10; j ++ {
+				nxt, err := aiTracker.Next("test",  nil, 1)
+				require.NoError(t, err)
+
+				val, err := convertIntTypeToUint(nxt)
+				require.NoError(t, err)
+
+				mu.Lock()
+				defer mu.Unlock()
+				allVals[val]++
+			}
+		}()
+	}
+
+	for _, val := range allVals {
+		require.Equal(t, 1, val)
+	}
+}

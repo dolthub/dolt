@@ -32,24 +32,28 @@ func (a *autoIncrementTracker) Next(tableName string, insertVal interface{}, dis
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	it, ok := a.valuePerTable[tableName]
+	potential, ok := a.valuePerTable[tableName]
 	if !ok {
 		// Use the disk val if the table has not been initialized yet.
-		it = diskVal
+		potential = diskVal
 	}
 
 	if insertVal != nil {
-		it = insertVal
+		potential = insertVal
+	}
+
+	if potential == nil {
+		potential = 0
 	}
 
 	// update the table only if val >= existing
-	isGeq, err := geq(it, a.valuePerTable[tableName])
+	isGeq, err := geq(potential, a.valuePerTable[tableName])
 	if err != nil {
 		return 0, err
 	}
 
 	if isGeq {
-		val, err := convertIntTypeToUint(it)
+		val, err := convertIntTypeToUint(potential)
 		if err != nil {
 			return val, err
 		}
@@ -57,7 +61,7 @@ func (a *autoIncrementTracker) Next(tableName string, insertVal interface{}, dis
 		a.valuePerTable[tableName] = val + 1
 	}
 
-	return it, nil
+	return potential, nil
 }
 
 func (a *autoIncrementTracker) Reset(tableName string, val interface{}) {
