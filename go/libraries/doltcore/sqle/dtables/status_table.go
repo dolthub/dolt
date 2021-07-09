@@ -30,9 +30,10 @@ import (
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type StatusTable struct {
-	ddb *doltdb.DoltDB
-	rsr env.RepoStateReader
-	drw env.DocsReadWriter
+	ddb           *doltdb.DoltDB
+	rootsProvider env.RootsProvider
+	drw           env.DocsReadWriter
+	dbName        string
 }
 
 func (s StatusTable) Name() string {
@@ -60,8 +61,13 @@ func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.R
 }
 
 // NewStatusTable creates a StatusTable
-func NewStatusTable(_ *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) sql.Table {
-	return &StatusTable{ddb: ddb, rsr: rsr, drw: drw}
+func NewStatusTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, rp env.RootsProvider, drw env.DocsReadWriter) sql.Table {
+	return &StatusTable{
+		ddb:           ddb,
+		dbName:        dbName,
+		rootsProvider: rp,
+		drw:           drw,
+	}
 }
 
 // StatusIter is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -73,30 +79,30 @@ type StatusItr struct {
 }
 
 func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
-	ddb := st.ddb
-	rsr := st.rsr
+	rp := st.rootsProvider
 	drw := st.drw
 
-	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
+	roots, err := rp.GetRoots(ctx)
+	if err != nil {
+		return nil, err
+	}
 
+	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return &StatusItr{}, err
 	}
 
-	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, rsr, drw)
-
+	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, drw)
 	if err != nil {
 		return &StatusItr{}, err
 	}
 
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, ddb, rsr)
-
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
 	if err != nil {
 		return &StatusItr{}, err
 	}
 
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, ddb, rsr, drw)
-
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, roots.Working, drw)
 	if err != nil {
 		return &StatusItr{}, err
 	}

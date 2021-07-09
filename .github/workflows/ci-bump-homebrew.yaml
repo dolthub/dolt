@@ -28,7 +28,7 @@ jobs:
 
             Created by https://github.com/mislav/bump-homebrew-formula-action
         env:
-          COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
+          COMMITTER_TOKEN: ${{secrets.REPO_ACCESS_TOKEN}}
       - name: Create Homebrew PR
         uses: mislav/bump-homebrew-formula-action@v1
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -43,4 +43,4 @@ jobs:
 
             Created by https://github.com/mislav/bump-homebrew-formula-action
         env:
-          COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
+          COMMITTER_TOKEN: ${{secrets.REPO_ACCESS_TOKEN}}

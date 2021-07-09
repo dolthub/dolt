@@ -370,18 +370,21 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		}
 	}
 
-	h, err := dEnv.DoltDB.WriteRootValue(ctx, rootVal)
+	// TODO: make this interface take a DoltRef and marshal it automatically
+	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: ref.NewBranchRef(branch)})
 	if err != nil {
-		return errhand.BuildDError("error: could not write root value").AddCause(err).Build()
+		return errhand.VerboseErrorFromError(err)
 	}
 
-	dEnv.RepoState.Head = ref.MarshalableRef{Ref: ref.NewBranchRef(branch)}
-	dEnv.RepoState.Staged = h.String()
-	dEnv.RepoState.Working = h.String()
-
-	err = dEnv.RepoState.Save(dEnv.FS)
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branch))
 	if err != nil {
-		return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	ws := doltdb.EmptyWorkingSet(wsRef)
+	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(rootVal).WithStagedRoot(rootVal))
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil

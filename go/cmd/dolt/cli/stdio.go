@@ -19,12 +19,26 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"
 )
+
+var outputClosed uint64
+
+func CloseOutput() {
+	if atomic.CompareAndSwapUint64(&outputClosed, 0, 1) {
+		fmt.Fprintln(CliOut)
+	}
+}
+
+func outputIsClosed() bool {
+	isClosed := atomic.LoadUint64(&outputClosed)
+	return isClosed == 1
+}
 
 var CliOut = color.Output
 var CliErr = color.Error
@@ -80,30 +94,58 @@ func InitIO() (restoreIO func()) {
 }
 
 func Println(a ...interface{}) {
+	if outputIsClosed() {
+		return
+	}
+
 	fmt.Fprintln(CliOut, a...)
 }
 
 func Print(a ...interface{}) {
+	if outputIsClosed() {
+		return
+	}
+
 	fmt.Fprint(CliOut, a...)
 }
 
 func Printf(format string, a ...interface{}) {
+	if outputIsClosed() {
+		return
+	}
+
 	fmt.Fprintf(CliOut, format, a...)
 }
 
 func PrintErrln(a ...interface{}) {
+	if outputIsClosed() {
+		return
+	}
+
 	fmt.Fprintln(CliErr, a...)
 }
 
 func PrintErr(a ...interface{}) {
+	if outputIsClosed() {
+		return
+	}
+
 	fmt.Fprint(CliErr, a...)
 }
 
 func PrintErrf(format string, a ...interface{}) {
+	if outputIsClosed() {
+		return
+	}
+
 	fmt.Fprintf(CliErr, format, a...)
 }
 
 func DeleteAndPrint(prevMsgLen int, msg string) int {
+	if outputIsClosed() {
+		return 0
+	}
+
 	msgLen := len(msg)
 	backspacesAndMsg := make([]byte, prevMsgLen+msgLen, 2*prevMsgLen+msgLen)
 	for i := 0; i < prevMsgLen; i++ {

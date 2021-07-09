@@ -114,7 +114,7 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
-		keepers, err := env.GetGCKeepers(ctx, dEnv.RepoStateReader(), dEnv.DoltDB)
+		keepers, err := env.GetGCKeepers(ctx, dEnv)
 		if err != nil {
 			verr = errhand.BuildDError("an error occurred while saving working set").AddCause(err).Build()
 			return HandleVErrAndExitCode(verr, usage)

@@ -215,6 +215,9 @@ func (bWr branchWriter) Insert(ctx *sql.Context, r sql.Row) error {
 	}
 
 	branchRef := ref.NewBranchRef(branchName)
+
+	// TODO: this isn't safe in a SQL context, since we have to update the working set of the new branch and it's a
+	//  race. It needs to be able to retry the same as committing a transaction.
 	return ddb.NewBranchAtCommit(ctx, branchRef, cm)
 }
 

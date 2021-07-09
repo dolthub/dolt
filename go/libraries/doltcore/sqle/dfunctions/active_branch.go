@@ -20,7 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const ActiveBranchFuncName = "active_branch"
@@ -34,9 +34,9 @@ func NewActiveBranchFunc(ctx *sql.Context) sql.Expression {
 }
 
 // Eval implements the Expression interface.
-func (cf *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
-	dSess := sqle.DSessFromSess(ctx.Session)
+	dSess := dsess.DSessFromSess(ctx.Session)
 
 	ddb, ok := dSess.GetDoltDB(dbName)
 
@@ -44,22 +44,18 @@ func (cf *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	rsr, ok := dSess.GetDoltDBRepoStateReader(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	currentBranchRef, err := dSess.CWBHeadRef(dbName)
+	if err != nil {
+		return nil, err
 	}
 
-	currentBranch := rsr.CWBHeadRef()
-
 	branches, err := ddb.GetBranches(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
 	for _, br := range branches {
-		if ref.Equals(br, currentBranch) {
+		if ref.Equals(br, currentBranchRef) {
 			return br.GetPath(), nil
 		}
 	}
@@ -68,12 +64,12 @@ func (cf *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 }
 
 // String implements the Stringer interface.
-func (cf *ActiveBranchFunc) String() string {
+func (ab *ActiveBranchFunc) String() string {
 	return fmt.Sprint("ACTIVE_BRANCH()")
 }
 
 // IsNullable implements the Expression interface.
-func (cf *ActiveBranchFunc) IsNullable() bool {
+func (ab *ActiveBranchFunc) IsNullable() bool {
 	return false
 }
 
@@ -82,7 +78,7 @@ func (*ActiveBranchFunc) Resolved() bool {
 	return true
 }
 
-func (cf *ActiveBranchFunc) Type() sql.Type {
+func (ab *ActiveBranchFunc) Type() sql.Type {
 	return sql.Text
 }
 
@@ -92,9 +88,9 @@ func (*ActiveBranchFunc) Children() []sql.Expression {
 }
 
 // WithChildren implements the Expression interface.
-func (v *ActiveBranchFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+func (ab *ActiveBranchFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 0 {
-		return nil, sql.ErrInvalidChildrenNumber.New(v, len(children), 0)
+		return nil, sql.ErrInvalidChildrenNumber.New(ab, len(children), 0)
 	}
 	return NewActiveBranchFunc(ctx), nil
 }

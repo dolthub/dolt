@@ -67,7 +67,7 @@ teardown() {
     [[ "$output" =~ "Commit3" ]] || false
     [[ "$output" =~ "Initialize data repository" ]] || false
     [[ ! "$output" =~ "Merge:" ]] || false
-    [[ ! "$output" =~ "Commit2" ]]
+    [[ ! "$output" =~ "Commit2" ]] || false
     dolt add test
     dolt commit -m "MergeCommit"
     run dolt log
@@ -239,4 +239,50 @@ teardown() {
     [[ "$output" =~ "Commit3" ]] || false
     [[ "$output" =~ "Commit1" ]] || false
     ! [[ "$output" =~ "Commit2" ]] || false
+}
+
+@test "log: --merges, --parents, --min-parents option" {
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add -A
+    dolt commit -m "Created table"
+    dolt checkout -b branch1
+    dolt sql -q "insert into test values (0,0)"
+    dolt add -A
+    dolt commit -m "Inserted 0,0"
+    dolt checkout master
+    dolt checkout -b branch2
+    dolt sql -q "insert into test values (1,1)"
+    dolt add -A
+    dolt commit -m "Inserted 1,1"
+
+    dolt checkout master
+    # Should be fast-forward 
+    dolt merge branch1
+    # An actual merge
+    dolt merge branch2
+    dolt commit -m "Merged branch2"
+
+    # Only shows merge commits
+    run dolt log --merges
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Merged" ]] || false
+    [[ ! "$output" =~ "0,0" ]] || false
+
+    # Only shows merge commits but use --min-parents 2
+    run dolt log --min-parents 2
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Merged" ]] || false
+    [[ ! "$output" =~ "0,0" ]] || false
+
+    # Show everything but the first commit
+    run dolt log --min-parents 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ ! "$output" =~ "Initialize data repository" ]] || false
+    
+    # each commit gets its parents in the log
+    run dolt log --parents
+    [ $status -eq 0 ]
+    regex='commit .* .*\n'
+    [[ "$output" =~ $regex ]] || false
 }

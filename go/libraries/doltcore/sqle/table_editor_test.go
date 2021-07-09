@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
@@ -159,9 +160,11 @@ func TestTableEditor(t *testing.T) {
 			ctx := NewTestSQLCtx(context.Background())
 			root, _ := dEnv.WorkingRoot(context.Background())
 			db := NewDatabase("dolt", dEnv.DbData())
-			_ = DSessFromSess(ctx.Session).AddDB(ctx, db, db.DbData())
+			err := dsess.DSessFromSess(ctx.Session).AddDB(ctx, getDbState(t, db, dEnv))
+			require.NoError(t, err)
+
 			ctx.SetCurrentDatabase(db.Name())
-			err := db.SetRoot(ctx, root)
+			err = db.SetRoot(ctx, root)
 			require.NoError(t, err)
 			peopleTable, _, err := db.GetTableInsensitive(ctx, "people")
 			require.NoError(t, err)
@@ -181,7 +184,7 @@ func TestTableEditor(t *testing.T) {
 			root, err = db.GetRoot(ctx)
 			require.NoError(t, err)
 
-			actualRows, _, err := executeSelect(context.Background(), dEnv, root, test.selectQuery)
+			actualRows, _, err := executeSelect(t, context.Background(), dEnv, root, test.selectQuery)
 			require.NoError(t, err)
 
 			assert.Equal(t, test.expectedRows, actualRows)

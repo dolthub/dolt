@@ -22,7 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const DoltAddFuncName = "dolt_add"
@@ -36,13 +36,6 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	if len(dbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
-	}
-
-	dSess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
-
-	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	ap := cli.CreateAddArgParser()
@@ -59,27 +52,34 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	allFlag := apr.Contains(cli.AllFlag)
 
+	dSess := dsess.DSessFromSess(ctx.Session)
+	roots, ok := dSess.GetRoots(dbName)
 	if apr.NArg() == 0 && !allFlag {
 		return 1, fmt.Errorf("Nothing specified, nothing added. Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		err = actions.StageAllTables(ctx, dbData)
+		if !ok {
+			return 1, fmt.Errorf("db session not found")
+		}
+
+		roots, err = actions.StageAllTablesNoDocs(ctx, roots)
 		if err != nil {
 			return 1, err
 		}
 
-		hashString := dbData.Rsr.StagedHash().String()
+		err = dSess.SetRoots(ctx, dbName, roots)
 		if err != nil {
-			return 1, err
+			return nil, err
 		}
-
-		// Sets @@_working to staged.
-		err = setSessionRootExplicit(ctx, hashString, sqle.WorkingKeySuffix)
 	} else {
-		err = actions.StageTables(ctx, dbData, apr.Args())
-	}
+		roots, err = actions.StageTablesNoDocs(ctx, roots, apr.Args())
+		if err != nil {
+			return 1, err
+		}
 
-	if err != nil {
-		return 1, err
+		err = dSess.SetRoots(ctx, dbName, roots)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return 0, nil

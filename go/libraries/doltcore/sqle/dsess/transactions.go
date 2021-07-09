@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dsess
 
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -25,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
@@ -33,10 +33,10 @@ const (
 )
 
 type DoltTransaction struct {
-	startRoot  *doltdb.RootValue
-	workingSet ref.WorkingSetRef
-	dbData     env.DbData
-	savepoints []savepoint
+	startState    *doltdb.WorkingSet
+	workingSetRef ref.WorkingSetRef
+	dbData        env.DbData
+	savepoints    []savepoint
 }
 
 type savepoint struct {
@@ -44,11 +44,11 @@ type savepoint struct {
 	root *doltdb.RootValue
 }
 
-func NewDoltTransaction(startRoot *doltdb.RootValue, workingSet ref.WorkingSetRef, dbData env.DbData) *DoltTransaction {
+func NewDoltTransaction(startState *doltdb.WorkingSet, workingSet ref.WorkingSetRef, dbData env.DbData) *DoltTransaction {
 	return &DoltTransaction{
-		startRoot:  startRoot,
-		workingSet: workingSet,
-		dbData:     dbData,
+		startState:    startState,
+		workingSetRef: workingSet,
+		dbData:        dbData,
 	}
 }
 
@@ -63,41 +63,54 @@ func (tx DoltTransaction) String() string {
 // |newRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
 // if working set == ancRoot, attempt a fast-forward merge
-func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+// TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
+//  strategies for staged as well as merge state.
+func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
+	// logrus.Errorf("Committing working root %s", workingSet.WorkingRoot().DebugString(ctx, true))
+
+	// Don't allow a root value with conflicts to be committed. Later we may open this up via configuration
+	hasConflicts, err := workingSet.WorkingRoot().HasConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if hasConflicts {
+		return nil, doltdb.ErrUnresolvedConflicts
+	}
+
 	for i := 0; i < maxTxCommitRetries; i++ {
-		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSet)
+		newWorkingSet := false
+
+		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
 		if err == doltdb.ErrWorkingSetNotFound {
-			// initial commit
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash.Hash{})
-			if err == datas.ErrOptimisticLockFailed {
-				continue
-			}
+			// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
+			// first time. Can be removed and called an error post 1.0
+			ws = doltdb.EmptyWorkingSet(tx.workingSetRef)
+			newWorkingSet = true
+		} else if err != nil {
+			return nil, err
 		}
 
+		existingWorkingRoot := ws.RootValue()
+
+		hash, err := ws.HashOf()
 		if err != nil {
 			return nil, err
 		}
 
-		root := ws.RootValue()
-
-		hash, err := ws.Struct().Hash(tx.dbData.Ddb.Format())
-		if err != nil {
-			return nil, err
-		}
-
-		if rootsEqual(root, tx.startRoot) {
+		if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
 			// ff merge
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, newRoot, hash)
+			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
 			if err == datas.ErrOptimisticLockFailed {
 				continue
 			} else if err != nil {
 				return nil, err
 			}
 
-			return tx.updateRepoStateFile(ctx, newRoot)
+			return workingSet, nil
 		}
 
-		mergedRoot, stats, err := merge.MergeRoots(ctx, root, newRoot, tx.startRoot)
+		mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot())
 		if err != nil {
 			return nil, err
 		}
@@ -109,34 +122,19 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, newRoot *doltdb.RootValue) (
 			}
 		}
 
-		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSet, mergedRoot, hash)
+		mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
+		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash, tx.getWorkingSetMeta(ctx))
 		if err == datas.ErrOptimisticLockFailed {
 			continue
 		} else if err != nil {
 			return nil, err
 		}
 
-		// TODO: this is not thread safe, but will not be necessary after migrating all clients away from using the
-		//  working set stored in repo_state.json, so should be good enough for now
-		return tx.updateRepoStateFile(ctx, mergedRoot)
+		return mergedWorkingSet, nil
 	}
 
 	// TODO: different error type for retries exhausted
 	return nil, datas.ErrOptimisticLockFailed
-}
-
-func (tx *DoltTransaction) updateRepoStateFile(ctx *sql.Context, mergedRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-	hash, err := mergedRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	err = tx.dbData.Rsw.SetWorkingHash(ctx, hash)
-	if err != nil {
-		return nil, err
-	}
-
-	return mergedRoot, err
 }
 
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given
@@ -181,6 +179,16 @@ func (tx *DoltTransaction) ClearSavepoint(name string) *doltdb.RootValue {
 		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
 	}
 	return existingRoot
+}
+
+func (tx DoltTransaction) getWorkingSetMeta(ctx *sql.Context) *doltdb.WorkingSetMeta {
+	sess := DSessFromSess(ctx.Session)
+	return &doltdb.WorkingSetMeta{
+		User:        sess.Username,
+		Email:       sess.Email,
+		Timestamp:   uint64(time.Now().Unix()),
+		Description: "sql transaction",
+	}
 }
 
 func rootsEqual(left, right *doltdb.RootValue) bool {

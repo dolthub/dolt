@@ -58,8 +58,8 @@ func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) err
 	return nil
 }
 
-func UpdateStagedWithVErr(ddb *doltdb.DoltDB, rsw env.RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	_, err := env.UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
+func UpdateStagedWithVErr(doltEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errhand.VerboseError {
+	err := doltEnv.UpdateStagedRoot(context.Background(), updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:
@@ -78,7 +78,7 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, 
 		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoStateReader().CWBHeadRef())
 
 	if err != nil {
 		if err == doltdb.ErrInvalidAncestorSpec {

@@ -42,12 +42,8 @@ func (a *autoIncrementTracker) Next(tableName string, insertVal interface{}, dis
 		potential = insertVal
 	}
 
-	if potential == nil {
-		potential = 0
-	}
-
 	// update the table only if val >= existing
-	isGeq, err := geq(potential, a.valuePerTable[tableName])
+	isGeq, err := geq(valOrZero(potential), valOrZero(a.valuePerTable[tableName]))
 	if err != nil {
 		return 0, err
 	}
@@ -69,6 +65,15 @@ func (a *autoIncrementTracker) Reset(tableName string, val interface{}) {
 	defer a.mu.Unlock()
 
 	a.valuePerTable[tableName] = val
+}
+
+// Helper method that sets nil values to 0 for clarity purposes
+func valOrZero(val interface{}) interface{} {
+	if val == nil {
+		return 0
+	}
+
+	return val
 }
 
 func geq(val1 interface{}, val2 interface{}) (bool, error) {
@@ -111,8 +116,6 @@ func convertIntTypeToUint(val interface{}) (uint64, error) {
 		return uint64(t), nil
 	case float64:
 		return uint64(t), nil
-	case nil:
-		return 0, nil
 	default:
 		return 0, fmt.Errorf("error: auto increment is not a numeric type")
 	}

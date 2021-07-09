@@ -20,7 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -34,16 +34,15 @@ const (
 	titleColTag  = 2
 )
 
-var _, outSch = untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
+var inCols = []schema.Column{
+	{Name: nameColName, Tag: nameColTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil, TypeInfo: typeinfo.StringDefaultType},
+	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, Constraints: nil, TypeInfo: typeinfo.Uint64Type},
+	{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil, TypeInfo: typeinfo.StringDefaultType},
+}
+var colColl = schema.NewColCollection(inCols...)
+var rowSch = schema.MustSchemaFromCols(colColl)
 
 func getSampleRows() (rows []row.Row) {
-	var inCols = []schema.Column{
-		{Name: nameColName, Tag: nameColTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil},
-		{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, Constraints: nil},
-		{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
-	}
-	colColl := schema.NewColCollection(inCols...)
-	rowSch := schema.MustSchemaFromCols(colColl)
 	return []row.Row{
 		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 			nameColTag:  types.String("Bill Billerson"),
@@ -92,7 +91,7 @@ Andy Anderson,27,
 	rows := getSampleRows()
 
 	fs := filesys.NewInMemFS(nil, nil, root)
-	csvWr, err := OpenCSVWriter(path, fs, outSch, info)
+	csvWr, err := OpenCSVWriter(path, fs, rowSch, info)
 
 	if err != nil {
 		t.Fatal("Could not open CSVWriter", err)
@@ -124,7 +123,7 @@ Andy Anderson|27|
 	rows := getSampleRows()
 
 	fs := filesys.NewInMemFS(nil, nil, root)
-	csvWr, err := OpenCSVWriter(path, fs, outSch, info)
+	csvWr, err := OpenCSVWriter(path, fs, rowSch, info)
 
 	if err != nil {
 		t.Fatal("Could not open CSVWriter", err)

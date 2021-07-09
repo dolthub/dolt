@@ -51,17 +51,17 @@ func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
 			dEnv := dtestutils.CreateTestEnv()
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			root, err = executeModify(ctx, dEnv, root, fmt.Sprintf("CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 %s);", test.FromType))
+			root, err = executeModify(t, ctx, dEnv, root, fmt.Sprintf("CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 %s);", test.FromType))
 			require.NoError(t, err)
-			root, err = executeModify(ctx, dEnv, root, fmt.Sprintf("INSERT INTO test VALUES %s;", test.InsertValues))
+			root, err = executeModify(t, ctx, dEnv, root, fmt.Sprintf("INSERT INTO test VALUES %s;", test.InsertValues))
 			require.NoError(t, err)
-			root, err = executeModify(ctx, dEnv, root, fmt.Sprintf("ALTER TABLE test MODIFY v1 %s;", test.ToType))
+			root, err = executeModify(t, ctx, dEnv, root, fmt.Sprintf("ALTER TABLE test MODIFY v1 %s;", test.ToType))
 			if test.ExpectedErr {
 				assert.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
-			res, err := executeSelect(ctx, dEnv, root, "SELECT v1 FROM test ORDER BY pk;")
+			res, err := executeSelect(t, ctx, dEnv, root, "SELECT v1 FROM test ORDER BY pk;")
 			require.NoError(t, err)
 			assert.Equal(t, test.SelectRes, res)
 		})
@@ -113,10 +113,10 @@ func parseTime(timestampLayout bool, value string) time.Time {
 	return t.UTC()
 }
 
-func executeSelect(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]interface{}, error) {
+func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]interface{}, error) {
 	var err error
 	db := sqle.NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := sqle.NewTestEngine(ctx, db, root)
+	engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
 	if err != nil {
 		return nil, err
 	}
@@ -142,9 +142,9 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	return vals, nil
 }
 
-func executeModify(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
+func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
 	db := sqle.NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := sqle.NewTestEngine(ctx, db, root)
+	engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
 	if err != nil {
 		return nil, err
 	}
