@@ -1,9 +1,10 @@
 package autoincr
 
 import (
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestNextHasNoRepeats(t *testing.T) {
@@ -14,8 +15,8 @@ func TestNextHasNoRepeats(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		go func() {
-			for j := 0; j < 10; j ++ {
-				nxt, err := aiTracker.Next("test",  nil, 1)
+			for j := 0; j < 10; j++ {
+				nxt, err := aiTracker.Next("test", nil, 1)
 				require.NoError(t, err)
 
 				val, err := convertIntTypeToUint(nxt)
