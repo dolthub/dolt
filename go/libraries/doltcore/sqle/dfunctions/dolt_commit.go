@@ -16,6 +16,7 @@ package dfunctions
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -24,7 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 const DoltCommitFuncName = "dolt_commit"
@@ -44,16 +46,6 @@ func NewDoltCommitFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
-	dSess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
-
-	if !ok {
-		return nil, fmt.Errorf("Could not load database %s", dbName)
-	}
-
-	ddb := dbData.Ddb
-	rsr := dbData.Rsr
-
 	ap := cli.CreateCommitArgParser()
 
 	// Get the args for DOLT_COMMIT.
@@ -67,34 +59,20 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, err
 	}
 
-	allFlag := apr.Contains(cli.AllFlag)
-	allowEmpty := apr.Contains(cli.AllowEmptyFlag)
+	dSess := dsess.DSessFromSess(ctx.Session)
 
-	// Check if there are no changes in the staged set but the -a flag is false
-	hasStagedChanges, err := hasStagedSetChanges(ctx, ddb, rsr)
-	if err != nil {
-		return nil, err
+	roots, ok := dSess.GetRoots(dbName)
+	if !ok {
+		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	if !allFlag && !hasStagedChanges && !allowEmpty {
-		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
+	if apr.Contains(cli.AllFlag) {
+		roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+		if err != nil {
+			return nil, fmt.Errorf(err.Error())
+		}
 	}
 
-	// Check if there are no changes in the working set but the -a flag is true.
-	// The -a flag is fine when a merge is active or there are staged changes as result of a merge or an add.
-	if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty && !rsr.IsMergeActive() && !hasStagedChanges {
-		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
-	}
-
-	if allFlag {
-		err = actions.StageAllTables(ctx, dbData)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf(err.Error())
-	}
-
-	// Parse the author flag. Return an error if not.
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
@@ -112,7 +90,6 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, fmt.Errorf("Must provide commit message.")
 	}
 
-	// Specify the time if the date parameter is not.
 	t := ctx.QueryTime()
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
@@ -123,7 +100,67 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-	h, err := actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+	// Commit any pending transaction before a dolt_commit
+	tx := ctx.Session.GetTransaction()
+	_, ok = tx.(*dsess.DoltTransaction)
+	if !ok {
+		return nil, fmt.Errorf("expected a DoltTransaction, got %T", tx)
+	}
+
+	err = dSess.SetRoots(ctx, dbName, roots)
+	if err != nil {
+		return nil, err
+	}
+
+	err = dSess.CommitTransaction(ctx, dbName, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
+	ctx.SetTransaction(nil)
+
+	// Now do a Dolt commit
+	commit, err := dSess.CommitToDolt(ctx, roots, dbName, actions.CommitStagedProps{
+		Message:          msg,
+		Date:             t,
+		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
+		Name:             name,
+		Email:            email,
+	})
+	if err != nil {
+		return 1, err
+	}
+
+	cmHash, err := commit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	return cmHash.String(), nil
+}
+
+func CommitToDolt(
+	ctx *sql.Context,
+	roots doltdb.Roots,
+	dbData env.DbData,
+	msg string,
+	t time.Time,
+	apr *argparser.ArgParseResults,
+	name string,
+	email string,
+	dSess *dsess.Session,
+	dbName string,
+) (*doltdb.Commit, error) {
+	// TODO: this does several session state updates, and it really needs to just do one
+	//  It's also not atomic with the above commit. We need a way to set both new HEAD and update the working
+	//  set together, atomically. We can't easily do this in noms right now, because the the data set is the unit of
+	//  atomic update at the API layer. There's a root value which is the unit of atomic updates at the storage layer,
+	//  just no API which allows one to update more than one dataset in the same atomic transaction. We need to write
+	//  one.
+	//  Meanwhile, this is all kinds of thread-unsafe
+	commit, err := actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
@@ -135,38 +172,33 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, err
 	}
 
-	if allFlag {
-		err = setHeadAndWorkingSessionRoot(ctx, h)
-	} else {
-		err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix)
-	}
+	// Now we have to do *another* SQL transaction, because CommitStaged currently modifies the super schema of the root
+	// value before committing what it's given. We need that exact same root in our working set to stay consistent. It
+	// doesn't happen automatically like outside the SQL context because CommitStaged is writing to a session-based
+	// repo state writer, so we're never persisting the new working set to disk like in a command line context.
+	// TODO: fix this mess
 
+	ws := dSess.WorkingSet(ctx, dbName)
+	// StartTransaction sets the working set for the session, and we want the one we previous had, not the one on disk
+	// Updating the working set like this also updates the head commit and root info for the session
+	tx, err := dSess.StartTransaction(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	return h, nil
-}
-
-func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
-	return rsr.WorkingHash() != rsr.StagedHash()
-}
-
-// TODO: We should not be dealing with root objects here but commit specs.
-func hasStagedSetChanges(ctx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
-	root, err := env.HeadRoot(ctx, ddb, rsr)
-
+	err = dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	headHash, err := root.HashOf()
-
+	err = dSess.CommitTransaction(ctx, dbName, tx)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	return rsr.StagedHash() != headHash, nil
+	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
+	ctx.SetTransaction(nil)
+	return commit, err
 }
 
 func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {
@@ -222,21 +254,4 @@ func (d DoltCommitFunc) Resolved() bool {
 
 func (d DoltCommitFunc) Children() []sql.Expression {
 	return d.children
-}
-
-// setHeadAndWorkingSessionRoot takes in a ctx and the new head hashstring and updates the session head and working hashes.
-func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
-	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
-	dsess := sqle.DSessFromSess(ctx.Session)
-
-	return dsess.SetSessionVariable(ctx, key, headHashStr)
-}
-
-// setSessionRootExplicit sets a session variable (either HEAD or WORKING) to a hash string. For HEAD, the hash string
-// should come from the commit string. For working the commit string needs to come from the root.
-func setSessionRootExplicit(ctx *sql.Context, hashString string, suffix string) error {
-	key := ctx.GetCurrentDatabase() + suffix
-	dsess := sqle.DSessFromSess(ctx.Session)
-
-	return dsess.SetSessionVarDirectly(ctx, key, hashString)
 }

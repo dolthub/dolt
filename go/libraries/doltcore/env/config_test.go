@@ -22,7 +22,7 @@ const (
 )
 
 func TestConfig(t *testing.T) {
-	dEnv := createTestEnv(true, true)
+	dEnv, _ := createTestEnv(true, true)
 
 	lCfg, _ := dEnv.Config.GetConfig(LocalConfig)
 	gCfg, _ := dEnv.Config.GetConfig(GlobalConfig)

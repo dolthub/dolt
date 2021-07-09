@@ -97,7 +97,23 @@ func runManifest(ctx context.Context, args []string) int {
 	}
 
 	var manifest nbs.ManifestInfo
-	manifest, err = nbs.ParseManifest(manifestReader)
+	version := make([]byte, 1)
+	_, err = manifestReader.Read(version)
+	if err != nil {
+		d.PanicIfError(err)
+	}
+	_, err = manifestReader.Seek(0, 0)
+	if err != nil {
+		d.PanicIfError(err)
+	}
+	switch version[0] {
+	case '4':
+		manifest, err = nbs.ParseManifest(4, manifestReader)
+	case '5':
+		manifest, err = nbs.ParseManifest(5, manifestReader)
+	default:
+		err = fmt.Errorf("unknown manifest version: %s", version)
+	}
 	d.PanicIfError(err)
 
 	numSpecs := manifest.NumTableSpecs()

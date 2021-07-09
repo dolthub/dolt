@@ -35,10 +35,12 @@ type localFS struct {
 // working directory.  Path relative operations occur relative to this directory.
 func LocalFilesysWithWorkingDir(cwd string) (Filesys, error) {
 	absCWD, err := filepath.Abs(cwd)
-
 	if err != nil {
 		return nil, err
 	}
+
+	// We're going to turn this into a URL, so we need to make sure that windows separators are converted to /
+	absCWD = filepath.ToSlash(absCWD)
 
 	stat, err := os.Stat(absCWD)
 

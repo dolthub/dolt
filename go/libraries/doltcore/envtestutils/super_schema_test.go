@@ -369,7 +369,7 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 	if test.ExpectedErrStr != "" {
 		require.Error(t, ee, test.ExpectedErrStr)
 	} else {
-		spec := dEnv.RepoState.CWBHeadRef()
+		spec := dEnv.RepoStateReader().CWBHeadRef()
 		require.Equal(t, "refs/heads/"+test.ExpectedBranch, spec.String())
 
 		r, err := dEnv.WorkingRoot(context.Background())

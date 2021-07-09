@@ -163,7 +163,7 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 
 	// Just dolt log
 	if apr.NArg() == 0 {
-		return logCommits(ctx, dEnv, dEnv.RepoState.CWBHeadSpec(), opts, loggerFunc)
+		return logCommits(ctx, dEnv, dEnv.RepoStateReader().CWBHeadSpec(), opts, loggerFunc)
 	} else if apr.NArg() == 1 { // dolt log <ref/table>
 		argIsRef := actions.ValidateIsRef(ctx, apr.Arg(0), dEnv.DoltDB, dEnv.RepoStateReader())
 
@@ -174,7 +174,7 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 			}
 			return logCommits(ctx, dEnv, cs, opts, loggerFunc)
 		} else {
-			return handleErrAndExit(logTableCommits(ctx, dEnv, opts, loggerFunc, dEnv.RepoState.CWBHeadSpec(), apr.Arg(0)))
+			return handleErrAndExit(logTableCommits(ctx, dEnv, opts, loggerFunc, dEnv.RepoStateReader().CWBHeadSpec(), apr.Arg(0)))
 		}
 	} else { // dolt log ref table
 		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
@@ -186,7 +186,7 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 }
 
 func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, opts logOpts, loggerFunc commitLoggerFunc) int {
-	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 
 	if err != nil {
 		cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
@@ -258,7 +258,7 @@ func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (
 }
 
 func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, loggerFunc commitLoggerFunc, cs *doltdb.CommitSpec, tableName string) error {
-	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
 		return err
 	}

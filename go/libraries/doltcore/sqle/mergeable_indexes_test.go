@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 )
 
@@ -1355,8 +1356,10 @@ func TestMergeableIndexes(t *testing.T) {
 
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
-			session := DSessFromSess(sqlCtx.Session)
-			err := session.AddDB(sqlCtx, db, denv.DbData())
+			session := dsess.DSessFromSess(sqlCtx.Session)
+			dbState := getDbState(t, db, denv)
+			err := session.AddDB(sqlCtx, dbState)
+
 			require.NoError(t, err)
 			sqlCtx.SetCurrentDatabase(db.Name())
 			err = session.SetRoot(sqlCtx, db.Name(), initialRoot)
@@ -1561,8 +1564,9 @@ func TestMergeableIndexesNulls(t *testing.T) {
 
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
-			session := DSessFromSess(sqlCtx.Session)
-			err := session.AddDB(sqlCtx, db, denv.DbData())
+			session := dsess.DSessFromSess(sqlCtx.Session)
+			dbState := getDbState(t, db, denv)
+			err := session.AddDB(sqlCtx, dbState)
 			require.NoError(t, err)
 			sqlCtx.SetCurrentDatabase(db.Name())
 			err = session.SetRoot(sqlCtx, db.Name(), initialRoot)

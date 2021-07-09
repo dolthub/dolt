@@ -15,6 +15,7 @@
 package doltdb
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
@@ -275,4 +276,13 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 	}
 
 	return NewCommit(c.vrw, ancestorSt), nil
+}
+
+func (c *Commit) DebugString(ctx context.Context) string {
+	var buf bytes.Buffer
+	err := types.WriteEncodedValue(ctx, &buf, c.commitSt)
+	if err != nil {
+		panic(err)
+	}
+	return buf.String()
 }

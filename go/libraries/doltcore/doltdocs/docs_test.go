@@ -25,12 +25,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	ctx := context.Background()
-	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB)
+	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
 	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	// If no tbl/schema is provided, doc Text and Value should be nil.
@@ -84,7 +85,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 
 func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	ctx := context.Background()
-	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB)
+	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
 	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	sch := createTestDocsSchema()

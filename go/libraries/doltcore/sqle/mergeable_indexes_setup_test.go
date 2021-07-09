@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -38,7 +39,7 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	db := NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := NewTestEngine(context.Background(), db, root)
+	engine, sqlCtx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	require.NoError(t, err)
 
 	_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (
@@ -99,7 +100,7 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	engine.AddDatabase(mergeableDb)
 
 	// Get an updated root to use for the rest of the test
-	root, _ = DSessFromSess(sqlCtx.Session).GetRoot(mergeableDb.Name())
+	root, _ = dsess.DSessFromSess(sqlCtx.Session).GetRoot(mergeableDb.Name())
 
 	return engine, dEnv, mergeableDb, []*indexTuple{
 		idxv1ToTuple,

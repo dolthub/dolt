@@ -310,6 +310,9 @@ type TableFileStore interface {
 	// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore.
 	WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error
 
+	// AddTableFilesToManifest adds table files to the manifest
+	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error
+
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 	PruneTableFiles(ctx context.Context) error
 

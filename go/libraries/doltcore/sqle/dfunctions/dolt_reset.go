@@ -21,9 +21,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const DoltResetFuncName = "dolt_reset"
@@ -39,7 +39,7 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	dSess := sqle.DSessFromSess(ctx.Session)
+	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(dbName)
 
 	if !ok {
@@ -64,9 +64,9 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	// Get all the needed roots.
-	working, staged, head, err := env.GetRoots(ctx, dbData.Ddb, dbData.Rsr)
-	if err != nil {
-		return 1, err
+	roots, ok := dSess.GetRoots(dbName)
+	if !ok {
+		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	if apr.Contains(cli.HardResetParam) {
@@ -78,34 +78,31 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			arg = apr.Arg(0)
 		}
 
-		h, err := actions.ResetHardTables(ctx, dbData, arg, working, staged, head)
+		var newHead *doltdb.Commit
+		newHead, roots, err = actions.ResetHardTables(ctx, dbData, arg, roots)
 		if err != nil {
 			return 1, err
 		}
 
-		// In this case we preserve untracked tables.
-		if h == "" {
-			headHash, err := dbData.Rsr.CWBHeadHash(ctx)
-			if err != nil {
-				return 1, err
-			}
-
-			h = headHash.String()
-			if err := ctx.SetSessionVariable(ctx, sqle.HeadKey(dbName), h); err != nil {
-				return 1, err
-			}
-
-			workingHash := dbData.Rsr.WorkingHash()
-			if err := ctx.SetSessionVariable(ctx, sqle.WorkingKey(dbName), workingHash.String()); err != nil {
-				return 1, err
-			}
-		} else {
-			if err := setHeadAndWorkingSessionRoot(ctx, h); err != nil {
+		// TODO: this overrides the transaction setting, needs to happen at commit, not here
+		if newHead != nil {
+			if err := dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
 				return 1, err
 			}
 		}
+
+		ws := dSess.WorkingSet(ctx, dbName)
+		err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged), nil)
+		if err != nil {
+			return 1, err
+		}
 	} else {
-		_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
+		roots, err = actions.ResetSoftTables(ctx, dbData, apr, roots)
+		if err != nil {
+			return 1, err
+		}
+
+		err = dSess.SetRoots(ctx, dbName, roots)
 		if err != nil {
 			return 1, err
 		}
