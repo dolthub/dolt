@@ -142,6 +142,7 @@ type DatabaseSessionState struct {
 	dirty                bool
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
+	RefStore 			 autoincr.RefInMemStore
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
@@ -170,6 +171,7 @@ type InitialDbState struct {
 	HeadCommit *doltdb.Commit
 	WorkingSet *doltdb.WorkingSet
 	DbData     env.DbData
+	RefStore   autoincr.RefInMemStore
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -556,7 +558,11 @@ func (sess *Session) GetDoltDbAutoIncrementTracker(dbName string) (autoincr.Auto
 		return nil, false
 	}
 
-	return d.dbData.Ait, true
+	workingRef := d.WorkingSet.Ref().String()
+
+	memStore := d.RefStore.GetRefMemStore(workingRef)
+
+	return memStore.Ait, true
 }
 
 func (sess *Session) GetDbData(dbName string) (env.DbData, bool) {
@@ -935,7 +941,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	adapter := NewSessionStateAdapter(sess, db.Name())
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
-	sessionState.dbData.Ait = dbState.DbData.Ait
+	sessionState.RefStore = dbState.RefStore
 
 	sessionState.EditSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 

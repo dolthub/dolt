@@ -147,6 +147,9 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 	if err = te.tableEditor.SetAutoIncrementValue(nomsVal); err != nil {
 		return err
 	}
+
+	// TODO: Move reset here.
+
 	return te.flush(ctx)
 }
 

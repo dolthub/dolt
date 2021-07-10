@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"io"
 	"os"
 	"path/filepath"
@@ -1405,6 +1406,9 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		if err != nil {
 			return nil, err
 		}
+
+		// Pass in each database's SessionGlobalInMemStore
+		//sess.DbStates[db.Name()].RefStore = autoincr.NewSessionGlobalInMemStore()
 	}
 
 	return &sqlEngine{nameToDB, mrEnv, engine, format}, nil
@@ -1435,14 +1439,12 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 		return dsess.InitialDbState{}, err
 	}
 
-	dbData := dEnv.DbData()
-	dbData.Ait = db.GetAutoIncrementTracker()
-
 	return dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,
-		DbData:     dbData,
+		DbData:     dEnv.DbData(),
+		RefStore:   autoincr.NewSessionGlobalInMemStore(),
 	}, nil
 }
 

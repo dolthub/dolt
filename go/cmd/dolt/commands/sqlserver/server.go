@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"net"
 	"strconv"
 	"time"
@@ -260,14 +261,13 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			return nil, err
 		}
 
-		dbData := dEnv.DbData()
-		dbData.Ait = db.GetAutoIncrementTracker()
-
 		dbStates = append(dbStates, dsess.InitialDbState{
 			Db:         db,
 			HeadCommit: headCommit,
 			WorkingSet: ws,
-			DbData:     dbData,
+			DbData:     dEnv.DbData(),
+			// TODO: The placement of this may change when multiple Dolt Databases can be represented in one commit log.
+			RefStore:   autoincr.NewSessionGlobalInMemStore(),
 		})
 	}
 

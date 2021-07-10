@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"runtime"
 	"strings"
 	"testing"
@@ -36,6 +37,7 @@ type DoltHarness struct {
 	env            *env.DoltEnv
 	session        *dsess.Session
 	databases      []sqle.Database
+	refStores 	   []autoincr.RefInMemStore
 	parallelism    int
 	skippedQueries []string
 }
@@ -123,8 +125,8 @@ func (d DoltHarness) NewSession() *sql.Context {
 		context.Background(),
 		sql.WithSession(session))
 
-	for _, db := range d.databases {
-		dbState := getDbState(d.t, db, d.env)
+	for i, db := range d.databases {
+		dbState := getDbState(d.t, db, d.env, d.refStores[i])
 		err := session.AddDB(ctx, dbState)
 		require.NoError(d.t, err)
 	}
@@ -162,12 +164,15 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 
 	var dbs []sql.Database
 	d.databases = nil
+	d.refStores = nil
 	for _, name := range names {
 		db := sqle.NewDatabase(name, dEnv.DbData())
-		dbState := getDbState(d.t, db, dEnv)
+		refStore := autoincr.NewSessionGlobalInMemStore()
+		dbState := getDbState(d.t, db, dEnv, refStore)
 		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), dbState))
 		dbs = append(dbs, db)
 		d.databases = append(d.databases, db)
+		d.refStores = append(d.refStores, refStore)
 	}
 
 	return dbs
@@ -180,7 +185,7 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 	return
 }
 
-func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
+func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, refStore autoincr.RefInMemStore) dsess.InitialDbState {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
@@ -190,14 +195,12 @@ func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.Initial
 	ws, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
 
-	dbData := dEnv.DbData()
-	dbData.Ait = db.GetAutoIncrementTracker()
-
 	return dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,
-		DbData:     dbData,
+		DbData:     dEnv.DbData(),
+		RefStore:   refStore,
 	}
 }
 
