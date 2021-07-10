@@ -568,13 +568,6 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	// Reset the auto increment trackers
-	ed, err := t.getTableEditor(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	ed.aiTracker.Reset(t.tableName, 1)
 
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
 	if err != nil {

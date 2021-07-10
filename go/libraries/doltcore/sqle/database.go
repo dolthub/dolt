@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -60,7 +59,6 @@ type Database struct {
 	rsr  env.RepoStateReader
 	rsw  env.RepoStateWriter
 	drw  env.DocsReadWriter
-	ait  autoincr.AutoIncrementTracker
 }
 
 var _ sql.Database = Database{}
@@ -148,7 +146,6 @@ func NewDatabase(name string, dbData env.DbData) Database {
 		rsr:  dbData.Rsr,
 		rsw:  dbData.Rsw,
 		drw:  dbData.Drw,
-		ait:  autoincr.NewAutoIncrementTracker(),
 	}
 }
 
@@ -176,17 +173,12 @@ func (db Database) GetDocsReadWriter() env.DocsReadWriter {
 	return db.drw
 }
 
-func (db Database) GetAutoIncrementTracker() autoincr.AutoIncrementTracker {
-	return db.ait
-}
-
 func (db Database) DbData() env.DbData {
 	return env.DbData{
 		Ddb: db.ddb,
 		Rsw: db.rsw,
 		Rsr: db.rsr,
 		Drw: db.drw,
-		Ait: db.ait,
 	}
 }
 

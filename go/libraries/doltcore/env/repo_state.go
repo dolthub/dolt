@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -61,7 +60,6 @@ type DbData struct {
 	Rsw RepoStateWriter
 	Rsr RepoStateReader
 	Drw DocsReadWriter
-	Ait autoincr.AutoIncrementTracker
 }
 
 type BranchConfig struct {

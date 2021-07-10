@@ -148,7 +148,8 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 		return err
 	}
 
-	// TODO: Move reset here.
+	// Reset the auto increment tracker
+	te.aiTracker.Reset(te.tableName, val)
 
 	return te.flush(ctx)
 }

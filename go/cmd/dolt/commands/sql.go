@@ -1406,9 +1406,6 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		if err != nil {
 			return nil, err
 		}
-
-		// Pass in each database's SessionGlobalInMemStore
-		//sess.DbStates[db.Name()].RefStore = autoincr.NewSessionGlobalInMemStore()
 	}
 
 	return &sqlEngine{nameToDB, mrEnv, engine, format}, nil
