@@ -37,6 +37,7 @@ type keylessTableEditor struct {
 	name string
 
 	acc keylessEditAcc
+	indexEds []*IndexEditor
 
 	eg *errgroup.Group
 	mu *sync.Mutex
@@ -58,6 +59,9 @@ type rowDelta struct {
 
 func (acc keylessEditAcc) increment(key, val types.Tuple) error {
 	h, err := key.Hash(acc.nbf)
+	x1 := key.HumanReadableString()
+	x2 := val.HumanReadableString()
+	print(x1, x2)
 	if err != nil {
 		return err
 	}
@@ -126,10 +130,19 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 		sch:  sch,
 		name: name,
 		acc:  acc,
+		indexEds:   make([]*IndexEditor, sch.Indexes().Count()),
 		eg:   eg,
 		mu:   &sync.Mutex{},
 	}
 
+	// TODO : add index editor access
+	for i, index := range sch.Indexes().AllIndexes() {
+		indexData, err := tbl.GetIndexRowData(ctx, index.Name())
+		if err != nil {
+			return nil, err
+		}
+		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, sch)
+	}
 	return te, nil
 }
 
@@ -279,14 +292,38 @@ func (kte *keylessTableEditor) flush(ctx context.Context) error {
 	}
 
 	kte.eg.Go(func() (err error) {
-		kte.tbl, err = applyEdits(ctx, tbl, acc)
+		kte.tbl, err = applyEdits(ctx, tbl, acc, kte.indexEds, nil)
 		return err
 	})
 
 	return nil
 }
 
-func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*doltdb.Table, error) {
+
+func (kte *keylessTableEditor) keyErrForKVP(ctx context.Context, kvp *doltKVP, isPk bool, errFunc PKDuplicateErrFunc) error {
+	kVal, err := kvp.k.Value(ctx)
+	if err != nil {
+		return err
+	}
+
+	vVal, err := kvp.v.Value(ctx)
+	if err != nil {
+		return err
+	}
+
+	keyStr, err := formatKey(ctx, kVal)
+	if err != nil {
+		return err
+	}
+
+	if errFunc != nil {
+		return errFunc(keyStr, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
+	} else {
+		return fmt.Errorf("duplicate key '%s': %w", keyStr, ErrDuplicateKey)
+	}
+}
+
+func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, errFunc PKDuplicateErrFunc) (_ *doltdb.Table, retErr error) {
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -307,6 +344,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 	ed := rowData.Edit()
 	iter := table.NewMapPointReader(rowData, keys...)
 
+	var ok bool
 	for {
 		k, v, err := iter.NextTuple(ctx)
 		if err == io.EOF {
@@ -322,15 +360,63 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 			return nil, err
 		}
 
-		var ok bool
+		var validv types.Tuple
 		if v.Empty() {
 			// row does not yet exist
 			v, ok, err = initializeCardinality(delta.val, delta.delta)
+			validv = v
+
 		} else {
+			validv = v
 			v, ok, err = modifyCardinalityWithDelta(v, delta.delta)
 		}
 		if err != nil {
 			return nil, err
+		}
+
+		// Run the index editors first, as we can back out of the changes in the event of an error, but can't do that for
+		// changes made to the table. We create a slice that matches the number of index editors. For each successful
+		// operation, we increment the associated index on the slice, and in the event of an error, we undo that number of
+		// operations.
+		// TODO : make sure index editor revert works
+		indexOpsToUndo := make([]int, len(indexEds))
+		defer func() {
+			if retErr != nil {
+				for i, opsToUndo := range indexOpsToUndo {
+					for undone := 0; undone < opsToUndo; undone++ {
+						indexEds[i].Undo(ctx)
+					}
+				}
+			}
+		}()
+
+		// TODO : add row to index if new
+		for i, indexEd := range indexEds {
+			// TODO: get parial and full key for index update
+			// currently uses a function without keyless equivalent
+			//fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(kte.acc.nbf, indexEd.Index(), tagToVal)
+			r, _, err := row.KeylessRowsFromTuples(k, validv)
+			if err != nil {
+				return nil, err
+			}
+			fullKey, partialKey, err := r.ReduceToIndexKeys(indexEd.Index())
+			if err != nil {
+				return nil, err
+			}
+
+			if delta.delta < 1 {
+				err = indexEd.DeleteRow(ctx, fullKey, partialKey)
+				if err != nil {
+					return nil, err
+				}
+			} else if delta.delta == 1 {
+				err = indexEd.InsertRow(ctx, fullKey, partialKey)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			indexOpsToUndo[i]++
 		}
 
 		if ok {
@@ -340,12 +426,24 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 		}
 	}
 
-	rowData, err = ed.Map(ctx)
+	for i := 0; i < len(indexEds); i++ {
+		indexMap, idxErr := indexEds[i].Map(ctx)
+		if idxErr != nil {
+			return nil, err
+		}
+		tbl, idxErr = tbl.SetIndexRowData(ctx, indexEds[i].Index().Name(), indexMap)
+		if idxErr != nil {
+			return nil, err
+		}
+	}
+
+		rowData, err = ed.Map(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return tbl.UpdateRows(ctx, rowData)
+
 }
 
 // for deletes (cardinality < 1): |ok| is set false

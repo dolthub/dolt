@@ -58,7 +58,7 @@ type Row interface {
 	TaggedValues() (TaggedValues, error)
 
 	// ReduceToIndexKeys returns full and partial index keys
-	ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, error)
+	ReduceToIndexKeys(idx schema.Index) (full types.Tuple, partial types.Tuple, err error)
 }
 
 func New(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) (Row, error) {
