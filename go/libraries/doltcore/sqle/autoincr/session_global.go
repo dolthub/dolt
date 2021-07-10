@@ -21,7 +21,7 @@ type refMemStore struct {
 
 type refInMemStoreImpl struct {
 	refToMemStore map[string]*refMemStore
-	mu sync.Mutex
+	mu            sync.Mutex
 }
 
 var _ RefInMemStore = (*refInMemStoreImpl)(nil)

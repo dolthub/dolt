@@ -142,7 +142,7 @@ type DatabaseSessionState struct {
 	dirty                bool
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
-	RefStore 			 autoincr.RefInMemStore
+	RefStore             autoincr.RefInMemStore
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
