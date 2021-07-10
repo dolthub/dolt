@@ -32,12 +32,24 @@ func (a *autoIncrementTracker) Next(tableName string, insertVal interface{}, dis
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	// Case 0: Just use the value passed in.
 	potential, ok := a.valuePerTable[tableName]
 	if !ok {
 		// Use the disk val if the table has not been initialized yet.
 		potential = diskVal
 	}
 
+	// Case 1: Disk Val is greater. This is useful for updating the tracker when a merge occurs.
+	diskValGreater, err := geq(valOrZero(diskVal), valOrZero(a.valuePerTable[tableName]))
+	if err != nil {
+		return nil, err
+	}
+
+	if diskValGreater {
+		potential = diskVal
+	}
+
+	// Case 2: Overwrite anything if an insert val is passed.
 	if insertVal != nil {
 		potential = insertVal
 	}
