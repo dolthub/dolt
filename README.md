@@ -371,6 +371,29 @@ explore and clone. Here are some of our favorites.
 - Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays
 - IP Address to Country: https://www.dolthub.com/repositories/dolthub/ip-to-country
 
+
+# Running A SQL-Server
+
+Dolt comes built in with a sql-server that you connect to with either the mysql-client or your favorite editor/tool.
+Simply run 
+
+```bash
+dolt sql-server
+```
+
+You connect with mysql using the default port 3306 as follows. The default username is "root" and the default password is 
+"" (empty password)
+
+```bash
+mysql -h 127.0.0.1 -u root  --port 3306 -p
+```
+
+Check these portions of the documentation for more configuation options.
+
+* [Starting a SQL
+  server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
+* [Connecting to an Editor](https://docs.dolthub.com/integrations/sql-editors)
+
 # More documentation
 
 There's a lot more to Dolt than can fit in a README file! For full
@@ -380,8 +403,6 @@ cover here:
 
 * [Querying past revisions of your
   tables](https://docs.dolthub.com/interfaces/sql#querying-non-head-revisions-of-a-database)
-* [Starting a SQL
-  server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
 * [Selecting the diff between two
   commits](https://docs.dolthub.com/interfaces/sql/dolt-system-tables#dolt_diff_usdtablename)
 * [Documentation for all CLI
