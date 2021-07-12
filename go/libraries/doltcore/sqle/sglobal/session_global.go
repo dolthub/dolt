@@ -15,8 +15,9 @@
 package sglobal
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
 type GlobalState interface {
@@ -31,7 +32,7 @@ func NewSessionGlobalInMemStore() GlobalState {
 
 type globalStateImpl struct {
 	trackerMap map[ref.WorkingSetRef]AutoIncrementTracker
-	mu            sync.Mutex
+	mu         sync.Mutex
 }
 
 var _ GlobalState = (*globalStateImpl)(nil)
