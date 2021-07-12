@@ -105,6 +105,10 @@ func runShow(ctx context.Context, args []string) int {
 		types.WriteEncodedValue(ctx, pgr.Writer, value)
 		fmt.Fprintln(pgr.Writer)
 	} else {
+		t, err := types.TypeOf(value)
+		util.CheckError(err)
+		fmt.Fprint(os.Stdout, t.HumanReadableString(), " - ")
+
 		types.WriteEncodedValue(ctx, os.Stdout, value)
 	}
 
