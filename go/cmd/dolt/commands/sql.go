@@ -1437,11 +1437,11 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	}
 
 	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		RefStore:   sglobal.NewSessionGlobalInMemStore(),
+		Db:          db,
+		HeadCommit:  headCommit,
+		WorkingSet:  ws,
+		DbData:      dEnv.DbData(),
+		GlobalState: sglobal.NewSessionGlobalInMemStore(),
 	}, nil
 }
 

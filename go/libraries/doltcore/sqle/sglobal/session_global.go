@@ -1,49 +1,35 @@
 package sglobal
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"sync"
 )
 
-type RefInMemStore interface {
-	GetRefMemStore(refhash string) *refMemStore
-	SetRefMemStore(refhash string, store *refMemStore)
+type GlobalState interface {
+	GetAutoIncrementTracker(wsref ref.WorkingSetRef) AutoIncrementTracker
 }
 
-func NewSessionGlobalInMemStore() RefInMemStore {
-	return &refInMemStoreImpl{
-		refToMemStore: make(map[string]*refMemStore),
+func NewSessionGlobalInMemStore() GlobalState {
+	return &globalStateImpl{
+		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
 	}
 }
 
-type refMemStore struct {
-	Ait AutoIncrementTracker
-}
-
-type refInMemStoreImpl struct {
-	refToMemStore map[string]*refMemStore
+type globalStateImpl struct {
+	trackerMap map[ref.WorkingSetRef]AutoIncrementTracker
 	mu            sync.Mutex
 }
 
-var _ RefInMemStore = (*refInMemStoreImpl)(nil)
+var _ GlobalState = (*globalStateImpl)(nil)
 
-func (s *refInMemStoreImpl) GetRefMemStore(refhash string) *refMemStore {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (g *globalStateImpl) GetAutoIncrementTracker(wsref ref.WorkingSetRef) AutoIncrementTracker {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 
-	memStore, ok := s.refToMemStore[refhash]
+	_, ok := g.trackerMap[wsref]
 	if !ok {
-		memStore = &refMemStore{
-			Ait: NewAutoIncrementTracker(),
-		}
-		s.refToMemStore[refhash] = memStore
+		g.trackerMap[wsref] = NewAutoIncrementTracker()
 	}
 
-	return memStore
-}
-
-func (s *refInMemStoreImpl) SetRefMemStore(refhash string, store *refMemStore) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.refToMemStore[refhash] = store
+	return g.trackerMap[wsref]
 }

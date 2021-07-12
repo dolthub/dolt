@@ -37,7 +37,7 @@ type DoltHarness struct {
 	env            *env.DoltEnv
 	session        *dsess.Session
 	databases      []sqle.Database
-	refStores      []sglobal.RefInMemStore
+	refStores      []sglobal.GlobalState
 	parallelism    int
 	skippedQueries []string
 }
@@ -185,7 +185,7 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 	return
 }
 
-func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, refStore sglobal.RefInMemStore) dsess.InitialDbState {
+func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, refStore sglobal.GlobalState) dsess.InitialDbState {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
@@ -196,11 +196,11 @@ func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, refStore sglo
 	require.NoError(t, err)
 
 	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		RefStore:   refStore,
+		Db:          db,
+		HeadCommit:  headCommit,
+		WorkingSet:  ws,
+		DbData:      dEnv.DbData(),
+		GlobalState: refStore,
 	}
 }
 
