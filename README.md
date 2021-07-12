@@ -392,7 +392,7 @@ Check these portions of the documentation for more configuration options.
 
 * [Starting a SQL
   server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
-* [Connecting to an Editor](https://docs.dolthub.com/integrations/sql-editors)
+* [Connecting to a server with an editor](https://docs.dolthub.com/integrations/sql-editors)
 
 # More documentation
 
