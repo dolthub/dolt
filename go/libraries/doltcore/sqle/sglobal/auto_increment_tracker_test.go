@@ -22,9 +22,7 @@ import (
 )
 
 func TestNextHasNoRepeats(t *testing.T) {
-	allVals := make(map[uint64]int)
-	var mu sync.Mutex
-
+	var allVals sync.Map
 	aiTracker := NewAutoIncrementTracker()
 
 	for i := 0; i < 100; i++ {
@@ -36,14 +34,23 @@ func TestNextHasNoRepeats(t *testing.T) {
 				val, err := convertIntTypeToUint(nxt)
 				require.NoError(t, err)
 
-				mu.Lock()
-				defer mu.Unlock()
-				allVals[val]++
+				current, ok := allVals.Load(val)
+				if !ok {
+					allVals.Store(val, 1)
+				} else {
+					asUint, _ := convertIntTypeToUint(current)
+					allVals.Store(val, asUint+1)
+				}
 			}
 		}()
 	}
 
-	for _, val := range allVals {
-		require.Equal(t, 1, val)
-	}
+	// Make sure each key was called once
+	allVals.Range(func(key, value interface{}) bool {
+		asUint, _ := convertIntTypeToUint(value)
+
+		require.Equal(t, uint64(1), asUint)
+
+		return true
+	})
 }
