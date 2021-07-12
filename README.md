@@ -374,8 +374,8 @@ explore and clone. Here are some of our favorites.
 
 # Running A SQL-Server
 
-Dolt comes built in with a sql-server that you connect to with either the mysql-client or your favorite editor/tool.
-Simply run 
+Dolt comes built in with a sql-server that you can connect with either the mysql-client or your favorite editor/tool.
+Simply run:
 
 ```bash
 dolt sql-server
@@ -388,7 +388,7 @@ You connect with mysql using the default port 3306 as follows. The default usern
 mysql -h 127.0.0.1 -u root  --port 3306 -p
 ```
 
-Check these portions of the documentation for more configuation options.
+Check these portions of the documentation for more configuration options.
 
 * [Starting a SQL
   server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
