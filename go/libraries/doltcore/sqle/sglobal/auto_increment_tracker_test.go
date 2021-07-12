@@ -37,8 +37,8 @@ func TestNextHasNoRepeats(t *testing.T) {
 				require.NoError(t, err)
 
 				mu.Lock()
+				defer mu.Unlock()
 				allVals[val]++
-				mu.Unlock()
 			}
 		}()
 	}
