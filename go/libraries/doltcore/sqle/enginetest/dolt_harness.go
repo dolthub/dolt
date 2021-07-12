@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sglobal"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 )
 
 type DoltHarness struct {
@@ -37,7 +37,7 @@ type DoltHarness struct {
 	env                  *env.DoltEnv
 	session              *dsess.Session
 	databases            []sqle.Database
-	databaseGlobalStates []sglobal.GlobalState
+	databaseGlobalStates []globalstate.GlobalState
 	parallelism          int
 	skippedQueries       []string
 }
@@ -167,7 +167,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databaseGlobalStates = nil
 	for _, name := range names {
 		db := sqle.NewDatabase(name, dEnv.DbData())
-		globalState := sglobal.NewSessionGlobalInMemStore()
+		globalState := globalstate.NewSessionGlobalInMemStore()
 		dbState := getDbState(d.t, db, dEnv, globalState)
 		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), dbState))
 		dbs = append(dbs, db)
@@ -185,7 +185,7 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 	return
 }
 
-func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState sglobal.GlobalState) dsess.InitialDbState {
+func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState globalstate.GlobalState) dsess.InitialDbState {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()

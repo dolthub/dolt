@@ -37,7 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sglobal"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
@@ -267,7 +267,7 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			WorkingSet: ws,
 			DbData:     dEnv.DbData(),
 			// TODO: The placement of this may change when multiple Dolt Databases can be represented in one commit log.
-			GlobalState: sglobal.NewSessionGlobalInMemStore(),
+			GlobalState: globalstate.NewSessionGlobalInMemStore(),
 		})
 	}
 
