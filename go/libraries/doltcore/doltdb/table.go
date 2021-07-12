@@ -29,12 +29,13 @@ import (
 const (
 	tableStructName = "table"
 
-	schemaRefKey       = "schema_ref"
-	tableRowsKey       = "rows"
-	conflictsKey       = "conflicts"
-	conflictSchemasKey = "conflict_schemas"
-	indexesKey         = "indexes"
-	autoIncrementKey   = "auto_increment"
+	schemaRefKey            = "schema_ref"
+	tableRowsKey            = "rows"
+	conflictsKey            = "conflicts"
+	conflictSchemasKey      = "conflict_schemas"
+	constraintViolationsKey = "constraint_violations"
+	indexesKey              = "indexes"
+	autoIncrementKey        = "auto_increment"
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z_]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
@@ -272,6 +273,46 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 		return baseSch, sch, mergeSch, err
 	}
 	return nil, nil, nil, ErrNoConflicts
+}
+
+// GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
+// whether the table has any violations.
+func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) {
+	constraintViolationsRefVal, ok, err := t.tableStruct.MaybeGet(constraintViolationsKey)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	if !ok {
+		emptyMap, err := types.NewMap(ctx, t.vrw)
+		return emptyMap, err
+	}
+	constraintViolationsVal, err := constraintViolationsRefVal.(types.Ref).TargetValue(ctx, t.vrw)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	return constraintViolationsVal.(types.Map), nil
+}
+
+// SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
+// violations entry on the embedded struct is removed.
+func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (*Table, error) {
+	// We can't just call violationsMap.Empty() as we can't guarantee that the caller passed in an instantiated map
+	if violationsMap == types.EmptyMap || violationsMap.Len() == 0 {
+		updatedStruct, err := t.tableStruct.Delete(constraintViolationsKey)
+		if err != nil {
+			return nil, err
+		}
+		return &Table{t.vrw, updatedStruct}, nil
+	}
+	constraintViolationsRef, err := WriteValAndGetRef(ctx, t.vrw, violationsMap)
+	if err != nil {
+		return nil, err
+	}
+	updatedStruct, err := t.tableStruct.Set(constraintViolationsKey, constraintViolationsRef)
+	if err != nil {
+		return nil, err
+	}
+	return &Table{t.vrw, updatedStruct}, nil
 }
 
 func RefToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {

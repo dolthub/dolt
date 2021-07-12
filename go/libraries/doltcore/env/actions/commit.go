@@ -105,6 +105,13 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		if len(inConflict) > 0 {
 			return nil, NewTblInConflictError(inConflict)
 		}
+		violatesConstraints, err := roots.Working.TablesWithConstraintViolations(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(violatesConstraints) > 0 {
+			return nil, NewTblHasConstraintViolations(violatesConstraints)
+		}
 
 		commit, err := rsr.GetMergeCommit(ctx)
 		if err != nil {

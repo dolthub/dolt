@@ -114,3 +114,7 @@ func (med *MapEditor) NumEdits() int64 {
 func (med *MapEditor) Format() *NomsBinFormat {
 	return med.m.format()
 }
+
+func (med *MapEditor) Close() {
+	med.acc.Close()
+}
