@@ -40,7 +40,7 @@ func (a *autoIncrementTracker) Next(tableName string, insertVal interface{}, dis
 	}
 
 	// Case 1: Disk Val is greater. This is useful for updating the tracker when a merge occurs.
-	// TODO: This is a bit of a hack. The current solution is to plumb this tracker through the merge logic.
+	// TODO: This is a bit of a hack. The correct solution is to plumb this tracker through the merge logic.
 	diskValGreater, err := geq(valOrZero(diskVal), valOrZero(a.valuePerTable[tableName]))
 	if err != nil {
 		return nil, err

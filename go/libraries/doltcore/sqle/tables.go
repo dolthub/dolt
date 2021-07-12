@@ -568,7 +568,6 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
 	if err != nil {
 		return 0, err
