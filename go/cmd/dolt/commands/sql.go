@@ -1441,7 +1441,7 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 		HeadCommit:  headCommit,
 		WorkingSet:  ws,
 		DbData:      dEnv.DbData(),
-		GlobalState: globalstate.NewSessionGlobalInMemStore(),
+		GlobalState: globalstate.NewGlobalStateStore(),
 	}, nil
 }
 

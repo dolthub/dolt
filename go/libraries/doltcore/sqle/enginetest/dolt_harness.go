@@ -167,7 +167,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databaseGlobalStates = nil
 	for _, name := range names {
 		db := sqle.NewDatabase(name, dEnv.DbData())
-		globalState := globalstate.NewSessionGlobalInMemStore()
+		globalState := globalstate.NewGlobalStateStore()
 		dbState := getDbState(d.t, db, dEnv, globalState)
 		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), dbState))
 		dbs = append(dbs, db)

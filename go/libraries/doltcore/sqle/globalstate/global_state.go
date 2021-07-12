@@ -24,7 +24,7 @@ type GlobalState interface {
 	GetAutoIncrementTracker(wsref ref.WorkingSetRef) AutoIncrementTracker
 }
 
-func NewSessionGlobalInMemStore() GlobalState {
+func NewGlobalStateStore() GlobalState {
 	return &globalStateImpl{
 		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
 	}
