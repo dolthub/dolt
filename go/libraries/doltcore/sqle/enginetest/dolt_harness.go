@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sglobal"
 	"runtime"
 	"strings"
 	"testing"
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )

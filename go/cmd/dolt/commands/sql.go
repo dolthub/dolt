@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sglobal"
 	"io"
 	"os"
 	"path/filepath"
@@ -48,7 +49,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"

@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sglobal"
 	"net"
 	"strconv"
 	"time"
@@ -34,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/autoincr"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
