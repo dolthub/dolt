@@ -560,6 +560,10 @@ func (sess *Session) GetDoltDbAutoIncrementTracker(dbName string) (sglobal.AutoI
 
 	workingRef := d.WorkingSet.Ref().String()
 
+	if d.RefStore == nil {
+		return nil, false
+	}
+
 	memStore := d.RefStore.GetRefMemStore(workingRef)
 
 	return memStore.Ait, true
