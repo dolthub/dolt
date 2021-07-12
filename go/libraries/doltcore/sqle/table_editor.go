@@ -82,7 +82,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 	}, nil
 }
 
-func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple, isPk bool) error {
+func (te *sqlTableEditor) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
 	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
 	if err != nil {
 		return err

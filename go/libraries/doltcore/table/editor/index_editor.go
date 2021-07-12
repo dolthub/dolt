@@ -257,7 +257,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 		if matches, err := ie.iea.HasPartial(ctx, ie.idxSch, partialKeyHash, partialKey); err != nil {
 			return err
 		} else if len(matches) > 0 {
-			tableTuple, err := ie.indexTupleToTableTuple(matches[0].Tuple)
+			tableTuple, err := ie.idx.ToTableTuple(ctx, matches[0].Tuple, ie.nbf)
 			if err != nil {
 				return err
 			}
@@ -565,43 +565,6 @@ func processIndexEditAccumulatorChain(ctx context.Context, futureIea *indexEditA
 	iea.addedKeys = nil
 	iea.removedKeys = nil
 	return updatedMap, nil
-}
-
-// indexTupleToTableTuple takes an index tuple and returns a tuple which matches the row on the table by its primary key.
-func (ie *IndexEditor) indexTupleToTableTuple(indexKey types.Tuple) (types.Tuple, error) {
-	pkTags := make(map[uint64]int)
-	for i, tag := range ie.tblSch.GetPKCols().Tags {
-		pkTags[tag] = i
-	}
-	tplItr, err := indexKey.Iterator()
-	if err != nil {
-		return types.Tuple{}, err
-	}
-	resVals := make([]types.Value, len(pkTags)*2)
-	for {
-		_, tag, err := tplItr.NextUint64()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return types.Tuple{}, err
-		}
-		idx, inPK := pkTags[tag]
-		if inPK {
-			_, valVal, err := tplItr.Next()
-			if err != nil {
-				return types.Tuple{}, err
-			}
-			resVals[idx*2] = types.Uint(tag)
-			resVals[idx*2+1] = valVal
-		} else {
-			err := tplItr.Skip()
-			if err != nil {
-				return types.Tuple{}, err
-			}
-		}
-	}
-	return types.NewTuple(ie.nbf, resVals...)
 }
 
 // Error implements the error interface.

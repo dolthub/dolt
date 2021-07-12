@@ -424,6 +424,21 @@ func (refOp ForeignKeyReferenceOption) String() string {
 	}
 }
 
+// ReducedString returns the SQL reference option in uppercase. All reference options are functionally equivalent to
+// either RESTRICT, CASCADE, or SET NULL, therefore only one those three options are returned.
+func (refOp ForeignKeyReferenceOption) ReducedString() string {
+	switch refOp {
+	case ForeignKeyReferenceOption_DefaultAction, ForeignKeyReferenceOption_NoAction, ForeignKeyReferenceOption_Restrict:
+		return "RESTRICT"
+	case ForeignKeyReferenceOption_Cascade:
+		return "CASCADE"
+	case ForeignKeyReferenceOption_SetNull:
+		return "SET NULL"
+	default:
+		return "INVALID"
+	}
+}
+
 // copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures
 // that the original collection is not affected by any operations applied to the copied collection.
 func (fkc *ForeignKeyCollection) copy() *ForeignKeyCollection {
