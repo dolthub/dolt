@@ -1,4 +1,4 @@
-package autoincr
+package sglobal
 
 import (
 	"fmt"

@@ -142,7 +142,7 @@ type DatabaseSessionState struct {
 	dirty                bool
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
-	RefStore             autoincr.RefInMemStore
+	RefStore             sglobal.RefInMemStore
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
@@ -171,7 +171,7 @@ type InitialDbState struct {
 	HeadCommit *doltdb.Commit
 	WorkingSet *doltdb.WorkingSet
 	DbData     env.DbData
-	RefStore   autoincr.RefInMemStore
+	RefStore   sglobal.RefInMemStore
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -551,7 +551,7 @@ func (sess *Session) GetDoltDBDocsReadWriter(dbName string) (env.DocsReadWriter,
 	return d.dbData.Drw, true
 }
 
-func (sess *Session) GetDoltDbAutoIncrementTracker(dbName string) (autoincr.AutoIncrementTracker, bool) {
+func (sess *Session) GetDoltDbAutoIncrementTracker(dbName string) (sglobal.AutoIncrementTracker, bool) {
 	d, ok := sess.DbStates[dbName]
 
 	if !ok {

@@ -267,7 +267,7 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			WorkingSet: ws,
 			DbData:     dEnv.DbData(),
 			// TODO: The placement of this may change when multiple Dolt Databases can be represented in one commit log.
-			RefStore: autoincr.NewSessionGlobalInMemStore(),
+			RefStore: sglobal.NewSessionGlobalInMemStore(),
 		})
 	}
 

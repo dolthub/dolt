@@ -49,7 +49,7 @@ type sqlTableEditor struct {
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
 	temporary         bool
-	aiTracker         autoincr.AutoIncrementTracker
+	aiTracker         sglobal.AutoIncrementTracker
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
