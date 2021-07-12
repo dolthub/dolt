@@ -44,17 +44,13 @@ func init() {
 	}
 }
 
-type RevisionDatabaseProvider interface {
-	RevisionDbState(ctx context.Context, revDB string) (dsess.InitialDbState, error)
-}
-
 type DoltDatabaseProvider struct {
 	databases map[string]sql.Database
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
-var _ RevisionDatabaseProvider = DoltDatabaseProvider{}
+var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
 func NewDoltDatabaseProvider(databases ...Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
@@ -174,15 +170,19 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string)
 		return init, nil
 	}
 
-	if doltdb.IsValidCommitHash(revSpec) {
-		_, init, err := dbRevisionForCommit(ctx, srcDb, revSpec)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-		return init, nil
-	}
+	// TODO: allow database revisions at commits
+	// much of the current database state logic depends on having
+	// a WorkingSet to reference, but Commits in the history don't
+	// have corresponding WorkingSets.
+	//if doltdb.IsValidCommitHash(revSpec) {
+	//	_, init, err := dbRevisionForCommit(ctx, srcDb, revSpec)
+	//	if err != nil {
+	//		return dsess.InitialDbState{}, err
+	//	}
+	//	return init, nil
+	//}
 
-	return dsess.InitialDbState{}, err
+	return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
 }
 
 func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {
@@ -269,6 +269,8 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 	init := dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: cm,
+		// TODO: provide a working root without a working set
+		//WorkingSet: nil
 		DbData: env.DbData{
 			Ddb: srcDb.ddb,
 			Rsw: srcDb.rsw,

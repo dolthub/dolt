@@ -89,22 +89,6 @@ func init() {
 	})
 }
 
-func TransactionsDisabled(ctx *sql.Context) bool {
-	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
-	if err != nil {
-		panic(err)
-	}
-
-	switch enabled.(int8) {
-	case 0:
-		return false
-	case 1:
-		return true
-	default:
-		panic(fmt.Sprintf("Unexpected value %v", enabled))
-	}
-}
-
 func IsHeadKey(key string) (bool, string) {
 	if strings.HasSuffix(key, HeadKeySuffix) {
 		return true, key[:len(key)-len(HeadKeySuffix)]
@@ -127,8 +111,8 @@ type Session struct {
 	BatchMode batchMode
 	Username  string
 	Email     string
-	// TODO: make this private again
-	dbStates map[string]*DatabaseSessionState
+	dbStates  map[string]*DatabaseSessionState
+	provider  RevisionDatabaseProvider
 }
 
 type DatabaseSessionState struct {
@@ -162,6 +146,7 @@ func DefaultSession() *Session {
 		Username: "",
 		Email:    "",
 		dbStates: make(map[string]*DatabaseSessionState),
+		provider: emptyRevisionDatabaseProvider{},
 	}
 	return sess
 }
@@ -175,12 +160,13 @@ type InitialDbState struct {
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess sql.Session, username, email string, dbs ...InitialDbState) (*Session, error) {
+func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, username, email string, dbs ...InitialDbState) (*Session, error) {
 	sess := &Session{
 		Session:  sqlSess,
 		Username: username,
 		Email:    email,
 		dbStates: make(map[string]*DatabaseSessionState),
+		provider: pro,
 	}
 
 	for _, db := range dbs {
@@ -208,6 +194,25 @@ func DSessFromSess(sess sql.Session) *Session {
 
 func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
 	dbState, ok := sess.dbStates[dbName]
+	if ok {
+		return dbState, ok, nil
+	}
+
+	init, err := sess.provider.RevisionDbState(ctx, dbName)
+	if err != nil {
+		return nil, ok, err
+	}
+	// TODO: this could potentially add a |sess.dbStates| entry
+	// for every commit in the history, leaking memory.
+	// We need a size-limited data structure for read-only
+	// revision databases reading from Commits.
+	if err = sess.AddDB(ctx, init); err != nil {
+		return nil, ok, err
+	}
+	dbState, ok = sess.dbStates[dbName]
+	if !ok {
+		return nil, ok, sql.ErrDatabaseNotFound.New(dbName)
+	}
 	return dbState, ok, nil
 }
 
@@ -226,13 +231,6 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 	}
 
 	return sess.SetRoot(ctx, dbName, newRoot)
-}
-
-// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
-type DisabledTransaction struct{}
-
-func (d DisabledTransaction) String() string {
-	return "Disabled transaction"
 }
 
 // CommitTransaction commits the in-progress transaction for the database named

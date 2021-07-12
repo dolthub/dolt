@@ -109,7 +109,8 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 
 	dbs := commands.CollectDBs(mrEnv)
-	cat := sql.NewCatalogWithDbProvider(dsqle.NewDoltDatabaseProvider(dbs...))
+	pro := dsqle.NewDoltDatabaseProvider(dbs...)
+	cat := sql.NewCatalogWithDbProvider(pro)
 	cat.AddDatabase(information_schema.NewInformationSchemaDatabase(cat))
 
 	a := analyzer.NewBuilder(cat).WithParallelism(serverConfig.QueryParallelism()).Build()
@@ -141,7 +142,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 			// to the value of mysql that we support.
 		},
 		sqlEngine,
-		newSessionBuilder(sqlEngine, username, email, mrEnv, serverConfig.AutoCommit()),
+		newSessionBuilder(sqlEngine, username, email, pro, mrEnv, serverConfig.AutoCommit()),
 	)
 
 	if startError != nil {
@@ -168,7 +169,7 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
+func newSessionBuilder(sqlEngine *sqle.Engine, username string, email string, pro dsqle.DoltDatabaseProvider, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 
@@ -180,7 +181,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, mrEnv env
 			return nil, nil, nil, err
 		}
 
-		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, username, email, dbStates...)
+		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, pro, username, email, dbStates...)
 		if err != nil {
 			return nil, nil, nil, err
 		}
