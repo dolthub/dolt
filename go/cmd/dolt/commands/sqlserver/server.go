@@ -17,7 +17,6 @@ package sqlserver
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sglobal"
 	"net"
 	"strconv"
 	"time"
@@ -38,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sglobal"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
