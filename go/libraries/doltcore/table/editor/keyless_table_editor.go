@@ -195,16 +195,6 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 	return kte.acc.increment(key, val)
 }
 
-// GetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
-func (kte *keylessTableEditor) GetAutoIncrementValue(ctx context.Context) types.Value {
-	return types.NullValue
-}
-
-// SetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
-func (kte *keylessTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
-	return fmt.Errorf("keyless tables do not support AUTO_INCREMENT")
-}
-
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
 func (kte *keylessTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 	kte.mu.Lock()

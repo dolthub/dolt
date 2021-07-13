@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -134,7 +135,16 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 }
 
 func (te *sqlTableEditor) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	val := te.tableEditor.GetAutoIncrementValue(ctx)
+	t, err := te.tableEditor.Table(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := t.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return te.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
 }
 
@@ -143,14 +153,38 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 	if err != nil {
 		return err
 	}
-	if err = te.tableEditor.SetAutoIncrementValue(nomsVal); err != nil {
+
+	tbl, err := te.tableEditor.Table(ctx)
+	if err != nil {
+		return err
+	}
+
+	newTbl, err := tbl.SetAutoIncrementValue(nomsVal)
+	if err != nil {
+		return err
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	root, ok := sess.GetRoot(te.dbName)
+	if !ok {
+		return fmt.Errorf("error: database %s not found", te.dbName)
+	}
+
+	newRv, err := root.PutTable(ctx, te.tableName, newTbl)
+	if err != nil {
+		return err
+	}
+
+	err = te.setRoot(ctx, newRv)
+	if err != nil {
 		return err
 	}
 
 	// Reset the auto increment tracker
 	te.aiTracker.Reset(te.tableName, val)
 
-	return te.flush(ctx)
+	return nil
 }
 
 // Close implements Closer

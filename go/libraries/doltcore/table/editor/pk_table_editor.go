@@ -55,9 +55,6 @@ type TableEditor interface {
 	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
 	DeleteRow(ctx context.Context, r row.Row) error
 
-	GetAutoIncrementValue(ctx context.Context) types.Value
-	SetAutoIncrementValue(v types.Value) (err error)
-
 	Table(ctx context.Context) (*doltdb.Table, error)
 	Schema() schema.Schema
 	Name() string
@@ -635,16 +632,6 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	te.tea.addedKeys[newHash] = &doltKVP{k: dNewKeyVal, v: dNewRowVal}
 	te.tea.opCount += 2
 	return nil
-}
-
-func (te *pkTableEditor) GetAutoIncrementValue(ctx context.Context) types.Value {
-	val, _ := te.t.GetAutoIncrementValue(ctx)
-	return val
-}
-
-func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
-	te.t, err = te.t.SetAutoIncrementValue(v)
-	return
 }
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.

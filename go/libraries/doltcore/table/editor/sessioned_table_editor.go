@@ -93,14 +93,6 @@ func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row,
 	return ste.updateRow(ctx, dOldRow, dNewRow, true, errFunc)
 }
 
-func (ste *sessionedTableEditor) GetAutoIncrementValue(ctx context.Context) types.Value {
-	return ste.tableEditor.GetAutoIncrementValue(ctx)
-}
-
-func (ste *sessionedTableEditor) SetAutoIncrementValue(v types.Value) error {
-	return ste.tableEditor.SetAutoIncrementValue(v)
-}
-
 func (ste *sessionedTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 	root, err := ste.tableEditSession.Flush(ctx)
 	if err != nil {
