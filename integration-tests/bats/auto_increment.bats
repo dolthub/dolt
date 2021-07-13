@@ -337,7 +337,7 @@ SQL
     [[ "${lines[3]}" =~ "3,3" ]] || false
 }
 
-@test "auto_increment: truncate in session correctly resets tracker" {
+@test "auto_increment: truncate in session correctly resets auto increment values" {
     dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,
@@ -402,9 +402,10 @@ SQL
     [[ "${lines[4]}" =~ "5,5" ]] || false
     [[ "${lines[5]}" =~ "6,6" ]] || false
     [[ "${lines[6]}" =~ "7,7" ]] || false
+    ! [[ "$output" =~ "3" ]] || false
 }
 
-@test "auto_increment: go forward than backwards" {
+@test "auto_increment: go forward then backwards" {
     dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,
@@ -431,7 +432,7 @@ SQL
     [[ "${lines[8]}" =~ "8,8" ]] || false
 }
 
-@test "auto_increment: dolt_merge() with auto increment #1" {
+@test "auto_increment: dolt_merge() works with no auto increment overlap" {
     dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,
@@ -462,7 +463,7 @@ SQL
     [[ "${lines[7]}" =~ "7,7" ]] || false
 }
 
-@test "auto_increment: dolt_merge() with auto increment #2" {
+@test "auto_increment: Jump in auto increment values after a dolt merge" {
     dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,
@@ -490,9 +491,12 @@ SQL
     [[ "${lines[4]}" =~ "4,4" ]] || false
     [[ "${lines[5]}" =~ "10,10" ]] || false
     [[ "${lines[6]}" =~ "11,11" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM t"
+    [[ "$output" =~ "6" ]] || false
 }
 
-@test "auto_increment: dolt_merge() with auto increment #3" {
+@test "auto_increment: dolt_merge() with a gap in an auto increment key" {
     dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,
@@ -520,9 +524,12 @@ SQL
     [[ "${lines[4]}" =~ "4,4" ]] || false
     [[ "${lines[5]}" =~ "5,5" ]] || false
     [[ "${lines[6]}" =~ "6,6" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM t"
+    [[ "$output" =~ "6" ]] || false
 }
 
-@test "auto_increment: dolt_merge() with auto increment #4" {
+@test "auto_increment: dolt_merge() with lesser auto increment keys" {
     dolt sql <<SQL
 CREATE TABLE t (
     pk int PRIMARY KEY AUTO_INCREMENT,
