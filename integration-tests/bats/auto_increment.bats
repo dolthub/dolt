@@ -521,3 +521,32 @@ SQL
     [[ "${lines[5]}" =~ "5,5" ]] || false
     [[ "${lines[6]}" =~ "6,6" ]] || false
 }
+
+@test "auto_increment: dolt_merge() with auto increment #4" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO t VALUES (4, 4), (5, 5);
+SELECT DOLT_COMMIT('-a', '-m', 'cm1');
+SELECT DOLT_CHECKOUT('-b', 'test');
+
+INSERT INTO t VALUES (1,1), (2, 2);
+SELECT DOLT_COMMIT('-a', '-m', 'cm2');
+SELECT DOLT_CHECKOUT('master');
+
+SELECT DOLT_MERGE('test');
+INSERT INTO t VALUES (NULL,6);
+SQL
+
+    run dolt sql -q "SELECT * FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "4,4" ]] || false
+    [[ "${lines[4]}" =~ "5,5" ]] || false
+    [[ "${lines[5]}" =~ "6,6" ]] || false
+}
