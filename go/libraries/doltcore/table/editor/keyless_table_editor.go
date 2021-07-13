@@ -196,7 +196,7 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 }
 
 // GetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
-func (kte *keylessTableEditor) GetAutoIncrementValue() types.Value {
+func (kte *keylessTableEditor) GetAutoIncrementValue(ctx context.Context) types.Value {
 	return types.NullValue
 }
 

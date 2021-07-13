@@ -637,7 +637,7 @@ func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentia
 
 func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if t.ed != nil {
-		return t.ed.GetAutoIncrementValue()
+		return t.ed.GetAutoIncrementValue(ctx)
 	}
 	return t.DoltTable.GetAutoIncrementValue(ctx)
 }

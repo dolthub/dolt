@@ -55,7 +55,7 @@ type TableEditor interface {
 	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
 	DeleteRow(ctx context.Context, r row.Row) error
 
-	GetAutoIncrementValue() types.Value
+	GetAutoIncrementValue(ctx context.Context) types.Value
 	SetAutoIncrementValue(v types.Value) (err error)
 
 	Table(ctx context.Context) (*doltdb.Table, error)
@@ -93,7 +93,6 @@ type pkTableEditor struct {
 
 	hasAutoInc bool
 	autoIncCol schema.Column
-	autoIncVal types.Value
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -154,10 +153,6 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 
 	err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
-			te.autoIncVal, err = t.GetAutoIncrementValue(ctx)
-			if err != nil {
-				return true, err
-			}
 			te.hasAutoInc = true
 			te.autoIncCol = col
 			return true, err
@@ -438,12 +433,17 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 		if ok {
 			var less bool
 
+			currentAiVal, err := te.t.GetAutoIncrementValue(ctx)
+			if err != nil {
+				return err
+			}
+
 			// float auto increment values should be rounded before comparing to the current auto increment values
-			if te.autoIncVal.Kind() == types.FloatKind {
+			if currentAiVal.Kind() == types.FloatKind {
 				rounded := types.Round(insertVal)
-				less, err = rounded.Less(te.nbf, te.autoIncVal)
+				less, err = rounded.Less(te.nbf, currentAiVal)
 			} else {
-				less, err = insertVal.Less(te.nbf, te.autoIncVal)
+				less, err = insertVal.Less(te.nbf, currentAiVal)
 			}
 
 			if err != nil {
@@ -451,8 +451,11 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 			}
 
 			if !less {
-				te.autoIncVal = types.Round(insertVal)
-				te.autoIncVal = types.Increment(te.autoIncVal)
+				rounded := types.Round(insertVal)
+				te.t, err = te.t.SetAutoIncrementValue(types.Increment(rounded))
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -634,13 +637,13 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	return nil
 }
 
-func (te *pkTableEditor) GetAutoIncrementValue() types.Value {
-	return te.autoIncVal
+func (te *pkTableEditor) GetAutoIncrementValue(ctx context.Context) types.Value {
+	val, _ := te.t.GetAutoIncrementValue(ctx)
+	return val
 }
 
 func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
-	te.autoIncVal = v
-	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
+	te.t, err = te.t.SetAutoIncrementValue(v)
 	return
 }
 
@@ -654,13 +657,6 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 
 	te.flushMutex.Lock()
 	defer te.flushMutex.Unlock()
-
-	if te.hasAutoInc {
-		te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	tbl := te.t
 	idxMutex := &sync.Mutex{}

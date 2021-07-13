@@ -133,8 +133,8 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
 }
 
-func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
-	val := te.tableEditor.GetAutoIncrementValue()
+func (te *sqlTableEditor) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+	val := te.tableEditor.GetAutoIncrementValue(ctx)
 	return te.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
 }
 
