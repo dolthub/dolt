@@ -607,11 +607,35 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 	return te
 }
 
-// GetAutoIncrementValue gets the last AUTO_INCREMENT value
-func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+// PeekNextAutoIncrementValue implements sql.AutoIncrementTable
+func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if !t.autoIncCol.AutoIncrement {
 		return nil, sql.ErrNoAutoIncrementCol
 	}
+
+	return t.getTableAutoIncrementValue(ctx)
+}
+
+// GetNextAutoIncrementValue implements sql.AutoIncrementTable
+func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentialVal interface{}) (interface{}, error) {
+	if !t.autoIncCol.AutoIncrement {
+		return nil, sql.ErrNoAutoIncrementCol
+	}
+
+	ed, err := t.getTableEditor(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tableVal, err := t.getTableAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return ed.aiTracker.Next(t.tableName, potentialVal, tableVal)
+}
+
+func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if t.ed != nil {
 		return t.ed.GetAutoIncrementValue()
 	}

@@ -434,15 +434,26 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 
 	if te.hasAutoInc {
 		insertVal, ok := tagToVal[te.autoIncCol.Tag]
+
 		if ok {
-			less, err := te.autoIncVal.Less(te.nbf, insertVal)
+			var less bool
+
+			// float auto increment values should be rounded before comparing to the current auto increment values
+			if te.autoIncVal.Kind() == types.FloatKind {
+				rounded := types.Round(insertVal)
+				less, err = rounded.Less(te.nbf, te.autoIncVal)
+			} else {
+				less, err = insertVal.Less(te.nbf, te.autoIncVal)
+			}
+
 			if err != nil {
 				return err
 			}
-			if less {
+
+			if !less {
 				te.autoIncVal = types.Round(insertVal)
+				te.autoIncVal = types.Increment(te.autoIncVal)
 			}
-			te.autoIncVal = types.Increment(te.autoIncVal)
 		}
 	}
 

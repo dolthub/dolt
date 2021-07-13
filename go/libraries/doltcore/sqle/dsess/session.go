@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -141,6 +142,7 @@ type DatabaseSessionState struct {
 	dirty                bool
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
+	GlobalState          globalstate.GlobalState
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
@@ -165,10 +167,11 @@ func DefaultSession() *Session {
 }
 
 type InitialDbState struct {
-	Db         sql.Database
-	HeadCommit *doltdb.Commit
-	WorkingSet *doltdb.WorkingSet
-	DbData     env.DbData
+	Db          sql.Database
+	HeadCommit  *doltdb.Commit
+	WorkingSet  *doltdb.WorkingSet
+	DbData      env.DbData
+	GlobalState globalstate.GlobalState
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -548,6 +551,24 @@ func (sess *Session) GetDoltDBDocsReadWriter(dbName string) (env.DocsReadWriter,
 	return d.dbData.Drw, true
 }
 
+func (sess *Session) GetDoltDbAutoIncrementTracker(dbName string) (globalstate.AutoIncrementTracker, bool) {
+	d, ok := sess.DbStates[dbName]
+
+	if !ok {
+		return nil, false
+	}
+
+	wsref := d.WorkingSet.Ref()
+
+	if d.GlobalState == nil {
+		return nil, false
+	}
+
+	tracker := d.GlobalState.GetAutoIncrementTracker(wsref)
+
+	return tracker, true
+}
+
 func (sess *Session) GetDbData(dbName string) (env.DbData, bool) {
 	sessionState, ok := sess.DbStates[dbName]
 	if !ok {
@@ -924,6 +945,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	adapter := NewSessionStateAdapter(sess, db.Name())
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
+	sessionState.GlobalState = dbState.GlobalState
 
 	sessionState.EditSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 

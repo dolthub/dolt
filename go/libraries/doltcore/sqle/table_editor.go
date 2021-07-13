@@ -15,16 +15,16 @@
 package sqle
 
 import (
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/types"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // sqlTableEditor is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
@@ -48,6 +48,7 @@ type sqlTableEditor struct {
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
 	temporary         bool
+	aiTracker         globalstate.AutoIncrementTracker
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -63,6 +64,9 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		return nil, err
 	}
 
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	ait, _ := doltSession.GetDoltDbAutoIncrementTracker(t.db.Name())
+
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
 		tableName:   t.Name(),
@@ -74,6 +78,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		tableEditor: tableEditor,
 		sess:        sess,
 		temporary:   t.IsTemporary(),
+		aiTracker:   ait,
 	}, nil
 }
 
@@ -141,6 +146,9 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 	if err = te.tableEditor.SetAutoIncrementValue(nomsVal); err != nil {
 		return err
 	}
+
+	te.aiTracker.Reset(te.tableName, val)
+
 	return te.flush(ctx)
 }
 
