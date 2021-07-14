@@ -402,6 +402,7 @@ SQL
     [[ "${lines[4]}" =~ "5,5" ]] || false
     [[ "${lines[5]}" =~ "6,6" ]] || false
     [[ "${lines[6]}" =~ "7,7" ]] || false
+    ! [[ "$output" =~ "3" ]] || false
 }
 
 @test "auto_increment: go forward then backwards" {
@@ -490,6 +491,9 @@ SQL
     [[ "${lines[4]}" =~ "4,4" ]] || false
     [[ "${lines[5]}" =~ "10,10" ]] || false
     [[ "${lines[6]}" =~ "11,11" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM t"
+    [[ "$output" =~ "6" ]] || false
 }
 
 @test "auto_increment: dolt_merge() with a gap in an auto increment key" {
@@ -520,6 +524,9 @@ SQL
     [[ "${lines[4]}" =~ "4,4" ]] || false
     [[ "${lines[5]}" =~ "5,5" ]] || false
     [[ "${lines[6]}" =~ "6,6" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM t"
+    [[ "$output" =~ "6" ]] || false
 }
 
 @test "auto_increment: dolt_merge() with lesser auto increment keys" {
