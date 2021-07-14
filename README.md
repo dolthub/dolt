@@ -372,23 +372,23 @@ explore and clone. Here are some of our favorites.
 - IP Address to Country: https://www.dolthub.com/repositories/dolthub/ip-to-country
 
 
-# Running A SQL-Server
+# Running A SQL Server
 
-Dolt comes built in with a sql-server that you can connect with either the mysql-client or your favorite editor/tool.
+Dolt comes built in with a SQL server that you can connect to with either the MySQL client, or your favorite MySQL-compatible tool.
 Simply run:
 
 ```bash
 dolt sql-server
 ```
 
-You connect with mysql using the default port 3306 as follows. The default username is "root" and the default password is 
+You connect with mysql using the default port 3306 as follows. The default username is "root", and the default password is 
 "" (empty password)
 
 ```bash
 mysql -h 127.0.0.1 -u root  --port 3306 -p
 ```
 
-Check these portions of the documentation for more configuration options.
+Checkout these portions of the documentation for more configuration options.
 
 * [Starting a SQL
   server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
