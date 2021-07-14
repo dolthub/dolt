@@ -565,20 +565,22 @@ func (sess *Session) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB,
 	return dbState.dbData.Ddb, true
 }
 
-func (sess *Session) GetDoltDbAutoIncrementTracker(dbName string) (globalstate.AutoIncrementTracker, bool) {
-	d, ok := sess.DbStates[dbName]
-
+func (sess *Session) GetDoltDbAutoIncrementTracker(ctx *sql.Context, dbName string) (globalstate.AutoIncrementTracker, bool) {
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return nil, false
+	}
 	if !ok {
 		return nil, false
 	}
 
-	wsref := d.WorkingSet.Ref()
+	wsref := dbState.WorkingSet.Ref()
 
-	if d.GlobalState == nil {
+	if dbState.GlobalState == nil {
 		return nil, false
 	}
 
-	tracker := d.GlobalState.GetAutoIncrementTracker(wsref)
+	tracker := dbState.GlobalState.GetAutoIncrementTracker(wsref)
 
 	return tracker, true
 }

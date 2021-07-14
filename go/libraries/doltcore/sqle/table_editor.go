@@ -68,7 +68,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 	}
 
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	ait, _ := doltSession.GetDoltDbAutoIncrementTracker(t.db.Name())
+	ait, _ := doltSession.GetDoltDbAutoIncrementTracker(ctx, t.db.Name())
 
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
