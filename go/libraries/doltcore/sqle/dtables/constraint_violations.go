@@ -79,7 +79,7 @@ func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, dSch)
+	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConstViolTablePrefix+tblName, dSch)
 	if err != nil {
 		return nil, err
 	}

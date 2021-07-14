@@ -1261,3 +1261,23 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 
 	return buf.String()
 }
+
+// MapTableHashes returns a map of each table name and hash.
+func (root *RootValue) MapTableHashes(ctx context.Context) (map[string]hash.Hash, error) {
+	names, err := root.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nameToHash := make(map[string]hash.Hash)
+	for _, name := range names {
+		h, ok, err := root.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, fmt.Errorf("root found a table with name '%s' but no hash", name)
+		} else {
+			nameToHash[name] = h
+		}
+	}
+	return nameToHash, nil
+}
