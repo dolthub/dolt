@@ -111,6 +111,9 @@ func stageTablesNoEnvUpdate(
 		return doltdb.Roots{}, err
 	}
 	roots.Staged, err = MoveTablesBetweenRoots(ctx, tbls, roots.Working, roots.Staged)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
 
 	return roots, nil
 }

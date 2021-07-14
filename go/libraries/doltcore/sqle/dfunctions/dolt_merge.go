@@ -137,26 +137,38 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	if canFF {
-		if apr.Contains(cli.NoFFParam) {
-			ws, err = executeNoFFMerge(ctx, sess, apr, dbName, ws, dbData, headCommit, mergeCommit)
-			if err == doltdb.ErrUnresolvedConflicts {
-				// if there are unresolved conflicts, write the resulting working set back to the session and return an
-				// error message
-				wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
-				if wsErr != nil {
-					return nil, wsErr
-				}
-
-				return err.Error(), nil
-			}
-		} else {
-			err = executeFFMerge(ctx, sess, apr.Contains(cli.SquashParam), dbName, ws, dbData, mergeCommit)
-		}
-
+		headRoot, err := headCommit.GetRootValue()
 		if err != nil {
 			return nil, err
 		}
-		return cmh.String(), err
+		mergeRoot, err := mergeCommit.GetRootValue()
+		if err != nil {
+			return nil, err
+		}
+		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, headRoot, mergeRoot); err != nil {
+			return nil, err
+		} else if !cvPossible {
+			if apr.Contains(cli.NoFFParam) {
+				ws, err = executeNoFFMerge(ctx, sess, apr, dbName, ws, dbData, headCommit, mergeCommit)
+				if err == doltdb.ErrUnresolvedConflicts {
+					// if there are unresolved conflicts, write the resulting working set back to the session and return an
+					// error message
+					wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
+					if wsErr != nil {
+						return nil, wsErr
+					}
+
+					return err.Error(), nil
+				}
+			} else {
+				err = executeFFMerge(ctx, sess, apr.Contains(cli.SquashParam), dbName, ws, dbData, mergeCommit)
+			}
+
+			if err != nil {
+				return nil, err
+			}
+			return cmh.String(), err
+		}
 	}
 
 	ws, err = executeMerge(ctx, apr.Contains(cli.SquashParam), headCommit, mergeCommit, ws)

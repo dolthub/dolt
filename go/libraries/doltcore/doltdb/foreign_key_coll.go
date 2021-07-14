@@ -406,6 +406,16 @@ func (fkc *ForeignKeyCollection) Stage(ctx context.Context, fksToAdd []ForeignKe
 	}
 }
 
+// Tables returns the set of all tables that either declare a foreign key or are referenced by a foreign key.
+func (fkc *ForeignKeyCollection) Tables() map[string]struct{} {
+	tables := make(map[string]struct{})
+	for _, fk := range fkc.foreignKeys {
+		tables[fk.TableName] = struct{}{}
+		tables[fk.ReferencedTableName] = struct{}{}
+	}
+	return tables
+}
+
 // String returns the SQL reference option in uppercase.
 func (refOp ForeignKeyReferenceOption) String() string {
 	switch refOp {

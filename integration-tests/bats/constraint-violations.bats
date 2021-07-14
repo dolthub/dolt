@@ -10,6 +10,56 @@ teardown() {
     teardown_common
 }
 
+@test "constraint-violations: functions blocked with violations" {
+    dolt sql <<"SQL"
+CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
+INSERT INTO test VALUES (1, 1), (2, 2);
+SQL
+    dolt add -A
+    dolt commit -m "MC1"
+    dolt branch other
+    dolt sql -q "INSERT INTO test VALUES (3, 3)"
+    dolt add -A
+    dolt commit -m "MC2"
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (4, 3), (9, 9)"
+    dolt add -A
+    dolt commit -m "OC1"
+    dolt checkout master
+
+    run dolt merge other
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fix constraint violations" ]] || false
+    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "table,num_violations" ]] || false
+    [[ "$output" =~ "test,1" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt status
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fix constraint violations" ]] || false
+    [[ "$output" =~ "test" ]] || false
+    run dolt merge other
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "constraint violation" ]] || false
+    run dolt add test
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "test" ]] || false
+    run dolt commit -m "this should fail"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "constraint violation" ]] || false
+
+    dolt sql -q "DELETE FROM dolt_constraint_violations_test"
+    run dolt status
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "constraint violations fixed" ]] || false
+    dolt add test
+    dolt commit -m "this works"
+    run dolt merge other
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "up to date" ]] || false
+}
+
 @test "constraint-violations: ancestor contains fk, main parent remove, other child add, restrict" {
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
@@ -2579,7 +2629,6 @@ SQL
 }
 
 @test "constraint-violations: cyclic foreign keys, illegal deletion" {
-    skip "Figure out how we should handle fast forward with foreign key merging"
     # We're deleting a reference in a cycle from each table to make sure if properly applies a violation in both instances
     dolt sql <<"SQL"
 CREATE TABLE t1 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
