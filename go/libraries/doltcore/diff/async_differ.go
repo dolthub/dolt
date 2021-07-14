@@ -112,7 +112,7 @@ func (ad *AsyncDiffer) Close() error {
 }
 
 func (ad *AsyncDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pred diffPredicate) ([]*diff.Difference, bool, error) {
-	diffs := make([]*diff.Difference, 0, ad.bufferSize)
+	diffs := make([]*diff.Difference, 0, numDiffs)
 	for {
 		select {
 		case d, more := <-ad.diffChan:

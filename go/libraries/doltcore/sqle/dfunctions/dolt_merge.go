@@ -99,13 +99,16 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	hasConflicts, err := roots.Working.HasConflicts(ctx)
-	if err != nil {
+	if hasConflicts, err := roots.Working.HasConflicts(ctx); err != nil {
 		return 1, err
+	} else if hasConflicts {
+		return 1, doltdb.ErrUnresolvedConflicts
 	}
 
-	if hasConflicts {
-		return 1, doltdb.ErrUnresolvedConflicts
+	if hasConstraintViolations, err := roots.Working.HasConstraintViolations(ctx); err != nil {
+		return 1, err
+	} else if hasConstraintViolations {
+		return 1, doltdb.ErrUnresolvedConstraintViolations
 	}
 
 	if ws.MergeActive() {

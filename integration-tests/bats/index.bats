@@ -2330,9 +2330,11 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout master
-    run dolt merge other
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "duplicate key" ]] || false
+    dolt merge other
+    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "table,num_violations" ]] || false
+    [[ "$output" =~ "onepk,1" ]] || false
 }
 
 @test "index: Merge into branch with index from branch without index" {

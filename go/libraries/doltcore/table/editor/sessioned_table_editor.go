@@ -69,7 +69,7 @@ func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, er
 	return ste.tableEditor.InsertRow(ctx, dRow, errFunc)
 }
 
-// DeleteKey removes the given key from the table.
+// DeleteRow removes the given key from the table.
 func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, r row.Row) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
@@ -93,6 +93,7 @@ func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row,
 	return ste.updateRow(ctx, dOldRow, dNewRow, true, errFunc)
 }
 
+// Table implements TableEditor.
 func (ste *sessionedTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 	root, err := ste.tableEditSession.Flush(ctx)
 	if err != nil {
@@ -110,16 +111,24 @@ func (ste *sessionedTableEditor) Table(ctx context.Context) (*doltdb.Table, erro
 	return tbl, nil
 }
 
+// Schema implements TableEditor.
 func (ste *sessionedTableEditor) Schema() schema.Schema {
 	return ste.tableEditor.Schema()
 }
 
+// Name implements TableEditor.
 func (ste *sessionedTableEditor) Name() string {
 	return ste.tableEditor.Name()
 }
 
+// Format implements TableEditor.
 func (ste *sessionedTableEditor) Format() *types.NomsBinFormat {
 	return ste.tableEditor.Format()
+}
+
+// ValueReadWriter implements TableEditor.
+func (ste *sessionedTableEditor) ValueReadWriter() types.ValueReadWriter {
+	return ste.tableEditor.ValueReadWriter()
 }
 
 // StatementStarted implements TableEditor.
@@ -132,6 +141,12 @@ func (ste *sessionedTableEditor) StatementFinished(ctx context.Context, errored 
 	return ste.tableEditor.StatementFinished(ctx, errored)
 }
 
+// SetConstraintViolation implements TableEditor.
+func (ste *sessionedTableEditor) SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error {
+	return ste.tableEditor.SetConstraintViolation(ctx, k, v)
+}
+
+// Close implements TableEditor.
 func (ste *sessionedTableEditor) Close() error {
 	return ste.tableEditor.Close()
 }

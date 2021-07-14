@@ -83,7 +83,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 	}, nil
 }
 
-func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple, isPk bool) error {
+func (te *sqlTableEditor) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
 	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
 	if err != nil {
 		return err
@@ -184,7 +184,7 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 	// Reset the auto increment tracker
 	te.aiTracker.Reset(te.tableName, val)
 
-	return nil
+	return te.flush(ctx)
 }
 
 // Close implements Closer
