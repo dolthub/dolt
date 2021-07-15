@@ -208,7 +208,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, roots.Working, cm2, dEnv.DbData())
+	tblNames, workingDiffs, err := merge.MergeWouldStompChanges(ctx, roots, cm2)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()

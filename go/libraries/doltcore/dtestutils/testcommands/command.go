@@ -237,10 +237,10 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	assert.NoError(t, err)
 	assert.NotEqual(t, h1, h2)
 
-	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	tblNames, _, err := env.MergeWouldStompChanges(context.Background(), workingRoot, cm2, dEnv.DbData())
+	tblNames, _, err := merge.MergeWouldStompChanges(context.Background(), roots, cm2)
 	if err != nil {
 		return err
 	}
