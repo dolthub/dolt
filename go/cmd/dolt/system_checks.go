@@ -19,9 +19,9 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 // returns false if it fails to verify that it can move files from the default temp directory to the local directory.
@@ -41,14 +41,14 @@ func canMoveTempFile() bool {
 		return false
 	}
 
-	err = os.Rename(name, testfile)
+	err = file.Rename(name, testfile)
 
 	if err != nil {
-		_ = os.Remove(name)
+		_ = file.Remove(name)
 		return false
 	}
 
-	_ = os.Remove(testfile)
+	_ = file.Remove(testfile)
 	return true
 }
 
