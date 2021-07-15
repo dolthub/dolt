@@ -154,23 +154,19 @@ func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData
 
 func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
 	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
-
 	if err != nil {
 		return Conflict{}, types.EmptyMap, err
 	}
-
 	if !ok {
 		return Conflict{}, types.EmptyMap, ErrNoConflicts
 	}
 
 	schemas, err := ConflictFromTuple(schemasVal.(types.Tuple))
-
 	if err != nil {
 		return Conflict{}, types.EmptyMap, err
 	}
 
 	conflictsVal, _, err := t.tableStruct.MaybeGet(conflictsKey)
-
 	if err != nil {
 		return Conflict{}, types.EmptyMap, err
 	}
