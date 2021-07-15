@@ -24,7 +24,6 @@ package nbs
 import (
 	"context"
 	"io/ioutil"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -34,6 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -47,7 +47,7 @@ func makeFileManifestTempDir(t *testing.T) fileManifestV5 {
 func TestFileManifestLoadIfExists(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
-	defer os.RemoveAll(fm.dir)
+	defer file.RemoveAll(fm.dir)
 	stats := &Stats{}
 
 	exists, upstream, err := fm.ParseIfExists(context.Background(), stats, nil)
@@ -79,7 +79,7 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
-	defer os.RemoveAll(fm.dir)
+	defer file.RemoveAll(fm.dir)
 	stats := &Stats{}
 
 	// Simulate another process writing a manifest.
@@ -115,7 +115,7 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
-	defer os.RemoveAll(fm.dir)
+	defer file.RemoveAll(fm.dir)
 	stats := &Stats{}
 
 	// Simulate another process having already put old Noms data in dir/.
@@ -130,7 +130,7 @@ func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
-	defer os.RemoveAll(fm.dir)
+	defer file.RemoveAll(fm.dir)
 	stats := &Stats{}
 
 	l := computeAddr([]byte{0x01})
@@ -159,7 +159,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 func TestFileManifestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	fm := makeFileManifestTempDir(t)
-	defer os.RemoveAll(fm.dir)
+	defer file.RemoveAll(fm.dir)
 	stats := &Stats{}
 
 	// First, test winning the race against another process.

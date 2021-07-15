@@ -38,6 +38,7 @@ import (
 	flag "github.com/juju/gnuflag"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -104,14 +105,14 @@ func main() {
 		if *toNBS != "" {
 			dir := makeTempDir(*toNBS, pb)
 			defer func() {
-				err := os.RemoveAll(dir)
+				err := file.RemoveAll(dir)
 				d.PanicIfError(err)
 			}()
 			open = func() (chunks.ChunkStore, error) {
 				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, bufSize)
 			}
 			reset = func() {
-				err := os.RemoveAll(dir)
+				err := file.RemoveAll(dir)
 				d.PanicIfError(err)
 				err = os.MkdirAll(dir, 0777)
 				d.PanicIfError(err)
@@ -120,7 +121,7 @@ func main() {
 		} else if *toFile != "" {
 			dir := makeTempDir(*toFile, pb)
 			defer func() {
-				err := os.RemoveAll(dir)
+				err := file.RemoveAll(dir)
 				d.PanicIfError(err)
 			}()
 			open = func() (chunks.ChunkStore, error) {
@@ -129,7 +130,7 @@ func main() {
 				return newFileBlockStore(f)
 			}
 			reset = func() {
-				err := os.RemoveAll(dir)
+				err := file.RemoveAll(dir)
 				d.PanicIfError(err)
 				err = os.MkdirAll(dir, 0777)
 				d.PanicIfError(err)

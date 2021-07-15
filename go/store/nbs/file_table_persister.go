@@ -32,9 +32,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
-
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const tempTablePrefix = "nbs_table_"
@@ -123,7 +123,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 		return nil, err
 	}
 
-	err = os.Rename(tempName, newName)
+	err = file.Rename(tempName, newName)
 
 	if err != nil {
 		return nil, err
@@ -203,7 +203,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, err
 	}
 
-	err = os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
+	err = file.Rename(tempName, filepath.Join(ftp.dir, name.String()))
 
 	if err != nil {
 		return nil, err
@@ -236,7 +236,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 		filePath := path.Join(ftp.dir, info.Name())
 
 		if strings.HasPrefix(info.Name(), tempTablePrefix) {
-			err = os.Remove(filePath)
+			err = file.Remove(filePath)
 			if err != nil {
 				ea.add(filePath, err)
 			}
@@ -256,7 +256,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 			continue // file is referenced in the manifest
 		}
 
-		err = os.Remove(filePath)
+		err = file.Remove(filePath)
 		if err != nil {
 			ea.add(filePath, err)
 		}

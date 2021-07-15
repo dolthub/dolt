@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,7 +32,7 @@ func TestFindGitConfigDir(t *testing.T) {
 		t.Errorf("Error creating temp directory: %v", err)
 	}
 	defer func() {
-		if err := os.RemoveAll(tmpDir); err != nil {
+		if err := file.RemoveAll(tmpDir); err != nil {
 			t.Errorf("Error removing test directories: %v", err)
 		}
 	}()

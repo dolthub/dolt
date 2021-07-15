@@ -25,12 +25,12 @@ import (
 	"bytes"
 	"context"
 	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/spec"
@@ -47,7 +47,7 @@ func TestNomsMerge(t *testing.T) {
 }
 
 func (s *nomsMergeTestSuite) TearDownTest() {
-	err := os.RemoveAll(s.DBDir)
+	err := file.RemoveAll(s.DBDir)
 	if !osutil.IsWindows {
 		s.NoError(err)
 	}
