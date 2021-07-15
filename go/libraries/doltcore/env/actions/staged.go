@@ -128,12 +128,12 @@ func stageTables(
 	}
 
 	// TODO: combine to single operation
-	err = env.UpdateWorkingRoot(ctx, rsw, roots.Working)
+	err = rsw.UpdateWorkingRoot(ctx, roots.Working)
 	if err != nil {
 		return err
 	}
 
-	return env.UpdateStagedRoot(ctx, rsw, roots.Staged)
+	return rsw.UpdateStagedRoot(ctx, roots.Staged)
 }
 
 // checkTablesForConflicts clears any 0-row conflicts from the tables named, and returns a new root with those

@@ -140,7 +140,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 	}
 
 	// TODO: combine into a single update
-	err = env.UpdateStagedRoot(ctx, rsw, stagedRoot)
+	err = rsw.UpdateStagedRoot(ctx, stagedRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		return nil, err
 	}
 
-	err = env.UpdateWorkingRoot(ctx, rsw, workingRoot)
+	err = rsw.UpdateWorkingRoot(ctx, workingRoot)
 	if err != nil {
 		return nil, err
 	}

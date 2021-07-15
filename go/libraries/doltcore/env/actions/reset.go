@@ -202,7 +202,7 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) err
 	}
 
 	// Changed the stage to old the root. Leave the working as is.
-	err = env.UpdateStagedRoot(ctx, dbData.Rsw, foundRoot)
+	err = dbData.Rsw.UpdateStagedRoot(ctx, foundRoot)
 	if err != nil {
 		return err
 	}

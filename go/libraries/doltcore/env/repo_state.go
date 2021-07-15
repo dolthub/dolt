@@ -234,17 +234,6 @@ func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*do
 	return commit.GetRootValue()
 }
 
-// Updates the staged root.
-// TODO: remove this
-func UpdateStagedRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
-	err := rsw.UpdateStagedRoot(ctx, newRoot)
-	if err != nil {
-		return ErrStateUpdate
-	}
-
-	return nil
-}
-
 // GetGCKeepers queries |rsr| to find a list of values that need to be temporarily saved during GC.
 // TODO: move this out of repo_state.go
 func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
