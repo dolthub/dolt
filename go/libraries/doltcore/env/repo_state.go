@@ -211,18 +211,6 @@ func (rs *RepoState) AddRemote(r Remote) {
 	rs.Remotes[r.Name] = r
 }
 
-// Updates the working root.
-func UpdateWorkingRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
-	// logrus.Infof("Updating working root with value %s", newRoot.DebugString(ctx, true))
-
-	err := rsw.UpdateWorkingRoot(ctx, newRoot)
-	if err != nil {
-		return ErrStateUpdate
-	}
-
-	return nil
-}
-
 // Returns the head root.
 func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
 	commit, err := ddb.ResolveCommitRef(ctx, rsr.CWBHeadRef())

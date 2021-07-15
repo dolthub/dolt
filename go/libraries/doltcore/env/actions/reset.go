@@ -240,7 +240,7 @@ func resetDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, docs 
 		return nil, err
 	}
 
-	err = env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
+	err = dbData.Rsw.UpdateWorkingRoot(ctx, roots.Working)
 	if err != nil {
 		return nil, err
 	}
