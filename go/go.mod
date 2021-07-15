@@ -18,11 +18,11 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.2
-	github.com/dolthub/go-mysql-server v0.10.1-0.20210713220712-3475290c0501
+	github.com/dolthub/go-mysql-server v0.10.1-0.20210715183513-e39781b264a7
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20210610232639-3424dd4d93a1
+	github.com/dolthub/vitess v0.0.0-20210630174954-8b41176178e1
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
