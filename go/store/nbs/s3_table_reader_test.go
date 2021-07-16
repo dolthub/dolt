@@ -22,7 +22,6 @@
 package nbs
 
 import (
-	"bytes"
 	"context"
 	"io/ioutil"
 	"net"
@@ -54,39 +53,13 @@ func TestS3TableReaderAt(t *testing.T) {
 		assert := assert.New(t)
 
 		baseline := s3.getCount
-		tra := &s3TableReaderAt{&s3ObjectReader{makeFlakyS3(s3), "bucket", nil, nil, ""}, h}
+		tra := &s3TableReaderAt{&s3ObjectReader{makeFlakyS3(s3), "bucket", nil, ""}, h}
 		scratch := make([]byte, len(tableData))
 		_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
 		require.NoError(t, err)
 		// constructing the table reader should have resulted in 2 reads
 		assert.Equal(2, s3.getCount-baseline)
 		assert.Equal(tableData, scratch)
-	})
-
-	t.Run("WithTableCache", func(t *testing.T) {
-		assert := assert.New(t)
-		dir := makeTempDir(t)
-		defer os.RemoveAll(dir)
-		stats := &Stats{}
-
-		tc, err := newFSTableCache(dir, uint64(2*len(tableData)), 4)
-		require.NoError(t, err)
-		tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, tc, ""}, h}
-
-		// First, read when table is not yet cached
-		scratch := make([]byte, len(tableData))
-		baseline := s3.getCount
-		_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
-		require.NoError(t, err)
-		assert.True(s3.getCount > baseline)
-
-		// Cache the table and read again
-		err = tc.store(h, bytes.NewReader(tableData), uint64(len(tableData)))
-		require.NoError(t, err)
-		baseline = s3.getCount
-		_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
-		require.NoError(t, err)
-		assert.Zero(s3.getCount - baseline)
 	})
 }
 
@@ -107,7 +80,7 @@ func TestS3TableReaderAtNamespace(t *testing.T) {
 	require.NoError(t, err)
 	s3.data["a-prefix-here/"+h.String()] = tableData
 
-	tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, nil, ns}, h}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, ns}, h}
 	scratch := make([]byte, len(tableData))
 	_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
 	require.NoError(t, err)

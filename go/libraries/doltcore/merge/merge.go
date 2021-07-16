@@ -16,10 +16,12 @@ package merge
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -27,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/atomicerr"
@@ -485,14 +488,20 @@ func applyPkChange(ctx context.Context, sch schema.Schema, tableEditor editor.Ta
 			if err != nil {
 				return err
 			}
-			err = tableEditor.UpdateRow(ctx, oldRow, newRow, nil)
+			err = tableEditor.UpdateRow(ctx, oldRow, newRow, handleTableEditorDuplicateErr)
 			if err != nil {
-				return err
+				err = applyPkChangeUnqErr(ctx, err, change.Key.(types.Tuple), change.NewValue.(types.Tuple), tableEditor)
+				if err != nil {
+					return err
+				}
 			}
 		} else {
-			err = tableEditor.InsertRow(ctx, newRow, nil)
+			err = tableEditor.InsertRow(ctx, newRow, handleTableEditorDuplicateErr)
 			if err != nil {
-				return err
+				err = applyPkChangeUnqErr(ctx, err, change.Key.(types.Tuple), change.NewValue.(types.Tuple), tableEditor)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		stats.Adds++
@@ -505,9 +514,12 @@ func applyPkChange(ctx context.Context, sch schema.Schema, tableEditor editor.Ta
 		if err != nil {
 			return err
 		}
-		err = tableEditor.UpdateRow(ctx, oldRow, newRow, nil)
+		err = tableEditor.UpdateRow(ctx, oldRow, newRow, handleTableEditorDuplicateErr)
 		if err != nil {
-			return err
+			err = applyPkChangeUnqErr(ctx, err, change.Key.(types.Tuple), change.NewValue.(types.Tuple), tableEditor)
+			if err != nil {
+				return err
+			}
 		}
 		stats.Modifications++
 	case types.DiffChangeRemoved:
@@ -522,6 +534,54 @@ func applyPkChange(ctx context.Context, sch schema.Schema, tableEditor editor.Ta
 		stats.Deletes++
 	}
 
+	return nil
+}
+
+// applyPkChangeUnqErr handles unique key errors for the applyPkChange if an error is returned from a table editor.
+// If the given error is not a unique key error, then it is returned as-is. Otherwise, it is added to the constraint
+// violations map if applicable.
+func applyPkChangeUnqErr(ctx context.Context, err error, k, v types.Tuple, tableEditor editor.TableEditor) error {
+	if uke, ok := err.(uniqueKeyError); ok {
+		sch := tableEditor.Schema()
+		schCols := sch.GetAllCols()
+		idx := sch.Indexes().GetByName(uke.indexName)
+		idxTags := idx.IndexedColumnTags()
+		colNames := make([]string, len(idxTags))
+		for i, tag := range idxTags {
+			if col, ok := schCols.TagToCol[tag]; !ok {
+				return fmt.Errorf("unique key '%s' references tag '%d' on table '%s' but it cannot be found",
+					idx.Name(), tag, tableEditor.Name())
+			} else {
+				colNames[i] = col.Name
+			}
+		}
+		jsonStr := fmt.Sprintf(`{`+
+			`"Name":"%s",`+
+			`"Columns":["%s"]`+
+			`}`,
+			uke.indexName,
+			strings.Join(colNames, `','`))
+
+		var doc interface{}
+		if err := json.Unmarshal([]byte(jsonStr), &doc); err != nil {
+			return err
+		}
+		sqlDoc := sql.JSONDocument{Val: doc}
+		nomsJson, err := json2.NomsJSONFromJSONValue(ctx, tableEditor.ValueReadWriter(), sqlDoc)
+		if err != nil {
+			return err
+		}
+		cvKey, cvVal, err := toConstraintViolationRow(ctx, cvType_UniqueIndex, types.JSON(nomsJson), k, v)
+		if err != nil {
+			return err
+		}
+		err = tableEditor.SetConstraintViolation(ctx, cvKey, cvVal)
+		if err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
 	return nil
 }
 
@@ -751,25 +811,21 @@ func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *dol
 
 func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
 	ancCommit, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	ourRoot, err := commit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	theirRoot, err := mergeCommit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	ancRoot, err := ancCommit.GetRootValue()
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -857,44 +913,29 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		return nil, nil, err
 	}
 
+	newRoot, err = AddConstraintViolations(ctx, newRoot, ourRoot, ancRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return newRoot, tblToStats, nil
 }
 
-func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
-	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
-
-	headRoot, err = env.HeadRoot(ctx, ddb, rsr)
-
+func GetTablesInConflict(ctx context.Context, roots doltdb.Roots) (
+	workingInConflict, stagedInConflict, headInConflict []string,
+	err error,
+) {
+	headInConflict, err = roots.Head.TablesInConflict(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	stagedRoot, err = env.StagedRoot(ctx, ddb, rsr)
-
+	stagedInConflict, err = roots.Staged.TablesInConflict(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	workingRoot, err = env.WorkingRoot(ctx, ddb, rsr)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	headInConflict, err = headRoot.TablesInConflict(ctx)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	stagedInConflict, err = stagedRoot.TablesInConflict(ctx)
-
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	workingInConflict, err = workingRoot.TablesInConflict(ctx)
-
+	workingInConflict, err = roots.Working.TablesInConflict(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -902,13 +943,8 @@ func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoSt
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
 
-func GetDocsInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
+func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
 	docs, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return nil, err
-	}
-
-	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, err
 	}

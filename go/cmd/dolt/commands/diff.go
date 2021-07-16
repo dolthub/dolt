@@ -364,7 +364,7 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 		return nil, false
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
 		return nil, false
 	}
@@ -526,7 +526,8 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 	}
 
 	if !schema.ColCollsAreCompatible(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		panic("primary key sets must be the same")
+		pkSetVErr := errhand.BuildDError("cannot diff tables with different primary key sets").Build()
+		return errhand.VerboseError(pkSetVErr)
 	}
 	pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
 	cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr))
@@ -874,7 +875,7 @@ func createSplitter(ctx context.Context, vrw types.ValueReadWriter, fromSch sche
 
 		unionSch, err = untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
 		if err != nil {
-			return nil, nil, errhand.BuildDError("Failed to merge schemas").AddCause(err).Build()
+			return nil, nil, errhand.BuildDError("Merge failed. Tables with different primary keys cannot be merged.").AddCause(err).Build()
 		}
 
 	} else {

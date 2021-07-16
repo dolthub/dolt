@@ -93,6 +93,17 @@ RUN apt-get update && apt-get -y upgrade
 RUN apt-get install -y esl-erlang
 RUN apt-get install -y elixir
 
+# install postgres and psql
+RUN apt-get install -y postgresql postgresql-contrib libpq-dev postgresql-server-dev-all
+RUN service postgresql start
+
+# install mysql_fdw
+WORKDIR /mysql-client-tests/mysql_fdw
+RUN git clone https://github.com/EnterpriseDB/mysql_fdw
+WORKDIR /mysql-client-tests/mysql_fdw/mysql_fdw
+RUN make USE_PGXS=1
+RUN make USE_PGXS=1 install
+
 # install dolt from source
 WORKDIR /root/building
 COPY ./go .

@@ -26,7 +26,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const DoltCheckoutFuncName = "dolt_checkout"
@@ -42,13 +43,6 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 
 	if len(dbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
-	}
-
-	dSess := sqle.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
-
-	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	ap := cli.CreateCheckoutArgParser()
@@ -68,11 +62,22 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 	}
 
 	// Checking out new branch.
+	dSess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := dSess.GetDbData(dbName)
+	if !ok {
+		return 1, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	roots, ok := dSess.GetRoots(dbName)
+	if !ok {
+		return 1, fmt.Errorf("Could not load database %s", dbName)
+	}
+
 	if newBranch, newBranchOk := apr.GetValue(cli.CheckoutCoBranch); newBranchOk {
 		if len(newBranch) == 0 {
 			err = errors.New("error: cannot checkout empty string")
 		} else {
-			err = checkoutNewBranch(ctx, dbData, newBranch, "")
+			err = checkoutNewBranch(ctx, dbName, dbData, roots, newBranch, "")
 		}
 
 		if err != nil {
@@ -88,27 +93,16 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, name); err != nil {
 		return 1, err
 	} else if isBranch {
-		err = checkoutBranch(ctx, dbData, name)
+		err = checkoutBranch(ctx, dbName, roots, dbData, name)
 		if err != nil {
 			return 1, err
 		}
 		return 0, nil
 	}
 
-	// Check if user want to checkout table or docs.
-	tbls, docs, err := actions.GetTablesOrDocs(dbData.Drw, args)
-	if err != nil {
-		return 1, errors.New("error: unable to parse arguments.")
-	}
-
-	if len(docs) > 0 {
-		return 1, errors.New("error: docs not supported in sql mode")
-	}
-
-	err = checkoutTables(ctx, dbData, tbls)
-
+	err = checkoutTables(ctx, roots, dbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, dbData, name)
+		err = checkoutRemoteBranch(ctx, dbName, dbData, roots, name)
 	}
 
 	if err != nil {
@@ -118,7 +112,7 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 	return 0, nil
 }
 
-func checkoutRemoteBranch(ctx *sql.Context, dbData env.DbData, branchName string) error {
+func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots doltdb.Roots, branchName string) error {
 	if len(branchName) == 0 {
 		return ErrEmptyBranchName
 	}
@@ -126,13 +120,13 @@ func checkoutRemoteBranch(ctx *sql.Context, dbData env.DbData, branchName string
 	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName); err != nil {
 		return errors.New("fatal: unable to read from data repository")
 	} else if refExists {
-		return checkoutNewBranch(ctx, dbData, branchName, ref.String())
+		return checkoutNewBranch(ctx, dbName, dbData, roots, branchName, ref.String())
 	} else {
 		return fmt.Errorf("error: could not find %s", branchName)
 	}
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbData env.DbData, branchName, startPt string) error {
+func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots doltdb.Roots, branchName, startPt string) error {
 	if len(branchName) == 0 {
 		return ErrEmptyBranchName
 	}
@@ -146,41 +140,24 @@ func checkoutNewBranch(ctx *sql.Context, dbData env.DbData, branchName, startPt 
 		return err
 	}
 
-	return checkoutBranch(ctx, dbData, branchName)
+	return checkoutBranch(ctx, dbName, roots, dbData, branchName)
 }
 
-func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) error {
+func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData env.DbData, branchName string) error {
 	if len(branchName) == 0 {
 		return ErrEmptyBranchName
 	}
-
-	err := actions.CheckoutBranchWithoutDocs(ctx, dbData, branchName)
-
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
-		} else if doltdb.IsRootValUnreachable(err) {
-			rt := doltdb.GetUnreachableRootType(err)
-			return fmt.Errorf("error: unable to read the %s", rt.String())
-		} else if actions.IsCheckoutWouldOverwrite(err) {
-			tbls := actions.CheckoutWouldOverwriteTables(err)
-			msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
-			for _, tbl := range tbls {
-				msg = msg + tbl + "\n"
-			}
-			return errors.New(msg)
-		} else if err == doltdb.ErrAlreadyOnBranch {
-			return nil // No need to return an error if on the same branch
-		} else {
-			return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
-		}
+		return err
 	}
 
-	return updateHeadAndWorkingSessionVars(ctx, dbData)
+	dSess := dsess.DSessFromSess(ctx.Session)
+	return dSess.SwitchWorkingSet(ctx, dbName, wsRef)
 }
 
-func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error {
-	err := actions.CheckoutTables(ctx, dbData, tables)
+func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
+	roots, err := actions.MoveTablesFromHeadToWorking(ctx, roots, tables)
 
 	if err != nil {
 		if doltdb.IsRootValUnreachable(err) {
@@ -193,37 +170,8 @@ func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error 
 		}
 	}
 
-	return updateHeadAndWorkingSessionVars(ctx, dbData)
-}
-
-// updateHeadAndWorkingSessionVars explicitly sets the head and working hash.
-func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error {
-	headHash, err := dbData.Rsr.CWBHeadHash(ctx)
-	if err != nil {
-		return err
-	}
-	hs := headHash.String()
-
-	hasWorkingChanges := hasWorkingSetChanges(dbData.Rsr)
-	hasStagedChanges, err := hasStagedSetChanges(ctx, dbData.Ddb, dbData.Rsr)
-
-	if err != nil {
-		return err
-	}
-
-	workingHash := dbData.Rsr.WorkingHash().String()
-
-	// This will update the session table editor's root and clear its cache.
-	if !hasStagedChanges && !hasWorkingChanges {
-		return setHeadAndWorkingSessionRoot(ctx, hs)
-	}
-
-	err = setSessionRootExplicit(ctx, hs, sqle.HeadKeySuffix)
-	if err != nil {
-		return err
-	}
-
-	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix)
+	dSess := dsess.DSessFromSess(ctx.Session)
+	return dSess.SetRoots(ctx, name, roots)
 }
 
 func (d DoltCheckoutFunc) String() string {

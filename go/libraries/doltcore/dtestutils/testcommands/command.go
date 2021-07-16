@@ -45,7 +45,10 @@ func (a StageAll) CommandString() string { return "stage_all" }
 
 // Exec executes a StageAll command on a test dolt environment.
 func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	return actions.StageAllTables(context.Background(), dEnv.DbData())
+	roots, err := dEnv.Roots(context.Background())
+	require.NoError(t, err)
+
+	return actions.StageAllTables(context.Background(), roots, dEnv.DbData())
 }
 
 type CommitStaged struct {
@@ -57,6 +60,9 @@ func (c CommitStaged) CommandString() string { return fmt.Sprintf("commit_staged
 
 // Exec executes a CommitStaged command on a test dolt environment.
 func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
+	roots, err := dEnv.Roots(context.Background())
+	require.NoError(t, err)
+
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
 
 	if err != nil {
@@ -65,7 +71,7 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(context.Background(), dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -86,7 +92,10 @@ func (c CommitAll) CommandString() string { return fmt.Sprintf("commit: %s", c.M
 
 // Exec executes a CommitAll command on a test dolt environment.
 func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	err := actions.StageAllTables(context.Background(), dEnv.DbData())
+	roots, err := dEnv.Roots(context.Background())
+	require.NoError(t, err)
+
+	err = actions.StageAllTables(context.Background(), roots, dEnv.DbData())
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
@@ -96,8 +105,11 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	}
 
 	dbData := dEnv.DbData()
+	// TODO: refactor StageAllTables to just modify roots in memory, not write to disk
+	roots, err = dEnv.Roots(context.Background())
+	require.NoError(t, err)
 
-	_, err = actions.CommitStaged(context.Background(), dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -126,7 +138,7 @@ func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	_, err = dEnv.UpdateStagedRoot(context.Background(), headRoot)
+	err = dEnv.UpdateStagedRoot(context.Background(), headRoot)
 	if err != nil {
 		return err
 	}
@@ -147,7 +159,7 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	sqlDb := dsqle.NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
+	engine, sqlCtx, err := dsqle.NewTestEngine(t, dEnv, context.Background(), sqlDb, root)
 	require.NoError(t, err)
 
 	_, iter, err := engine.Query(sqlCtx, q.Query)
@@ -186,7 +198,7 @@ func (b Branch) CommandString() string { return fmt.Sprintf("branch: %s", b.Bran
 
 // Exec executes a Branch command on a test dolt environment.
 func (b Branch) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
-	cwb := dEnv.RepoState.Head.Ref.String()
+	cwb := dEnv.RepoStateReader().CWBHeadRef().String()
 	return actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(), b.BranchName, cwb, false)
 }
 
@@ -225,7 +237,10 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	assert.NoError(t, err)
 	assert.NotEqual(t, h1, h2)
 
-	tblNames, _, err := env.MergeWouldStompChanges(context.Background(), cm2, dEnv.DbData())
+	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	require.NoError(t, err)
+
+	tblNames, _, err := env.MergeWouldStompChanges(context.Background(), workingRoot, cm2, dEnv.DbData())
 	if err != nil {
 		return err
 	}
@@ -238,21 +253,21 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			return err
 		}
 
-		rv, err := cm2.GetRootValue()
-		assert.NoError(t, err)
-
-		h, err := dEnv.DoltDB.WriteRootValue(context.Background(), rv)
-		assert.NoError(t, err)
-
-		err = dEnv.DoltDB.FastForward(context.Background(), dEnv.RepoState.CWBHeadRef(), cm2)
+		err = dEnv.DoltDB.FastForward(context.Background(), dEnv.RepoStateReader().CWBHeadRef(), cm2)
 		if err != nil {
 			return err
 		}
 
-		dEnv.RepoState.Working = h.String()
-		dEnv.RepoState.Staged = h.String()
-		err = dEnv.RepoState.Save(dEnv.FS)
+		workingSet, err := dEnv.WorkingSet(context.Background())
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+
+		rv, err := cm2.GetRootValue()
 		assert.NoError(t, err)
+
+		err = dEnv.UpdateWorkingSet(context.Background(), workingSet.WithWorkingRoot(rv))
+		require.NoError(t, err)
 
 		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
 		assert.NoError(t, err)
@@ -264,10 +279,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			require.True(t, stats.Conflicts == 0)
 		}
 
-		h2, err := cm2.HashOf()
-		require.NoError(t, err)
-
-		err = dEnv.RepoState.StartMerge(h2.String(), dEnv.FS)
+		err = dEnv.StartMerge(context.Background(), cm2)
 		if err != nil {
 			return err
 		}
@@ -282,7 +294,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			return err
 		}
 
-		_, err = dEnv.UpdateStagedRoot(context.Background(), mergedRoot)
+		err = dEnv.UpdateStagedRoot(context.Background(), mergedRoot)
 		if err != nil {
 			return err
 		}
@@ -293,7 +305,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 func resolveCommit(t *testing.T, cSpecStr string, dEnv *env.DoltEnv) *doltdb.Commit {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	require.NoError(t, err)
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoStateReader().CWBHeadRef())
 	require.NoError(t, err)
 	return cm
 }

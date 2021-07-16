@@ -24,113 +24,90 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.Commit, error) {
+func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
-	rsw := dbData.Rsw
 
 	var newHead *doltdb.Commit
 	if cSpecStr != "" {
 		cs, err := doltdb.NewCommitSpec(cSpecStr)
 		if err != nil {
-			return nil, err
+			return nil, doltdb.Roots{}, err
 		}
 
 		newHead, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
 		if err != nil {
-			return nil, err
+			return nil, doltdb.Roots{}, err
 		}
 
-		headRoot, err = newHead.GetRootValue()
+		roots.Head, err = newHead.GetRootValue()
 		if err != nil {
-			return nil, err
+			return nil, doltdb.Roots{}, err
 		}
 	}
 
 	// need to save the state of files that aren't tracked
 	untrackedTables := make(map[string]*doltdb.Table)
-	wTblNames, err := workingRoot.GetTableNames(ctx)
+	wTblNames, err := roots.Working.GetTableNames(ctx)
 
 	if err != nil {
-		return nil, err
+		return nil, doltdb.Roots{}, err
 	}
 
 	for _, tblName := range wTblNames {
-		untrackedTables[tblName], _, err = workingRoot.GetTable(ctx, tblName)
+		untrackedTables[tblName], _, err = roots.Working.GetTable(ctx, tblName)
 
 		if err != nil {
-			return nil, err
+			return nil, doltdb.Roots{}, err
 		}
 	}
 
-	headTblNames, err := stagedRoot.GetTableNames(ctx)
+	headTblNames, err := roots.Staged.GetTableNames(ctx)
 
 	if err != nil {
-		return nil, err
+		return nil, doltdb.Roots{}, err
 	}
 
 	for _, tblName := range headTblNames {
 		delete(untrackedTables, tblName)
 	}
 
-	newWkRoot := headRoot
+	newWkRoot := roots.Head
 	for tblName, tbl := range untrackedTables {
 		if tblName != doltdb.DocTableName {
 			newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
 		}
 		if err != nil {
-			return nil, errors.New("error: failed to write table back to database")
+			return nil, doltdb.Roots{}, errors.New("error: failed to write table back to database")
 		}
 	}
 
-	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, newWkRoot)
+	roots.Working = newWkRoot
+	roots.Staged = roots.Head
 
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = env.UpdateStagedRoot(ctx, ddb, rsw, headRoot)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return newHead, nil
+	return newHead, roots, nil
 }
 
-// ResetHardTables resets the tables in working, staged, and head based on the given parameters. Returns the commit hash
-// if head is updated.
-func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (string, error) {
-	newHead, err := resetHardTables(ctx, dbData, cSpecStr, workingRoot, stagedRoot, headRoot)
-
-	if err != nil {
-		return "", err
-	}
-
-	ddb := dbData.Ddb
-	rsr := dbData.Rsr
-
-	if newHead != nil {
-		if err := ddb.SetHeadToCommit(ctx, rsr.CWBHeadRef(), newHead); err != nil {
-			return "", err
-		}
-
-		h, err := newHead.HashOf()
-		if err != nil {
-			return "", err
-		}
-
-		return h.String(), nil
-	}
-
-	return "", nil
+// ResetHardTables resets the tables in working, staged, and head based on the given parameters. Returns the new
+// head commit and resulting roots
+func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
+	return resetHardTables(ctx, dbData, cSpecStr, roots)
 }
 
-func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) error {
+func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, roots doltdb.Roots) error {
 	dbData := dEnv.DbData()
 
-	newHead, err := resetHardTables(ctx, dbData, cSpecStr, workingRoot, stagedRoot, headRoot)
+	newHead, roots, err := resetHardTables(ctx, dbData, cSpecStr, roots)
+	if err != nil {
+		return err
+	}
 
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged))
 	if err != nil {
 		return err
 	}
@@ -140,11 +117,9 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, workingR
 		return err
 	}
 
-	ddb := dbData.Ddb
-	rsr := dbData.Rsr
-
 	if newHead != nil {
-		if err = ddb.SetHeadToCommit(ctx, rsr.CWBHeadRef(), newHead); err != nil {
+		err = dEnv.DoltDB.SetHeadToCommit(ctx, dEnv.RepoStateReader().CWBHeadRef(), newHead)
+		if err != nil {
 			return err
 		}
 	}
@@ -152,31 +127,28 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, workingR
 	return nil
 }
 
-func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-	tables, err := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
+func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
+	tables, err := getUnionedTables(ctx, apr.Args(), roots.Staged, roots.Head)
 	tables = RemoveDocsTable(tables)
-
 	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
-	err = ValidateTables(context.TODO(), tables, stagedRoot, headRoot)
-
+	err = ValidateTables(context.TODO(), tables, roots.Staged, roots.Head)
 	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
-	stagedRoot, err = resetStaged(ctx, dbData.Ddb, dbData.Rsw, tables, stagedRoot, headRoot)
-
+	roots.Staged, err = MoveTablesBetweenRoots(ctx, tables, roots.Head, roots.Staged)
 	if err != nil {
-		return nil, err
+		return doltdb.Roots{}, err
 	}
 
-	return stagedRoot, nil
+	return roots, nil
 }
 
-func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-	tables, err := getUnionedTables(ctx, tables, stagedRoot, headRoot)
+func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots doltdb.Roots) (*doltdb.RootValue, error) {
+	tables, err := getUnionedTables(ctx, tables, roots.Staged, roots.Head)
 
 	if err != nil {
 		return nil, err
@@ -191,24 +163,24 @@ func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, stagedRo
 		tables = RemoveDocsTable(tables)
 	}
 
-	err = ValidateTables(context.TODO(), tables, stagedRoot, headRoot)
+	err = ValidateTables(context.TODO(), tables, roots.Staged, roots.Head)
 
 	if err != nil {
 		return nil, err
 	}
 
-	stagedRoot, err = resetDocs(ctx, dbData, headRoot, stagedRoot, docs)
+	roots.Staged, err = resetDocs(ctx, dbData, roots, docs)
 	if err != nil {
 		return nil, err
 	}
 
-	stagedRoot, err = resetStaged(ctx, dbData.Ddb, dbData.Rsw, tables, stagedRoot, headRoot)
+	roots.Staged, err = resetStaged(ctx, roots, dbData.Rsw, tables)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return stagedRoot, nil
+	return roots.Staged, nil
 }
 
 // ResetSoftToRef matches the `git reset --soft <REF>` pattern. It resets both staged and head to the previous ref
@@ -230,7 +202,7 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) err
 	}
 
 	// Changed the stage to old the root. Leave the working as is.
-	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, foundRoot)
+	err = env.UpdateStagedRoot(ctx, dbData.Rsw, foundRoot)
 	if err != nil {
 		return err
 	}
@@ -257,38 +229,38 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 }
 
 // resetDocs resets the working and staged docs with docs from head.
-func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docs doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
-	docs, err = doltdocs.GetDocsFromRoot(ctx, headRoot, doltdocs.GetDocNamesFromDocs(docs)...)
+func resetDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, docs doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
+	docs, err = doltdocs.GetDocsFromRoot(ctx, roots.Head, doltdocs.GetDocNamesFromDocs(docs)...)
 	if err != nil {
 		return nil, err
 	}
 
-	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+	roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
 	if err != nil {
 		return nil, err
 	}
 
-	working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
+	err = env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, working)
-	if err != nil {
-		return nil, err
-	}
-
-	return doltdocs.UpdateRootWithDocs(ctx, staged, docs)
+	return doltdocs.UpdateRootWithDocs(ctx, roots.Staged, docs)
 }
 
-func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWriter, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, error) {
-	updatedRoot, err := MoveTablesBetweenRoots(ctx, tbls, head, staged)
-
+// TODO: this should just work in memory, not write to disk
+func resetStaged(ctx context.Context, roots doltdb.Roots, rsw env.RepoStateWriter, tbls []string) (*doltdb.RootValue, error) {
+	newStaged, err := MoveTablesBetweenRoots(ctx, tbls, roots.Head, roots.Staged)
 	if err != nil {
 		return nil, err
 	}
 
-	return updatedRoot, env.UpdateStagedRootWithVErr(ddb, rsw, updatedRoot)
+	err = rsw.UpdateStagedRoot(ctx, newStaged)
+	if err != nil {
+		return nil, err
+	}
+
+	return newStaged, nil
 }
 
 // ValidateIsRef validates whether the input parameter is a valid cString

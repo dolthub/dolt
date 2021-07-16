@@ -14,6 +14,8 @@
 
 package schema
 
+import "math"
+
 // ** WARNING - DO NOT CHANGE **
 //
 // consistency in these values
@@ -89,4 +91,9 @@ const (
 	DoltProceduresCreateStmtTag
 	DoltProceduresCreatedAtTag
 	DoltProceduresModifiedAtTag
+)
+
+const (
+	DoltConstraintViolationsTypeTag = 0
+	DoltConstraintViolationsInfoTag = math.MaxUint64
 )

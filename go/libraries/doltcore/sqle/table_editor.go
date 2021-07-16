@@ -15,15 +15,16 @@
 package sqle
 
 import (
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/store/types"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // sqlTableEditor is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
@@ -47,6 +48,7 @@ type sqlTableEditor struct {
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
 	temporary         bool
+	aiTracker         globalstate.AutoIncrementTracker
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -62,6 +64,9 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		return nil, err
 	}
 
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	ait, _ := doltSession.GetDoltDbAutoIncrementTracker(t.db.Name())
+
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
 		tableName:   t.Name(),
@@ -73,10 +78,11 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		tableEditor: tableEditor,
 		sess:        sess,
 		temporary:   t.IsTemporary(),
+		aiTracker:   ait,
 	}, nil
 }
 
-func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple, isPk bool) error {
+func (te *sqlTableEditor) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
 	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
 	if err != nil {
 		return err
@@ -140,15 +146,18 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 	if err = te.tableEditor.SetAutoIncrementValue(nomsVal); err != nil {
 		return err
 	}
+
+	te.aiTracker.Reset(te.tableName, val)
+
 	return te.flush(ctx)
 }
 
 // Close implements Closer
 func (te *sqlTableEditor) Close(ctx *sql.Context) error {
-	sess := DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	// If we're running in batched mode, don't flush the edits until explicitly told to do so
-	if sess.batchMode == batched {
+	if sess.BatchMode == dsess.Batched {
 		return nil
 	}
 	return te.flush(ctx)
@@ -179,11 +188,11 @@ func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 }
 
 func (te *sqlTableEditor) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	dSess := DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	if te.temporary {
-		return dSess.SetTempTableRoot(ctx, te.dbName, newRoot)
+		return sess.SetTempTableRoot(ctx, te.dbName, newRoot)
 	}
 
-	return dSess.SetRoot(ctx, te.dbName, newRoot)
+	return sess.SetRoot(ctx, te.dbName, newRoot)
 }

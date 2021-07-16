@@ -88,6 +88,15 @@ type ChunkStore interface {
 	io.Closer
 }
 
+type DebugLogger interface {
+	Logf(fmt string, args ...interface{})
+}
+
+type LoggingChunkStore interface {
+	ChunkStore
+	SetLogger(logger DebugLogger)
+}
+
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
 type ChunkStoreGarbageCollector interface {
 	ChunkStore

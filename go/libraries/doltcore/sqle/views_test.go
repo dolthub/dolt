@@ -33,13 +33,13 @@ func TestViews(t *testing.T) {
 	root, _ := dEnv.WorkingRoot(ctx)
 
 	var err error
-	root, err = ExecuteSql(dEnv, root, "create table test (a int primary key)")
+	root, err = ExecuteSql(t, dEnv, root, "create table test (a int primary key)")
 	require.NoError(t, err)
 
-	root, err = ExecuteSql(dEnv, root, "insert into test values (1), (2), (3)")
+	root, err = ExecuteSql(t, dEnv, root, "insert into test values (1), (2), (3)")
 	require.NoError(t, err)
 
-	root, err = ExecuteSql(dEnv, root, "create view plus1 as select a + 1 from test")
+	root, err = ExecuteSql(t, dEnv, root, "create view plus1 as select a + 1 from test")
 	require.NoError(t, err)
 
 	expectedRows := []sql.Row{
@@ -47,10 +47,10 @@ func TestViews(t *testing.T) {
 		{int64(3)},
 		{int64(4)},
 	}
-	rows, _, err := executeSelect(context.Background(), dEnv, root, "select * from plus1")
+	rows, _, err := executeSelect(t, context.Background(), dEnv, root, "select * from plus1")
 	require.NoError(t, err)
 	assert.Equal(t, expectedRows, rows)
 
-	root, err = ExecuteSql(dEnv, root, "drop view plus1")
+	root, err = ExecuteSql(t, dEnv, root, "drop view plus1")
 	require.NoError(t, err)
 }

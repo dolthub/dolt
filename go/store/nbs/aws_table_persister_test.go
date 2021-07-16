@@ -71,33 +71,6 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				}
 			})
 
-			t.Run("CacheTable", func(t *testing.T) {
-				s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
-				limits := awsLimits{partTarget: calcPartSize(mt, 3)}
-				tc := &waitOnStoreTableCache{readers: map[addr]io.ReaderAt{}}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, tc: tc, ns: ns, parseIndex: parseIndexF}
-
-				// Persist and wait until tc.store() has completed
-				tc.storeWG.Add(1)
-				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
-				require.NoError(t, err)
-				tc.storeWG.Wait()
-
-				// Now, open the table that should have been cached by the above Persist() and read out all the chunks. All the reads should be serviced from tc.
-				rdr, err := s3p.Open(context.Background(), mustAddr(src.hash()), mustUint32(src.count()), &Stats{})
-				require.NoError(t, err)
-				baseline := s3svc.getCount
-				ch := make(chan extractRecord)
-				go func() {
-					defer close(ch)
-					err := rdr.extract(context.Background(), ch)
-					require.NoError(t, err)
-				}()
-				for range ch {
-				}
-				assert.Zero(t, s3svc.getCount-baseline)
-			})
-
 			t.Run("InSinglePart", func(t *testing.T) {
 				assert := assert.New(t)
 
@@ -364,7 +337,6 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			s3svc,
 			"bucket",
 			rl,
-			nil,
 			ddb,
 			awsLimits{targetPartSize, minPartSize, maxPartSize, maxItemSize, maxChunkCount},
 			ic,

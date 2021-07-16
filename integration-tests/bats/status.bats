@@ -10,6 +10,7 @@ teardown() {
     teardown_common
 }
 
+
 @test "status: dolt version --feature" {
     # bump this test with feature version bumps
     run dolt version --feature
@@ -401,4 +402,17 @@ SQL
 
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
+}
+
+@test "status: roots runs even if status fails" {
+  mv .dolt/repo_state.json .dolt/repo_state.backup
+
+  run dolt status
+  [ "$status" -ne 0 ]
+
+  run dolt roots
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "refs/heads/master" ]]
+
+  mv .dolt/repo_state.backup .dolt/repo_state.json
 }

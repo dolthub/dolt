@@ -2298,11 +2298,13 @@ SQL
     dolt checkout master
     dolt merge other
     dolt conflicts resolve onepk 4
-    dolt sql <<SQL
+    dolt sql --disable-batch <<SQL
+set autocommit = off;
 UPDATE onepk SET v1 = -11, v2 = 11 WHERE pk1 = 1;
 UPDATE onepk SET v1 = -22, v2 = 22 WHERE pk1 = 2;
+delete from dolt_conflicts_onepk where our_pk1 = 1 or our_pk1 = 2;
+commit;
 SQL
-    dolt conflicts resolve onepk 1 2
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1,pk1" ]] || false
@@ -2328,9 +2330,11 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout master
-    run dolt merge other
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "duplicate key" ]] || false
+    dolt merge other
+    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "table,num_violations" ]] || false
+    [[ "$output" =~ "onepk,1" ]] || false
 }
 
 @test "index: Merge into branch with index from branch without index" {

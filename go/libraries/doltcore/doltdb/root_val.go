@@ -533,6 +533,34 @@ func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
+// TablesWithConstraintViolations returns all tables that have constraint violations.
+func (root *RootValue) TablesWithConstraintViolations(ctx context.Context) ([]string, error) {
+	tableMap, err := root.getTableMap()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, tableMap.Len())
+
+	err = tableMap.Iter(ctx, func(key, tblRefVal types.Value) (stop bool, err error) {
+		tblVal, err := tblRefVal.(types.Ref).TargetValue(ctx, root.vrw)
+		if err != nil {
+			return false, err
+		}
+		tblSt := tblVal.(types.Struct)
+		tbl := &Table{root.vrw, tblSt}
+		if cvMap, err := tbl.GetConstraintViolations(ctx); err != nil {
+			return false, err
+		} else if !cvMap.Empty() {
+			names = append(names, string(key.(types.String)))
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
 func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	cnfTbls, err := root.TablesInConflict(ctx)
 
@@ -541,6 +569,15 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	}
 
 	return len(cnfTbls) > 0, nil
+}
+
+// HasConstraintViolations returns whether any tables have constraint violations.
+func (root *RootValue) HasConstraintViolations(ctx context.Context) (bool, error) {
+	tbls, err := root.TablesWithConstraintViolations(ctx)
+	if err != nil {
+		return false, err
+	}
+	return len(tbls) > 0, nil
 }
 
 // IterTables calls the callback function cb on each table in this RootValue.

@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -41,7 +41,7 @@ func NewMergeFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, err
 
 // Eval implements the Expression interface.
 func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	sess := sqle.DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 
 	// TODO: Move to a separate MERGE argparser.
 	ap := cli.CreateCommitArgParser()
@@ -152,7 +152,6 @@ func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootVal
 	if rh != hrh {
 		return errors.New("cannot merge with uncommitted changes")
 	}
-
 	return nil
 }
 
@@ -184,8 +183,13 @@ func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*do
 	return cm, cmh, nil
 }
 
-func getHead(ctx *sql.Context, sess *sqle.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
-	head, hh, err := sess.GetHeadCommit(ctx, dbName)
+func getHead(ctx *sql.Context, sess *dsess.Session, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
+	head, err := sess.GetHeadCommit(ctx, dbName)
+	if err != nil {
+		return nil, hash.Hash{}, nil, err
+	}
+
+	hh, err := head.HashOf()
 	if err != nil {
 		return nil, hash.Hash{}, nil, err
 	}
