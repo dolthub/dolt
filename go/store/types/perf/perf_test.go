@@ -31,6 +31,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/perf/suite"
 	"github.com/dolthub/dolt/go/store/types"
@@ -164,7 +165,7 @@ func (s *perfSuite) testBuild500megBlob(p int) {
 			f := r.(*os.File)
 			err := f.Close()
 			assert.NoError(err)
-			err = os.Remove(f.Name())
+			err = file.Remove(f.Name())
 			assert.NoError(err)
 		}
 	}()

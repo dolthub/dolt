@@ -137,7 +137,7 @@ SQL
     [[ "$output" =~ "3" ]] || false
 
     run dolt status
-    [[ "$output" =~ "All conflicts fixed but you are still merging" ]] || false
+    [[ "$output" =~ "All conflicts and constraint violations fixed but you are still merging" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 

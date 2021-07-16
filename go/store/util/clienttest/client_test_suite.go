@@ -29,6 +29,7 @@ import (
 	flag "github.com/juju/gnuflag"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/exit"
@@ -74,7 +75,7 @@ func (suite *ClientTestSuite) SetupSuite() {
 func (suite *ClientTestSuite) TearDownSuite() {
 	suite.out.Close()
 	suite.err.Close()
-	err := os.RemoveAll(suite.TempDir)
+	err := file.RemoveAll(suite.TempDir)
 	if !osutil.IsWindows {
 		d.Chk.NoError(err)
 	}

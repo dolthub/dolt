@@ -110,7 +110,7 @@ func toAddVErr(err error) errhand.VerboseError {
 
 		return bdr.Build()
 
-	case actions.IsTblInConflict(err):
+	case actions.IsTblInConflict(err) || actions.IsTblViolatesConstraints(err):
 		tbls := actions.GetTablesForError(err)
 		bdr := errhand.BuildDError("error: not all tables merged")
 
