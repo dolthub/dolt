@@ -172,7 +172,7 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 
 		idx, inPK := i.pkTags[tag]
 
-		if inPK || (tag == schema.KeylessRowIdTag) {
+		if inPK || tag == schema.KeylessRowIdTag {
 			_, valVal, err := tplItr.Next()
 
 			if err != nil {

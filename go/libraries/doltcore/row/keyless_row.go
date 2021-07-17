@@ -53,7 +53,7 @@ func KeylessRow(nbf *types.NomsBinFormat, vals ...types.Value) (Row, error) {
 	return keylessRowWithCardinality(nbf, 1, vals...)
 }
 
-func 	KeylessRowsFromTuples(key, val types.Tuple) (Row, uint64, error) {
+func KeylessRowsFromTuples(key, val types.Tuple) (Row, uint64, error) {
 	c, err := val.Get(1)
 	if err != nil {
 		return nil, 0, err
@@ -267,7 +267,7 @@ func (r keylessRow) Format() *types.NomsBinFormat {
 
 // ReduceToIndexKeys creates a full key and a partial key from the given row (first tuple being the full key). Please
 // refer to the note in the index editor for more information regarding partial keys.
-func (r keylessRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, error) {
+func (r keylessRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, types.Tuple, error) {
 	// full = (new index, hash of keys)
 	// partial = (new index)
 	vals := make([]types.Value, 0, len(idx.AllTags())*2)
@@ -280,17 +280,37 @@ func (r keylessRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tupl
 	}
 	hashTag, err := r.key.Get(0)
 	if err != nil {
-		return types.Tuple{}, types.Tuple{}, err
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
 	}
 	hashVal, err := r.key.Get(1)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+
+	cardTag, err := r.val.Get(0)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+	cardVal, err := r.val.Get(1)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+
+	value, err := types.NewTuple(r.Format(), cardTag, cardVal)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+
 	vals = append(vals, hashTag, hashVal)
 	fullKey, err := types.NewTuple(r.Format(), vals...)
 	if err != nil {
-		return types.Tuple{}, types.Tuple{}, err
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
 	}
+
 	partialKey, err := types.NewTuple(r.Format(), vals[:idx.Count()*2]...)
 	if err != nil {
-		return types.Tuple{}, types.Tuple{}, err
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
 	}
-	return fullKey, partialKey, nil
+
+	return fullKey, partialKey, value, nil
 }

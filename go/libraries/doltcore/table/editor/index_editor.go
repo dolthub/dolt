@@ -99,6 +99,7 @@ type indexEditAccumulator struct {
 	// addedPartialKeys is a map of partial keys to a map of full keys that match the partial key
 	addedPartialKeys map[hash.Hash]map[hash.Hash]types.Tuple
 	addedKeys        map[hash.Hash]hashedTuple // These hashes represent the hash of the partial key, with the tuple being the full key
+	addedValues      map[hash.Hash]types.Tuple
 	removedKeys      map[hash.Hash]hashedTuple // These hashes represent the hash of the partial key, with the tuple being the full key
 }
 
@@ -118,6 +119,7 @@ func createInitialIndexEditAcc(indexData types.Map) *indexEditAccumulator {
 		nbf:              indexData.Format(),
 		addedPartialKeys: make(map[hash.Hash]map[hash.Hash]types.Tuple),
 		addedKeys:        make(map[hash.Hash]hashedTuple),
+		addedValues:      make(map[hash.Hash]types.Tuple),
 		removedKeys:      make(map[hash.Hash]hashedTuple),
 	}
 }
@@ -130,6 +132,7 @@ func (iea *indexEditAccumulator) NewFromCurrent() *indexEditAccumulator {
 		nbf:              iea.nbf,
 		addedPartialKeys: make(map[hash.Hash]map[hash.Hash]types.Tuple),
 		addedKeys:        make(map[hash.Hash]hashedTuple),
+		addedValues:      make(map[hash.Hash]types.Tuple),
 		removedKeys:      make(map[hash.Hash]hashedTuple),
 	}
 }
@@ -236,7 +239,7 @@ func NewIndexEditor(ctx context.Context, index schema.Index, indexData types.Map
 
 // InsertRow adds the given row to the index. If the row already exists and the index is unique, then an error is returned.
 // Otherwise, it is a no-op.
-func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tuple) error {
+func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tuple, value types.Tuple) error {
 	defer ie.autoFlush()
 	ie.flushMutex.RLock()
 	defer ie.flushMutex.RUnlock()
@@ -267,8 +270,8 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 	} else {
 		if rowExists, err := ie.iea.Has(ctx, keyHash, key); err != nil {
 			return err
-		} else if rowExists {
-			ie.stack.Push(true, types.EmptyTuple(key.Format()), types.EmptyTuple(key.Format()))
+		} else if rowExists && value.Empty() {
+			ie.stack.Push(true, types.EmptyTuple(key.Format()), types.EmptyTuple(key.Format()), types.EmptyTuple(key.Format()))
 			return nil
 		}
 	}
@@ -277,6 +280,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 		delete(ie.iea.removedKeys, keyHash)
 	} else {
 		ie.iea.addedKeys[keyHash] = hashedTuple{key, partialKeyHash}
+		ie.iea.addedValues[keyHash] = value
 		if matchingMap, ok := ie.iea.addedPartialKeys[partialKeyHash]; ok {
 			matchingMap[keyHash] = key
 		} else {
@@ -285,7 +289,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 	}
 
 	ie.iea.opCount++
-	ie.stack.Push(true, key, partialKey)
+	ie.stack.Push(true, key, partialKey, value)
 	return nil
 }
 
@@ -309,13 +313,14 @@ func (ie *IndexEditor) DeleteRow(ctx context.Context, key, partialKey types.Tupl
 
 	if _, ok := ie.iea.addedKeys[keyHash]; ok {
 		delete(ie.iea.addedKeys, keyHash)
+		delete(ie.iea.addedValues, keyHash)
 		delete(ie.iea.addedPartialKeys[partialKeyHash], keyHash)
 	} else {
 		ie.iea.removedKeys[keyHash] = hashedTuple{key, partialKeyHash}
 	}
 
 	ie.iea.opCount++
-	ie.stack.Push(false, key, partialKey)
+	ie.stack.Push(false, key, partialKey, types.Tuple{})
 	return nil
 }
 
@@ -363,7 +368,7 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 				ie.idx.Name(), err))
 		}
 	} else {
-		err := ie.InsertRow(ctx, indexOp.fullKey, indexOp.partialKey)
+		err := ie.InsertRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
 			panic(fmt.Sprintf("index '%s' is in an invalid and unrecoverable state: "+
 				"attempted to undo previous deletion but encountered the following error: %v",
@@ -414,6 +419,7 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 			for keyHash, hTpl := range ie.iea.removedKeys {
 				if _, ok := targetIea.addedKeys[keyHash]; ok {
 					delete(targetIea.addedKeys, keyHash)
+					delete(targetIea.addedValues, keyHash)
 					delete(targetIea.addedPartialKeys[hTpl.Hash], keyHash)
 				} else {
 					targetIea.removedKeys[keyHash] = hTpl
@@ -424,6 +430,7 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 					delete(targetIea.removedKeys, keyHash)
 				} else {
 					targetIea.addedKeys[keyHash] = hTpl
+					targetIea.addedValues[keyHash] = ie.iea.addedValues[keyHash]
 					if matchingMap, ok := targetIea.addedPartialKeys[hTpl.Hash]; ok {
 						matchingMap[keyHash] = hTpl.Tuple
 					} else {
@@ -519,8 +526,14 @@ func processIndexEditAccumulatorChain(ctx context.Context, futureIea *indexEditA
 	for _, hTpl := range iea.removedKeys {
 		ed.AddEdit(hTpl.Tuple, nil)
 	}
-	for _, hTpl := range iea.addedKeys {
-		ed.AddEdit(hTpl.Tuple, types.EmptyTuple(hTpl.Tuple.Format()))
+	for key, hTpl := range iea.addedKeys {
+		// TODO: max - need the value to be reachable here i think?
+		//ed.AddEdit(hTpl.Tuple, types.EmptyTuple(hTpl.Tuple.Format()))
+		value, ok := iea.addedValues[key]
+		if !ok {
+			panic("key with no value")
+		}
+		ed.AddEdit(hTpl.Tuple, value)
 	}
 
 	// If we encounter an error and return, then we need to remove this iea from the chain and update the next's rowData
@@ -684,12 +697,12 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 			return err
 		}
 
-		fullKey, partialKey, err := dRow.ReduceToIndexKeys(index)
+		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index)
 		if err != nil {
 			return err
 		}
 
-		err = indexEditor.InsertRow(ctx, fullKey, partialKey)
+		err = indexEditor.InsertRow(ctx, fullKey, partialKey, keyVal)
 		if err != nil {
 			return err
 		}

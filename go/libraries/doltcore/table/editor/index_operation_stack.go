@@ -34,13 +34,15 @@ type indexOperation struct {
 	isInsert   bool
 	fullKey    types.Tuple
 	partialKey types.Tuple
+	value types.Tuple
 }
 
 // Push adds the given keys to the top of the stack.
-func (ios *indexOperationStack) Push(isInsert bool, fullKey, partialKey types.Tuple) {
+func (ios *indexOperationStack) Push(isInsert bool, fullKey, partialKey types.Tuple, value types.Tuple) {
 	ios.entries[ios.currentIndex].isInsert = isInsert
 	ios.entries[ios.currentIndex].fullKey = fullKey
 	ios.entries[ios.currentIndex].partialKey = partialKey
+	ios.entries[ios.currentIndex].value = value
 	ios.currentIndex = (ios.currentIndex + 1) % uint64(len(ios.entries))
 	ios.numOfItems++
 	if ios.numOfItems > uint64(len(ios.entries)) {

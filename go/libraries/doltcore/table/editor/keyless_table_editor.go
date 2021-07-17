@@ -59,9 +59,9 @@ type rowDelta struct {
 
 func (acc keylessEditAcc) increment(key, val types.Tuple) error {
 	h, err := key.Hash(acc.nbf)
-	x1 := key.HumanReadableString()
-	x2 := val.HumanReadableString()
-	print(x1, x2)
+	//x1 := key.HumanReadableString()
+	//x2 := val.HumanReadableString()
+	//print(x1, x2)
 	if err != nil {
 		return err
 	}
@@ -360,15 +360,14 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 			return nil, err
 		}
 
-		var validv types.Tuple
+		oldv := v
 		if v.Empty() {
 			// row does not yet exist
 			v, ok, err = initializeCardinality(delta.val, delta.delta)
-			validv = v
 
 		} else {
-			validv = v
 			v, ok, err = modifyCardinalityWithDelta(v, delta.delta)
+
 		}
 		if err != nil {
 			return nil, err
@@ -395,11 +394,16 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 			// TODO: get parial and full key for index update
 			// currently uses a function without keyless equivalent
 			//fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(kte.acc.nbf, indexEd.Index(), tagToVal)
-			r, _, err := row.KeylessRowsFromTuples(k, validv)
+			var r row.Row
+			if v.Empty() {
+				r, _, err = row.KeylessRowsFromTuples(k, oldv)
+			} else {
+				r, _, err = row.KeylessRowsFromTuples(k, v)
+			}
 			if err != nil {
 				return nil, err
 			}
-			fullKey, partialKey, err := r.ReduceToIndexKeys(indexEd.Index())
+			fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index())
 			if err != nil {
 				return nil, err
 			}
@@ -409,8 +413,8 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 				if err != nil {
 					return nil, err
 				}
-			} else if delta.delta == 1 {
-				err = indexEd.InsertRow(ctx, fullKey, partialKey)
+			} else {
+				err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
 				if err != nil {
 					return nil, err
 				}
@@ -437,7 +441,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 		}
 	}
 
-		rowData, err = ed.Map(ctx)
+	rowData, err = ed.Map(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -230,6 +230,7 @@ func (tea *tableEditAccumulator) maybeGet(ctx context.Context, keyHash hash.Hash
 // format expected of the index, similar to searching on the index map itself.
 func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) (bool, error) {
 	// If we're working with a pkTableEditor, then we don't need to flush the table nor indexes.
+	// TODO : max - do i need to add keyless table editor here?
 	if pkTe, ok := te.(*pkTableEditor); ok {
 		for _, indexEd := range pkTe.indexEds {
 			if indexEd.idx.Name() == indexName {
@@ -401,7 +402,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 		if err != nil {
 			return err
 		}
-		err = indexEd.InsertRow(ctx, fullKey, partialKey)
+		err = indexEd.InsertRow(ctx, fullKey, partialKey, types.Tuple{})
 		if uke, ok := err.(*uniqueKeyErr); ok {
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {
@@ -509,7 +510,7 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := dRow.ReduceToIndexKeys(indexEd.Index())
+		fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(indexEd.Index())
 		if err != nil {
 			return err
 		}
@@ -573,7 +574,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	}()
 
 	for i, indexEd := range te.indexEds {
-		oldFullKey, oldPartialKey, err := dOldRow.ReduceToIndexKeys(indexEd.Index())
+		oldFullKey, oldPartialKey, _, err := dOldRow.ReduceToIndexKeys(indexEd.Index())
 		if err != nil {
 			return err
 		}
@@ -582,11 +583,11 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 			return err
 		}
 		indexOpsToUndo[i]++
-		newFullKey, newPartialKey, err := dNewRow.ReduceToIndexKeys(indexEd.Index())
+		newFullKey, newPartialKey, newVal, err := dNewRow.ReduceToIndexKeys(indexEd.Index())
 		if err != nil {
 			return err
 		}
-		err = indexEd.InsertRow(ctx, newFullKey, newPartialKey)
+		err = indexEd.InsertRow(ctx, newFullKey, newPartialKey, newVal)
 		if uke, ok := err.(*uniqueKeyErr); ok {
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {

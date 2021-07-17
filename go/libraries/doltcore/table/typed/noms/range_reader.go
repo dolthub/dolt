@@ -16,6 +16,7 @@ package noms
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -89,6 +90,10 @@ type NomsRangeReader struct {
 	idx       int
 	itr       types.MapIterator
 	currCheck InRangeCheck
+	keylessKey types.Tuple
+	keylessVal types.Tuple
+	keylessCard int
+	keylessIdx int
 }
 
 // NewNomsRangeReader creates a NomsRangeReader
@@ -100,6 +105,10 @@ func NewNomsRangeReader(sch schema.Schema, m types.Map, ranges []*ReadRange) *No
 		0,
 		nil,
 		nil,
+		types.Tuple{},
+		types.Tuple{},
+		-1,
+		-1,
 	}
 }
 
@@ -129,9 +138,26 @@ func (nrr *NomsRangeReader) ReadKey(ctx context.Context) (types.Tuple, error) {
 
 func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tuple, error) {
 	var err error
+	var ok bool
 	var k types.Tuple
 	var v types.Tuple
+	var cardTag types.Uint
+	var card types.Uint
+	var cardVal types.Value
+	var cardTagVal types.Value
 	for nrr.itr != nil || nrr.idx < len(nrr.ranges) {
+		if nrr.keylessCard != -1 && nrr.keylessIdx != -1 && !nrr.keylessKey.Empty() {
+			nrr.keylessIdx++
+			if nrr.keylessIdx < nrr.keylessCard {
+				return nrr.keylessKey, nrr.keylessVal, nil
+			} else {
+				nrr.keylessCard = -1
+				nrr.keylessIdx = -1
+				nrr.keylessKey = types.Tuple{}
+				nrr.keylessVal = types.Tuple{}
+			}
+		}
+
 		if nrr.itr == nil {
 			r := nrr.ranges[nrr.idx]
 			nrr.idx++
@@ -141,6 +167,7 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			} else {
 				nrr.itr, err = nrr.m.IteratorFrom(ctx, r.Start)
 			}
+			// TODO: generate a special iterator for keyless index w/ cardinality
 
 			if err != nil {
 				return types.Tuple{}, types.Tuple{}, err
@@ -170,6 +197,37 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			}
 
 			if inRange {
+				// TODO: max - return multiple keys here if value is keyless card > 1
+				if !v.Empty() {
+					cardTagVal, err = v.Get(0)
+					if err != nil {
+						return types.Tuple{}, types.Tuple{}, err
+					}
+					cardTag, ok = cardTagVal.(types.Uint)
+					if !ok {
+						return types.Tuple{}, types.Tuple{}, errors.New("Index cardinality invalid tag type")
+					}
+
+					if uint64(cardTag) != schema.KeylessRowCardinalityTag {
+						return types.Tuple{}, types.Tuple{}, errors.New("Index cardinality tag invalid")
+					}
+
+					cardVal, err = v.Get(1)
+					if err != nil {
+						return types.Tuple{}, types.Tuple{}, err
+					}
+					card, ok = cardVal.(types.Uint)
+					if !ok {
+						return types.Tuple{}, types.Tuple{}, errors.New("Index cardinality value invalid type")
+					}
+					if int(card) > 1 {
+						nrr.keylessCard = int(card)
+						nrr.keylessIdx = 0
+						nrr.keylessKey = k
+						nrr.keylessVal = v
+						return k, v, nil
+					}
+				}
 				return k, v, nil
 			}
 		}

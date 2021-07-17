@@ -44,6 +44,9 @@ func pkRowFromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error)
 	allCols := sch.GetAllCols()
 
 	err = IterPkTuple(keySl, func(tag uint64, val types.Value) (stop bool, err error) {
+		if tag == schema.KeylessRowIdTag {
+			return false, nil
+		}
 		col, ok := allCols.GetByTag(tag)
 
 		if !ok {
@@ -250,7 +253,7 @@ func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
 
 // ReduceToIndexKeys creates a full key and a partial key from the given row (first tuple being the full key). Please
 // refer to the note in the index editor for more information regarding partial keys.
-func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, error) {
+func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, types.Tuple, error) {
 	vals := make([]types.Value, 0, len(idx.AllTags())*2)
 	for _, tag := range idx.AllTags() {
 		val, ok := nr.GetColVal(tag)
@@ -261,13 +264,13 @@ func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple,
 	}
 	fullKey, err := types.NewTuple(nr.Format(), vals...)
 	if err != nil {
-		return types.Tuple{}, types.Tuple{}, err
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
 	}
 	partialKey, err := types.NewTuple(nr.Format(), vals[:idx.Count()*2]...)
 	if err != nil {
-		return types.Tuple{}, types.Tuple{}, err
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
 	}
-	return fullKey, partialKey, nil
+	return fullKey, partialKey, types.Tuple{}, nil
 }
 
 func IterPkTuple(tvs types.TupleValueSlice, cb func(tag uint64, val types.Value) (stop bool, err error)) error {

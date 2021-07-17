@@ -34,7 +34,7 @@ teardown() {
     [ $status -eq 0 ]
     [[ ! "$output" =~ "panic" ]] || false
 
-    run dolt sql -q "CREATE TABLE bad (a int, b int, INDEX (b));"
+    run dolt sql -q "CREATE TABLE fine (a int, b int, INDEX (b));"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "panic" ]] || false
 
@@ -821,7 +821,7 @@ SQL
     [ "${#lines[@]}" -eq 4 ]
 }
 
-@test "keyless: secondary index" {
+@test "keyless: create secondary index" {
     dolt sql -q "create index idx on keyless (c1)"
 
     run dolt sql -q "show index from keyless" -r csv
@@ -833,12 +833,98 @@ SQL
     [ $status -eq 0 ]
     [[ "${lines[0]}" = "c0,c1" ]] || false
     [[ "${lines[1]}" = "1,1" ]] || false
-    [[ "${lines[2]}" = "2,2" ]] || false
-    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[2]}" = "1,1" ]] || false
+    [[ "${lines[3]}" = "2,2" ]] || false
+    [ "${#lines[@]}" -eq 4 ]
 
     run dolt sql -q "select c0 from keyless where c1 = 1" -r csv
     [ $status -eq 0 ]
     [[ "${lines[0]}" = "c0" ]] || false
     [[ "${lines[1]}" = "1" ]] || false
+    [[ "${lines[2]}" = "1" ]] || false
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "keyless: secondary index insert" {
+    dolt sql -q "create index idx on keyless (c1)"
+
+    dolt sql -q "insert into keyless values (3,3), (4,4)"
+
+    run dolt sql -q "select c0 from keyless where c1 = 4" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0" ]] || false
+    [[ "${lines[1]}" = "4" ]] || false
+    [ "${#lines[@]}" -eq 2 ]
+}
+
+@test "keyless: secondary index duplicate insert" {
+    dolt sql -q "create index idx on keyless (c1)"
+
+    dolt sql -q "insert into keyless values (3,3), (4,4), (4,4)"
+
+    run dolt sql -q "select c0 from keyless where c1 = 4" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0" ]] || false
+    [[ "${lines[1]}" = "4" ]] || false
+    [[ "${lines[2]}" = "4" ]] || false
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "keyless: secondary index update" {
+    dolt sql -q "create index idx on keyless (c1)"
+
+    dolt sql -q "update keyless set c0 = c0 + 1"
+
+    run dolt sql -q "select * from keyless order by c0" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "1,0" ]] || false
+    [[ "${lines[2]}" = "2,1" ]] || false
+    [[ "${lines[3]}" = "2,1" ]] || false
+    [[ "${lines[4]}" = "3,2" ]] || false
+    [ "${#lines[@]}" -eq 5 ]
+
+    run dolt sql -q "select c0 from keyless where c1 = 1" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0" ]] || false
+    [[ "${lines[1]}" = "2" ]] || false
+    [[ "${lines[1]}" = "2" ]] || false
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "keyless: secondary index delete single" {
+    dolt sql -q "create index idx on keyless (c1)"
+
+    dolt sql -q "insert into keyless values (3,3), (4,4)"
+    dolt sql -q "delete from keyless where c0 = 4"
+
+    run dolt sql -q "select c0 from keyless where c1 > 2" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0" ]] || false
+    [[ "${lines[1]}" = "3" ]] || false
+    [ "${#lines[@]}" -eq 2 ]
+
+    run dolt sql -q "select c0 from keyless where c0 > 2" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0" ]] || false
+    [[ "${lines[1]}" = "3" ]] || false
+    [ "${#lines[@]}" -eq 2 ]
+}
+
+@test "keyless: secondary index delete duplicate" {
+    dolt sql -q "create index idx on keyless (c1)"
+
+    dolt sql -q "insert into keyless values (3,3), (4,4), (4,4)"
+    dolt sql -q "delete from keyless where c0 = 4"
+
+    run dolt sql -q "select c0 from keyless where c1 > 2" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0" ]] || false
+    [[ "${lines[1]}" = "3" ]] || false
+    [ "${#lines[@]}" -eq 2 ]
+
+    run dolt sql -q "select c0 from keyless where c0 > 2" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0" ]] || false
+    [[ "${lines[1]}" = "3" ]] || false
     [ "${#lines[@]}" -eq 2 ]
 }
