@@ -103,7 +103,19 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	if canFF {
-		return cmh.String(), nil
+		ancRoot, err := head.GetRootValue()
+		if err != nil {
+			return nil, err
+		}
+		mergedRoot, err := cm.GetRootValue()
+		if err != nil {
+			return nil, err
+		}
+		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
+			return nil, err
+		} else if !cvPossible {
+			return cmh.String(), nil
+		}
 	}
 
 	mergeRoot, _, err := merge.MergeCommits(ctx, head, cm)

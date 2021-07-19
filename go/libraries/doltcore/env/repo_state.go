@@ -257,17 +257,17 @@ func MergeWouldStompChanges(ctx context.Context, workingRoot *doltdb.RootValue, 
 		return nil, nil, err
 	}
 
-	headTableHashes, err := mapTableHashes(ctx, headRoot)
+	headTableHashes, err := headRoot.MapTableHashes(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	workingTableHashes, err := mapTableHashes(ctx, workingRoot)
+	workingTableHashes, err := workingRoot.MapTableHashes(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeTableHashes, err := mapTableHashes(ctx, mergeRoot)
+	mergeTableHashes, err := mergeRoot.MapTableHashes(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -341,29 +341,6 @@ func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
 	}
 
 	return keepers, nil
-}
-
-func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {
-	names, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	nameToHash := make(map[string]hash.Hash)
-	for _, name := range names {
-		h, ok, err := root.GetTableHash(ctx, name)
-
-		if err != nil {
-			return nil, err
-		} else if !ok {
-			panic("GetTableNames returned a table that GetTableHash says isn't there.")
-		} else {
-			nameToHash[name] = h
-		}
-	}
-
-	return nameToHash, nil
 }
 
 func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map[string]hash.Hash {

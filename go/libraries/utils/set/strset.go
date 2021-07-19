@@ -120,8 +120,8 @@ func (s *StrSet) Size() int {
 	return len(s.items)
 }
 
-// AsSlice converts the set to a slice of strings.  If this is an insensitive set the resulting slice will be lowercase
-// regardless of the case that was used when adding the string to the set
+// AsSlice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
+// regardless of the case that was used when adding the string to the set.
 func (s *StrSet) AsSlice() []string {
 	size := len(s.items)
 	sl := make([]string, size)
@@ -135,6 +135,16 @@ func (s *StrSet) AsSlice() []string {
 	return sl
 }
 
+// AsSortedSlice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
+// regardless of the case that was used when adding the string to the set. The slice is sorted in ascending order.
+func (s *StrSet) AsSortedSlice() []string {
+	slice := s.AsSlice()
+	sort.Slice(slice, func(i, j int) bool {
+		return slice[i] < slice[j]
+	})
+	return slice
+}
+
 // Iterate accepts a callback which will be called once for each element in the set until all items have been
 // exhausted or callback returns false.
 func (s *StrSet) Iterate(callBack func(string) (cont bool)) {
@@ -145,7 +155,7 @@ func (s *StrSet) Iterate(callBack func(string) (cont bool)) {
 	}
 }
 
-// IntersectionAndMissing takes a slice of strings and returns a slice of strings containing the intersection with the
+// LeftIntersectionRight takes a slice of strings and returns a slice of strings containing the intersection with the
 // set, and a slice of strings for the ones missing from the set.
 func (s *StrSet) LeftIntersectionRight(other *StrSet) (left *StrSet, intersection *StrSet, right *StrSet) {
 	left = NewStrSet(nil)

@@ -773,6 +773,22 @@ func (ddb *DoltDB) GetBranches(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, branchRefFilter)
 }
 
+type BranchWithHash struct {
+	Ref  ref.DoltRef
+	Hash hash.Hash
+}
+
+func (ddb *DoltDB) GetBranchesWithHashes(ctx context.Context) ([]BranchWithHash, error) {
+	var refs []BranchWithHash
+	err := ddb.VisitRefsOfType(ctx, branchRefFilter, func(r ref.DoltRef, v types.Value) error {
+		if tr, ok := v.(types.Ref); ok {
+			refs = append(refs, BranchWithHash{r, tr.TargetHash()})
+		}
+		return nil
+	})
+	return refs, err
+}
+
 var tagsRefFilter = map[ref.RefType]struct{}{ref.TagRefType: {}}
 
 // GetTags returns a list of all tags in the database.
@@ -792,15 +808,13 @@ func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.HeadRefTypes)
 }
 
-func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
-	var refs []ref.DoltRef
+func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, visit func(r ref.DoltRef, v types.Value) error) error {
 	dss, err := ddb.db.Datasets(ctx)
-
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = dss.IterAll(ctx, func(key, _ types.Value) error {
+	return dss.IterAll(ctx, func(key, v types.Value) error {
 		keyStr := string(key.(types.String))
 
 		var dref ref.DoltRef
@@ -811,18 +825,24 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 			}
 
 			if _, ok := refTypeFilter[dref.GetType()]; ok {
-				refs = append(refs, dref)
+				err = visit(dref, v)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
 		return nil
 	})
+}
 
-	if err != nil {
-		return nil, err
-	}
-
-	return refs, nil
+func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
+	var refs []ref.DoltRef
+	err := ddb.VisitRefsOfType(ctx, refTypeFilter, func(r ref.DoltRef, v types.Value) error {
+		refs = append(refs, r)
+		return nil
+	})
+	return refs, err
 }
 
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.

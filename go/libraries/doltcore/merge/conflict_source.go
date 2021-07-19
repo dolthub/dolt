@@ -47,7 +47,10 @@ type ConflictReader struct {
 // NewConflictReader returns a new conflict reader for a given table
 func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader, error) {
 	base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx)
-
+	if err == doltdb.ErrNoConflicts {
+		base, err = tbl.GetSchema(ctx)
+		sch, mergeSch = base, base
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -63,19 +66,19 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 			theirsStr: func(colName string) string { return theirsStr + "_" + colName },
 		},
 	)
-
 	if err != nil {
 		return nil, err
 	}
 
 	_, confData, err := tbl.GetConflicts(ctx)
-
+	if err == doltdb.ErrNoConflicts {
+		confData, err = types.NewMap(ctx, tbl.ValueReadWriter())
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	confItr, err := confData.Iterator(ctx)
-
 	if err != nil {
 		return nil, err
 	}

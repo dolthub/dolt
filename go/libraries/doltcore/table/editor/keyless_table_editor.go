@@ -38,6 +38,7 @@ type keylessTableEditor struct {
 
 	acc      keylessEditAcc
 	indexEds []*IndexEditor
+	cvEditor *types.MapEditor
 
 	eg *errgroup.Group
 	mu *sync.Mutex
@@ -248,11 +249,31 @@ func (kte *keylessTableEditor) Format() *types.NomsBinFormat {
 	return kte.tbl.Format()
 }
 
+// ValueReadWriter implements TableEditor.
+func (kte *keylessTableEditor) ValueReadWriter() types.ValueReadWriter {
+	return kte.tbl.ValueReadWriter()
+}
+
 // StatementStarted implements TableEditor.
 func (kte *keylessTableEditor) StatementStarted(ctx context.Context) {}
 
 // StatementFinished implements TableEditor.
 func (kte *keylessTableEditor) StatementFinished(ctx context.Context, errored bool) error {
+	return nil
+}
+
+// SetConstraintViolation implements TableEditor.
+func (kte *keylessTableEditor) SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error {
+	if kte.cvEditor == nil {
+		cvMap, err := kte.tbl.GetConstraintViolations(ctx)
+		if err != nil {
+			return err
+		}
+		kte.cvEditor = cvMap.Edit()
+	}
+	kte.mu.Lock()
+	defer kte.mu.Unlock()
+	kte.cvEditor.Set(k, v)
 	return nil
 }
 
@@ -294,29 +315,6 @@ func (kte *keylessTableEditor) flush(ctx context.Context) error {
 	})
 
 	return nil
-}
-
-func (kte *keylessTableEditor) keyErrForKVP(ctx context.Context, kvp *doltKVP, isPk bool, errFunc PKDuplicateErrFunc) error {
-	kVal, err := kvp.k.Value(ctx)
-	if err != nil {
-		return err
-	}
-
-	vVal, err := kvp.v.Value(ctx)
-	if err != nil {
-		return err
-	}
-
-	keyStr, err := formatKey(ctx, kVal)
-	if err != nil {
-		return err
-	}
-
-	if errFunc != nil {
-		return errFunc(keyStr, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
-	} else {
-		return fmt.Errorf("duplicate key '%s': %w", keyStr, ErrDuplicateKey)
-	}
 }
 
 func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, errFunc PKDuplicateErrFunc) (_ *doltdb.Table, retErr error) {

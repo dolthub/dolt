@@ -106,6 +106,10 @@ func stageTablesNoEnvUpdate(
 		return doltdb.Roots{}, err
 	}
 
+	err = checkTablesForConstraintViolations(ctx, tbls, roots.Working)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
 	roots.Staged, err = MoveTablesBetweenRoots(ctx, tbls, roots.Working, roots.Staged)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -178,6 +182,29 @@ func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb
 	}
 
 	return working, nil
+}
+
+func checkTablesForConstraintViolations(ctx context.Context, tbls []string, working *doltdb.RootValue) error {
+	var violates []string
+	for _, tblName := range tbls {
+		tbl, ok, err := working.GetTable(ctx, tblName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		if cvMap, err := tbl.GetConstraintViolations(ctx); err != nil {
+			return err
+		} else if !cvMap.Empty() {
+			violates = append(violates, tblName)
+		}
+	}
+
+	if len(violates) > 0 {
+		return NewTblHasConstraintViolations(violates)
+	}
+	return nil
 }
 
 // ValidateTables checks that all tables passed exist in at least one of the roots passed.

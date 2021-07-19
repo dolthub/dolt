@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
@@ -170,8 +171,9 @@ func portInUse(hostPort string) bool {
 func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
-		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
 
+		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
+		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
 		doltDbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, mrEnv, doltDbs)
 		if err != nil {
@@ -179,7 +181,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, mrEnv env
 		}
 
 		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, username, email, dbStates...)
-
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -265,6 +266,8 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			HeadCommit: headCommit,
 			WorkingSet: ws,
 			DbData:     dEnv.DbData(),
+			// TODO: The placement of this may change when multiple Dolt Databases can be represented in one commit log.
+			GlobalState: globalstate.NewGlobalStateStore(),
 		})
 	}
 

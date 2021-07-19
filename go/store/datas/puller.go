@@ -21,10 +21,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -167,12 +169,14 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, err
 	}
 
-	logFilePath := filepath.Join(tempDir, "push.log")
-	f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
-
 	var pushLogger *log.Logger
-	if err == nil {
-		pushLogger = log.New(f, "", log.Lmicroseconds)
+	if dbg, ok := os.LookupEnv("PUSH_LOG"); ok && strings.ToLower(dbg) == "true" {
+		logFilePath := filepath.Join(tempDir, "push.log")
+		f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+
+		if err == nil {
+			pushLogger = log.New(f, "", log.Lmicroseconds)
+		}
 	}
 
 	p := &Puller{
@@ -236,7 +240,7 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, ae *atomicerr.AtomicEr
 		fWithStats.Stop()
 
 		go func() {
-			_ = os.Remove(tmpTblFile.path)
+			_ = file.Remove(tmpTblFile.path)
 		}()
 	}()
 

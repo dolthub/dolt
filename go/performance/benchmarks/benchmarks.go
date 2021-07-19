@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -229,7 +231,7 @@ func getStdinForSQLBenchmark(fs filesys.Filesys, pathToImportFile string) *os.Fi
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name()) // clean up
+	defer file.Remove(tmpfile.Name()) // clean up
 
 	if _, err := tmpfile.Write(content); err != nil {
 		log.Fatal(err)

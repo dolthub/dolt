@@ -29,15 +29,17 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 )
 
 type DoltHarness struct {
-	t              *testing.T
-	env            *env.DoltEnv
-	session        *dsess.Session
-	databases      []sqle.Database
-	parallelism    int
-	skippedQueries []string
+	t                    *testing.T
+	env                  *env.DoltEnv
+	session              *dsess.Session
+	databases            []sqle.Database
+	databaseGlobalStates []globalstate.GlobalState
+	parallelism          int
+	skippedQueries       []string
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -123,8 +125,8 @@ func (d DoltHarness) NewSession() *sql.Context {
 		context.Background(),
 		sql.WithSession(session))
 
-	for _, db := range d.databases {
-		dbState := getDbState(d.t, db, d.env)
+	for i, db := range d.databases {
+		dbState := getDbState(d.t, db, d.env, d.databaseGlobalStates[i])
 		err := session.AddDB(ctx, dbState)
 		require.NoError(d.t, err)
 	}
@@ -162,12 +164,15 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 
 	var dbs []sql.Database
 	d.databases = nil
+	d.databaseGlobalStates = nil
 	for _, name := range names {
 		db := sqle.NewDatabase(name, dEnv.DbData())
-		dbState := getDbState(d.t, db, dEnv)
+		globalState := globalstate.NewGlobalStateStore()
+		dbState := getDbState(d.t, db, dEnv, globalState)
 		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), dbState))
 		dbs = append(dbs, db)
 		d.databases = append(d.databases, db)
+		d.databaseGlobalStates = append(d.databaseGlobalStates, globalState)
 	}
 
 	return dbs
@@ -180,7 +185,7 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 	return
 }
 
-func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
+func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState globalstate.GlobalState) dsess.InitialDbState {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
@@ -191,10 +196,11 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialD
 	require.NoError(t, err)
 
 	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
+		Db:          db,
+		HeadCommit:  headCommit,
+		WorkingSet:  ws,
+		DbData:      dEnv.DbData(),
+		GlobalState: globalState,
 	}
 }
 

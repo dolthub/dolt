@@ -833,7 +833,7 @@ SQL
     [[ "$output" =~ "one-more-time" ]] || false
     run dolt status
     echo "output = $output"
-    [[ "$output" =~ "All conflicts fixed" ]] || false
+    [[ "$output" =~ "All conflicts and constraint violations fixed" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "README.md" ]] || false
 }
