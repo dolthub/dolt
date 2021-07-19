@@ -555,53 +555,12 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 // DeleteRow removes the given row from the table. This essentially acts as a convenience function for DeleteKey, while
 // ensuring proper thread safety.
 func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr error) {
-	key, err := dRow.NomsMapKey(te.tSch).Value(ctx)
+	key, tv, err := row.KeyAndTaggedValuesForRow(dRow, te.tSch)
 	if err != nil {
 		return err
 	}
 
-	keyHash, err := key.Hash(te.nbf)
-	if err != nil {
-		return err
-	}
-
-	defer te.autoFlush()
-	te.flushMutex.RLock()
-	defer te.flushMutex.RUnlock()
-
-	// Regarding the lock's position here, refer to the comment in InsertKeyVal
-	te.writeMutex.Lock()
-	defer te.writeMutex.Unlock()
-
-	// Index operations should come before all table operations. For the reasoning, refer to the comment in InsertKeyVal
-	indexOpsToUndo := make([]int, len(te.indexEds))
-	defer func() {
-		if retErr != nil {
-			for i, opsToUndo := range indexOpsToUndo {
-				for undone := 0; undone < opsToUndo; undone++ {
-					te.indexEds[i].Undo(ctx)
-				}
-			}
-		}
-	}()
-
-	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := row.ReduceToIndexKeys(indexEd.Index(), dRow)
-		if err != nil {
-			return err
-		}
-		err = indexEd.DeleteRow(ctx, fullKey, partialKey)
-		if err != nil {
-			return err
-		}
-		indexOpsToUndo[i]++
-	}
-
-	delete(te.tea.addedKeys, keyHash)
-	te.tea.removedKeys[keyHash] = key
-
-	te.tea.opCount++
-	return nil
+	return te.DeleteByKey(ctx, key, tv)
 }
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.

@@ -523,14 +523,18 @@ func applyPkChange(ctx context.Context, sch schema.Schema, tableEditor editor.Ta
 		}
 		stats.Modifications++
 	case types.DiffChangeRemoved:
-		oldRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.OldValue.(types.Tuple))
+		key := change.Key.(types.Tuple)
+		value := change.OldValue.(types.Tuple)
+		tv, err := row.TaggedValuesFromTupleKeyAndValue(key, value)
 		if err != nil {
 			return err
 		}
-		err = tableEditor.DeleteRow(ctx, oldRow)
+
+		err = tableEditor.DeleteByKey(ctx, key, tv)
 		if err != nil {
 			return err
 		}
+
 		stats.Deletes++
 	}
 
@@ -613,14 +617,18 @@ func applyKeylessChange(ctx context.Context, sch schema.Schema, tableEditor edit
 			}
 			stats.Modifications++
 		case types.DiffChangeRemoved:
-			oldRow, err := row.FromNoms(sch, ch.Key.(types.Tuple), ch.OldValue.(types.Tuple))
+			key := change.Key.(types.Tuple)
+			value := change.OldValue.(types.Tuple)
+			tv, err := row.TaggedValuesFromTupleKeyAndValue(key, value)
 			if err != nil {
 				return err
 			}
-			err = tableEditor.DeleteRow(ctx, oldRow)
+
+			err = tableEditor.DeleteByKey(ctx, key, tv)
 			if err != nil {
 				return err
 			}
+
 			stats.Deletes++
 		}
 		return nil
