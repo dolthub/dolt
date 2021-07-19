@@ -18,6 +18,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -50,6 +51,7 @@ func DbRevisionsEnabled() bool {
 
 type DoltDatabaseProvider struct {
 	databases map[string]sql.Database
+	mu *sync.RWMutex
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
@@ -62,12 +64,18 @@ func NewDoltDatabaseProvider(databases ...Database) DoltDatabaseProvider {
 		dbs[db.Name()] = db
 	}
 
-	return DoltDatabaseProvider{databases: dbs}
+	return DoltDatabaseProvider{databases: dbs, mu: &sync.RWMutex{}}
 }
 
 func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error) {
 	var ok bool
-	if db, ok = p.databases[name]; ok {
+	func() {
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+
+		db, ok = p.databases[name]
+	}()
+	if ok {
 		return db, nil
 	}
 
@@ -77,6 +85,9 @@ func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error)
 			return nil, err
 		}
 		if ok {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+
 			p.databases[name] = db
 			return db, nil
 		}
@@ -91,6 +102,9 @@ func (p DoltDatabaseProvider) HasDatabase(name string) bool {
 }
 
 func (p DoltDatabaseProvider) AllDatabases() (all []sql.Database) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	i := 0
 	all = make([]sql.Database, len(p.databases))
 	for _, db := range p.databases {
@@ -101,6 +115,9 @@ func (p DoltDatabaseProvider) AllDatabases() (all []sql.Database) {
 }
 
 func (p DoltDatabaseProvider) AddDatabase(db sql.Database) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	p.databases[db.Name()] = db
 }
 
