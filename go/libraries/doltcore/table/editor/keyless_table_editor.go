@@ -59,9 +59,6 @@ type rowDelta struct {
 
 func (acc keylessEditAcc) increment(key, val types.Tuple) error {
 	h, err := key.Hash(acc.nbf)
-	//x1 := key.HumanReadableString()
-	//x2 := val.HumanReadableString()
-	//print(x1, x2)
 	if err != nil {
 		return err
 	}
@@ -372,11 +369,6 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 			return nil, err
 		}
 
-		// Run the index editors first, as we can back out of the changes in the event of an error, but can't do that for
-		// changes made to the table. We create a slice that matches the number of index editors. For each successful
-		// operation, we increment the associated index on the slice, and in the event of an error, we undo that number of
-		// operations.
-		// TODO : make sure index editor revert works
 		indexOpsToUndo := make([]int, len(indexEds))
 		defer func() {
 			if retErr != nil {
@@ -388,11 +380,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 			}
 		}()
 
-		// TODO : add row to index if new
 		for i, indexEd := range indexEds {
-			// TODO: get parial and full key for index update
-			// currently uses a function without keyless equivalent
-			//fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(kte.acc.nbf, indexEd.Index(), tagToVal)
 			var r row.Row
 			if v.Empty() {
 				r, _, err = row.KeylessRowsFromTuples(k, oldv)

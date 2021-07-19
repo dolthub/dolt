@@ -16,6 +16,7 @@ package editor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -527,11 +528,9 @@ func processIndexEditAccumulatorChain(ctx context.Context, futureIea *indexEditA
 		ed.AddEdit(hTpl.Tuple, nil)
 	}
 	for key, hTpl := range iea.addedKeys {
-		// TODO: max - need the value to be reachable here i think?
-		//ed.AddEdit(hTpl.Tuple, types.EmptyTuple(hTpl.Tuple.Format()))
 		value, ok := iea.addedValues[key]
 		if !ok {
-			panic("key with no value")
+			return types.EmptyMap, errors.New("key with no value")
 		}
 		ed.AddEdit(hTpl.Tuple, value)
 	}

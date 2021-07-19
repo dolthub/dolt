@@ -230,7 +230,6 @@ func (tea *tableEditAccumulator) maybeGet(ctx context.Context, keyHash hash.Hash
 // format expected of the index, similar to searching on the index map itself.
 func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) (bool, error) {
 	// If we're working with a pkTableEditor, then we don't need to flush the table nor indexes.
-	// TODO : max - do i need to add keyless table editor here?
 	if pkTe, ok := te.(*pkTableEditor); ok {
 		for _, indexEd := range pkTe.indexEds {
 			if indexEd.idx.Name() == indexName {

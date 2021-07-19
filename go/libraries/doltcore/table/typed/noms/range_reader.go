@@ -90,10 +90,7 @@ type NomsRangeReader struct {
 	idx         int
 	itr         types.MapIterator
 	currCheck   InRangeCheck
-	keylessKey  types.Tuple
-	keylessVal  types.Tuple
-	keylessCard int
-	keylessIdx  int
+	cardCounter *CardinalityCounter
 }
 
 // NewNomsRangeReader creates a NomsRangeReader
@@ -105,10 +102,7 @@ func NewNomsRangeReader(sch schema.Schema, m types.Map, ranges []*ReadRange) *No
 		0,
 		nil,
 		nil,
-		types.Tuple{},
-		types.Tuple{},
-		-1,
-		-1,
+		NewCardinalityCounter(),
 	}
 }
 
@@ -138,23 +132,15 @@ func (nrr *NomsRangeReader) ReadKey(ctx context.Context) (types.Tuple, error) {
 
 func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tuple, error) {
 	var err error
-	var ok bool
 	var k types.Tuple
 	var v types.Tuple
-	var cardTag types.Uint
-	var card types.Uint
-	var cardVal types.Value
-	var cardTagVal types.Value
 	for nrr.itr != nil || nrr.idx < len(nrr.ranges) {
-		if nrr.keylessCard != -1 && nrr.keylessIdx != -1 && !nrr.keylessKey.Empty() {
-			nrr.keylessIdx++
-			if nrr.keylessIdx < nrr.keylessCard {
-				return nrr.keylessKey, nrr.keylessVal, nil
+
+		if !nrr.cardCounter.empty() {
+			if nrr.cardCounter.done() {
+				nrr.cardCounter.reset()
 			} else {
-				nrr.keylessCard = -1
-				nrr.keylessIdx = -1
-				nrr.keylessKey = types.Tuple{}
-				nrr.keylessVal = types.Tuple{}
+				return nrr.cardCounter.next()
 			}
 		}
 
@@ -197,39 +183,14 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			}
 
 			if inRange {
-				// TODO: max - return multiple keys here if value is keyless card > 1
 				if !v.Empty() {
-					cardTagVal, err = v.Get(0)
-					if err != nil {
-						return types.Tuple{}, types.Tuple{}, err
-					}
-					cardTag, ok = cardTagVal.(types.Uint)
-					if !ok {
-						return types.Tuple{}, types.Tuple{}, errors.New("Index cardinality invalid tag type")
-					}
-
-					if uint64(cardTag) != schema.KeylessRowCardinalityTag {
-						return types.Tuple{}, types.Tuple{}, errors.New("Index cardinality tag invalid")
-					}
-
-					cardVal, err = v.Get(1)
-					if err != nil {
-						return types.Tuple{}, types.Tuple{}, err
-					}
-					card, ok = cardVal.(types.Uint)
-					if !ok {
-						return types.Tuple{}, types.Tuple{}, errors.New("Index cardinality value invalid type")
-					}
-					if int(card) > 1 {
-						nrr.keylessCard = int(card)
-						nrr.keylessIdx = 0
-						nrr.keylessKey = k
-						nrr.keylessVal = v
-						return k, v, nil
+					nrr.cardCounter.updateWithKV(k, v)
+					if !nrr.cardCounter.done() && !nrr.cardCounter.empty() {
+						return nrr.cardCounter.next()
 					}
 				}
-				return k, v, nil
 			}
+			return k, v, nil
 		}
 
 		nrr.itr = nil
@@ -284,4 +245,83 @@ func SqlRowFromTuples(sch schema.Schema, key, val types.Tuple) (sql.Row, error) 
 	}
 
 	return sql.NewRow(colVals...), nil
+}
+
+type CardinalityCounter struct {
+	key   *types.Tuple
+	value *types.Tuple
+	card  int
+	idx   int
+}
+
+func NewCardinalityCounter() *CardinalityCounter {
+	return &CardinalityCounter{
+		nil,
+		nil,
+		-1,
+		-1,
+	}
+}
+
+func (cc *CardinalityCounter) updateWithKV(k, v types.Tuple) error {
+	if !v.Empty() {
+		cardTagVal, err := v.Get(0)
+		if err != nil {
+			return err
+		}
+		cardTag, ok := cardTagVal.(types.Uint)
+		if !ok {
+			return errors.New("index cardinality invalid tag type")
+		}
+
+		if uint64(cardTag) != schema.KeylessRowCardinalityTag {
+			return errors.New("index cardinality tag invalid")
+		}
+
+		cardVal, err := v.Get(1)
+		if err != nil {
+			return err
+		}
+		card, ok := cardVal.(types.Uint)
+		if !ok {
+			return errors.New("index cardinality value invalid type")
+		}
+		if int(card) > 1 {
+			cc.card = int(card)
+			cc.idx = 0
+			cc.key = &k
+			cc.value = &v
+			return nil
+		} else {
+			cc.card = -1
+			cc.idx = -1
+			cc.key = nil
+			cc.value = nil
+		}
+	}
+	return nil
+}
+
+func (cc *CardinalityCounter) empty() bool {
+	return cc.key == nil || cc.value == nil
+}
+
+func (cc *CardinalityCounter) done() bool {
+	return cc.card < 1 || cc.idx >= cc.card
+}
+
+func (cc *CardinalityCounter) next() (types.Tuple, types.Tuple, error) {
+	if cc.key == nil || cc.value == nil {
+		return types.Tuple{}, types.Tuple{}, errors.New("cannot increment empty cardinality counter")
+	}
+	cc.idx++
+	return *cc.key, *cc.value, nil
+
+}
+
+func (cc *CardinalityCounter) reset() {
+	cc.card = -1
+	cc.idx = -1
+	cc.key = nil
+	cc.value = nil
 }

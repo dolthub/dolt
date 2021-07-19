@@ -265,11 +265,10 @@ func (r keylessRow) Format() *types.NomsBinFormat {
 	return r.val.Format()
 }
 
-// ReduceToIndexKeys creates a full key and a partial key from the given row (first tuple being the full key). Please
-// refer to the note in the index editor for more information regarding partial keys.
+// ReduceToIndexKeys creates a full key, a partial key, and a cardinality value from the given row
+// (first tuple being the full key). Please refer to the note in the index editor for more information
+// regarding partial keys.
 func (r keylessRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, types.Tuple, error) {
-	// full = (new index, hash of keys)
-	// partial = (new index)
 	vals := make([]types.Value, 0, len(idx.AllTags())*2)
 	for _, tag := range idx.AllTags() {
 		val, ok := r.GetColVal(tag)
@@ -296,7 +295,7 @@ func (r keylessRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tupl
 		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
 	}
 
-	value, err := types.NewTuple(r.Format(), cardTag, cardVal)
+	keyValue, err := types.NewTuple(r.Format(), cardTag, cardVal)
 	if err != nil {
 		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
 	}
@@ -312,5 +311,5 @@ func (r keylessRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tupl
 		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
 	}
 
-	return fullKey, partialKey, value, nil
+	return fullKey, partialKey, keyValue, nil
 }
