@@ -121,7 +121,7 @@ func TestMerge(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			actRows, err := sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, test.query)
+			actRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, test.query)
 			require.NoError(t, err)
 
 			require.Equal(t, len(test.expected), len(actRows))
@@ -234,7 +234,7 @@ func TestMergeConflicts(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			actRows, err := sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, test.query)
+			actRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, test.query)
 			require.NoError(t, err)
 
 			require.Equal(t, len(test.expected), len(actRows))

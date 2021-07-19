@@ -315,7 +315,7 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 
 	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(context.Background(), dEnv, root, test.ReplaceQuery)
+	root, err = executeModify(t, context.Background(), dEnv, root, test.ReplaceQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return
@@ -323,7 +323,7 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, sch, err := executeSelect(context.Background(), dEnv, root, test.SelectQuery)
+	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)

@@ -30,6 +30,10 @@ teardown() {
 	teardown_common
 }
 
+@test "sql-conflicts: read from empty table" {
+    dolt sql -q "SELECT * FROM dolt_conflicts_empty"
+}
+
 @test "sql-conflicts: add conflict" {
   dolt branch feature_branch master
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
@@ -71,19 +75,21 @@ teardown() {
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]] ]] || false
 
-  dolt sql -q "DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0"
-  dolt sql -q "DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0"
+  dolt sql --disable-batch <<SQL
+  set autocommit = off;
+  DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0;
+  DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0;
+  commit;
+SQL
 
   EXPECTED=$( echo -e "table,num_conflicts")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
 
-  # delete an already resolved conflict a 2nd time should not cause problems
+  # delete an already resolved conflict a 2nd time is an error
   run dolt sql -q "DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0"
-  [ "$status" -eq 0 ]
-  echo $output
-  [[ "$output" =~ "Query OK, 0 rows affected" ]] || false
+  [ "$status" -eq 1 ]
 }
 
 
@@ -132,8 +138,12 @@ teardown() {
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+theirs[[:space:]] ]] || false
 
-  dolt sql -q "DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0"
-  dolt sql -q "DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0"
+  dolt sql --disable-batch << SQL
+set autocommit = off;
+DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0;
+DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0;
+commit;
+SQL
 
   EXPECTED=$( echo -e "table,num_conflicts")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts"
@@ -186,8 +196,12 @@ teardown() {
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \-[[:space:]]*\|[[:space:]]+theirs[[:space:]] ]] || false
 
-  dolt sql -q "DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0"
-  dolt sql -q "DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0"
+  dolt sql << SQL
+set autocommit = off;
+DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0;
+DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0;
+commit;
+SQL
 
   EXPECTED=$( echo -e "table,num_conflicts")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts"

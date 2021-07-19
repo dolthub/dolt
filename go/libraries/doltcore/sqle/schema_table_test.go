@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -33,7 +34,8 @@ func TestSchemaTableRecreation(t *testing.T) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	db := NewDatabase("dolt", dEnv.DbData())
-	err := DSessFromSess(ctx.Session).AddDB(ctx, db, db.DbData())
+	dbState := getDbState(t, db, dEnv)
+	err := dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
 

@@ -202,5 +202,38 @@ func (t *Type) String() string {
 }
 
 func (t *Type) HumanReadableString() string {
-	panic("unreachable")
+	switch typedDesc := t.Desc.(type) {
+	case CompoundDesc:
+		str := typedDesc.kind.String() + "<"
+		for i, et := range typedDesc.ElemTypes {
+			if i != 0 {
+				str += ","
+			}
+
+			str += et.HumanReadableString()
+		}
+		str += ">"
+
+		return str
+
+	case PrimitiveDesc:
+		return typedDesc.Kind().String()
+
+	case StructDesc:
+		str := typedDesc.Name + "{"
+		for i, f := range typedDesc.fields {
+			if i != 0 {
+				str += ","
+			}
+			str += f.Name + " " + f.Type.Desc.Kind().String()
+		}
+		str += "}"
+
+		return str
+
+	case CycleDesc:
+		return string(typedDesc) + "(Cycle)"
+	}
+
+	panic("implement type desc in switch")
 }

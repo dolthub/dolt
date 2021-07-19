@@ -18,6 +18,8 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 )
 
 // TempFileProvider is an interface which provides methods for creating temporary files.
@@ -75,7 +77,7 @@ func (tfp *TempFileProviderAt) Clean() {
 	defer tfp.mu.Unlock()
 	for _, filename := range tfp.filesCreated {
 		// best effort. ignore errors
-		_ = os.Remove(filename)
+		_ = file.Remove(filename)
 	}
 }
 

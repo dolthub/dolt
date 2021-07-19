@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -55,7 +56,7 @@ func (r *Remote) GetParamOrDefault(pName, defVal string) string {
 }
 
 func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat) (*doltdb.DoltDB, error) {
-	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, r.Params)
+	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, r.Params)
 }
 
 func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat) (*doltdb.DoltDB, error) {
@@ -64,5 +65,5 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 		params[k] = v
 	}
 	params[dbfactory.NoCachingParameter] = "true"
-	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, params)
+	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }

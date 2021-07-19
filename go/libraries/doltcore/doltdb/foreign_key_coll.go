@@ -406,6 +406,16 @@ func (fkc *ForeignKeyCollection) Stage(ctx context.Context, fksToAdd []ForeignKe
 	}
 }
 
+// Tables returns the set of all tables that either declare a foreign key or are referenced by a foreign key.
+func (fkc *ForeignKeyCollection) Tables() map[string]struct{} {
+	tables := make(map[string]struct{})
+	for _, fk := range fkc.foreignKeys {
+		tables[fk.TableName] = struct{}{}
+		tables[fk.ReferencedTableName] = struct{}{}
+	}
+	return tables
+}
+
 // String returns the SQL reference option in uppercase.
 func (refOp ForeignKeyReferenceOption) String() string {
 	switch refOp {
@@ -417,6 +427,21 @@ func (refOp ForeignKeyReferenceOption) String() string {
 		return "NO ACTION"
 	case ForeignKeyReferenceOption_Restrict:
 		return "RESTRICT"
+	case ForeignKeyReferenceOption_SetNull:
+		return "SET NULL"
+	default:
+		return "INVALID"
+	}
+}
+
+// ReducedString returns the SQL reference option in uppercase. All reference options are functionally equivalent to
+// either RESTRICT, CASCADE, or SET NULL, therefore only one those three options are returned.
+func (refOp ForeignKeyReferenceOption) ReducedString() string {
+	switch refOp {
+	case ForeignKeyReferenceOption_DefaultAction, ForeignKeyReferenceOption_NoAction, ForeignKeyReferenceOption_Restrict:
+		return "RESTRICT"
+	case ForeignKeyReferenceOption_Cascade:
+		return "CASCADE"
 	case ForeignKeyReferenceOption_SetNull:
 		return "SET NULL"
 	default:

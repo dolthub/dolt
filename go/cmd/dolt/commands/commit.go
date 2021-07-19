@@ -76,9 +76,13 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	// Check if the -all param is provided. Stage all tables if so.
 	allFlag := apr.Contains(cli.AllFlag)
 
-	var err error
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
+	}
+
 	if allFlag {
-		err = actions.StageAllTables(ctx, dEnv.DbData())
+		err = actions.StageAllTables(ctx, roots, dEnv.DbData())
 	}
 
 	if err != nil {
@@ -112,9 +116,14 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
+	// TODO: refactor above stage funcs to modify roots in memory instead of writing to disk
 	dbData := dEnv.DbData()
+	roots, err = dEnv.Roots(context.Background())
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
+	}
 
-	_, err = actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
@@ -160,7 +169,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	if actions.IsNothingStaged(err) {
 		notStagedTbls := actions.NothingStagedTblDiffs(err)
 		notStagedDocs := actions.NothingStagedDocsDiffs(err)
-		n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, []string{})
+		n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, nil, nil)
 
 		if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
@@ -194,24 +203,34 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) string {
 	return finalMsg
 }
 
+// TODO: return an error here
 func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
-	currBranch := dEnv.RepoState.CWBHeadRef()
-	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		panic(err)
+	}
 
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
+	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, roots)
+
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}
+	workingTblsWithViolations, _, _, err := merge.GetTablesWithConstraintViolations(ctx, roots)
+	if err != nil {
+		workingTblsWithViolations = []string{}
+	}
 
-	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
+	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
-	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
+	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict, workingTblsWithViolations)
 
+	currBranch := dEnv.RepoStateReader().CWBHeadRef()
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
 		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"
 

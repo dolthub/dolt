@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -175,7 +176,7 @@ func runTestSuite(t *testing.T, mem bool) {
 	// Write test results to our own temporary LDB database.
 	ldbDir, err := ioutil.TempDir("", "suite.TestSuite")
 	require.NoError(t, err)
-	defer os.RemoveAll(ldbDir)
+	defer file.RemoveAll(ldbDir)
 
 	flagVal, repeatFlagVal, memFlagVal := *perfFlag, *perfRepeatFlag, *perfMemFlag
 	*perfFlag, *perfRepeatFlag, *perfMemFlag = ldbDir, 3, mem
@@ -290,7 +291,7 @@ func TestPrefixFlag(t *testing.T) {
 	// Write test results to a temporary database.
 	ldbDir, err := ioutil.TempDir("", "suite.TestSuite")
 	require.NoError(t, err)
-	defer os.RemoveAll(ldbDir)
+	defer file.RemoveAll(ldbDir)
 
 	flagVal, prefixFlagVal := *perfFlag, *perfPrefixFlag
 	*perfFlag, *perfPrefixFlag = ldbDir, "foo/"

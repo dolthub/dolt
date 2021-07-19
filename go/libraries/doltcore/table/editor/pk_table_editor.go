@@ -46,7 +46,7 @@ func init() {
 	}
 }
 
-type PKDuplicateErrFunc func(keyString string, k, v types.Tuple, isPk bool) error
+type PKDuplicateErrFunc func(keyString, indexName string, k, v types.Tuple, isPk bool) error
 
 type TableEditor interface {
 	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
@@ -58,11 +58,13 @@ type TableEditor interface {
 
 	GetAutoIncrementValue() types.Value
 	SetAutoIncrementValue(v types.Value) (err error)
+	SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error
 
 	Table(ctx context.Context) (*doltdb.Table, error)
 	Schema() schema.Schema
 	Name() string
 	Format() *types.NomsBinFormat
+	ValueReadWriter() types.ValueReadWriter
 
 	StatementStarted(ctx context.Context)
 	StatementFinished(ctx context.Context, errored bool) error
@@ -91,6 +93,7 @@ type pkTableEditor struct {
 	aq       *async.ActionExecutor
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
+	cvEditor *types.MapEditor
 
 	hasAutoInc bool
 	autoIncCol schema.Column
@@ -350,7 +353,7 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 	return rows, nil
 }
 
-func (te *pkTableEditor) keyErrForKVP(ctx context.Context, kvp *doltKVP, isPk bool, errFunc PKDuplicateErrFunc) error {
+func (te *pkTableEditor) keyErrForKVP(ctx context.Context, indexName string, kvp *doltKVP, isPk bool, errFunc PKDuplicateErrFunc) error {
 	kVal, err := kvp.k.Value(ctx)
 	if err != nil {
 		return err
@@ -367,7 +370,7 @@ func (te *pkTableEditor) keyErrForKVP(ctx context.Context, kvp *doltKVP, isPk bo
 	}
 
 	if errFunc != nil {
-		return errFunc(keyStr, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
+		return errFunc(keyStr, indexName, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
 	} else {
 		return fmt.Errorf("duplicate key '%s': %w", keyStr, ErrDuplicateKey)
 	}
@@ -433,7 +436,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
 					indexEd.Index().Name(), keyStr)
 			}
-			return te.keyErrForKVP(ctx, kvp, false, errFunc)
+			return te.keyErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
 		} else if err != nil {
 			return err
 		}
@@ -443,7 +446,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	if kvp, pkExists, err := te.tea.maybeGet(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
-		return te.keyErrForKVP(ctx, kvp, true, errFunc)
+		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
 	delete(te.tea.removedKeys, keyHash)
@@ -451,15 +454,26 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 
 	if te.hasAutoInc {
 		insertVal, ok := tagToVal[te.autoIncCol.Tag]
+
 		if ok {
-			less, err := te.autoIncVal.Less(te.nbf, insertVal)
+			var less bool
+
+			// float auto increment values should be rounded before comparing to the current auto increment values
+			if te.autoIncVal.Kind() == types.FloatKind {
+				rounded := types.Round(insertVal)
+				less, err = rounded.Less(te.nbf, te.autoIncVal)
+			} else {
+				less, err = insertVal.Less(te.nbf, te.autoIncVal)
+			}
+
 			if err != nil {
 				return err
 			}
-			if less {
+
+			if !less {
 				te.autoIncVal = types.Round(insertVal)
+				te.autoIncVal = types.Increment(te.autoIncVal)
 			}
-			te.autoIncVal = types.Increment(te.autoIncVal)
 		}
 	}
 
@@ -664,7 +678,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
 					indexEd.Index().Name(), keyStr)
 			}
-			return te.keyErrForKVP(ctx, kvp, false, errFunc)
+			return te.keyErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
 		} else if err != nil {
 			return err
 		}
@@ -677,7 +691,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	if kvp, pkExists, err := te.tea.maybeGet(ctx, newHash, dNewKeyVal); err != nil {
 		return err
 	} else if pkExists {
-		return te.keyErrForKVP(ctx, kvp, true, errFunc)
+		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
 	delete(te.tea.removedKeys, newHash)
@@ -742,6 +756,18 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if te.cvEditor != nil {
+		cvMap, err := te.cvEditor.Map(ctx)
+		if err != nil {
+			return nil, err
+		}
+		te.cvEditor = nil
+		tbl, err = tbl.SetConstraintViolations(ctx, cvMap)
+		if err != nil {
+			return nil, err
+		}
+	}
 	te.t = tbl
 
 	return te.t, nil
@@ -757,6 +783,10 @@ func (te *pkTableEditor) Name() string {
 
 func (te *pkTableEditor) Format() *types.NomsBinFormat {
 	return te.nbf
+}
+
+func (te *pkTableEditor) ValueReadWriter() types.ValueReadWriter {
+	return te.t.ValueReadWriter()
 }
 
 // StatementStarted implements TableEditor.
@@ -842,9 +872,32 @@ func (te *pkTableEditor) StatementFinished(ctx context.Context, errored bool) er
 	return nil
 }
 
+// SetConstraintViolation implements TableEditor.
+func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error {
+	if te.cvEditor == nil {
+		cvMap, err := te.t.GetConstraintViolations(ctx)
+		if err != nil {
+			return err
+		}
+		te.cvEditor = cvMap.Edit()
+	}
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
+	te.cvEditor.Set(k, v)
+	return nil
+}
+
 // Close ensures that all goroutines that may be open are properly disposed of. Attempting to call any other function
 // on this editor after calling this function is undefined behavior.
 func (te *pkTableEditor) Close() error {
+	te.flushMutex.Lock()
+	defer te.flushMutex.Unlock()
+	if te.cvEditor != nil {
+		te.cvEditor.Close()
+		te.cvEditor = nil
+	}
 	for _, indexEd := range te.indexEds {
 		err := indexEd.Close()
 		if err != nil {

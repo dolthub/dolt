@@ -69,34 +69,42 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
-
-	if err != nil {
-		cli.PrintErrln(toStatusVErr(err).Verbose())
-		return 1
-	}
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
-
+	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
-
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
-
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 
-	printStatus(ctx, dEnv, staged, notStaged, workingTblsInConflict, workingDocsInConflict, stagedDocDiffs, notStagedDocDiffs)
+	workingTblsWithViolations, _, _, err := merge.GetTablesWithConstraintViolations(ctx, roots)
+	if err != nil {
+		cli.PrintErrln(toStatusVErr(err).Verbose())
+		return 1
+	}
+
+	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
+	if err != nil {
+		cli.PrintErrln(toStatusVErr(err).Verbose())
+		return 1
+	}
+
+	err = printStatus(ctx, dEnv, staged, notStaged, workingTblsInConflict, workingTblsWithViolations, stagedDocDiffs, notStagedDocDiffs)
+	if err != nil {
+		cli.PrintErrln(toStatusVErr(err).Verbose())
+		return 1
+	}
+
 	return 0
 }
 
@@ -131,11 +139,11 @@ const (
 	stagedHeaderHelp = `  (use "dolt reset <table>..." to unstage)`
 
 	unmergedTablesHeader = `You have unmerged tables.
-  (fix conflicts and run "dolt commit")
+  (fix %s and run "dolt commit")
   (use "dolt merge --abort" to abort the merge)
 `
 
-	allMergedHeader = `All conflicts fixed but you are still merging.
+	allMergedHeader = `All conflicts and constraint violations fixed but you are still merging.
   (use "dolt commit" to conclude merge)
 `
 
@@ -190,27 +198,46 @@ func printStagedDiffs(wr io.Writer, stagedTbls []diff.TableDelta, stagedDocs *di
 	return 0
 }
 
-func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocDiffs, printHelp bool, linesPrinted int, workingTblsInConflict []string) int {
+func printDiffsNotStaged(
+	ctx context.Context,
+	dEnv *env.DoltEnv,
+	wr io.Writer,
+	notStagedTbls []diff.TableDelta,
+	notStagedDocs *diff.DocDiffs,
+	printHelp bool,
+	linesPrinted int,
+	workingTblsInConflict, workingTblsWithViolations []string,
+) int {
 	inCnfSet := set.NewStrSet(workingTblsInConflict)
+	violationSet := set.NewStrSet(workingTblsWithViolations)
 
-	if len(workingTblsInConflict) > 0 {
+	if len(workingTblsInConflict) > 0 || len(workingTblsWithViolations) > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
-
 		iohelp.WriteLine(wr, mergedTableHeader)
-
 		if printHelp {
 			iohelp.WriteLine(wr, mergedTableHelp)
 		}
 
-		lines := make([]string, 0, len(notStagedTbls))
-		for _, tblName := range workingTblsInConflict {
-			lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, tblName))
+		if len(workingTblsInConflict) > 0 {
+			lines := make([]string, 0, len(notStagedTbls))
+			for _, tblName := range workingTblsInConflict {
+				lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, tblName))
+			}
+			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+			linesPrinted += len(lines)
 		}
 
-		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
-		linesPrinted += len(lines)
+		if len(workingTblsWithViolations) > 0 {
+			violationOnly, _, _ := violationSet.LeftIntersectionRight(inCnfSet)
+			lines := make([]string, 0, len(notStagedTbls))
+			for _, tblName := range violationOnly.AsSortedSlice() {
+				lines = append(lines, fmt.Sprintf(statusFmt, "modified", tblName))
+			}
+			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+			linesPrinted += len(lines)
+		}
 	}
 
 	added := 0
@@ -229,7 +256,7 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 	numRemovedOrModified := removeModified + notStagedDocs.NumRemoved + notStagedDocs.NumModified
 	docsInCnf, _ := docCnfsOnWorkingRoot(ctx, dEnv)
 
-	if numRemovedOrModified-inCnfSet.Size() > 0 {
+	if numRemovedOrModified-inCnfSet.Size()-violationSet.Size() > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
@@ -243,7 +270,7 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 				iohelp.WriteLine(wr, workingHeaderHelp)
 			}
 
-			lines := getModifiedAndRemovedNotStaged(notStagedTbls, notStagedDocs, inCnfSet)
+			lines := getModifiedAndRemovedNotStaged(notStagedTbls, notStagedDocs, inCnfSet, violationSet)
 
 			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 			linesPrinted += len(lines)
@@ -277,10 +304,10 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 	return linesPrinted
 }
 
-func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocDiffs, inCnfSet *set.StrSet) (lines []string) {
+func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocDiffs, inCnfSet, violationSet *set.StrSet) (lines []string) {
 	lines = make([]string, 0, len(notStagedTbls)+notStagedDocs.Len())
 	for _, td := range notStagedTbls {
-		if td.IsAdd() || inCnfSet.Contains(td.CurName()) || td.CurName() == doltdb.DocTableName {
+		if td.IsAdd() || inCnfSet.Contains(td.CurName()) || violationSet.Contains(td.CurName()) || td.CurName() == doltdb.DocTableName {
 			continue
 		}
 		if td.IsDrop() {
@@ -325,23 +352,35 @@ func getAddedNotStaged(notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocD
 	return lines
 }
 
-func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict []string, workingDocsInConflict *diff.DocDiffs, stagedDocs, notStagedDocs *diff.DocDiffs) {
-	cli.Printf(branchHeader, dEnv.RepoState.CWBHeadRef().GetPath())
+// TODO: working docs in conflict param not used here
+func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict, workingTblsWithViolations []string, stagedDocs, notStagedDocs *diff.DocDiffs) error {
+	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
 
-	if dEnv.RepoState.Merge != nil {
-		if len(workingTblsInConflict) > 0 {
-			cli.Println(unmergedTablesHeader)
+	mergeActive, err := dEnv.IsMergeActive(ctx)
+	if err != nil {
+		return err
+	}
+
+	if mergeActive {
+		if len(workingTblsInConflict) > 0 && len(workingTblsWithViolations) > 0 {
+			cli.Println(fmt.Sprintf(unmergedTablesHeader, "conflicts and constraint violations"))
+		} else if len(workingTblsInConflict) > 0 {
+			cli.Println(fmt.Sprintf(unmergedTablesHeader, "conflicts"))
+		} else if len(workingTblsWithViolations) > 0 {
+			cli.Println(fmt.Sprintf(unmergedTablesHeader, "constraint violations"))
 		} else {
 			cli.Println(allMergedHeader)
 		}
 	}
 
 	n := printStagedDiffs(cli.CliOut, stagedTbls, stagedDocs, true)
-	n = printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, true, n, workingTblsInConflict)
+	n = printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, true, n, workingTblsInConflict, workingTblsWithViolations)
 
-	if dEnv.RepoState.Merge == nil && n == 0 {
+	if !mergeActive && n == 0 {
 		cli.Println("nothing to commit, working tree clean")
 	}
+
+	return nil
 }
 
 func toStatusVErr(err error) errhand.VerboseError {

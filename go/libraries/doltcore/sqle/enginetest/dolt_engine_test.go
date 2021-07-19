@@ -28,12 +28,7 @@ func init() {
 }
 
 func TestQueries(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestQueries(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestQueries(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestQueries(t, newDoltHarness(t))
 }
 
 func TestSingleQuery(t *testing.T) {
@@ -99,12 +94,7 @@ func TestSingleScript(t *testing.T) {
 }
 
 func TestVersionedQueries(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestVersionedQueries(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestVersionedQueries(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestVersionedQueries(t, newDoltHarness(t))
 }
 
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
@@ -128,75 +118,35 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestQueryErrors(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestQueryErrors(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestQueryErrors(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestQueryErrors(t, newDoltHarness(t))
 }
 
 func TestInfoSchema(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestInfoSchema(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestInfoSchema(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestInfoSchema(t, newDoltHarness(t))
 }
 
 func TestColumnAliases(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestColumnAliases(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestColumnAliases(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestColumnAliases(t, newDoltHarness(t))
 }
 
 func TestOrderByGroupBy(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestOrderByGroupBy(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestOrderByGroupBy(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestOrderByGroupBy(t, newDoltHarness(t))
 }
 
 func TestAmbiguousColumnResolution(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestAmbiguousColumnResolution(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestAmbiguousColumnResolution(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestAmbiguousColumnResolution(t, newDoltHarness(t))
 }
 
 func TestInsertInto(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestInsertInto(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestInsertInto(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestInsertInto(t, newDoltHarness(t))
 }
 
 func TestInsertIgnoreInto(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestInsertIgnoreInto(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestInsertIgnoreInto(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestInsertIgnoreInto(t, newDoltHarness(t))
 }
 
 func TestInsertIntoErrors(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestInsertIntoErrors(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestInsertIntoErrors(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestInsertIntoErrors(t, newDoltHarness(t))
 }
 
 func TestReplaceInto(t *testing.T) {
@@ -205,195 +155,90 @@ func TestReplaceInto(t *testing.T) {
 }
 
 func TestReplaceIntoErrors(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestReplaceIntoErrors(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestReplaceIntoErrors(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestReplaceIntoErrors(t, newDoltHarness(t))
 }
 
 func TestUpdate(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestUpdate(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestUpdate(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestUpdate(t, newDoltHarness(t))
 }
 
 func TestUpdateErrors(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestUpdateErrors(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestUpdateErrors(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestUpdateErrors(t, newDoltHarness(t))
 }
 
 func TestDeleteFrom(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestDelete(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestDelete(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestDelete(t, newDoltHarness(t))
 }
 
 func TestDeleteFromErrors(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestDeleteErrors(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestDeleteErrors(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestDeleteErrors(t, newDoltHarness(t))
 }
 
 func TestTruncate(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestTruncate(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestTruncate(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
 func TestScripts(t *testing.T) {
 	skipped := []string{
 		"create index r_c0 on r (c0);",
 	}
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestScripts(t, newDoltHarness(t).withTransactionsEnabled(true).WithSkippedQueries(skipped))
-	})
+	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
 func TestCreateTable(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestCreateTable(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestCreateTable(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
 
 func TestDropTable(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestDropTable(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestDropTable(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestDropTable(t, newDoltHarness(t))
 }
 
 func TestRenameTable(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestRenameTable(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestRenameTable(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestRenameTable(t, newDoltHarness(t))
 }
 
 func TestRenameColumn(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestRenameColumn(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestRenameColumn(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestRenameColumn(t, newDoltHarness(t))
 }
 
 func TestAddColumn(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestAddColumn(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestAddColumn(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestAddColumn(t, newDoltHarness(t))
 }
 
 func TestModifyColumn(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestModifyColumn(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestModifyColumn(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
 func TestDropColumn(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestDropColumn(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestDropColumn(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestDropColumn(t, newDoltHarness(t))
 }
 
 func TestCreateForeignKeys(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestCreateForeignKeys(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 
 func TestDropForeignKeys(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestDropForeignKeys(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestDropForeignKeys(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestDropForeignKeys(t, newDoltHarness(t))
 }
 
 func TestCreateCheckConstraints(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestCreateCheckConstraints(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
 }
 
 func TestChecksOnInsert(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestChecksOnInsert(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestChecksOnInsert(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestChecksOnInsert(t, newDoltHarness(t))
 }
 
 func TestChecksOnUpdate(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestChecksOnUpdate(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestChecksOnUpdate(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestChecksOnUpdate(t, newDoltHarness(t))
 }
 
 func TestDisallowedCheckConstraints(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestDisallowedCheckConstraints(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestDisallowedCheckConstraints(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestDisallowedCheckConstraints(t, newDoltHarness(t))
 }
 
 func TestDropCheckConstraints(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestDropCheckConstraints(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestDropCheckConstraints(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestDropCheckConstraints(t, newDoltHarness(t))
 }
 
 func TestExplode(t *testing.T) {
@@ -402,108 +247,51 @@ func TestExplode(t *testing.T) {
 }
 
 func TestReadOnly(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestReadOnly(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestReadOnly(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestReadOnly(t, newDoltHarness(t))
 }
 
 func TestViews(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestViews(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestViews(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestViews(t, newDoltHarness(t))
 }
 
 func TestVersionedViews(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestVersionedViews(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestVersionedViews(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestVersionedViews(t, newDoltHarness(t))
 }
 
 func TestNaturalJoin(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestNaturalJoin(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestNaturalJoin(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestNaturalJoin(t, newDoltHarness(t))
 }
 
 func TestNaturalJoinEqual(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestNaturalJoinEqual(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestNaturalJoinEqual(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestNaturalJoinEqual(t, newDoltHarness(t))
 }
 
 func TestNaturalJoinDisjoint(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestNaturalJoinEqual(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestNaturalJoinEqual(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestNaturalJoinEqual(t, newDoltHarness(t))
 }
 
 func TestInnerNestedInNaturalJoins(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestInnerNestedInNaturalJoins(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestInnerNestedInNaturalJoins(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestInnerNestedInNaturalJoins(t, newDoltHarness(t))
 }
 
 func TestColumnDefaults(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestColumnDefaults(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestColumnDefaults(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestColumnDefaults(t, newDoltHarness(t))
 }
 
 func TestVariables(t *testing.T) {
-	// Can't run these tests more than once because they set and make assertions about global vars, which obviously
-	// persist outside sessions.
 	enginetest.TestVariables(t, newDoltHarness(t))
 }
 
 func TestVariableErrors(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestVariableErrors(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestVariableErrors(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestVariableErrors(t, newDoltHarness(t))
 }
 
 func TestJsonScripts(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestJsonScripts(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestJsonScripts(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
 func TestTriggers(t *testing.T) {
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestTriggers(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestTriggers(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestTriggers(t, newDoltHarness(t))
 }
 
 func TestStoredProcedures(t *testing.T) {
@@ -516,19 +304,100 @@ func TestStoredProcedures(t *testing.T) {
 	}
 	enginetest.ProcedureLogicTests = tests
 
-	t.Run("no transactions", func(t *testing.T) {
-		enginetest.TestStoredProcedures(t, newDoltHarness(t))
-	})
-	t.Run("with transactions", func(t *testing.T) {
-		enginetest.TestStoredProcedures(t, newDoltHarness(t).withTransactionsEnabled(true))
-	})
+	enginetest.TestStoredProcedures(t, newDoltHarness(t))
 }
 
 func TestTransactions(t *testing.T) {
-	enginetest.TestTransactionScripts(t, newDoltHarness(t).withTransactionsEnabled(true))
+	enginetest.TestTransactionScripts(t, newDoltHarness(t))
 	for _, script := range DoltTransactionTests {
-		enginetest.TestTransactionScript(t, newDoltHarness(t).withTransactionsEnabled(true), script)
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
+}
+
+// TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
+// desired test.
+func TestSingleTransactionScript(t *testing.T) {
+	//t.Skip()
+
+	script := enginetest.TransactionTest{
+		Name: "rollback",
+		SetUpScript: []string{
+			"create table t (x int primary key, y int)",
+			"insert into t values (1, 1)",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into t values (3, 3)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ insert into t values (2, 2)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}},
+			},
+			{
+				Query:    "/* client b */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from t order by x",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+		},
+	}
+
+	enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 }
 
 func TestSystemTableQueries(t *testing.T) {

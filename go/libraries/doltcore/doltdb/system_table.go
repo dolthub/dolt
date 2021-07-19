@@ -134,6 +134,7 @@ var generatedSystemTables = []string{
 	BranchesTableName,
 	LogTableName,
 	TableOfTablesInConflictName,
+	TableOfTablesWithViolationsName,
 	CommitsTableName,
 	CommitAncestorsTableName,
 	StatusTableName,
@@ -144,6 +145,7 @@ var generatedSystemTablePrefixes = []string{
 	DoltCommitDiffTablePrefix,
 	DoltHistoryTablePrefix,
 	DoltConfTablePrefix,
+	DoltConstViolTablePrefix,
 }
 
 const (
@@ -194,12 +196,14 @@ const (
 const (
 	// DoltHistoryTablePrefix is the prefix assigned to all the generated history tables
 	DoltHistoryTablePrefix = "dolt_history_"
-	// DoltdDiffTablePrefix is the prefix assigned to all the generated diff tables
+	// DoltDiffTablePrefix is the prefix assigned to all the generated diff tables
 	DoltDiffTablePrefix = "dolt_diff_"
 	// DoltCommitDiffTablePrefix is the prefix assigned to all the generated commit diff tables
 	DoltCommitDiffTablePrefix = "dolt_commit_diff_"
 	// DoltConfTablePrefix is the prefix assigned to all the generated conflict tables
 	DoltConfTablePrefix = "dolt_conflicts_"
+	// DoltConstViolTablePrefix is the prefix assigned to all the generated constraint violation tables
+	DoltConstViolTablePrefix = "dolt_constraint_violations_"
 )
 
 const (
@@ -208,6 +212,9 @@ const (
 
 	// TableOfTablesInConflictName is the conflicts system table name
 	TableOfTablesInConflictName = "dolt_conflicts"
+
+	// TableOfTablesWithViolationsName is the constraint violations system table name
+	TableOfTablesWithViolationsName = "dolt_constraint_violations"
 
 	// BranchesTableName is the branches system table name
 	BranchesTableName = "dolt_branches"

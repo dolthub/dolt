@@ -22,10 +22,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
-
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 func flushSinkToFile(sink ByteSink, path string) (err error) {
@@ -285,7 +285,7 @@ func (sink *BufferedFileByteSink) FlushToFile(path string) (err error) {
 		return err
 	}
 
-	return os.Rename(sink.path, path)
+	return file.Rename(sink.path, path)
 }
 
 // HashingByteSink is a ByteSink that keeps an md5 hash of all the data written to it.

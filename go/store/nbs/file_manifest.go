@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/dolthub/fslock"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -54,9 +56,15 @@ type manifestWriter func(temp io.Writer, contents manifestContents) error
 type manifestChecker func(upstream, contents manifestContents) error
 
 // ParseManifest parses s a manifest file from the supplied reader
-func ParseManifest(r io.Reader) (ManifestInfo, error) {
-	fm4 := fileManifestV4{}
-	return fm4.parseManifest(r)
+func ParseManifest(version int, r io.Reader) (ManifestInfo, error) {
+	switch version {
+	case 4:
+		return fileManifestV4{}.parseManifest(r)
+	case 5:
+		return fileManifestV5{}.parseManifest(r)
+	default:
+		return nil, fmt.Errorf("unknown manifest version: %d", version)
+	}
 }
 
 func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
@@ -468,7 +476,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 		return manifestContents{}, err
 	}
 
-	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
+	defer file.Remove(tempManifestPath) // If we rename below, this will be a no-op
 
 	// Take manifest file lock
 	lck := newLock(dir)
@@ -545,23 +553,9 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 		return manifestContents{}, err
 	}
 
-	err = os.Rename(tempManifestPath, manifestPath)
+	err = file.Rename(tempManifestPath, manifestPath)
 	if err != nil {
-		// On Windows, renaming the temporary manifest file to the current manifest file overwrites the current file.
-		// This can occasionally cause an "ACCESS DENIED" error, aborting the entire operation. The cause is not clear,
-		// as it does not appear to be a dangling file handle (observed through Process Explorer). The error is also
-		// hard to reproduce and inconsistent, as it seems to occur between 200-7,000 renames, but averages around 1,500
-		// renames. This adds a delay before retrying the rename, increasing the wait time by a factor of 10 after each
-		// failure, up to a max of 10 seconds. If an error still occurs after that time, then we just fail. It is
-		// unknown if this is sufficient enough to completely eliminate the issue, however it has so far been able to
-		// succeed before reaching the retry limit.
-		for waitTime := time.Duration(1); err != nil && waitTime <= 10000; waitTime *= 10 {
-			time.Sleep(waitTime * time.Millisecond)
-			err = os.Rename(tempManifestPath, manifestPath)
-		}
-		if err != nil {
-			return manifestContents{}, err
-		}
+		return manifestContents{}, err
 	}
 
 	return newContents, nil

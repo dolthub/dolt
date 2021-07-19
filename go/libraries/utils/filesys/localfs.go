@@ -22,6 +22,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 )
 
 // LocalFS is the machines local filesystem
@@ -35,10 +37,12 @@ type localFS struct {
 // working directory.  Path relative operations occur relative to this directory.
 func LocalFilesysWithWorkingDir(cwd string) (Filesys, error) {
 	absCWD, err := filepath.Abs(cwd)
-
 	if err != nil {
 		return nil, err
 	}
+
+	// We're going to turn this into a URL, so we need to make sure that windows separators are converted to /
+	absCWD = filepath.ToSlash(absCWD)
 
 	stat, err := os.Stat(absCWD)
 
@@ -215,7 +219,7 @@ func (fs *localFS) DeleteFile(path string) error {
 			return ErrIsDir
 		}
 
-		return os.Remove(path)
+		return file.Remove(path)
 	}
 
 	return os.ErrNotExist
@@ -232,9 +236,9 @@ func (fs *localFS) Delete(path string, force bool) error {
 	}
 
 	if !force {
-		return os.Remove(path)
+		return file.Remove(path)
 	} else {
-		return os.RemoveAll(path)
+		return file.RemoveAll(path)
 	}
 }
 
@@ -253,7 +257,7 @@ func (fs *localFS) MoveFile(srcPath, destPath string) error {
 		return err
 	}
 
-	return os.Rename(srcPath, destPath)
+	return file.Rename(srcPath, destPath)
 }
 
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered

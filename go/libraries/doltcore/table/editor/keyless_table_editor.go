@@ -36,7 +36,8 @@ type keylessTableEditor struct {
 	sch  schema.Schema
 	name string
 
-	acc keylessEditAcc
+	acc      keylessEditAcc
+	cvEditor *types.MapEditor
 
 	eg *errgroup.Group
 	mu *sync.Mutex
@@ -242,11 +243,31 @@ func (kte *keylessTableEditor) Format() *types.NomsBinFormat {
 	return kte.tbl.Format()
 }
 
+// ValueReadWriter implements TableEditor.
+func (kte *keylessTableEditor) ValueReadWriter() types.ValueReadWriter {
+	return kte.tbl.ValueReadWriter()
+}
+
 // StatementStarted implements TableEditor.
 func (kte *keylessTableEditor) StatementStarted(ctx context.Context) {}
 
 // StatementFinished implements TableEditor.
 func (kte *keylessTableEditor) StatementFinished(ctx context.Context, errored bool) error {
+	return nil
+}
+
+// SetConstraintViolation implements TableEditor.
+func (kte *keylessTableEditor) SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error {
+	if kte.cvEditor == nil {
+		cvMap, err := kte.tbl.GetConstraintViolations(ctx)
+		if err != nil {
+			return err
+		}
+		kte.cvEditor = cvMap.Edit()
+	}
+	kte.mu.Lock()
+	defer kte.mu.Unlock()
+	kte.cvEditor.Set(k, v)
 	return nil
 }
 

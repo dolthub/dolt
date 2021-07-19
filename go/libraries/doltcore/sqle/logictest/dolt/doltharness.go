@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -49,7 +50,7 @@ type DoltHarness struct {
 	Version string
 	engine  *sqle.Engine
 
-	sess    *dsql.DoltSession
+	sess    *dsess.Session
 	idxReg  *sql.IndexRegistry
 	viewReg *sql.ViewRegistry
 }
@@ -138,7 +139,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	h.sess = dsql.DefaultDoltSession()
+	h.sess = dsess.DefaultSession()
 	h.idxReg = sql.NewIndexRegistry()
 	h.viewReg = sql.NewViewRegistry()
 
@@ -154,8 +155,8 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		dsqlDB := db.(dsql.Database)
 		dsqlDBs[i] = dsqlDB
 
-		sess := dsql.DSessFromSess(ctx.Session)
-		err := sess.AddDB(ctx, dsqlDB, dsqlDB.DbData())
+		sess := dsess.DSessFromSess(ctx.Session)
+		err := sess.AddDB(ctx, getDbState(db, dEnv))
 
 		if err != nil {
 			return err
@@ -184,6 +185,28 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	}
 
 	return nil
+}
+
+func getDbState(db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
+	ctx := context.Background()
+
+	head := dEnv.RepoStateReader().CWBHeadSpec()
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		panic(err)
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	return dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+	}
 }
 
 // We cheat a little at these tests. A great many of them use tables without primary keys, which we don't currently

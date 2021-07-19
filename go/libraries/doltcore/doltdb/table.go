@@ -29,12 +29,13 @@ import (
 const (
 	tableStructName = "table"
 
-	schemaRefKey       = "schema_ref"
-	tableRowsKey       = "rows"
-	conflictsKey       = "conflicts"
-	conflictSchemasKey = "conflict_schemas"
-	indexesKey         = "indexes"
-	autoIncrementKey   = "auto_increment"
+	schemaRefKey            = "schema_ref"
+	tableRowsKey            = "rows"
+	conflictsKey            = "conflicts"
+	conflictSchemasKey      = "conflict_schemas"
+	constraintViolationsKey = "constraint_violations"
+	indexesKey              = "indexes"
+	autoIncrementKey        = "auto_increment"
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z_]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
@@ -153,23 +154,19 @@ func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData
 
 func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
 	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
-
 	if err != nil {
 		return Conflict{}, types.EmptyMap, err
 	}
-
 	if !ok {
 		return Conflict{}, types.EmptyMap, ErrNoConflicts
 	}
 
 	schemas, err := ConflictFromTuple(schemasVal.(types.Tuple))
-
 	if err != nil {
 		return Conflict{}, types.EmptyMap, err
 	}
 
 	conflictsVal, _, err := t.tableStruct.MaybeGet(conflictsKey)
-
 	if err != nil {
 		return Conflict{}, types.EmptyMap, err
 	}
@@ -272,6 +269,46 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 		return baseSch, sch, mergeSch, err
 	}
 	return nil, nil, nil, ErrNoConflicts
+}
+
+// GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
+// whether the table has any violations.
+func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) {
+	constraintViolationsRefVal, ok, err := t.tableStruct.MaybeGet(constraintViolationsKey)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	if !ok {
+		emptyMap, err := types.NewMap(ctx, t.vrw)
+		return emptyMap, err
+	}
+	constraintViolationsVal, err := constraintViolationsRefVal.(types.Ref).TargetValue(ctx, t.vrw)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	return constraintViolationsVal.(types.Map), nil
+}
+
+// SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
+// violations entry on the embedded struct is removed.
+func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (*Table, error) {
+	// We can't just call violationsMap.Empty() as we can't guarantee that the caller passed in an instantiated map
+	if violationsMap == types.EmptyMap || violationsMap.Len() == 0 {
+		updatedStruct, err := t.tableStruct.Delete(constraintViolationsKey)
+		if err != nil {
+			return nil, err
+		}
+		return &Table{t.vrw, updatedStruct}, nil
+	}
+	constraintViolationsRef, err := WriteValAndGetRef(ctx, t.vrw, violationsMap)
+	if err != nil {
+		return nil, err
+	}
+	updatedStruct, err := t.tableStruct.Set(constraintViolationsKey, constraintViolationsRef)
+	if err != nil {
+		return nil, err
+	}
+	return &Table{t.vrw, updatedStruct}, nil
 }
 
 func RefToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
@@ -403,7 +440,6 @@ func (t *Table) GetRowData(ctx context.Context) (types.Map, error) {
 func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
 	removed := 0
 	_, confData, err := t.GetConflicts(ctx)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -425,24 +461,36 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 	}
 
 	conflicts, err := confEdit.Map(ctx)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	conflictsRef, err := WriteValAndGetRef(ctx, t.vrw, conflicts)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	updatedSt, err := t.tableStruct.Set(conflictsKey, conflictsRef)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	return invalid, notFound, &Table{t.vrw, updatedSt}, nil
+	newTbl := &Table{t.vrw, updatedSt}
+
+	// If we resolved the last conflict, mark the table conflict free
+	numRowsInConflict, err := newTbl.NumRowsInConflict(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if numRowsInConflict == 0 {
+		newTbl, err = newTbl.ClearConflicts()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	return invalid, notFound, newTbl, nil
 }
 
 // GetIndexData returns the internal index map which goes from index name to a ref of the row data map.

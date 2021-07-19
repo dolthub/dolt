@@ -73,13 +73,18 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	allFlag := apr.Contains(cli.AllFlag)
 
-	var err error
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		err = actions.StageAllTables(ctx, dEnv.DbData())
+		err = actions.StageAllTables(ctx, roots, dEnv.DbData())
 	} else {
-		err = actions.StageTables(ctx, dEnv.DbData(), apr.Args())
+		err = actions.StageTables(ctx, roots, dEnv.DbData(), apr.Args())
 	}
 
 	if err != nil {
@@ -105,7 +110,7 @@ func toAddVErr(err error) errhand.VerboseError {
 
 		return bdr.Build()
 
-	case actions.IsTblInConflict(err):
+	case actions.IsTblInConflict(err) || actions.IsTblViolatesConstraints(err):
 		tbls := actions.GetTablesForError(err)
 		bdr := errhand.BuildDError("error: not all tables merged")
 

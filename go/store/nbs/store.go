@@ -172,13 +172,19 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 		return nil
 	}
 
-	err := f(nbs.tables.upstream)
+	tables := func() tableSet {
+		nbs.mu.RLock()
+		defer nbs.mu.RUnlock()
+		return nbs.tables
+	}()
+
+	err := f(tables.upstream)
 
 	if err != nil {
 		return nil, err
 	}
 
-	err = f(nbs.tables.novel)
+	err = f(tables.novel)
 
 	if err != nil {
 		return nil, err
@@ -1279,38 +1285,37 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 	}
 
 	path := filepath.Join(fsPersister.dir, fileId)
-
-	err := func() (err error) {
-		var f *os.File
-		f, err = os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
-
-		if err != nil {
-			return err
-		}
-
-		defer func() {
-			closeErr := f.Close()
-
-			if err == nil {
-				err = closeErr
-			}
-		}()
-
-		return writeTo(f, rd, copyTableFileBufferSize)
-	}()
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
 	if err != nil {
 		return err
 	}
 
-	fileIdHash, ok := hash.MaybeParse(fileId)
+	defer func() {
+		closeErr := f.Close()
 
-	if !ok {
-		return errors.New("invalid base32 encoded hash: " + fileId)
+		if err == nil {
+			err = closeErr
+		}
+	}()
+
+	return writeTo(f, rd, copyTableFileBufferSize)
+}
+
+// AddTableFilesToManifest adds table files to the manifest
+func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
+	fileIdHashToNumChunks := make(map[hash.Hash]uint32)
+	for fileId, numChunks := range fileIdToNumChunks {
+		fileIdHash, ok := hash.MaybeParse(fileId)
+
+		if !ok {
+			return errors.New("invalid base32 encoded hash: " + fileId)
+		}
+
+		fileIdHashToNumChunks[fileIdHash] = uint32(numChunks)
 	}
 
-	_, err = nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash: uint32(numChunks)})
-
+	_, err := nbs.UpdateManifest(ctx, fileIdHashToNumChunks)
 	return err
 }
 

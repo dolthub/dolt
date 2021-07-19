@@ -29,6 +29,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
+
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/util/sizecache"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -88,7 +90,7 @@ func (ftc *fsTableCache) init(concurrency int) error {
 			}
 			if isTempTableFile(info) {
 				// ignore failure to remove temp file
-				_ = os.Remove(path)
+				_ = file.Remove(path)
 				return nil
 			}
 			if !isTableFile(info) {
@@ -204,7 +206,7 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 		return err
 	}
 
-	err = os.Rename(tempName, path)
+	err = file.Rename(tempName, path)
 
 	if err != nil {
 		return err
@@ -225,5 +227,5 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 }
 
 func (ftc *fsTableCache) expire(h addr) error {
-	return os.Remove(filepath.Join(ftc.dir, h.String()))
+	return file.Remove(filepath.Join(ftc.dir, h.String()))
 }

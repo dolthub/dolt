@@ -22,68 +22,55 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
-func CheckoutAllTables(ctx context.Context, dbData env.DbData) error {
-	roots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.WorkingRoot, doltdb.StagedRoot, doltdb.HeadRoot)
-
-	if err != nil {
-		return err
-	}
-
-	tbls, err := doltdb.UnionTableNames(ctx, roots[doltdb.WorkingRoot], roots[doltdb.StagedRoot], roots[doltdb.HeadRoot])
-
+func CheckoutAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) error {
+	tbls, err := doltdb.UnionTableNames(ctx, roots.Working, roots.Staged, roots.Head)
 	if err != nil {
 		return err
 	}
 
 	docs := doltdocs.SupportedDocs
-
 	return checkoutTablesAndDocs(ctx, dbData, roots, tbls, docs)
-
-}
-
-func CheckoutTables(ctx context.Context, dbData env.DbData, tables []string) error {
-	roots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.WorkingRoot, doltdb.StagedRoot, doltdb.HeadRoot)
-
-	if err != nil {
-		return err
-	}
-
-	return checkoutTables(ctx, dbData, roots, tables)
 }
 
 // CheckoutTablesAndDocs takes in a set of tables and docs and checks them out to another branch.
-func CheckoutTablesAndDocs(ctx context.Context, dbData env.DbData, tables []string, docs doltdocs.Docs) error {
-	roots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.WorkingRoot, doltdb.StagedRoot, doltdb.HeadRoot)
-
-	if err != nil {
-		return err
-	}
-
+func CheckoutTablesAndDocs(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tables []string, docs doltdocs.Docs) error {
 	return checkoutTablesAndDocs(ctx, dbData, roots, tables, docs)
 }
 
-func checkoutTables(ctx context.Context, dbData env.DbData, roots map[doltdb.RootType]*doltdb.RootValue, tbls []string) error {
-	unknownTbls := []string{}
+func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
+	roots, err := MoveTablesFromHeadToWorking(ctx, roots, tbls)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
 
-	currRoot := roots[doltdb.WorkingRoot]
-	staged := roots[doltdb.StagedRoot]
-	head := roots[doltdb.HeadRoot]
+	err = env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
 
+	return roots, nil
+}
+
+// MoveTablesFromHeadToWorking replaces the tables named from the given head to the given working root, overwriting any
+// working changes, and returns the new resulting roots
+func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
+	var unknownTbls []string
 	for _, tblName := range tbls {
+		// TODO: not at all clear why this should be excluded (this code was moved from elsewhere)
 		if tblName == doltdb.DocTableName {
 			continue
 		}
-		tbl, ok, err := staged.GetTable(ctx, tblName)
+		tbl, ok, err := roots.Staged.GetTable(ctx, tblName)
 
 		if err != nil {
-			return err
+			return doltdb.Roots{}, err
 		}
 
 		if !ok {
-			tbl, ok, err = head.GetTable(ctx, tblName)
+			tbl, ok, err = roots.Head.GetTable(ctx, tblName)
 
 			if err != nil {
-				return err
+				return doltdb.Roots{}, err
 			}
 
 			if !ok {
@@ -92,49 +79,40 @@ func checkoutTables(ctx context.Context, dbData env.DbData, roots map[doltdb.Roo
 			}
 		}
 
-		currRoot, err = currRoot.PutTable(ctx, tblName, tbl)
+		roots.Working, err = roots.Working.PutTable(ctx, tblName, tbl)
 
 		if err != nil {
-			return err
+			return doltdb.Roots{}, err
 		}
 	}
 
 	if len(unknownTbls) > 0 {
 		// Return table not exist error before RemoveTables, which fails silently if the table is not on the root.
-		err := validateTablesExist(ctx, currRoot, unknownTbls)
+		err := validateTablesExist(ctx, roots.Working, unknownTbls)
 		if err != nil {
-			return err
+			return doltdb.Roots{}, err
 		}
 
-		currRoot, err = currRoot.RemoveTables(ctx, unknownTbls...)
+		roots.Working, err = roots.Working.RemoveTables(ctx, unknownTbls...)
 
 		if err != nil {
-			return err
+			return doltdb.Roots{}, err
 		}
 	}
 
-	// update the working root with currRoot
-	_, err := env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, currRoot)
-
-	return err
+	return roots, nil
 }
 
-func checkoutDocs(ctx context.Context, dbData env.DbData, roots map[doltdb.RootType]*doltdb.RootValue, docs doltdocs.Docs) error {
-	currRoot := roots[doltdb.WorkingRoot]
-	staged := roots[doltdb.StagedRoot]
-	head := roots[doltdb.HeadRoot]
-
+func checkoutDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, docs doltdocs.Docs) error {
 	if len(docs) > 0 {
-		currRootWithDocs, stagedWithDocs, updatedDocs, err := getUpdatedWorkingAndStagedWithDocs(ctx, currRoot, staged, head, docs)
+		var err error
+		roots, docs, err = getUpdatedWorkingAndStagedWithDocs(ctx, roots, docs)
 		if err != nil {
 			return err
 		}
-		currRoot = currRootWithDocs
-		staged = stagedWithDocs
-		docs = updatedDocs
 	}
 
-	_, err := env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, currRoot)
+	err := env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
 	if err != nil {
 		return err
 	}
@@ -142,15 +120,9 @@ func checkoutDocs(ctx context.Context, dbData env.DbData, roots map[doltdb.RootT
 	return dbData.Drw.WriteDocsToDisk(docs)
 }
 
-func checkoutTablesAndDocs(ctx context.Context, dbData env.DbData, roots map[doltdb.RootType]*doltdb.RootValue, tbls []string, docs doltdocs.Docs) error {
-	err := checkoutTables(ctx, dbData, roots, tbls)
-
-	if err != nil {
-		return err
-	}
-
-	roots, err = getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.WorkingRoot, doltdb.StagedRoot, doltdb.HeadRoot)
-
+func checkoutTablesAndDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, tbls []string, docs doltdocs.Docs) error {
+	var err error
+	roots, err = checkoutTables(ctx, dbData, roots, tbls)
 	if err != nil {
 		return err
 	}

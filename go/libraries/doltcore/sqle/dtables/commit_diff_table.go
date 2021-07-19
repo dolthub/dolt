@@ -116,7 +116,7 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 }
 
 func calcSuperDuperSchema(ctx context.Context, ddb *doltdb.DoltDB, working *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
-	refs, err := ddb.GetHeadRefs(ctx)
+	refs, err := ddb.GetBranches(ctx)
 
 	if err != nil {
 		return nil, err
