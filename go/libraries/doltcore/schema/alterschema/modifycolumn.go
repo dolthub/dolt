@@ -16,6 +16,7 @@ package alterschema
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -149,7 +150,9 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 	var autoVal types.Value
 	if schema.HasAutoIncrement(newSch) {
 		autoVal, err = tbl.GetAutoIncrementValue(ctx)
-		if err != nil {
+		// In the case that the alter table is adding a new auto increment value, then it will return a
+		// ErrorNoAutoIncrement value. We can ignore that.
+		if err != nil && !errors.Is(err, doltdb.ErrNoAutoIncrementValue) {
 			return nil, err
 		}
 	}
