@@ -44,6 +44,10 @@ func init() {
 	}
 }
 
+func DbRevisionsEnabled() bool {
+	return dbRevisionsEnabled
+}
+
 type DoltDatabaseProvider struct {
 	databases map[string]sql.Database
 }
