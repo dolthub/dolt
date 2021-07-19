@@ -139,6 +139,11 @@ func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
 }
 
 func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
+	// In the case that someone run an alter table auto increment on a table with no existing auto increment key, nop
+	if te.autoIncCol.TypeInfo == nil {
+		return nil
+	}
+
 	nomsVal, err := te.autoIncCol.TypeInfo.ConvertValueToNomsValue(ctx, te.vrw, val)
 	if err != nil {
 		return err
