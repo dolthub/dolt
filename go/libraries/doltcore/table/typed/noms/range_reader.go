@@ -84,16 +84,16 @@ func NewRangeStartingAfter(key types.Tuple, inRangeCheck InRangeCheck) *ReadRang
 
 // NomsRangeReader reads values in one or more ranges from a map
 type NomsRangeReader struct {
-	sch       schema.Schema
-	m         types.Map
-	ranges    []*ReadRange
-	idx       int
-	itr       types.MapIterator
-	currCheck InRangeCheck
-	keylessKey types.Tuple
-	keylessVal types.Tuple
+	sch         schema.Schema
+	m           types.Map
+	ranges      []*ReadRange
+	idx         int
+	itr         types.MapIterator
+	currCheck   InRangeCheck
+	keylessKey  types.Tuple
+	keylessVal  types.Tuple
 	keylessCard int
-	keylessIdx int
+	keylessIdx  int
 }
 
 // NewNomsRangeReader creates a NomsRangeReader

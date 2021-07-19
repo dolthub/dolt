@@ -34,7 +34,7 @@ type indexOperation struct {
 	isInsert   bool
 	fullKey    types.Tuple
 	partialKey types.Tuple
-	value types.Tuple
+	value      types.Tuple
 }
 
 // Push adds the given keys to the top of the stack.

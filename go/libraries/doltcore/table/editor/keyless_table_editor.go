@@ -36,7 +36,7 @@ type keylessTableEditor struct {
 	sch  schema.Schema
 	name string
 
-	acc keylessEditAcc
+	acc      keylessEditAcc
 	indexEds []*IndexEditor
 
 	eg *errgroup.Group
@@ -126,13 +126,13 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	eg, _ := errgroup.WithContext(ctx)
 
 	te := &keylessTableEditor{
-		tbl:  tbl,
-		sch:  sch,
-		name: name,
-		acc:  acc,
-		indexEds:   make([]*IndexEditor, sch.Indexes().Count()),
-		eg:   eg,
-		mu:   &sync.Mutex{},
+		tbl:      tbl,
+		sch:      sch,
+		name:     name,
+		acc:      acc,
+		indexEds: make([]*IndexEditor, sch.Indexes().Count()),
+		eg:       eg,
+		mu:       &sync.Mutex{},
 	}
 
 	// TODO : add index editor access
@@ -298,7 +298,6 @@ func (kte *keylessTableEditor) flush(ctx context.Context) error {
 
 	return nil
 }
-
 
 func (kte *keylessTableEditor) keyErrForKVP(ctx context.Context, kvp *doltKVP, isPk bool, errFunc PKDuplicateErrFunc) error {
 	kVal, err := kvp.k.Value(ctx)
