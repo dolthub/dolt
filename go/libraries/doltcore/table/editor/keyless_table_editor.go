@@ -394,7 +394,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 			}
 
 			if delta.delta < 1 {
-				err = indexEd.DeleteRow(ctx, fullKey, partialKey,  value)
+				err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
 				if err != nil {
 					return nil, err
 				}

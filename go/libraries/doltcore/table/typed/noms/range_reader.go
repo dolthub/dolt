@@ -183,12 +183,12 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			if inRange {
 				if !v.Empty() {
 					nrr.cardCounter.updateWithKV(k, v)
-					if !nrr.cardCounter.done() && !nrr.cardCounter.empty() {
+					if !nrr.cardCounter.empty() && !nrr.cardCounter.done() {
 						return nrr.cardCounter.next()
 					}
 				}
+				return k, v, nil
 			}
-			return k, v, nil
 		}
 
 		nrr.itr = nil
