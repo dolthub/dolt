@@ -527,7 +527,7 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 		if err != nil {
 			return err
 		}
-		err = indexEd.DeleteRow(ctx, fullKey, partialKey)
+		err = indexEd.DeleteRow(ctx, fullKey, partialKey, types.Tuple{})
 		if err != nil {
 			return err
 		}
@@ -587,11 +587,11 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	}()
 
 	for i, indexEd := range te.indexEds {
-		oldFullKey, oldPartialKey, _, err := dOldRow.ReduceToIndexKeys(indexEd.Index())
+		oldFullKey, oldPartialKey, oldVal, err := dOldRow.ReduceToIndexKeys(indexEd.Index())
 		if err != nil {
 			return err
 		}
-		err = indexEd.DeleteRow(ctx, oldFullKey, oldPartialKey)
+		err = indexEd.DeleteRow(ctx, oldFullKey, oldPartialKey, oldVal)
 		if err != nil {
 			return err
 		}

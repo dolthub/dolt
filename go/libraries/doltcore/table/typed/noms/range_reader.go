@@ -153,8 +153,6 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			} else {
 				nrr.itr, err = nrr.m.IteratorFrom(ctx, r.Start)
 			}
-			// TODO: generate a special iterator for keyless index w/ cardinality
-
 			if err != nil {
 				return types.Tuple{}, types.Tuple{}, err
 			}

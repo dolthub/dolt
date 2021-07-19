@@ -105,7 +105,7 @@ func TestIndexEditorConcurrency(t *testing.T) {
 				require.NoError(t, err)
 				oldFullKey, oldPartialKey, _, err := dOldRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
-				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey))
+				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey, types.Tuple{}))
 				newFullKey, newPartialKey, newValue, err := dNewRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
 				require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey, newValue))
@@ -124,7 +124,7 @@ func TestIndexEditorConcurrency(t *testing.T) {
 				require.NoError(t, err)
 				fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
-				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey))
+				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey, types.Tuple{}))
 				wg.Done()
 			}(j)
 		}
@@ -199,7 +199,7 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 				require.NoError(t, err)
 				oldFullKey, oldPartialKey, _, err := dOldRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
-				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey))
+				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey, types.Tuple{}))
 				newFullKey, newPartialKey, value, err := dNewRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
 				require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey, value))
@@ -217,7 +217,7 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 				require.NoError(t, err)
 				fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(index)
 				require.NoError(t, err)
-				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey))
+				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey, types.Tuple{}))
 				wg.Done()
 			}(j)
 		}
@@ -328,7 +328,7 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 		require.NoError(t, err)
 		fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(index)
 		require.NoError(t, err)
-		require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey))
+		require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey, types.Tuple{}))
 	}
 
 	newIndexData, err := indexEditor.Map(context.Background())
