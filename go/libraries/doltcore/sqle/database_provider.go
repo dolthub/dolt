@@ -51,7 +51,7 @@ func DbRevisionsEnabled() bool {
 
 type DoltDatabaseProvider struct {
 	databases map[string]sql.Database
-	mu *sync.RWMutex
+	mu        *sync.RWMutex
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
