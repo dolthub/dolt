@@ -138,6 +138,37 @@ func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.
 	panic("not implemented")
 }
 
+func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) (err error) {
+	kte.mu.Lock()
+	defer kte.mu.Unlock()
+
+	defer func() { err = kte.autoFlush(ctx) }()
+
+	nonPkCols := kte.sch.GetNonPKCols()
+	tplVals := make([]types.Value, 0, 2*nonPkCols.Size())
+	err = nonPkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		var val types.Value = types.NullValue
+		if rowVal, ok := tagToVal[tag]; ok {
+			val = rowVal
+		}
+
+		tplVals = append(tplVals, types.Uint(tag))
+		tplVals = append(tplVals, val)
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	val, err := types.NewTuple(kte.tbl.Format(), tplVals...)
+	if err != nil {
+		return err
+	}
+
+	return kte.acc.decrement(key, val)
+}
+
 // InsertRow implements TableEditor.
 func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, _ PKDuplicateErrFunc) (err error) {
 	kte.mu.Lock()
