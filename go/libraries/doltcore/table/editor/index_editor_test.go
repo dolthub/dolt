@@ -328,7 +328,7 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 		require.NoError(t, err)
 		fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(index)
 		require.NoError(t, err)
-		require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey, types.Tuple{}))
+		require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey, types.EmptyTuple(format)))
 	}
 
 	newIndexData, err := indexEditor.Map(context.Background())
