@@ -270,7 +270,7 @@ func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple,
 	if err != nil {
 		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
 	}
-	return fullKey, partialKey, types.Tuple{}, nil
+	return fullKey, partialKey, types.EmptyTuple(fullKey.Format()), nil
 }
 
 func IterPkTuple(tvs types.TupleValueSlice, cb func(tag uint64, val types.Value) (stop bool, err error)) error {

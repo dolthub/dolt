@@ -16,6 +16,8 @@ package editor
 
 import (
 	"context"
+	"errors"
+
 	//"errors"
 	"fmt"
 	"io"
@@ -101,6 +103,7 @@ type indexEditAccumulator struct {
 	addedPartialKeys map[hash.Hash]map[hash.Hash]types.Tuple
 	addedKeys        map[hash.Hash]hashedTuple // These hashes represent the hash of the partial key, with the tuple being the full key
 	removedKeys      map[hash.Hash]hashedTuple // These hashes represent the hash of the partial key, with the tuple being the full key
+	addedValues      map[hash.Hash]types.Tuple
 }
 
 // hashedTuple is a tuple accompanied by a hash. The representing value of the hash is dependent on the function
@@ -119,7 +122,7 @@ func createInitialIndexEditAcc(indexData types.Map) *indexEditAccumulator {
 		nbf:              indexData.Format(),
 		addedPartialKeys: make(map[hash.Hash]map[hash.Hash]types.Tuple),
 		addedKeys:        make(map[hash.Hash]hashedTuple),
-		//addedValues:      make(map[hash.Hash]types.Tuple),
+		addedValues:      make(map[hash.Hash]types.Tuple),
 		removedKeys: make(map[hash.Hash]hashedTuple),
 	}
 }
@@ -132,7 +135,7 @@ func (iea *indexEditAccumulator) NewFromCurrent() *indexEditAccumulator {
 		nbf:              iea.nbf,
 		addedPartialKeys: make(map[hash.Hash]map[hash.Hash]types.Tuple),
 		addedKeys:        make(map[hash.Hash]hashedTuple),
-		//addedValues:      make(map[hash.Hash]types.Tuple),
+		addedValues:      make(map[hash.Hash]types.Tuple),
 		removedKeys: make(map[hash.Hash]hashedTuple),
 	}
 }
@@ -280,7 +283,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 		delete(ie.iea.removedKeys, keyHash)
 	} else {
 		ie.iea.addedKeys[keyHash] = hashedTuple{key, partialKeyHash}
-		//ie.iea.addedValues[keyHash] = value
+		ie.iea.addedValues[keyHash] = value
 		if matchingMap, ok := ie.iea.addedPartialKeys[partialKeyHash]; ok {
 			matchingMap[keyHash] = key
 		} else {
@@ -313,7 +316,7 @@ func (ie *IndexEditor) DeleteRow(ctx context.Context, key, partialKey, value typ
 
 	if _, ok := ie.iea.addedKeys[keyHash]; ok {
 		delete(ie.iea.addedKeys, keyHash)
-		//delete(ie.iea.addedValues, keyHash)
+		delete(ie.iea.addedValues, keyHash)
 		delete(ie.iea.addedPartialKeys[partialKeyHash], keyHash)
 	} else {
 		ie.iea.removedKeys[keyHash] = hashedTuple{key, partialKeyHash}
@@ -419,7 +422,7 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 			for keyHash, hTpl := range ie.iea.removedKeys {
 				if _, ok := targetIea.addedKeys[keyHash]; ok {
 					delete(targetIea.addedKeys, keyHash)
-					//delete(targetIea.addedValues, keyHash)
+					delete(targetIea.addedValues, keyHash)
 					delete(targetIea.addedPartialKeys[hTpl.Hash], keyHash)
 				} else {
 					targetIea.removedKeys[keyHash] = hTpl
@@ -430,7 +433,7 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 					delete(targetIea.removedKeys, keyHash)
 				} else {
 					targetIea.addedKeys[keyHash] = hTpl
-					//targetIea.addedValues[keyHash] = ie.iea.addedValues[keyHash]
+					targetIea.addedValues[keyHash] = ie.iea.addedValues[keyHash]
 					if matchingMap, ok := targetIea.addedPartialKeys[hTpl.Hash]; ok {
 						matchingMap[keyHash] = hTpl.Tuple
 					} else {
@@ -526,13 +529,12 @@ func processIndexEditAccumulatorChain(ctx context.Context, futureIea *indexEditA
 	for _, hTpl := range iea.removedKeys {
 		ed.AddEdit(hTpl.Tuple, nil)
 	}
-	for _, hTpl := range iea.addedKeys {
-		//value, ok := iea.addedValues[key]
-		//if !ok {
-		//	return types.EmptyMap, errors.New("key with no value")
-		//}
-		//ed.AddEdit(hTpl.Tuple, value)
-		ed.AddEdit(hTpl.Tuple, types.EmptyTuple(hTpl.Tuple.Format()))
+	for key, hTpl := range iea.addedKeys {
+		v, ok := iea.addedValues[key]
+		if !ok {
+			return types.EmptyMap, errors.New("key with no value")
+		}
+		ed.AddEdit(hTpl.Tuple, v)
 	}
 
 	// If we encounter an error and return, then we need to remove this iea from the chain and update the next's rowData

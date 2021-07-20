@@ -404,7 +404,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 		if err != nil {
 			return err
 		}
-		err = indexEd.InsertRow(ctx, fullKey, partialKey, types.Tuple{})
+		err = indexEd.InsertRow(ctx, fullKey, partialKey, types.EmptyTuple(te.nbf))
 		if uke, ok := err.(*uniqueKeyErr); ok {
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {
