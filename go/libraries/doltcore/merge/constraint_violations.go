@@ -31,6 +31,7 @@ import (
 	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	diff2 "github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -56,80 +57,93 @@ const (
 )
 
 // AddConstraintViolations adds all constraint violations to each table.
-func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue, tables *set.StrSet) (*doltdb.RootValue, *set.StrSet, error) {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	foundViolationsSet := set.NewStrSet(nil)
 	for _, foreignKey := range fkColl.AllKeys() {
+		if tables.Size() != 0 && !tables.Contains(foreignKey.TableName) {
+			continue
+		}
+
 		postParent, ok, err := newConstraintViolationsLoadedTable(ctx, foreignKey.ReferencedTableName, foreignKey.ReferencedTableIndex, newRoot)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("foreign key %s should have index %s on table %s but it cannot be found",
+			return nil, nil, fmt.Errorf("foreign key %s should have index %s on table %s but it cannot be found",
 				foreignKey.Name, foreignKey.ReferencedTableIndex, foreignKey.ReferencedTableName)
 		}
 
 		postChild, ok, err := newConstraintViolationsLoadedTable(ctx, foreignKey.TableName, foreignKey.TableIndex, newRoot)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("foreign key %s should have index %s on table %s but it cannot be found",
+			return nil, nil, fmt.Errorf("foreign key %s should have index %s on table %s but it cannot be found",
 				foreignKey.Name, foreignKey.TableIndex, foreignKey.TableName)
 		}
 
+		foundViolations := false
 		preParent, _, err := newConstraintViolationsLoadedTable(ctx, foreignKey.ReferencedTableName, "", baseRoot)
 		if err != nil {
 			if err != doltdb.ErrTableNotFound {
-				return nil, err
+				return nil, nil, err
 			}
 			// Parent does not exist in the ancestor so we use an empty map
 			emptyMap, err := types.NewMap(ctx, postParent.Table.ValueReadWriter())
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			postChild.Table, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, postParent.Schema, emptyMap)
+			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, postParent.Schema, emptyMap)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		} else {
 			// Parent exists in the ancestor
-			postChild.Table, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParent.Schema, preParent.RowData)
+			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParent.Schema, preParent.RowData)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 
 		preChild, _, err := newConstraintViolationsLoadedTable(ctx, foreignKey.TableName, "", baseRoot)
 		if err != nil {
 			if err != doltdb.ErrTableNotFound {
-				return nil, err
+				return nil, nil, err
 			}
+			innerFoundViolations := false
 			// Child does not exist in the ancestor so we use an empty map
 			emptyMap, err := types.NewMap(ctx, postChild.Table.ValueReadWriter())
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			postChild.Table, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild.Schema, emptyMap)
+			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild.Schema, emptyMap)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
+			foundViolations = foundViolations || innerFoundViolations
 		} else {
 			// Child exists in the ancestor
-			postChild.Table, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, preChild.RowData)
+			innerFoundViolations := false
+			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, preChild.RowData)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
+			foundViolations = foundViolations || innerFoundViolations
 		}
 
 		newRoot, err = newRoot.PutTable(ctx, postChild.TableName, postChild.Table)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if foundViolations {
+			foundViolationsSet.Add(postChild.TableName)
 		}
 	}
-	return newRoot, nil
+	return newRoot, foundViolationsSet, nil
 }
 
 // parentFkConstraintViolations processes foreign key constraint violations for the parent in a foreign key.
@@ -139,12 +153,13 @@ func parentFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentSch schema.Schema,
 	preParentRowData types.Map,
-) (*doltdb.Table, error) {
+) (*doltdb.Table, bool, error) {
+	foundViolations := false
 	postParentIndexTags := postParent.Index.IndexedColumnTags()
 	postChildIndexTags := postChild.Index.IndexedColumnTags()
 	postChildCVMap, err := postChild.Table.GetConstraintViolations(ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	postChildCVMapEditor := postChildCVMap.Edit()
 
@@ -154,11 +169,11 @@ func parentFkConstraintViolations(
 	for {
 		diffSlice, hasMore, err := differ.GetDiffs(1, 10*time.Second)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if len(diffSlice) != 1 {
 			if hasMore {
-				return nil, fmt.Errorf("no diff returned but should have errored earlier")
+				return nil, false, fmt.Errorf("no diff returned but should have errored earlier")
 			}
 			break
 		}
@@ -167,7 +182,7 @@ func parentFkConstraintViolations(
 		case types.DiffChangeRemoved, types.DiffChangeModified:
 			postParentRow, err := row.FromNoms(postParent.Schema, rowDiff.KeyValue.(types.Tuple), rowDiff.OldValue.(types.Tuple))
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			hasNulls := false
 			for _, tag := range postParentIndexTags {
@@ -182,7 +197,7 @@ func parentFkConstraintViolations(
 
 			postParentIndexPartialKey, err := row.ReduceToIndexPartialKey(postParent.Index, postParentRow)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 
 			shouldContinue, err := func() (bool, error) {
@@ -205,20 +220,24 @@ func parentFkConstraintViolations(
 
 			postParentIndexPartialKeySlice, err := postParentIndexPartialKey.AsSlice()
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			for i := 0; i < len(postChildIndexTags); i++ {
 				postParentIndexPartialKeySlice[2*i] = types.Uint(postChildIndexTags[i])
 			}
 			postChildIndexPartialKey, err := types.NewTuple(postChild.Table.Format(), postParentIndexPartialKeySlice...)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
-			err = parentFkConstraintViolationsProcess(ctx, foreignKey, postParent, postChild, postChildIndexPartialKey, postChildCVMapEditor)
+			changeViolates, err := parentFkConstraintViolationsProcess(ctx, foreignKey, postParent, postChild, postChildIndexPartialKey, postChildCVMapEditor)
+			if err != nil {
+				return nil, false, err
+			}
+			foundViolations = foundViolations || changeViolates
 		case types.DiffChangeAdded:
 			// We don't do anything if a parent row was added
 		default:
-			return nil, fmt.Errorf("unknown diff change type")
+			return nil, false, fmt.Errorf("unknown diff change type")
 		}
 		if !hasMore {
 			break
@@ -227,9 +246,10 @@ func parentFkConstraintViolations(
 
 	postChildCVMap, err = postChildCVMapEditor.Map(ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return postChild.Table.SetConstraintViolations(ctx, postChildCVMap)
+	updatedTbl, err := postChild.Table.SetConstraintViolations(ctx, postChildCVMap)
+	return updatedTbl, foundViolations, err
 }
 
 // parentFkConstraintViolationsProcess handles processing the reference options on a child, or creating a violation if
@@ -240,7 +260,8 @@ func parentFkConstraintViolationsProcess(
 	postParent, postChild *constraintViolationsLoadedTable,
 	postChildIndexPartialKey types.Tuple,
 	postChildCVMapEditor *types.MapEditor,
-) error {
+) (bool, error) {
+	foundViolation := false
 	mapIter := noms.NewNomsRangeReader(postChild.IndexSchema, postChild.IndexData,
 		[]*noms.ReadRange{{Start: postChildIndexPartialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 			return tuple.StartsWith(postChildIndexPartialKey), nil
@@ -251,33 +272,34 @@ func parentFkConstraintViolationsProcess(
 	for postChildIndexRow, err = mapIter.ReadRow(ctx); err == nil; postChildIndexRow, err = mapIter.ReadRow(ctx) {
 		postChildIndexKey, err := postChildIndexRow.NomsMapKey(postChild.IndexSchema).Value(ctx)
 		if err != nil {
-			return err
+			return false, err
 		}
 		postChildRowKey, err := postChild.Index.ToTableTuple(ctx, postChildIndexKey.(types.Tuple), postChild.Table.Format())
 		if err != nil {
-			return err
+			return false, err
 		}
 		postChildRowVal, ok, err := postChild.RowData.MaybeGetTuple(ctx, postChildRowKey)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if !ok {
-			return fmt.Errorf("index %s on %s contains data that table does not", foreignKey.TableIndex, foreignKey.TableName)
+			return false, fmt.Errorf("index %s on %s contains data that table does not", foreignKey.TableIndex, foreignKey.TableName)
 		}
 		vInfo, err := foreignKeyCVJson(ctx, foreignKey, postChild.Table.ValueReadWriter(), postChild.Schema, postParent.Schema)
 		if err != nil {
-			return err
+			return false, err
 		}
 		cvKey, cvVal, err := toConstraintViolationRow(ctx, cvType_ForeignKey, vInfo, postChildRowKey, postChildRowVal)
 		if err != nil {
-			return err
+			return false, err
 		}
 		postChildCVMapEditor.Set(cvKey, cvVal)
+		foundViolation = true
 	}
 	if err != io.EOF {
-		return err
+		return false, err
 	}
-	return nil
+	return foundViolation, nil
 }
 
 // childFkConstraintViolations processes foreign key constraint violations for the child in a foreign key.
@@ -287,12 +309,13 @@ func childFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildSch schema.Schema,
 	preChildRowData types.Map,
-) (*doltdb.Table, error) {
+) (*doltdb.Table, bool, error) {
+	foundViolations := false
 	postParentIndexTags := postParent.Index.IndexedColumnTags()
 	postChildIndexTags := postChild.Index.IndexedColumnTags()
 	postChildCVMap, err := postChild.Table.GetConstraintViolations(ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	postChildCVMapEditor := postChildCVMap.Edit()
 
@@ -302,11 +325,11 @@ func childFkConstraintViolations(
 	for {
 		diffSlice, hasMore, err := differ.GetDiffs(1, 10*time.Second)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if len(diffSlice) != 1 {
 			if hasMore {
-				return nil, fmt.Errorf("no diff returned but should have errored earlier")
+				return nil, false, fmt.Errorf("no diff returned but should have errored earlier")
 			}
 			break
 		}
@@ -315,7 +338,7 @@ func childFkConstraintViolations(
 		case types.DiffChangeAdded, types.DiffChangeModified:
 			postChildRow, err := row.FromNoms(postChild.Schema, rowDiff.KeyValue.(types.Tuple), rowDiff.NewValue.(types.Tuple))
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			hasNulls := false
 			for _, tag := range postChildIndexTags {
@@ -330,27 +353,28 @@ func childFkConstraintViolations(
 
 			postChildIndexPartialKey, err := row.ReduceToIndexPartialKey(postChild.Index, postChildRow)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			postChildIndexPartialKeySlice, err := postChildIndexPartialKey.AsSlice()
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			for i := 0; i < len(postParentIndexTags); i++ {
 				postChildIndexPartialKeySlice[2*i] = types.Uint(postParentIndexTags[i])
 			}
 			parentPartialKey, err := types.NewTuple(postChild.Table.Format(), postChildIndexPartialKeySlice...)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
-			err = childFkConstraintViolationsProcess(ctx, foreignKey, postParent, postChild, rowDiff, parentPartialKey, postChildCVMapEditor)
+			diffViolates, err := childFkConstraintViolationsProcess(ctx, foreignKey, postParent, postChild, rowDiff, parentPartialKey, postChildCVMapEditor)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
+			foundViolations = foundViolations || diffViolates
 		case types.DiffChangeRemoved:
 			// We don't do anything if a child row was removed
 		default:
-			return nil, fmt.Errorf("unknown diff change type")
+			return nil, false, fmt.Errorf("unknown diff change type")
 		}
 		if !hasMore {
 			break
@@ -358,9 +382,10 @@ func childFkConstraintViolations(
 	}
 	postChildCVMap, err = postChildCVMapEditor.Map(ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return postChild.Table.SetConstraintViolations(ctx, postChildCVMap)
+	updatedTbl, err := postChild.Table.SetConstraintViolations(ctx, postChildCVMap)
+	return updatedTbl, foundViolations, err
 }
 
 // childFkConstraintViolationsProcess handles processing the constraint violations for the child of a foreign key.
@@ -371,7 +396,7 @@ func childFkConstraintViolationsProcess(
 	rowDiff *diff2.Difference,
 	parentPartialKey types.Tuple,
 	postChildCVMapEditor *types.MapEditor,
-) error {
+) (bool, error) {
 	var mapIter table.TableReadCloser = noms.NewNomsRangeReader(postParent.IndexSchema, postParent.IndexData,
 		[]*noms.ReadRange{{Start: parentPartialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 			return tuple.StartsWith(parentPartialKey), nil
@@ -380,19 +405,20 @@ func childFkConstraintViolationsProcess(
 	// If the row exists in the parent, then we don't need to do anything
 	if _, err := mapIter.ReadRow(ctx); err != nil {
 		if err != io.EOF {
-			return err
+			return false, err
 		}
 		vInfo, err := foreignKeyCVJson(ctx, foreignKey, postChild.Table.ValueReadWriter(), postChild.Schema, postParent.Schema)
 		if err != nil {
-			return err
+			return false, err
 		}
 		cvKey, cvVal, err := toConstraintViolationRow(ctx, cvType_ForeignKey, vInfo, rowDiff.KeyValue.(types.Tuple), rowDiff.NewValue.(types.Tuple))
 		if err != nil {
-			return err
+			return false, err
 		}
 		postChildCVMapEditor.Set(cvKey, cvVal)
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
@@ -439,30 +465,31 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 
 // toConstraintViolationRow converts the given key and value tuples into ones suitable to add to a constraint violation map.
 func toConstraintViolationRow(ctx context.Context, vType cvType, vInfo types.JSON, k, v types.Tuple) (types.Tuple, types.Tuple, error) {
-	constraintViolationVals := []types.Value{types.Uint(schema.DoltConstraintViolationsTypeTag), types.Uint(vType)}
+	constraintViolationKeyVals := []types.Value{types.Uint(schema.DoltConstraintViolationsTypeTag), types.Uint(vType)}
 	keySlice, err := k.AsSlice()
 	if err != nil {
 		emptyTuple := types.EmptyTuple(k.Format())
 		return emptyTuple, emptyTuple, err
 	}
-	constraintViolationVals = append(constraintViolationVals, keySlice...)
-	valSlice, err := v.AsSlice()
+	constraintViolationKeyVals = append(constraintViolationKeyVals, keySlice...)
+	constraintViolationKey, err := types.NewTuple(k.Format(), constraintViolationKeyVals...)
 	if err != nil {
 		emptyTuple := types.EmptyTuple(k.Format())
 		return emptyTuple, emptyTuple, err
 	}
-	constraintViolationVals = append(constraintViolationVals, valSlice...)
-	constraintViolationKey, err := types.NewTuple(k.Format(), constraintViolationVals...)
+
+	constraintViolationValVals, err := v.AsSlice()
 	if err != nil {
 		emptyTuple := types.EmptyTuple(k.Format())
 		return emptyTuple, emptyTuple, err
 	}
-	constraintViolationVal, err := types.NewTuple(v.Format(),
-		types.Uint(schema.DoltConstraintViolationsInfoTag), vInfo)
+	constraintViolationValVals = append(constraintViolationValVals, types.Uint(schema.DoltConstraintViolationsInfoTag), vInfo)
+	constraintViolationVal, err := types.NewTuple(v.Format(), constraintViolationValVals...)
 	if err != nil {
 		emptyTuple := types.EmptyTuple(k.Format())
 		return emptyTuple, emptyTuple, err
 	}
+
 	return constraintViolationKey, constraintViolationVal, nil
 }
 

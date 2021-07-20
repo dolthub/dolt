@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -30,7 +29,7 @@ import (
 type ConstraintViolationsTable struct {
 	tblName string
 	root    *doltdb.RootValue
-	dSch    schema.Schema
+	cvSch   schema.Schema
 	sqlSch  sql.Schema
 	tbl     *doltdb.Table
 	rs      RootSetter
@@ -49,44 +48,18 @@ func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb
 	} else if !ok {
 		return nil, sql.ErrTableNotFound.New(tblName)
 	}
-	sch, err := tbl.GetSchema(ctx)
+	cvSch, err := tbl.GetConstraintViolationsSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	typeType, err := typeinfo.FromSqlType(
-		sql.MustCreateEnumType([]string{"foreign key", "unique index", "check constraint"}, sql.Collation_Default))
-	if err != nil {
-		return nil, err
-	}
-	typeCol, err := schema.NewColumnWithTypeInfo("violation_type", schema.DoltConstraintViolationsTypeTag, typeType, true, "", false, "")
-	if err != nil {
-		return nil, err
-	}
-	infoCol, err := schema.NewColumnWithTypeInfo("violation_info", schema.DoltConstraintViolationsInfoTag, typeinfo.JSONType, false, "", false, "")
-	if err != nil {
-		return nil, err
-	}
-
-	colColl := schema.NewColCollection()
-	colColl = colColl.Append(typeCol)
-	for _, col := range sch.GetAllCols().GetColumns() {
-		col.IsPartOfPK = true
-		colColl = colColl.Append(col)
-	}
-	colColl = colColl.Append(infoCol)
-	dSch, err := schema.SchemaFromCols(colColl)
-	if err != nil {
-		return nil, err
-	}
-	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConstViolTablePrefix+tblName, dSch)
+	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConstViolTablePrefix+tblName, cvSch)
 	if err != nil {
 		return nil, err
 	}
 	return &ConstraintViolationsTable{
 		tblName: tblName,
 		root:    root,
-		dSch:    dSch,
+		cvSch:   cvSch,
 		sqlSch:  sqlSch,
 		tbl:     tbl,
 		rs:      rs,
@@ -123,7 +96,7 @@ func (cvt *ConstraintViolationsTable) PartitionRows(ctx *sql.Context, part sql.P
 	if err != nil {
 		return nil, err
 	}
-	return &constraintViolationsIter{ctx, cvt.dSch, iter}, nil
+	return &constraintViolationsIter{ctx, cvt.cvSch, iter}, nil
 }
 
 // Deleter implements the interface sql.DeletableTable.
@@ -172,11 +145,11 @@ var _ sql.RowDeleter = (*constraintViolationsDeleter)(nil)
 
 // Delete implements the interface sql.RowDeleter.
 func (cvd *constraintViolationsDeleter) Delete(ctx *sql.Context, r sql.Row) error {
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, cvd.cvt.tbl.ValueReadWriter(), r, cvd.cvt.dSch)
+	dRow, err := sqlutil.SqlRowToDoltRow(ctx, cvd.cvt.tbl.ValueReadWriter(), r, cvd.cvt.cvSch)
 	if err != nil {
 		return err
 	}
-	key, err := dRow.NomsMapKey(cvd.cvt.dSch).Value(ctx)
+	key, err := dRow.NomsMapKey(cvd.cvt.cvSch).Value(ctx)
 	if err != nil {
 		return err
 	}
