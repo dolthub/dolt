@@ -122,7 +122,7 @@ func createInitialIndexEditAcc(indexData types.Map) *indexEditAccumulator {
 		addedPartialKeys: make(map[hash.Hash]map[hash.Hash]types.Tuple),
 		addedKeys:        make(map[hash.Hash]hashedTuple),
 		addedValues:      make(map[hash.Hash]types.Tuple),
-		removedKeys: make(map[hash.Hash]hashedTuple),
+		removedKeys:      make(map[hash.Hash]hashedTuple),
 	}
 }
 
@@ -135,7 +135,7 @@ func (iea *indexEditAccumulator) NewFromCurrent() *indexEditAccumulator {
 		addedPartialKeys: make(map[hash.Hash]map[hash.Hash]types.Tuple),
 		addedKeys:        make(map[hash.Hash]hashedTuple),
 		addedValues:      make(map[hash.Hash]types.Tuple),
-		removedKeys: make(map[hash.Hash]hashedTuple),
+		removedKeys:      make(map[hash.Hash]hashedTuple),
 	}
 }
 
