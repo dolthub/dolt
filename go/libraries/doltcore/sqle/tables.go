@@ -1318,6 +1318,10 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		return err
 	}
 
+	tableData, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
 	tableIndexData, err := table.GetIndexRowData(ctx, tableIndex.Name())
 	if err != nil {
 		return err
@@ -1326,7 +1330,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
-	err = foreignKey.ValidateData(ctx, tableIndexData, refTableIndexData, tableIndex, refTableIndex)
+	err = foreignKey.ValidateData(ctx, t.sch, tableData, tableIndexData, refTableIndexData, tableIndex, refTableIndex)
 	if err != nil {
 		return err
 	}

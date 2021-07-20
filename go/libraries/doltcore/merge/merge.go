@@ -921,7 +921,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		return nil, nil, err
 	}
 
-	newRoot, err = AddConstraintViolations(ctx, newRoot, ancRoot)
+	newRoot, _, err = AddConstraintViolations(ctx, newRoot, ancRoot, nil)
 	if err != nil {
 		return nil, nil, err
 	}

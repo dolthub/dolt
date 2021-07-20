@@ -25,8 +25,44 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+type mapSqlIter struct {
+	ctx context.Context
+	nmr *noms.NomsMapReader
+	sch schema.Schema
+}
+
+var _ sql.RowIter = (*mapSqlIter)(nil)
+
+// Next implements the interface sql.RowIter.
+func (m *mapSqlIter) Next() (sql.Row, error) {
+	dRow, err := m.nmr.ReadRow(m.ctx)
+	if err != nil {
+		return nil, err
+	}
+	return DoltRowToSqlRow(dRow, m.sch)
+}
+
+// Close implements the interface sql.RowIter.
+func (m *mapSqlIter) Close(ctx *sql.Context) error {
+	return m.nmr.Close(ctx)
+}
+
+// MapToSqlIter returns a map reader that converts all rows to sql rows, creating a sql row iterator.
+func MapToSqlIter(ctx context.Context, sch schema.Schema, data types.Map) (sql.RowIter, error) {
+	mapReader, err := noms.NewNomsMapReader(ctx, data, sch)
+	if err != nil {
+		return nil, err
+	}
+	return &mapSqlIter{
+		ctx: ctx,
+		nmr: mapReader,
+		sch: sch,
+	}, nil
+}
 
 // DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
 func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {

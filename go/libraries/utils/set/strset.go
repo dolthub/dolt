@@ -72,6 +72,9 @@ func (s *StrSet) Remove(items ...string) {
 
 // Contains returns true if the item being checked is already in the set.
 func (s *StrSet) Contains(item string) bool {
+	if s == nil {
+		return false
+	}
 	if !s.caseSensitive {
 		item = strings.ToLower(item)
 	}
@@ -82,6 +85,9 @@ func (s *StrSet) Contains(item string) bool {
 
 // ContainsAll returns true if all the items being checked are already in the set.
 func (s *StrSet) ContainsAll(items []string) bool {
+	if s == nil {
+		return false
+	}
 	if !s.caseSensitive {
 		items = funcitr.MapStrings(items, strings.ToLower)
 	}
@@ -117,12 +123,18 @@ func (s *StrSet) Equals(other *StrSet) bool {
 
 // Size returns the number of unique elements in the set
 func (s *StrSet) Size() int {
+	if s == nil {
+		return 0
+	}
 	return len(s.items)
 }
 
 // AsSlice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
 // regardless of the case that was used when adding the string to the set.
 func (s *StrSet) AsSlice() []string {
+	if s == nil {
+		return nil
+	}
 	size := len(s.items)
 	sl := make([]string, size)
 
@@ -138,6 +150,9 @@ func (s *StrSet) AsSlice() []string {
 // AsSortedSlice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
 // regardless of the case that was used when adding the string to the set. The slice is sorted in ascending order.
 func (s *StrSet) AsSortedSlice() []string {
+	if s == nil {
+		return nil
+	}
 	slice := s.AsSlice()
 	sort.Slice(slice, func(i, j int) bool {
 		return slice[i] < slice[j]
@@ -148,6 +163,9 @@ func (s *StrSet) AsSortedSlice() []string {
 // Iterate accepts a callback which will be called once for each element in the set until all items have been
 // exhausted or callback returns false.
 func (s *StrSet) Iterate(callBack func(string) (cont bool)) {
+	if s == nil {
+		return
+	}
 	for k := range s.items {
 		if !callBack(k) {
 			break
