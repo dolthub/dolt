@@ -25,8 +25,8 @@ import (
 	"context"
 	"errors"
 	"io/ioutil"
-	"os"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -101,7 +101,7 @@ func (nbc *NomsBlockCache) Count() (uint32, error) {
 // Destroy drops the cache and deletes any backing storage.
 func (nbc *NomsBlockCache) Destroy() error {
 	chunkErr := nbc.chunks.Close()
-	remErr := os.RemoveAll(nbc.dbDir)
+	remErr := file.RemoveAll(nbc.dbDir)
 
 	if chunkErr != nil {
 		return chunkErr

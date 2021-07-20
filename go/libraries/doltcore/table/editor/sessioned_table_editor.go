@@ -52,6 +52,20 @@ func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val type
 	return ti.InsertKeyVal(ctx, key, val, tagToVal, errFunc)
 }
 
+func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) error {
+	ste.tableEditSession.writeMutex.RLock()
+	defer ste.tableEditSession.writeMutex.RUnlock()
+
+	if !ste.tableEditSession.Props.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
+		err := ste.onDeleteHandleRowsReferencingValues(ctx, key, tagToVal)
+		if err != nil {
+			return err
+		}
+	}
+
+	return ste.tableEditor.DeleteByKey(ctx, key, tagToVal)
+}
+
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
 func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
 	ste.tableEditSession.writeMutex.RLock()
@@ -153,25 +167,36 @@ func (ste *sessionedTableEditor) Close() error {
 
 // handleReferencingRowsOnDelete handles updating referencing foreign keys on delete operations
 func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Context, dRow row.Row) error {
-	//TODO: all self referential logic assumes non-composite keys
-	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
-		return nil
-	}
 	dRowTaggedVals, err := dRow.TaggedValues()
 	if err != nil {
 		return err
+	}
+
+	key, err := dRow.NomsMapKey(ste.tableEditor.Schema()).Value(ctx)
+	if err != nil {
+		return err
+	}
+
+	return ste.onDeleteHandleRowsReferencingValues(ctx, key.(types.Tuple), dRowTaggedVals)
+}
+
+func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context.Context, key types.Tuple, dRowTaggedVals row.TaggedValues) error {
+	//TODO: all self referential logic assumes non-composite keys
+	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
+		return nil
 	}
 
 	if ste.indexSchemaCache == nil {
 		ste.indexSchemaCache = make(map[string]schema.Schema)
 	}
 
+	nbf := ste.Format()
 	for _, foreignKey := range ste.referencingTables {
 		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
 		}
-		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dRowTaggedVals)
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(nbf, foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dRowTaggedVals)
 		if err != nil {
 			return err
 		}
@@ -186,43 +211,63 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
 			ste.indexSchemaCache[cacheKey] = idxSch
 		}
-		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
+
+		referencingRowKVPs, err := GetIndexedRowKVPs(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
 			return err
 		}
-		if len(referencingRows) == 0 {
+		if len(referencingRowKVPs) == 0 {
 			continue
 		}
 
 		var shouldSkip bool
 		switch foreignKey.OnDelete {
 		case doltdb.ForeignKeyReferenceOption_Cascade:
-			for _, rowToDelete := range referencingRows {
-				ctx, shouldSkip, err = ste.shouldSkipDeleteCascade(ctx, foreignKey, dRow, rowToDelete)
+			for _, kvpToDelete := range referencingRowKVPs {
+				ctx, shouldSkip, err = ste.shouldSkipDeleteCascade(ctx, foreignKey, key, kvpToDelete[0])
 				if err != nil {
 					return err
 				}
 				if shouldSkip {
 					continue
 				}
-				err = referencingSte.DeleteRow(ctx, rowToDelete)
+				taggedVals, err := row.TaggedValuesFromTupleKeyAndValue(kvpToDelete[0], kvpToDelete[1])
+				if err != nil {
+					return err
+				}
+
+				err = referencingSte.DeleteByKey(ctx, kvpToDelete[0], taggedVals)
 				if err != nil {
 					return err
 				}
 			}
 		case doltdb.ForeignKeyReferenceOption_SetNull:
-			for _, unalteredNewRow := range referencingRows {
-				if foreignKey.IsSelfReferential() && row.AreEqual(dRow, unalteredNewRow, ste.tableEditor.Schema()) {
+			for _, unalteredNewKVP := range referencingRowKVPs {
+				taggedVals, err := row.TaggedValuesFromTupleKeyAndValue(unalteredNewKVP[0], unalteredNewKVP[1])
+				if err != nil {
+					return err
+				}
+
+				sch := referencingSte.tableEditor.Schema()
+				oldRow, err := row.FromNoms(sch, unalteredNewKVP[0], unalteredNewKVP[1])
+				if err != nil {
+					return err
+				}
+
+				if foreignKey.IsSelfReferential() && row.TaggedValsEqualForSch(taggedVals, dRowTaggedVals, sch) {
 					continue
 				}
-				newRow := unalteredNewRow
+
 				for _, colTag := range foreignKey.TableColumns {
-					newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.Schema())
-					if err != nil {
-						return err
-					}
+					taggedVals[colTag] = types.NullValue
 				}
-				err = referencingSte.updateRow(ctx, unalteredNewRow, newRow, false, nil)
+
+				newRow, err := taggedVals.ToRow(ctx, nbf, sch)
+				if err != nil {
+					return err
+				}
+
+				err = referencingSte.updateRow(ctx, oldRow, newRow, false, nil)
 				if err != nil {
 					return err
 				}
@@ -251,12 +296,13 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 		ste.indexSchemaCache = make(map[string]schema.Schema)
 	}
 
+	nbf := ste.Format()
 	for _, foreignKey := range ste.referencingTables {
 		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
 		}
-		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dOldRowTaggedVals)
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(nbf, foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dOldRowTaggedVals)
 		if err != nil {
 			return err
 		}
@@ -357,7 +403,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 // shouldSkipDeleteCascade determines whether the next row should be deleted, based on if a loop has been detected in
 // cascading deletes. Stores the previous delete hashes in the context, and returns a new context if the old one did not
 // have any hashes. Only applies to self referential foreign keys.
-func (ste *sessionedTableEditor) shouldSkipDeleteCascade(ctx context.Context, foreignKey doltdb.ForeignKey, oldRow, newRow row.Row) (context.Context, bool, error) {
+func (ste *sessionedTableEditor) shouldSkipDeleteCascade(ctx context.Context, foreignKey doltdb.ForeignKey, oldKey, newKey types.Tuple) (context.Context, bool, error) {
 	//TODO: all self referential logic assumes non-composite keys
 	if !foreignKey.IsSelfReferential() {
 		return ctx, false, nil
@@ -373,13 +419,7 @@ func (ste *sessionedTableEditor) shouldSkipDeleteCascade(ctx context.Context, fo
 		ctx = context.WithValue(ctx, contextValueName, deleteKeys)
 	}
 
-	// We immediately store the old key in the map. We don't need to see if it was already there.
-	// We can also catch deletions that loop on the same row this way.
-	oldKey, err := oldRow.NomsMapKey(ste.tableEditor.Schema()).Value(ctx)
-	if err != nil {
-		return ctx, false, err
-	}
-	oldKeyHash, err := oldKey.Hash(oldRow.Format())
+	oldKeyHash, err := oldKey.Hash(ste.Format())
 	if err != nil {
 		return ctx, false, err
 	}
@@ -387,11 +427,7 @@ func (ste *sessionedTableEditor) shouldSkipDeleteCascade(ctx context.Context, fo
 
 	// We don't need to store the new key. If it also causes a cascade then it will become an old key as the logic
 	// progresses. We're only interested in whether the new key is already present in the map.
-	newKey, err := newRow.NomsMapKey(ste.tableEditor.Schema()).Value(ctx)
-	if err != nil {
-		return ctx, false, err
-	}
-	newKeyHash, err := newKey.Hash(newRow.Format())
+	newKeyHash, err := newKey.Hash(ste.Format())
 	if err != nil {
 		return ctx, false, err
 	}

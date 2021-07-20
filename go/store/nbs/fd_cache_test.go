@@ -30,13 +30,15 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFDCache(t *testing.T) {
 	dir := makeTempDir(t)
-	defer os.RemoveAll(dir)
+	defer file.RemoveAll(dir)
 
 	paths := [3]string{}
 	for i := range paths {

@@ -1026,3 +1026,9 @@ setup_ref_test() {
     [[ "$output" =~ "remotes/origin/branch-one" ]] || false
     [[ "$output" =~ "remotes/origin/branch-two" ]] || false
 }
+
+@test "remotes: not specifying a branch throws an error" {
+    run dolt push -u origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: --set-upstream requires <remote> and <refspec> params." ]] || false
+}

@@ -30,6 +30,10 @@ teardown() {
 	teardown_common
 }
 
+@test "sql-conflicts: read from empty table" {
+    dolt sql -q "SELECT * FROM dolt_conflicts_empty"
+}
+
 @test "sql-conflicts: add conflict" {
   dolt branch feature_branch master
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"

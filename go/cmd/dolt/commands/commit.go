@@ -169,7 +169,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	if actions.IsNothingStaged(err) {
 		notStagedTbls := actions.NothingStagedTblDiffs(err)
 		notStagedDocs := actions.NothingStagedDocsDiffs(err)
-		n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, []string{})
+		n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, nil, nil)
 
 		if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
@@ -219,12 +219,16 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}
+	workingTblsWithViolations, _, _, err := merge.GetTablesWithConstraintViolations(ctx, roots)
+	if err != nil {
+		workingTblsWithViolations = []string{}
+	}
 
 	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
-	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
+	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict, workingTblsWithViolations)
 
 	currBranch := dEnv.RepoStateReader().CWBHeadRef()
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +

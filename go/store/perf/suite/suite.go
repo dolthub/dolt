@@ -111,6 +111,7 @@ import (
 	"github.com/stretchr/testify/require"
 	testifySuite "github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -229,10 +230,10 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	defer func() {
 		for _, f := range suite.tempFiles {
 			f.Close()
-			os.Remove(f.Name())
+			file.Remove(f.Name())
 		}
 		for _, d := range suite.tempDirs {
-			os.RemoveAll(d)
+			file.RemoveAll(d)
 		}
 	}()
 

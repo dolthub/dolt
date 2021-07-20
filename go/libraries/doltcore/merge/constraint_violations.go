@@ -56,7 +56,7 @@ const (
 )
 
 // AddConstraintViolations adds all constraint violations to each table.
-func AddConstraintViolations(ctx context.Context, newRoot, ourRoot, baseRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
