@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -340,4 +341,73 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Unexpected schema")
 		}
 	}
+}
+
+func TestListPortionOfRefs(t *testing.T) {
+	ddb, err := LoadDoltDB(context.Background(), types.Format_Default, InMemDoltDB, filesys.LocalFS)
+	if err != nil {
+		t.Fatal("Failed to load db")
+	}
+
+	err = ddb.WriteEmptyRepo(context.Background(), "Bill Billerson", "bigbillieb@fake.horse")
+	if err != nil {
+		t.Fatal("Unexpected error creating empty repo", err)
+	}
+
+	cs, _ := NewCommitSpec("master")
+	cm, err := ddb.Resolve(context.Background(), cs, nil)
+	if err != nil {
+		t.Fatal("Could not find commit")
+	}
+
+	// Get master branch
+	branches, err := ddb.GetPortionOfBranches(context.Background(), 0, 30, "")
+	if err != nil {
+		t.Fatal("Could not get branches")
+	}
+	assert.Len(t, branches, 1)
+	assert.Equal(t, branches[0].String(), "refs/heads/master")
+
+	// Add 40 more branches
+	for i := 0; i < 40; i++ {
+		err = ddb.NewBranchAtCommit(context.Background(), ref.NewBranchRef(fmt.Sprintf("branch-%v", i)), cm)
+		if err != nil {
+			t.Fatal("Could not create branch", err)
+		}
+	}
+
+	// Get first page of branches
+	seenRefPaths := make(map[string]bool)
+	newBranches, err := ddb.GetPortionOfBranches(context.Background(), 0, 30, "")
+	if err != nil {
+		t.Fatal("Could not get branches")
+	}
+	assert.Len(t, newBranches, 31)
+	for i, branch := range newBranches {
+		if i < 30 {
+			_, present := seenRefPaths[branch.String()]
+			assert.False(t, present)
+			seenRefPaths[branch.String()] = true
+		}
+	}
+
+	// Get second page of branches
+	nextBranches, err := ddb.GetPortionOfBranches(context.Background(), 30, 30, "")
+	if err != nil {
+		t.Fatal("Could not get branches")
+	}
+	assert.Len(t, nextBranches, 11)
+	for _, branch := range nextBranches {
+		_, present := seenRefPaths[branch.String()]
+		assert.False(t, present)
+		seenRefPaths[branch.String()] = true
+	}
+
+	// Filter branches based on query
+	oneBranch, err := ddb.GetPortionOfBranches(context.Background(), 0, 30, "branch-17")
+	if err != nil {
+		t.Fatal("Could not get branches")
+	}
+	assert.Len(t, oneBranch, 1)
+	assert.Equal(t, oneBranch[0].String(), "refs/heads/branch-17")
 }

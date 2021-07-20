@@ -773,6 +773,11 @@ func (ddb *DoltDB) GetBranches(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, branchRefFilter)
 }
 
+// GetPortionOfBranches returns a list portion of branches in the database.
+func (ddb *DoltDB) GetPortionOfBranches(ctx context.Context, offset, pageCount int, query string) ([]ref.DoltRef, error) {
+	return ddb.GetPortionOfRefsOfType(ctx, branchRefFilter, offset, pageCount, query)
+}
+
 type BranchWithHash struct {
 	Ref  ref.DoltRef
 	Hash hash.Hash
@@ -834,6 +839,68 @@ func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.Re
 
 		return nil
 	})
+}
+
+func (ddb *DoltDB) VisitPortionOfRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, offset, pageCount int, query string, visit func(r ref.DoltRef, v types.Value) error) error {
+	dss, err := ddb.db.Datasets(ctx)
+	if err != nil {
+		return err
+	}
+
+	refIter, err := dss.IteratorAt(ctx, uint64(offset))
+	if err != nil {
+		return err
+	}
+
+	nomsKey, nomsValue, err := refIter.Next(ctx)
+	if err != nil {
+		return err
+	}
+
+	count := 0
+	for nomsKey != nil && count < pageCount+1 {
+		keyStr := string(nomsKey.(types.String))
+
+		var dref ref.DoltRef
+		if ref.IsRef(keyStr) {
+			dref, err = ref.Parse(keyStr)
+			if err != nil {
+				return err
+			}
+
+			_, ok := refTypeFilter[dref.GetType()]
+
+			matchesQuery := true
+			if query != "" {
+				matchesQuery = ref.EqualsStr(dref, query)
+			}
+
+			if ok && matchesQuery {
+				err = visit(dref, nomsValue)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		nomsKey, nomsValue, err = refIter.Next(ctx)
+		if err != nil {
+			return err
+		}
+
+		count++
+	}
+
+	return nil
+}
+
+func (ddb *DoltDB) GetPortionOfRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, offset, pageCount int, query string) ([]ref.DoltRef, error) {
+	var refs []ref.DoltRef
+	err := ddb.VisitPortionOfRefsOfType(ctx, refTypeFilter, offset, pageCount, query, func(r ref.DoltRef, v types.Value) error {
+		refs = append(refs, r)
+		return nil
+	})
+	return refs, err
 }
 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
