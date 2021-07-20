@@ -385,7 +385,7 @@ func TestIndexEditorUniqueErrorDoesntPersist(t *testing.T) {
 	require.NoError(t, err)
 	fullKey, partialKey, value, err = dRow.ReduceToIndexKeys(index)
 	require.NoError(t, err)
-	require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey, value))
+	require.Error(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey, value))
 	dRow, err = row.New(format, indexSch, row.TaggedValues{
 		0: types.Int(2),
 		1: types.Int(2),
