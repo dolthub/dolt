@@ -465,6 +465,6 @@ func TestMergeCommits(t *testing.T) {
 			t.Error("index contents are incorrect")
 		}
 	} else {
-		assert.Fail(t, "%v and %v do not equal", h, eh)
+		assert.Fail(t, "%s and %s do not equal", h.String(), eh.String())
 	}
 }

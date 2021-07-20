@@ -112,12 +112,22 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
-	if err != nil {
-		return err
-	}
+	if !schema.IsKeyless(te.sch) {
+		k, tagToVal, err := sqlutil.DoltKeyAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
 
-	return te.tableEditor.DeleteRow(ctx, dRow)
+		if err != nil {
+			return err
+		}
+
+		return te.tableEditor.DeleteByKey(ctx, k, tagToVal)
+	} else {
+		dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
+		if err != nil {
+			return err
+		}
+
+		return te.tableEditor.DeleteRow(ctx, dRow)
+	}
 }
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {

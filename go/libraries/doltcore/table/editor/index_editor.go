@@ -492,7 +492,7 @@ func (ie *IndexEditor) flush() {
 func (ie *IndexEditor) autoFlush() {
 	ie.flushMutex.RLock()
 	ie.writeMutex.Lock()
-	runFlush := ie.iea.opCount >= tableEditorMaxOps
+	runFlush := uint64(ie.iea.opCount) >= tableEditorMaxOps
 	ie.writeMutex.Unlock()
 	ie.flushMutex.RUnlock()
 
