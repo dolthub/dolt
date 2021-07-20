@@ -153,7 +153,6 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 			return nil, err
 		}
 	}
-
 	updatedTable, err := doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData, autoVal)
 	if err != nil {
 		return nil, err
