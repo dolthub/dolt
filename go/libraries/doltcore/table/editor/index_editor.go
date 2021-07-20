@@ -432,7 +432,9 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 					delete(targetIea.removedKeys, keyHash)
 				} else {
 					targetIea.addedKeys[keyHash] = hTpl
-					targetIea.addedValues[keyHash] = ie.iea.addedValues[keyHash]
+					if val, ok := ie.iea.addedValues[keyHash]; ok {
+						targetIea.addedValues[keyHash] = val
+					}
 					if matchingMap, ok := targetIea.addedPartialKeys[hTpl.Hash]; ok {
 						matchingMap[keyHash] = hTpl.Tuple
 					} else {
