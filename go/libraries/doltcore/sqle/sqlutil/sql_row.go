@@ -135,6 +135,64 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 	return keyTuple, valTuple, tagToVal, nil
 }
 
+// DoltKeyValueAndMappingFromSqlRow converts a sql.Row to key tuple and keeps a mapping from tag to value that
+// can be used to speed up index key generation for foreign key checks.
+func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, map[uint64]types.Value, error) {
+	allCols := doltSchema.GetAllCols()
+	pkCols := doltSchema.GetPKCols()
+
+	numCols := allCols.Size()
+	numPKCols := pkCols.Size()
+	pkVals := make([]types.Value, numPKCols*2)
+	tagToVal := make(map[uint64]types.Value, numCols)
+
+	if len(r) < numCols {
+		numCols = len(r)
+	}
+
+	// values for the pk tuple are in schema order
+	pkIdx := 0
+	for i := 0; i < numCols; i++ {
+		schCol := allCols.GetAtIndex(i)
+		val := r[i]
+		if val == nil {
+			if !schCol.IsNullable() {
+				return types.Tuple{}, nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
+			}
+			continue
+		}
+
+		tag := schCol.Tag
+		nomsVal, err := schCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
+
+		if err != nil {
+			return types.Tuple{}, nil, err
+		}
+
+		tagToVal[tag] = nomsVal
+
+		if schCol.IsPartOfPK {
+			pkVals[pkIdx] = types.Uint(tag)
+			pkVals[pkIdx+1] = nomsVal
+			pkIdx += 2
+		}
+	}
+
+	// no nulls in keys
+	if pkIdx != len(pkVals) {
+		return types.Tuple{}, nil, errors.New("not all pk columns have a value")
+	}
+
+	nbf := vrw.Format()
+	keyTuple, err := types.NewTuple(nbf, pkVals...)
+
+	if err != nil {
+		return types.Tuple{}, nil, err
+	}
+
+	return keyTuple, tagToVal, nil
+}
+
 func pkDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
 	allCols := doltSchema.GetAllCols()

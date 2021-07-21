@@ -34,14 +34,14 @@ import (
 )
 
 var (
-	tableEditorMaxOps int64 = 16384
-	ErrDuplicateKey         = errors.New("duplicate key error")
+	tableEditorMaxOps uint64 = 256 * 1024
+	ErrDuplicateKey          = errors.New("duplicate key error")
 )
 
 func init() {
 	if maxOpsEnv := os.Getenv("DOLT_EDIT_TABLE_BUFFER_ROWS"); maxOpsEnv != "" {
 		if v, err := strconv.ParseUint(maxOpsEnv, 10, 63); err == nil {
-			tableEditorMaxOps = int64(v)
+			tableEditorMaxOps = v
 		}
 	}
 }
@@ -49,7 +49,8 @@ func init() {
 type PKDuplicateErrFunc func(keyString, indexName string, k, v types.Tuple, isPk bool) error
 
 type TableEditor interface {
-	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
+	InsertKeyVal(ctx context.Context, key, val types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
+	DeleteByKey(ctx context.Context, key types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value) error
 
 	InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateErrFunc) error
 	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
@@ -268,9 +269,9 @@ func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, in
 	}
 }
 
-// GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
+// GetIndexedRowKVPs returns all matching row keys and values for the given key on the index. The key is assumed to be in the format
 // expected of the index, similar to searching on the index map itself.
-func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
+func GetIndexedRowKVPs(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([][2]types.Tuple, error) {
 	tbl, err := te.Table(ctx)
 	if err != nil {
 		return nil, err
@@ -292,17 +293,17 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 		return nil, err
 	}
 
-	var rows []row.Row
+	var rowKVPS [][2]types.Tuple
 	for {
-		r, err := indexIter.ReadRow(ctx)
+		k, err := indexIter.ReadKey(ctx)
+
 		if err == io.EOF {
 			break
-		}
-		if err != nil {
+		} else if err != nil {
 			return nil, err
 		}
 
-		indexRowTaggedValues, err := r.TaggedValues()
+		indexRowTaggedValues, err := row.ParseTaggedValues(k)
 		if err != nil {
 			return nil, err
 		}
@@ -317,6 +318,7 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 		if err != nil {
 			return nil, err
 		}
+
 		if fieldsVal == nil {
 			keyStr, err := formatKey(ctx, key)
 			if err != nil {
@@ -325,12 +327,27 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 			return nil, fmt.Errorf("index key `%s` does not have a corresponding entry in table", keyStr)
 		}
 
-		tableRow, err := row.FromNoms(te.Schema(), pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple))
+		rowKVPS = append(rowKVPS, [2]types.Tuple{pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple)})
+	}
+
+	return rowKVPS, nil
+
+}
+
+// GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
+// expected of the index, similar to searching on the index map itself.
+func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
+	rowKVPS, err := GetIndexedRowKVPs(ctx, te, key, indexName, idxSch)
+	if err != nil {
+		return nil, err
+	}
+
+	rows := make([]row.Row, len(rowKVPS))
+	for i, rowKVP := range rowKVPS {
+		rows[i], err = row.FromNoms(te.Schema(), rowKVP[0], rowKVP[1])
 		if err != nil {
 			return nil, err
 		}
-
-		rows = append(rows, tableRow)
 	}
 
 	return rows, nil
@@ -360,7 +377,7 @@ func (te *pkTableEditor) keyErrForKVP(ctx context.Context, indexName string, kvp
 }
 
 // InsertKeyVal adds the given tuples to the table.
-func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) (retErr error) {
+func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) (retErr error) {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -400,11 +417,11 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
+		fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(indexEd.Index())
 		if err != nil {
 			return err
 		}
-		err = indexEd.InsertRow(ctx, fullKey, partialKey, types.EmptyTuple(te.nbf))
+		err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
 		if uke, ok := err.(*uniqueKeyErr); ok {
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {
@@ -487,24 +504,13 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 	if err != nil {
 		return err
 	}
-	return te.InsertKeyVal(ctx, key.(types.Tuple), val.(types.Tuple), tagToVal, errFunc)
+	return te.InsertKeyVal(ctx, key.(types.Tuple), val.(types.Tuple), dRow, tagToVal, errFunc)
 }
 
-// DeleteRow removes the given row from the table.
-func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr error) {
+func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value) (retErr error) {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
-
-	key, err := dRow.NomsMapKey(te.tSch).Value(ctx)
-	if err != nil {
-		return err
-	}
-
-	keyHash, err := key.Hash(te.nbf)
-	if err != nil {
-		return err
-	}
 
 	// Regarding the lock's position here, refer to the comment in InsertKeyVal
 	te.writeMutex.Lock()
@@ -523,15 +529,21 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(indexEd.Index())
+		fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(indexEd.Index())
+		//fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
 		if err != nil {
 			return err
 		}
-		err = indexEd.DeleteRow(ctx, fullKey, partialKey, types.Tuple{})
+		err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
 		if err != nil {
 			return err
 		}
 		indexOpsToUndo[i]++
+	}
+
+	keyHash, err := key.Hash(te.nbf)
+	if err != nil {
+		return err
 	}
 
 	delete(te.tea.addedKeys, keyHash)
@@ -539,6 +551,17 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 
 	te.tea.opCount++
 	return nil
+}
+
+// DeleteRow removes the given row from the table. This essentially acts as a convenience function for DeleteKey, while
+// ensuring proper thread safety.
+func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr error) {
+	key, tv, err := row.KeyAndTaggedValuesForRow(dRow, te.tSch)
+	if err != nil {
+		return err
+	}
+
+	return te.DeleteByKey(ctx, key, dRow, tv)
 }
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.
@@ -861,7 +884,7 @@ func (te *pkTableEditor) flush() {
 func (te *pkTableEditor) autoFlush() {
 	te.flushMutex.RLock()
 	te.writeMutex.Lock()
-	runFlush := te.tea.opCount >= tableEditorMaxOps
+	runFlush := uint64(te.tea.opCount) >= tableEditorMaxOps
 	te.writeMutex.Unlock()
 	te.flushMutex.RUnlock()
 

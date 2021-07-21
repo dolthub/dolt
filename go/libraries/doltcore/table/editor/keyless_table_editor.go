@@ -144,8 +144,39 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	return te, nil
 }
 
-func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
+func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
 	panic("not implemented")
+}
+
+func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value) (err error) {
+	kte.mu.Lock()
+	defer kte.mu.Unlock()
+
+	defer func() { err = kte.autoFlush(ctx) }()
+
+	nonPkCols := kte.sch.GetNonPKCols()
+	tplVals := make([]types.Value, 0, 2*nonPkCols.Size())
+	err = nonPkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		var val types.Value = types.NullValue
+		if rowVal, ok := tagToVal[tag]; ok {
+			val = rowVal
+		}
+
+		tplVals = append(tplVals, types.Uint(tag))
+		tplVals = append(tplVals, val)
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	val, err := types.NewTuple(kte.tbl.Format(), tplVals...)
+	if err != nil {
+		return err
+	}
+
+	return kte.acc.decrement(key, val)
 }
 
 // InsertRow implements TableEditor.
@@ -338,6 +369,17 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 	ed := rowData.Edit()
 	iter := table.NewMapPointReader(rowData, keys...)
 
+	indexOpsToUndo := make([]int, len(indexEds))
+	defer func() {
+		if retErr != nil {
+			for i, opsToUndo := range indexOpsToUndo {
+				for undone := 0; undone < opsToUndo; undone++ {
+					indexEds[i].Undo(ctx)
+				}
+			}
+		}
+	}()
+
 	var ok bool
 	for {
 		k, v, err := iter.NextTuple(ctx)
@@ -366,17 +408,6 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 		if err != nil {
 			return nil, err
 		}
-
-		indexOpsToUndo := make([]int, len(indexEds))
-		defer func() {
-			if retErr != nil {
-				for i, opsToUndo := range indexOpsToUndo {
-					for undone := 0; undone < opsToUndo; undone++ {
-						indexEds[i].Undo(ctx)
-					}
-				}
-			}
-		}()
 
 		for i, indexEd := range indexEds {
 			var r row.Row

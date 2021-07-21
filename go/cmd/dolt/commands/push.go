@@ -199,6 +199,10 @@ func parsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
+	if verr != nil {
+		return nil, verr
+	}
+
 	remote, remoteOK = remotes[remoteName]
 
 	if !remoteOK {
