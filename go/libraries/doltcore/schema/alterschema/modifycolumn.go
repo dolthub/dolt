@@ -147,6 +147,8 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		return nil, err
 	}
 	var autoVal types.Value
+	// Note: The correct way to add an auto increment value to an existing schema is to you use the
+	// ALTER TABLE CHANGE COLUMN syntax not ALTER TABLE autoincrement. (see auto_increment.bats)
 	if schema.HasAutoIncrement(newSch) && schema.HasAutoIncrement(oldSch) {
 		autoVal, err = tbl.GetAutoIncrementValue(ctx)
 		if err != nil {
