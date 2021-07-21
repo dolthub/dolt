@@ -164,3 +164,21 @@ func (hs HashSet) Has(hash Hash) (has bool) {
 func (hs HashSet) Remove(hash Hash) {
 	delete(hs, hash)
 }
+
+// Copy returns a copy of the hashset
+func (hs HashSet) Copy() HashSet {
+	copyOf := make(HashSet, len(hs))
+
+	for k := range hs {
+		copyOf[k] = struct{}{}
+	}
+
+	return copyOf
+}
+
+// InsertAll inserts all elements of a HashSet into this HashSet
+func (hs HashSet) InsertAll(other HashSet) {
+	for h, _ := range other {
+		hs[h] = struct{}{}
+	}
+}

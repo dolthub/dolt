@@ -86,13 +86,13 @@ func (s *TestStoreView) Put(ctx context.Context, c Chunk) error {
 	return s.ChunkStore.Put(ctx, c)
 }
 
-func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
+func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error {
 	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
 	if !ok {
 		return ErrUnsupportedOperation
 	}
 
-	return collector.MarkAndSweepChunks(ctx, last, keepChunks)
+	return collector.MarkAndSweepChunks(ctx, last, keepChunks, dest)
 }
 
 func (s *TestStoreView) Reads() int {

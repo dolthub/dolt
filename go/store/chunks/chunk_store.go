@@ -108,7 +108,13 @@ type ChunkStoreGarbageCollector interface {
 	// and MarkAndSweepChunks returns, the chunk store will only have the
 	// chunks sent on |keepChunks| and will have removed all other content
 	// from the ChunkStore.
-	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error
+	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error
+}
+
+// OldGenner is an interface supporting the OldGen function which can return an old gen ChunkStore
+type OldGenner interface {
+	// OldGen returns an old gen chunk store
+	OldGen() ChunkStoreGarbageCollector
 }
 
 // ChunkStoreVersionGetter is a ChunkStore that supports getting the manifest's
