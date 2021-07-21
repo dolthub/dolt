@@ -1400,6 +1400,12 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		return errLastRootMismatch
 	}
 
+	// check to see if the specs have changed since last gc.  If they haven't bail early.
+	gcGenCheck := generateLockHash(last, nbs.upstream.specs)
+	if nbs.upstream.gcGen == gcGenCheck {
+		return chunks.ErrNothingToCollect
+	}
+
 	specs, err := nbs.copyMarkedChunks(ctx, keepChunks)
 	if err != nil {
 		return err
