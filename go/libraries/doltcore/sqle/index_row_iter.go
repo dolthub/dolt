@@ -201,7 +201,6 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 func (i *indexLookupRowIterAdapter) processKey(indexKey types.Tuple) (sql.Row, error) {
 	tableData := i.idx.TableData()
 
-	// TODO: - could do a keyless tag lookup to check if keyless idx
 	pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), indexKey)
 	if err != nil {
 		return nil, err
