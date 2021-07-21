@@ -16,6 +16,9 @@ package commands
 
 import (
 	"context"
+	"errors"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -122,7 +125,11 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 
 		err = dEnv.DoltDB.GC(ctx, keepers...)
 		if err != nil {
-			verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
+			if errors.Is(err, chunks.ErrNothingToCollect) {
+				cli.PrintErrln(color.YellowString("Nothing to collect."))
+			} else {
+				verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
+			}
 		}
 	}
 

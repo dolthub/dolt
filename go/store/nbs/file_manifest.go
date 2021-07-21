@@ -93,13 +93,14 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return false, ErrUnreadableManifest
 	}
 
-	check := func(upstream, contents manifestContents) error {
-		if upstream.gcGen == contents.gcGen {
-			return errors.New("error migrating manifest")
+	check := func(_, contents manifestContents) error {
+		var empty addr
+		if contents.gcGen != empty {
+			return errors.New("migrating from v4 to v5 should result in a manifest with a 0 gcGen")
 		}
+
 		return nil
 	}
-	contents.gcGen = contents.lock
 
 	_, err = updateWithParseWriterAndChecker(ctx, dir, fm5.writeManifest, fm4.parseManifest, check, contents.lock, contents, nil)
 
@@ -546,7 +547,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 		return upstream, nil
 	}
 
-	// this is where we assert that gcGen is unchanged
+	// this is where we assert that gcGen is correct
 	err = validate(upstream, newContents)
 
 	if err != nil {

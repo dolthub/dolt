@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+var ErrNothingToCollect = errors.New("no changes since last gc")
+
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.
 type ChunkStore interface {
