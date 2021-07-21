@@ -45,7 +45,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(nil, dbName)
+	dbData, ok := sess.GetDbData(ctx, dbName)
 
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
@@ -71,7 +71,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	if err != nil {
 		return nil, err
 	}
-	roots, ok := sess.GetRoots(nil, dbName)
+	roots, ok := sess.GetRoots(ctx, dbName)
 
 	// logrus.Errorf("heads are working: %s\nhead: %s", roots.Working.DebugString(ctx, true), roots.Head.DebugString(ctx, true))
 
@@ -97,7 +97,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return "Merge aborted", nil
 	}
 
-	ddb, ok := sess.GetDoltDB(nil, dbName)
+	ddb, ok := sess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}

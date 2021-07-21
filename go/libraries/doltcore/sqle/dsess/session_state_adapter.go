@@ -33,13 +33,21 @@ type SessionStateAdapter struct {
 }
 
 func (s SessionStateAdapter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	roots, _ := s.session.GetRoots(nil, s.dbName)
+	sqlCtx, ok := ctx.(*sql.Context)
+	if ok {
+		return fmt.Errorf("non-sql context passed to SessionStateAdapter")
+	}
+	roots, _ := s.session.GetRoots(sqlCtx, s.dbName)
 	roots.Staged = newRoot
 	return s.session.SetRoots(ctx.(*sql.Context), s.dbName, roots)
 }
 
 func (s SessionStateAdapter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	roots, _ := s.session.GetRoots(nil, s.dbName)
+	sqlCtx, ok := ctx.(*sql.Context)
+	if ok {
+		return fmt.Errorf("non-sql context passed to SessionStateAdapter")
+	}
+	roots, _ := s.session.GetRoots(sqlCtx, s.dbName)
 	roots.Working = newRoot
 	return s.session.SetRoots(ctx.(*sql.Context), s.dbName, roots)
 }

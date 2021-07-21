@@ -71,7 +71,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	dbName := sess.GetCurrentDatabase()
-	ddb, ok := sess.GetDoltDB(nil, dbName)
+	ddb, ok := sess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}

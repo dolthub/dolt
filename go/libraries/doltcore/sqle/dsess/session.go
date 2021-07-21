@@ -297,7 +297,7 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 		}
 	}
 
-	dbState, _, err := sess.LookupDbState(ctx, dbName)
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -314,11 +314,6 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 	// These commands should not error.
 	if dbName == "" {
 		return nil
-	}
-
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
 	}
 
 	// It's possible that this returns false if the user has created an in-Memory database. Moreover,

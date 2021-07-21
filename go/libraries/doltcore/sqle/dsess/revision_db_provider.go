@@ -21,7 +21,7 @@ import (
 )
 
 // RevisionDatabaseProvider provides revision databases.
-// In Dolt, commits and branches can be accessed as discreet databases
+// In Dolt, commits and branches can be accessed as discrete databases
 // using a Dolt-specific syntax: `my_database/my_branch`. Revision databases
 // corresponding to historical commits in the repository will be read-only
 // databases. Revision databases for branches will be read/write.

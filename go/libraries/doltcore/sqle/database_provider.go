@@ -164,9 +164,9 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 }
 
 func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string) (dsess.InitialDbState, error) {
-	err := sql.ErrDatabaseNotFound.New(revDB)
+	errNotFound := sql.ErrDatabaseNotFound.New(revDB)
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
-		return dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, errNotFound
 	}
 
 	parts := strings.SplitN(revDB, dbRevisionDelimiter, 2)
@@ -174,11 +174,11 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string)
 
 	candidate, ok := p.databases[dbName]
 	if !ok {
-		return dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, errNotFound
 	}
 	srcDb, ok := candidate.(Database)
 	if !ok {
-		return dsess.InitialDbState{}, err
+		return dsess.InitialDbState{}, errNotFound
 	}
 
 	if isBranch(ctx, srcDb.ddb, revSpec) {
@@ -196,14 +196,14 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string)
 	// a WorkingSet to reference, but Commits in the history don't
 	// have corresponding WorkingSets.
 	//if doltdb.IsValidCommitHash(revSpec) {
-	//	_, init, err := dbRevisionForCommit(ctx, srcDb, revSpec)
-	//	if err != nil {
-	//		return dsess.InitialDbState{}, err
+	//	_, init, errNotFound := dbRevisionForCommit(ctx, srcDb, revSpec)
+	//	if errNotFound != nil {
+	//		return dsess.InitialDbState{}, errNotFound
 	//	}
 	//	return init, nil
 	//}
 
-	return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
+	return dsess.InitialDbState{}, errNotFound
 }
 
 func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {
