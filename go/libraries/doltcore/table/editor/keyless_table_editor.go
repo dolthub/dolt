@@ -369,24 +369,12 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 	ed := rowData.Edit()
 	iter := table.NewMapPointReader(rowData, keys...)
 
-	indexOpsToUndo := make([]int, len(indexEds))
-	defer func() {
-		if retErr != nil {
-			for i, opsToUndo := range indexOpsToUndo {
-				for undone := 0; undone < opsToUndo; undone++ {
-					indexEds[i].Undo(ctx)
-				}
-			}
-		}
-	}()
-
 	var ok bool
 	for {
 		k, v, err := iter.NextTuple(ctx)
 		if err == io.EOF {
 			break
 		}
-
 		if err != nil {
 			return nil, err
 		}
@@ -409,41 +397,55 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 			return nil, err
 		}
 
-		for i, indexEd := range indexEds {
-			var r row.Row
-			if v.Empty() {
-				r, _, err = row.KeylessRowsFromTuples(k, oldv)
-			} else {
-				r, _, err = row.KeylessRowsFromTuples(k, v)
-			}
-			if err != nil {
-				return nil, err
-			}
-			fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index())
-			if err != nil {
-				return nil, err
-			}
+		func(k, v types.Tuple) (*doltdb.Table, error) {
+			indexOpsToUndo := make([]int, len(indexEds))
+			defer func() {
+				if retErr != nil {
+					for i, opsToUndo := range indexOpsToUndo {
+						for undone := 0; undone < opsToUndo; undone++ {
+							indexEds[i].Undo(ctx)
+						}
+					}
+				}
+			}()
 
-			if delta.delta < 1 {
-				err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
+			for i, indexEd := range indexEds {
+				var r row.Row
+				if v.Empty() {
+					r, _, err = row.KeylessRowsFromTuples(k, oldv)
+				} else {
+					r, _, err = row.KeylessRowsFromTuples(k, v)
+				}
 				if err != nil {
 					return nil, err
 				}
-			} else {
-				err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
+				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index())
 				if err != nil {
 					return nil, err
 				}
-			}
 
-			indexOpsToUndo[i]++
-		}
+				if delta.delta < 1 {
+					err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
+					if err != nil {
+						return nil, err
+					}
+				}
+				indexOpsToUndo[i]++
+			}
+			return nil, nil
+		}(k, v)
 
 		if ok {
 			ed.Set(k, v)
 		} else {
 			ed.Remove(k)
 		}
+
 	}
 
 	for i := 0; i < len(indexEds); i++ {
@@ -463,7 +465,6 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 	}
 
 	return tbl.UpdateRows(ctx, rowData)
-
 }
 
 // for deletes (cardinality < 1): |ok| is set false

@@ -106,9 +106,9 @@ type indexEditAccumulator struct {
 // hashedTuple is a tuple accompanied by a hash. The representing value of the hash is dependent on the function
 // it is obtained from.
 type hashedTuple struct {
-	key types.Tuple
+	key   types.Tuple
 	value types.Tuple
-	hash hash.Hash
+	hash  hash.Hash
 }
 
 // createInitialIndexEditAcc creates the initial indexEditAccumulator. All future ieas should use the method
@@ -205,7 +205,7 @@ func (iea *indexEditAccumulator) HasPartial(
 			if err != nil {
 				return nil, err
 			}
-			matches = append(matches, hashedTuple{key, val,keyHash})
+			matches = append(matches, hashedTuple{key, val, keyHash})
 		}
 		if err != io.EOF {
 			return nil, err
@@ -220,7 +220,7 @@ func (iea *indexEditAccumulator) HasPartial(
 		}
 	}
 	for addedHash, addedTpl := range iea.addedPartialKeys[partialKeyHash] {
-		matches = append(matches, hashedTuple{addedTpl, types.EmptyTuple(addedTpl.Format()),addedHash})
+		matches = append(matches, hashedTuple{addedTpl, types.EmptyTuple(addedTpl.Format()), addedHash})
 	}
 	return matches, nil
 }
@@ -283,7 +283,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 	if _, ok := ie.iea.removedKeys[keyHash]; ok {
 		delete(ie.iea.removedKeys, keyHash)
 	} else {
-		ie.iea.addedKeys[keyHash] = hashedTuple{key, value,partialKeyHash}
+		ie.iea.addedKeys[keyHash] = hashedTuple{key, value, partialKeyHash}
 		if matchingMap, ok := ie.iea.addedPartialKeys[partialKeyHash]; ok {
 			matchingMap[keyHash] = key
 		} else {
@@ -318,7 +318,7 @@ func (ie *IndexEditor) DeleteRow(ctx context.Context, key, partialKey, value typ
 		delete(ie.iea.addedKeys, keyHash)
 		delete(ie.iea.addedPartialKeys[partialKeyHash], keyHash)
 	} else {
-		ie.iea.removedKeys[keyHash] = hashedTuple{key, value,partialKeyHash}
+		ie.iea.removedKeys[keyHash] = hashedTuple{key, value, partialKeyHash}
 	}
 
 	ie.iea.opCount++
