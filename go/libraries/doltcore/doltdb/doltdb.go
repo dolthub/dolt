@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1064,9 +1065,52 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 		return err
 	}
 
+	rand.Seed(time.Now().UnixNano())
+	tmpDatasets := make([]datas.Dataset, len(uncommitedVals))
+	for i, h := range uncommitedVals {
+		v, err := ddb.db.ReadValue(ctx, h)
+		if err != nil {
+			return err
+		}
+		if v == nil {
+			return fmt.Errorf("empty value for value hash %s", h.String())
+		}
+
+		ds, err := ddb.db.GetDataset(ctx, fmt.Sprintf("tmp/%d", rand.Int63()))
+		if err != nil {
+			return err
+		}
+
+		r, err := WriteValAndGetRef(ctx, ddb.db, v)
+		if err != nil {
+			return err
+		}
+
+		ds, err = ddb.db.CommitValue(ctx, ds, r)
+		if err != nil {
+			return err
+		}
+		if !ds.HasHead() {
+			return fmt.Errorf("could not save value %s", h.String())
+		}
+
+		tmpDatasets[i] = ds
+	}
+
 	err = collector.GC(ctx)
 	if err != nil {
 		return err
+	}
+
+	for _, ds := range tmpDatasets {
+		ds, err = ddb.db.Delete(ctx, ds)
+		if err != nil {
+			return err
+		}
+
+		if ds.HasHead() {
+			return fmt.Errorf("unsuccessful delete for dataset %s", ds.ID())
+		}
 	}
 
 	return nil
