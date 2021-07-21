@@ -256,8 +256,8 @@ func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
 	return nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
 }
 
-// ReduceToIndexKeys creates a full key and a partial key from the given row (first tuple being the full key). Please
-// refer to the note in the index editor for more information regarding partial keys.
+// ReduceToIndexKeys creates a full key, partial key, and value tuple from the given row (first tuple being the full key). Please
+// refer to the note in the index editor for more information regarding partial keys. NomsRows map always keys to an empty value tuple.
 func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, types.Tuple, error) {
 	vals := make([]types.Value, 0, len(idx.AllTags())*2)
 	for _, tag := range idx.AllTags() {
