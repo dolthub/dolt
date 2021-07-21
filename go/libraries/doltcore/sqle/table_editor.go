@@ -92,6 +92,10 @@ func (te *sqlTableEditor) duplicateKeyErrFunc(keyString, indexName string, k, v 
 }
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
+	if err != nil {
+		return err
+	}
 	if !schema.IsKeyless(te.sch) {
 		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
 
@@ -99,33 +103,24 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 			return err
 		}
 
-		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
+		return te.tableEditor.InsertKeyVal(ctx, k, v, dRow, tagToVal, te.duplicateKeyErrFunc)
 	}
-
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
-
-	if err != nil {
-		return err
-	}
-
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	if !schema.IsKeyless(te.sch) {
 		k, tagToVal, err := sqlutil.DoltKeyAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
-
 		if err != nil {
 			return err
 		}
 
-		return te.tableEditor.DeleteByKey(ctx, k, tagToVal)
+		return te.tableEditor.DeleteByKey(ctx, k, types.EmptyTuple(k.Format()), tagToVal)
 	} else {
 		dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 		if err != nil {
 			return err
 		}
-
 		return te.tableEditor.DeleteRow(ctx, dRow)
 	}
 }

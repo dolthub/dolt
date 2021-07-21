@@ -52,18 +52,18 @@ func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val type
 	return ti.InsertKeyVal(ctx, key, val, dRow, tagToVal, errFunc)
 }
 
-func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value) error {
+func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key, value types.Tuple, tagToVal map[uint64]types.Value) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
 	if !ste.tableEditSession.Props.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
-		err := ste.onDeleteHandleRowsReferencingValues(ctx, key, dRow, tagToVal)
+		err := ste.onDeleteHandleRowsReferencingValues(ctx, key, value, tagToVal)
 		if err != nil {
 			return err
 		}
 	}
 
-	return ste.tableEditor.DeleteByKey(ctx, key, dRow, tagToVal)
+	return ste.tableEditor.DeleteByKey(ctx, key, value, tagToVal)
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
@@ -187,10 +187,15 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		return err
 	}
 
-	return ste.onDeleteHandleRowsReferencingValues(ctx, key.(types.Tuple), dRow, dRowTaggedVals)
+	value, err := dRow.NomsMapValue(ste.tableEditor.Schema()).Value(ctx)
+	if err != nil {
+		return err
+	}
+
+	return ste.onDeleteHandleRowsReferencingValues(ctx, key.(types.Tuple), value.(types.Tuple), dRowTaggedVals)
 }
 
-func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context.Context, key types.Tuple, dRow row.Row, dRowTaggedVals row.TaggedValues) error {
+func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context.Context, key, value types.Tuple, dRowTaggedVals row.TaggedValues) error {
 	//TODO: all self referential logic assumes non-composite keys
 	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
 		return nil
@@ -246,7 +251,7 @@ func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context
 					return err
 				}
 
-				err = referencingSte.DeleteByKey(ctx, kvpToDelete[0], dRow, taggedVals)
+				err = referencingSte.DeleteByKey(ctx, kvpToDelete[0], kvpToDelete[1], taggedVals)
 				if err != nil {
 					return err
 				}

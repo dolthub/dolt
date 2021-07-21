@@ -148,7 +148,7 @@ func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.
 	panic("not implemented")
 }
 
-func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value) (err error) {
+func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key, value types.Tuple, tagToVal map[uint64]types.Value) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
 

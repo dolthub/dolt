@@ -50,7 +50,7 @@ type PKDuplicateErrFunc func(keyString, indexName string, k, v types.Tuple, isPk
 
 type TableEditor interface {
 	InsertKeyVal(ctx context.Context, key, val types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
-	DeleteByKey(ctx context.Context, key types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value) error
+	DeleteByKey(ctx context.Context, key, value types.Tuple, tagToVal map[uint64]types.Value) error
 
 	InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateErrFunc) error
 	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
@@ -507,7 +507,7 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 	return te.InsertKeyVal(ctx, key.(types.Tuple), val.(types.Tuple), dRow, tagToVal, errFunc)
 }
 
-func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value) (retErr error) {
+func (te *pkTableEditor) DeleteByKey(ctx context.Context, key, value types.Tuple, tagToVal map[uint64]types.Value) (retErr error) {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -529,8 +529,8 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, dRow 
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(indexEd.Index())
-		//fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
+		//fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(indexEd.Index())
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
 		if err != nil {
 			return err
 		}
@@ -561,7 +561,7 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 		return err
 	}
 
-	return te.DeleteByKey(ctx, key, dRow, tv)
+	return te.DeleteByKey(ctx, key, types.EmptyTuple(key.Format()), tv)
 }
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.
