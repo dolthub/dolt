@@ -285,6 +285,8 @@ func (kte *keylessTableEditor) StatementFinished(ctx context.Context, errored bo
 
 // SetConstraintViolation implements TableEditor.
 func (kte *keylessTableEditor) SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error {
+	kte.mu.Lock()
+	defer kte.mu.Unlock()
 	if kte.cvEditor == nil {
 		cvMap, err := kte.tbl.GetConstraintViolations(ctx)
 		if err != nil {
@@ -292,8 +294,6 @@ func (kte *keylessTableEditor) SetConstraintViolation(ctx context.Context, k typ
 		}
 		kte.cvEditor = cvMap.Edit()
 	}
-	kte.mu.Lock()
-	defer kte.mu.Unlock()
 	kte.cvEditor.Set(k, v)
 	return nil
 }
