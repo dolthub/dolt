@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"io"
-	"math"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -39,12 +38,12 @@ var resultBufferPool = &sync.Pool{
 }
 
 type indexLookupRowIterAdapter struct {
-	idx     DoltIndex
-	keyIter nomsKeyIter
-	pkTags  map[uint64]int
-	conv    *KVToSqlRowConverter
-	ctx     *sql.Context
-	cancelF func()
+	idx        DoltIndex
+	keyIter    nomsKeyIter
+	lookupTags map[uint64]int
+	conv       *KVToSqlRowConverter
+	ctx        *sql.Context
+	cancelF    func()
 
 	read  uint64
 	count uint64
@@ -54,9 +53,14 @@ type indexLookupRowIterAdapter struct {
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
 func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsKeyIter) *indexLookupRowIterAdapter {
-	pkTags := make(map[uint64]int)
+	lookupTags := make(map[uint64]int)
 	for i, tag := range idx.Schema().GetPKCols().Tags {
-		pkTags[tag] = i
+		lookupTags[tag] = i
+	}
+
+	// handle keyless case, where no columns are pk's and rowIdTag is the only lookup tag
+	if len(lookupTags) == 0 {
+		lookupTags[schema.KeylessRowIdTag] = 0
 	}
 
 	cols := idx.Schema().GetAllCols().GetColumns()
@@ -67,13 +71,13 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 	queueCtx, cancelF := context.WithCancel(ctx)
 
 	iter := &indexLookupRowIterAdapter{
-		idx:       idx,
-		keyIter:   keyIter,
-		conv:      conv,
-		pkTags:    pkTags,
-		ctx:       ctx,
-		cancelF:   cancelF,
-		resultBuf: resBuf,
+		idx:        idx,
+		keyIter:    keyIter,
+		conv:       conv,
+		lookupTags: lookupTags,
+		ctx:        ctx,
+		cancelF:    cancelF,
+		resultBuf:  resBuf,
 	}
 
 	go iter.queueRows(queueCtx, epoch)
@@ -158,7 +162,7 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 		return types.Tuple{}, err
 	}
 
-	resVals := make([]types.Value, int(math.Max(2, float64(len(i.pkTags)*2))))
+	resVals := make([]types.Value, len(i.lookupTags)*2)
 	for {
 		_, tag, err := tplItr.NextUint64()
 
@@ -170,9 +174,9 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 			return types.Tuple{}, err
 		}
 
-		idx, inPK := i.pkTags[tag]
+		idx, inKey := i.lookupTags[tag]
 
-		if inPK || tag == schema.KeylessRowIdTag {
+		if inKey {
 			_, valVal, err := tplItr.Next()
 
 			if err != nil {
@@ -197,6 +201,7 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 func (i *indexLookupRowIterAdapter) processKey(indexKey types.Tuple) (sql.Row, error) {
 	tableData := i.idx.TableData()
 
+	// TODO: - could do a keyless tag lookup to check if keyless idx
 	pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), indexKey)
 	if err != nil {
 		return nil, err

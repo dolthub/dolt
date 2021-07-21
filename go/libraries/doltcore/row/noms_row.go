@@ -44,6 +44,9 @@ func pkRowFromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error)
 	allCols := sch.GetAllCols()
 
 	err = IterPkTuple(keySl, func(tag uint64, val types.Value) (stop bool, err error) {
+		// keyless index schemas pass through keyless check in FromNoms even though
+		// KeylessRowIdTag is a valid component of the index key tuple.
+		// We probably need a better fix, but NomsRangeReader breaks without this.
 		if tag == schema.KeylessRowIdTag {
 			return false, nil
 		}
