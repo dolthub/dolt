@@ -1,26 +1,27 @@
-package chunks
+package nbs
 
 import (
 	"context"
 	"math/rand"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/require"
 )
 
 var randGen = rand.New(rand.NewSource(0))
 
-func genChunks(t *testing.T, count int, max int) []Chunk {
-	chunks := make([]Chunk, count)
+func genChunks(t *testing.T, count int, max int) []chunks.Chunk {
+	chnks := make([]chunks.Chunk, count)
 	for i := 0; i < count; i++ {
 		bytes := make([]byte, randGen.Int()%max)
 		n, err := randGen.Read(bytes)
 		require.NoError(t, err)
-		chunks[i] = NewChunk(bytes[:n])
+		chnks[i] = chunks.NewChunk(bytes[:n])
 	}
 
-	return chunks
+	return chnks
 }
 
 func mergeMaps(m1, m2 map[int]bool) map[int]bool {
@@ -36,7 +37,7 @@ func mergeMaps(m1, m2 map[int]bool) map[int]bool {
 	return m3
 }
 
-func hashesForChunks(chunks []Chunk, indexes map[int]bool) hash.HashSet {
+func hashesForChunks(chunks []chunks.Chunk, indexes map[int]bool) hash.HashSet {
 	hashes := make(hash.HashSet)
 	for idx := range indexes {
 		hashes[chunks[idx].Hash()] = struct{}{}
@@ -47,11 +48,11 @@ func hashesForChunks(chunks []Chunk, indexes map[int]bool) hash.HashSet {
 
 type foundHashes hash.HashSet
 
-func (fh foundHashes) found(chk *Chunk) {
+func (fh foundHashes) found(chk *chunks.Chunk) {
 	fh[chk.Hash()] = struct{}{}
 }
 
-func requireChunks(t *testing.T, ctx context.Context, chunks []Chunk, genCS *GenerationalCS, inOld, inNew map[int]bool) {
+func requireChunks(t *testing.T, ctx context.Context, chunks []chunks.Chunk, genCS *GenerationalNBS, inOld, inNew map[int]bool) {
 	// Has/Get Checks
 	for i, chk := range chunks {
 		has, err := genCS.oldGen.Has(ctx, chk.Hash())
@@ -113,7 +114,7 @@ func requireChunks(t *testing.T, ctx context.Context, chunks []Chunk, genCS *Gen
 	require.Equal(t, expected, hash.HashSet(received))
 }
 
-func putChunks(t *testing.T, ctx context.Context, chunks []Chunk, cs ChunkStore, indexesIn map[int]bool, chunkIndexes ...int) {
+func putChunks(t *testing.T, ctx context.Context, chunks []chunks.Chunk, cs chunks.ChunkStore, indexesIn map[int]bool, chunkIndexes ...int) {
 	for _, idx := range chunkIndexes {
 		err := cs.Put(ctx, chunks[idx])
 		require.NoError(t, err)
@@ -123,9 +124,9 @@ func putChunks(t *testing.T, ctx context.Context, chunks []Chunk, cs ChunkStore,
 
 func TestGenerationalCS(t *testing.T) {
 	ctx := context.Background()
-	oldGen := (&MemoryStorage{}).NewView()
+	oldGen := (&chunks.MemoryStorage{}).NewView()
 	inOld := make(map[int]bool)
-	newGen := (&MemoryStorage{}).NewView()
+	newGen := (&chunks.MemoryStorage{}).NewView()
 	inNew := make(map[int]bool)
 	chunks := genChunks(t, 100, 1000)
 

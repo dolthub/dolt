@@ -605,29 +605,30 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 	}
 
 	newGenRefs.Insert(root)
-	if oldGenner, ok := collector.(chunks.OldGenner); ok {
-		oldGen := oldGenner.OldGen()
-		err = lvs.gc(ctx, root, oldGenRefs, oldGen, oldGen)
+	if gcs, ok := collector.(chunks.GenerationalCS); ok {
+		oldGen := gcs.OldGen()
+		newGen := gcs.NewGen()
+		err = lvs.gc(ctx, root, oldGenRefs, oldGen, newGen, oldGen)
 		if err != nil {
 			return err
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, oldGen, collector)
+		return lvs.gc(ctx, root, newGenRefs, oldGen, newGen, newGen)
 	} else {
 		if len(oldGenRefs) > 0 {
 			newGenRefs.InsertAll(oldGenRefs)
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, nil, collector)
+		return lvs.gc(ctx, root, newGenRefs, nil, collector, collector)
 	}
 }
 
-func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.HashSet, oldGenCS chunks.ChunkStore, dest chunks.ChunkStoreGarbageCollector) error {
+func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.HashSet, oldGenCS chunks.ChunkStore, src, dest chunks.ChunkStoreGarbageCollector) error {
 	keepChunks := make(chan []hash.Hash, gcBuffSize)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		return dest.MarkAndSweepChunks(ctx, root, keepChunks, dest)
+		return src.MarkAndSweepChunks(ctx, root, keepChunks, dest)
 	})
 
 	keepHashes := func(hs []hash.Hash) error {

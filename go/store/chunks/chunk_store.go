@@ -111,9 +111,9 @@ type ChunkStoreGarbageCollector interface {
 	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error
 }
 
-// OldGenner is an interface supporting the OldGen function which can return an old gen ChunkStore
-type OldGenner interface {
-	// OldGen returns an old gen chunk store
+// GenerationalCS is an interface supporting the getting old gen and new gen chunk stores
+type GenerationalCS interface {
+	NewGen() ChunkStoreGarbageCollector
 	OldGen() ChunkStoreGarbageCollector
 }
 

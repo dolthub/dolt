@@ -1435,7 +1435,7 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		}
 	} else {
 		fileIdToNumChunks := tableSpecsToMap(specs)
-		err := nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks)
+		err = destNBS.AddTableFilesToManifest(ctx, fileIdToNumChunks)
 
 		if err != nil {
 			return err

@@ -52,19 +52,50 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	path = filepath.FromSlash(path)
 	path = urlObj.Host + path
 
+	err = validateDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	newGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize)
+
+	if err != nil {
+		return nil, err
+	}
+
+	oldgenPath := filepath.Join(path, "oldgen")
+	err = validateDir(oldgenPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+
+		err = os.Mkdir(oldgenPath, os.ModePerm)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	oldGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), oldgenPath, defaultMemTableSize)
+
+	if err != nil {
+		return nil, err
+	}
+
+	st := nbs.NewGenerationalCS(oldGenSt, newGenSt)
+	// metrics?
+
+	return datas.NewDatabase(st), nil
+}
+
+func validateDir(path string) error {
 	info, err := os.Stat(path)
 
 	if err != nil {
-		return nil, err
+		return err
 	} else if !info.IsDir() {
-		return nil, filesys.ErrIsFile
+		return filesys.ErrIsFile
 	}
 
-	st, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return datas.NewDatabase(nbs.NewNBSMetricWrapper(st)), nil
+	return nil
 }
