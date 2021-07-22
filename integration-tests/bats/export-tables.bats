@@ -195,11 +195,11 @@ if rows[2] != "9,8,7,6,5,4".split(","):
    [ "$status" -eq 0 ]
    [[ "$output" =~ "Successfully exported data." ]] ||  false
 
-    # reimport the data
-    dolt table rm timetable
-    run dolt table import -c --pk=pk timetable export.csv
-    [ "$status" -eq 0 ]
+   # reimport the data
+   dolt table rm timetable
+   run dolt table import -c --pk=pk timetable export.csv
+   [ "$status" -eq 0 ]
 
-    run dolt sql -q "SELECT * FROM timetable" -r csv
-    [[ "$output" =~ "1,2021-06-02 15:37:24 +0000 UTC" ]] ||  false
+   run dolt sql -q "SELECT * FROM timetable" -r csv
+   [[ "$output" =~ "1,2021-06-02 15:37:24 +0000 UTC" ]] ||  false
 }
