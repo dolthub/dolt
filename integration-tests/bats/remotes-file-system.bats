@@ -175,3 +175,16 @@ SQL
     [ ! -d test-repo ]
     cd ..
 }
+
+@test "remotes-file-system: clone from another file directory" {
+   mkdir remotedir && cd remotedir
+   dolt init
+   dolt sql -q "create table t(pk int)"
+
+   dolt clone file://../remotedir/.dolt/noms testrepo
+   [ "$status" -eq 0 ]
+
+   cd testrepo
+   run dolt sql -q "show tables"
+   [[ "$output" =~ "t" ]] || false
+}
