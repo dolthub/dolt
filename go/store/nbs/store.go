@@ -1304,6 +1304,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 
 // AddTableFilesToManifest adds table files to the manifest
 func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
+	var totalChunks int
 	fileIdHashToNumChunks := make(map[hash.Hash]uint32)
 	for fileId, numChunks := range fileIdToNumChunks {
 		fileIdHash, ok := hash.MaybeParse(fileId)
@@ -1313,6 +1314,11 @@ func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 		}
 
 		fileIdHashToNumChunks[fileIdHash] = uint32(numChunks)
+		totalChunks += numChunks
+	}
+
+	if totalChunks == 0 {
+		return nil
 	}
 
 	_, err := nbs.UpdateManifest(ctx, fileIdHashToNumChunks)

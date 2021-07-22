@@ -65,6 +65,11 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) ([]tab
 	}
 
 	filepath := path.Join(destDir, filename)
+
+	if gcc.writer.Size() == 0 {
+		return []tableSpec{}, nil
+	}
+
 	err = gcc.writer.FlushToFile(filepath)
 	if err != nil {
 		return nil, err
