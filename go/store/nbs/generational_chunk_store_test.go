@@ -1,3 +1,17 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nbs
 
 import (
@@ -5,9 +19,10 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/stretchr/testify/require"
 )
 
 var randGen = rand.New(rand.NewSource(0))
@@ -124,45 +139,35 @@ func putChunks(t *testing.T, ctx context.Context, chunks []chunks.Chunk, cs chun
 
 func TestGenerationalCS(t *testing.T) {
 	ctx := context.Background()
-	oldGen := (&chunks.MemoryStorage{}).NewView()
+	oldGen, _ := makeTestLocalStore(t, 64)
+	newGen, _ := makeTestLocalStore(t, 64)
 	inOld := make(map[int]bool)
-	newGen := (&chunks.MemoryStorage{}).NewView()
 	inNew := make(map[int]bool)
-	chunks := genChunks(t, 100, 1000)
+	chnks := genChunks(t, 100, 1000)
 
-	putChunks(t, ctx, chunks, oldGen, inOld, 0, 1, 2, 3, 4)
+	putChunks(t, ctx, chnks, oldGen, inOld, 0, 1, 2, 3, 4)
 
 	cs := NewGenerationalCS(oldGen, newGen)
-	requireChunks(t, ctx, chunks, cs, inOld, inNew)
+	requireChunks(t, ctx, chnks, cs, inOld, inNew)
 
-	putChunks(t, ctx, chunks, cs, inNew, 6, 7, 8, 9)
-	requireChunks(t, ctx, chunks, cs, inOld, inNew)
+	putChunks(t, ctx, chnks, cs, inNew, 6, 7, 8, 9)
+	requireChunks(t, ctx, chnks, cs, inOld, inNew)
 
-	err := cs.copyToOldGen(ctx, hashesForChunks(chunks, inNew))
+	err := cs.copyToOldGen(ctx, hashesForChunks(chnks, inNew))
 	require.NoError(t, err)
 
 	inOld = mergeMaps(inOld, inNew)
-	requireChunks(t, ctx, chunks, cs, inOld, inNew)
+	requireChunks(t, ctx, chnks, cs, inOld, inNew)
 
-	putChunks(t, ctx, chunks, cs, inNew, 10, 11, 12, 13, 14)
-	requireChunks(t, ctx, chunks, cs, inOld, inNew)
+	putChunks(t, ctx, chnks, cs, inNew, 10, 11, 12, 13, 14)
+	requireChunks(t, ctx, chnks, cs, inOld, inNew)
 
-	err = cs.copyToOldGen(ctx, hashesForChunks(chunks, inNew))
+	err = cs.copyToOldGen(ctx, hashesForChunks(chnks, inNew))
 	require.NoError(t, err)
 
 	inOld = mergeMaps(inOld, inNew)
-	requireChunks(t, ctx, chunks, cs, inOld, inNew)
+	requireChunks(t, ctx, chnks, cs, inOld, inNew)
 
-	putChunks(t, ctx, chunks, cs, inNew, 15, 16, 17, 18, 19)
-	requireChunks(t, ctx, chunks, cs, inOld, inNew)
-
-	last, err := cs.newGen.Root(ctx)
-	require.NoError(t, err)
-	keepChunks := make(chan []hash.Hash)
-	close(keepChunks)
-	err = cs.MarkAndSweepChunks(ctx, last, keepChunks)
-	require.NoError(t, err)
-
-	inNew = make(map[int]bool)
-	requireChunks(t, ctx, chunks, cs, inOld, inNew)
+	putChunks(t, ctx, chnks, cs, inNew, 15, 16, 17, 18, 19)
+	requireChunks(t, ctx, chnks, cs, inOld, inNew)
 }
