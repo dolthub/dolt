@@ -332,6 +332,7 @@ SELECT DOLT_MERGE('--abort');
 insert into one_pk values (9,9,9);
 commit;
 SQL
+    echo $output
     [ $status -eq 0 ]
 
     # We can see the latest inserted row back on the command line
@@ -548,7 +549,8 @@ SELECT COUNT(*) FROM dolt_conflicts where num_conflicts > 0;
 rollback;
 SQL
     [ $status -eq 0 ]
-    [[ $output =~ "merge has unresolved conflicts. please use the dolt_conflicts table to resolve" ]] || false
+    [[ "$output" =~ "| DOLT_MERGE('feature-branch') |" ]] || false
+    [[ "$output" =~ "| 0                            |" ]] || false # conflict should return 0
     [[ "$output" =~ "| COUNT(*) |" ]] || false
     [[ "$output" =~ "| 1        |" ]] || false
 }

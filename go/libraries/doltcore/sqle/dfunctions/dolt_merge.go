@@ -60,7 +60,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	apr, err := ap.Parse(args)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
@@ -88,7 +88,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 		err := sess.SetWorkingSet(ctx, dbName, ws, nil)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 
 		return "Merge aborted", nil
@@ -96,7 +96,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	ddb, ok := sess.GetDoltDB(dbName)
 	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+		return 1, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	if hasConflicts, err := roots.Working.HasConflicts(ctx); err != nil {
@@ -117,36 +117,36 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	err = checkForUncommittedChanges(roots.Working, roots.Head)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	branchName := apr.Arg(0)
 	mergeCommit, cmh, err := getBranchCommit(ctx, branchName, ddb)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	headCommit, err := sess.GetHeadCommit(ctx, dbName)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	canFF, err := headCommit.CanFastForwardTo(ctx, mergeCommit)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	if canFF {
 		headRoot, err := headCommit.GetRootValue()
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 		mergeRoot, err := mergeCommit.GetRootValue()
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, headRoot, mergeRoot); err != nil {
-			return nil, err
+			return 1, err
 		} else if !cvPossible {
 			if apr.Contains(cli.NoFFParam) {
 				ws, err = executeNoFFMerge(ctx, sess, apr, dbName, ws, dbData, headCommit, mergeCommit)
@@ -155,10 +155,11 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 					// error message
 					wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
 					if wsErr != nil {
-						return nil, wsErr
+						return 0, wsErr
 					}
 
-					return err.Error(), nil
+					// Return 0 indicating there are conflicts
+					return 0, nil
 				}
 			} else {
 				err = executeFFMerge(ctx, sess, apr.Contains(cli.SquashParam), dbName, ws, dbData, mergeCommit)
@@ -167,7 +168,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			if err != nil {
 				return nil, err
 			}
-			return cmh.String(), err
+			return 1, err
 		}
 	}
 
@@ -177,22 +178,22 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		// error message
 		wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
 		if wsErr != nil {
-			return nil, wsErr
+			return 0, wsErr
 		}
 
-		return err.Error(), nil
+		return 0, nil
 	} else if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	hch, err := headCommit.HashOf()
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	returnMsg := fmt.Sprintf("Updating %s..%s", hch.String(), cmh.String())
