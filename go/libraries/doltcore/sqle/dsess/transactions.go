@@ -91,16 +91,6 @@ func (tx DoltTransaction) String() string {
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
 	// logrus.Errorf("Committing working root %s", workingSet.WorkingRoot().DebugString(ctx, true))
 
-	// Don't allow a root value with conflicts to be committed. Later we may open this up via configuration
-	hasConflicts, err := workingSet.WorkingRoot().HasConflicts(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if hasConflicts {
-		return nil, doltdb.ErrUnresolvedConflicts
-	}
-
 	for i := 0; i < maxTxCommitRetries; i++ {
 		newWorkingSet := false
 
