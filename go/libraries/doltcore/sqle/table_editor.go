@@ -57,7 +57,10 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	sess := t.db.TableEditSession(ctx, t.IsTemporary())
+	sess, err := t.db.TableEditSession(ctx, t.IsTemporary())
+	if err != nil {
+		return nil, err
+	}
 
 	tableEditor, err := sess.GetTableEditor(ctx, t.tableName, t.sch)
 	if err != nil {
@@ -65,7 +68,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 	}
 
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	ait, _ := doltSession.GetDoltDbAutoIncrementTracker(t.db.Name())
+	ait, _ := doltSession.GetDoltDbAutoIncrementTracker(ctx, t.db.Name())
 
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{

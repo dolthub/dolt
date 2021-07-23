@@ -63,7 +63,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	dbName := ctx.GetCurrentDatabase()
-	ddb, ok := dsess.DSessFromSess(ctx.Session).GetDoltDB(dbName)
+	ddb, ok := dsess.DSessFromSess(ctx.Session).GetDoltDB(ctx, dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}

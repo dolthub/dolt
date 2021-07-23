@@ -60,8 +60,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-
-	roots, ok := dSess.GetRoots(dbName)
+	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
@@ -178,7 +177,11 @@ func CommitToDolt(
 	// repo state writer, so we're never persisting the new working set to disk like in a command line context.
 	// TODO: fix this mess
 
-	ws := dSess.WorkingSet(ctx, dbName)
+	ws, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
 	// StartTransaction sets the working set for the session, and we want the one we previous had, not the one on disk
 	// Updating the working set like this also updates the head commit and root info for the session
 	tx, err := dSess.StartTransaction(ctx, dbName)
@@ -186,6 +189,10 @@ func CommitToDolt(
 		return nil, err
 	}
 
+	ws, err = dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
 	err = dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
 	if err != nil {
 		return nil, err

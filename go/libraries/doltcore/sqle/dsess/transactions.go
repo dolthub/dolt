@@ -32,6 +32,29 @@ const (
 	maxTxCommitRetries = 5
 )
 
+func TransactionsDisabled(ctx *sql.Context) bool {
+	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
+	if err != nil {
+		panic(err)
+	}
+
+	switch enabled.(int8) {
+	case 0:
+		return false
+	case 1:
+		return true
+	default:
+		panic(fmt.Sprintf("Unexpected value %v", enabled))
+	}
+}
+
+// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
+type DisabledTransaction struct{}
+
+func (d DisabledTransaction) String() string {
+	return "Disabled transaction"
+}
+
 type DoltTransaction struct {
 	startState    *doltdb.WorkingSet
 	workingSetRef ref.WorkingSetRef

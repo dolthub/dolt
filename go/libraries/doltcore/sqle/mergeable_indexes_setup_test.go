@@ -100,7 +100,9 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	engine.AddDatabase(mergeableDb)
 
 	// Get an updated root to use for the rest of the test
-	root, _ = dsess.DSessFromSess(sqlCtx.Session).GetRoot(mergeableDb.Name())
+	ctx := sql.NewEmptyContext()
+	roots, ok := dsess.DSessFromSess(sqlCtx.Session).GetRoots(ctx, mergeableDb.Name())
+	require.True(t, ok)
 
 	return engine, dEnv, mergeableDb, []*indexTuple{
 		idxv1ToTuple,
@@ -109,7 +111,7 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 			nbf:  idxv2v1RowData.Format(),
 			cols: idxv2v1Cols[:len(idxv2v1Cols)-1],
 		},
-	}, root
+	}, roots.Working
 }
 
 // Database made to test mergeable indexes while using the full SQL engine.
