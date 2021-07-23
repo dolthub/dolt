@@ -160,6 +160,8 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 						return 0, wsErr
 					}
 
+					ctx.Warn(DoltConflictWarningCode, err.Error())
+
 					// Return 0 indicating there are conflicts
 					return 0, nil
 				}
