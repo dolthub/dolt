@@ -37,6 +37,8 @@ type DoltMergeFunc struct {
 	expression.NaryExpression
 }
 
+const DoltConflictWarningCode int = 0001
+
 func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
 
@@ -180,6 +182,8 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		if wsErr != nil {
 			return 0, wsErr
 		}
+
+		ctx.Warn(DoltConflictWarningCode, err.Error())
 
 		return 0, nil
 	} else if err != nil {
