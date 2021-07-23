@@ -37,7 +37,7 @@ type DoltMergeFunc struct {
 	expression.NaryExpression
 }
 
-const DoltConflictWarningCode int = 0001
+const DoltConflictWarningCode int = 1105 //
 
 func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
