@@ -613,7 +613,7 @@ func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (interf
 		return nil, sql.ErrNoAutoIncrementCol
 	}
 
-	return t.getTableAutoIncrementValue(ctx)
+	return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
 // GetNextAutoIncrementValue implements sql.AutoIncrementTable
@@ -627,19 +627,12 @@ func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentia
 		return nil, err
 	}
 
-	tableVal, err := t.getTableAutoIncrementValue(ctx)
+	tableVal, err := t.DoltTable.GetAutoIncrementValue(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return ed.aiTracker.Next(t.tableName, potentialVal, tableVal)
-}
-
-func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	if t.ed != nil {
-		return t.ed.GetAutoIncrementValue(ctx)
-	}
-	return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
 func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {

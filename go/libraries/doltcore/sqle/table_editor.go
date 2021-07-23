@@ -145,20 +145,6 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
 }
 
-func (te *sqlTableEditor) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	t, err := te.tableEditor.Table(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	val, err := t.GetAutoIncrementValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return te.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
-}
-
 func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
 	nomsVal, err := te.autoIncCol.TypeInfo.ConvertValueToNomsValue(ctx, te.vrw, val)
 	if err != nil {
