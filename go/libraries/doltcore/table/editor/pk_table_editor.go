@@ -293,6 +293,16 @@ func GetIndexedRowKVPs(ctx context.Context, te TableEditor, key types.Tuple, ind
 		return nil, err
 	}
 
+	lookupTags := make(map[uint64]int)
+	for i, tag := range te.Schema().GetPKCols().Tags {
+		lookupTags[tag] = i
+	}
+
+	// handle keyless case, where no columns are pk's and rowIdTag is the only lookup tag
+	if len(lookupTags) == 0 {
+		lookupTags[schema.KeylessRowIdTag] = 0
+	}
+
 	var rowKVPS [][2]types.Tuple
 	for {
 		k, err := indexIter.ReadKey(ctx)
@@ -303,35 +313,66 @@ func GetIndexedRowKVPs(ctx context.Context, te TableEditor, key types.Tuple, ind
 			return nil, err
 		}
 
-		indexRowTaggedValues, err := row.ParseTaggedValues(k)
+		pkTupleVal, err := indexKeyToTableKey(tbl.Format(), k, lookupTags)
 		if err != nil {
 			return nil, err
 		}
 
-		pkTuple := indexRowTaggedValues.NomsTupleForPKCols(te.Format(), te.Schema().GetPKCols())
-		pkTupleVal, err := pkTuple.Value(ctx)
+		fieldsVal, ok, err := rowData.MaybeGetTuple(ctx, pkTupleVal)
 		if err != nil {
 			return nil, err
 		}
-
-		fieldsVal, _, err := rowData.MaybeGet(ctx, pkTupleVal)
-		if err != nil {
-			return nil, err
+		if !ok {
+			return nil, nil
 		}
 
-		if fieldsVal == nil {
-			keyStr, err := formatKey(ctx, key)
-			if err != nil {
-				return nil, err
-			}
-			return nil, fmt.Errorf("index key `%s` does not have a corresponding entry in table", keyStr)
-		}
-
-		rowKVPS = append(rowKVPS, [2]types.Tuple{pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple)})
+		rowKVPS = append(rowKVPS, [2]types.Tuple{pkTupleVal, fieldsVal})
 	}
 
 	return rowKVPS, nil
 
+}
+
+func indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple, lookupTags map[uint64]int) (types.Tuple, error) {
+	tplItr, err := indexKey.Iterator()
+
+	if err != nil {
+		return types.Tuple{}, err
+	}
+
+	resVals := make([]types.Value, len(lookupTags)*2)
+	for {
+		_, tag, err := tplItr.NextUint64()
+
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			return types.Tuple{}, err
+		}
+
+		idx, inKey := lookupTags[tag]
+
+		if inKey {
+			_, valVal, err := tplItr.Next()
+
+			if err != nil {
+				return types.Tuple{}, err
+			}
+
+			resVals[idx*2] = types.Uint(tag)
+			resVals[idx*2+1] = valVal
+		} else {
+			err := tplItr.Skip()
+
+			if err != nil {
+				return types.Tuple{}, err
+			}
+		}
+	}
+
+	return types.NewTuple(nbf, resVals...)
 }
 
 // GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
