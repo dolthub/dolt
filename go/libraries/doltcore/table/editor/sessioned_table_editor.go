@@ -39,7 +39,7 @@ type sessionedTableEditor struct {
 
 var _ TableEditor = &sessionedTableEditor{}
 
-func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
+func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
@@ -49,21 +49,21 @@ func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val type
 	}
 
 	ti := ste.tableEditor
-	return ti.InsertKeyVal(ctx, key, val, dRow, tagToVal, errFunc)
+	return ti.InsertKeyVal(ctx, key, val, tagToVal, errFunc)
 }
 
-func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key, value types.Tuple, tagToVal map[uint64]types.Value) error {
+func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
 	if !ste.tableEditSession.Props.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
-		err := ste.onDeleteHandleRowsReferencingValues(ctx, key, value, tagToVal)
+		err := ste.onDeleteHandleRowsReferencingValues(ctx, key,tagToVal)
 		if err != nil {
 			return err
 		}
 	}
 
-	return ste.tableEditor.DeleteByKey(ctx, key, value, tagToVal)
+	return ste.tableEditor.DeleteByKey(ctx, key, tagToVal)
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
@@ -186,16 +186,16 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	//
+	//value, err := dRow.NomsMapValue(ste.tableEditor.Schema()).Value(ctx)
+	//if err != nil {
+	//	return err
+	//}
 
-	value, err := dRow.NomsMapValue(ste.tableEditor.Schema()).Value(ctx)
-	if err != nil {
-		return err
-	}
-
-	return ste.onDeleteHandleRowsReferencingValues(ctx, key.(types.Tuple), value.(types.Tuple), dRowTaggedVals)
+	return ste.onDeleteHandleRowsReferencingValues(ctx, key.(types.Tuple), dRowTaggedVals)
 }
 
-func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context.Context, key, value types.Tuple, dRowTaggedVals row.TaggedValues) error {
+func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context.Context, key types.Tuple, dRowTaggedVals row.TaggedValues) error {
 	//TODO: all self referential logic assumes non-composite keys
 	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
 		return nil
@@ -251,7 +251,7 @@ func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context
 					return err
 				}
 
-				err = referencingSte.DeleteByKey(ctx, kvpToDelete[0], kvpToDelete[1], taggedVals)
+				err = referencingSte.DeleteByKey(ctx, kvpToDelete[0], taggedVals)
 				if err != nil {
 					return err
 				}

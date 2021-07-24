@@ -530,7 +530,7 @@ func applyPkChange(ctx context.Context, sch schema.Schema, tableEditor editor.Ta
 			return err
 		}
 
-		err = tableEditor.DeleteByKey(ctx, key, value, tv)
+		err = tableEditor.DeleteByKey(ctx, key, tv)
 		if err != nil {
 			return err
 		}
@@ -624,7 +624,7 @@ func applyKeylessChange(ctx context.Context, sch schema.Schema, tableEditor edit
 				return err
 			}
 
-			err = tableEditor.DeleteByKey(ctx, key, value, tv)
+			err = tableEditor.DeleteByKey(ctx, key, tv)
 			if err != nil {
 				return err
 			}

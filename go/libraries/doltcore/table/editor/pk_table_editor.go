@@ -49,8 +49,8 @@ func init() {
 type PKDuplicateErrFunc func(keyString, indexName string, k, v types.Tuple, isPk bool) error
 
 type TableEditor interface {
-	InsertKeyVal(ctx context.Context, key, val types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
-	DeleteByKey(ctx context.Context, key, value types.Tuple, tagToVal map[uint64]types.Value) error
+	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
+	DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) error
 
 	InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateErrFunc) error
 	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
@@ -418,7 +418,7 @@ func (te *pkTableEditor) keyErrForKVP(ctx context.Context, indexName string, kvp
 }
 
 // InsertKeyVal adds the given tuples to the table.
-func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, dRow row.Row, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) (retErr error) {
+func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) (retErr error) {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -458,11 +458,11 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(indexEd.Index())
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
 		if err != nil {
 			return err
 		}
-		err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
+		err = indexEd.InsertRow(ctx, fullKey, partialKey, types.EmptyTuple(te.nbf))
 		if uke, ok := err.(*uniqueKeyErr); ok {
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {
@@ -545,10 +545,10 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 	if err != nil {
 		return err
 	}
-	return te.InsertKeyVal(ctx, key.(types.Tuple), val.(types.Tuple), dRow, tagToVal, errFunc)
+	return te.InsertKeyVal(ctx, key.(types.Tuple), val.(types.Tuple), tagToVal, errFunc)
 }
 
-func (te *pkTableEditor) DeleteByKey(ctx context.Context, key, value types.Tuple, tagToVal map[uint64]types.Value) (retErr error) {
+func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) (retErr error) {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -570,12 +570,11 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key, value types.Tuple
 	}()
 
 	for i, indexEd := range te.indexEds {
-		//fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(indexEd.Index())
 		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
 		if err != nil {
 			return err
 		}
-		err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
+		err = indexEd.DeleteRow(ctx, fullKey, partialKey, types.EmptyTuple(te.nbf))
 		if err != nil {
 			return err
 		}
@@ -602,7 +601,7 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 		return err
 	}
 
-	return te.DeleteByKey(ctx, key, types.EmptyTuple(key.Format()), tv)
+	return te.DeleteByKey(ctx, key, tv)
 }
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.
