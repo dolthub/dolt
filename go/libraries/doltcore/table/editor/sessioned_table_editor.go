@@ -57,7 +57,7 @@ func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tupl
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
 	if !ste.tableEditSession.Props.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
-		err := ste.onDeleteHandleRowsReferencingValues(ctx, key,tagToVal)
+		err := ste.onDeleteHandleRowsReferencingValues(ctx, key, tagToVal)
 		if err != nil {
 			return err
 		}
