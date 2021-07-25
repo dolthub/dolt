@@ -551,11 +551,9 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "| DOLT_MERGE('feature-branch') |" ]] || false
     [[ "$output" =~ "| 0                            |" ]] || false # conflict should return 0
-    [[ "$output" =~ "| Warning | 1    | merge has unresolved conflicts. please use the dolt_conflicts table to resolve |" ]] || false
+    [[ "$output" =~ "| Warning | 1105 | merge has unresolved conflicts. please use the dolt_conflicts table to resolve |" ]] || false
     [[ "$output" =~ "| COUNT(*) |" ]] || false
     [[ "$output" =~ "| 1        |" ]] || false
-
-    # TODO: Add check for warning
 }
 
 
