@@ -71,7 +71,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		}
 
 		err = os.Mkdir(oldgenPath, os.ModePerm)
-		if err != nil {
+		if err != nil && !errors.Is(err, os.ErrExist) {
 			return nil, err
 		}
 	}
