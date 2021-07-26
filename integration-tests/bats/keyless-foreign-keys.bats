@@ -25,7 +25,7 @@ teardown() {
     teardown_common
 }
 
-@test keyless-foreign-keys: test foreign-key on commit checks" {
+@test "keyless-foreign-keys: test foreign-key on commit checks" {
     dolt reset --hard
     dolt sql <<SQL
       CREATE TABLE colors (
@@ -72,7 +72,7 @@ SQL
     dolt commit -m 'update 1'
 }
 
-@test keyless-foreign-keys: test multi-field foreign-key on commit checks" {
+@test "keyless-foreign-keys: test multi-field foreign-key on commit checks" {
     dolt reset --hard
     dolt sql <<SQL
       CREATE TABLE colors (
@@ -131,7 +131,7 @@ SQL
     dolt commit -m 'update 1'
 }
 
-@test keyless-foreign-keys: test foreign-key on commit errors" {
+@test "keyless-foreign-keys: test foreign-key on commit errors" {
     skip "keyless fk todo"
     dolt reset --hard
     dolt sql <<SQL
@@ -217,7 +217,7 @@ SQL
     dolt reset --hard
 }
 
-@test keyless-foreign-keys: ALTER TABLE Single Named FOREIGN KEY" {
+@test "keyless-foreign-keys: ALTER TABLE Single Named FOREIGN KEY" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);
 SQL
@@ -226,7 +226,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
 }
 
-@test keyless-foreign-keys: CREATE TABLE Single Named FOREIGN KEY" {
+@test "keyless-foreign-keys: CREATE TABLE Single Named FOREIGN KEY" {
     dolt sql <<SQL
 CREATE TABLE sibling (
   id int,
@@ -241,7 +241,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
 }
 
-@test keyless-foreign-keys: parent table index required" {
+@test "keyless-foreign-keys: parent table index required" {
     # parent doesn't have an index over (v1,v2) to reference
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1,v2) REFERENCES parent(v1,v2);"
     [ "$status" -ne "0" ]
@@ -251,7 +251,7 @@ SQL
     [ ! "$status" -eq "0" ]
 }
 
-@test keyless-foreign-keys: CREATE TABLE Name Collision" {
+@test "keyless-foreign-keys: CREATE TABLE Name Collision" {
     run dolt sql <<SQL
 CREATE TABLE child (
   id INT,
@@ -268,7 +268,7 @@ SQL
     [[ "$output" =~ "already exists" ]] || false
 }
 
-@test keyless-foreign-keys: CREATE TABLE Type Mismatch" {
+@test "keyless-foreign-keys: CREATE TABLE Type Mismatch" {
     run dolt sql <<SQL
 CREATE TABLE sibling (
   pk int primary key,
@@ -280,7 +280,7 @@ SQL
     [[ "$output" =~ "column type mismatch" ]] || false
 }
 
-@test keyless-foreign-keys: CREATE TABLE Key Count Mismatch" {
+@test "keyless-foreign-keys: CREATE TABLE Key Count Mismatch" {
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1,v2);"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "number of columns" ]] || false
@@ -290,7 +290,7 @@ SQL
     [[ "$output" =~ "number of columns" ]] || false
 }
 
-@test keyless-foreign-keys: SET DEFAULT not supported" {
+@test "keyless-foreign-keys: SET DEFAULT not supported" {
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET DEFAULT"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "\"SET DEFAULT\" is not supported" ]] || false
@@ -304,7 +304,7 @@ SQL
     [[ "$output" =~ "\"SET DEFAULT\" is not supported" ]] || false
 }
 
-@test keyless-foreign-keys: CREATE TABLE Disallow TEXT/BLOB" {
+@test "keyless-foreign-keys: CREATE TABLE Disallow TEXT/BLOB" {
     dolt sql <<SQL
 CREATE TABLE parent1 (
   id INT,
@@ -423,13 +423,13 @@ SQL
     [[ "$output" =~ "not valid type" ]] || false
 }
 
-@test keyless-foreign-keys: CREATE TABLE Non-existent Table" {
+@test "keyless-foreign-keys: CREATE TABLE Non-existent Table" {
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES father(v1)"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table not found" ]] || false
 }
 
-@test keyless-foreign-keys: CREATE TABLE Non-existent Columns" {
+@test "keyless-foreign-keys: CREATE TABLE Non-existent Columns" {
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (random) REFERENCES parent(v1)"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "does not have column" ]] || false
@@ -439,7 +439,7 @@ SQL
     [[ "$output" =~ "does not have column" ]] || false
 }
 
-@test keyless-foreign-keys: CREATE TABLE SET NULL on non-nullable column" {
+@test "keyless-foreign-keys: CREATE TABLE SET NULL on non-nullable column" {
     dolt sql -q "ALTER TABLE child MODIFY v1 int NOT NULL"
 
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET NULL"
@@ -458,14 +458,14 @@ SQL
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test keyless-foreign-keys: ALTER TABLE Foreign Key Name Collision" {
+@test "keyless-foreign-keys: ALTER TABLE Foreign Key Name Collision" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);"
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "already exists" ]] || false
 }
 
-@test keyless-foreign-keys: ALTER TABLE DROP FOREIGN KEY" {
+@test "keyless-foreign-keys: ALTER TABLE DROP FOREIGN KEY" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     run dolt index ls parent
     [ "$status" -eq "0" ]
@@ -492,7 +492,7 @@ SQL
     [ "$status" -eq "1" ]
 }
 
-@test keyless-foreign-keys: ALTER TABLE SET NULL on non-nullable column" {
+@test "keyless-foreign-keys: ALTER TABLE SET NULL on non-nullable column" {
     dolt sql -q 'ALTER TABLE child MODIFY COLUMN v1 int NOT NULL'
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET NULL"
     [ "$status" -eq "1" ]
@@ -510,7 +510,8 @@ SQL
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test keyless-foreign-keys: ADD FOREIGN KEY fails on existing table when data would cause violation" {
+@test "keyless-foreign-keys: ADD FOREIGN KEY fails on existing table when data would cause violation" {
+    skip "keyless fk todo"
     dolt sql <<SQL
 INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2);
 INSERT INTO child  VALUES (1, 1, 1), (2, 3, 2);
@@ -521,7 +522,7 @@ SQL
     [[ "$output" =~ "fk_name" ]] || false
 }
 
-@test keyless-foreign-keys: RENAME TABLE" {
+@test "keyless-foreign-keys: RENAME TABLE" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     dolt sql -q "RENAME TABLE parent TO new_parent;"
     run dolt schema show child
@@ -533,7 +534,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `new_parent` (`v1`)' ]] || false
 }
 
-@test keyless-foreign-keys: dolt table mv" {
+@test "keyless-foreign-keys: dolt table mv" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     dolt table mv parent new_parent
     run dolt schema show child
@@ -545,7 +546,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `new_parent` (`v1`)' ]] || false
 }
 
-@test keyless-foreign-keys: DROP TABLE" {
+@test "keyless-foreign-keys: DROP TABLE" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     dolt index ls parent
     run dolt index ls parent
@@ -567,7 +568,7 @@ SQL
     dolt sql -q "DROP TABLE parent"
 }
 
-@test keyless-foreign-keys: dolt table rm" {
+@test "keyless-foreign-keys: dolt table rm" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     run dolt index ls parent
     [ "$status" -eq "0" ]
@@ -588,7 +589,7 @@ SQL
     dolt table rm parent
 }
 
-@test keyless-foreign-keys: indexes used by foreign keys can't be dropped" {
+@test "keyless-foreign-keys: indexes used by foreign keys can't be dropped" {
     dolt sql <<SQL
 ALTER TABLE child ADD INDEX v1 (v1);
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);
@@ -608,7 +609,7 @@ SQL
     [ "$status" -eq "0" ]
 }
 
-@test keyless-foreign-keys: dolt table cp" {
+@test "keyless-foreign-keys: dolt table cp" {
     dolt sql <<SQL
 CREATE TABLE one (
   id BIGINT,
@@ -635,7 +636,7 @@ SQL
     [[ "$output" =~ "FOREIGN KEY" ]] || false
 }
 
-@test keyless-foreign-keys: ALTER TABLE RENAME COLUMN" {
+@test "keyless-foreign-keys: ALTER TABLE RENAME COLUMN" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);
 ALTER TABLE parent RENAME COLUMN v1 TO v1_new;
@@ -647,7 +648,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk1` FOREIGN KEY (`v1_new`) REFERENCES `parent` (`v1_new`)' ]] || false
 }
 
-@test keyless-foreign-keys: ALTER TABLE MODIFY COLUMN type change not allowed" {
+@test "keyless-foreign-keys: ALTER TABLE MODIFY COLUMN type change not allowed" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);
 SQL
@@ -660,7 +661,7 @@ SQL
     [[ "$output" =~ "type" ]] || false
 }
 
-@test keyless-foreign-keys: DROP COLUMN" {
+@test "keyless-foreign-keys: DROP COLUMN" {
     skip "keyless fk todo"
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     dolt add -A
@@ -679,7 +680,7 @@ SQL
     dolt sql -q "ALTER TABLE child DROP COLUMN v1"
 }
 
-@test keyless-foreign-keys: Disallow change column type when SET NULL" {
+@test "keyless-foreign-keys: Disallow change column type when SET NULL" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET NULL ON UPDATE SET NULL"
     run dolt sql -q "ALTER TABLE child CHANGE COLUMN parent_extra parent_extra BIGINT"
     [ "$status" -eq "1" ]
@@ -690,7 +691,7 @@ SQL
     [[ "$output" =~ "parent_extra" ]] || false
 }
 
-@test keyless-foreign-keys: SQL CASCADE" {
+@test "keyless-foreign-keys: SQL CASCADE" {
     dolt sql <<SQL
 CREATE TABLE one (
   pk BIGINT,
@@ -756,7 +757,7 @@ SQL
     [[ "${#lines[@]}" = "3" ]] || false
 }
 
-@test keyless-foreign-keys: SQL SET NULL" {
+@test "keyless-foreign-keys: SQL SET NULL" {
     dolt sql <<SQL
 CREATE TABLE one (
   pk BIGINT,
@@ -805,7 +806,7 @@ SQL
     [[ "${#lines[@]}" = "5" ]] || false
 }
 
-@test keyless-foreign-keys: SQL RESTRICT" {
+@test "keyless-foreign-keys: SQL RESTRICT" {
     dolt sql <<SQL
 CREATE TABLE one (
   pk BIGINT,
@@ -841,7 +842,7 @@ SQL
     [[ "$output" =~ "violation" ]] || false
 }
 
-@test keyless-foreign-keys: SQL no reference options" {
+@test "keyless-foreign-keys: SQL no reference options" {
     dolt sql <<SQL
 CREATE TABLE one (
   pk BIGINT,
@@ -875,7 +876,7 @@ SQL
     [[ "$output" =~ "violation" ]] || false
 }
 
-@test keyless-foreign-keys: SQL INSERT multiple keys violates only one" {
+@test "keyless-foreign-keys: SQL INSERT multiple keys violates only one" {
     dolt sql <<SQL
 CREATE TABLE one (
   pk BIGINT,
@@ -912,7 +913,7 @@ SQL
     dolt sql -q "INSERT INTO two VALUES (4, NULL, NULL)" # sanity check
 }
 
-@test keyless-foreign-keys: dolt table import" {
+@test "keyless-foreign-keys: dolt table import" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -966,7 +967,7 @@ SQL
     [[ "${#lines[@]}" = "3" ]] || false
 }
 
-@test keyless-foreign-keys: Commit all" {
+@test "keyless-foreign-keys: Commit all" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE RESTRICT;
@@ -1019,7 +1020,7 @@ SQL
     ! [[ "$output" =~ "FOREIGN KEY" ]] || false
 }
 
-@test keyless-foreign-keys: Commit then rename parent, child, and columns" {
+@test "keyless-foreign-keys: Commit then rename parent, child, and columns" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1054,7 +1055,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
 }
 
-@test keyless-foreign-keys: Commit then recreate key with different columns" {
+@test "keyless-foreign-keys: Commit then recreate key with different columns" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1088,7 +1089,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
 }
 
-@test keyless-foreign-keys: Commit --force" {
+@test "keyless-foreign-keys: Commit --force" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1108,7 +1109,7 @@ SQL
     dolt commit -m "parent commits just fine without child, child not in working set anymore"
 }
 
-@test keyless-foreign-keys: Commit then delete foreign key" {
+@test "keyless-foreign-keys: Commit then delete foreign key" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1140,7 +1141,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
 }
 
-@test keyless-foreign-keys: Reset staged table" {
+@test "keyless-foreign-keys: Reset staged table" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1154,7 +1155,7 @@ SQL
     [ "$status" -eq "0" ]
 }
 
-@test keyless-foreign-keys: Commit, rename parent, commit only child" {
+@test "keyless-foreign-keys: Commit, rename parent, commit only child" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1174,7 +1175,7 @@ SQL
     dolt commit -m "passes now"
 }
 
-@test keyless-foreign-keys: Add data to two tables and commit only one" {
+@test "keyless-foreign-keys: Add data to two tables and commit only one" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
@@ -1191,7 +1192,7 @@ SQL
     [[ "$output" =~ "Foreign key violation" ]] || false
 }
 
-@test keyless-foreign-keys: Merge valid onto parent" {
+@test "keyless-foreign-keys: Merge valid onto parent" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
@@ -1235,7 +1236,7 @@ SQL
     [[ "${#lines[@]}" = "4" ]] || false
 }
 
-@test keyless-foreign-keys: Merge invalid onto parent" {
+@test "keyless-foreign-keys: Merge invalid onto parent" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1268,7 +1269,7 @@ SQL
     [[ "$output" =~ "child,1" ]] || false
 }
 
-@test keyless-foreign-keys: Merge valid onto child" {
+@test "keyless-foreign-keys: Merge valid onto child" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
@@ -1312,7 +1313,7 @@ SQL
     [[ "${#lines[@]}" = "4" ]] || false
 }
 
-@test keyless-foreign-keys: Merge invalid onto child" {
+@test "keyless-foreign-keys: Merge invalid onto child" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1345,7 +1346,7 @@ SQL
     [[ "$output" =~ "child,1" ]] || false
 }
 
-@test keyless-foreign-keys: Merge valid onto parent and child" {
+@test "keyless-foreign-keys: Merge valid onto parent and child" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
@@ -1391,7 +1392,7 @@ SQL
     [[ "${#lines[@]}" = "4" ]] || false
 }
 
-@test keyless-foreign-keys: Merge invalid onto parent and child" {
+@test "keyless-foreign-keys: Merge invalid onto parent and child" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1425,7 +1426,7 @@ SQL
     [[ "$output" =~ "child,1" ]] || false
 }
 
-@test keyless-foreign-keys: Resolve catches violations" {
+@test "keyless-foreign-keys: Resolve catches violations" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
@@ -1458,7 +1459,7 @@ SQL
     [[ "$output" =~ "violation" ]] || false
 }
 
-@test keyless-foreign-keys: FKs move with the working set on checkout" {
+@test "keyless-foreign-keys: FKs move with the working set on checkout" {
     dolt add . && dolt commit -m "added parent and child tables"
     dolt branch other
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
@@ -1472,7 +1473,7 @@ SQL
     [[ "$output" =~ "fk_v1" ]] || false
 }
 
-@test keyless-foreign-keys: extended names supported" {
+@test "keyless-foreign-keys: extended names supported" {
     dolt sql <<SQL
 CREATE TABLE parent2 (
   pk BIGINT,
@@ -1495,7 +1496,7 @@ SQL
     [[ "$output" =~ '`$not-possible-before_`' ]] || false
 }
 
-@test keyless-foreign-keys: self-referential same column(s)" {
+@test "keyless-foreign-keys: self-referential same column(s)" {
     dolt sql <<SQL
 CREATE INDEX v1v2 ON parent(v1, v2);
 SQL
@@ -1507,7 +1508,7 @@ SQL
     [[ "$output" =~ "self referential" ]] || false
 }
 
-@test keyless-foreign-keys: self-referential child column follows parent RESTRICT" {
+@test "keyless-foreign-keys: self-referential child column follows parent RESTRICT" {
     skip "keyless fk todo"
     # default reference option is RESTRICT
     dolt sql <<SQL
@@ -1535,7 +1536,7 @@ SQL
     [[ "$output" =~ "violation" ]] || false
 }
 
-@test keyless-foreign-keys: self-referential child column follows parent CASCADE" {
+@test "keyless-foreign-keys: self-referential child column follows parent CASCADE" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v2) REFERENCES parent(v1) ON UPDATE CASCADE ON DELETE CASCADE;
@@ -1592,7 +1593,7 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
 }
 
-@test keyless-foreign-keys: self-referential child column follows parent SET NULL" {
+@test "keyless-foreign-keys: self-referential child column follows parent SET NULL" {
     skip "keyless fk todo"
     dolt sql <<SQL
 ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v2) REFERENCES parent(v1) ON UPDATE SET NULL ON DELETE SET NULL;
@@ -1649,7 +1650,7 @@ SQL
     [[ "$output" =~ '{"rows": [{"id":2,"v1":2}]}' ]] || false
 }
 
-@test keyless-foreign-keys: self referential foreign keys do not break committing" {
+@test "keyless-foreign-keys: self referential foreign keys do not break committing" {
     skip "keyless fk todo"
     dolt sql <<SQL
 CREATE TABLE test (id char(32) NOT NULL);
@@ -1661,7 +1662,7 @@ SQL
     dolt commit -m "committed"
 }
 
-@test keyless-foreign-keys: deleting and readding" {
+@test "keyless-foreign-keys: deleting and readding" {
     dolt sql <<SQL
 CREATE TABLE parent2 (
   pk BIGINT,
@@ -1691,7 +1692,7 @@ SQL
     [[ "$output" =~ 'child2_fk' ]] || false
 }
 
-@test keyless-foreign-keys: child violation correctly detected" {
+@test "keyless-foreign-keys: child violation correctly detected" {
     dolt sql <<SQL
 CREATE TABLE colors (
     id INT NOT NULL,
@@ -1730,7 +1731,7 @@ SQL
     [[ $output =~ '4' ]] || false
 }
 
-@test keyless-foreign-keys: insert ignore into works correctly w/ FK violations" {
+@test "keyless-foreign-keys: insert ignore into works correctly w/ FK violations" {
     dolt sql <<SQL
 CREATE TABLE colors (
     id INT NOT NULL,
@@ -1774,7 +1775,7 @@ SQL
     [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `(4011,"yellow")`' ]] || false
 }
 
-@test keyless-foreign-keys: updating to null works as expected in commit" {
+@test "keyless-foreign-keys: updating to null works as expected in commit" {
     dolt sql -q "create table unprocessed_t (id int primary key);"
     dolt sql -q "create table additional_t (id int primary key);"
     dolt sql <<SQL
