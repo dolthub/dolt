@@ -586,11 +586,6 @@ func makeBatches(hss []hash.HashSet, count int) [][]hash.Hash {
 
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
 func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error {
-	collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector)
-
-	if !ok {
-		return chunks.ErrUnsupportedOperation
-	}
 
 	lvs.versOnce.Do(lvs.expectVersion)
 
@@ -611,7 +606,7 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 	}
 
 	newGenRefs.Insert(root)
-	if gcs, ok := collector.(chunks.GenerationalCS); ok {
+	if gcs, ok := lvs.cs.(chunks.GenerationalCS); ok {
 		oldGen := gcs.OldGen()
 		newGen := gcs.NewGen()
 		err = lvs.gc(ctx, root, oldGenRefs, oldGen.HasMany, newGen, oldGen)
@@ -620,12 +615,14 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 		}
 
 		return lvs.gc(ctx, root, newGenRefs, oldGen.HasMany, newGen, newGen)
-	} else {
+	} else if collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector); ok {
 		if len(oldGenRefs) > 0 {
 			newGenRefs.InsertAll(oldGenRefs)
 		}
 
 		return lvs.gc(ctx, root, newGenRefs, unfilteredHashFunc, collector, collector)
+	} else {
+		return chunks.ErrUnsupportedOperation
 	}
 }
 
