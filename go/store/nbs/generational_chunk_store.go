@@ -23,7 +23,6 @@ import (
 )
 
 var _ chunks.ChunkStore = (*GenerationalNBS)(nil)
-var _ chunks.ChunkStoreGarbageCollector = (*GenerationalNBS)(nil)
 var _ chunks.GenerationalCS = (*GenerationalNBS)(nil)
 var _ TableFileStore = (*GenerationalNBS)(nil)
 
@@ -222,10 +221,6 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 	}
 
 	return err
-}
-
-func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
-	panic("don't call directly")
 }
 
 // Sources retrieves the current root hash, a list of all the table files (which may include appendix table files),

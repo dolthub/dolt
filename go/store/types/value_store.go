@@ -35,6 +35,12 @@ import (
 	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
+type HashFilterFunc func(context.Context, hash.HashSet) (hash.HashSet, error)
+
+func unfilteredHashFunc(_ context.Context, hs hash.HashSet) (hash.HashSet, error) {
+	return hs, nil
+}
+
 // ValueReader is an interface that knows how to read Noms Values, e.g.
 // datas/Database. Required to avoid import cycle between this package and the
 // package that implements Value reading.
@@ -563,7 +569,7 @@ func makeBatches(hss []hash.HashSet, count int) [][]hash.Hash {
 		}
 	}
 
-	numBatches := count + (maxBatchSize-1)/maxBatchSize
+	numBatches := (count + (maxBatchSize - 1)) / maxBatchSize
 	batchSize := count / numBatches
 
 	res := make([][]hash.Hash, numBatches)
@@ -608,22 +614,22 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 	if gcs, ok := collector.(chunks.GenerationalCS); ok {
 		oldGen := gcs.OldGen()
 		newGen := gcs.NewGen()
-		err = lvs.gc(ctx, root, oldGenRefs, oldGen, newGen, oldGen)
+		err = lvs.gc(ctx, root, oldGenRefs, oldGen.HasMany, newGen, oldGen)
 		if err != nil {
 			return err
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, oldGen, newGen, newGen)
+		return lvs.gc(ctx, root, newGenRefs, oldGen.HasMany, newGen, newGen)
 	} else {
 		if len(oldGenRefs) > 0 {
 			newGenRefs.InsertAll(oldGenRefs)
 		}
 
-		return lvs.gc(ctx, root, newGenRefs, nil, collector, collector)
+		return lvs.gc(ctx, root, newGenRefs, unfilteredHashFunc, collector, collector)
 	}
 }
 
-func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.HashSet, oldGenCS chunks.ChunkStore, src, dest chunks.ChunkStoreGarbageCollector) error {
+func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.HashSet, hashFilter HashFilterFunc, src, dest chunks.ChunkStoreGarbageCollector) error {
 	keepChunks := make(chan []hash.Hash, gcBuffSize)
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -653,7 +659,7 @@ func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.Hash
 		}()
 
 		visited := toVisit.Copy()
-		return lvs.gcProcessRefs(ctx, visited, []hash.HashSet{toVisit}, keepHashes, walker, oldGenCS, dest)
+		return lvs.gcProcessRefs(ctx, visited, []hash.HashSet{toVisit}, keepHashes, walker, hashFilter)
 	})
 
 	err := eg.Wait()
@@ -670,7 +676,7 @@ func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.Hash
 	return nil
 }
 
-func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, toVisit []hash.HashSet, keepHashes func(hs []hash.Hash) error, walker *parallelRefWalker, oldGen, dest chunks.ChunkStore) error {
+func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, toVisit []hash.HashSet, keepHashes func(hs []hash.Hash) error, walker *parallelRefWalker, hashFilter HashFilterFunc) error {
 	if len(toVisit) != 1 {
 		panic("Must be one initial hashset to visit")
 	}
@@ -698,11 +704,10 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, 
 				return err
 			}
 
-			if oldGen != nil {
-				hashes, err = oldGen.HasMany(ctx, hashes)
-				if err != nil {
-					return err
-				}
+			// continue processing
+			hashes, err = hashFilter(ctx, hashes)
+			if err != nil {
+				return err
 			}
 
 			toVisit[i] = hashes
