@@ -16,6 +16,7 @@ package noms
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -83,12 +84,13 @@ func NewRangeStartingAfter(key types.Tuple, inRangeCheck InRangeCheck) *ReadRang
 
 // NomsRangeReader reads values in one or more ranges from a map
 type NomsRangeReader struct {
-	sch       schema.Schema
-	m         types.Map
-	ranges    []*ReadRange
-	idx       int
-	itr       types.MapIterator
-	currCheck InRangeCheck
+	sch         schema.Schema
+	m           types.Map
+	ranges      []*ReadRange
+	idx         int
+	itr         types.MapIterator
+	currCheck   InRangeCheck
+	cardCounter *CardinalityCounter
 }
 
 // NewNomsRangeReader creates a NomsRangeReader
@@ -100,6 +102,7 @@ func NewNomsRangeReader(sch schema.Schema, m types.Map, ranges []*ReadRange) *No
 		0,
 		nil,
 		nil,
+		NewCardinalityCounter(),
 	}
 }
 
@@ -132,6 +135,15 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 	var k types.Tuple
 	var v types.Tuple
 	for nrr.itr != nil || nrr.idx < len(nrr.ranges) {
+
+		if !nrr.cardCounter.empty() {
+			if nrr.cardCounter.done() {
+				nrr.cardCounter.reset()
+			} else {
+				return nrr.cardCounter.next()
+			}
+		}
+
 		if nrr.itr == nil {
 			r := nrr.ranges[nrr.idx]
 			nrr.idx++
@@ -141,7 +153,6 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			} else {
 				nrr.itr, err = nrr.m.IteratorFrom(ctx, r.Start)
 			}
-
 			if err != nil {
 				return types.Tuple{}, types.Tuple{}, err
 			}
@@ -170,6 +181,12 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			}
 
 			if inRange {
+				if !v.Empty() {
+					nrr.cardCounter.updateWithKV(k, v)
+					if !nrr.cardCounter.empty() && !nrr.cardCounter.done() {
+						return nrr.cardCounter.next()
+					}
+				}
 				return k, v, nil
 			}
 		}
@@ -226,4 +243,83 @@ func SqlRowFromTuples(sch schema.Schema, key, val types.Tuple) (sql.Row, error) 
 	}
 
 	return sql.NewRow(colVals...), nil
+}
+
+type CardinalityCounter struct {
+	key   *types.Tuple
+	value *types.Tuple
+	card  int
+	idx   int
+}
+
+func NewCardinalityCounter() *CardinalityCounter {
+	return &CardinalityCounter{
+		nil,
+		nil,
+		-1,
+		-1,
+	}
+}
+
+func (cc *CardinalityCounter) updateWithKV(k, v types.Tuple) error {
+	if !v.Empty() {
+		cardTagVal, err := v.Get(0)
+		if err != nil {
+			return err
+		}
+		cardTag, ok := cardTagVal.(types.Uint)
+		if !ok {
+			return errors.New("index cardinality invalid tag type")
+		}
+
+		if uint64(cardTag) != schema.KeylessRowCardinalityTag {
+			return errors.New("index cardinality tag invalid")
+		}
+
+		cardVal, err := v.Get(1)
+		if err != nil {
+			return err
+		}
+		card, ok := cardVal.(types.Uint)
+		if !ok {
+			return errors.New("index cardinality value invalid type")
+		}
+		if int(card) > 1 {
+			cc.card = int(card)
+			cc.idx = 0
+			cc.key = &k
+			cc.value = &v
+			return nil
+		} else {
+			cc.card = -1
+			cc.idx = -1
+			cc.key = nil
+			cc.value = nil
+		}
+	}
+	return nil
+}
+
+func (cc *CardinalityCounter) empty() bool {
+	return cc.key == nil || cc.value == nil
+}
+
+func (cc *CardinalityCounter) done() bool {
+	return cc.card < 1 || cc.idx >= cc.card
+}
+
+func (cc *CardinalityCounter) next() (types.Tuple, types.Tuple, error) {
+	if cc.key == nil || cc.value == nil {
+		return types.Tuple{}, types.Tuple{}, errors.New("cannot increment empty cardinality counter")
+	}
+	cc.idx++
+	return *cc.key, *cc.value, nil
+
+}
+
+func (cc *CardinalityCounter) reset() {
+	cc.card = -1
+	cc.idx = -1
+	cc.key = nil
+	cc.value = nil
 }

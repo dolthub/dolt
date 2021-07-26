@@ -162,7 +162,8 @@ func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int
 		}
 
 		tag64 := primReader.ReadUint()
-		if tag64 > maxTag {
+
+		if tag64 > maxTag && tag64 != schema.KeylessRowCardinalityTag && tag64 != schema.KeylessRowIdTag {
 			break
 		}
 

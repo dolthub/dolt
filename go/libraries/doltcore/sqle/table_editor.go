@@ -104,20 +104,16 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 
 		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
 	}
-
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
-
 	if err != nil {
 		return err
 	}
-
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	if !schema.IsKeyless(te.sch) {
 		k, tagToVal, err := sqlutil.DoltKeyAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
-
 		if err != nil {
 			return err
 		}
@@ -128,7 +124,6 @@ func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 		if err != nil {
 			return err
 		}
-
 		return te.tableEditor.DeleteRow(ctx, dRow)
 	}
 }

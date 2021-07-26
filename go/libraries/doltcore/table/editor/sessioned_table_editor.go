@@ -186,6 +186,11 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	//
+	//value, err := dRow.NomsMapValue(ste.tableEditor.Schema()).Value(ctx)
+	//if err != nil {
+	//	return err
+	//}
 
 	return ste.onDeleteHandleRowsReferencingValues(ctx, key.(types.Tuple), dRowTaggedVals)
 }
