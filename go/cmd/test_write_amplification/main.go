@@ -6,6 +6,12 @@ import (
 	"fmt"
 	"sort"
 	"math/rand"
+	"runtime"
+	"sync/atomic"
+	"sync"
+	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -82,7 +88,15 @@ func RunAmplificationTest(ctx context.Context, db *doltdb.DoltDB, rv *doltdb.Roo
 	benchmark_ref(ctx, tm, tdr, db.ValueReadWriter())
 }
 
+const MaxProcs = 32
+
 func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.ValueReadWriter) {
+	numprocs := runtime.GOMAXPROCS(0)
+
+	if numprocs > MaxProcs {
+		panic("error, GOMAXPROCS is greater than MaxProcs. Please increase MaxProcs")
+	}
+
 	originalHashes := newHashset()
 	var ogchunksizes inthist
 	next := get_leaves(ctx, []types.Ref{r}, vrw, originalHashes, &ogchunksizes)
@@ -113,7 +127,9 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 	fmt.Printf(fmtstr, i, len(next))
 	fmt.Printf("\n")
 
-	var numchunks, chunksizes inthist
+	var numchunksa, chunksizesa [MaxProcs]inthist
+	var is [MaxProcs]int64
+	eg, ctx := errgroup.WithContext(ctx)
 
 	w = len(fmt.Sprintf("%d", len(todelete)))
 	fmtstr = fmt.Sprintf("\033[G\033[K %%%dd / %%d", w)
@@ -121,29 +137,86 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 	fmt.Println("key tuples", len(todelete))
 	fmt.Println("running deletes and measuring deltas")
 
-	for i, k := range todelete {
-		nm, err := m.Edit().Remove(k).Map(ctx)
-		if err != nil {
-			panic(err)
+	numtodelete := len(todelete)
+
+	stride := numtodelete / numprocs
+	if stride < 16 {
+		numprocs = 1
+		stride = numtodelete
+	}
+
+	for j := 0; j < numprocs; j++ {
+		ftodelete := todelete
+		if j != numprocs - 1 {
+			ftodelete = todelete[:stride]
+			todelete = todelete[stride:]
 		}
-		var rs []types.Ref
-		nm.WalkRefs(nm.Format(), func(r types.Ref) error {
-			rs = append(rs, r)
+		fi := &is[j]
+		numchunks := &numchunksa[j]
+		chunksizes := &chunksizesa[j]
+
+		eg.Go(func() error {
+			for _, k := range ftodelete {
+				nm, err := m.Edit().Remove(k).Map(ctx)
+				if err != nil {
+					panic(err)
+				}
+				var rs []types.Ref
+				nm.WalkRefs(nm.Format(), func(r types.Ref) error {
+					rs = append(rs, r)
+					return nil
+				})
+				newchunks, newchunksizes := get_delta(ctx, rs, vrw, originalHashes)
+				newchunks += 1
+				newchunksizes += nm.EncodedLen()
+				numchunks.add(newchunks)
+				chunksizes.add(newchunksizes)
+				atomic.AddInt64(fi, 1)
+			}
 			return nil
 		})
-		newchunks, newchunksizes := get_delta(ctx, rs, vrw, originalHashes)
-		newchunks += 1
-		newchunksizes += nm.EncodedLen()
-		numchunks.add(newchunks)
-		chunksizes.add(newchunksizes)
-		fmt.Printf(fmtstr, i, len(todelete))
 	}
-	fmt.Printf(fmtstr, len(todelete), len(todelete))
+
+	geti := func() int {
+		var res int64
+		for j := 0; j < len(is); j++ {
+			res += atomic.LoadInt64(&is[j])
+		}
+		return int(res)
+	}
+
+	quit := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-quit:
+				i := geti()
+				fmt.Printf(fmtstr, i, numtodelete)
+				return
+			case <-time.After(1 * time.Second):
+				i := geti()
+				fmt.Printf(fmtstr, i, numtodelete)
+			}
+		}
+	}()
+
+	eg.Wait()
+	close(quit)
+	wg.Wait()
+
 	fmt.Printf("\n")
 
+	for j := 1; j < numprocs; j++ {
+		numchunksa[0].merge(numchunksa[j])
+		chunksizesa[0].merge(chunksizesa[j])
+	}
+
 	fmt.Printf("og chunk sizes: %s\n", ogchunksizes.String())
-	fmt.Printf("new chunks:     %s\n", numchunks.String())
-	fmt.Printf("bytes written:  %s\n", chunksizes.String())
+	fmt.Printf("new chunks:     %s\n", numchunksa[0].String())
+	fmt.Printf("bytes written:  %s\n", chunksizesa[0].String())
 }
 
 type inthist struct {
@@ -153,6 +226,11 @@ type inthist struct {
 
 func (h *inthist) add(i int) {
 	h.vs = append(h.vs, i)
+	h.sorted = false
+}
+
+func (h *inthist) merge(hp inthist) {
+	h.vs = append(h.vs, hp.vs...)
 	h.sorted = false
 }
 
