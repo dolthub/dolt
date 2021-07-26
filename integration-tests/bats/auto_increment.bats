@@ -557,3 +557,26 @@ SQL
     [[ "${lines[4]}" =~ "5,5" ]] || false
     [[ "${lines[5]}" =~ "6,6" ]] || false
 }
+
+@test "auto_increment: alter table autoincrement on table with no AI key nops" {
+    dolt sql -q "create table test2(pk int primary key, name varchar(255), type int);"
+    run dolt sql -q "alter table test2 auto_increment = 2;"
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "insert into test2 values (0, 'john', 0)"
+    run dolt sql -q "SELECT * from test2" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,john,0" ]] || false
+}
+
+@test "auto_increment: alter table change column works" {
+    dolt sql -q "create table t(pk int primary key);"
+    dolt sql -q "ALTER TABLE t CHANGE COLUMN pk pk int NOT NULL AUTO_INCREMENT PRIMARY KEY;"
+
+    dolt sql -q 'insert into t values (NULL), (NULL), (NULL)'
+    run dolt sql -q "SELECT * FROM t" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+    [[ "${lines[3]}" =~ "3" ]] || false
+}

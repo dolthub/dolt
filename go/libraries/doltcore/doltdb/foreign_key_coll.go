@@ -34,9 +34,48 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// ForeignKeyCollection represents the collection of foreign keys for a root value.
 type ForeignKeyCollection struct {
 	foreignKeys map[string]ForeignKey
 }
+
+// ForeignKeyViolationError represents a set of foreign key violations for a table.
+type ForeignKeyViolationError struct {
+	ForeignKey    ForeignKey
+	Schema        schema.Schema
+	ViolationRows []row.Row
+}
+
+// Error implements the interface error.
+func (f *ForeignKeyViolationError) Error() string {
+	if len(f.ViolationRows) == 0 {
+		return "no violations were found, should not be an error"
+	}
+	sb := strings.Builder{}
+	const earlyTerminationLimit = 50
+	terminatedEarly := false
+	for i := range f.ViolationRows {
+		if i >= earlyTerminationLimit {
+			terminatedEarly = true
+			break
+		}
+		key, _ := f.ViolationRows[i].NomsMapKey(f.Schema).Value(context.Background())
+		val, _ := f.ViolationRows[i].NomsMapValue(f.Schema).Value(context.Background())
+		valSlice, _ := val.(types.Tuple).AsSlice()
+		all, _ := key.(types.Tuple).Append(valSlice...)
+		str, _ := types.EncodedValue(context.Background(), all)
+		sb.WriteRune('\n')
+		sb.WriteString(str)
+	}
+	if terminatedEarly {
+		return fmt.Sprintf("foreign key violations on `%s`.`%s`:%s\n%d more violations are not being displayed",
+			f.ForeignKey.Name, f.ForeignKey.TableName, sb.String(), len(f.ViolationRows)-earlyTerminationLimit)
+	} else {
+		return fmt.Sprintf("foreign key violations on `%s`.`%s`:%s", f.ForeignKey.Name, f.ForeignKey.TableName, sb.String())
+	}
+}
+
+var _ error = (*ForeignKeyViolationError)(nil)
 
 type ForeignKeyReferenceOption byte
 
@@ -460,8 +499,13 @@ func (fkc *ForeignKeyCollection) copy() *ForeignKeyCollection {
 }
 
 // ValidateData ensures that the foreign key is valid by comparing the index data from the given table
-// against the index data from the referenced table.
-func (fk ForeignKey) ValidateData(ctx context.Context, childIdx, parentIdx types.Map, childDef, parentDef schema.Index) error {
+// against the index data from the referenced table. Returns an error for each violation.
+func (fk ForeignKey) ValidateData(
+	ctx context.Context,
+	childSch schema.Schema,
+	childRowData, childIdxData, parentIdxData types.Map,
+	childDef, parentDef schema.Index,
+) error {
 	if fk.ReferencedTableIndex != parentDef.Name() {
 		return fmt.Errorf("cannot validate data as wrong referenced index was given: expected `%s` but received `%s`",
 			fk.ReferencedTableIndex, parentDef.Name())
@@ -484,11 +528,12 @@ func (fk ForeignKey) ValidateData(ctx context.Context, childIdx, parentIdx types
 		return err
 	}
 
-	rdr, err := noms.NewNomsMapReader(ctx, childIdx, childDef.Schema())
+	rdr, err := noms.NewNomsMapReader(ctx, childIdxData, childDef.Schema())
 	if err != nil {
 		return err
 	}
 
+	var violatingRows []row.Row
 	for {
 		childIdxRow, err := rdr.ReadRow(ctx)
 		if err == io.EOF {
@@ -527,7 +572,7 @@ func (fk ForeignKey) ValidateData(ctx context.Context, childIdx, parentIdx types
 			return err
 		}
 
-		indexIter := noms.NewNomsRangeReader(parentDef.Schema(), parentIdx,
+		indexIter := noms.NewNomsRangeReader(parentDef.Schema(), parentIdxData,
 			[]*noms.ReadRange{{Start: partial, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 				return tuple.StartsWith(partial), nil
 			}}},
@@ -537,12 +582,39 @@ func (fk ForeignKey) ValidateData(ctx context.Context, childIdx, parentIdx types
 		case nil:
 			continue // parent table contains child key
 		case io.EOF:
-			indexKeyStr, _ := types.EncodedValue(ctx, partial)
-			return fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", fk.Name, fk.TableName, indexKeyStr)
+			childFullKey, err := childIdxRow.NomsMapKey(childDef.Schema()).Value(ctx)
+			if err != nil {
+				return err
+			}
+			childKey, err := childDef.ToTableTuple(ctx, childFullKey.(types.Tuple), childIdxRow.Format())
+			if err != nil {
+				return err
+			}
+			childVal, ok, err := childRowData.MaybeGetTuple(ctx, childKey)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				childKeyStr, _ := types.EncodedValue(ctx, childKey)
+				return fmt.Errorf("could not find row value for key %s on table `%s`", childKeyStr, fk.TableName)
+			}
+			childRow, err := row.FromNoms(childSch, childKey, childVal)
+			if err != nil {
+				return err
+			}
+			violatingRows = append(violatingRows, childRow)
 		default:
 			return err
 		}
 	}
 
-	return nil
+	if len(violatingRows) == 0 {
+		return nil
+	} else {
+		return &ForeignKeyViolationError{
+			ForeignKey:    fk,
+			Schema:        childSch,
+			ViolationRows: violatingRows,
+		}
+	}
 }

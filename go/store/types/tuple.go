@@ -535,7 +535,7 @@ func (t Tuple) Set(n uint64, v Value) (Tuple, error) {
 	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}, nil
 }
 
-func (t Tuple) Append(v Value) (Tuple, error) {
+func (t Tuple) Append(vals ...Value) (Tuple, error) {
 	dec := t.decoder()
 	dec.skipKind()
 	prolog := dec.buff[:dec.offset]
@@ -544,12 +544,13 @@ func (t Tuple) Append(v Value) (Tuple, error) {
 
 	w := binaryNomsWriter{make([]byte, len(t.buff)), 0}
 	w.writeRaw(prolog)
-	w.writeCount(count + 1)
+	w.writeCount(count + uint64(len(vals)))
 	w.writeRaw(dec.buff[fieldsOffset:])
-	err := v.writeTo(&w, t.format())
-
-	if err != nil {
-		return EmptyTuple(t.nbf), err
+	for _, val := range vals {
+		err := val.writeTo(&w, t.format())
+		if err != nil {
+			return EmptyTuple(t.nbf), err
+		}
 	}
 
 	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}, nil

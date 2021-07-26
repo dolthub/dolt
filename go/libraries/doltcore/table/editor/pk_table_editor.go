@@ -817,6 +817,10 @@ func (te *pkTableEditor) StatementFinished(ctx context.Context, errored bool) er
 
 // SetConstraintViolation implements TableEditor.
 func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error {
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
 	if te.cvEditor == nil {
 		cvMap, err := te.t.GetConstraintViolations(ctx)
 		if err != nil {
@@ -824,10 +828,6 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 		}
 		te.cvEditor = cvMap.Edit()
 	}
-	te.flushMutex.RLock()
-	defer te.flushMutex.RUnlock()
-	te.writeMutex.Lock()
-	defer te.writeMutex.Unlock()
 	te.cvEditor.Set(k, v)
 	return nil
 }

@@ -20,8 +20,11 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -269,6 +272,35 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 		return baseSch, sch, mergeSch, err
 	}
 	return nil, nil, nil, ErrNoConflicts
+}
+
+// GetConstraintViolationsSchema returns the schema for the dolt_constraint_violations system table belonging to this
+// table.
+func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schema, error) {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	typeType, err := typeinfo.FromSqlType(
+		sql.MustCreateEnumType([]string{"foreign key", "unique index", "check constraint"}, sql.Collation_Default))
+	if err != nil {
+		return nil, err
+	}
+	typeCol, err := schema.NewColumnWithTypeInfo("violation_type", schema.DoltConstraintViolationsTypeTag, typeType, true, "", false, "")
+	if err != nil {
+		return nil, err
+	}
+	infoCol, err := schema.NewColumnWithTypeInfo("violation_info", schema.DoltConstraintViolationsInfoTag, typeinfo.JSONType, false, "", false, "")
+	if err != nil {
+		return nil, err
+	}
+
+	colColl := schema.NewColCollection()
+	colColl = colColl.Append(typeCol)
+	colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
+	colColl = colColl.Append(infoCol)
+	return schema.SchemaFromCols(colColl)
 }
 
 // GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
