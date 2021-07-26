@@ -16,6 +16,7 @@ package dbfactory
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
