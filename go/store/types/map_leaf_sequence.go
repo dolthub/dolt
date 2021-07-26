@@ -389,6 +389,18 @@ func (mes mapEntrySequence) getValue(idx int) (Value, error) {
 	return mes.entries[idx].value, nil
 }
 
+func (mes mapEntrySequence) EncodedLen() int {
+	return 0
+}
+
+func (mes mapEntrySequence) OffsetsByteSize() int {
+	return 0
+}
+
+func (mes mapEntrySequence) Buff() []byte {
+	return nil
+}
+
 func (mes mapEntrySequence) search(key orderedKey) (int, error) {
 	n, err := SearchWithErroringLess(len(mes.entries), func(i int) (bool, error) {
 		ordKey, err := mes.getKey(i)

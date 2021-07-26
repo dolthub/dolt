@@ -242,6 +242,10 @@ func (v valueImpl) writeTo(enc nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
+func (v valueImpl) Buff() []byte {
+	return v.buff
+}
+
 // IsZeroValue can be used to test if a Value is the same as T{}.
 func (v valueImpl) IsZeroValue() bool {
 	return v.buff == nil

@@ -671,3 +671,15 @@ func (es emptySequence) Len() uint64 {
 func (es emptySequence) asValueImpl() valueImpl {
 	panic("empty sequence")
 }
+
+func (es emptySequence) EncodedLen() int {
+	return 0
+}
+
+func (es emptySequence) OffsetsByteSize() int {
+	return 0
+}
+
+func (es emptySequence) Buff() []byte {
+	return nil
+}

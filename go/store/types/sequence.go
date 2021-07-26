@@ -33,6 +33,9 @@ type sequenceItem interface{}
 type compareFn func(x int, y int) (bool, error)
 
 type sequence interface {
+	EncodedLen() int
+	Buff() []byte
+	OffsetsByteSize() int
 	asValueImpl() valueImpl
 	cumulativeNumberOfLeaves(idx int) (uint64, error)
 	Empty() bool
@@ -91,6 +94,14 @@ func (seq sequenceImpl) Empty() bool {
 
 func (seq sequenceImpl) Len() uint64 {
 	return seq.len
+}
+
+func (seq sequenceImpl) EncodedLen() int {
+	return len(seq.valueImpl.buff)
+}
+
+func (seq sequenceImpl) OffsetsByteSize() int {
+	return len(seq.valueImpl.offsets) * 8
 }
 
 func (seq sequenceImpl) seqLen() int {

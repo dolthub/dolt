@@ -140,6 +140,10 @@ func (seq leafSequence) getCompareFn(other sequence) compareFn {
 	panic("unreachable")
 }
 
+func (seq leafSequence) EncodedLen() int {
+	return seq.sequenceImpl.EncodedLen()
+}
+
 func (seq leafSequence) typeOf() (*Type, error) {
 	dec := seq.decoder()
 	kind := dec.ReadKind()
