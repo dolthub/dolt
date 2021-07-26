@@ -34,8 +34,13 @@ const (
 
 	// The window size to use for computing the rolling hash. This is way more than necessary assuming random data (two bytes would be sufficient with a target chunk size of 4k). The benefit of a larger window is it allows for better distribution on input with lower entropy. At a target chunk size of 4k, any given byte changing has roughly a 1.5% chance of affecting an existing boundary, which seems like an acceptable trade-off. The choice of a prime number provides better distribution for repeating input.
 	chunkWindow  = uint32(67)
-	maxChunkSize = 1 << 24 // TODO: Remove when https://github.com/attic-labs/noms/issues/3743 is fixed.
+
+	oldMaxChunkSize = 1 << 24
+	minChunkSize    = 1 << 10
+	maxChunkSize    = 1 << 13
 )
+
+var TestRewrite bool = false
 
 // Only set by tests
 var (
@@ -113,9 +118,18 @@ func (rv *rollingValueHasher) HashByte(b byte) bool {
 func (rv *rollingValueHasher) hashByte(b byte, offset uint32) bool {
 	if !rv.crossedBoundary {
 		rv.bz.HashByte(b ^ rv.salt)
-		rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
-		if offset > maxChunkSize {
-			rv.crossedBoundary = true
+		if TestRewrite {
+			if offset > minChunkSize {
+				rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
+			}
+			if offset > maxChunkSize {
+				rv.crossedBoundary = true
+			}
+		} else {
+			rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
+			if offset > oldMaxChunkSize {
+				rv.crossedBoundary = true
+			}
 		}
 	}
 	return rv.crossedBoundary

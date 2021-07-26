@@ -26,6 +26,7 @@ var Branch = flag.String("branch", "master", "branch of the repository")
 var Table = flag.String("table", "", "table to test against")
 var Seed = flag.Int("seed", 1, "seed to use for rng key selector")
 var Perc = flag.Float64("perc", 0.01, "percentage of keys to measure write amplification for deleting")
+var Rewrite = flag.Bool("rewrite", false, "if true, rewrite the map and run the test on the rewritten map")
 
 func GetTableNames(ctx context.Context, dir, branch string) (*doltdb.DoltDB, *doltdb.RootValue, []string) {
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, "file://"+dir+"/.dolt/noms", "0.0.0-test_tuples")
@@ -71,6 +72,10 @@ func main() {
 
 	ctx := context.Background()
 
+	if *Rewrite {
+		types.TestRewrite = true
+	}
+
 	db, rv, tablenames := GetTableNames(ctx, *Dir, *Branch)
 	if *Table == "" {
 		for _, name := range tablenames {
@@ -98,11 +103,19 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 	}
 
 	originalHashes := newHashset()
-	var ogchunksizes inthist
+	var ogchunksizes, rewritechunksizes inthist
 	next := get_leaves(ctx, []types.Ref{r}, vrw, originalHashes, &ogchunksizes)
 	fmt.Println("num leaves", len(next), "num chunks", len(originalHashes))
 
-	var todelete []types.Tuple
+	var rewritemapeditor *types.MapEditor
+	if *Rewrite {
+		rewritemap, err := types.NewMap(ctx, vrw)
+		if err != nil {
+			panic(err)
+		}
+		rewritemapeditor = types.NewMapEditor(rewritemap)
+	}
+
 	rd := rand.New(rand.NewSource(int64(*Seed)))
 
 	w := len(fmt.Sprintf("%d", len(next)))
@@ -110,13 +123,19 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 	fmt.Println("sampling keys from leaves")
 
 	i := 0
+	var todelete []types.Tuple
 	leaves(ctx, next, vrw, func(m types.Map) {
 		ogchunksizes.add(m.EncodedLen())
 		key := true
+		var lastkey types.Tuple
 		m.WalkValues(ctx, func(v types.Value) error {
-			if key && rd.Float64() < *Perc {
-				t := v.(types.Tuple)
-				todelete = append(todelete, t)
+			if key {
+				lastkey = v.(types.Tuple)
+				if rd.Float64() < *Perc {
+					todelete = append(todelete, lastkey)
+				}
+			} else if *Rewrite {
+				rewritemapeditor.Set(lastkey, v)
 			}
 			key = !key
 			return nil
@@ -126,6 +145,34 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 	})
 	fmt.Printf(fmtstr, i, len(next))
 	fmt.Printf("\n")
+
+	if *Rewrite {
+		fmt.Println("flushing rewrite map editor")
+		rewritemap, err := rewritemapeditor.Map(ctx)
+		if err != nil {
+			panic(err)
+		}
+		var rs []types.Ref
+		rewritemap.WalkRefs(rewritemap.Format(), func(r types.Ref) error {
+			rs = append(rs, r)
+			return nil
+		})
+		originalHashes = newHashset()
+		next = get_leaves(ctx, rs, vrw, originalHashes, &rewritechunksizes)
+		i = 0
+		fmt.Println("getting rewrite map chunk sizes")
+		w := len(fmt.Sprintf("%d", len(next)))
+		fmtstr := fmt.Sprintf("\033[G\033[K %%%dd / %%d", w)
+		leaves(ctx, next, vrw, func(m types.Map) {
+			rewritechunksizes.add(m.EncodedLen())
+			i += 1
+			fmt.Printf(fmtstr, i, len(next))
+		})
+		fmt.Printf(fmtstr, i, len(next))
+		fmt.Printf("\n")
+
+		m = rewritemap
+	}
 
 	var numchunksa, chunksizesa [MaxProcs]inthist
 	var is [MaxProcs]int64
@@ -214,9 +261,12 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 		chunksizesa[0].merge(chunksizesa[j])
 	}
 
-	fmt.Printf("og chunk sizes: %s\n", ogchunksizes.String())
-	fmt.Printf("new chunks:     %s\n", numchunksa[0].String())
-	fmt.Printf("bytes written:  %s\n", chunksizesa[0].String())
+	if *Rewrite {
+		fmt.Printf("rewrite chunk sizes: %s\n", rewritechunksizes.String())
+	}
+	fmt.Printf("og chunk sizes:      %s\n", ogchunksizes.String())
+	fmt.Printf("new chunks:          %s\n", numchunksa[0].String())
+	fmt.Printf("bytes written:       %s\n", chunksizesa[0].String())
 }
 
 type inthist struct {
