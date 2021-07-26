@@ -19,7 +19,7 @@ var Dir = flag.String("dir", "/Users/aaronson/dolt_clone/city-populations", "dir
 var Branch = flag.String("branch", "master", "branch of the repository")
 var Table = flag.String("table", "", "table to test against")
 var Seed = flag.Int("seed", 1, "seed to use for rng key selector")
-var Perc = flag.Int("perc", 1, "percentage of keys to measure write amplification for deleting")
+var Perc = flag.Float64("perc", 0.01, "percentage of keys to measure write amplification for deleting")
 
 func GetTableNames(ctx context.Context, dir, branch string) (*doltdb.DoltDB, *doltdb.RootValue, []string) {
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, "file://"+dir+"/.dolt/noms", "0.0.0-test_tuples")
@@ -84,27 +84,43 @@ func RunAmplificationTest(ctx context.Context, db *doltdb.DoltDB, rv *doltdb.Roo
 
 func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.ValueReadWriter) {
 	originalHashes := newHashset()
-	next := get_leaves(ctx, []types.Ref{r}, vrw, originalHashes)
+	var ogchunksizes inthist
+	next := get_leaves(ctx, []types.Ref{r}, vrw, originalHashes, &ogchunksizes)
 	fmt.Println("num leaves", len(next), "num chunks", len(originalHashes))
 
 	var todelete []types.Tuple
 	rd := rand.New(rand.NewSource(int64(*Seed)))
 
+	w := len(fmt.Sprintf("%d", len(next)))
+	fmtstr := fmt.Sprintf("\033[G\033[K %%%dd / %%d", w)
+	fmt.Println("sampling keys from leaves")
+
+	i := 0
 	leaves(ctx, next, vrw, func(m types.Map) {
+		ogchunksizes.add(m.EncodedLen())
 		key := true
 		m.WalkValues(ctx, func(v types.Value) error {
-			if key && rd.Intn(100) < *Perc {
+			if key && rd.Float64() < *Perc {
 				t := v.(types.Tuple)
 				todelete = append(todelete, t)
 			}
 			key = !key
 			return nil
 		})
+		i += 1
+		fmt.Printf(fmtstr, i, len(next))
 	})
+	fmt.Printf(fmtstr, i, len(next))
+	fmt.Printf("\n")
 
 	var numchunks, chunksizes inthist
 
+	w = len(fmt.Sprintf("%d", len(todelete)))
+	fmtstr = fmt.Sprintf("\033[G\033[K %%%dd / %%d", w)
+
 	fmt.Println("key tuples", len(todelete))
+	fmt.Println("running deletes and measuring deltas")
+
 	for i, k := range todelete {
 		nm, err := m.Edit().Remove(k).Map(ctx)
 		if err != nil {
@@ -120,13 +136,14 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 		newchunksizes += nm.EncodedLen()
 		numchunks.add(newchunks)
 		chunksizes.add(newchunksizes)
-		if i % 100 == 99 {
-			fmt.Println(i, "/", len(todelete))
-		}
+		fmt.Printf(fmtstr, i, len(todelete))
 	}
+	fmt.Printf(fmtstr, len(todelete), len(todelete))
+	fmt.Printf("\n")
 
-	fmt.Printf("new chunks: p10: %d, p50: %d, p90: %d, p99: %d, p99.9: %d, p100: %d\n", numchunks.perc(.1), numchunks.perc(.5), numchunks.perc(.9), numchunks.perc(.99), numchunks.perc(.999), numchunks.perc(1))
-	fmt.Printf("bytes written: p10: %d, p50: %d, p90: %d, p99: %d, p99.9: %d, p100: %d\n", chunksizes.perc(.1), chunksizes.perc(.5), chunksizes.perc(.9), chunksizes.perc(.99), chunksizes.perc(.999), chunksizes.perc(1))
+	fmt.Printf("og chunk sizes: %s\n", ogchunksizes.String())
+	fmt.Printf("new chunks:     %s\n", numchunks.String())
+	fmt.Printf("bytes written:  %s\n", chunksizes.String())
 }
 
 type inthist struct {
@@ -149,6 +166,20 @@ func (h *inthist) perc(p float32) int {
 		i = len(h.vs) - 1
 	}
 	return h.vs[i]
+}
+
+func (h *inthist) avg() float64 {
+	// we can just use an int64 here because these are byte sizes of things
+	// that exist on a disk...
+	var sum int64
+	for _, v := range h.vs {
+		sum += int64(v)
+	}
+	return float64(sum) / float64(len(h.vs))
+}
+
+func (h *inthist) String() string {
+	return fmt.Sprintf("avg: %10.2f, p10: %10d, p50: %10d, p90: %10d, p99: %10d, p99.9: %10d, p100: %10d", h.avg(), h.perc(.1), h.perc(.5), h.perc(.9), h.perc(.99), h.perc(.999), h.perc(1))
 }
 
 type hashset map[[20]byte]struct{}
@@ -197,7 +228,7 @@ func get_delta(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, o
 	return newchunks, newchunksizes
 }
 
-func get_leaves(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, hs hashset) []types.Ref {
+func get_leaves(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, hs hashset, chunksizes *inthist) []types.Ref {
 	res := make([]types.Ref, 0)
 	next := rs
 	for len(next) > 0 {
@@ -214,6 +245,7 @@ func get_leaves(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, 
 				panic(err)
 			}
 			m := v.(types.Map)
+			chunksizes.add(m.EncodedLen())
 			m.WalkRefs(m.Format(), func(r types.Ref) error {
 				next = append(next, r)
 				return nil
