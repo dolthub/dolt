@@ -36,28 +36,24 @@ const (
 	chunkWindow = uint32(67)
 
 	oldMaxChunkSize = 1 << 24
+
 	minChunkSize    = 1 << 10
 	maxChunkSize    = 1 << 13
 
-	// min
-	nine       = uint32(1 << 9)			// 512
-	ninePatten = uint32(1<<16 - 1)
-
-	ten       = uint32(1 << 10)			// 1K
-	tenPatten = uint32(1<<14 - 1)
-
-	eleven       = uint32(1 << 11)		// 2K
-	elevenPatten = uint32(1<<12 - 1)
-
-	twelve       = uint32(1 << 12)		// 4K
-	twelvePatten = uint32(1<<10 - 1)
-
-	thirteen       = uint32(1 << 13)	// 8K
-	thirteenPatten = uint32(1<<8 - 1)
-
-	// max
-	fourteen       = uint32(1 << 14)	// 16K
+	smoothMinChunkSize    = 1 << 9
+	smoothMaxChunkSize    = 1 << 14
 )
+
+type signatureRange [2]uint32
+
+var smoothRanges = []signatureRange{
+	{1024,  1<<16 - 1},
+	{2048,  1<<14 - 1},
+	{4096,  1<<12 - 1},
+	{8192,  1<<10 - 1},
+	{16384, 1<<8 - 1},
+}
+
 
 var TestRewrite bool = false
 var TestSmooth bool = false
@@ -139,25 +135,24 @@ func (rv *rollingValueHasher) hashByte(b byte, offset uint32) bool {
 	if !rv.crossedBoundary {
 		rv.bz.HashByte(b ^ rv.salt)
 		if TestRewrite {
+
+			// chunk with smoothed probabilities
 			if TestSmooth {
 				s32 := rv.bz.Sum32()
-				if offset < nine {
-					// 512 min
-					return rv.crossedBoundary
-				} else if offset < ten {
-					rv.crossedBoundary = s32&ninePatten == ninePatten
-				} else if offset < eleven {
-					rv.crossedBoundary = s32&tenPatten == tenPatten
-				} else if offset < twelve {
-					rv.crossedBoundary = s32&elevenPatten == elevenPatten
-				} else if offset < thirteen {
-					rv.crossedBoundary = s32&twelvePatten == twelvePatten
-				} else if offset < fourteen {
-					rv.crossedBoundary = s32&thirteenPatten == thirteenPatten
-				} else if offset >= fourteen {
-					// 16K max
+				if offset > smoothMinChunkSize {
+					for _, r := range smoothRanges {
+						rangeEnd, pattern := r[0], r[1]
+						if offset < rangeEnd {
+							rv.crossedBoundary = s32&pattern == pattern
+							return rv.crossedBoundary
+						}
+					}
+				}
+				if offset > smoothMaxChunkSize {
 					rv.crossedBoundary = true
 				}
+
+			// chunk with min/max
 			} else {
 				if offset > minChunkSize {
 					rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
@@ -166,6 +161,8 @@ func (rv *rollingValueHasher) hashByte(b byte, offset uint32) bool {
 					rv.crossedBoundary = true
 				}
 			}
+
+		// chunk with constant probability, no min/max
 		} else {
 			rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
 			if offset > oldMaxChunkSize {
