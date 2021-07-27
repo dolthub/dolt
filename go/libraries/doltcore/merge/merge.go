@@ -523,14 +523,18 @@ func applyPkChange(ctx context.Context, sch schema.Schema, tableEditor editor.Ta
 		}
 		stats.Modifications++
 	case types.DiffChangeRemoved:
-		oldRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.OldValue.(types.Tuple))
+		key := change.Key.(types.Tuple)
+		value := change.OldValue.(types.Tuple)
+		tv, err := row.TaggedValuesFromTupleKeyAndValue(key, value)
 		if err != nil {
 			return err
 		}
-		err = tableEditor.DeleteRow(ctx, oldRow)
+
+		err = tableEditor.DeleteByKey(ctx, key, tv)
 		if err != nil {
 			return err
 		}
+
 		stats.Deletes++
 	}
 
@@ -613,14 +617,18 @@ func applyKeylessChange(ctx context.Context, sch schema.Schema, tableEditor edit
 			}
 			stats.Modifications++
 		case types.DiffChangeRemoved:
-			oldRow, err := row.FromNoms(sch, ch.Key.(types.Tuple), ch.OldValue.(types.Tuple))
+			key := change.Key.(types.Tuple)
+			value := change.OldValue.(types.Tuple)
+			tv, err := row.TaggedValuesFromTupleKeyAndValue(key, value)
 			if err != nil {
 				return err
 			}
-			err = tableEditor.DeleteRow(ctx, oldRow)
+
+			err = tableEditor.DeleteByKey(ctx, key, tv)
 			if err != nil {
 				return err
 			}
+
 			stats.Deletes++
 		}
 		return nil
@@ -913,12 +921,56 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		return nil, nil, err
 	}
 
-	newRoot, err = AddConstraintViolations(ctx, newRoot, ourRoot, ancRoot)
+	newRoot, _, err = AddConstraintViolations(ctx, newRoot, ancRoot, nil)
 	if err != nil {
 		return nil, nil, err
 	}
+	for tblName, stats := range tblToStats {
+		tbl, ok, err := newRoot.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, nil, err
+		}
+		if ok {
+			cvMap, err := tbl.GetConstraintViolations(ctx)
+			if err != nil {
+				return nil, nil, err
+			}
+			stats.ConstraintViolations = int(cvMap.Len())
+		}
+	}
 
 	return newRoot, tblToStats, nil
+}
+
+// MayHaveConstraintViolations returns whether the given roots may have constraint violations. For example, a fast
+// forward merge that does not involve any tables with foreign key constraints or check constraints will not be able
+// to generate constraint violations. Unique key constraint violations would be caught during the generation of the
+// merged root, therefore it is not a factor for this function.
+func MayHaveConstraintViolations(ctx context.Context, ancestor, merged *doltdb.RootValue) (bool, error) {
+	ancTables, err := ancestor.MapTableHashes(ctx)
+	if err != nil {
+		return false, err
+	}
+	mergedTables, err := merged.MapTableHashes(ctx)
+	if err != nil {
+		return false, err
+	}
+	fkColl, err := merged.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return false, err
+	}
+	tablesInFks := fkColl.Tables()
+	for tblName := range tablesInFks {
+		if ancHash, ok := ancTables[tblName]; !ok {
+			// If a table used in a foreign key is new then it's treated as a change
+			return true, nil
+		} else if mergedHash, ok := mergedTables[tblName]; !ok {
+			return false, fmt.Errorf("foreign key uses table '%s' but no hash can be found for this table", tblName)
+		} else if !ancHash.Equal(mergedHash) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func GetTablesInConflict(ctx context.Context, roots doltdb.Roots) (
@@ -943,6 +995,28 @@ func GetTablesInConflict(ctx context.Context, roots doltdb.Roots) (
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
 
+func GetTablesWithConstraintViolations(ctx context.Context, roots doltdb.Roots) (
+	workingViolations, stagedViolations, headViolations []string,
+	err error,
+) {
+	headViolations, err = roots.Head.TablesWithConstraintViolations(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	stagedViolations, err = roots.Staged.TablesWithConstraintViolations(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	workingViolations, err = roots.Working.TablesWithConstraintViolations(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return workingViolations, stagedViolations, headViolations, err
+}
+
 func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
 	docs, err := drw.GetDocsOnDisk()
 	if err != nil {
@@ -958,17 +1032,17 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 		return nil, nil, err
 	}
 
-	headTableHashes, err := mapTableHashes(ctx, roots.Head)
+	headTableHashes, err := roots.Head.MapTableHashes(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	workingTableHashes, err := mapTableHashes(ctx, roots.Working)
+	workingTableHashes, err := roots.Working.MapTableHashes(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeTableHashes, err := mapTableHashes(ctx, mergeRoot)
+	mergeTableHashes, err := mergeRoot.MapTableHashes(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -985,29 +1059,6 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 	}
 
 	return stompedTables, headWorkingDiffs, nil
-}
-
-func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {
-	names, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	nameToHash := make(map[string]hash.Hash)
-	for _, name := range names {
-		h, ok, err := root.GetTableHash(ctx, name)
-
-		if err != nil {
-			return nil, err
-		} else if !ok {
-			panic("GetTableNames returned a table that GetTableHash says isn't there.")
-		} else {
-			nameToHash[name] = h
-		}
-	}
-
-	return nameToHash, nil
 }
 
 func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map[string]hash.Hash {

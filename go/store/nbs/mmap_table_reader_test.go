@@ -23,9 +23,10 @@ package nbs
 
 import (
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,7 +36,7 @@ func TestMmapTableReader(t *testing.T) {
 	assert := assert.New(t)
 	dir, err := ioutil.TempDir("", "")
 	require.NoError(t, err)
-	defer os.RemoveAll(dir)
+	defer file.RemoveAll(dir)
 
 	fc := newFDCache(1)
 	defer fc.Drop()

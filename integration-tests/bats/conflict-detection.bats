@@ -89,7 +89,7 @@ SQL
     [[ "$output" =~ "1 rows modified" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
     run dolt status
-    [[ "$output" =~ "All conflicts fixed" ]] || false
+    [[ "$output" =~ "All conflicts and constraint violations fixed" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
 }
 
@@ -124,7 +124,7 @@ SQL
     [[ "$output" =~ "1 rows modified" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
     run dolt status
-    [[ "$output" =~ "All conflicts fixed" ]] || false
+    [[ "$output" =~ "All conflicts and constraint violations fixed" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
 }
 

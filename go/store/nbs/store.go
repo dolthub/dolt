@@ -172,13 +172,19 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 		return nil
 	}
 
-	err := f(nbs.tables.upstream)
+	tables := func() tableSet {
+		nbs.mu.RLock()
+		defer nbs.mu.RUnlock()
+		return nbs.tables
+	}()
+
+	err := f(tables.upstream)
 
 	if err != nil {
 		return nil, err
 	}
 
-	err = f(nbs.tables.novel)
+	err = f(tables.novel)
 
 	if err != nil {
 		return nil, err
@@ -1392,6 +1398,12 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 
 	if nbs.upstream.root != last {
 		return errLastRootMismatch
+	}
+
+	// check to see if the specs have changed since last gc.  If they haven't bail early.
+	gcGenCheck := generateLockHash(last, nbs.upstream.specs)
+	if nbs.upstream.gcGen == gcGenCheck {
+		return chunks.ErrNothingToCollect
 	}
 
 	specs, err := nbs.copyMarkedChunks(ctx, keepChunks)

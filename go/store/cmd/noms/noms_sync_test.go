@@ -23,11 +23,11 @@ package main
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/spec"
@@ -67,7 +67,7 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 }
 
 func (s *nomsSyncTestSuite) TestSync() {
-	defer s.NoError(os.RemoveAll(s.DBDir2))
+	defer s.NoError(file.RemoveAll(s.DBDir2))
 
 	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
@@ -128,7 +128,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 }
 
 func (s *nomsSyncTestSuite) TestSync_Issue2598() {
-	defer s.NoError(os.RemoveAll(s.DBDir2))
+	defer s.NoError(file.RemoveAll(s.DBDir2))
 
 	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize)
 	s.NoError(err)

@@ -57,7 +57,10 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	sess := t.db.TableEditSession(ctx, t.IsTemporary())
+	sess, err := t.db.TableEditSession(ctx, t.IsTemporary())
+	if err != nil {
+		return nil, err
+	}
 
 	tableEditor, err := sess.GetTableEditor(ctx, t.tableName, t.sch)
 	if err != nil {
@@ -65,7 +68,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 	}
 
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	ait, _ := doltSession.GetDoltDbAutoIncrementTracker(t.db.Name())
+	ait, _ := doltSession.GetDoltDbAutoIncrementTracker(ctx, t.db.Name())
 
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
@@ -101,23 +104,28 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 
 		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
 	}
-
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
-
 	if err != nil {
 		return err
 	}
-
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
-	if err != nil {
-		return err
-	}
+	if !schema.IsKeyless(te.sch) {
+		k, tagToVal, err := sqlutil.DoltKeyAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
+		if err != nil {
+			return err
+		}
 
-	return te.tableEditor.DeleteRow(ctx, dRow)
+		return te.tableEditor.DeleteByKey(ctx, k, tagToVal)
+	} else {
+		dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
+		if err != nil {
+			return err
+		}
+		return te.tableEditor.DeleteRow(ctx, dRow)
+	}
 }
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {

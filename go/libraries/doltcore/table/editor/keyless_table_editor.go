@@ -37,6 +37,7 @@ type keylessTableEditor struct {
 	name string
 
 	acc      keylessEditAcc
+	indexEds []*IndexEditor
 	cvEditor *types.MapEditor
 
 	eg *errgroup.Group
@@ -123,19 +124,58 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	eg, _ := errgroup.WithContext(ctx)
 
 	te := &keylessTableEditor{
-		tbl:  tbl,
-		sch:  sch,
-		name: name,
-		acc:  acc,
-		eg:   eg,
-		mu:   &sync.Mutex{},
+		tbl:      tbl,
+		sch:      sch,
+		name:     name,
+		acc:      acc,
+		indexEds: make([]*IndexEditor, sch.Indexes().Count()),
+		eg:       eg,
+		mu:       &sync.Mutex{},
 	}
 
+	for i, index := range sch.Indexes().AllIndexes() {
+		indexData, err := tbl.GetIndexRowData(ctx, index.Name())
+		if err != nil {
+			return nil, err
+		}
+		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, sch)
+	}
 	return te, nil
 }
 
 func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
 	panic("not implemented")
+}
+
+func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) (err error) {
+	kte.mu.Lock()
+	defer kte.mu.Unlock()
+
+	defer func() { err = kte.autoFlush(ctx) }()
+
+	nonPkCols := kte.sch.GetNonPKCols()
+	tplVals := make([]types.Value, 0, 2*nonPkCols.Size())
+	err = nonPkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		var val types.Value = types.NullValue
+		if rowVal, ok := tagToVal[tag]; ok {
+			val = rowVal
+		}
+
+		tplVals = append(tplVals, types.Uint(tag))
+		tplVals = append(tplVals, val)
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	val, err := types.NewTuple(kte.tbl.Format(), tplVals...)
+	if err != nil {
+		return err
+	}
+
+	return kte.acc.decrement(key, val)
 }
 
 // InsertRow implements TableEditor.
@@ -254,6 +294,8 @@ func (kte *keylessTableEditor) StatementFinished(ctx context.Context, errored bo
 
 // SetConstraintViolation implements TableEditor.
 func (kte *keylessTableEditor) SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error {
+	kte.mu.Lock()
+	defer kte.mu.Unlock()
 	if kte.cvEditor == nil {
 		cvMap, err := kte.tbl.GetConstraintViolations(ctx)
 		if err != nil {
@@ -261,8 +303,6 @@ func (kte *keylessTableEditor) SetConstraintViolation(ctx context.Context, k typ
 		}
 		kte.cvEditor = cvMap.Edit()
 	}
-	kte.mu.Lock()
-	defer kte.mu.Unlock()
 	kte.cvEditor.Set(k, v)
 	return nil
 }
@@ -300,14 +340,14 @@ func (kte *keylessTableEditor) flush(ctx context.Context) error {
 	}
 
 	kte.eg.Go(func() (err error) {
-		kte.tbl, err = applyEdits(ctx, tbl, acc)
+		kte.tbl, err = applyEdits(ctx, tbl, acc, kte.indexEds, nil)
 		return err
 	})
 
 	return nil
 }
 
-func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*doltdb.Table, error) {
+func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, errFunc PKDuplicateErrFunc) (_ *doltdb.Table, retErr error) {
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -328,12 +368,12 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 	ed := rowData.Edit()
 	iter := table.NewMapPointReader(rowData, keys...)
 
+	var ok bool
 	for {
 		k, v, err := iter.NextTuple(ctx)
 		if err == io.EOF {
 			break
 		}
-
 		if err != nil {
 			return nil, err
 		}
@@ -343,21 +383,78 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 			return nil, err
 		}
 
-		var ok bool
+		oldv := v
 		if v.Empty() {
 			// row does not yet exist
 			v, ok, err = initializeCardinality(delta.val, delta.delta)
+
 		} else {
 			v, ok, err = modifyCardinalityWithDelta(v, delta.delta)
+
 		}
 		if err != nil {
 			return nil, err
 		}
 
+		func(k, v types.Tuple) (*doltdb.Table, error) {
+			indexOpsToUndo := make([]int, len(indexEds))
+			defer func() {
+				if retErr != nil {
+					for i, opsToUndo := range indexOpsToUndo {
+						for undone := 0; undone < opsToUndo; undone++ {
+							indexEds[i].Undo(ctx)
+						}
+					}
+				}
+			}()
+
+			for i, indexEd := range indexEds {
+				var r row.Row
+				if v.Empty() {
+					r, _, err = row.KeylessRowsFromTuples(k, oldv)
+				} else {
+					r, _, err = row.KeylessRowsFromTuples(k, v)
+				}
+				if err != nil {
+					return nil, err
+				}
+				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index())
+				if err != nil {
+					return nil, err
+				}
+
+				if delta.delta < 1 {
+					err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
+					if err != nil {
+						return nil, err
+					}
+				}
+				indexOpsToUndo[i]++
+			}
+			return nil, nil
+		}(k, v)
+
 		if ok {
 			ed.Set(k, v)
 		} else {
 			ed.Remove(k)
+		}
+
+	}
+
+	for i := 0; i < len(indexEds); i++ {
+		indexMap, idxErr := indexEds[i].Map(ctx)
+		if idxErr != nil {
+			return nil, err
+		}
+		tbl, idxErr = tbl.SetIndexRowData(ctx, indexEds[i].Index().Name(), indexMap)
+		if idxErr != nil {
+			return nil, err
 		}
 	}
 

@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
@@ -50,7 +51,7 @@ import (
 )
 
 const (
-	Version = "0.26.11"
+	Version = "0.27.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -83,6 +84,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	schcmds.Commands,
 	tblcmds.Commands,
 	cnfcmds.Commands,
+	cvcmds.Commands,
 	commands.SendMetricsCmd{},
 	dumpDocsCommand,
 	commands.MigrateCmd{},
@@ -90,7 +92,6 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.ReadTablesCmd{},
 	commands.GarbageCollectionCmd{},
 	commands.FilterBranchCmd{},
-	commands.VerifyConstraintsCmd{},
 	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
 })

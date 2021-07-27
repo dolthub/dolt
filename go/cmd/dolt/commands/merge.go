@@ -117,25 +117,30 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 
 			// If there are any conflicts or constraint violations then we disallow the merge
-			if has, err := root.HasConflicts(ctx); err != nil {
+			hasCnf, err := root.HasConflicts(ctx)
+			if err != nil {
 				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
-			} else if has {
+			}
+			hasCV, err := root.HasConstraintViolations(ctx)
+			if err != nil {
+				verr = errhand.BuildDError("error: failed to get constraint violations").AddCause(err).Build()
+			}
+			if hasCnf || hasCV {
 				cli.Println("error: Merging is not possible because you have unmerged tables.")
 				cli.Println("hint: Fix them up in the working tree, and then use 'dolt add <table>'")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
-				cli.Println("fatal: Exiting because of an unresolved conflict.")
+				if hasCnf && hasCV {
+					cli.Println("fatal: Exiting because of an unresolved conflict and constraint violation.")
+				} else if hasCnf {
+					cli.Println("fatal: Exiting because of an unresolved conflict.")
+				} else {
+					cli.Println("fatal: Exiting because of an unresolved constraint violation.")
+				}
 				return 1
 			} else if mergeActive {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
 				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using 'dolt commit -m <msg>'")
 				cli.Println("fatal: Exiting because of active merge")
-				return 1
-			}
-
-			if has, err := root.HasConstraintViolations(ctx); err != nil {
-				verr = errhand.BuildDError("error: failed to get constraint violations").AddCause(err).Build()
-			} else if has {
-				cli.Println("fatal: Exiting because of an unresolved constraint violation.")
 				return 1
 			}
 
@@ -224,6 +229,19 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	}
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
+		ancRoot, err := cm1.GetRootValue()
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		mergedRoot, err := cm2.GetRootValue()
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
+			return errhand.VerboseErrorFromError(err)
+		} else if cvPossible {
+			return executeMerge(ctx, squash, dEnv, cm1, cm2, workingDiffs)
+		}
 		if apr.Contains(cli.NoFFParam) {
 			return execNoFFMerge(ctx, apr, dEnv, roots, cm2, verr, workingDiffs)
 		} else {
@@ -421,10 +439,16 @@ func mergedRootToWorking(
 	verr := UpdateWorkingWithVErr(dEnv, workingRoot)
 
 	if verr == nil {
-		hasConflicts := printSuccessStats(tblToStats)
+		hasConflicts, hasConstraintViolations := printSuccessStats(tblToStats)
 
-		if hasConflicts {
+		if hasConflicts && hasConstraintViolations {
+			cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
+		} else if hasConflicts {
 			cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
+		} else if hasConstraintViolations {
+			cli.Println("Automatic merge failed; fix constraint violations and then commit the result.\n" +
+				"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n" +
+				"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.")
 		} else {
 			err = actions.SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 			if err != nil {
@@ -441,11 +465,12 @@ func mergedRootToWorking(
 	return verr
 }
 
-func printSuccessStats(tblToStats map[string]*merge.MergeStats) bool {
+// printSuccessStats returns whether there are conflicts or constraint violations.
+func printSuccessStats(tblToStats map[string]*merge.MergeStats) (conflicts bool, constraintViolations bool) {
 	printModifications(tblToStats)
 	printAdditions(tblToStats)
 	printDeletions(tblToStats)
-	return printConflicts(tblToStats)
+	return printConflictsAndViolations(tblToStats)
 }
 
 func printAdditions(tblToStats map[string]*merge.MergeStats) {
@@ -464,18 +489,24 @@ func printDeletions(tblToStats map[string]*merge.MergeStats) {
 	}
 }
 
-func printConflicts(tblToStats map[string]*merge.MergeStats) bool {
+func printConflictsAndViolations(tblToStats map[string]*merge.MergeStats) (conflicts bool, constraintViolations bool) {
 	hasConflicts := false
+	hasConstraintViolations := false
 	for tblName, stats := range tblToStats {
-		if stats.Operation == merge.TableModified && stats.Conflicts > 0 {
+		if stats.Operation == merge.TableModified && (stats.Conflicts > 0 || stats.ConstraintViolations > 0) {
 			cli.Println("Auto-merging", tblName)
-			cli.Println("CONFLICT (content): Merge conflict in", tblName)
-
-			hasConflicts = true
+			if stats.Conflicts > 0 {
+				cli.Println("CONFLICT (content): Merge conflict in", tblName)
+				hasConflicts = true
+			}
+			if stats.ConstraintViolations > 0 {
+				cli.Println("CONSTRAINT VIOLATION (content): Merge created constraint violation in", tblName)
+				hasConstraintViolations = true
+			}
 		}
 	}
 
-	return hasConflicts
+	return hasConflicts, hasConstraintViolations
 }
 
 func printModifications(tblToStats map[string]*merge.MergeStats) {
@@ -486,7 +517,7 @@ func printModifications(tblToStats map[string]*merge.MergeStats) {
 	rowsChanged := 0
 	var tbls []string
 	for tblName, stats := range tblToStats {
-		if stats.Operation == merge.TableModified && stats.Conflicts == 0 {
+		if stats.Operation == merge.TableModified && stats.Conflicts == 0 && stats.ConstraintViolations == 0 {
 			tbls = append(tbls, tblName)
 			nameLen := len(tblName)
 			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.Conflicts

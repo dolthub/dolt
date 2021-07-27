@@ -31,6 +31,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -161,7 +162,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 	run := func(prefix string) {
 		tmpDir, err := ioutil.TempDir("", "spec_test")
 		assert.NoError(err)
-		defer os.RemoveAll(tmpDir)
+		defer file.RemoveAll(tmpDir)
 
 		s := types.String("string")
 
@@ -263,7 +264,7 @@ func TestForDatabase(t *testing.T) {
 
 	tmpDir, err := ioutil.TempDir("", "spec_test")
 	assert.NoError(err)
-	defer os.RemoveAll(tmpDir)
+	defer file.RemoveAll(tmpDir)
 
 	testCases := []struct {
 		spec, protocol, databaseName, canonicalSpecIfAny string
@@ -327,7 +328,7 @@ func TestForDataset(t *testing.T) {
 
 	tmpDir, err := ioutil.TempDir("", "spec_test")
 	assert.NoError(err)
-	defer os.RemoveAll(tmpDir)
+	defer file.RemoveAll(tmpDir)
 
 	testCases := []struct {
 		spec, protocol, databaseName, datasetName, canonicalSpecIfAny string
@@ -372,7 +373,7 @@ func TestForPath(t *testing.T) {
 
 	tmpDir, err := ioutil.TempDir("", "spec_test")
 	assert.NoError(err)
-	defer os.RemoveAll(tmpDir)
+	defer file.RemoveAll(tmpDir)
 
 	testCases := []struct {
 		spec, protocol, databaseName, pathString, canonicalSpecIfAny string
@@ -499,7 +500,7 @@ func TestMultipleSpecsSameNBS(t *testing.T) {
 
 	tmpDir, err := ioutil.TempDir("", "spec_test")
 	assert.NoError(err)
-	defer os.RemoveAll(tmpDir)
+	defer file.RemoveAll(tmpDir)
 
 	spec1, err1 := ForDatabase(tmpDir)
 	spec2, err2 := ForDatabase(tmpDir)
