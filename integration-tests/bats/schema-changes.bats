@@ -254,3 +254,27 @@ SQL
     [[ "$output" =~ '>   `v2` VARCHAR(1024)' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 }
+
+@test "schema-changes: alter table on keyless column with duplicates throws an error" {
+    dolt sql -q "dasda"
+}
+
+@test "schema-changes: add single primary key" {
+
+}
+
+@test "schema-changes: add composite primary key" {
+
+}
+
+@test "schema-changes: can delete single primary key" {
+
+}
+
+@test "schema-changes: can delete composite primary key" {
+
+}
+
+@test "schema-changes: run through some add and drop primary key operations" {
+  
+}
