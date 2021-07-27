@@ -232,7 +232,7 @@ func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newCon
 
 	checker := func(upstream, contents manifestContents) error {
 		if contents.gcGen == upstream.gcGen {
-			return errors.New("UpdateGCGen() must update the garbage collection generation")
+			return fmt.Errorf("UpdateGCGen() must update the garbage collection generation. old = '%s' new = '%s'", upstream.gcGen.String(), contents.gcGen.String())
 		}
 		if contents.root != upstream.root {
 			return errors.New("UpdateGCGen() cannot update the root")

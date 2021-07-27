@@ -1069,16 +1069,21 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 	oldGen := make(hash.HashSet)
 	err = datasets.IterAll(ctx, func(key, value types.Value) error {
 		keyStr := string(key.(types.String))
-		parsed, err := ref.Parse(keyStr)
-
-		if err != nil && !errors.Is(err, ref.ErrUnknownRefType) {
-			return err
-		}
-
 		h := value.(types.Ref).TargetHash()
 
-		refType := parsed.GetType()
-		if refType == ref.BranchRefType || refType == ref.RemoteRefType {
+		var isOldGen bool
+		switch {
+		case ref.IsRef(keyStr):
+			parsed, err := ref.Parse(keyStr)
+			if err != nil && !errors.Is(err, ref.ErrUnknownRefType) {
+				return err
+			}
+
+			refType := parsed.GetType()
+			isOldGen = refType == ref.BranchRefType || refType == ref.RemoteRefType || refType == ref.InternalRefType
+		}
+
+		if isOldGen {
 			oldGen.Insert(h)
 		} else {
 			newGen.Insert(h)
