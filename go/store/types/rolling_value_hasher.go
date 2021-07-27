@@ -37,23 +37,24 @@ const (
 
 	oldMaxChunkSize = 1 << 24
 
-	minChunkSize    = 1 << 10
-	maxChunkSize    = 1 << 13
+	minChunkSize = 1 << 10
+	maxChunkSize = 1 << 13
 
-	smoothMinChunkSize    = 1 << 9
-	smoothMaxChunkSize    = 1 << 14
+	smoothMinChunkSize = 1 << 9
+	smoothMaxChunkSize = 1 << 14
 )
 
-type signatureRange [2]uint32
+type signatureRange [2]uint32 // { endOfRange, pattern }
 
 var smoothRanges = []signatureRange{
-	{1024,  1<<16 - 1},
-	{2048,  1<<14 - 1},
-	{4096,  1<<12 - 1},
-	{8192,  1<<10 - 1},
+	// min = 512
+	{1024, 1<<16 - 1},
+	{2048, 1<<14 - 1},
+	{4096, 1<<12 - 1},
+	{8192, 1<<10 - 1},
 	{16384, 1<<8 - 1},
+	// max = 16384
 }
-
 
 var TestRewrite bool = false
 var TestSmooth bool = false
@@ -152,7 +153,7 @@ func (rv *rollingValueHasher) hashByte(b byte, offset uint32) bool {
 					rv.crossedBoundary = true
 				}
 
-			// chunk with min/max
+				// chunk with min/max
 			} else {
 				if offset > minChunkSize {
 					rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
@@ -162,7 +163,7 @@ func (rv *rollingValueHasher) hashByte(b byte, offset uint32) bool {
 				}
 			}
 
-		// chunk with constant probability, no min/max
+			// chunk with constant probability, no min/max
 		} else {
 			rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
 			if offset > oldMaxChunkSize {
