@@ -788,3 +788,43 @@ SQL
     )" ""
     server_query repo1 1 "SHOW tables" "" # validate that it does have show tables
 }
+
+@test "sql-server: connect to another branch with connection string" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt checkout -b "feature-branch"
+    dolt checkout master
+    start_sql_server repo1
+
+    server_query "repo1/feature-branch" 1 "CREATE TABLE test (
+        pk int,
+        c1 int,
+        PRIMARY KEY (pk)
+    )" ""
+
+    server_query repo1 1 "SHOW tables" "" # no tables on master
+
+    server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
+}
+
+@test "sql-server: select a branch with the USE syntax" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt checkout -b "feature-branch"
+    dolt checkout master
+    start_sql_server repo1
+
+    multi_query repo1 1 '
+    USE `repo1/feature-branch`;
+    CREATE TABLE test ( 
+        pk int,
+        c1 int,
+        PRIMARY KEY (pk)
+    )' ""
+
+    server_query repo1 1 "SHOW tables" "" # no tables on master
+    
+    server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
+}
