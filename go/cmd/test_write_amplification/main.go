@@ -4,11 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"sort"
 	"math/rand"
 	"runtime"
-	"sync/atomic"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -17,8 +17,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var Dir = flag.String("dir", "/Users/aaronson/dolt_clone/city-populations", "directory of the repository")
@@ -27,6 +27,7 @@ var Table = flag.String("table", "", "table to test against")
 var Seed = flag.Int("seed", 1, "seed to use for rng key selector")
 var Perc = flag.Float64("perc", 0.01, "percentage of keys to measure write amplification for deleting")
 var Rewrite = flag.Bool("rewrite", false, "if true, rewrite the map and run the test on the rewritten map")
+var Smooth = flag.Bool("smooth", false, "if true, rewrites the map with smoothed pattern matching ")
 
 func GetTableNames(ctx context.Context, dir, branch string) (*doltdb.DoltDB, *doltdb.RootValue, []string) {
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, "file://"+dir+"/.dolt/noms", "0.0.0-test_tuples")
@@ -74,6 +75,9 @@ func main() {
 
 	if *Rewrite {
 		types.TestRewrite = true
+		if *Smooth {
+			types.TestSmooth = true
+		}
 	}
 
 	db, rv, tablenames := GetTableNames(ctx, *Dir, *Branch)
@@ -194,7 +198,7 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 
 	for j := 0; j < numprocs; j++ {
 		ftodelete := todelete
-		if j != numprocs - 1 {
+		if j != numprocs-1 {
 			ftodelete = todelete[:stride]
 			todelete = todelete[stride:]
 		}

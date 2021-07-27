@@ -33,14 +33,34 @@ const (
 	defaultChunkPattern = uint32(1<<12 - 1) // Avg Chunk Size of 4k
 
 	// The window size to use for computing the rolling hash. This is way more than necessary assuming random data (two bytes would be sufficient with a target chunk size of 4k). The benefit of a larger window is it allows for better distribution on input with lower entropy. At a target chunk size of 4k, any given byte changing has roughly a 1.5% chance of affecting an existing boundary, which seems like an acceptable trade-off. The choice of a prime number provides better distribution for repeating input.
-	chunkWindow  = uint32(67)
+	chunkWindow = uint32(67)
 
 	oldMaxChunkSize = 1 << 24
 	minChunkSize    = 1 << 10
 	maxChunkSize    = 1 << 13
+
+	// min
+	nine       = uint32(1 << 9)			// 512
+	ninePatten = uint32(1<<16 - 1)
+
+	ten       = uint32(1 << 10)			// 1K
+	tenPatten = uint32(1<<14 - 1)
+
+	eleven       = uint32(1 << 11)		// 2K
+	elevenPatten = uint32(1<<12 - 1)
+
+	twelve       = uint32(1 << 12)		// 4K
+	twelvePatten = uint32(1<<10 - 1)
+
+	thirteen       = uint32(1 << 13)	// 8K
+	thirteenPatten = uint32(1<<8 - 1)
+
+	// max
+	fourteen       = uint32(1 << 14)	// 16K
 )
 
 var TestRewrite bool = false
+var TestSmooth bool = false
 
 // Only set by tests
 var (
@@ -119,11 +139,32 @@ func (rv *rollingValueHasher) hashByte(b byte, offset uint32) bool {
 	if !rv.crossedBoundary {
 		rv.bz.HashByte(b ^ rv.salt)
 		if TestRewrite {
-			if offset > minChunkSize {
-				rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
-			}
-			if offset > maxChunkSize {
-				rv.crossedBoundary = true
+			if TestSmooth {
+				s32 := rv.bz.Sum32()
+				if offset < nine {
+					// 512 min
+					return rv.crossedBoundary
+				} else if offset < ten {
+					rv.crossedBoundary = s32&ninePatten == ninePatten
+				} else if offset < eleven {
+					rv.crossedBoundary = s32&tenPatten == tenPatten
+				} else if offset < twelve {
+					rv.crossedBoundary = s32&elevenPatten == elevenPatten
+				} else if offset < thirteen {
+					rv.crossedBoundary = s32&twelvePatten == twelvePatten
+				} else if offset < fourteen {
+					rv.crossedBoundary = s32&thirteenPatten == thirteenPatten
+				} else if offset >= fourteen {
+					// 16K max
+					rv.crossedBoundary = true
+				}
+			} else {
+				if offset > minChunkSize {
+					rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
+				}
+				if offset > maxChunkSize {
+					rv.crossedBoundary = true
+				}
 			}
 		} else {
 			rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
