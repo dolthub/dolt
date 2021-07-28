@@ -259,22 +259,52 @@ SQL
     dolt sql -q "dasda"
 }
 
-@test "schema-changes: add single primary key" {
+#@test "schema-changes: add single primary key" {
+#
+#}
+#
+#@test "schema-changes: add composite primary key" {
+#
+#}
+#
+#@test "schema-changes: can delete single primary key" {
+#
+#}
+#
+#@test "schema-changes: can delete composite primary key" {
+#
+#}
+#
+#@test "schema-changes: run through some add and drop primary key operations" {
+#
+#}
 
-}
+#todo: Add test cases for indexes/unique keys and stufd
 
-@test "schema-changes: add composite primary key" {
+# Todo: add a test with autoincrement and alter table
+@test "schema-changes: merge with keyless and keyed table with different data" {
+    dolt sql -q "CREATE TABLE t(pk int primary key, val int)"
+    dolt commit -am "add table"
 
-}
+    dolt checkout -b keyless-branch
+    dolt sql -q "DROP TABLE t"
+    dolt sql -q "CREATE TABLE t(pk int, val int)"
+    dolt sql -q "INSERT INTO t VALUES (2, 2)"
+    dolt add .
+    dolt add .
+    dolt commit -am "commit keyless"
 
-@test "schema-changes: can delete single primary key" {
+    dolt checkout master
+    dolt sql -q "insert into t values (1, 1)"
+    dolt commit -am "keyed insert"
 
-}
+    dolt merge keyless-branch
+    run dolt sql -q "SELECT * FROM t"
+    [ "$status" -eq 1 ]
 
-@test "schema-changes: can delete composite primary key" {
-
-}
-
-@test "schema-changes: run through some add and drop primary key operations" {
-  
+    # Different types of encoding is causing the problem
+#    Map<Union<>,Union<>> - map {
+#       (15476,1): (12204,1),
+#       (2251799813690248,d494c354-3c9b-6c6c-a5af-580b1fd48518): (2251799813690249,2,15476,2,12204,2),
+#    }
 }
