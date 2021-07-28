@@ -389,7 +389,7 @@ func (d DoltMergeFunc) String() string {
 }
 
 func (d DoltMergeFunc) Type() sql.Type {
-	return sql.Int8
+	return sql.Boolean
 }
 
 func (d DoltMergeFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
