@@ -608,7 +608,76 @@ SQL
 
     run dolt sql -q "select * from \`dolt_repo_$$/$hash\`.a1 order by x;" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]    
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ "5" ]] || false
+
+    # same with USE syntax
+    run dolt sql --disable-batch -r csv <<SQL
+    USE \`dolt_repo_$$/$hash\`;
+    select * from a1;
+SQL
+
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ] # First line is "database changed"
+    [[ ! "$output" =~ "5" ]] || false
+}
+
+@test "sql: commit hash qualified DB name in delete" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    
+    dolt sql --disable-batch <<SQL
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+insert into a1 values (4), (5), (6);
+select DOLT_COMMIT('-a', '-m', 'more values');
+SQL
+
+    # get the second to last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
+
+    run dolt sql -q "delete from \`dolt_repo_$$/$hash\`.a1;" -r csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'read-only' ]] || false
+
+    # same with USE syntax
+    run dolt sql --disable-batch <<SQL
+    USE \`dolt_repo_$$/$hash\`;
+    delete from a1;
+SQL
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'read-only' ]] || false    
+}
+
+@test "sql: commit hash qualified DB name in update" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    
+    dolt sql --disable-batch <<SQL
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+insert into a1 values (4), (5), (6);
+select DOLT_COMMIT('-a', '-m', 'more values');
+SQL
+
+    # get the second to last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
+
+    run dolt sql -q "update \`dolt_repo_$$/$hash\`.a1 set x = x*10" -r csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'read-only' ]] || false
+
+    # same with USE syntax
+    run dolt sql --disable-batch <<SQL
+    USE \`dolt_repo_$$/$hash\`;
+    update a1 set x = x*10;
+SQL
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'read-only' ]] || false    
 }
 
 @test "sql: describe" {
