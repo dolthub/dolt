@@ -606,7 +606,7 @@ SQL
     # get the second to last commit hash
     hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
 
-    dolt sql -q "select * from \`dolt_repo_$$/$hash\`.a1 order by x;" -r csv
+    run dolt sql -q "select * from \`dolt_repo_$$/$hash\`.a1 order by x;" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]    
 }

@@ -1036,6 +1036,23 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		headRoot, err := dbState.HeadCommit.GetRootValue()
+		if err != nil {
+			return err
+		}
+
+		hash, err := headRoot.HashOf()
+		if err != nil {
+			return err
+		}
+
+		err = sess.Session.SetSessionVariable(ctx, WorkingKey(db.Name()), hash.String())
+		if err != nil {
+			return err
+		}
+
+		sessionState.headRoot = headRoot
 	}
 
 	// This has to happen after SetRoot above, since it does a stale check before its work
