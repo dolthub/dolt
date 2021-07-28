@@ -236,9 +236,9 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		drw:  srcDb.drw,
 	}}
 	init := dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: cm,
-		ReadOnly:   true,
+		Db:           db,
+		HeadCommit:   cm,
+		ReadOnly:     true,
 		DetachedHead: true,
 		DbData: env.DbData{
 			Ddb: srcDb.ddb,
