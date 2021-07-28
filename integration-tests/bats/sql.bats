@@ -554,6 +554,43 @@ SQL
     [[ "$output" =~ table_a ]] || false
 }
 
+@test "sql: branch qualified DB name in select" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout master
+    
+    dolt sql --disable-batch <<SQL
+USE \`dolt_repo_$$/feature-branch\`;
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+SQL
+
+    run dolt sql -q "select * from \`dolt_repo_$$/feature-branch\`.a1 order by x;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+}
+
+@test "sql: branch qualified DB name in insert" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout master
+    
+    dolt sql --disable-batch <<SQL
+USE \`dolt_repo_$$/feature-branch\`;
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+SQL
+
+    run dolt sql -q "insert into \`dolt_repo_$$/feature-branch\`.a1 values (4);" -r csv
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from \`dolt_repo_$$/feature-branch\`.a1 order by x;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+}
+
 @test "sql: describe" {
     run dolt sql -q "describe one_pk"
     [ $status -eq 0 ]
