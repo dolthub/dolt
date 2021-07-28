@@ -15,6 +15,7 @@
 package ref
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -38,6 +39,8 @@ func NewWorkingSetRef(workingSetName string) WorkingSetRef {
 	return WorkingSetRef{workingSetName}
 }
 
+var ErrWorkingSetUnsupported = errors.New("unsupported type of ref for a working set")
+
 // WorkingSetRefForHead returns a new WorkingSetRef for the head ref given, or an error if the ref given doesn't
 // represent a head.
 func WorkingSetRefForHead(ref DoltRef) (WorkingSetRef, error) {
@@ -45,7 +48,7 @@ func WorkingSetRefForHead(ref DoltRef) (WorkingSetRef, error) {
 	case BranchRefType, WorkspaceRefType:
 		return NewWorkingSetRef(path.Join(string(ref.GetType()), ref.GetPath())), nil
 	default:
-		return WorkingSetRef{}, fmt.Errorf("unsupported type of ref for a working set: %s", ref.GetType())
+		return WorkingSetRef{}, fmt.Errorf("%w: %s", ErrWorkingSetUnsupported, ref.GetType())
 	}
 }
 

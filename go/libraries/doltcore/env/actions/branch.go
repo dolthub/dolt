@@ -149,6 +149,18 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 		}
 	}
 
+	wsRef, err := ref.WorkingSetRefForHead(dref)
+	if err != nil {
+		if !errors.Is(err, ref.ErrWorkingSetUnsupported) {
+			return err
+		}
+	} else {
+		err = ddb.DeleteWorkingSet(ctx, wsRef)
+		if err != nil {
+			return err
+		}
+	}
+
 	return ddb.DeleteBranch(ctx, dref)
 }
 
