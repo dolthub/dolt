@@ -591,6 +591,26 @@ SQL
     [ "${#lines[@]}" -eq 5 ]
 }
 
+@test "sql: commit hash qualified DB name in select" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    
+    dolt sql --disable-batch <<SQL
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+insert into a1 values (4), (5), (6);
+select DOLT_COMMIT('-a', '-m', 'more values');
+SQL
+
+    # get the second to last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
+
+    dolt sql -q "select * from \`dolt_repo_$$/$hash\`.a1 order by x;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]    
+}
+
 @test "sql: describe" {
     run dolt sql -q "describe one_pk"
     [ $status -eq 0 ]

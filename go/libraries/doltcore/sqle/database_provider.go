@@ -61,7 +61,7 @@ func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error)
 		return db, nil
 	}
 
-	db, ok, err = p.databaseForRevision(context.Background(), name)
+	db, _, ok, err = p.databaseForRevision(context.Background(), name)
 	if err != nil {
 		return nil, err
 	}
@@ -105,9 +105,9 @@ func (p DoltDatabaseProvider) DropDatabase(name string) {
 	delete(p.databases, name)
 }
 
-func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB string) (sql.Database, bool, error) {
+func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
-		return nil, false, nil
+		return nil, dsess.InitialDbState{}, false, nil
 	}
 
 	parts := strings.SplitN(revDB, dbRevisionDelimiter, 2)
@@ -115,75 +115,43 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 
 	candidate, ok := p.databases[dbName]
 	if !ok {
-		return nil, false, nil
+		return nil, dsess.InitialDbState{}, false, nil
 	}
 	srcDb, ok := candidate.(Database)
 	if !ok {
-		return nil, false, nil
+		return nil, dsess.InitialDbState{}, false, nil
 	}
 
 	if isBranch(ctx, srcDb.ddb, revSpec) {
 		// if the requested revision is a br we can
 		// write to it, otherwise make read-only
-		db, _, err := dbRevisionForBranch(ctx, srcDb, revSpec)
+		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
 		if err != nil {
-			return nil, false, err
+			return nil, dsess.InitialDbState{}, false, err
 		}
-		return db, true, nil
+		return db, init, true, nil
 	}
 
 	if doltdb.IsValidCommitHash(revSpec) {
-		db, _, err := dbRevisionForCommit(ctx, srcDb, revSpec)
+		db, init, err := dbRevisionForCommit(ctx, srcDb, revSpec)
 		if err != nil {
-			return nil, false, err
+			return nil, dsess.InitialDbState{}, false, err
 		}
-		return db, true, nil
+		return db, init, true, nil
 	}
 
-	return nil, false, nil
+	return nil, dsess.InitialDbState{}, false, nil
 }
 
 func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string) (dsess.InitialDbState, error) {
-	errNotFound := sql.ErrDatabaseNotFound.New(revDB)
-	if !strings.Contains(revDB, dbRevisionDelimiter) {
-		return dsess.InitialDbState{}, errNotFound
+	_, init, ok, err := p.databaseForRevision(ctx, revDB)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	} else if !ok {
+		return dsess.InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
 	}
 
-	parts := strings.SplitN(revDB, dbRevisionDelimiter, 2)
-	dbName, revSpec := parts[0], parts[1]
-
-	candidate, ok := p.databases[dbName]
-	if !ok {
-		return dsess.InitialDbState{}, errNotFound
-	}
-	srcDb, ok := candidate.(Database)
-	if !ok {
-		return dsess.InitialDbState{}, errNotFound
-	}
-
-	if isBranch(ctx, srcDb.ddb, revSpec) {
-		// if the requested revision is a br we can
-		// write to it, otherwise make read-only
-		_, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
-		if err != nil {
-			return dsess.InitialDbState{}, err
-		}
-		return init, nil
-	}
-
-	// TODO: allow database revisions at commits
-	// much of the current database state logic depends on having
-	// a WorkingSet to reference, but Commits in the history don't
-	// have corresponding WorkingSets.
-	//if doltdb.IsValidCommitHash(revSpec) {
-	//	_, init, errNotFound := dbRevisionForCommit(ctx, srcDb, revSpec)
-	//	if errNotFound != nil {
-	//		return dsess.InitialDbState{}, errNotFound
-	//	}
-	//	return init, nil
-	//}
-
-	return dsess.InitialDbState{}, errNotFound
+	return init, nil
 }
 
 func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {
@@ -270,8 +238,8 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 	init := dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: cm,
-		// TODO: provide a working root without a working set
-		//WorkingSet: nil
+		ReadOnly:   true,
+		DetachedHead: true,
 		DbData: env.DbData{
 			Ddb: srcDb.ddb,
 			Rsw: srcDb.rsw,
