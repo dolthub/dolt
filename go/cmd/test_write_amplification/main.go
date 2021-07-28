@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"gonum.org/v1/plot/vg"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -12,6 +13,8 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -21,13 +24,14 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var Dir = flag.String("dir", "/Users/aaronson/dolt_clone/city-populations", "directory of the repository")
+var Dir = flag.String("dir", ".", "directory of the repository")
 var Branch = flag.String("branch", "master", "branch of the repository")
 var Table = flag.String("table", "", "table to test against")
 var Seed = flag.Int("seed", 1, "seed to use for rng key selector")
 var Perc = flag.Float64("perc", 0.01, "percentage of keys to measure write amplification for deleting")
 var Rewrite = flag.Bool("rewrite", false, "if true, rewrite the map and run the test on the rewritten map")
 var Smooth = flag.Bool("smooth", false, "if true, rewrites the map with smoothed pattern matching ")
+var Hist = flag.Bool("hist", false, "if true, plot chunk size histograms")
 
 func GetTableNames(ctx context.Context, dir, branch string) (*doltdb.DoltDB, *doltdb.RootValue, []string) {
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, "file://"+dir+"/.dolt/noms", "0.0.0-test_tuples")
@@ -108,7 +112,7 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 
 	originalHashes := newHashset()
 	var ogchunksizes, rewritechunksizes inthist
-	next := get_leaves(ctx, []types.Ref{r}, vrw, originalHashes, &ogchunksizes)
+	next, ogHist := get_leaves(ctx, []types.Ref{r}, vrw, originalHashes, &ogchunksizes)
 	fmt.Println("num leaves", len(next), "num chunks", len(originalHashes))
 
 	var rewritemapeditor *types.MapEditor
@@ -150,6 +154,8 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 	fmt.Printf(fmtstr, i, len(next))
 	fmt.Printf("\n")
 
+	// histogram viz
+	var rewriteHist plotter.Values
 	if *Rewrite {
 		fmt.Println("flushing rewrite map editor")
 		rewritemap, err := rewritemapeditor.Map(ctx)
@@ -162,7 +168,7 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 			return nil
 		})
 		originalHashes = newHashset()
-		next = get_leaves(ctx, rs, vrw, originalHashes, &rewritechunksizes)
+		next, rewriteHist = get_leaves(ctx, rs, vrw, originalHashes, &rewritechunksizes)
 		i = 0
 		fmt.Println("getting rewrite map chunk sizes")
 		w := len(fmt.Sprintf("%d", len(next)))
@@ -271,6 +277,11 @@ func benchmark_ref(ctx context.Context, m types.Map, r types.Ref, vrw types.Valu
 	fmt.Printf("og chunk sizes:      %s\n", ogchunksizes.String())
 	fmt.Printf("new chunks:          %s\n", numchunksa[0].String())
 	fmt.Printf("bytes written:       %s\n", chunksizesa[0].String())
+
+	if *Hist {
+		histPlot(ogHist, fmt.Sprintf("og-hist-%s.png", *Table))
+		histPlot(rewriteHist, fmt.Sprintf("rewrite-hist-%s.png", *Table))
+	}
 }
 
 type inthist struct {
@@ -360,7 +371,8 @@ func get_delta(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, o
 	return newchunks, newchunksizes
 }
 
-func get_leaves(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, hs hashset, chunksizes *inthist) []types.Ref {
+func get_leaves(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, hs hashset, chunksizes *inthist) ([]types.Ref, plotter.Values) {
+	vals := plotter.Values{}
 	res := make([]types.Ref, 0)
 	next := rs
 	for len(next) > 0 {
@@ -378,13 +390,14 @@ func get_leaves(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, 
 			}
 			m := v.(types.Map)
 			chunksizes.add(m.EncodedLen())
+			vals = append(vals, float64(m.EncodedLen()))
 			m.WalkRefs(m.Format(), func(r types.Ref) error {
 				next = append(next, r)
 				return nil
 			})
 		}
 	}
-	return res
+	return res, vals
 }
 
 func leaves(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, cb func(types.Map)) {
@@ -394,5 +407,21 @@ func leaves(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, cb f
 			panic(err)
 		}
 		cb(v.(types.Map))
+	}
+}
+
+func histPlot(values plotter.Values, fname string) {
+	p := plot.New()
+	p.Title.Text = "histogram plot"
+
+	hist, err := plotter.NewHist(values, 20)
+	if err != nil {
+		panic(err)
+	}
+	p.Add(hist)
+
+
+	if err := p.Save(3*vg.Inch, 3*vg.Inch, fname); err != nil {
+		panic(err)
 	}
 }
