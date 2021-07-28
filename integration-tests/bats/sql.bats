@@ -530,6 +530,30 @@ SQL
     [[ ! "$output" =~ table_a ]] || false    
 }
 
+@test "sql: USE branch" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout master
+    
+    dolt sql --disable-batch <<SQL
+USE \`dolt_repo_$$/feature-branch\`;
+CREATE TABLE table_a(x int primary key);
+CREATE TABLE table_b(x int primary key);
+SELECT DOLT_COMMIT('-a', '-m', 'two new tables');
+SQL
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ table_a ]] || false
+
+    dolt checkout feature-branch
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ table_a ]] || false
+}
+
 @test "sql: describe" {
     run dolt sql -q "describe one_pk"
     [ $status -eq 0 ]
