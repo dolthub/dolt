@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"os"
 	"strings"
 	"sync"
 
@@ -30,24 +29,7 @@ import (
 
 const (
 	dbRevisionDelimiter = "/"
-
-	enableDbRevisionsEnvKey = "DOLT_ENABLE_DB_REVISIONS"
 )
-
-var dbRevisionsEnabled = true
-
-func init() {
-	val, ok := os.LookupEnv(enableDbRevisionsEnvKey)
-	if ok {
-		if strings.ToLower(val) == "true" {
-			dbRevisionsEnabled = true
-		}
-	}
-}
-
-func DbRevisionsEnabled() bool {
-	return true
-}
 
 type DoltDatabaseProvider struct {
 	databases map[string]sql.Database
@@ -79,18 +61,16 @@ func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error)
 		return db, nil
 	}
 
-	if dbRevisionsEnabled { // feature flagged
-		db, ok, err = p.databaseForRevision(context.Background(), name)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			p.mu.Lock()
-			defer p.mu.Unlock()
+	db, ok, err = p.databaseForRevision(context.Background(), name)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		p.mu.Lock()
+		defer p.mu.Unlock()
 
-			p.databases[name] = db
-			return db, nil
-		}
+		p.databases[name] = db
+		return db, nil
 	}
 
 	return nil, sql.ErrDatabaseNotFound.New(name)

@@ -247,7 +247,7 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			return false, nil
 		})
 
-		if dEnv == nil && dsqle.DbRevisionsEnabled() {
+		if dEnv == nil {
 			init, err := pro.RevisionDbState(ctx, db.Name())
 			if err != nil {
 				return nil, err
