@@ -60,6 +60,36 @@ SQL
     [[ "$output" =~ "up to date" ]] || false
 }
 
+@test "constraint-violations: dolt_force_transaction_commit ignores constraint violations" {
+    dolt sql <<"SQL"
+CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
+INSERT INTO test VALUES (1, 1), (2, 2);
+SQL
+    dolt add -A
+    dolt commit -m "MC1"
+    dolt branch other
+    dolt sql -q "INSERT INTO test VALUES (3, 3)"
+    dolt add -A
+    dolt commit -m "MC2"
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (4, 3), (9, 9)"
+    dolt add -A
+    dolt commit -m "OC1"
+    dolt checkout master
+
+    run dolt sql <<"SQL"
+SELECT DOLT_MERGE('other');
+SQL
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "constraint violations" ]] || false
+    run dolt sql <<"SQL"
+SET dolt_force_transaction_commit = 1;
+SELECT DOLT_MERGE('other');
+SQL
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "constraint violations" ]] || false
+}
+
 @test "constraint-violations: ancestor contains fk, main parent remove, other child add, restrict" {
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));

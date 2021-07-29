@@ -22,18 +22,17 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/fkconstrain"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type CommitStagedProps struct {
-	Message          string
-	Date             time.Time
-	AllowEmpty       bool
-	CheckForeignKeys bool
-	Name             string
-	Email            string
+	Message    string
+	Date       time.Time
+	AllowEmpty bool
+	Force      bool
+	Name       string
+	Email      string
 }
 
 // GetNameAndEmail returns the name and email from the supplied config
@@ -96,7 +95,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 	}
 
 	var mergeParentCommits []*doltdb.Commit
-	if mergeActive {
+	if mergeActive && !props.Force {
 		inConflict, err := roots.Working.TablesInConflict(ctx)
 		if err != nil {
 			return nil, err
@@ -125,14 +124,8 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		return nil, err
 	}
 
-	if props.CheckForeignKeys {
+	if !props.Force {
 		stagedRoot, err = stagedRoot.ValidateForeignKeysOnSchemas(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
-		err = fkconstrain.Validate(ctx, roots.Head, stagedRoot)
 		if err != nil {
 			return nil, err
 		}

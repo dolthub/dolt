@@ -41,6 +41,8 @@ const (
 const (
 	EnableTransactionsEnvKey      = "DOLT_ENABLE_TRANSACTIONS"
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
+	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
+	ForceTransactionCommit        = "dolt_force_transaction_commit"
 )
 
 type batchMode int8
@@ -49,8 +51,6 @@ const (
 	single batchMode = iota
 	Batched
 )
-
-const TransactionsDisabledSysVar = "dolt_transactions_disabled"
 
 func HeadKey(dbName string) string {
 	return dbName + HeadKeySuffix
@@ -70,7 +70,7 @@ func StagedKey(dbName string) string {
 
 func init() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
+		{ // If true, causes a Dolt commit to occur when you commit a transaction.
 			Name:              DoltCommitOnTransactionCommit,
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           true,
@@ -84,6 +84,14 @@ func init() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(TransactionsDisabledSysVar),
+			Default:           int8(0),
+		},
+		{ // If true, disables the conflict and constraint violation check when you commit a transaction.
+			Name:              ForceTransactionCommit,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(ForceTransactionCommit),
 			Default:           int8(0),
 		},
 	})
@@ -421,11 +429,6 @@ func (sess *Session) CreateDoltCommit(ctx *sql.Context, dbName string) error {
 		return nil
 	}
 
-	fkChecks, err := sess.Session.GetSessionVariable(ctx, "foreign_key_checks")
-	if err != nil {
-		return err
-	}
-
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -438,12 +441,12 @@ func (sess *Session) CreateDoltCommit(ctx *sql.Context, dbName string) error {
 	}
 
 	_, err = sess.CommitToDolt(ctx, roots, dbName, actions.CommitStagedProps{
-		Message:          fmt.Sprintf("Transaction commit at %s", ctx.QueryTime().UTC().Format("2006-01-02T15:04:05Z")),
-		Date:             ctx.QueryTime(),
-		AllowEmpty:       false,
-		CheckForeignKeys: fkChecks.(int8) == 1,
-		Name:             sess.Username,
-		Email:            sess.Email,
+		Message:    fmt.Sprintf("Transaction commit at %s", ctx.QueryTime().UTC().Format("2006-01-02T15:04:05Z")),
+		Date:       ctx.QueryTime(),
+		AllowEmpty: false,
+		Force:      false,
+		Name:       sess.Username,
+		Email:      sess.Email,
 	})
 	if _, ok := err.(actions.NothingStaged); err != nil && !ok {
 		return err

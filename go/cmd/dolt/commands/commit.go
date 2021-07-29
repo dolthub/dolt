@@ -124,12 +124,12 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
-		Message:          msg,
-		Date:             t,
-		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
-		Name:             name,
-		Email:            email,
+		Message:    msg,
+		Date:       t,
+		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		Force:      apr.Contains(cli.ForceFlag),
+		Name:       name,
+		Email:      email,
 	})
 
 	if err == nil {
