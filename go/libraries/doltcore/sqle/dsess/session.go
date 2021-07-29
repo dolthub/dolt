@@ -105,6 +105,14 @@ func IsHeadKey(key string) (bool, string) {
 	return false, ""
 }
 
+func IsHeadRefKey(key string) (bool, string) {
+	if strings.HasSuffix(key, HeadRefKeySuffix) {
+		return true, key[:len(key)-len(HeadRefKeySuffix)]
+	}
+
+	return false, ""
+}
+
 func IsWorkingKey(key string) (bool, string) {
 	if strings.HasSuffix(key, WorkingKeySuffix) {
 		return true, key[:len(key)-len(WorkingKeySuffix)]
@@ -876,8 +884,6 @@ func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Com
 // SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
 // vars that we define. Otherwise we pass it on to the base implementation.
 func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
-	// TODO: working set ref
-
 	if isHead, dbName := IsHeadKey(key); isHead {
 		err := sess.setHeadSessionVar(ctx, value, dbName)
 		if err != nil {
@@ -891,6 +897,30 @@ func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value inte
 
 		dbState.detachedHead = true
 		return nil
+	}
+
+	if isHeadRef, dbName := IsHeadRefKey(key); isHeadRef {
+		valStr, isStr := value.(string)
+		if !isStr {
+			return doltdb.ErrInvalidBranchOrHash
+		}
+
+		headRef, err := ref.Parse(valStr)
+		if err != nil {
+			return err
+		}
+
+		wsRef, err := ref.WorkingSetRefForHead(headRef)
+		if err != nil {
+			return err
+		}
+
+		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
+		if err != nil {
+			return err
+		}
+
+		return sess.Session.SetSessionVariable(ctx, key, value)
 	}
 
 	if isWorking, dbName := IsWorkingKey(key); isWorking {
@@ -964,7 +994,6 @@ func (sess *Session) setHeadSessionVar(ctx *sql.Context, value interface{}, dbNa
 	}
 
 	valStr, isStr := value.(string)
-
 	if !isStr || !hash.IsValid(valStr) {
 		return doltdb.ErrInvalidHash
 	}

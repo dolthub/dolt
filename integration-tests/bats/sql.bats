@@ -590,6 +590,14 @@ SQL
 
     dolt checkout master
 
+    run dolt sql --disable-batch <<SQL
+set @@dolt_repo_$$_head_ref = 'refs/heads/feature-branch';
+select @@dolt_repo_$$_head_ref;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'refs/heads/feature-branch' ]] || false
+    
     # switching to a branch that doesn't exist should be an error
     run dolt sql -q "set @@dolt_repo_$$_head_ref = 'does-not-exist';"
     [ "$status" -eq 1 ]
