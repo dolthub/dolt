@@ -54,7 +54,6 @@ const (
 	Version = "0.27.0"
 )
 
-
 // TESTING THE STUFF
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
