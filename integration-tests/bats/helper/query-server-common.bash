@@ -7,14 +7,16 @@ import sys
 
 args = sys.argv[sys.argv.index('--') + 1:]
 query_results = None
+expected_exception = None
 
-if len(args) == 6:
-    working_dir, database, port_str, auto_commit, query_strs, query_results = args
-else:
-    working_dir, database, port_str, auto_commit, query_strs = args
+working_dir, database, port_str, auto_commit, query_strs = args[0:5]
+if len(args) > 5:
+   query_results = args[5]
+if len(args) > 6:
+   expected_exception = args[6]
 
 print('Query Strings: ' + query_strs)
-print('Workind Dir: ' + working_dir)
+print('Working Dir: ' + working_dir)
 print('Database: ' + database)
 print('Port: ' + port_str)
 print('Autocommit: ' + auto_commit)
@@ -47,7 +49,19 @@ if query_results is not None:
 for i in range(len(queries)):
     query_str = queries[i].strip()
     print('executing:', query_str)
-    actual_rows, num_rows = dc.query(query_str)
+
+    actual_rows, num_rows = None, None
+    try:
+        actual_rows, num_rows = dc.query(query_str, False)
+    except BaseException as e:
+        print('caught exception', str(e))
+        if expected_exception is not None and len(expected_exception) > 0:
+            if expected_exception not in str(e):
+                print('expected exception: ', expected_exception, '\n  got: ', str(e))
+                sys.exit(1)
+            continue
+        else:
+            sys.exit(1)
 
     if expected[i] is not None:
         expected_rows = csv_to_row_maps(expected[i])
@@ -130,40 +144,45 @@ stop_sql_server() {
 
 # server_query connects to a running mysql server, executes a query and compares the results against what is expected.
 # In the event that the results do not match expectations, the python process will exit with an exit code of 1
-#  * param1 is 1 for autocommit = true, 0 for autocommit = false
-#  * param2 is the query_str
-#  * param3 is a csv representing the expected result set.  If a query is not expected to have a result set "" should
+#  * param1 is the database name for the connection string
+#  * param2 is 1 for autocommit = true, 0 for autocommit = false
+#  * param3 is the query_str
+#  * param4 is a csv representing the expected result set.  If a query is not expected to have a result set "" should
 #      be passed.
+#  * param5 is an expected exception string. Mutually exclusive with param4
 server_query() {
     let PORT="$$ % (65536-1024) + 1024"
     PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
     echo Executing server_query
-    python3 -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "$DEFAULT_DB" "$PORT" "$1" "$2" "$3"
+    python3 -u -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "$1" "$PORT" "$2" "$3" "$4" "$5"
 }
 
 # server_query connects to a running mysql server, executes a query and compares the results against what is expected.
 # In the event that the results do not match expectations, the python process will exit with an exit code of 1
-#  * param1 is 1 for autocommit = true, 0 for autocommit = false
-#  * param2 is the query_str
+#  * param1 is the database name for the connection string
+#  * param2 is 1 for autocommit = true, 0 for autocommit = false
+#  * param3 is the query_str
 multi_query() {
     let PORT="$$ % (65536-1024) + 1024"
     PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
     echo Executing multi_query
-    python3 -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "$DEFAULT_DB" "$PORT" "$1" "$2"
+    python3 -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "$1" "$PORT" "$2" "$3"
 }
 
-# update_query runs an update query and should be called with 2 parameters
-#   * param1 is 1 for autocommit = true, 0 for autocommit = false
-#   * param2 is the query string
+# update_query runs an update query and should be called with 3 parameters
+#   * param1 is the database name for the connection string
+#   * param2 is 1 for autocommit = true, 0 for autocommit = false
+#   * param3 is the query string
 update_query() {
-    server_query $1 "$2" ""
+    server_query "$1" "$2" "$3" ""
 }
 
-# insert_query runs an insert query and should be called with 2 parameters
-#   * param1 is 1 for autocommit = true, 0 for autocommit = false
-#   * param2 is the query string
+# insert_query runs an insert query and should be called with 3 parameters
+#   * param1 is the database name for the connection string
+#   * param2 is 1 for autocommit = true, 0 for autocommit = false
+#   * param3 is the query string
 insert_query() {
-    server_query $1 "$2" ""
+    server_query "$1" "$2" "$3" ""
 }
 
 # unselected_server_query connects to a running mysql server, but not to a particular database, executes a query and

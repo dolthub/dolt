@@ -126,11 +126,12 @@ type Session struct {
 type DatabaseSessionState struct {
 	dbName               string
 	headCommit           *doltdb.Commit
-	detachedHead         bool
 	headRoot             *doltdb.RootValue
 	WorkingSet           *doltdb.WorkingSet
 	dbData               env.DbData
 	EditSession          *editor.TableEditSession
+	detachedHead         bool
+	readOnly             bool
 	dirty                bool
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
@@ -138,6 +139,13 @@ type DatabaseSessionState struct {
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
+	if d.WorkingSet == nil {
+		return doltdb.Roots{
+			Head:    d.headRoot,
+			Working: d.headRoot,
+			Staged:  d.headRoot,
+		}
+	}
 	return doltdb.Roots{
 		Head:    d.headRoot,
 		Working: d.WorkingSet.WorkingRoot(),
@@ -160,11 +168,13 @@ func DefaultSession() *Session {
 }
 
 type InitialDbState struct {
-	Db          sql.Database
-	HeadCommit  *doltdb.Commit
-	WorkingSet  *doltdb.WorkingSet
-	DbData      env.DbData
-	GlobalState globalstate.GlobalState
+	Db           sql.Database
+	HeadCommit   *doltdb.Commit
+	DetachedHead bool
+	ReadOnly     bool
+	WorkingSet   *doltdb.WorkingSet
+	DbData       env.DbData
+	GlobalState  globalstate.GlobalState
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -210,6 +220,7 @@ func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSe
 	if err != nil {
 		return nil, ok, err
 	}
+
 	// TODO: this could potentially add a |sess.dbStates| entry
 	// for every commit in the history, leaking memory.
 	// We need a size-limited data structure for read-only
@@ -250,6 +261,10 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (sql.Tran
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
+	}
+
+	if sessionState.readOnly && sessionState.detachedHead {
+		return DisabledTransaction{}, nil
 	}
 
 	wsRef := sessionState.WorkingSet.Ref()
@@ -614,12 +629,18 @@ func (sess *Session) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bo
 // Data changes contained in the |newRoot| aren't persisted until this session is committed.
 // TODO: rename to SetWorkingRoot
 func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+	// TODO: this is redundant with work done in setRoot
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
 	if rootsEqual(sessionState.GetRoots().Working, newRoot) {
+		return nil
+	}
+
+	if sessionState.readOnly {
+		// TODO: Return an error here?
 		return nil
 	}
 
@@ -998,21 +1019,42 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
 	sessionState.GlobalState = dbState.GlobalState
+	sessionState.readOnly, sessionState.detachedHead = dbState.ReadOnly, dbState.DetachedHead
 
 	sessionState.EditSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
-	err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), dbState.WorkingSet.Ref().GetPath())
-	if err != nil {
-		return err
-	}
+	// WorkingSet is nil in the case of a read only, detached head DB
+	if dbState.WorkingSet != nil {
+		err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), dbState.WorkingSet.Ref().GetPath())
+		if err != nil {
+			return err
+		}
 
-	sessionState.WorkingSet = dbState.WorkingSet
-	workingRoot := dbState.WorkingSet.WorkingRoot()
-	logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
+		sessionState.WorkingSet = dbState.WorkingSet
+		workingRoot := dbState.WorkingSet.WorkingRoot()
+		logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
 
-	err = sess.setRoot(ctx, db.Name(), workingRoot)
-	if err != nil {
-		return err
+		err = sess.setRoot(ctx, db.Name(), workingRoot)
+		if err != nil {
+			return err
+		}
+	} else {
+		headRoot, err := dbState.HeadCommit.GetRootValue()
+		if err != nil {
+			return err
+		}
+
+		hash, err := headRoot.HashOf()
+		if err != nil {
+			return err
+		}
+
+		err = sess.Session.SetSessionVariable(ctx, WorkingKey(db.Name()), hash.String())
+		if err != nil {
+			return err
+		}
+
+		sessionState.headRoot = headRoot
 	}
 
 	// This has to happen after SetRoot above, since it does a stale check before its work

@@ -204,7 +204,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username string, email string, pr
 		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		for _, db := range dbs {
 			root, err := db.GetRoot(sqlCtx)
-			if err != err {
+			if err != nil {
 				cli.PrintErrln(err)
 				return nil, nil, nil, err
 			}
@@ -247,7 +247,7 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			return false, nil
 		})
 
-		if dEnv == nil && dsqle.DbRevisionsEnabled() {
+		if dEnv == nil {
 			init, err := pro.RevisionDbState(ctx, db.Name())
 			if err != nil {
 				return nil, err
