@@ -204,11 +204,9 @@ SQL
 }
 
 @test "verify-constraints: SQL CONSTRAINTS_VERIFY() no named tables" {
-    run dolt sql -q "SELECT CONSTRAINTS_VERIFY()" -r=csv
+    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY();" -r=json
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "CONSTRAINTS_VERIFY()" ]] || false
-    [[ "$output" =~ "0" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY()\":0}" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [[ "$output" =~ "child3,1" ]] || false
     [[ "$output" =~ "child4,1" ]] || false
@@ -216,11 +214,9 @@ SQL
 }
 
 @test "verify-constraints: SQL CONSTRAINTS_VERIFY() named table" {
-    run dolt sql -q "SELECT CONSTRAINTS_VERIFY('child3')" -r=csv
+    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY('child3');" -r=json
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "CONSTRAINTS_VERIFY('child3')" ]] || false
-    [[ "$output" =~ "0" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY('child3')\":0}" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [[ "$output" =~ "child3,1" ]] || false
     [[ ! "$output" =~ "child4,1" ]] || false
@@ -228,11 +224,9 @@ SQL
 }
 
 @test "verify-constraints: SQL CONSTRAINTS_VERIFY() named tables" {
-    run dolt sql -q "SELECT CONSTRAINTS_VERIFY('child3', 'child4')" -r=csv
+    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY('child3', 'child4');" -r=json
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "CONSTRAINTS_VERIFY('child3', 'child4')" ]] || false
-    [[ "$output" =~ "0" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY('child3', 'child4')\":0}" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [[ "$output" =~ "child3,1" ]] || false
     [[ "$output" =~ "child4,1" ]] || false
@@ -240,11 +234,9 @@ SQL
 }
 
 @test "verify-constraints: SQL CONSTRAINTS_VERIFY_ALL() no named tables" {
-    run dolt sql -q "SELECT CONSTRAINTS_VERIFY_ALL()" -r=csv
+    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY_ALL();" -r=json
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "CONSTRAINTS_VERIFY_ALL()" ]] || false
-    [[ "$output" =~ "0" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY_ALL()\":0}" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [[ "$output" =~ "child3,2" ]] || false
     [[ "$output" =~ "child4,2" ]] || false
@@ -252,11 +244,9 @@ SQL
 }
 
 @test "verify-constraints: SQL CONSTRAINTS_VERIFY_ALL() named table" {
-    run dolt sql -q "SELECT CONSTRAINTS_VERIFY_ALL('child3')" -r=csv
+    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY_ALL('child3');" -r=json
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "CONSTRAINTS_VERIFY_ALL('child3')" ]] || false
-    [[ "$output" =~ "0" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY_ALL('child3')\":0}" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [[ "$output" =~ "child3,2" ]] || false
     [[ ! "$output" =~ "child4,2" ]] || false
@@ -264,11 +254,9 @@ SQL
 }
 
 @test "verify-constraints: SQL CONSTRAINTS_VERIFY_ALL() named tables" {
-    run dolt sql -q "SELECT CONSTRAINTS_VERIFY_ALL('child3', 'child4')" -r=csv
+    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY_ALL('child3', 'child4');" -r=json
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "CONSTRAINTS_VERIFY_ALL('child3', 'child4')" ]] || false
-    [[ "$output" =~ "0" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY_ALL('child3', 'child4')\":0}" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [[ "$output" =~ "child3,2" ]] || false
     [[ "$output" =~ "child4,2" ]] || false

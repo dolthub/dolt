@@ -334,12 +334,12 @@ func executeNoFFMerge(
 	// TODO: this does several session state updates, and it really needs to just do one
 	//  We also need to commit any pending transaction before we do this.
 	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
-		Message:          msg,
-		Date:             t,
-		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
-		Name:             name,
-		Email:            email,
+		Message:    msg,
+		Date:       t,
+		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		Force:      apr.Contains(cli.ForceFlag),
+		Name:       name,
+		Email:      email,
 	})
 	if err != nil {
 		return nil, err
