@@ -46,6 +46,25 @@ func RenameBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch s
 		}
 	}
 
+	fromWSRef, err := ref.WorkingSetRefForHead(oldRef)
+	if err != nil {
+		if !errors.Is(err, ref.ErrWorkingSetUnsupported) {
+			return err
+		}
+	} else {
+		toWSRef, err := ref.WorkingSetRefForHead(newRef)
+		if err != nil {
+			return err
+		}
+		// We always `force` here, because the CopyBranch up
+		// above created a new branch and it will have a
+		// working set.
+		err = dEnv.DoltDB.CopyWorkingSet(ctx, fromWSRef, toWSRef, true /* force */)
+		if err != nil {
+			return err
+		}
+	}
+
 	return DeleteBranch(ctx, dEnv, oldBranch, DeleteOptions{Force: true})
 }
 

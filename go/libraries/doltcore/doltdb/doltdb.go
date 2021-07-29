@@ -890,6 +890,31 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, nil)
 }
 
+func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetRef, toWSRef ref.WorkingSetRef, force bool) error {
+	ws, err := ddb.ResolveWorkingSet(ctx, fromWSRef)
+	if err == ErrWorkingSetNotFound {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	var currWsHash hash.Hash
+	toWS, err := ddb.ResolveWorkingSet(ctx, toWSRef)
+	if err != nil && err != ErrWorkingSetNotFound {
+		return err
+	}
+	if !force && err != ErrWorkingSetNotFound {
+		return errors.New("cannot overwrite existing working set " + toWSRef.String() + " without force.")
+	} else if err == nil {
+		currWsHash, err = toWS.HashOf()
+		if err != nil {
+			return err
+		}
+	}
+
+	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, nil)
+}
+
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
 func (ddb *DoltDB) DeleteBranch(ctx context.Context, branch ref.DoltRef) error {
 	return ddb.deleteRef(ctx, branch)
