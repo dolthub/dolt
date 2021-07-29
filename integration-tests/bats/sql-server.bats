@@ -101,8 +101,8 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
 
-    # check that dolt_commit throws an error when autocommit is off
-    run server_query repo1 0 "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')" ""
+    # check that dolt_commit throws an error when there are no changes to commit
+    run server_query repo1 0 "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 1 ]
 
     run dolt ls
@@ -806,6 +806,31 @@ SQL
     server_query repo1 1 "SHOW tables" "" # no tables on master
 
     server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
+}
+
+@test "sql-server: connect to a commit with connection string" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt sql -q "create table test (pk int primary key)"
+    dolt commit -a -m "Created new table"
+    dolt sql -q "insert into test values (1), (2), (3)"
+    dolt commit -a -m "Inserted 3 values"
+    dolt sql -q "insert into test values (4), (5), (6)"
+    dolt commit -a -m "Inserted 3 more values"
+
+    start_sql_server repo1
+
+    # get the second-to-last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
+
+    server_query "repo1/$hash" 1 "select count(*) from test" "count(*)\n3"
+
+    # fails
+    server_query "repo1/$hash" 1 "insert into test values (7)" "" "read-only"
+
+    # server should still be alive after an error
+    server_query "repo1/$hash" 1 "select count(*) from test" "count(*)\n3"
 }
 
 @test "sql-server: select a branch with the USE syntax" {
