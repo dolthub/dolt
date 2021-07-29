@@ -920,7 +920,7 @@ func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value inte
 			return err
 		}
 
-		return sess.Session.SetSessionVariable(ctx, key, value)
+		return sess.Session.SetSessionVariable(ctx, key, headRef.String())
 	}
 
 	if isWorking, dbName := IsWorkingKey(key); isWorking {
@@ -1054,7 +1054,12 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.WorkingSet != nil {
-		err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), dbState.WorkingSet.Ref().GetPath())
+		headRef, err := dbState.WorkingSet.Ref().ToHeadRef()
+		if err != nil {
+			return err
+		}
+
+		err = sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), headRef.String())
 		if err != nil {
 			return err
 		}
@@ -1138,6 +1143,19 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	if err != nil {
 		return err
 	}
+
+	if state.WorkingSet != nil {
+		headRef, err := state.WorkingSet.Ref().ToHeadRef()
+		if err != nil {
+			return err
+		}
+
+		err = sess.Session.SetSessionVariable(ctx, HeadRefKey(dbName), headRef.String())
+		if err != nil {
+			return err
+		}
+	}
+
 	roots := state.GetRoots()
 
 	h, err := roots.Working.HashOf()

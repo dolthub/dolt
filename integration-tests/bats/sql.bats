@@ -558,7 +558,11 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     dolt checkout master
-    
+
+    run dolt sql -q "select @@dolt_repo_$$_head_ref;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'refs/heads/master' ]] || false
+
     dolt sql --disable-batch <<SQL
 set @@dolt_repo_$$_head_ref = 'feature-branch';
 CREATE TABLE test (x int primary key);
@@ -591,7 +595,7 @@ SQL
     dolt checkout master
 
     run dolt sql --disable-batch <<SQL
-set @@dolt_repo_$$_head_ref = 'refs/heads/feature-branch';
+set @@dolt_repo_$$_head_ref = 'feature-branch';
 select @@dolt_repo_$$_head_ref;
 SQL
 
