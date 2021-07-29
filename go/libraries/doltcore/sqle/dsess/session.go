@@ -1054,36 +1054,16 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.WorkingSet != nil {
-		headRef, err := dbState.WorkingSet.Ref().ToHeadRef()
-		if err != nil {
-			return err
-		}
-
-		err = sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), headRef.String())
-		if err != nil {
-			return err
-		}
-
 		sessionState.WorkingSet = dbState.WorkingSet
 		workingRoot := dbState.WorkingSet.WorkingRoot()
 		logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
 
-		err = sess.setRoot(ctx, db.Name(), workingRoot)
+		err := sess.setRoot(ctx, db.Name(), workingRoot)
 		if err != nil {
 			return err
 		}
 	} else {
 		headRoot, err := dbState.HeadCommit.GetRootValue()
-		if err != nil {
-			return err
-		}
-
-		hash, err := headRoot.HashOf()
-		if err != nil {
-			return err
-		}
-
-		err = sess.Session.SetSessionVariable(ctx, WorkingKey(db.Name()), hash.String())
 		if err != nil {
 			return err
 		}
@@ -1095,19 +1075,10 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: this needs to be kept up to date as the working set ref changes
 	sessionState.headCommit = dbState.HeadCommit
 
-	headCommitHash, err := dbState.HeadCommit.HashOf()
-	if err != nil {
-		return err
-	}
-
-	err = sess.Session.SetSessionVariable(ctx, HeadKey(db.Name()), headCommitHash.String())
-	if err != nil {
-		return err
-	}
-
 	// After setting the initial root we have no state to commit
 	sessionState.dirty = false
-	return nil
+
+	return sess.setSessionVarsForDb(ctx, db.Name())
 }
 
 // CreateTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing
