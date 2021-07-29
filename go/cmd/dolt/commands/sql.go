@@ -1381,7 +1381,6 @@ func newSqlEngine(
 		return nil, nil, err
 	}
 
-	cat.AddDatabase(information_schema.NewInformationSchemaDatabase(cat))
 	engine := sqle.New(cat, analyzer.NewBuilder(cat).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
 	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
 

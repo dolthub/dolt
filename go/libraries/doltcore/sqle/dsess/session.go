@@ -1031,7 +1031,6 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 		workingRoot := dbState.WorkingSet.WorkingRoot()
 		logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
 
-		// TODO: this needs to happen in the nil case as well
 		err = sess.setRoot(ctx, db.Name(), workingRoot)
 		if err != nil {
 			return err
