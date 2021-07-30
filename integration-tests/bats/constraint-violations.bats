@@ -42,9 +42,9 @@ SQL
     run dolt merge other
     [ "$status" -eq "1" ]
     [[ "$output" =~ "constraint violation" ]] || false
-    run dolt add test
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "test" ]] || false
+
+    # we can stage conflicts, but not commit them
+    dolt add test
     run dolt commit -m "this should fail"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "constraint violation" ]] || false
@@ -85,6 +85,7 @@ SQL
     run dolt sql <<"SQL"
 SET dolt_force_transaction_commit = 1;
 SELECT DOLT_MERGE('other');
+SELECT DOLT_COMMIT("-am", "msg", "--force");
 SQL
     [ "$status" -eq "0" ]
     [[ ! "$output" =~ "constraint violations" ]] || false

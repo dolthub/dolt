@@ -145,7 +145,7 @@ teardown() {
     [[ "$output" =~ "| 0 " ]] || false
 }
 
-@test "merge: dolt add fails on table with conflict" {
+@test "merge: dolt commit fails on table with conflict" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,1)"
     dolt add test1
@@ -160,10 +160,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test1" ]] || false
 
-    run dolt add test1
+    dolt add test1
+    run dolt commit -am "can't commit with conflicts"
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "not all tables merged" ]] || false
+    [[ "$output" =~ " unresolved conflicts from the merge" ]] || false
     [[ "$output" =~ "test1" ]] || false
+    dolt commit --force -am "force commit with conflicts"
 }
 
 @test "merge: dolt commit fails with unmerged tables in working set" {
