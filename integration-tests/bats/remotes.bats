@@ -1032,3 +1032,9 @@ setup_ref_test() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: --set-upstream requires <remote> and <refspec> params." ]] || false
 }
+
+@test "remotes: pushing empty branch does not panic" {
+    run dolt push origin ''
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: invalid refspec ''" ]] || false
+}
