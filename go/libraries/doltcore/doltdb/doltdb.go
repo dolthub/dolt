@@ -890,6 +890,12 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, nil)
 }
 
+// CopyWorkingSet copies a WorkingSetRef from one ref to another. If `force` is
+// true, will overwrite any existing value in the destination ref. Otherwise
+// will fail if the destination ref exists.
+//
+// If fromWSRef does not exist, this method does not return an error, but
+// returns `nil`. In that case, the destination ref is left alone.
 func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetRef, toWSRef ref.WorkingSetRef, force bool) error {
 	ws, err := ddb.ResolveWorkingSet(ctx, fromWSRef)
 	if err == ErrWorkingSetNotFound {
