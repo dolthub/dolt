@@ -140,8 +140,7 @@ func stageTables(
 	return env.UpdateStagedRoot(ctx, rsw, roots.Staged)
 }
 
-// clearEmptyConflicts clears any 0-row conflicts from the tables named, and returns a new root with those
-// conflicts cleared. If any tables named have real conflicts, returns an error.
+// clearEmptyConflicts clears any 0-row conflicts from the tables named, and returns a new root.
 func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for _, tblName := range tbls {
 		tbl, _, err := working.GetTable(ctx, tblName)
@@ -176,6 +175,7 @@ func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.Roo
 	return working, nil
 }
 
+// clearEmptyConstraintViolations clears any 0-row constraint-violations from the tables named, and returns a new root.
 func clearEmptyConstraintViolations(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for _, tblName := range tbls {
 		tbl, ok, err := working.GetTable(ctx, tblName)
