@@ -101,6 +101,16 @@ func stageTablesNoEnvUpdate(
 		return doltdb.Roots{}, err
 	}
 
+	roots.Working, err = clearEmptyConflicts(ctx, tbls, roots.Working)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	roots.Working, err = clearConstraintViolations(ctx, tbls, roots.Working)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
 	roots.Staged, err = MoveTablesBetweenRoots(ctx, tbls, roots.Working, roots.Staged)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -130,10 +140,9 @@ func stageTables(
 	return env.UpdateStagedRoot(ctx, rsw, roots.Staged)
 }
 
-// checkTablesForConflicts clears any 0-row conflicts from the tables named, and returns a new root with those
+// clearEmptyConflicts clears any 0-row conflicts from the tables named, and returns a new root with those
 // conflicts cleared. If any tables named have real conflicts, returns an error.
-func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
-	var inConflict []string
+func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for _, tblName := range tbls {
 		tbl, _, err := working.GetTable(ctx, tblName)
 		if err != nil {
@@ -161,41 +170,41 @@ func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb
 					return nil, err
 				}
 			}
-
-			if num > 0 {
-				inConflict = append(inConflict, tblName)
-			}
 		}
-	}
-
-	if len(inConflict) > 0 {
-		return nil, NewTblInConflictError(inConflict)
 	}
 
 	return working, nil
 }
 
-func checkTablesForConstraintViolations(ctx context.Context, tbls []string, working *doltdb.RootValue) error {
-	var violates []string
+func clearConstraintViolations(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for _, tblName := range tbls {
 		tbl, ok, err := working.GetTable(ctx, tblName)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !ok {
 			continue
 		}
-		if cvMap, err := tbl.GetConstraintViolations(ctx); err != nil {
-			return err
-		} else if !cvMap.Empty() {
-			violates = append(violates, tblName)
+
+		cvMap, err := tbl.GetConstraintViolations(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if cvMap.Empty() {
+			clrTbl, err := tbl.ClearConstraintViolations()
+			if err != nil {
+				return nil, err
+			}
+
+			working, err = working.PutTable(ctx, tblName, clrTbl)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	if len(violates) > 0 {
-		return NewTblHasConstraintViolations(violates)
-	}
-	return nil
+	return working, nil
 }
 
 // ValidateTables checks that all tables passed exist in at least one of the roots passed.

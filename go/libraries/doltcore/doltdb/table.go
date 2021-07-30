@@ -343,6 +343,16 @@ func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types
 	return &Table{t.vrw, updatedStruct}, nil
 }
 
+// ClearConstraintViolations removes the contraint violations map.
+func (t *Table) ClearConstraintViolations() (*Table, error) {
+	tSt, err := t.tableStruct.Delete(constraintViolationsKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{t.vrw, tSt}, nil
+}
+
 func RefToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
 	schemaVal, err := ref.TargetValue(ctx, vrw)
 
