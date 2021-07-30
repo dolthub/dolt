@@ -554,6 +554,61 @@ SQL
     [[ "$output" =~ table_a ]] || false
 }
 
+@test "sql: set head ref session var" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout master
+
+    run dolt sql -q "select @@dolt_repo_$$_head_ref;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'refs/heads/master' ]] || false
+
+    dolt sql --disable-batch <<SQL
+set @@dolt_repo_$$_head_ref = 'feature-branch';
+CREATE TABLE test (x int primary key);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+SQL
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ test ]] || false
+
+    dolt checkout feature-branch
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ test ]] || false
+
+    dolt checkout master
+    dolt sql --disable-batch <<SQL
+set @@dolt_repo_$$_head_ref = 'refs/heads/feature-branch';
+insert into test values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'inserted 3 values');
+SQL
+
+    dolt checkout feature-branch
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+
+    dolt checkout master
+
+    run dolt sql --disable-batch <<SQL
+set @@dolt_repo_$$_head_ref = 'feature-branch';
+select @@dolt_repo_$$_head_ref;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'refs/heads/feature-branch' ]] || false
+    
+    # switching to a branch that doesn't exist should be an error
+    run dolt sql -q "set @@dolt_repo_$$_head_ref = 'does-not-exist';"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'branch not found' ]] || false
+}
+
+
 @test "sql: branch qualified DB name in select" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch

@@ -41,6 +41,16 @@ teardown() {
     [ $status -eq 1 ]
 }
 
+@test "sql-checkout: DOLT_CHECKOUT updates the head ref session var" {
+    run dolt sql --disable-batch <<SQL
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+select @@dolt_repo_$$_head_ref;
+SQL
+
+    [ $status -eq 0 ]
+    [[ "$output" =~ "refs/heads/feature-branch" ]] || false
+}
+
 @test "sql-checkout: DOLT_CHECKOUT changes branches, leaves behind working set unmodified." {
     dolt add . && dolt commit -m "0, 1, and 2 in test table"
     dolt sql -q "insert into test values (4);"

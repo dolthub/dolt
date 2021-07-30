@@ -105,6 +105,14 @@ func IsHeadKey(key string) (bool, string) {
 	return false, ""
 }
 
+func IsHeadRefKey(key string) (bool, string) {
+	if strings.HasSuffix(key, HeadRefKeySuffix) {
+		return true, key[:len(key)-len(HeadRefKeySuffix)]
+	}
+
+	return false, ""
+}
+
 func IsWorkingKey(key string) (bool, string) {
 	if strings.HasSuffix(key, WorkingKeySuffix) {
 		return true, key[:len(key)-len(WorkingKeySuffix)]
@@ -876,8 +884,6 @@ func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Com
 // SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
 // vars that we define. Otherwise we pass it on to the base implementation.
 func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
-	// TODO: working set ref
-
 	if isHead, dbName := IsHeadKey(key); isHead {
 		err := sess.setHeadSessionVar(ctx, value, dbName)
 		if err != nil {
@@ -891,6 +897,30 @@ func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value inte
 
 		dbState.detachedHead = true
 		return nil
+	}
+
+	if isHeadRef, dbName := IsHeadRefKey(key); isHeadRef {
+		valStr, isStr := value.(string)
+		if !isStr {
+			return doltdb.ErrInvalidBranchOrHash
+		}
+
+		headRef, err := ref.Parse(valStr)
+		if err != nil {
+			return err
+		}
+
+		wsRef, err := ref.WorkingSetRefForHead(headRef)
+		if err != nil {
+			return err
+		}
+
+		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
+		if err != nil {
+			return err
+		}
+
+		return sess.Session.SetSessionVariable(ctx, key, headRef.String())
 	}
 
 	if isWorking, dbName := IsWorkingKey(key); isWorking {
@@ -964,7 +994,6 @@ func (sess *Session) setHeadSessionVar(ctx *sql.Context, value interface{}, dbNa
 	}
 
 	valStr, isStr := value.(string)
-
 	if !isStr || !hash.IsValid(valStr) {
 		return doltdb.ErrInvalidHash
 	}
@@ -1025,31 +1054,16 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.WorkingSet != nil {
-		err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), dbState.WorkingSet.Ref().GetPath())
-		if err != nil {
-			return err
-		}
-
 		sessionState.WorkingSet = dbState.WorkingSet
 		workingRoot := dbState.WorkingSet.WorkingRoot()
 		logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
 
-		err = sess.setRoot(ctx, db.Name(), workingRoot)
+		err := sess.setRoot(ctx, db.Name(), workingRoot)
 		if err != nil {
 			return err
 		}
 	} else {
 		headRoot, err := dbState.HeadCommit.GetRootValue()
-		if err != nil {
-			return err
-		}
-
-		hash, err := headRoot.HashOf()
-		if err != nil {
-			return err
-		}
-
-		err = sess.Session.SetSessionVariable(ctx, WorkingKey(db.Name()), hash.String())
 		if err != nil {
 			return err
 		}
@@ -1061,19 +1075,10 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: this needs to be kept up to date as the working set ref changes
 	sessionState.headCommit = dbState.HeadCommit
 
-	headCommitHash, err := dbState.HeadCommit.HashOf()
-	if err != nil {
-		return err
-	}
-
-	err = sess.Session.SetSessionVariable(ctx, HeadKey(db.Name()), headCommitHash.String())
-	if err != nil {
-		return err
-	}
-
 	// After setting the initial root we have no state to commit
 	sessionState.dirty = false
-	return nil
+
+	return sess.setSessionVarsForDb(ctx, db.Name())
 }
 
 // CreateTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing
@@ -1109,6 +1114,19 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	if err != nil {
 		return err
 	}
+
+	if state.WorkingSet != nil {
+		headRef, err := state.WorkingSet.Ref().ToHeadRef()
+		if err != nil {
+			return err
+		}
+
+		err = sess.Session.SetSessionVariable(ctx, HeadRefKey(dbName), headRef.String())
+		if err != nil {
+			return err
+		}
+	}
+
 	roots := state.GetRoots()
 
 	h, err := roots.Working.HashOf()
