@@ -106,11 +106,6 @@ func stageTablesNoEnvUpdate(
 		return doltdb.Roots{}, err
 	}
 
-	roots.Working, err = clearEmptyConstraintViolations(ctx, tbls, roots.Working)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
 	roots.Staged, err = MoveTablesBetweenRoots(ctx, tbls, roots.Working, roots.Staged)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -168,38 +163,6 @@ func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.Roo
 				if err != nil {
 					return nil, err
 				}
-			}
-		}
-	}
-
-	return working, nil
-}
-
-// clearEmptyConstraintViolations clears any 0-row constraint-violations from the tables named, and returns a new root.
-func clearEmptyConstraintViolations(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
-	for _, tblName := range tbls {
-		tbl, ok, err := working.GetTable(ctx, tblName)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
-		}
-
-		cvMap, err := tbl.GetConstraintViolations(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		if cvMap.Empty() {
-			clrTbl, err := tbl.ClearConstraintViolations()
-			if err != nil {
-				return nil, err
-			}
-
-			working, err = working.PutTable(ctx, tblName, clrTbl)
-			if err != nil {
-				return nil, err
 			}
 		}
 	}
