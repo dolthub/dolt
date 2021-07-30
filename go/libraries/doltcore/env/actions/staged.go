@@ -106,7 +106,7 @@ func stageTablesNoEnvUpdate(
 		return doltdb.Roots{}, err
 	}
 
-	roots.Working, err = clearConstraintViolations(ctx, tbls, roots.Working)
+	roots.Working, err = clearEmptyConstraintViolations(ctx, tbls, roots.Working)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -176,7 +176,7 @@ func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.Roo
 	return working, nil
 }
 
-func clearConstraintViolations(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
+func clearEmptyConstraintViolations(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for _, tblName := range tbls {
 		tbl, ok, err := working.GetTable(ctx, tblName)
 		if err != nil {
