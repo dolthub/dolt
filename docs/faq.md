@@ -15,18 +15,6 @@ short enough to type on the command line, and
 not taken in the standard command line lexicon. So,
 `dolt`.
 
-## Why does my connection to the server hang / time out?
-
-With no config file, the server starts up in single user mode. It
-won't allow a second connection until the first hangs up. This is to
-prevent any unpleasant surprises with multiple writers, since Dolt's
-transaction / concurrency model is a work in progress.
-
-To allow multiple simultaneous connections, set the `max_connections`
-field in the config.yaml file you pass to the `dolt sql-server`
-command, [as described in the
-docs](https://docs.dolthub.com/interfaces/cli#dolt-sql-server).
-
 ## The MySQL shell gives me an error: `Can't connect to local MySQL server through socket '/tmp/mysql.sock'`
 
 The MySQL shell will try to connect through a socket file on many OSes. 
@@ -83,18 +71,11 @@ SQL](https://www.dolthub.com/blog/2021-03-15-programmatic-merge-and-resolve/)
 
 ## Does Dolt support transactions?
 
-Yes, but it's an alpha release that may have some rough edges, so it's
-not enabled by default. To turn it on, set an environment variable:
+Yes, it should exactly work the same as MySQL, but with fewer locks for competing writes.
 
-`export DOLT_ENABLE_TRANSACTIONS=true`
-
-See [this blog post](https://www.dolthub.com/blog/2021-05-19-dolt-transactions/) 
-for more details.
-
-Named locks work, via `GET_LOCK()` and `RELEASE_LOCK()` functions.
-
-Support for traditional database transactions, concurrency, and
-row-level locking is on our [roadmap](roadmap.md).
+It's also possible for different sessions to connect to different HEADs (branches) on
+the same server. See [working with multiple heads](https://docs.dolthub.com/interfaces/sql/heads) 
+for details.
 
 ## What SQL features / syntax are supported?
 
