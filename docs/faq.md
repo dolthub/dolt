@@ -55,9 +55,6 @@ into `dolt_branches`)
 `DOLT_COMMIT()` is the same as if you run `dolt commit` from the
 command line. It updates HEAD.
 
-See the [docs on
-concurrency](https://docs.dolthub.com/interfaces/sql/concurrency).
-
 ## I want each of my connected SQL users to get their own branch to make changes on, then merge them back into `master` when they're done making edits. How do I do that?
 
 We are glad you asked! This is a common use case, and we wrote a
