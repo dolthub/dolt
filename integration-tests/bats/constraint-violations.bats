@@ -85,6 +85,7 @@ SQL
     run dolt sql <<"SQL"
 SET dolt_force_transaction_commit = 1;
 SELECT DOLT_MERGE('other');
+SELECT DOLT_COMMIT("-am", "msg", "--force");
 SQL
     [ "$status" -eq "0" ]
     [[ ! "$output" =~ "constraint violations" ]] || false

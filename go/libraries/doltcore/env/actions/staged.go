@@ -101,15 +101,6 @@ func stageTablesNoEnvUpdate(
 		return doltdb.Roots{}, err
 	}
 
-	roots.Working, err = checkTablesForConflicts(ctx, tbls, roots.Working)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	err = checkTablesForConstraintViolations(ctx, tbls, roots.Working)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
 	roots.Staged, err = MoveTablesBetweenRoots(ctx, tbls, roots.Working, roots.Staged)
 	if err != nil {
 		return doltdb.Roots{}, err
