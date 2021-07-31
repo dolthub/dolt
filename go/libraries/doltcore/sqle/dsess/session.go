@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -143,7 +142,6 @@ type DatabaseSessionState struct {
 	dirty                bool
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
-	GlobalState          globalstate.GlobalState
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
@@ -182,7 +180,6 @@ type InitialDbState struct {
 	ReadOnly     bool
 	WorkingSet   *doltdb.WorkingSet
 	DbData       env.DbData
-	GlobalState  globalstate.GlobalState
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -595,26 +592,6 @@ func (sess *Session) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB,
 	}
 
 	return dbState.dbData.Ddb, true
-}
-
-func (sess *Session) GetDoltDbAutoIncrementTracker(ctx *sql.Context, dbName string) (globalstate.AutoIncrementTracker, bool) {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return nil, false
-	}
-	if !ok {
-		return nil, false
-	}
-
-	wsref := dbState.WorkingSet.Ref()
-
-	if dbState.GlobalState == nil {
-		return nil, false
-	}
-
-	tracker := dbState.GlobalState.GetAutoIncrementTracker(wsref)
-
-	return tracker, true
 }
 
 func (sess *Session) GetDbData(ctx *sql.Context, dbName string) (env.DbData, bool) {
@@ -1058,7 +1035,6 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	adapter := NewSessionStateAdapter(sess, db.Name())
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
-	sessionState.GlobalState = dbState.GlobalState
 	sessionState.readOnly, sessionState.detachedHead = dbState.ReadOnly, dbState.DetachedHead
 
 	sessionState.EditSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
