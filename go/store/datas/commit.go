@@ -133,6 +133,43 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 	return a, ok, nil
 }
 
+// todo comment doc
+func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, rf types.Ref, vr types.ValueReader) (a types.Ref, ok bool, err error) {
+	t, err := types.TypeOf(rf)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+
+	// precondition checks
+	if !IsRefOfCommitType(rf.Format(), t) {
+		d.Panic("reference is not a commit")
+	}
+
+	q := &RefByHeightHeap{rf}
+	var curr types.RefSlice
+
+	for !q.Empty() {
+		curr = q.PopRefsOfHeight(q.MaxHeight())
+
+		for _, r := range curr {
+			ok, err = cl.Contains(r)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			if ok {
+				return r, ok, nil
+			}
+		}
+
+		err = parentsToQueue(ctx, curr, q, vr)
+		if err != nil {
+			return types.Ref{}, false, err
+		}
+	}
+
+	return types.Ref{}, false, nil
+}
+
 func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap, vr types.ValueReader) error {
 	seen := make(map[hash.Hash]bool)
 	for _, r := range refs {

@@ -23,6 +23,7 @@ package datas
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -241,6 +242,59 @@ func toRefList(vrw types.ValueReadWriter, commits ...types.Struct) (types.List, 
 	return le.List(context.Background())
 }
 
+func commonAncWithSetClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
+	var closure RefClosure
+	closure, err = NewSetRefClosure(ctx, vr1, c1)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+
+	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
+}
+
+func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
+	closure := NewLazyRefClousure(ctx, c1, vr1)
+	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
+}
+
+// Assert that c is the common ancestor of a and b
+func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb Database) {
+	assert := assert.New(t)
+
+	type caFinder func(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error)
+
+	methods := map[string]caFinder{
+		"FindCommonAncestor": FindCommonAncestor,
+		"SetClosure":         commonAncWithSetClosure,
+	}
+
+	for name, method := range methods {
+		tn := fmt.Sprintf("find common ancestor using %s", name)
+		t.Run(tn, func(t *testing.T) {
+			found, ok, err := method(context.Background(), mustRef(types.NewRef(a, types.Format_7_18)), mustRef(types.NewRef(b, types.Format_7_18)), ldb, rdb)
+			assert.NoError(err)
+
+			if assert.True(ok) {
+				tv, err := found.TargetValue(context.Background(), ldb)
+				assert.NoError(err)
+				ancestor := tv.(types.Struct)
+				expV, _, _ := expected.MaybeGet(ValueField)
+				aV, _, _ := a.MaybeGet(ValueField)
+				bV, _, _ := b.MaybeGet(ValueField)
+				ancV, _, _ := ancestor.MaybeGet(ValueField)
+				assert.True(
+					expected.Equals(ancestor),
+					"%s should be common ancestor of %s, %s. Got %s",
+					expV,
+					aV,
+					bV,
+					ancV,
+				)
+			}
+		})
+	}
+}
+
 func TestFindCommonAncestor(t *testing.T) {
 	assert := assert.New(t)
 
@@ -251,30 +305,6 @@ func TestFindCommonAncestor(t *testing.T) {
 		ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{ParentsList: mustList(toRefList(db, parents...))})
 		assert.NoError(err)
 		return mustHead(ds)
-	}
-
-	// Assert that c is the common ancestor of a and b
-	assertCommonAncestor := func(expected, a, b types.Struct, ldb, rdb Database) {
-		found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(a, types.Format_7_18)), mustRef(types.NewRef(b, types.Format_7_18)), ldb, rdb)
-		assert.NoError(err)
-
-		if assert.True(ok) {
-			tv, err := found.TargetValue(context.Background(), ldb)
-			assert.NoError(err)
-			ancestor := tv.(types.Struct)
-			expV, _, _ := expected.MaybeGet(ValueField)
-			aV, _, _ := a.MaybeGet(ValueField)
-			bV, _, _ := b.MaybeGet(ValueField)
-			ancV, _, _ := ancestor.MaybeGet(ValueField)
-			assert.True(
-				expected.Equals(ancestor),
-				"%s should be common ancestor of %s, %s. Got %s",
-				expV,
-				aV,
-				bV,
-				ancV,
-			)
-		}
 	}
 
 	storage := &chunks.TestStorage{}
@@ -310,11 +340,11 @@ func TestFindCommonAncestor(t *testing.T) {
 	b5 := addCommit(db, b, "b5", b4, a3)
 	a6 := addCommit(db, a, "a6", a5, b5)
 
-	assertCommonAncestor(a1, a1, a1, db, db) // All self
-	assertCommonAncestor(a1, a1, a2, db, db) // One side self
-	assertCommonAncestor(a2, a3, b3, db, db) // Common parent
-	assertCommonAncestor(a2, a4, b4, db, db) // Common grandparent
-	assertCommonAncestor(a1, a6, c3, db, db) // Traversing multiple parents on both sides
+	assertCommonAncestor(t, a1, a1, a1, db, db) // All self
+	assertCommonAncestor(t, a1, a1, a2, db, db) // One side self
+	assertCommonAncestor(t, a2, a3, b3, db, db) // Common parent
+	assertCommonAncestor(t, a2, a4, b4, db, db) // Common grandparent
+	assertCommonAncestor(t, a1, a6, c3, db, db) // Traversing multiple parents on both sides
 
 	// No common ancestor
 	found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(d2, types.Format_7_18)), mustRef(types.NewRef(a6, types.Format_7_18)), db, db)
@@ -386,13 +416,13 @@ func TestFindCommonAncestor(t *testing.T) {
 	ra8 := addCommit(rdb, a, "ra8", ra7)
 	ra9 := addCommit(rdb, a, "ra9", ra8)
 
-	assertCommonAncestor(a1, a1, a1, db, rdb) // All self
-	assertCommonAncestor(a1, a1, a2, db, rdb) // One side self
-	assertCommonAncestor(a2, a3, b3, db, rdb) // Common parent
-	assertCommonAncestor(a2, a4, b4, db, rdb) // Common grandparent
-	assertCommonAncestor(a1, a6, c3, db, rdb) // Traversing multiple parents on both sides
+	assertCommonAncestor(t, a1, a1, a1, db, rdb) // All self
+	assertCommonAncestor(t, a1, a1, a2, db, rdb) // One side self
+	assertCommonAncestor(t, a2, a3, b3, db, rdb) // Common parent
+	assertCommonAncestor(t, a2, a4, b4, db, rdb) // Common grandparent
+	assertCommonAncestor(t, a1, a6, c3, db, rdb) // Traversing multiple parents on both sides
 
-	assertCommonAncestor(a6, a9, ra9, db, rdb) // Common third parent
+	assertCommonAncestor(t, a6, a9, ra9, db, rdb) // Common third parent
 
 	_, _, err = FindCommonAncestor(context.Background(), mustRef(types.NewRef(a9, types.Format_7_18)), mustRef(types.NewRef(ra9, types.Format_7_18)), rdb, db)
 	assert.Error(err)
