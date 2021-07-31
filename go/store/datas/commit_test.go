@@ -251,7 +251,7 @@ func commonAncWithSetClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 typ
 }
 
 func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
-	closure := NewLazyRefClousure(c1, vr1)
+	closure := NewLazyRefClosure(c1, vr1)
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 

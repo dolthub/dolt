@@ -67,7 +67,7 @@ func transitiveClosure(ctx context.Context, vr types.ValueReader, ref types.Ref)
 	return s, nil
 }
 
-func NewLazyRefClousure(ref types.Ref, vr types.ValueReader) lazyRefClosure {
+func NewLazyRefClosure(ref types.Ref, vr types.ValueReader) lazyRefClosure {
 	return lazyRefClosure{
 		seen: hash.NewHashSet(ref.TargetHash()),
 		heap: &RefByHeightHeap{ref},
