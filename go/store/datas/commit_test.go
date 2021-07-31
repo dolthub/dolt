@@ -243,17 +243,15 @@ func toRefList(vrw types.ValueReadWriter, commits ...types.Struct) (types.List, 
 }
 
 func commonAncWithSetClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
-	var closure RefClosure
-	closure, err = NewSetRefClosure(ctx, vr1, c1)
+	closure, err := NewSetRefClosure(ctx, vr1, c1)
 	if err != nil {
 		return types.Ref{}, false, err
 	}
-
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 
 func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
-	closure := NewLazyRefClousure(ctx, c1, vr1)
+	closure := NewLazyRefClousure(c1, vr1)
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 
@@ -266,6 +264,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb Da
 	methods := map[string]caFinder{
 		"FindCommonAncestor": FindCommonAncestor,
 		"SetClosure":         commonAncWithSetClosure,
+		"LazyClosure":        commonAncWithLazyClosure,
 	}
 
 	for name, method := range methods {

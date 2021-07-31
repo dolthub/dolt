@@ -23,7 +23,7 @@ import (
 
 // todo comment doc
 type RefClosure interface {
-	Contains(ref types.Ref) (bool, error)
+	Contains(ctx context.Context, ref types.Ref) (bool, error)
 }
 
 // todo comment doc
@@ -42,7 +42,7 @@ type setRefClosure struct {
 
 var _ RefClosure = setRefClosure{}
 
-func (s setRefClosure) Contains(ref types.Ref) (ok bool, err error) {
+func (s setRefClosure) Contains(ctx context.Context, ref types.Ref) (ok bool, err error) {
 	ok = s.HashSet.Has(ref.TargetHash())
 	return
 }
@@ -67,31 +67,43 @@ func transitiveClosure(ctx context.Context, vr types.ValueReader, ref types.Ref)
 	return s, nil
 }
 
-func NewLazyRefClousure(ctx context.Context, ref types.Ref, vr types.ValueReader) lazyRefClosure {
+func NewLazyRefClousure(ref types.Ref, vr types.ValueReader) lazyRefClosure {
 	return lazyRefClosure{
-		partial: hash.NewHashSet(ref.TargetHash()),
-		bottom:  RefByHeightHeap{ref},
+		seen: hash.NewHashSet(ref.TargetHash()),
+		heap: &RefByHeightHeap{ref},
+		vr:   vr,
 	}
 }
 
 type lazyRefClosure struct {
-	partial hash.HashSet
-	bottom  []types.Ref
-	depth   uint64
+	seen hash.HashSet
+	heap *RefByHeightHeap
+	vr   types.ValueReader
 }
 
 var _ RefClosure = lazyRefClosure{}
 
-func (l lazyRefClosure) Contains(ref types.Ref) (ok bool, err error) {
-	if ref.Height() < l.depth {
-		err = traverseToDepth(ref.Height(), l.bottom, l.partial)
-	}
+func (l lazyRefClosure) Contains(ctx context.Context, ref types.Ref) (ok bool, err error) {
+	err = l.traverseToDepth(ctx, ref.Height())
 	if err != nil {
 		return false, err
 	}
-	return l.partial.Has(ref.TargetHash()), nil
+	return l.seen.Has(ref.TargetHash()), nil
 }
 
-func traverseToDepth(depth uint64, roots []types.Ref, visited hash.HashSet) error {
-	panic("todo")
+func (l lazyRefClosure) traverseToDepth(ctx context.Context, depth uint64) (err error) {
+	var curr types.RefSlice
+	for !l.heap.Empty() && depth <= l.heap.MaxHeight() {
+
+		curr = l.heap.PopRefsOfHeight(l.heap.MaxHeight())
+		for _, r := range curr {
+			l.seen.Insert(r.TargetHash())
+		}
+
+		err = parentsToQueue(ctx, curr, l.heap, l.vr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

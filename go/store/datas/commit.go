@@ -152,7 +152,7 @@ func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, rf types.Ref,
 		curr = q.PopRefsOfHeight(q.MaxHeight())
 
 		for _, r := range curr {
-			ok, err = cl.Contains(r)
+			ok, err = cl.Contains(ctx, r)
 			if err != nil {
 				return types.Ref{}, false, err
 			}
