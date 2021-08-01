@@ -255,33 +255,158 @@ SQL
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 }
 
-@test "schema-changes: alter table on keyless column with duplicates throws an error" {
-    dolt sql -q "dasda"
+@test "schema-changes: add single primary key" {
+    dolt sql -q "create table t(pk int, val int)"
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "INSERT INTO t VALUES (1,1),(2,2),(3,3)"
+    run dolt sql -q "SELECT * FROM t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '(1,1)' ]] || false
+    [[ "$output" =~ '(2,2)' ]] || false
+    [[ "$output" =~ '(3,3)' ]] || false
+
+    run dolt sql -q "INSERT INTO t VALUES (2, 4)"
+    [ "$status" -eq 1 ]
 }
 
-#@test "schema-changes: add single primary key" {
-#
-#}
-#
-#@test "schema-changes: add composite primary key" {
-#
-#}
-#
-#@test "schema-changes: can delete single primary key" {
-#
-#}
-#
-#@test "schema-changes: can delete composite primary key" {
-#
-#}
-#
-#@test "schema-changes: run through some add and drop primary key operations" {
-#
-#}
+@test "schema-changes: add composite primary key" {
+    dolt sql -q "create table t(pk int, val int)"
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk, val)"
+    [ "$status" -eq 0 ]
 
-#todo: Add test cases for indexes/unique keys and stufd
+    dolt sql -q "INSERT INTO t VALUES (1,1),(2,2),(3,3)"
+    run dolt sql -q "SELECT * FROM t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '(1,1)' ]] || false
+    [[ "$output" =~ '(2,2)' ]] || false
+    [[ "$output" =~ '(3,3)' ]] || false
 
-# Todo: add a test with autoincrement and alter table
+    run dolt sql -q "INSERT INTO t VALUES (2, 2)"
+    [ "$status" -eq 1 ]
+}
+
+@test "schema-changes: can delete single primary key" {
+    dolt sql -q "create table t(pk int, val int, PRIMARY KEY(pk))"
+    run dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "INSERT INTO t VALUES (1,1),(2,2),(2,2)"
+    run dolt sql -q "SELECT * FROM t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '(1,1)' ]] || false
+    [[ "$output" =~ '(2,2)' ]] || false
+    [[ "${#lines[4]}" =~ '(2,2)' ]] || false
+
+    run dolt sql -q "INSERT INTO t VALUES (2, 2)"
+    [ "$status" -eq 0 ]
+}
+
+@test "schema-changes: can delete composite primary key" {
+    dolt sql -q "create table t(pk int, val int, PRIMARY KEY(pk, val))"
+    run dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "INSERT INTO t VALUES (1,1),(2,2),(2,2)"
+    run dolt sql -q "SELECT * FROM t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '(1,1)' ]] || false
+    [[ "$output" =~ '(2,2)' ]] || false
+    [[ "${#lines[4]}" =~ '(2,2)' ]] || false
+
+    run dolt sql -q "INSERT INTO t VALUES (2, 2)"
+    [ "$status" -eq 0 ]
+}
+
+@test "schema-changes: run through some add and drop primary key operations" {
+    dolt sql -q "create table t(pk int, val int, PRIMARY KEY(pk, val))"
+    run dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "INSERT INTO t VALUES (1,1),(2,2)"
+    run dolt sql -q "SELECT * FROM t"
+
+    run dolt sql -q "SELECT * FROM t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '(1,1)' ]] || false
+    [[ "$output" =~ '(2,2)' ]] || false
+
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk))"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "INSERT INTO t values (1, 5)"
+    [ "$status" -eq 1 ]
+
+    dolt sql -q "INSERT INTO t VALUES (3,3)"
+    run dolt sql -q "SELECT * FROM t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '(1,1)' ]] || false
+    [[ "$output" =~ '(2,2)' ]] || false
+    [[ "$output" =~ '(3,3)' ]] || false
+}
+
+@test "schema-changes: alter table on keyless column with duplicates throws an error" {
+    dolt sql -q "create table t(pk int, val int)"
+    dolt sql -q "insert into t values (1,1),(1,1)"
+
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk, val)"
+    [ "$status" -eq 1 ]
+}
+
+
+@test "schema-changes: dropping a primary key still preserves secondary indexes and constraints" {
+    dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
+    dolt sql -q "alter table t add CONSTRAINT myidx UNIQUE(val);"
+    dolt sql -q "ALTER TABLE t ADD INDEX (val2)"
+
+    dolt sql -q "insert into t values (1,1,1), (2,2,2)"
+    run dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "INSERT INTO t VALUES (3, 2, 3)" # unique violation
+    [ "$status" -eq 1 ]
+
+    run dolt sql -q "SELECT COUNT(*) FROM T where val2 = 3"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '1' ]] || false
+}
+
+@test "schema-changes: drop primary key with auto increment throws an error" {
+    dolt sql -q "create table t(pk int PRIMARY KEY AUTO_INCREMENT, val1 int, val2 int)"
+    run dolt sql -q "alter table t drop primary key"
+    [ "$status" -eq 1 ]
+}
+
+@test "schema-changes: merge on primary key schema differences throws an error" {
+    dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
+    dolt sql -q "INSERT INTO t values (1,1,1)"
+
+    dolt commit -am "cm1"
+    dolt checkout -b test
+    dolt sql -q "ALTER TABLE t drop PRIMARY key"
+    dolt commit -am "cm2"
+    dolt checkout master
+
+    run dolt merge test
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'cannot merge branches with different primary key schema' ]] || false
+}
+
+@test "schema-changes: diff on primary key schema change shows schema level diff but does not show row level diff" {
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 1)"
+
+    dolt commit -am "cm1"
+
+    run dolt sql -q "ALTER TABLE T DROP PRIMARY key"
+    [ "$status" -eq 0 ]
+
+    run dolt diff HEAD
+    [ "$status" -eq 0 ]
+    # TODO: Schema level dif
+}
+
 @test "schema-changes: merge with keyless and keyed table with different data" {
     dolt sql -q "CREATE TABLE t(pk int primary key, val int)"
     dolt commit -am "add table"
