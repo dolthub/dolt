@@ -131,6 +131,10 @@ func (c *Commit) GetCommitMeta() (*CommitMeta, error) {
 	return nil, errors.New(h.String() + " is a commit without the required metadata.")
 }
 
+func (c *Commit) ParentRefs(ctx context.Context) []types.Ref {
+	return c.parents
+}
+
 // ParentHashes returns the commit hashes for all parent commits.
 func (c *Commit) ParentHashes(ctx context.Context) ([]hash.Hash, error) {
 	hashes := make([]hash.Hash, len(c.parents))
