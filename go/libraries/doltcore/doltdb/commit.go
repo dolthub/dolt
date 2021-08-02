@@ -131,7 +131,7 @@ func (c *Commit) GetCommitMeta() (*CommitMeta, error) {
 	return nil, errors.New(h.String() + " is a commit without the required metadata.")
 }
 
-func (c *Commit) ParentRefs(ctx context.Context) []types.Ref {
+func (c *Commit) ParentRefs() []types.Ref {
 	return c.parents
 }
 
