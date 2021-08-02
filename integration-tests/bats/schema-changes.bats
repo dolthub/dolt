@@ -256,6 +256,7 @@ SQL
 }
 
 @test "schema-changes: add single primary key" {
+    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int)"
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
     [ "$status" -eq 0 ]
@@ -272,6 +273,7 @@ SQL
 }
 
 @test "schema-changes: add composite primary key" {
+    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int)"
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk, val)"
     [ "$status" -eq 0 ]
@@ -288,6 +290,7 @@ SQL
 }
 
 @test "schema-changes: can delete single primary key" {
+    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int, PRIMARY KEY(pk))"
     run dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
     [ "$status" -eq 0 ]
@@ -304,6 +307,7 @@ SQL
 }
 
 @test "schema-changes: can delete composite primary key" {
+    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int, PRIMARY KEY(pk, val))"
     run dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
     [ "$status" -eq 0 ]
@@ -320,6 +324,7 @@ SQL
 }
 
 @test "schema-changes: run through some add and drop primary key operations" {
+    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int, PRIMARY KEY(pk, val))"
     run dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
     [ "$status" -eq 0 ]
@@ -347,6 +352,7 @@ SQL
 }
 
 @test "schema-changes: alter table on keyless column with duplicates throws an error" {
+    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int)"
     dolt sql -q "insert into t values (1,1),(1,1)"
 
@@ -356,6 +362,7 @@ SQL
 
 
 @test "schema-changes: dropping a primary key still preserves secondary indexes and constraints" {
+    skip "unimplemented"
     dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
     dolt sql -q "alter table t add CONSTRAINT myidx UNIQUE(val);"
     dolt sql -q "ALTER TABLE t ADD INDEX (val2)"
@@ -373,12 +380,14 @@ SQL
 }
 
 @test "schema-changes: drop primary key with auto increment throws an error" {
+    skip "unimplemented"
     dolt sql -q "create table t(pk int PRIMARY KEY AUTO_INCREMENT, val1 int, val2 int)"
     run dolt sql -q "alter table t drop primary key"
     [ "$status" -eq 1 ]
 }
 
 @test "schema-changes: merge on primary key schema differences throws an error" {
+    skip "unimplemented"
     dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
     dolt sql -q "INSERT INTO t values (1,1,1)"
 
@@ -394,6 +403,7 @@ SQL
 }
 
 @test "schema-changes: diff on primary key schema change shows schema level diff but does not show row level diff" {
+    skip "unimplemented"
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
 
@@ -408,6 +418,7 @@ SQL
 }
 
 @test "schema-changes: dolt diff table return an empty table" {
+    skip "unimplemented"
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
 
@@ -422,30 +433,3 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ '0' ]] || false
 }
-
-#@test "schema-changes: merge with keyless and keyed table with different data" {
-#    dolt sql -q "CREATE TABLE t(pk int primary key, val int)"
-#    dolt commit -am "add table"
-#
-#    dolt checkout -b keyless-branch
-#    dolt sql -q "DROP TABLE t"
-#    dolt sql -q "CREATE TABLE t(pk int, val int)"
-#    dolt sql -q "INSERT INTO t VALUES (2, 2)"
-#    dolt add .
-#    dolt add .
-#    dolt commit -am "commit keyless"
-#
-#    dolt checkout master
-#    dolt sql -q "insert into t values (1, 1)"
-#    dolt commit -am "keyed insert"
-#
-#    dolt merge keyless-branch
-#    run dolt sql -q "SELECT * FROM t"
-#    [ "$status" -eq 1 ]
-#
-#    # Different types of encoding is causing the problem
-##    Map<Union<>,Union<>> - map {
-##       (15476,1): (12204,1),
-##       (2251799813690248,d494c354-3c9b-6c6c-a5af-580b1fd48518): (2251799813690249,2,15476,2,12204,2),
-##    }
-#}
