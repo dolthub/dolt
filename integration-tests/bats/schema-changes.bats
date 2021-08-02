@@ -407,29 +407,45 @@ SQL
     # TODO: Schema level dif
 }
 
-@test "schema-changes: merge with keyless and keyed table with different data" {
-    dolt sql -q "CREATE TABLE t(pk int primary key, val int)"
-    dolt commit -am "add table"
+@test "schema-changes: dolt diff table return an empty table" {
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 1)"
 
-    dolt checkout -b keyless-branch
     dolt sql -q "DROP TABLE t"
     dolt sql -q "CREATE TABLE t(pk int, val int)"
-    dolt sql -q "INSERT INTO t VALUES (2, 2)"
+    dolt sql -q "INSERT INTO t values (2,2)"
+
     dolt add .
     dolt add .
-    dolt commit -am "commit keyless"
 
-    dolt checkout master
-    dolt sql -q "insert into t values (1, 1)"
-    dolt commit -am "keyed insert"
-
-    dolt merge keyless-branch
-    run dolt sql -q "SELECT * FROM t"
-    [ "$status" -eq 1 ]
-
-    # Different types of encoding is causing the problem
-#    Map<Union<>,Union<>> - map {
-#       (15476,1): (12204,1),
-#       (2251799813690248,d494c354-3c9b-6c6c-a5af-580b1fd48518): (2251799813690249,2,15476,2,12204,2),
-#    }
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '0' ]] || false
 }
+
+#@test "schema-changes: merge with keyless and keyed table with different data" {
+#    dolt sql -q "CREATE TABLE t(pk int primary key, val int)"
+#    dolt commit -am "add table"
+#
+#    dolt checkout -b keyless-branch
+#    dolt sql -q "DROP TABLE t"
+#    dolt sql -q "CREATE TABLE t(pk int, val int)"
+#    dolt sql -q "INSERT INTO t VALUES (2, 2)"
+#    dolt add .
+#    dolt add .
+#    dolt commit -am "commit keyless"
+#
+#    dolt checkout master
+#    dolt sql -q "insert into t values (1, 1)"
+#    dolt commit -am "keyed insert"
+#
+#    dolt merge keyless-branch
+#    run dolt sql -q "SELECT * FROM t"
+#    [ "$status" -eq 1 ]
+#
+#    # Different types of encoding is causing the problem
+##    Map<Union<>,Union<>> - map {
+##       (15476,1): (12204,1),
+##       (2251799813690248,d494c354-3c9b-6c6c-a5af-580b1fd48518): (2251799813690249,2,15476,2,12204,2),
+##    }
+#}
