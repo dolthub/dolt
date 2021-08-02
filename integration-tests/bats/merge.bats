@@ -409,3 +409,93 @@ SQL
     skip "merge fails on unique index violation, should log conflict"
     dolt merge other
 }
+
+@test "merge: merge a branch with a new table" {
+    dolt branch feature-branch
+    
+    dolt sql << SQL
+INSERT INTO test2 VALUES (0, 0, 0);
+INSERT INTO test2 VALUES (1, 1, 1);
+SQL
+    dolt add -A && dolt commit -am "add data to test 2"
+
+    dolt checkout feature-branch
+    dolt sql << SQL
+create table test3 (a int primary key);
+INSERT INTO test3 VALUES (0), (1);
+SQL
+    dolt commit -am "new table test3"
+
+    dolt checkout master
+    
+    run dolt merge feature-branch
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from test3"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 1 ]] || false
+}
+
+@test "merge: merge a branch that deletes a table" {
+    dolt branch feature-branch
+    
+    dolt sql << SQL
+INSERT INTO test1 VALUES (0, 0, 0);
+INSERT INTO test1 VALUES (1, 1, 1);
+SQL
+    dolt commit -am "add data to test1"
+
+    dolt checkout feature-branch
+    dolt sql << SQL
+INSERT INTO test1 VALUES (2, 2, 2);
+drop table test2;
+SQL
+    dolt commit -am "add data to test1, drop test2"
+
+    dolt checkout master
+    run dolt merge feature-branch
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "test2" ]] || false
+
+    run dolt sql -q "select * from test1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 2 ]] || false
+}
+
+
+@test "merge: merge branch with table that was deleted" {
+    dolt sql << SQL
+INSERT INTO test2 VALUES (0, 0, 0);
+INSERT INTO test2 VALUES (1, 1, 1);
+SQL
+    dolt add -A && dolt commit -am "add data to test 2"
+
+    dolt branch feature-branch
+    dolt sql -q "drop table test2"
+    dolt commit -am "drop table test2"
+
+    dolt sql << SQL
+INSERT INTO test1 VALUES (2, 2, 2);
+INSERT INTO test1 VALUES (3, 3, 3);
+SQL
+    dolt commit -am "add data to test1"
+    
+    dolt checkout feature-branch
+    dolt sql << SQL
+INSERT INTO test1 VALUES (0, 0, 0);
+INSERT INTO test1 VALUES (1, 1, 1);
+SQL
+    dolt commit -am "add data to test1"
+    
+    dolt checkout master
+    run dolt merge feature-branch
+
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "test2" ]] || false
+}
