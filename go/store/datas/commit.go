@@ -133,19 +133,21 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 	return a, ok, nil
 }
 
-// todo comment doc
-func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, rf types.Ref, vr types.ValueReader) (a types.Ref, ok bool, err error) {
-	t, err := types.TypeOf(rf)
+// FindClosureCommonAncestor returns the most recent common ancestor of |cl| and |cm|,
+// where |cl| is the transitive closure of one or more refs. If a common ancestor
+// exists, |ok| is set to true, else false.
+func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref, vr types.ValueReader) (a types.Ref, ok bool, err error) {
+	t, err := types.TypeOf(cm)
 	if err != nil {
 		return types.Ref{}, false, err
 	}
 
 	// precondition checks
-	if !IsRefOfCommitType(rf.Format(), t) {
+	if !IsRefOfCommitType(cm.Format(), t) {
 		d.Panic("reference is not a commit")
 	}
 
-	q := &RefByHeightHeap{rf}
+	q := &RefByHeightHeap{cm}
 	var curr types.RefSlice
 
 	for !q.Empty() {

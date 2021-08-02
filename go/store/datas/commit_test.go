@@ -255,7 +255,7 @@ func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 ty
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 
-// Assert that c is the common ancestor of a and b
+// Assert that c is the common ancestor of a and b, using multiple common ancestor methods.
 func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb Database) {
 	assert := assert.New(t)
 
