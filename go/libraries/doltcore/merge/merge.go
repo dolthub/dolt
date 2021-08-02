@@ -52,61 +52,51 @@ func NewMerger(ctx context.Context, root, mergeRoot, ancRoot *doltdb.RootValue, 
 	return &Merger{root, mergeRoot, ancRoot, vrw}
 }
 
+func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.RootValue) (
+	ok bool,
+	table *doltdb.Table,
+	sch schema.Schema,
+	h hash.Hash,
+	err error,
+) {
+	table, ok, err = root.GetTable(ctx, tblName)
+	if err != nil {
+		return false, nil, nil, hash.Hash{}, err
+	}
+
+	if ok {
+		h, err = table.HashOf()
+		if err != nil {
+			return false, nil, nil, hash.Hash{}, err
+		}
+		sch, err = table.GetSchema(ctx)
+		if err != nil {
+			return false, nil, nil, hash.Hash{}, err
+		}
+	}
+
+	return ok, table, sch, h, nil
+}
+
 // MergeTable merges schema and table data for the table tblName.
 func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *editor.TableEditSession) (*doltdb.Table, *MergeStats, error) {
-	tbl, ok, err := merger.root.GetTable(ctx, tblName)
+	rootHasTable, tbl, rootSchema, rootHash, err := getTableInfoFromRoot(ctx, tblName, merger.root)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var h hash.Hash
-	var tblSchema schema.Schema
-	if ok {
-		h, err = tbl.HashOf()
-		if err != nil {
-			return nil, nil, err
-		}
-		tblSchema, err = tbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	mergeTbl, mergeOk, err := merger.mergeRoot.GetTable(ctx, tblName)
+	mergeHasTable, mergeTbl, mergeSchema, mergeHash, err := getTableInfoFromRoot(ctx, tblName, merger.mergeRoot)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var mh hash.Hash
-	var mergeTblSchema schema.Schema
-	if mergeOk {
-		mh, err = mergeTbl.HashOf()
-		if err != nil {
-			return nil, nil, err
-		}
-		mergeTblSchema, err = mergeTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	ancTbl, ancOk, err := merger.ancRoot.GetTable(ctx, tblName)
+	ancHasTable, ancTbl, ancSchema, ancHash, err := getTableInfoFromRoot(ctx, tblName, merger.ancRoot)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var anch hash.Hash
-	var ancTblSchema schema.Schema
 	var ancRows types.Map
-	if ancOk {
-		anch, err = ancTbl.HashOf()
-		if err != nil {
-			return nil, nil, err
-		}
-		ancTblSchema, err = ancTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
+	if ancHasTable {
 		ancRows, err = ancTbl.GetRowData(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -114,26 +104,26 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	{ // short-circuit logic
-		if ancOk && schema.IsKeyless(ancTblSchema) {
-			if ok && mergeOk && ancOk && h == mh && h == anch {
+		if ancHasTable && schema.IsKeyless(ancSchema) {
+			if rootHasTable && mergeHasTable && ancHasTable && rootHash == mergeHash && rootHash == ancHash {
 				return tbl, &MergeStats{Operation: TableUnmodified}, nil
 			}
 		} else {
-			if ok && mergeOk && h == mh {
+			if rootHasTable && mergeHasTable && rootHash == mergeHash {
 				return tbl, &MergeStats{Operation: TableUnmodified}, nil
 			}
 		}
 
-		if !ancOk {
-			if mergeOk && ok {
-				if schema.SchemasAreEqual(tblSchema, mergeTblSchema) {
+		if !ancHasTable {
+			if mergeHasTable && rootHasTable {
+				if schema.SchemasAreEqual(rootSchema, mergeSchema) {
 					// hackity hack
-					ancTblSchema, ancTbl = tblSchema, tbl
+					ancSchema, ancTbl = rootSchema, tbl
 					ancRows, _ = types.NewMap(ctx, merger.vrw)
 				} else {
 					return nil, nil, ErrSameTblAddedTwice
 				}
-			} else if ok {
+			} else if rootHasTable {
 				// fast-forward
 				return tbl, &MergeStats{Operation: TableUnmodified}, nil
 			} else {
@@ -142,10 +132,10 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 			}
 		}
 
-		if h == anch {
+		if rootHash == ancHash {
 			// fast-forward
 			ms := MergeStats{Operation: TableModified}
-			if h != mh {
+			if rootHash != mergeHash {
 				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
 				if err != nil {
 					return nil, nil, err
@@ -157,13 +147,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 				return nil, nil, err
 			}
 			return mergeTbl, &ms, nil
-		} else if mh == anch {
+		} else if mergeHash == ancHash {
 			// fast-forward
 			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
 	}
 
-	postMergeSchema, schConflicts, err := SchemaMerge(tblSchema, mergeTblSchema, ancTblSchema, tblName)
+	postMergeSchema, schConflicts, err := SchemaMerge(rootSchema, mergeSchema, ancSchema, tblName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -192,7 +182,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	for _, index := range postMergeSchema.Indexes().AllIndexes() {
 		addedIndexesSet[strings.ToLower(index.Name())] = index.Name()
 	}
-	for _, index := range tblSchema.Indexes().AllIndexes() {
+	for _, index := range rootSchema.Indexes().AllIndexes() {
 		delete(addedIndexesSet, strings.ToLower(index.Name()))
 	}
 	for _, addedIndex := range addedIndexesSet {
