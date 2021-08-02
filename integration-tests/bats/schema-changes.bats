@@ -422,11 +422,9 @@ SQL
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
 
-    dolt sql -q "DROP TABLE t"
-    dolt sql -q "CREATE TABLE t(pk int, val int)"
+    dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
     dolt sql -q "INSERT INTO t values (2,2)"
 
-    dolt add .
     dolt add .
 
     run dolt sql -q "SELECT COUNT(*) from dolt_diff_t"
