@@ -877,9 +877,9 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 			if err != nil {
 				return nil, nil, err
 			}
-		} else if has, err := newRoot.HasTable(ctx, tblName); err != nil {
+		} else if newRootHasTable, err := newRoot.HasTable(ctx, tblName); err != nil {
 			return nil, nil, err
-		} else if has {
+		} else if newRootHasTable {
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
 			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 				return root.RemoveTables(ctx, tblName)
