@@ -938,7 +938,7 @@ SQL
 }
 
 @test "keyless: unique index works" {
-    skip "dont havefunctionality yet"
+    skip "dont have functionality yet"
     dolt sql -q "create table t(pk int, val1 int, val2 int);"
     dolt sql -q "alter table t add CONSTRAINT myidx UNIQUE(val1);"
     dolt sql -q "alter table t add index (val2)"
