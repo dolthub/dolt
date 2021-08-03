@@ -462,9 +462,10 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test2" ]] || false
 
-    run dolt sql -q "select * from test1"
+    run dolt sql -q "select * from test1" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 2 ]] || false
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,2,2" ]] || false
 }
 
 

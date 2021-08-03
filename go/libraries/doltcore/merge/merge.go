@@ -116,11 +116,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
 
-		// Changes only in root, table unmodified
-		if mergeHash == ancHash {
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
-		}
-
 		// One or both added this table
 		if !ancHasTable {
 			if mergeHasTable && rootHasTable {
@@ -153,6 +148,11 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 			}
 			// fast-forward
 			return nil, &MergeStats{Operation: TableRemoved}, nil
+		}
+
+		// Changes only in root, table unmodified
+		if mergeHash == ancHash {
+			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
 
 		// Changes only in merge root, fast-forward
@@ -868,7 +868,6 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	// need to validate merges can be done on all tables before starting the actual merges.
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, tableEditSession)
-
 		if err != nil {
 			return nil, nil, err
 		}
@@ -889,6 +888,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		} else if newRootHasTable, err := newRoot.HasTable(ctx, tblName); err != nil {
 			return nil, nil, err
 		} else if newRootHasTable {
+			// Merge root deleted this table
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
 			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 				return root.RemoveTables(ctx, tblName)
@@ -901,7 +901,11 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 				return nil, nil, err
 			}
 		} else {
-			panic("?")
+			// This is a deleted table that the merge root still has
+			if stats.Operation != TableRemoved {
+				panic("Invalid merge state. This is a bug.")
+			}
+			// Nothing to update, our root already has the table deleted
 		}
 	}
 
