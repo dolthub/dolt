@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"io"
 	"os"
 	"runtime"
@@ -811,6 +812,7 @@ var _ sql.IndexAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyTable = (*AlterableDoltTable)(nil)
 var _ sql.CheckAlterableTable = (*AlterableDoltTable)(nil)
+var _ sql.PrimaryKeyAlterableTable = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
@@ -1720,3 +1722,119 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 
 	return false, nil
 }
+
+func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string) error {
+	currSch := t.sch
+	if currSch.GetPKCols().Size() > 0 {
+		return sql.ErrMultiplePrimaryKeyDefined.New() // Also caught in GMD
+	}
+
+	// TODO: Add foreign key checks
+
+	// Map function for converting columns to a primary key
+	schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
+		for _, c := range columns {
+			if c == col.Name {
+				col.IsPartOfPK = true
+				return col
+			}
+		}
+
+		return col
+	})
+
+	table, err := t.doltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	table, err = table.UpdateSchema(ctx, currSch)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
+	currSch := t.sch
+	if currSch.GetPKCols().Size() == 0 {
+		return fmt.Errorf("error: no primary key to be foung") // TODO: need to add this error to gms
+	}
+
+	// TODO: Add foreign key checks
+
+	table, err := t.doltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	table, err = table.UpdateSchema(ctx, currSch)
+	if err != nil {
+		return err
+	}
+
+	rowData, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	newRowData, err := keyedRowDataToKeylessRowData(ctx, t.nbf, table.ValueReadWriter(), rowData, currSch)
+	if err != nil {
+		return err
+	}
+
+	table, err = table.UpdateRows(ctx, newRowData)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutTable(ctx, t.tableName, table)
+	if err != nil {
+		return err
+	}
+
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+func keyedRowDataToKeylessRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, sch schema.Schema) (types.Map, error) {
+	newMap, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return types.Map{}, err
+	}
+
+	mapEditor := newMap.Edit()
+
+	rowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
+		taggedVals, err := row.TaggedValuesFromTupleKeyAndValue(key.(types.Tuple), value.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+
+		keylessRow, err := row.New(nbf, sch, taggedVals)
+		if err != nil {
+			return true, nil
+		}
+
+		// fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index())
+		rkey := keylessRow.NomsMapKey(sch)
+		rval := keylessRow.NomsMapValue(sch)
+
+		mapEditor = mapEditor.Set(rkey, rval)
+
+		return false, nil
+	})
+
+	return mapEditor.Map(ctx)
+}
+
