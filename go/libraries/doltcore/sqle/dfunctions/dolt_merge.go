@@ -176,7 +176,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			}
 
 			if err != nil {
-				return nil, err
+				return noConflicts, err
 			}
 			return noConflicts, err
 		}
