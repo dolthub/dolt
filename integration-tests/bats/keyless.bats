@@ -936,3 +936,15 @@ SQL
     [[ "${lines[1]}" = "3" ]] || false
     [ "${#lines[@]}" -eq 2 ]
 }
+
+@test "keyless: unique index works" {
+    skip "dont havefunctionality yet"
+    dolt sql -q "create table t(pk int, val1 int, val2 int);"
+    dolt sql -q "alter table t add CONSTRAINT myidx UNIQUE(val1);"
+    dolt sql -q "alter table t add index (val2)"
+    dolt sql -q "insert into t values (1,1,1)"
+
+    run dolt sql -q "INSERT INTO t VALUES (1,1,1)"
+    [ $status -eq 1 ]
+    [[ "$output" = "unique violation" ]] || false
+}
