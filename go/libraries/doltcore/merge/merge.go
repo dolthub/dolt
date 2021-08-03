@@ -86,7 +86,8 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 		}
 
 		// Both made identical changes
-		if rootHasTable && mergeHasTable && rootHash == mergeHash {
+		// For keyless tables, this counts as a conflict
+		if rootHasTable && mergeHasTable && rootHash == mergeHash && !schema.IsKeyless(rootSchema) {
 			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
 
@@ -94,8 +95,9 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 		if !ancHasTable {
 			if mergeHasTable && rootHasTable {
 				if schema.SchemasAreEqual(rootSchema, mergeSchema) {
-					// if both added the same table, pretend it was in the ancestor all along with no data
-					ancSchema, ancTbl = rootSchema, tbl
+					// If both added the same table, pretend it was in the ancestor all along with no data
+					// Don't touch ancHash to avoid triggering other short-circuit logic below
+					ancHasTable, ancSchema, ancTbl = true, rootSchema, tbl
 					ancRows, _ = types.NewMap(ctx, merger.vrw)
 				} else {
 					return nil, nil, ErrSameTblAddedTwice
@@ -851,8 +853,6 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit) (*dol
 }
 
 func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootValue) (*doltdb.RootValue, map[string]*MergeStats, error) {
-	merger := NewMerger(ctx, ourRoot, theirRoot, ancRoot, ourRoot.VRW())
-
 	tblNames, err := doltdb.UnionTableNames(ctx, ourRoot, theirRoot)
 
 	if err != nil {
@@ -865,7 +865,10 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	tableEditSession := editor.CreateTableEditSession(ourRoot, editor.TableEditSessionProps{
 		ForeignKeyChecksDisabled: true,
 	})
-	// need to validate merges can be done on all tables before starting the actual merges.
+
+	// Merge tables one at a time. This is done based on name, so will work badly for things like table renames.
+	// TODO: merge based on a more durable table identity that persists across renames
+	merger := NewMerger(ctx, ourRoot, theirRoot, ancRoot, ourRoot.VRW())
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, tableEditSession)
 		if err != nil {
@@ -903,7 +906,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		} else {
 			// This is a deleted table that the merge root still has
 			if stats.Operation != TableRemoved {
-				panic("Invalid merge state. This is a bug.")
+				panic(fmt.Sprintf("Invalid merge state for table %s. This is a bug.", tblName))
 			}
 			// Nothing to update, our root already has the table deleted
 		}
