@@ -348,6 +348,37 @@ SQL
     [[ "$output" =~ "9,9,9" ]] || false
 }
 
+
+@test "sql-merge: DOLT_MERGE(--abort) clears index state" {
+    run dolt sql --disable-batch << SQL
+set autocommit = off;
+CREATE TABLE one_pk (
+  pk1 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  PRIMARY KEY (pk1)
+);
+SELECT DOLT_COMMIT('-a', '-m', 'add tables');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+SELECT DOLT_CHECKOUT('master');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
+SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_CHECKOUT('feature-branch');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
+SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
+SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_MERGE('feature-branch');
+SELECT DOLT_MERGE('--abort');
+commit;
+SQL
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "On branch master" ]] || false
+    [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
+}
+
 @test "sql-merge: DOLT_MERGE with unresolved conflicts throws an error" {
       run dolt sql << SQL
 CREATE TABLE one_pk (
