@@ -96,6 +96,9 @@ type pkTableEditor struct {
 	indexEds []*IndexEditor
 	cvEditor *types.MapEditor
 
+	// true if has edits
+	dirty bool
+
 	hasAutoInc bool
 	autoIncCol schema.Column
 	autoIncVal types.Value
@@ -424,6 +427,9 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
 
+	// mark as dirty
+	te.dirty = true
+
 	keyHash, err := key.Hash(te.nbf)
 	if err != nil {
 		return err
@@ -526,6 +532,9 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow. This converts the given row into
 // tuples that are then passed to InsertKeyVal.
 func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
+	// mark as dirty
+	te.dirty = true
+
 	key, err := dRow.NomsMapKey(te.tSch).Value(ctx)
 	if err != nil {
 		return err
@@ -557,6 +566,9 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 	// Regarding the lock's position here, refer to the comment in InsertKeyVal
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
+
+	// mark as dirty
+	te.dirty = true
 
 	// Index operations should come before all table operations. For the reasoning, refer to the comment in InsertKeyVal
 	indexOpsToUndo := make([]int, len(te.indexEds))
@@ -610,6 +622,9 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
+
+	// mark as dirty
+	te.dirty = true
 
 	dOldKeyVal, err := dOldRow.NomsMapKey(te.tSch).Value(ctx)
 	if err != nil {
@@ -706,6 +721,9 @@ func (te *pkTableEditor) GetAutoIncrementValue() types.Value {
 }
 
 func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
+	// mark as dirty
+	te.dirty = true
+
 	te.autoIncVal = v
 	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
 	return
@@ -883,6 +901,10 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 	defer te.flushMutex.RUnlock()
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
+
+	// mark as dirty
+	te.dirty = true
+
 	if te.cvEditor == nil {
 		cvMap, err := te.t.GetConstraintViolations(ctx)
 		if err != nil {
@@ -913,7 +935,7 @@ func (te *pkTableEditor) Close() error {
 }
 
 func (te *pkTableEditor) hasEdits() bool {
-	return te.tea.opCount > 0
+	return te.dirty
 }
 
 // Flush finalizes all of the changes made so far.
