@@ -88,6 +88,31 @@ teardown() {
     [[ "${lines[1]}" =~ "9,9,9" ]] || false
 }
 
+@test "merge: --abort leaves clean working, staging roots" {
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test1 VALUES (1,10,10);"
+    dolt commit -am "added rows to test1 on master"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test1 VALUES (2,20,20);"
+    dolt commit -am "added rows to test1 on other"
+
+    dolt checkout master
+    dolt merge other
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "still merging" ]] || false
+    [[ "$output" =~ "modified:       test" ]] || false
+
+    dolt merge --abort
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "On branch master" ]] || false
+    skip "index is left dirty after --abort"
+    [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
+}
+
 @test "merge: squash merge" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
