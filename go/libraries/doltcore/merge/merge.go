@@ -39,6 +39,7 @@ import (
 
 var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
+var ErrTableDeletedAndModified = errors.New("conflict: table with same name deleted and modified ")
 
 type Merger struct {
 	root      *doltdb.RootValue
@@ -104,20 +105,27 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	{ // short-circuit logic
-		if ancHasTable && schema.IsKeyless(ancSchema) {
-			if rootHasTable && mergeHasTable && ancHasTable && rootHash == mergeHash && rootHash == ancHash {
-				return tbl, &MergeStats{Operation: TableUnmodified}, nil
-			}
-		} else {
-			if rootHasTable && mergeHasTable && rootHash == mergeHash {
-				return tbl, &MergeStats{Operation: TableUnmodified}, nil
-			}
+
+		// Nothing changed
+		if rootHasTable && mergeHasTable && ancHasTable && rootHash == mergeHash && rootHash == ancHash {
+			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
 
+		// Both made identical changes
+		if rootHasTable && mergeHasTable && rootHash == mergeHash {
+			return tbl, &MergeStats{Operation: TableUnmodified}, nil
+		}
+
+		// Changes only in root, table unmodified
+		if mergeHash == ancHash {
+			return tbl, &MergeStats{Operation: TableUnmodified}, nil
+		}
+
+		// One or both added this table
 		if !ancHasTable {
 			if mergeHasTable && rootHasTable {
 				if schema.SchemasAreEqual(rootSchema, mergeSchema) {
-					// hackity hack
+					// if both added the same table, pretend it was in the ancestor all along with no data
 					ancSchema, ancTbl = rootSchema, tbl
 					ancRows, _ = types.NewMap(ctx, merger.vrw)
 				} else {
@@ -132,8 +140,23 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 			}
 		}
 
-		if rootHash == ancHash {
+		// Deleted in both, fast-forward
+		if ancHasTable && !rootHasTable && !mergeHasTable {
+			return nil, &MergeStats{Operation: TableRemoved}, nil
+		}
+
+		// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
+		if ancHasTable && (!rootHasTable || !mergeHasTable) {
+			if (mergeHasTable && mergeHash != ancHash) ||
+				(rootHasTable && rootHash != ancHash) {
+				return nil, nil, ErrTableDeletedAndModified
+			}
 			// fast-forward
+			return nil, &MergeStats{Operation: TableRemoved}, nil
+		}
+
+		// Changes only in merge root, fast-forward
+		if rootHash == ancHash {
 			ms := MergeStats{Operation: TableModified}
 			if rootHash != mergeHash {
 				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
@@ -147,9 +170,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 				return nil, nil, err
 			}
 			return mergeTbl, &ms, nil
-		} else if mergeHash == ancHash {
-			// fast-forward
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
 	}
 
@@ -160,16 +180,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	if schConflicts.Count() != 0 {
 		// error on schema conflicts for now
 		return nil, nil, schConflicts.AsError()
-	}
-
-	rows, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeRows, err := mergeTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	updatedTbl, err := tbl.UpdateSchema(ctx, postMergeSchema)
@@ -208,6 +218,15 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 		return nil, nil, err
 	}
 
+	rows, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeRows, err := mergeTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	resultTbl, conflicts, stats, err := mergeTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, ancRows, updatedTblEditor, sess)
 	if err != nil {
 		return nil, nil, err
