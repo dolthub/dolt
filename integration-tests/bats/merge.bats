@@ -109,7 +109,6 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "On branch master" ]] || false
-    skip "index is left dirty after --abort"
     [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
 }
 
