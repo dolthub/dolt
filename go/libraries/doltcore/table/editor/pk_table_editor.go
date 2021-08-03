@@ -55,6 +55,7 @@ type TableEditor interface {
 	InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateErrFunc) error
 	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
 	DeleteRow(ctx context.Context, r row.Row) error
+	hasEdits() bool
 
 	GetAutoIncrementValue() types.Value
 	SetAutoIncrementValue(v types.Value) (err error)
@@ -712,6 +713,10 @@ func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
 func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
+	if !te.hasEdits() {
+		return te.t, nil
+	}
+
 	te.flush()
 	err := te.aq.WaitForEmpty()
 	if err != nil {
@@ -907,12 +912,16 @@ func (te *pkTableEditor) Close() error {
 	return nil
 }
 
+func (te *pkTableEditor) hasEdits() bool {
+	return te.tea.opCount > 0
+}
+
 // Flush finalizes all of the changes made so far.
 func (te *pkTableEditor) flush() {
 	te.flushMutex.Lock()
 	defer te.flushMutex.Unlock()
 
-	if te.tea.opCount > 0 {
+	if te.hasEdits() {
 		newTea := te.tea.NewFromCurrent()
 		te.aq.Execute(newTea)
 		te.tea = newTea

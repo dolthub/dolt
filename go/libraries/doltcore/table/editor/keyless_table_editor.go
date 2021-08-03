@@ -236,6 +236,10 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 	return kte.acc.increment(key, val)
 }
 
+func (kte *keylessTableEditor) hasEdits() bool {
+	return len(kte.acc.deltas) > 0
+}
+
 // GetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
 func (kte *keylessTableEditor) GetAutoIncrementValue() types.Value {
 	return types.NullValue

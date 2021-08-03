@@ -107,6 +107,10 @@ func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row,
 	return ste.updateRow(ctx, dOldRow, dNewRow, true, errFunc)
 }
 
+func (ste *sessionedTableEditor) hasEdits() bool {
+	return ste.tableEditor.hasEdits()
+}
+
 // GetAutoIncrementValue implements TableEditor.
 func (ste *sessionedTableEditor) GetAutoIncrementValue() types.Value {
 	return ste.tableEditor.GetAutoIncrementValue()
