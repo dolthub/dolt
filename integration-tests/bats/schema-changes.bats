@@ -371,22 +371,28 @@ SQL
 }
 
 
-@test "schema-changes: dropping a primary key still preserves secondary indexes and constraints" {
-    skip "unimplemented"
-    dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
-    dolt sql -q "alter table t add CONSTRAINT myidx UNIQUE(val);"
-    dolt sql -q "ALTER TABLE t ADD INDEX (val2)"
+@test "schema-changes: dropping a primary key still preserves secondary indexes" {
+    dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int);"
+    dolt sql -q "alter table t add index (val2)"
 
     dolt sql -q "insert into t values (1,1,1), (2,2,2)"
     run dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "INSERT INTO t VALUES (3, 2, 3)" # unique violation
-    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,2,2" ]] || false
 
-    run dolt sql -q "SELECT COUNT(*) FROM T where val2 = 3"
+    run dolt sql -q "INSERT INTO t VALUES (3, 3, 3)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '1' ]] || false
+
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,2,2" ]] || false
+    [[ "$output" =~ "3,3,3" ]] || false
+
+    run dolt sql -q "describe t"
+    [[ "$output" =~ "MUL" ]] || false
 }
 
 @test "schema-changes: drop primary key with auto increment throws an error" {
