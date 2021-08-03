@@ -502,6 +502,11 @@ SQL
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test2" ]] || false
+
+    run dolt sql -q "select * from test1" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,2,2" ]] || false
 }
 
 @test "merge: merge a branch that edits a deleted table" {
