@@ -1762,6 +1762,16 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return fmt.Errorf("error: no primary key to be foung") // TODO: need to add this error to gms
 	}
 
+	newCollection := schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
+		col.IsPartOfPK = false
+		return col
+	})
+
+	newSchema, err := schema.SchemaFromCols(newCollection)
+	if err != nil {
+		return err
+	}
+
 	// TODO: Add foreign key checks
 
 	table, err := t.doltTable(ctx)
@@ -1769,7 +1779,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	table, err = table.UpdateSchema(ctx, currSch)
+	table, err = table.UpdateSchema(ctx, newSchema)
 	if err != nil {
 		return err
 	}
@@ -1779,7 +1789,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	newRowData, err := keyedRowDataToKeylessRowData(ctx, t.nbf, table.ValueReadWriter(), rowData, currSch)
+	newRowData, err := keyedRowDataToKeylessRowData(ctx, t.nbf, table.ValueReadWriter(), rowData, newSchema)
 	if err != nil {
 		return err
 	}
