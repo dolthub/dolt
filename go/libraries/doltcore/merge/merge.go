@@ -53,32 +53,6 @@ func NewMerger(ctx context.Context, root, mergeRoot, ancRoot *doltdb.RootValue, 
 	return &Merger{root, mergeRoot, ancRoot, vrw}
 }
 
-func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.RootValue) (
-	ok bool,
-	table *doltdb.Table,
-	sch schema.Schema,
-	h hash.Hash,
-	err error,
-) {
-	table, ok, err = root.GetTable(ctx, tblName)
-	if err != nil {
-		return false, nil, nil, hash.Hash{}, err
-	}
-
-	if ok {
-		h, err = table.HashOf()
-		if err != nil {
-			return false, nil, nil, hash.Hash{}, err
-		}
-		sch, err = table.GetSchema(ctx)
-		if err != nil {
-			return false, nil, nil, hash.Hash{}, err
-		}
-	}
-
-	return ok, table, sch, h, nil
-}
-
 // MergeTable merges schema and table data for the table tblName.
 func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *editor.TableEditSession) (*doltdb.Table, *MergeStats, error) {
 	rootHasTable, tbl, rootSchema, rootHash, err := getTableInfoFromRoot(ctx, tblName, merger.root)
@@ -262,6 +236,32 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	return resultTbl, stats, nil
+}
+
+func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.RootValue) (
+	ok bool,
+	table *doltdb.Table,
+	sch schema.Schema,
+	h hash.Hash,
+	err error,
+) {
+	table, ok, err = root.GetTable(ctx, tblName)
+	if err != nil {
+		return false, nil, nil, hash.Hash{}, err
+	}
+
+	if ok {
+		h, err = table.HashOf()
+		if err != nil {
+			return false, nil, nil, hash.Hash{}, err
+		}
+		sch, err = table.GetSchema(ctx)
+		if err != nil {
+			return false, nil, nil, hash.Hash{}, err
+		}
+	}
+
+	return ok, table, sch, h, nil
 }
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {
