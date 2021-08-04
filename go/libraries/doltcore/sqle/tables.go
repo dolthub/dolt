@@ -1842,7 +1842,12 @@ func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	currSch := t.sch
 	if currSch.GetPKCols().Size() == 0 {
-		return fmt.Errorf("error: no primary key to be foung") // TODO: need to add this error to gms
+		return sql.ErrCantDropFieldOrKey.New("PRIMARY")
+	}
+
+	// Ensure that no auto increment requirements exist on this table
+	if t.autoIncCol.AutoIncrement {
+		return sql.ErrWrongAutoKey.New()
 	}
 
 	newCollection := schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
