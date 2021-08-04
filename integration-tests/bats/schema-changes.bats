@@ -402,19 +402,21 @@ SQL
    [ "$status" -eq 0 ]
 
    run dolt sql -q "alter table t add primary key (pk);"
-   echo $output
    [  "$status" -eq 0 ]
 }
 
 @test "schema-changes: alter table on keyless column with duplicates throws an error" {
-    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int)"
     dolt sql -q "insert into t values (1,1),(1,1)"
 
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk, val)"
     [ "$status" -eq 1 ]
-}
+    [[ "$output" =~ "Duplicate entry for key '(1,1)'" ]] || false
 
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Duplicate entry for key '(1)'" ]] || false
+}
 
 @test "schema-changes: dropping a primary key still preserves secondary indexes" {
     dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int);"

@@ -1814,8 +1814,7 @@ func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 		}
 
 		if card > 1 {
-			// todo: move to gms error
-			return true, fmt.Errorf("error: we have a problem")
+			return true, fmtDuplicateKeyError(sch, keyless)
 		}
 
 		taggedVals, err := keyless.TaggedValues()
@@ -1839,7 +1838,6 @@ func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 
 	return mapEditor.Map(ctx)
 }
-
 
 func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	currSch := t.sch
@@ -1941,3 +1939,18 @@ func keyedRowDataToKeylessRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 	return mapEditor.Map(ctx)
 }
 
+func fmtDuplicateKeyError(sch schema.Schema, keylessRow row.Row) error {
+	pkTags := sch.GetPKCols().Tags
+
+	vals := make([]string, len(pkTags))
+	for i, tg := range sch.GetPKCols().Tags {
+		val, ok := keylessRow.GetColVal(tg)
+		if !ok {
+			panic("tag for primary key wasn't found")
+		}
+
+		vals[i] = val.HumanReadableString()
+	}
+
+	return sql.ErrDuplicateEntry.New(fmt.Sprintf("(%s)", strings.Join(vals, ",")))
+}
