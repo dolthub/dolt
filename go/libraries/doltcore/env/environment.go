@@ -422,6 +422,7 @@ type RootsProvider interface {
 	GetRoots(ctx context.Context) (doltdb.Roots, error)
 }
 
+// Roots returns the roots for this environment
 func (dEnv *DoltEnv) Roots(ctx context.Context) (doltdb.Roots, error) {
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
@@ -440,6 +441,23 @@ func (dEnv *DoltEnv) Roots(ctx context.Context) (doltdb.Roots, error) {
 	}, nil
 }
 
+// UpdateRoots updates the working and staged roots for this environment
+func (dEnv *DoltEnv) UpdateRoots(ctx context.Context, roots doltdb.Roots) error {
+	ws, err := dEnv.WorkingSet(ctx)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// first time updating roots
+		wsRef, err := ref.WorkingSetRefForHead(dEnv.RepoState.CWBHeadRef())
+		if err != nil {
+			return err
+		}
+		ws = doltdb.EmptyWorkingSet(wsRef)
+	} else if err != nil {
+		return err
+	}
+
+	return dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged))
+}
+
 // WorkingRoot returns the working root for the current working branch
 func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	workingSet, err := dEnv.WorkingSet(ctx)
@@ -447,7 +465,7 @@ func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
 		return nil, err
 	}
 
-	return workingSet.RootValue(), nil
+	return workingSet.WorkingRoot(), nil
 }
 
 func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
@@ -510,48 +528,12 @@ type repoStateReader struct {
 	dEnv *DoltEnv
 }
 
-func (r *repoStateReader) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	return r.dEnv.StagedRoot(ctx)
-}
-
-func (r *repoStateReader) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	return r.dEnv.WorkingRoot(ctx)
-}
-
 func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
 	return r.dEnv.RepoState.CWBHeadRef()
 }
 
 func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
 	return r.dEnv.RepoState.CWBHeadSpec()
-}
-
-func (r *repoStateReader) CWBHeadHash(ctx context.Context) (hash.Hash, error) {
-	ref := r.CWBHeadRef()
-	cm, err := r.dEnv.DoltDB.ResolveCommitRef(ctx, ref)
-
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	return cm.HashOf()
-}
-
-func (r *repoStateReader) StagedHash() hash.Hash {
-	return hash.Parse(r.dEnv.RepoState.staged)
-}
-
-func (r *repoStateReader) IsMergeActive(ctx context.Context) (bool, error) {
-	return r.dEnv.IsMergeActive(ctx)
-}
-
-func (r *repoStateReader) GetMergeCommit(ctx context.Context) (*doltdb.Commit, error) {
-	ws, err := r.dEnv.WorkingSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return ws.MergeState().Commit(), nil
 }
 
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
@@ -571,19 +553,6 @@ func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.
 	}
 
 	return nil
-}
-
-// TODO: kill merge methods
-func (r *repoStateWriter) AbortMerge(ctx context.Context) error {
-	return r.DoltEnv.AbortMerge(ctx)
-}
-
-func (r *repoStateWriter) ClearMerge(ctx context.Context) error {
-	return r.DoltEnv.ClearMerge(ctx)
-}
-
-func (r *repoStateWriter) StartMerge(ctx context.Context, commit *doltdb.Commit) error {
-	return r.DoltEnv.StartMerge(ctx, commit)
 }
 
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {

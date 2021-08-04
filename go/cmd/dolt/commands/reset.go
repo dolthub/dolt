@@ -117,8 +117,12 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 		tables := apr.Args()
 
-		roots.Staged, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, roots)
+		roots, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, roots)
+		if err != nil {
+			return handleResetError(err, usage)
+		}
 
+		err = dEnv.UpdateRoots(ctx, roots)
 		if err != nil {
 			return handleResetError(err, usage)
 		}
