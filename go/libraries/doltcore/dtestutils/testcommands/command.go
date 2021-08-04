@@ -72,12 +72,12 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	dbData := dEnv.DbData()
 
 	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
-		Message:          c.Message,
-		Date:             time.Now(),
-		AllowEmpty:       false,
-		CheckForeignKeys: true,
-		Name:             name,
-		Email:            email,
+		Message:    c.Message,
+		Date:       time.Now(),
+		AllowEmpty: false,
+		Force:      false,
+		Name:       name,
+		Email:      email,
 	})
 
 	return err
@@ -110,12 +110,12 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	require.NoError(t, err)
 
 	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
-		Message:          c.Message,
-		Date:             time.Now(),
-		AllowEmpty:       false,
-		CheckForeignKeys: true,
-		Name:             name,
-		Email:            email,
+		Message:    c.Message,
+		Date:       time.Now(),
+		AllowEmpty: false,
+		Force:      false,
+		Name:       name,
+		Email:      email,
 	})
 
 	return err

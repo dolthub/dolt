@@ -118,6 +118,10 @@ SQL
 
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ "true" ]] || false
+    [[ "${lines[26]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
+    [[ "${lines[28]}" =~ "1" ]] || false
+    ! [[ "$output" =~ "Updating" ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
     [ $status -eq 0 ]
@@ -283,10 +287,11 @@ SELECT DOLT_MERGE('feature-branch');
 SELECT * FROM dolt_conflicts;
 SELECT DOLT_MERGE('--abort');
 SQL
-    
     [ $status -eq 0 ]
-    [[ "$output" =~ "table,num_conflicts" ]] || false
-    [[ "$output" =~ "one_pk,1" ]] || false
+    [[ "${lines[2]}" =~ "table,num_conflicts" ]] || false
+    [[ "${lines[3]}" =~ "one_pk,1" ]] || false
+    [[ "${lines[4]}" =~ "DOLT_MERGE('--abort')" ]] || false
+    [[ "${lines[5]}" =~ "1" ]] || false
 
     # now resolve commits
     run dolt sql --disable-batch << SQL
@@ -346,6 +351,37 @@ SQL
     run dolt sql -r csv -q "select * from one_pk where pk1 > 3";
     [ $status -eq 0 ]
     [[ "$output" =~ "9,9,9" ]] || false
+}
+
+
+@test "sql-merge: DOLT_MERGE(--abort) clears index state" {
+    run dolt sql --disable-batch << SQL
+set autocommit = off;
+CREATE TABLE one_pk (
+  pk1 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  PRIMARY KEY (pk1)
+);
+SELECT DOLT_COMMIT('-a', '-m', 'add tables');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+SELECT DOLT_CHECKOUT('master');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
+SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_CHECKOUT('feature-branch');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
+SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
+SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_MERGE('feature-branch');
+SELECT DOLT_MERGE('--abort');
+commit;
+SQL
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "On branch master" ]] || false
+    [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "sql-merge: DOLT_MERGE with unresolved conflicts throws an error" {
@@ -544,11 +580,14 @@ INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
 SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch');
+SHOW WARNINGS;
 SELECT COUNT(*) FROM dolt_conflicts where num_conflicts > 0;
 rollback;
 SQL
     [ $status -eq 0 ]
-    [[ $output =~ "merge has unresolved conflicts. please use the dolt_conflicts table to resolve" ]] || false
+    [[ "$output" =~ "| DOLT_MERGE('feature-branch') |" ]] || false
+    [[ "$output" =~ "| 0                            |" ]] || false # conflict should return 0
+    [[ "$output" =~ "| Warning | 1105 | merge has unresolved conflicts. please use the dolt_conflicts table to resolve |" ]] || false
     [[ "$output" =~ "| COUNT(*) |" ]] || false
     [[ "$output" =~ "| 1        |" ]] || false
 }

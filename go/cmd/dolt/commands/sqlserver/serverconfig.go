@@ -42,7 +42,7 @@ const (
 	defaultReadOnly         = false
 	defaultLogLevel         = LogLevel_Info
 	defaultAutoCommit       = true
-	defaultMaxConnections   = 1
+	defaultMaxConnections   = 100
 	defaultQueryParallelism = 2
 )
 

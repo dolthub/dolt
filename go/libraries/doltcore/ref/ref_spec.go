@@ -61,7 +61,9 @@ func ParseRefSpecForRemote(remote, refSpecStr string) (RefSpec, error) {
 	var fromRef DoltRef
 	var toRef DoltRef
 	var err error
-	if refSpecStr[0] == ':' {
+	if len(refSpecStr) == 0 {
+		return nil, ErrInvalidRefSpec
+	} else if refSpecStr[0] == ':' {
 		fromRef = EmptyBranchRef
 		toRef, err = Parse(refSpecStr[1:])
 

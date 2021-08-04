@@ -131,7 +131,8 @@ SQL
     [[ "$output" =~ "CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10" ]] || false
     [[ "$output" =~ "CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100" ]] || false
     dolt merge other
-    run dolt add dolt_schemas
+    dolt add dolt_schemas
+    run dolt commit -am "can't commit conflicts"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "dolt_schemas" ]] || false
     run dolt conflicts cat dolt_schemas

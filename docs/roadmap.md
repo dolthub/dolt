@@ -12,9 +12,7 @@ their feature requests implemented first.
 * Primary key changes in `ALTER TABLE`
 * Tuples for `IN (...)` expressions
 * `push` and `pull` via SQL
-* Concurrency and transactions
-* Check constraints
-* JSON type and functions
+* JSON functions
 * More window functions
 * Cross-database joins with indexes
 * `ROWS PRECEDING` and `ROWS FOLLOWING` window definitions

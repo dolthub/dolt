@@ -38,8 +38,8 @@ teardown() {
     dolt checkout master
     start_sql_server repo1
 
-    server_query 0 "SELECT * FROM query_values" ""
-    server_query 0 "
+    server_query repo1 0 "SELECT * FROM query_values" ""
+    server_query repo1 0 "
     SET @@repo1_head=hashof('values_has_one');
     SELECT * FROM query_values;
     SET @@repo1_head=hashof('values_has_two');
@@ -61,7 +61,7 @@ teardown() {
     dolt checkout no_view
     start_sql_server repo1
 
-    server_query 0 "
+    server_query repo1 0 "
     SET @@repo1_head=hashof('with_view');
     SELECT * FROM a_view;
     " ";47\n47"
@@ -78,7 +78,7 @@ teardown() {
     dolt commit -m 'Create a view'
     start_sql_server repo1
 
-    server_query 0 "
+    server_query repo1 0 "
     SET @@repo1_head=hashof('no_view');
     SELECT * FROM information_schema.views
     " ";"

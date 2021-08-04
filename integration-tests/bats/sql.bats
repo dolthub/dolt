@@ -530,6 +530,211 @@ SQL
     [[ ! "$output" =~ table_a ]] || false    
 }
 
+@test "sql: USE branch" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout master
+    
+    dolt sql --disable-batch <<SQL
+USE \`dolt_repo_$$/feature-branch\`;
+CREATE TABLE table_a(x int primary key);
+CREATE TABLE table_b(x int primary key);
+SELECT DOLT_COMMIT('-a', '-m', 'two new tables');
+SQL
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ table_a ]] || false
+
+    dolt checkout feature-branch
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ table_a ]] || false
+}
+
+@test "sql: set head ref session var" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout master
+
+    run dolt sql -q "select @@dolt_repo_$$_head_ref;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'refs/heads/master' ]] || false
+
+    dolt sql --disable-batch <<SQL
+set @@dolt_repo_$$_head_ref = 'feature-branch';
+CREATE TABLE test (x int primary key);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+SQL
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ test ]] || false
+
+    dolt checkout feature-branch
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ test ]] || false
+
+    dolt checkout master
+    dolt sql --disable-batch <<SQL
+set @@dolt_repo_$$_head_ref = 'refs/heads/feature-branch';
+insert into test values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'inserted 3 values');
+SQL
+
+    dolt checkout feature-branch
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+
+    dolt checkout master
+
+    run dolt sql --disable-batch <<SQL
+set @@dolt_repo_$$_head_ref = 'feature-branch';
+select @@dolt_repo_$$_head_ref;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'refs/heads/feature-branch' ]] || false
+    
+    # switching to a branch that doesn't exist should be an error
+    run dolt sql -q "set @@dolt_repo_$$_head_ref = 'does-not-exist';"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'branch not found' ]] || false
+}
+
+
+@test "sql: branch qualified DB name in select" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout master
+    
+    dolt sql --disable-batch <<SQL
+USE \`dolt_repo_$$/feature-branch\`;
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+SQL
+
+    run dolt sql -q "select * from \`dolt_repo_$$/feature-branch\`.a1 order by x;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+}
+
+@test "sql: branch qualified DB name in insert" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout master
+    
+    dolt sql --disable-batch <<SQL
+USE \`dolt_repo_$$/feature-branch\`;
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+SQL
+
+    run dolt sql -q "insert into \`dolt_repo_$$/feature-branch\`.a1 values (4);" -r csv
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from \`dolt_repo_$$/feature-branch\`.a1 order by x;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+}
+
+@test "sql: commit hash qualified DB name in select" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    
+    dolt sql --disable-batch <<SQL
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+insert into a1 values (4), (5), (6);
+select DOLT_COMMIT('-a', '-m', 'more values');
+SQL
+
+    # get the second to last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
+
+    run dolt sql -q "select * from \`dolt_repo_$$/$hash\`.a1 order by x;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ "5" ]] || false
+
+    # same with USE syntax
+    run dolt sql --disable-batch -r csv <<SQL
+    USE \`dolt_repo_$$/$hash\`;
+    select * from a1;
+SQL
+
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ] # First line is "database changed"
+    [[ ! "$output" =~ "5" ]] || false
+}
+
+@test "sql: commit hash qualified DB name in delete" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    
+    dolt sql --disable-batch <<SQL
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+insert into a1 values (4), (5), (6);
+select DOLT_COMMIT('-a', '-m', 'more values');
+SQL
+
+    # get the second to last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
+
+    run dolt sql -q "delete from \`dolt_repo_$$/$hash\`.a1;" -r csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'read-only' ]] || false
+
+    # same with USE syntax
+    run dolt sql --disable-batch <<SQL
+    USE \`dolt_repo_$$/$hash\`;
+    delete from a1;
+SQL
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'read-only' ]] || false    
+}
+
+@test "sql: commit hash qualified DB name in update" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    
+    dolt sql --disable-batch <<SQL
+CREATE TABLE a1(x int primary key);
+insert into a1 values (1), (2), (3);
+SELECT DOLT_COMMIT('-a', '-m', 'new table');
+insert into a1 values (4), (5), (6);
+select DOLT_COMMIT('-a', '-m', 'more values');
+SQL
+
+    # get the second to last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+2 | head -n1`
+
+    run dolt sql -q "update \`dolt_repo_$$/$hash\`.a1 set x = x*10" -r csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'read-only' ]] || false
+
+    # same with USE syntax
+    run dolt sql --disable-batch <<SQL
+    USE \`dolt_repo_$$/$hash\`;
+    update a1 set x = x*10;
+SQL
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'read-only' ]] || false    
+}
+
 @test "sql: describe" {
     run dolt sql -q "describe one_pk"
     [ $status -eq 0 ]

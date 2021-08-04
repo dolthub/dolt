@@ -468,3 +468,33 @@ SQL
     dolt merge --abort
     dolt reset --hard
 }
+
+@test "conflict-detection-2: dolt_force_transaction_commit ignores conflicts" {
+    dolt sql <<"SQL"
+CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT);
+INSERT INTO test VALUES (1, 1), (2, 2);
+SQL
+    dolt add -A
+    dolt commit -m "MC1"
+    dolt branch other
+    dolt sql -q "INSERT INTO test VALUES (3, 3)"
+    dolt add -A
+    dolt commit -m "MC2"
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (3, 4)"
+    dolt add -A
+    dolt commit -m "OC1"
+    dolt checkout master
+
+    run dolt sql <<"SQL"
+SELECT DOLT_MERGE('other');
+SQL
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "conflicts" ]] || false
+    run dolt sql <<"SQL"
+SET dolt_force_transaction_commit = 1;
+SELECT DOLT_MERGE('other');
+SQL
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "conflicts" ]] || false
+}

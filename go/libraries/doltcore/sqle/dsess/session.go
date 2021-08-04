@@ -41,6 +41,8 @@ const (
 const (
 	EnableTransactionsEnvKey      = "DOLT_ENABLE_TRANSACTIONS"
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
+	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
+	ForceTransactionCommit        = "dolt_force_transaction_commit"
 )
 
 type batchMode int8
@@ -49,8 +51,6 @@ const (
 	single batchMode = iota
 	Batched
 )
-
-const TransactionsDisabledSysVar = "dolt_transactions_disabled"
 
 func HeadKey(dbName string) string {
 	return dbName + HeadKeySuffix
@@ -70,7 +70,7 @@ func StagedKey(dbName string) string {
 
 func init() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
+		{ // If true, causes a Dolt commit to occur when you commit a transaction.
 			Name:              DoltCommitOnTransactionCommit,
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           true,
@@ -86,12 +86,28 @@ func init() {
 			Type:              sql.NewSystemBoolType(TransactionsDisabledSysVar),
 			Default:           int8(0),
 		},
+		{ // If true, disables the conflict and constraint violation check when you commit a transaction.
+			Name:              ForceTransactionCommit,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(ForceTransactionCommit),
+			Default:           int8(0),
+		},
 	})
 }
 
 func IsHeadKey(key string) (bool, string) {
 	if strings.HasSuffix(key, HeadKeySuffix) {
 		return true, key[:len(key)-len(HeadKeySuffix)]
+	}
+
+	return false, ""
+}
+
+func IsHeadRefKey(key string) (bool, string) {
+	if strings.HasSuffix(key, HeadRefKeySuffix) {
+		return true, key[:len(key)-len(HeadRefKeySuffix)]
 	}
 
 	return false, ""
@@ -118,11 +134,12 @@ type Session struct {
 type DatabaseSessionState struct {
 	dbName               string
 	headCommit           *doltdb.Commit
-	detachedHead         bool
 	headRoot             *doltdb.RootValue
 	WorkingSet           *doltdb.WorkingSet
 	dbData               env.DbData
 	EditSession          *editor.TableEditSession
+	detachedHead         bool
+	readOnly             bool
 	dirty                bool
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
@@ -130,6 +147,13 @@ type DatabaseSessionState struct {
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
+	if d.WorkingSet == nil {
+		return doltdb.Roots{
+			Head:    d.headRoot,
+			Working: d.headRoot,
+			Staged:  d.headRoot,
+		}
+	}
 	return doltdb.Roots{
 		Head:    d.headRoot,
 		Working: d.WorkingSet.WorkingRoot(),
@@ -152,11 +176,13 @@ func DefaultSession() *Session {
 }
 
 type InitialDbState struct {
-	Db          sql.Database
-	HeadCommit  *doltdb.Commit
-	WorkingSet  *doltdb.WorkingSet
-	DbData      env.DbData
-	GlobalState globalstate.GlobalState
+	Db           sql.Database
+	HeadCommit   *doltdb.Commit
+	DetachedHead bool
+	ReadOnly     bool
+	WorkingSet   *doltdb.WorkingSet
+	DbData       env.DbData
+	GlobalState  globalstate.GlobalState
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -202,6 +228,7 @@ func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSe
 	if err != nil {
 		return nil, ok, err
 	}
+
 	// TODO: this could potentially add a |sess.dbStates| entry
 	// for every commit in the history, leaking memory.
 	// We need a size-limited data structure for read-only
@@ -242,6 +269,10 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (sql.Tran
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
+	}
+
+	if sessionState.readOnly && sessionState.detachedHead {
+		return DisabledTransaction{}, nil
 	}
 
 	wsRef := sessionState.WorkingSet.Ref()
@@ -421,11 +452,6 @@ func (sess *Session) CreateDoltCommit(ctx *sql.Context, dbName string) error {
 		return nil
 	}
 
-	fkChecks, err := sess.Session.GetSessionVariable(ctx, "foreign_key_checks")
-	if err != nil {
-		return err
-	}
-
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -438,12 +464,12 @@ func (sess *Session) CreateDoltCommit(ctx *sql.Context, dbName string) error {
 	}
 
 	_, err = sess.CommitToDolt(ctx, roots, dbName, actions.CommitStagedProps{
-		Message:          fmt.Sprintf("Transaction commit at %s", ctx.QueryTime().UTC().Format("2006-01-02T15:04:05Z")),
-		Date:             ctx.QueryTime(),
-		AllowEmpty:       false,
-		CheckForeignKeys: fkChecks.(int8) == 1,
-		Name:             sess.Username,
-		Email:            sess.Email,
+		Message:    fmt.Sprintf("Transaction commit at %s", ctx.QueryTime().UTC().Format("2006-01-02T15:04:05Z")),
+		Date:       ctx.QueryTime(),
+		AllowEmpty: false,
+		Force:      false,
+		Name:       sess.Username,
+		Email:      sess.Email,
 	})
 	if _, ok := err.(actions.NothingStaged); err != nil && !ok {
 		return err
@@ -611,12 +637,18 @@ func (sess *Session) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bo
 // Data changes contained in the |newRoot| aren't persisted until this session is committed.
 // TODO: rename to SetWorkingRoot
 func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+	// TODO: this is redundant with work done in setRoot
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
 	if rootsEqual(sessionState.GetRoots().Working, newRoot) {
+		return nil
+	}
+
+	if sessionState.readOnly {
+		// TODO: Return an error here?
 		return nil
 	}
 
@@ -852,8 +884,6 @@ func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Com
 // SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
 // vars that we define. Otherwise we pass it on to the base implementation.
 func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
-	// TODO: working set ref
-
 	if isHead, dbName := IsHeadKey(key); isHead {
 		err := sess.setHeadSessionVar(ctx, value, dbName)
 		if err != nil {
@@ -867,6 +897,30 @@ func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value inte
 
 		dbState.detachedHead = true
 		return nil
+	}
+
+	if isHeadRef, dbName := IsHeadRefKey(key); isHeadRef {
+		valStr, isStr := value.(string)
+		if !isStr {
+			return doltdb.ErrInvalidBranchOrHash
+		}
+
+		headRef, err := ref.Parse(valStr)
+		if err != nil {
+			return err
+		}
+
+		wsRef, err := ref.WorkingSetRefForHead(headRef)
+		if err != nil {
+			return err
+		}
+
+		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
+		if err != nil {
+			return err
+		}
+
+		return sess.Session.SetSessionVariable(ctx, key, headRef.String())
 	}
 
 	if isWorking, dbName := IsWorkingKey(key); isWorking {
@@ -940,7 +994,6 @@ func (sess *Session) setHeadSessionVar(ctx *sql.Context, value interface{}, dbNa
 	}
 
 	valStr, isStr := value.(string)
-
 	if !isStr || !hash.IsValid(valStr) {
 		return doltdb.ErrInvalidHash
 	}
@@ -995,40 +1048,37 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
 	sessionState.GlobalState = dbState.GlobalState
+	sessionState.readOnly, sessionState.detachedHead = dbState.ReadOnly, dbState.DetachedHead
 
 	sessionState.EditSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
-	err := sess.Session.SetSessionVariable(ctx, HeadRefKey(db.Name()), dbState.WorkingSet.Ref().GetPath())
-	if err != nil {
-		return err
-	}
+	// WorkingSet is nil in the case of a read only, detached head DB
+	if dbState.WorkingSet != nil {
+		sessionState.WorkingSet = dbState.WorkingSet
+		workingRoot := dbState.WorkingSet.WorkingRoot()
+		logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
 
-	sessionState.WorkingSet = dbState.WorkingSet
-	workingRoot := dbState.WorkingSet.WorkingRoot()
-	logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
+		err := sess.setRoot(ctx, db.Name(), workingRoot)
+		if err != nil {
+			return err
+		}
+	} else {
+		headRoot, err := dbState.HeadCommit.GetRootValue()
+		if err != nil {
+			return err
+		}
 
-	err = sess.setRoot(ctx, db.Name(), workingRoot)
-	if err != nil {
-		return err
+		sessionState.headRoot = headRoot
 	}
 
 	// This has to happen after SetRoot above, since it does a stale check before its work
 	// TODO: this needs to be kept up to date as the working set ref changes
 	sessionState.headCommit = dbState.HeadCommit
 
-	headCommitHash, err := dbState.HeadCommit.HashOf()
-	if err != nil {
-		return err
-	}
-
-	err = sess.Session.SetSessionVariable(ctx, HeadKey(db.Name()), headCommitHash.String())
-	if err != nil {
-		return err
-	}
-
 	// After setting the initial root we have no state to commit
 	sessionState.dirty = false
-	return nil
+
+	return sess.setSessionVarsForDb(ctx, db.Name())
 }
 
 // CreateTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing
@@ -1064,6 +1114,19 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	if err != nil {
 		return err
 	}
+
+	if state.WorkingSet != nil {
+		headRef, err := state.WorkingSet.Ref().ToHeadRef()
+		if err != nil {
+			return err
+		}
+
+		err = sess.Session.SetSessionVariable(ctx, HeadRefKey(dbName), headRef.String())
+		if err != nil {
+			return err
+		}
+	}
+
 	roots := state.GetRoots()
 
 	h, err := roots.Working.HashOf()

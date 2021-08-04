@@ -136,6 +136,7 @@ func (ws WorkingSet) StartMerge(commit *Commit) *WorkingSet {
 
 func (ws WorkingSet) AbortMerge() *WorkingSet {
 	ws.workingRoot = ws.mergeState.PreMergeWorkingRoot()
+	ws.stagedRoot = ws.workingRoot
 	ws.mergeState = nil
 	return &ws
 }
