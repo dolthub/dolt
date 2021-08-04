@@ -96,7 +96,7 @@ type pkTableEditor struct {
 	indexEds []*IndexEditor
 	cvEditor *types.MapEditor
 
-	// true if has edits
+	// Whenever any write operation occurs on the table editor, this is set to true for the lifetime of the editor.
 	dirty bool
 
 	hasAutoInc bool
@@ -139,6 +139,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		name:       name,
 		nbf:        t.Format(),
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
+		dirty:      false,
 		writeMutex: &sync.Mutex{},
 		flushMutex: &sync.RWMutex{},
 	}
@@ -427,9 +428,6 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
 
-	// mark as dirty
-	te.dirty = true
-
 	keyHash, err := key.Hash(te.nbf)
 	if err != nil {
 		return err
@@ -525,6 +523,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 		}
 	}
 
+	te.dirty = true
 	te.tea.opCount++
 	return nil
 }
@@ -532,9 +531,6 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow. This converts the given row into
 // tuples that are then passed to InsertKeyVal.
 func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
-	// mark as dirty
-	te.dirty = true
-
 	key, err := dRow.NomsMapKey(te.tSch).Value(ctx)
 	if err != nil {
 		return err
@@ -566,9 +562,6 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 	// Regarding the lock's position here, refer to the comment in InsertKeyVal
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
-
-	// mark as dirty
-	te.dirty = true
 
 	// Index operations should come before all table operations. For the reasoning, refer to the comment in InsertKeyVal
 	indexOpsToUndo := make([]int, len(te.indexEds))
@@ -602,6 +595,7 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 	delete(te.tea.addedKeys, keyHash)
 	te.tea.removedKeys[keyHash] = key
 
+	te.dirty = true
 	te.tea.opCount++
 	return nil
 }
@@ -622,9 +616,6 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
-
-	// mark as dirty
-	te.dirty = true
 
 	dOldKeyVal, err := dOldRow.NomsMapKey(te.tSch).Value(ctx)
 	if err != nil {
@@ -710,6 +701,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
+	te.dirty = true
 	delete(te.tea.removedKeys, newHash)
 	te.tea.addedKeys[newHash] = &doltKVP{k: dNewKeyVal, v: dNewRowVal}
 	te.tea.opCount += 2
@@ -721,9 +713,7 @@ func (te *pkTableEditor) GetAutoIncrementValue() types.Value {
 }
 
 func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
-	// mark as dirty
 	te.dirty = true
-
 	te.autoIncVal = v
 	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
 	return
@@ -731,7 +721,12 @@ func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
 func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
-	if !te.hasEdits() {
+	// We must acquire a lock to read the dirty bool, otherwise there's the probability for a race.
+	// We don't actually care about the race, but CI will fail if there are any potential race conditions.
+	te.flushMutex.Lock()
+	isDirty := te.dirty
+	te.flushMutex.Unlock()
+	if !isDirty {
 		return te.t, nil
 	}
 
@@ -902,9 +897,6 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
-	// mark as dirty
-	te.dirty = true
-
 	if te.cvEditor == nil {
 		cvMap, err := te.t.GetConstraintViolations(ctx)
 		if err != nil {
@@ -913,6 +905,7 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 		te.cvEditor = cvMap.Edit()
 	}
 	te.cvEditor.Set(k, v)
+	te.dirty = true
 	return nil
 }
 
@@ -934,6 +927,10 @@ func (te *pkTableEditor) Close() error {
 	return nil
 }
 
+// hasEdits returns whether the table editor has had any successful write operations. This does not track whether the
+// write operations were eventually rolled back (such as through an error on StatementFinished), so it is still possible
+// for this to return true when the table editor does not actually contain any new edits. This is preferable to
+// potentially returning false when there are edits.
 func (te *pkTableEditor) hasEdits() bool {
 	return te.dirty
 }

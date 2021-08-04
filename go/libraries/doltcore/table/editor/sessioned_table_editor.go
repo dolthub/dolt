@@ -35,6 +35,7 @@ type sessionedTableEditor struct {
 	referencedTables  []doltdb.ForeignKey // The tables that we reference to ensure an insert or update is valid
 	referencingTables []doltdb.ForeignKey // The tables that reference us to ensure their inserts and updates are valid
 	indexSchemaCache  map[string]schema.Schema
+	dirty             bool
 }
 
 var _ TableEditor = &sessionedTableEditor{}
@@ -48,8 +49,8 @@ func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val type
 		return err
 	}
 
-	ti := ste.tableEditor
-	return ti.InsertKeyVal(ctx, key, val, tagToVal, errFunc)
+	ste.dirty = true
+	return ste.tableEditor.InsertKeyVal(ctx, key, val, tagToVal, errFunc)
 }
 
 func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) error {
@@ -63,6 +64,7 @@ func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tupl
 		}
 	}
 
+	ste.dirty = true
 	return ste.tableEditor.DeleteByKey(ctx, key, tagToVal)
 }
 
@@ -80,6 +82,7 @@ func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, er
 		return err
 	}
 
+	ste.dirty = true
 	return ste.tableEditor.InsertRow(ctx, dRow, errFunc)
 }
 
@@ -95,6 +98,7 @@ func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, r row.Row) error
 		}
 	}
 
+	ste.dirty = true
 	return ste.tableEditor.DeleteRow(ctx, r)
 }
 
@@ -107,7 +111,13 @@ func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row,
 	return ste.updateRow(ctx, dOldRow, dNewRow, true, errFunc)
 }
 
+// hasEdits returns whether the table editor has had any write operations, whether they were successful or unsuccessful
+// (on the underlying table editor). This makes it possible for this to return true when the table editor does not
+// actually contain any new edits, which is preferable to potentially returning false when there are edits.
 func (ste *sessionedTableEditor) hasEdits() bool {
+	if ste.dirty {
+		return true
+	}
 	return ste.tableEditor.hasEdits()
 }
 
@@ -118,6 +128,7 @@ func (ste *sessionedTableEditor) GetAutoIncrementValue() types.Value {
 
 // SetAutoIncrementValue implements TableEditor.
 func (ste *sessionedTableEditor) SetAutoIncrementValue(v types.Value) error {
+	ste.dirty = true
 	return ste.tableEditor.SetAutoIncrementValue(v)
 }
 
@@ -171,6 +182,7 @@ func (ste *sessionedTableEditor) StatementFinished(ctx context.Context, errored 
 
 // SetConstraintViolation implements TableEditor.
 func (ste *sessionedTableEditor) SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error {
+	ste.dirty = true
 	return ste.tableEditor.SetConstraintViolation(ctx, k, v)
 }
 
@@ -488,6 +500,7 @@ func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row,
 		return err
 	}
 
+	ste.dirty = true
 	return ste.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, errFunc)
 }
 
