@@ -459,19 +459,22 @@ SQL
 }
 
 @test "schema-changes: merge on primary key schema differences throws an error" {
-    skip "unimplemented"
     dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
     dolt sql -q "INSERT INTO t values (1,1,1)"
 
     dolt commit -am "cm1"
     dolt checkout -b test
     dolt sql -q "ALTER TABLE t drop PRIMARY key"
+    dolt add .
     dolt commit -am "cm2"
     dolt checkout master
 
+    dolt sql -q "INSERT INTO t values (2,2,2)"
+    dolt commit -am "cm3"
+
     run dolt merge test
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'cannot merge branches with different primary key schema' ]] || false
+    [[ "$output" =~ 'different primary key definitions for our column pk and their column pk' ]] || false
 }
 
 @test "schema-changes: diff on primary key schema change shows schema level diff but does not show row level diff" {
@@ -489,7 +492,7 @@ SQL
     # TODO: Schema level dif
 }
 
-@test "schema-changes: dolt diff table return an empty table" {
+@test "schema-changes: dolt diff table returns an empty table" {
     skip "unimplemented"
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"

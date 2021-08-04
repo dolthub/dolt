@@ -28,6 +28,7 @@ type conflictKind byte
 const (
 	TagCollision conflictKind = iota
 	NameCollision
+	PkCollision
 )
 
 type SchemaConflict struct {
@@ -65,6 +66,8 @@ func (c ColConflict) String() string {
 		return fmt.Sprintf("two columns with the name '%s'", c.Ours.Name)
 	case TagCollision:
 		return fmt.Sprintf("different column definitions for our column %s and their column %s", c.Ours.Name, c.Theirs.Name)
+	case PkCollision:
+		return fmt.Sprintf("different primary key definitions for our column %s and their column %s", c.Ours.Name, c.Theirs.Name)
 	}
 	return ""
 }
@@ -204,7 +207,7 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (merged *schema.C
 	ourNewCols := schema.ColCollectionSetDifference(ourCC, ancCC)
 	theirNewCols := schema.ColCollectionSetDifference(theirCC, ancCC)
 
-	// check for name conflicts between columns added on each branch since the ancestor
+	// check for name and pk conflicts between columns added on each branch since the ancestor
 	_ = ourNewCols.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
 		theirCol, ok := theirNewCols.GetByNameCaseInsensitive(ourCol.Name)
 		if ok && ourCol.Tag != theirCol.Tag {
@@ -214,6 +217,15 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (merged *schema.C
 				Theirs: theirCol,
 			})
 		}
+
+		if ok && (ourCol.IsPartOfPK != theirCol.IsPartOfPK) {
+			conflicts = append(conflicts, ColConflict{
+				Kind: PkCollision,
+				Ours: ourCol,
+				Theirs: theirCol,
+			})
+		}
+
 		return false, nil
 	})
 
@@ -243,6 +255,14 @@ func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schem
 		if ourCol.Equals(theirCol) {
 			common = common.Append(ourCol)
 			return false, nil
+		}
+
+		if ok && (ourCol.IsPartOfPK != theirCol.IsPartOfPK) {
+			conflicts = append(conflicts, ColConflict{
+				Kind: PkCollision,
+				Ours: ourCol,
+				Theirs: theirCol,
+			})
 		}
 
 		ancCol, ok := ancCC.GetByTag(ourCol.Tag)
