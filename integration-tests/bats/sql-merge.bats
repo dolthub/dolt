@@ -36,8 +36,6 @@ SELECT DOLT_CHECKOUT('master');
 SQL
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 0 ]
-    [[ "$output" =~ "| 1" ]] || false # validate that merge returns 1 not "Updating..."
-    ! [[ "$output" =~ "Updating" ]] || false
 
     run dolt log -n 1
     [ $status -eq 0 ]
@@ -120,6 +118,10 @@ SQL
 
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ "true" ]] || false
+    [[ "${lines[26]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
+    [[ "${lines[28]}" =~ "1" ]] || false
+    ! [[ "$output" =~ "Updating" ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
     [ $status -eq 0 ]
