@@ -36,6 +36,8 @@ SELECT DOLT_CHECKOUT('master');
 SQL
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 0 ]
+    [[ "$output" =~ "| 1" ]] || false # validate that merge returns 1 not "Updating..."
+    ! [[ "$output" =~ "Updating" ]] || false
 
     run dolt log -n 1
     [ $status -eq 0 ]
@@ -283,10 +285,11 @@ SELECT DOLT_MERGE('feature-branch');
 SELECT * FROM dolt_conflicts;
 SELECT DOLT_MERGE('--abort');
 SQL
-    
     [ $status -eq 0 ]
-    [[ "$output" =~ "table,num_conflicts" ]] || false
-    [[ "$output" =~ "one_pk,1" ]] || false
+    [[ "${lines[2]}" =~ "table,num_conflicts" ]] || false
+    [[ "${lines[3]}" =~ "one_pk,1" ]] || false
+    [[ "${lines[4]}" =~ "DOLT_MERGE('--abort')" ]] || false
+    [[ "${lines[5]}" =~ "1" ]] || false
 
     # now resolve commits
     run dolt sql --disable-batch << SQL
