@@ -332,7 +332,7 @@ func executeNoFFMerge(
 
 	// TODO: this does several session state updates, and it really needs to just do one
 	//  We also need to commit any pending transaction before we do this.
-	_, err = actions.CommitStaged(ctx, roots, mergeParentCommits, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),

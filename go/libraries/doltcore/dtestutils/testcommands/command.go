@@ -81,7 +81,7 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	_, err = actions.CommitStaged(context.Background(), roots, mergeParentCommits, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
 		Message:    c.Message,
 		Date:       time.Now(),
 		AllowEmpty: false,
@@ -133,7 +133,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	_, err = actions.CommitStaged(context.Background(), roots, mergeParentCommits, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
 		Message:    c.Message,
 		Date:       time.Now(),
 		AllowEmpty: false,

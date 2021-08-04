@@ -133,7 +133,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	_, err = actions.CommitStaged(ctx, roots, mergeParentCommits, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),

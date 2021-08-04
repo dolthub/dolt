@@ -399,6 +399,11 @@ func (sess *Session) CommitToDolt(
 	}
 	dbData := sessionState.dbData
 
+	ws, err := sess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
 	// TODO: this does several session state updates, and it really needs to just do one
 	//  It's also not atomic with the above commit. We need a way to set both new HEAD and update the working
 	//  set together, atomically. We can't easily do this in noms right now, because the the data set is the unit of
@@ -406,7 +411,7 @@ func (sess *Session) CommitToDolt(
 	//  just no API which allows one to update more than one dataset in the same atomic transaction. We need to write
 	//  one.
 	//  Meanwhile, this is all kinds of thread-unsafe
-	commit, err := actions.CommitStaged(ctx, roots, mergeParentCommits, dbData, props)
+	commit, err := actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dbData, props)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +422,7 @@ func (sess *Session) CommitToDolt(
 	// repo state writer, so we're never persisting the new working set to disk like in a command line context.
 	// TODO: fix this mess
 
-	ws, err := sess.WorkingSet(ctx, dbName)
+	ws, err = sess.WorkingSet(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
