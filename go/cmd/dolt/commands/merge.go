@@ -318,6 +318,11 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return errhand.BuildDError("error: committing").AddCause(err).Build()
 	}
 
+	err = dEnv.ClearMerge(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
 	return nil
 }
 

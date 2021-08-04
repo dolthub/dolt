@@ -90,7 +90,11 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		Email:      email,
 	})
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	return dEnv.ClearMerge(context.Background())
 }
 
 type CommitAll struct {
@@ -138,7 +142,11 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		Email:      email,
 	})
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	return dEnv.ClearMerge(context.Background())
 }
 
 type ResetHard struct{}

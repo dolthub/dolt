@@ -344,7 +344,7 @@ func executeNoFFMerge(
 		return nil, err
 	}
 
-	return ws, dSess.SetWorkingSet(ctx, dbName, ws, nil)
+	return ws, dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
 }
 
 // TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.

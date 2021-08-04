@@ -36,12 +36,6 @@ type RepoStateWriter interface {
 	// TODO: get rid of this
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
-	// TODO: get rid of this
-	AbortMerge(ctx context.Context) error
-	// TODO: get rid of this
-	ClearMerge(ctx context.Context) error
-	// TODO: get rid of this
-	StartMerge(ctx context.Context, commit *doltdb.Commit) error
 }
 
 type DocsReadWriter interface {
