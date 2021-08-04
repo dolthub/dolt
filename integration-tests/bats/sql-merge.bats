@@ -118,6 +118,10 @@ SQL
 
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ "true" ]] || false
+    [[ "${lines[26]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
+    [[ "${lines[28]}" =~ "1" ]] || false
+    ! [[ "$output" =~ "Updating" ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
     [ $status -eq 0 ]
@@ -283,10 +287,11 @@ SELECT DOLT_MERGE('feature-branch');
 SELECT * FROM dolt_conflicts;
 SELECT DOLT_MERGE('--abort');
 SQL
-    
     [ $status -eq 0 ]
-    [[ "$output" =~ "table,num_conflicts" ]] || false
-    [[ "$output" =~ "one_pk,1" ]] || false
+    [[ "${lines[2]}" =~ "table,num_conflicts" ]] || false
+    [[ "${lines[3]}" =~ "one_pk,1" ]] || false
+    [[ "${lines[4]}" =~ "DOLT_MERGE('--abort')" ]] || false
+    [[ "${lines[5]}" =~ "1" ]] || false
 
     # now resolve commits
     run dolt sql --disable-batch << SQL
