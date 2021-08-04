@@ -1732,7 +1732,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 	// TODO: Add foreign key checks
 
 	// Map function for converting columns to a primary key
-	schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
+	newCollection := schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
 		for _, c := range columns {
 			if c == col.Name {
 				col.IsPartOfPK = true
@@ -1743,18 +1743,117 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 		return col
 	})
 
+	newSchema, err := schema.SchemaFromCols(newCollection)
+	if err != nil {
+		return err
+	}
+
+	newSchema.Indexes().AddIndex(currSch.Indexes().AllIndexes()...)
+
 	table, err := t.doltTable(ctx)
 	if err != nil {
 		return err
 	}
 
-	table, err = table.UpdateSchema(ctx, currSch)
+	table, err = table.UpdateSchema(ctx, newSchema)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	rowData, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	newRowData, err := keylessRowDataToKeyedRowData(ctx, t.nbf, table.ValueReadWriter(), rowData, newSchema)
+	if err != nil {
+		return err
+	}
+
+	table, err = table.UpdateRows(ctx, newRowData)
+	if err != nil {
+		return err
+	}
+
+	idx := newSchema.Indexes()
+
+	// Rebuild all of the indexes now that the primary key has been changes
+	for _, index := range idx.AllIndexes() {
+		indexRowData, err := editor.RebuildIndex(ctx, table, index.Name())
+		if err != nil {
+			return err
+		}
+
+		keylessIndexData, err := keylessRowDataToKeyedRowData(ctx, t.nbf, table.ValueReadWriter(), indexRowData, newSchema)
+		if err != nil {
+			return err
+		}
+
+		table, err = table.SetIndexRowData(ctx, index.Name(), keylessIndexData)
+		if err != nil {
+			return err
+		}
+	}
+
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutTable(ctx, t.tableName, table)
+	if err != nil {
+		return err
+	}
+
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }
+
+func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, sch schema.Schema) (types.Map, error) {
+	newMap, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return types.Map{}, err
+	}
+
+	mapEditor := newMap.Edit()
+
+	err = rowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
+		keyless, card, err := row.KeylessRowsFromTuples(key.(types.Tuple), value.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+
+		if card > 1 {
+			// todo: move to gms error
+			return true, fmt.Errorf("error: we have a problem")
+		}
+
+		taggedVals, err := keyless.TaggedValues()
+		if err != nil {
+			return true, err
+		}
+
+		keyedRow, err := row.New(nbf, sch, taggedVals)
+		if err != nil {
+			return true, err
+		}
+
+		mapEditor = mapEditor.Set(keyedRow.NomsMapKey(sch), keyedRow.NomsMapValue(sch))
+
+		return false, nil
+	})
+
+	if err != nil {
+		return types.Map{}, err
+	}
+
+	return mapEditor.Map(ctx)
+}
+
 
 func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	currSch := t.sch
@@ -1847,25 +1946,25 @@ func keyedRowDataToKeylessRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 
 	mapEditor := newMap.Edit()
 
-	rowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
+	err = rowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
 		taggedVals, err := row.TaggedValuesFromTupleKeyAndValue(key.(types.Tuple), value.(types.Tuple))
 		if err != nil {
 			return true, err
 		}
 
-		keylessRow, err := row.New(nbf, sch, taggedVals)
+		keyedRow, err := row.New(nbf, sch, taggedVals)
 		if err != nil {
 			return true, nil
 		}
 
-		// fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index())
-		rkey := keylessRow.NomsMapKey(sch)
-		rval := keylessRow.NomsMapValue(sch)
-
-		mapEditor = mapEditor.Set(rkey, rval)
+		mapEditor = mapEditor.Set(keyedRow.NomsMapKey(sch), keyedRow.NomsMapValue(sch))
 
 		return false, nil
 	})
+
+	if err != nil {
+		return types.Map{}, err
+	}
 
 	return mapEditor.Map(ctx)
 }

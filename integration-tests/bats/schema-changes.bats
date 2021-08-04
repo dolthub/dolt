@@ -256,19 +256,18 @@ SQL
 }
 
 @test "schema-changes: add single primary key" {
-    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int)"
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
     [ "$status" -eq 0 ]
 
     dolt sql -q "INSERT INTO t VALUES (1,1),(2,2),(3,3)"
-    run dolt sql -q "SELECT * FROM t"
+    run dolt sql -q "SELECT * FROM t" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '(1,1)' ]] || false
-    [[ "$output" =~ '(2,2)' ]] || false
-    [[ "$output" =~ '(3,3)' ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
 
-    run dolt sql -q "INSERT INTO t VALUES (2, 4)"
+    run dolt sql -q "INSERT INTO t VALUES (2,4)"
     [ "$status" -eq 1 ]
 }
 
