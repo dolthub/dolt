@@ -269,23 +269,37 @@ SQL
 
     run dolt sql -q "INSERT INTO t VALUES (2,4)"
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "duplicate primary key" ]] || false
 }
 
 @test "schema-changes: add composite primary key" {
-    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int)"
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk, val)"
     [ "$status" -eq 0 ]
 
     dolt sql -q "INSERT INTO t VALUES (1,1),(2,2),(3,3)"
-    run dolt sql -q "SELECT * FROM t"
+    run dolt sql -q "SELECT * FROM t" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '(1,1)' ]] || false
-    [[ "$output" =~ '(2,2)' ]] || false
-    [[ "$output" =~ '(3,3)' ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
 
     run dolt sql -q "INSERT INTO t VALUES (2, 2)"
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "duplicate primary key" ]] || false
+
+    run dolt sql -q "INSERT INTO t VALUES (2, 3)"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM t" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM t" -r csv
+    [[ "$output" =~ "4" ]] || false
 }
 
 @test "schema-changes: can delete single primary key" {
@@ -313,7 +327,7 @@ SQL
     [[ "$output" =~ "1,1" ]] || false
 
     run dolt sql -q "describe t;"
-    ! [[ "${lines[1]}" =~ "PRI" ]] || false
+    ! [[ "$output" =~ "PRI" ]] || false
 }
 
 @test "schema-changes: can delete composite primary key" {
@@ -329,11 +343,10 @@ SQL
     [[ "${lines[3]}" =~ "2,2" ]] || false
 
     run dolt sql -q "describe t;"
-    ! [[ "${lines[1]}" =~ "PRI" ]] || false
+    ! [[ "$output" =~ "PRI" ]] || false
 }
 
 @test "schema-changes: run through some add and drop primary key operations" {
-    skip "unimplemented"
     dolt sql -q "create table t(pk int, val int, PRIMARY KEY(pk, val))"
     run dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
     [ "$status" -eq 0 ]
@@ -341,23 +354,56 @@ SQL
     dolt sql -q "INSERT INTO t VALUES (1,1),(2,2)"
     run dolt sql -q "SELECT * FROM t"
 
-    run dolt sql -q "SELECT * FROM t"
+    run dolt sql -q "SELECT * FROM t" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '(1,1)' ]] || false
-    [[ "$output" =~ '(2,2)' ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
 
-    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk))"
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
+    echo $output
     [ "$status" -eq 0 ]
 
     run dolt sql -q "INSERT INTO t values (1, 5)"
     [ "$status" -eq 1 ]
 
     dolt sql -q "INSERT INTO t VALUES (3,3)"
-    run dolt sql -q "SELECT * FROM t"
+    run dolt sql -q "SELECT * FROM t" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '(1,1)' ]] || false
-    [[ "$output" =~ '(2,2)' ]] || false
-    [[ "$output" =~ '(3,3)' ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
+}
+
+@test "schema-changes: add an index after dropping a key, and then recreate the key" {
+   dolt sql -q "create table t(pk int, val int, primary key (pk, val));"
+   dolt sql -q "insert into t values (1,1);"
+   run dolt sql -q "alter table t drop primary key;"
+   [ "$status" -eq 0 ]
+
+   run dolt sql -q "select * from t;" -r csv
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "1,1" ]] || false
+
+   run dolt sql -q "alter table t add primary key (pk, val);"
+   [ "$status" -eq 0 ]
+
+   run dolt sql -q "select * from t;" -r csv
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "1,1" ]] || false
+
+   run dolt sql -q "alter table t drop primary key;"
+   [ "$status" -eq 0 ]
+
+   run dolt sql -q "select * from t;" -r csv
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "1,1" ]] || false
+
+   run dolt sql -q "alter table t add index (val);"
+   [ "$status" -eq 0 ]
+
+   run dolt sql -q "alter table t add primary key (pk);"
+   echo $output
+   [  "$status" -eq 0 ]
 }
 
 @test "schema-changes: alter table on keyless column with duplicates throws an error" {

@@ -1775,24 +1775,10 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 		return err
 	}
 
-	idx := newSchema.Indexes()
-
-	// Rebuild all of the indexes now that the primary key has been changes
-	for _, index := range idx.AllIndexes() {
-		indexRowData, err := editor.RebuildIndex(ctx, table, index.Name())
-		if err != nil {
-			return err
-		}
-
-		keylessIndexData, err := keylessRowDataToKeyedRowData(ctx, t.nbf, table.ValueReadWriter(), indexRowData, newSchema)
-		if err != nil {
-			return err
-		}
-
-		table, err = table.SetIndexRowData(ctx, index.Name(), keylessIndexData)
-		if err != nil {
-			return err
-		}
+	// Rebuild all of the indexes now that the primary key has been changed
+	table, err = editor.RebuildAllIndexes(ctx, table)
+	if err != nil {
+		return err
 	}
 
 	root, err := t.getRoot(ctx)
@@ -1900,24 +1886,10 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	idx := newSchema.Indexes()
-
-	// Rebuild all of the indexes now that the primary key has been changes
-	for _, index := range idx.AllIndexes() {
-		indexRowData, err := editor.RebuildIndex(ctx, table, index.Name())
-		if err != nil {
-			return err
-		}
-
-		keylessIndexData, err := keyedRowDataToKeylessRowData(ctx, t.nbf, table.ValueReadWriter(), indexRowData, newSchema)
-		if err != nil {
-			return err
-		}
-
-		table, err = table.SetIndexRowData(ctx, index.Name(), keylessIndexData)
-		if err != nil {
-			return err
-		}
+	// Rebuild all of the indexes now that the primary key has been changed
+	table, err = editor.RebuildAllIndexes(ctx, table)
+	if err != nil {
+		return err
 	}
 
 	root, err := t.getRoot(ctx)
