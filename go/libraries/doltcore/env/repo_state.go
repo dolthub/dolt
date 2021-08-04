@@ -28,10 +28,6 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
-	// TODO: get rid of this
-	IsMergeActive(ctx context.Context) (bool, error)
-	// TODO: get rid of this
-	GetMergeCommit(ctx context.Context) (*doltdb.Commit, error)
 }
 
 type RepoStateWriter interface {

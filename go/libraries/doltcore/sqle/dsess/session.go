@@ -389,6 +389,7 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 func (sess *Session) CommitToDolt(
 	ctx *sql.Context,
 	roots doltdb.Roots,
+	mergeParentCommits []*doltdb.Commit,
 	dbName string,
 	props actions.CommitStagedProps,
 ) (*doltdb.Commit, error) {
@@ -405,7 +406,7 @@ func (sess *Session) CommitToDolt(
 	//  just no API which allows one to update more than one dataset in the same atomic transaction. We need to write
 	//  one.
 	//  Meanwhile, this is all kinds of thread-unsafe
-	commit, err := actions.CommitStaged(ctx, roots, dbData, props)
+	commit, err := actions.CommitStaged(ctx, roots, mergeParentCommits, dbData, props)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +464,12 @@ func (sess *Session) CreateDoltCommit(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	_, err = sess.CommitToDolt(ctx, roots, dbName, actions.CommitStagedProps{
+	var mergeParentCommits []*doltdb.Commit
+	if sessionState.WorkingSet.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{sessionState.WorkingSet.MergeState().Commit()}
+	}
+
+	_, err = sess.CommitToDolt(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
 		Message:    fmt.Sprintf("Transaction commit at %s", ctx.QueryTime().UTC().Format("2006-01-02T15:04:05Z")),
 		Date:       ctx.QueryTime(),
 		AllowEmpty: false,

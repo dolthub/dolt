@@ -123,7 +123,17 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
 	}
 
-	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage)
+	}
+
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
+	_, err = actions.CommitStaged(ctx, roots, mergeParentCommits, dbData, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -133,6 +143,11 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	})
 
 	if err == nil {
+		err = dEnv.ClearMerge(ctx)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("Couldn't update working set").AddCause(err).Build(), usage)
+		}
+
 		// if the commit was successful, print it out using the log command
 		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
 	}

@@ -71,7 +71,17 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
+	ws, err := dEnv.WorkingSet(context.Background())
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
+	_, err = actions.CommitStaged(context.Background(), roots, mergeParentCommits, dbData, actions.CommitStagedProps{
 		Message:    c.Message,
 		Date:       time.Now(),
 		AllowEmpty: false,
@@ -109,7 +119,17 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err = dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
+	ws, err := dEnv.WorkingSet(context.Background())
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
+	_, err = actions.CommitStaged(context.Background(), roots, mergeParentCommits, dbData, actions.CommitStagedProps{
 		Message:    c.Message,
 		Date:       time.Now(),
 		AllowEmpty: false,

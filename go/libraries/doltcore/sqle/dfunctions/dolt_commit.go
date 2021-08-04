@@ -17,6 +17,7 @@ package dfunctions
 import (
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
@@ -115,8 +116,18 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
 	ctx.SetTransaction(nil)
 
+	var mergeParentCommits []*doltdb.Commit
+	ws, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
 	// Now do a Dolt commit
-	commit, err := dSess.CommitToDolt(ctx, roots, dbName, actions.CommitStagedProps{
+	commit, err := dSess.CommitToDolt(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),

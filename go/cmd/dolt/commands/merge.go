@@ -295,7 +295,17 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	_, err = actions.CommitStaged(ctx, roots, dEnv.DbData(), actions.CommitStagedProps{
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
+	_, err = actions.CommitStaged(ctx, roots, mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
