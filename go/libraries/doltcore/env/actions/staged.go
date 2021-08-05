@@ -26,7 +26,7 @@ func StageTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs, tb
 		var err error
 		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
 		if err != nil {
-			return doltdb.Roots{}, nil
+			return doltdb.Roots{}, err
 		}
 	}
 

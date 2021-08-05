@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package testcommands TODO: kill off this package, replace with the non-test commands directly
 package testcommands
 
 import (
