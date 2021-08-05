@@ -88,13 +88,12 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl)
 	require.NoError(t, err)
 
-	sch, err = tbl.GetSchema(ctx)
+	working, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
-	rows, err := tbl.GetRowData(ctx)
+	working, err = working.PutTable(ctx, TableName, tbl)
 	require.NoError(t, err)
-	indexes, err := tbl.GetIndexData(ctx)
-	require.NoError(t, err)
-	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, TableName, nil)
+
+	err = dEnv.UpdateWorkingRoot(ctx, working)
 	require.NoError(t, err)
 
 	return dEnv

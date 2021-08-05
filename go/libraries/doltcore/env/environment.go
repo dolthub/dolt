@@ -699,45 +699,6 @@ func (dEnv *DoltEnv) StartMerge(ctx context.Context, commit *doltdb.Commit) erro
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.StartMerge(commit), h, dEnv.workingSetMeta())
 }
 
-// todo: move this out of env to actions
-func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, sch schema.Schema, rows types.Map, indexData types.Map, tableName string, autoVal types.Value) error {
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return doltdb.ErrNomsIO
-	}
-
-	vrw := dEnv.DoltDB.ValueReadWriter()
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
-	if err != nil {
-		return ErrMarshallingSchema
-	}
-
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, indexData, autoVal)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutTable(ctx, tableName, tbl)
-	if err != nil {
-		return err
-	}
-
-	rootHash, err := root.HashOf()
-	if err != nil {
-		return err
-	}
-
-	newRootHash, err := newRoot.HashOf()
-	if err != nil {
-		return err
-	}
-	if rootHash == newRootHash {
-		return nil
-	}
-
-	return dEnv.UpdateWorkingRoot(ctx, newRoot)
-}
-
 func (dEnv *DoltEnv) IsMergeActive(ctx context.Context) (bool, error) {
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
