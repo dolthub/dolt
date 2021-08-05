@@ -559,6 +559,18 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 		return chunks.ErrUnsupportedOperation
 	}
 
+	err := func() error {
+		lvs.bufferMu.RLock()
+		defer lvs.bufferMu.RUnlock()
+		if len(lvs.bufferedChunks) > 0 {
+			return errors.New("invalid GC state; bufferedChunks must be empty.")
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
+	}
+
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	root, err := lvs.Root(ctx)
@@ -639,23 +651,23 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 				toVisitCount += len(hashes)
 			}
 		}
-		close(keepChunks)
 		walker.Close()
+
+		lvs.bufferMu.Lock()
+		defer lvs.bufferMu.Unlock()
+		if len(lvs.bufferedChunks) > 0 {
+			return errors.New("invalid GC state; bufferedChunks started empty and was not empty at end of run.")
+		}
+		lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
+		lvs.bufferedChunks = make(map[hash.Hash]chunks.Chunk, lvs.bufferedChunkSize)
+		lvs.bufferedChunkSize = 0
+		lvs.withBufferedChildren = map[hash.Hash]uint64{}
+
+		close(keepChunks)
 		return nil
 	})
 
-	err = eg.Wait()
-	if err != nil {
-		return err
-	}
-
-	// purge the cache
-	lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
-	lvs.bufferedChunks = make(map[hash.Hash]chunks.Chunk, lvs.bufferedChunkSize)
-	lvs.bufferedChunkSize = 0
-	lvs.withBufferedChildren = map[hash.Hash]uint64{}
-
-	return nil
+	return eg.Wait()
 }
 
 // Close closes the underlying ChunkStore
