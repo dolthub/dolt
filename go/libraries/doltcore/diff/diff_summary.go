@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -67,6 +69,16 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Ma
 }
 
 func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td TableDelta) error {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+	}
+
+	// If the primary key sets of two tables are different throw an error
+	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+		return nil
+	}
+
 	keyless, err := td.IsKeyless(ctx)
 	if err != nil {
 		return err

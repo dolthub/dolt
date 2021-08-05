@@ -529,23 +529,64 @@ SQL
 }
 
 @test "schema-changes: diff on primary key schema change shows schema level diff but does not show row level diff" {
-    skip "unimplemented"
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
-
     dolt commit -am "cm1"
 
-    run dolt sql -q "ALTER TABLE T DROP PRIMARY key"
+    run dolt sql -q "ALTER TABLE t DROP PRIMARY key"
     [ "$status" -eq 0 ]
 
-    run dolt diff HEAD
+    run dolt diff
     [ "$status" -eq 0 ]
-    # TODO: Schema level dif
+    [[ "$output" =~ '<   `pk`' ]] || false
+    [[ "$output" =~ '>   `pk`' ]] || false
+    [[ "$output" =~ '<    PRIMARY KEY (pk)' ]] || false
+    [[ "$output" =~ '>    PRIMARY KEY ()' ]] || false
+
+    # Make sure there is not data diff
+    run dolt diff --data
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
 }
 
-# TODO: add summary diffs
-# TODO: add additional diff tests
+@test "schema-changes: diff on composite schema" {
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 1)"
+    dolt commit -am "cm1"
 
+    run dolt sql -q "ALTER TABLE t DROP PRIMARY key"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk, val)"
+    [ "$status" -eq 0 ]
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '<   `val`' ]] || false
+    [[ "$output" =~ '>   `val`' ]] || false
+    [[ "$output" =~ '<    PRIMARY KEY (pk)' ]] || false
+    [[ "$output" =~ '>    PRIMARY KEY (pk, val)' ]] || false
+
+    # Make sure there is not data diff or summary diff
+    run dolt diff --data
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+
+    run dolt diff --summary
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No data changes" ]] || false
+
+    dolt add .
+
+    run dolt status
+    [[ "$output" =~ 'Changes to be committed' ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*t) ]] || false
+    ! [[ "$output" =~ 'deleted' ]] || false
+    ! [[ "$output" =~ 'new table' ]] || false
+}
+
+# do not allow sql style diffs
+# diff tabl diffs
 @test "schema-changes: dolt diff table returns an empty table" {
     skip "unimplemented"
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"

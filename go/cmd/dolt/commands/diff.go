@@ -529,8 +529,8 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 	if !schema.ColCollsAreCompatible(fromSch.GetPKCols(), toSch.GetPKCols()) {
 		fromPkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
 		toPkStr := strings.Join(toSch.GetPKCols().GetColumnNames(), ", ")
-		cli.Println("<    " + sqlfmt.FmtColPrimaryKeyNoNewLine(4, fromPkStr))
-		cli.Println(">    " + sqlfmt.FmtColPrimaryKeyNoNewLine(4, toPkStr))
+		cli.Println("<" + sqlfmt.FmtColPrimaryKeyNoNewLine(3, fromPkStr))
+		cli.Println(">" + sqlfmt.FmtColPrimaryKeyNoNewLine(3, toPkStr))
 	} else {
 		// Just display the normal primary keys string
 		pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
