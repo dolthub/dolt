@@ -596,6 +596,18 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 		return errors.New("invalid GC state; bufferedChunks must be empty.")
 	}
 
+	err := func() error {
+		lvs.bufferMu.RLock()
+		defer lvs.bufferMu.RUnlock()
+		if len(lvs.bufferedChunks) > 0 {
+			return errors.New("invalid GC state; bufferedChunks must be empty.")
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
+	}
+
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	root, err := lvs.Root(ctx)
@@ -683,7 +695,7 @@ func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.Hash
 	lvs.bufferedChunkSize = 0
 	lvs.withBufferedChildren = map[hash.Hash]uint64{}
 
-	return nil
+	return eg.Wait()
 }
 
 func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, toVisit []hash.HashSet, keepHashes func(hs []hash.Hash) error, walker *parallelRefWalker, hashFilter HashFilterFunc) error {
