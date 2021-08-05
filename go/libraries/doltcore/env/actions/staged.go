@@ -53,32 +53,32 @@ func StageTablesNoDocs(ctx context.Context, roots doltdb.Roots, tbls []string) (
 	return stageTablesNoEnvUpdate(ctx, roots, tbls)
 }
 
-func StageAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) error {
+func StageAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) (doltdb.Roots, error) {
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
 	docs, err := drw.GetDocsOnDisk()
 	if err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
 	roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
 	if err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
 	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 	if err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
-	err = stageTables(ctx, roots, rsw, tbls)
+	roots, err = stageTablesNoEnvUpdate(ctx, roots, tbls)
 	if err != nil {
-		env.ResetWorkingDocsToStagedDocs(ctx, roots, rsw)
-		return err
+		_ = env.ResetWorkingDocsToStagedDocs(ctx, roots, rsw)
+		return doltdb.Roots{}, err
 	}
 
-	return nil
+	return roots, nil
 }
 
 func StageAllTablesNoDocs(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {

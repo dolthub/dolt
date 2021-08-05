@@ -82,11 +82,10 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	if allFlag {
-		err = actions.StageAllTables(ctx, roots, dEnv.DbData())
-	}
-
-	if err != nil {
-		return handleCommitErr(ctx, dEnv, err, help)
+		roots, err = actions.StageAllTables(ctx, roots, dEnv.DbData())
+		if err != nil {
+			return handleCommitErr(ctx, dEnv, err, help)
+		}
 	}
 
 	var name, email string
@@ -116,13 +115,6 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	// TODO: refactor above stage funcs to modify roots in memory instead of writing to disk
-	dbData := dEnv.DbData()
-	roots, err = dEnv.Roots(context.Background())
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working root").AddCause(err).Build(), usage)
-	}
-
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage)
@@ -133,7 +125,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -142,17 +134,17 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		Email:      email,
 	})
 
-	if err == nil {
-		err = dEnv.ClearMerge(ctx)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError("Couldn't update working set").AddCause(err).Build(), usage)
-		}
-
-		// if the commit was successful, print it out using the log command
-		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
+	if err != nil {
+		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	return handleCommitErr(ctx, dEnv, err, usage)
+	err = dEnv.ClearMerge(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't update working set").AddCause(err).Build(), usage)
+	}
+
+	// if the commit was successful, print it out using the log command
+	return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {

@@ -48,7 +48,10 @@ func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	return actions.StageAllTables(context.Background(), roots, dEnv.DbData())
+	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.DbData())
+	require.NoError(t, err)
+
+	return dEnv.UpdateRoots(context.Background(), roots)
 }
 
 type CommitStaged struct {
@@ -109,7 +112,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	err = actions.StageAllTables(context.Background(), roots, dEnv.DbData())
+	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.DbData())
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
@@ -117,11 +120,6 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	if err != nil {
 		return err
 	}
-
-	dbData := dEnv.DbData()
-	// TODO: refactor StageAllTables to just modify roots in memory, not write to disk
-	roots, err = dEnv.Roots(context.Background())
-	require.NoError(t, err)
 
 	ws, err := dEnv.WorkingSet(context.Background())
 	if err != nil {
@@ -133,7 +131,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	_, err = actions.CommitStaged(context.Background(), roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
 		Message:    c.Message,
 		Date:       time.Now(),
 		AllowEmpty: false,
