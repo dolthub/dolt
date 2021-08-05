@@ -1012,9 +1012,6 @@ func (t *AlterableDoltTable) CreateIndex(
 	columns []sql.IndexColumn,
 	comment string,
 ) error {
-	if schema.IsKeyless(t.sch) {
-		return fmt.Errorf("indexes on keyless tables are not supported")
-	}
 
 	table, err := t.doltTable(ctx)
 	if err != nil {

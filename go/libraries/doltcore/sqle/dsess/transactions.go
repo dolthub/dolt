@@ -32,6 +32,29 @@ const (
 	maxTxCommitRetries = 5
 )
 
+func TransactionsDisabled(ctx *sql.Context) bool {
+	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
+	if err != nil {
+		panic(err)
+	}
+
+	switch enabled.(int8) {
+	case 0:
+		return false
+	case 1:
+		return true
+	default:
+		panic(fmt.Sprintf("Unexpected value %v", enabled))
+	}
+}
+
+// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
+type DisabledTransaction struct{}
+
+func (d DisabledTransaction) String() string {
+	return "Disabled transaction"
+}
+
 type DoltTransaction struct {
 	startState    *doltdb.WorkingSet
 	workingSetRef ref.WorkingSetRef
@@ -66,16 +89,26 @@ func (tx DoltTransaction) String() string {
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
 //  strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
-	// logrus.Errorf("Committing working root %s", workingSet.WorkingRoot().DebugString(ctx, true))
-
-	// Don't allow a root value with conflicts to be committed. Later we may open this up via configuration
-	hasConflicts, err := workingSet.WorkingRoot().HasConflicts(ctx)
+	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
 		return nil, err
 	}
-
-	if hasConflicts {
-		return nil, doltdb.ErrUnresolvedConflicts
+	if forceTransactionCommit.(int8) != 1 {
+		workingRoot := workingSet.WorkingRoot()
+		hasConflicts, err := workingRoot.HasConflicts(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if hasConflicts {
+			return nil, doltdb.ErrUnresolvedConflicts
+		}
+		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if hasConstraintViolations {
+			return nil, doltdb.ErrUnresolvedConstraintViolations
+		}
 	}
 
 	for i := 0; i < maxTxCommitRetries; i++ {

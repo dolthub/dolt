@@ -54,10 +54,12 @@ func NewConstraintsVerifyAllFunc(ctx *sql.Context, args ...sql.Expression) (sql.
 func (vc *ConstraintsVerifyFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
-	workingSet := dSess.WorkingSet(ctx, dbName)
+	workingSet, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
 	workingRoot := workingSet.WorkingRoot()
 	var comparingRoot *doltdb.RootValue
-	var err error
 	if vc.isAll {
 		comparingRoot, err = doltdb.EmptyRootValue(ctx, workingRoot.VRW())
 		if err != nil {

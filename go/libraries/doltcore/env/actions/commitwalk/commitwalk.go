@@ -25,6 +25,7 @@ import (
 type c struct {
 	ddb       *doltdb.DoltDB
 	commit    *doltdb.Commit
+	meta      *doltdb.CommitMeta
 	hash      hash.Hash
 	height    uint64
 	invisible bool
@@ -67,14 +68,8 @@ func (q *q) AddPendingIfUnseen(ctx context.Context, ddb *doltdb.DoltDB, id hash.
 			}
 
 			// if the commits have equal height, tiebreak on timestamp
-			pendingMeta, err := q.pending[i].commit.GetCommitMeta()
-			if err != nil {
-				return err
-			}
-			commitMeta, err := c.commit.GetCommitMeta()
-			if err != nil {
-				return err
-			}
+			pendingMeta := q.pending[i].meta
+			commitMeta := c.meta
 			if pendingMeta.UserTimestamp > commitMeta.UserTimestamp {
 				break
 			}
@@ -128,8 +123,12 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 	if err != nil {
 		return nil, err
 	}
+	meta, err := l.GetCommitMeta()
+	if err != nil {
+		return nil, err
+	}
 
-	c := &c{ddb: ddb, commit: l, height: h, hash: id}
+	c := &c{ddb: ddb, commit: l, meta: meta, height: h, hash: id}
 	q.loaded[id] = c
 	return c, nil
 }

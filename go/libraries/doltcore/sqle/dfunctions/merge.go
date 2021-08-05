@@ -71,12 +71,12 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	dbName := sess.GetCurrentDatabase()
-	ddb, ok := sess.GetDoltDB(dbName)
+	ddb, ok := sess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	root, ok := sess.GetRoot(dbName)
+	roots, ok := sess.GetRoots(ctx, dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
@@ -86,7 +86,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	err = checkForUncommittedChanges(root, headRoot)
+	err = checkForUncommittedChanges(roots.Working, headRoot)
 	if err != nil {
 		return nil, err
 	}

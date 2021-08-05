@@ -296,12 +296,12 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	}
 
 	_, err = actions.CommitStaged(ctx, roots, dEnv.DbData(), actions.CommitStagedProps{
-		Message:          msg,
-		Date:             t,
-		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(forceFlag),
-		Name:             name,
-		Email:            email,
+		Message:    msg,
+		Date:       t,
+		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		Force:      apr.Contains(forceFlag),
+		Name:       name,
+		Email:      email,
 	})
 
 	if err != nil {
