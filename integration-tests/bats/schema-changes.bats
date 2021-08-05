@@ -489,7 +489,7 @@ SQL
     [[ "$output" =~ 'Changes to be committed' ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*t) ]] || false
     ! [[ "$output" =~ 'deleted' ]] || false
-    ! [[ "$output" =~ 'added' ]] || false
+    ! [[ "$output" =~ 'new table' ]] || false
 
     dolt commit -m "cm2"
     dolt checkout master
@@ -515,7 +515,7 @@ SQL
     [[ "$output" =~ 'Changes to be committed' ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*t) ]] || false
     ! [[ "$output" =~ 'deleted' ]] || false
-    ! [[ "$output" =~ 'added' ]] || false
+    ! [[ "$output" =~ 'new table' ]] || false
 
     dolt commit -m "cm2"
     dolt checkout master
