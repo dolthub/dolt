@@ -20,16 +20,18 @@ teardown() {
     done
     dolt sql -q 'insert into test values '"$values"';'
     dolt add .
-    dolt commit -m 'making a new commit'
     dolt gc
     with_values_sz=`du -s | awk '{print $1}'`
+    echo $with_values_sz
+    dolt reset --hard
     dolt checkout master
     dolt branch -d -f to_delete
     num_branches=`dolt branch | wc -l`
+    echo $num_branches
     [[ "$num_branches" -eq 1 ]] || fail "expected num_branches to be 1"
     dolt gc
     without_values_sz=`du -s | awk '{print $1}'`
-    echo "$sz $new_sz $post_delete_sz"
+    echo $without_values_sz
     [[ "$without_values_sz" -lt "$with_values_sz" ]] || false
 }
 
