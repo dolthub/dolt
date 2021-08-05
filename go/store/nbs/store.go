@@ -206,54 +206,54 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
-	var stats Stats
-	var ok bool
-	var contents manifestContents
-	ok, contents, err = nbs.mm.Fetch(ctx, &stats)
-
-	if err != nil {
-		return manifestContents{}, err
-	} else if !ok {
-		contents = manifestContents{vers: nbs.upstream.vers}
-	}
-
-	originalLock := contents.lock
-
-	currSpecs := contents.getSpecSet()
-
-	var addCount int
-	for h, count := range updates {
-		a := addr(h)
-
-		if _, ok := currSpecs[a]; !ok {
-			addCount++
-			contents.specs = append(contents.specs, tableSpec{a, count})
+	var updatedContents manifestContents
+	for {
+		ok, contents, ferr := nbs.mm.Fetch(ctx, nbs.stats)
+		if ferr != nil {
+			return manifestContents{}, ferr
+		} else if !ok {
+			contents = manifestContents{vers: nbs.upstream.vers}
 		}
-	}
 
-	contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
+		originalLock := contents.lock
 
-	if addCount == 0 {
-		return contents, nil
-	}
+		currSpecs := contents.getSpecSet()
 
-	// ensure we dont drop existing appendices
-	if contents.appendix != nil && len(contents.appendix) > 0 {
-		contents, err = fromManifestAppendixOptionNewContents(contents, contents.appendix, ManifestAppendixOption_Set)
+		var addCount int
+		for h, count := range updates {
+			a := addr(h)
+
+			if _, ok := currSpecs[a]; !ok {
+				addCount++
+				contents.specs = append(contents.specs, tableSpec{a, count})
+			}
+		}
+
+		if addCount == 0 {
+			return contents, nil
+		}
+
+		contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
+
+		// ensure we dont drop existing appendices
+		if contents.appendix != nil && len(contents.appendix) > 0 {
+			contents, err = fromManifestAppendixOptionNewContents(contents, contents.appendix, ManifestAppendixOption_Set)
+			if err != nil {
+				return manifestContents{}, err
+			}
+		}
+
+		updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
 		if err != nil {
 			return manifestContents{}, err
 		}
+
+		if updatedContents.lock == contents.lock {
+			break
+		}
 	}
 
-	var updatedContents manifestContents
-	updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, &stats, nil)
-
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
-
+	newTables, err := nbs.tables.Rebase(ctx, updatedContents.specs, nbs.stats)
 	if err != nil {
 		return manifestContents{}, err
 	}
@@ -282,52 +282,55 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
-	var stats Stats
-	var ok bool
-	var contents manifestContents
-	ok, contents, err = nbs.mm.Fetch(ctx, &stats)
+	var updatedContents manifestContents
+	for {
+		ok, contents, ferr := nbs.mm.Fetch(ctx, nbs.stats)
 
-	if err != nil {
-		return manifestContents{}, err
-	} else if !ok {
-		contents = manifestContents{vers: nbs.upstream.vers}
-	}
+		if ferr != nil {
+			return manifestContents{}, ferr
+		} else if !ok {
+			contents = manifestContents{vers: nbs.upstream.vers}
+		}
 
-	originalLock := contents.lock
+		originalLock := contents.lock
 
-	currAppendixSpecs := contents.getAppendixSet()
+		currAppendixSpecs := contents.getAppendixSet()
 
-	appendixSpecs := make([]tableSpec, 0)
-	var addCount int
-	for h, count := range updates {
-		a := addr(h)
+		appendixSpecs := make([]tableSpec, 0)
+		var addCount int
+		for h, count := range updates {
+			a := addr(h)
 
-		if option == ManifestAppendixOption_Set {
-			appendixSpecs = append(appendixSpecs, tableSpec{a, count})
-		} else {
-			if _, ok := currAppendixSpecs[a]; !ok {
-				addCount++
+			if option == ManifestAppendixOption_Set {
 				appendixSpecs = append(appendixSpecs, tableSpec{a, count})
+			} else {
+				if _, ok := currAppendixSpecs[a]; !ok {
+					addCount++
+					appendixSpecs = append(appendixSpecs, tableSpec{a, count})
+				}
 			}
+		}
+
+		if addCount == 0 && option != ManifestAppendixOption_Set {
+			return contents, nil
+		}
+
+		contents, err = fromManifestAppendixOptionNewContents(contents, appendixSpecs, option)
+		if err != nil {
+			return manifestContents{}, err
+		}
+
+		updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
+		if err != nil {
+			return manifestContents{}, err
+		}
+
+		if updatedContents.lock == contents.lock {
+			break
 		}
 	}
 
-	if addCount == 0 && option != ManifestAppendixOption_Set {
-		return contents, nil
-	}
-
-	contents, err = fromManifestAppendixOptionNewContents(contents, appendixSpecs, option)
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	var updatedContents manifestContents
-	updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, &stats, nil)
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+	newTables, err := nbs.tables.Rebase(ctx, updatedContents.specs, nbs.stats)
 	if err != nil {
 		return manifestContents{}, err
 	}
@@ -1154,8 +1157,7 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
-	stats := &Stats{}
-	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, stats, nil)
+	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, nbs.stats, nil)
 
 	if err != nil {
 		return hash.Hash{}, nil, nil, err
@@ -1221,8 +1223,7 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
-	stats := &Stats{}
-	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, stats, nil)
+	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, nbs.stats, nil)
 
 	if err != nil {
 		return uint64(0), err
