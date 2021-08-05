@@ -1529,6 +1529,11 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) er
 		specs: specs,
 	}
 
+	// nothing has changed.  Bail early
+	if newContents.gcGen == nbs.upstream.gcGen {
+		return nil
+	}
+
 	var err error
 	nbs.mm.LockForUpdate()
 	defer func() {
