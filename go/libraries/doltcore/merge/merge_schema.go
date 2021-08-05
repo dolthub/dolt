@@ -218,14 +218,6 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (merged *schema.C
 			})
 		}
 
-		if ok && (ourCol.IsPartOfPK != theirCol.IsPartOfPK) {
-			conflicts = append(conflicts, ColConflict{
-				Kind: PkCollision,
-				Ours: ourCol,
-				Theirs: theirCol,
-			})
-		}
-
 		return false, nil
 	})
 
@@ -257,6 +249,7 @@ func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schem
 			return false, nil
 		}
 
+		// Throw a collision if the columns are differing parts of the primary key schema
 		if ok && (ourCol.IsPartOfPK != theirCol.IsPartOfPK) {
 			conflicts = append(conflicts, ColConflict{
 				Kind: PkCollision,

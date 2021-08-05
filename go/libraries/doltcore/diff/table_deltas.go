@@ -145,10 +145,17 @@ type TableDelta struct {
 // GetTableDeltas returns a slice of TableDelta objects for each table that changed between fromRoot and toRoot.
 // It matches tables across roots using the tag of the first primary key column in the table's schema.
 func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
-	deltas, err = getKeylessDeltas(ctx, fromRoot, toRoot)
+	deltas, seenKeylessKeyedChanges, err := getKeylessKeyedDeltas(ctx, fromRoot, toRoot)
 	if err != nil {
 		return nil, err
 	}
+
+	keylessDeltas, err := getKeylessDeltas(ctx, fromRoot, toRoot, seenKeylessKeyedChanges)
+	if err != nil {
+		return nil, err
+	}
+
+	deltas = append(deltas, keylessDeltas...)
 
 	fromTables := make(map[uint64]*doltdb.Table)
 	fromTableNames := make(map[uint64]string)
@@ -239,11 +246,13 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 
 	// all unmatched tables in fromRoot must have been dropped
 	for pkTag, oldName := range fromTableNames {
-		deltas = append(deltas, TableDelta{
-			FromName:  oldName,
-			FromTable: fromTables[pkTag],
-			FromFks:   fromTableFKs[pkTag],
-		})
+		if !seenKeylessKeyedChanges[oldName] {
+			deltas = append(deltas, TableDelta{
+				FromName:  oldName,
+				FromTable: fromTables[pkTag],
+				FromFks:   fromTableFKs[pkTag],
+			})
+		}
 	}
 
 	return deltas, nil
@@ -265,7 +274,7 @@ func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (stag
 
 // we don't have any stable identifier to a keyless table, have to do an n^2 match
 // todo: this is a good reason to implement table tags
-func getKeylessDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
+func getKeylessDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, seenKeylessKeyedChanges map[string]bool) (deltas []TableDelta, err error) {
 	type fromTable struct {
 		tags *set.Uint64Set
 		tbl  *doltdb.Table
@@ -340,13 +349,71 @@ func getKeylessDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (
 
 	// all unmatched pairs are table drops
 	for name, fromPair := range fromTables {
-		deltas = append(deltas, TableDelta{
-			FromName:  name,
-			FromTable: fromPair.tbl,
-		})
+		if !seenKeylessKeyedChanges[name] {
+			deltas = append(deltas, TableDelta{
+				FromName:  name,
+				FromTable: fromPair.tbl,
+			})
+		}
 	}
 
 	return deltas, nil
+}
+
+// getKeylessKeyedDeltas returns the table deltas between tables that were previously keyless and now keyed or vice versa
+func getKeylessKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, seenKeylessKeyedChanges map[string]bool, err error) {
+	seenKeylessKeyedChanges = make(map[string]bool)
+	type fromTable struct {
+		tags *set.Uint64Set
+		tbl  *doltdb.Table
+		sch  schema.Schema
+	}
+
+	fromTables := make(map[string]fromTable)
+	err = fromRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		fromTables[name] = fromTable{
+			tags: set.NewUint64Set(sch.GetAllCols().Tags),
+			tbl:  tbl,
+			sch: sch,
+		}
+		return
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = toRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		delta := TableDelta{
+			ToName:  name,
+			ToTable: tbl,
+		}
+
+		toTableTags := set.NewUint64Set(sch.GetAllCols().Tags)
+		for fromName, fromTbl := range fromTables {
+			// |tbl| and |fromTbl| have the same identity
+			// if they have column tags in common
+			if toTableTags.Intersection(fromTbl.tags).Size() > 0 {
+				// consume matched fromTable
+				delete(fromTables, fromName)
+
+				// detect schema difference
+				if (schema.IsKeyless(fromTbl.sch) && !schema.IsKeyless(sch)) || (!schema.IsKeyless(fromTbl.sch) && schema.IsKeyless(sch)) {
+					delta.FromName = fromName
+					delta.FromTable = fromTbl.tbl
+					deltas = append(deltas, delta)
+					seenKeylessKeyedChanges[delta.FromName] = true
+					break
+				}
+			}
+		}
+		return
+	})
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return deltas, seenKeylessKeyedChanges, nil
 }
 
 func getUniqueTag(sch schema.Schema) uint64 {

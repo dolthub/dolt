@@ -1799,6 +1799,8 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 	return t.updateFromRoot(ctx, newRoot)
 }
 
+
+
 func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, sch schema.Schema) (types.Map, error) {
 	newMap, err := types.NewMap(ctx, vrw)
 	if err != nil {

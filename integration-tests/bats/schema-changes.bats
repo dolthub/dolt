@@ -458,7 +458,7 @@ SQL
     [[ "$output" =~ "error: incorrect table definition; there can be only one auto column and it must be defined as a key" ]] || false
 }
 
-@test "schema-changes: merge on primary key schema differences throws an error" {
+@test "schema-changes: ff merge with primary key schema differences correctly works" {
     dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
     dolt sql -q "INSERT INTO t values (1,1,1)"
 
@@ -467,6 +467,27 @@ SQL
     dolt sql -q "ALTER TABLE t drop PRIMARY key"
     dolt add .
     dolt commit -am "cm2"
+    dolt checkout master
+
+    run dolt merge test
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "describe t;"
+    ! [[ "$output" =~ 'PRI' ]] || false
+}
+
+@test "schema-changes: merge on primary key schema differences throws an error" {
+    dolt sql -q "create table t(pk int PRIMARY KEY, val1 int, val2 int)"
+    dolt sql -q "INSERT INTO t values (1,1,1)"
+    dolt commit -am "cm1"
+    dolt checkout -b test
+
+    dolt sql -q "ALTER TABLE t drop PRIMARY key"
+
+    # TODO: Fix the double add problem
+    dolt add .
+    dolt add .
+    dolt commit m "cm2"
     dolt checkout master
 
     dolt sql -q "INSERT INTO t values (2,2,2)"
@@ -507,4 +528,22 @@ SQL
     [[ "$output" =~ '0' ]] || false
 }
 
-# TODO: FKs checks
+@test "schema-changes: error dropping foreign key when used as a child in Fk relationship" {
+    skip "unimplemented"
+    dolt sql -q "CREATE TABLE child(pk int primary key)"
+    dolt sql -q "CREATE TABLE parent(pk int primary key, val int);"
+    dolt sql -q "ALTER TABLE parent ADD CONSTRAINT myfk FOREIGN KEY (val) REFERENCES child (pk);"
+
+    run dolt sql -q "ALTER TABLE child DROP PRIMARY KEY"
+    [ "$status" -eq 1 ]
+}
+
+@test "schema-changes: error dropping primary key when used as a parent in Fk relationship" {
+    skip "unimplemented"
+    dolt sql -q "CREATE TABLE child(pk int primary key)"
+    dolt sql -q "CREATE TABLE parent(pk int primary key, val int);"
+    dolt sql -q "ALTER TABLE parent ADD CONSTRAINT myfk FOREIGN KEY (pk) REFERENCES child (pk);"
+
+    run dolt sql -q "ALTER TABLE parent DROP PRIMARY KEY"
+    [ "$status" -eq 1 ]
+}
