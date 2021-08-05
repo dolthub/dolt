@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
@@ -79,28 +78,6 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 	dsession := dsess.DSessFromSess(ctx.Session)
 	return dsession.StartTransaction(ctx, db.Name())
-}
-
-func (db Database) setHeadHash(ctx *sql.Context, ref ref.WorkingSetRef) error {
-	// TODO: use the session HEAD ref here instead of the repo state one
-	// headRef, err := ref.ToHeadRef()
-	// if err != nil {
-	// 	return err
-	// }
-
-	headCommit, err := db.ddb.Resolve(ctx, db.rsr.CWBHeadSpec(), db.rsr.CWBHeadRef())
-	if err != nil {
-		return err
-	}
-	headHash, err := headCommit.HashOf()
-	if err != nil {
-		return err
-	}
-	if doltSession, ok := ctx.Session.(*dsess.Session); ok {
-		return doltSession.SetSessionVarDirectly(ctx, dsess.HeadKey(db.name), headHash.String())
-	} else {
-		return ctx.SetSessionVariable(ctx, dsess.HeadKey(db.name), headHash.String())
-	}
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {

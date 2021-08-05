@@ -28,10 +28,6 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
-	// TODO: get rid of this
-	IsMergeActive(ctx context.Context) (bool, error)
-	// TODO: get rid of this
-	GetMergeCommit(ctx context.Context) (*doltdb.Commit, error)
 }
 
 type RepoStateWriter interface {
@@ -40,12 +36,6 @@ type RepoStateWriter interface {
 	// TODO: get rid of this
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
-	// TODO: get rid of this
-	AbortMerge(ctx context.Context) error
-	// TODO: get rid of this
-	ClearMerge(ctx context.Context) error
-	// TODO: get rid of this
-	StartMerge(ctx context.Context, commit *doltdb.Commit) error
 }
 
 type DocsReadWriter interface {
@@ -209,160 +199,4 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 
 func (rs *RepoState) AddRemote(r Remote) {
 	rs.Remotes[r.Name] = r
-}
-
-// Updates the working root.
-func UpdateWorkingRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
-	// logrus.Infof("Updating working root with value %s", newRoot.DebugString(ctx, true))
-
-	err := rsw.UpdateWorkingRoot(ctx, newRoot)
-	if err != nil {
-		return ErrStateUpdate
-	}
-
-	return nil
-}
-
-// Returns the head root.
-func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
-	commit, err := ddb.ResolveCommitRef(ctx, rsr.CWBHeadRef())
-
-	if err != nil {
-		return nil, err
-	}
-
-	return commit.GetRootValue()
-}
-
-// Updates the staged root.
-// TODO: remove this
-func UpdateStagedRoot(ctx context.Context, rsw RepoStateWriter, newRoot *doltdb.RootValue) error {
-	err := rsw.UpdateStagedRoot(ctx, newRoot)
-	if err != nil {
-		return ErrStateUpdate
-	}
-
-	return nil
-}
-
-// TODO: this needs to be a function in the merge package, not repo state
-func MergeWouldStompChanges(ctx context.Context, workingRoot *doltdb.RootValue, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
-	headRoot, err := HeadRoot(ctx, dbData.Ddb, dbData.Rsr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeRoot, err := mergeCommit.GetRootValue()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	headTableHashes, err := headRoot.MapTableHashes(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	workingTableHashes, err := workingRoot.MapTableHashes(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeTableHashes, err := mergeRoot.MapTableHashes(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
-	mergedHeadDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
-
-	stompedTables := make([]string, 0, len(headWorkingDiffs))
-	for tName, _ := range headWorkingDiffs {
-		if _, ok := mergedHeadDiffs[tName]; ok {
-			// even if the working changes match the merge changes, don't allow (matches git behavior).
-			stompedTables = append(stompedTables, tName)
-		}
-	}
-
-	return stompedTables, headWorkingDiffs, nil
-}
-
-// GetGCKeepers queries |rsr| to find a list of values that need to be temporarily saved during GC.
-// TODO: move this out of repo_state.go
-func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
-	workingRoot, err := env.WorkingRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	workingHash, err := workingRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	stagedRoot, err := env.StagedRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	stagedHash, err := stagedRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	keepers := []hash.Hash{
-		workingHash,
-		stagedHash,
-	}
-
-	mergeActive, err := env.IsMergeActive(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if mergeActive {
-		ws, err := env.WorkingSet(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		cm := ws.MergeState().Commit()
-		ch, err := cm.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		pmw := ws.MergeState().PreMergeWorkingRoot()
-		pmwh, err := pmw.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		keepers = append(keepers, ch, pmwh)
-	}
-
-	return keepers, nil
-}
-
-func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map[string]hash.Hash {
-	diffs := make(map[string]hash.Hash)
-	for tName, hh := range headTableHashes {
-		if h, ok := otherTableHashes[tName]; ok {
-			if h != hh {
-				// modification
-				diffs[tName] = h
-			}
-		} else {
-			// deletion
-			diffs[tName] = hash.Hash{}
-		}
-	}
-
-	for tName, h := range otherTableHashes {
-		if _, ok := headTableHashes[tName]; !ok {
-			// addition
-			diffs[tName] = h
-		}
-	}
-
-	return diffs
 }

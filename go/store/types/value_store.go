@@ -584,8 +584,17 @@ func makeBatches(hss []hash.HashSet, count int) [][]hash.Hash {
 	return res
 }
 
+func (lvs *ValueStore) numBuffChunks() int {
+	lvs.bufferMu.RLock()
+	defer lvs.bufferMu.RUnlock()
+	return len(lvs.bufferedChunks)
+}
+
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
 func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error {
+	if lvs.numBuffChunks() > 0 {
+		return errors.New("invalid GC state; bufferedChunks must be empty.")
+	}
 
 	lvs.versOnce.Do(lvs.expectVersion)
 
@@ -662,6 +671,10 @@ func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.Hash
 	err := eg.Wait()
 	if err != nil {
 		return err
+	}
+
+	if lvs.numBuffChunks() > 0 {
+		return errors.New("invalid GC state; bufferedChunks started empty and was not empty at end of run.")
 	}
 
 	// purge the cache

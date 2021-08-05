@@ -57,7 +57,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 }
 
 // CommitStaged adds a new commit to HEAD with the given props. Returns the new commit's hash as a string and an error.
-func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, props CommitStagedProps) (*doltdb.Commit, error) {
+func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mergeParents []*doltdb.Commit, dbData env.DbData, props CommitStagedProps) (*doltdb.Commit, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
@@ -81,11 +81,6 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	mergeActive, err := rsr.IsMergeActive(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
 		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, drw)
 		if err != nil {
@@ -94,8 +89,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		return nil, NothingStaged{notStaged, notStagedDocs}
 	}
 
-	var mergeParentCommits []*doltdb.Commit
-	if mergeActive && !props.Force {
+	if !props.Force {
 		inConflict, err := roots.Working.TablesInConflict(ctx)
 		if err != nil {
 			return nil, err
@@ -110,13 +104,6 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		if len(violatesConstraints) > 0 {
 			return nil, NewTblHasConstraintViolations(violatesConstraints)
 		}
-
-		commit, err := rsr.GetMergeCommit(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		mergeParentCommits = []*doltdb.Commit{commit}
 	}
 
 	stagedRoot, err := roots.Staged.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
@@ -132,7 +119,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 	}
 
 	// TODO: combine into a single update
-	err = env.UpdateStagedRoot(ctx, rsw, stagedRoot)
+	err = rsw.UpdateStagedRoot(ctx, stagedRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +129,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		return nil, err
 	}
 
-	err = env.UpdateWorkingRoot(ctx, rsw, workingRoot)
+	err = rsw.UpdateWorkingRoot(ctx, workingRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -162,12 +149,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 	// logrus.Errorf("staged root is %s", stagedRoot.DebugString(ctx, true))
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.
-	c, err := ddb.CommitWithParentCommits(ctx, h, rsr.CWBHeadRef(), mergeParentCommits, meta)
-	if err != nil {
-		return nil, err
-	}
-
-	err = rsw.ClearMerge(ctx)
+	c, err := ddb.CommitWithParentCommits(ctx, h, rsr.CWBHeadRef(), mergeParents, meta)
 	if err != nil {
 		return nil, err
 	}

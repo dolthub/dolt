@@ -325,9 +325,14 @@ func executeNoFFMerge(
 	// The roots need refreshing after the above
 	roots, _ := dSess.GetRoots(ctx, dbName)
 
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
 	// TODO: this does several session state updates, and it really needs to just do one
 	//  We also need to commit any pending transaction before we do this.
-	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -339,7 +344,7 @@ func executeNoFFMerge(
 		return nil, err
 	}
 
-	return ws, dSess.SetWorkingSet(ctx, dbName, ws, nil)
+	return ws, dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
 }
 
 // TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.

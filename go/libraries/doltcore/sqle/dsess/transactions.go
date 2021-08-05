@@ -124,7 +124,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 			return nil, err
 		}
 
-		existingWorkingRoot := ws.RootValue()
+		existingWorkingRoot := ws.WorkingRoot()
 
 		hash, err := ws.HashOf()
 		if err != nil {
