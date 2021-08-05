@@ -525,12 +525,17 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 		}
 	}
 
+	// Display Primary Key Set Differences
 	if !schema.ColCollsAreCompatible(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		pkSetVErr := errhand.BuildDError("cannot diff tables with different primary key sets").Build()
-		return errhand.VerboseError(pkSetVErr)
+		fromPkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
+		toPkStr := strings.Join(toSch.GetPKCols().GetColumnNames(), ", ")
+		cli.Println("<    " + sqlfmt.FmtColPrimaryKeyNoNewLine(4, fromPkStr))
+		cli.Println(">    " + sqlfmt.FmtColPrimaryKeyNoNewLine(4, toPkStr))
+	} else {
+		// Just display the normal primary keys tring
+		pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
+		cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr))
 	}
-	pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
-	cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr))
 
 	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
 		switch idxDiff.DiffType {

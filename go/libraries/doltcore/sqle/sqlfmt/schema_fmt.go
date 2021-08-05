@@ -69,6 +69,11 @@ func FmtColPrimaryKey(indent int, colStr string) string {
 	return fmt.Sprintf(fmtStr, "")
 }
 
+func FmtColPrimaryKeyNoNewLine(indent int, colStr string) string {
+	fmtStr := fmt.Sprintf("%%%ds PRIMARY KEY (%s)", indent, colStr)
+	return fmt.Sprintf(fmtStr, "")
+}
+
 func FmtIndex(index schema.Index) string {
 	sb := strings.Builder{}
 	if index.IsUnique() {

@@ -543,6 +543,9 @@ SQL
     # TODO: Schema level dif
 }
 
+# TODO: add summary diffs
+# TODO: add additional diff tests
+
 @test "schema-changes: dolt diff table returns an empty table" {
     skip "unimplemented"
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
