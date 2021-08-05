@@ -82,7 +82,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	if allFlag {
-		roots, err = actions.StageAllTables(ctx, roots, dEnv.DbData())
+		roots, err = actions.StageAllTables(ctx, roots, dEnv.Docs)
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, help)
 		}

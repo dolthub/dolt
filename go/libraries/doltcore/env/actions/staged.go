@@ -16,49 +16,36 @@ package actions
 
 import (
 	"context"
-	"errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
-var ErrTablesInConflict = errors.New("table is in conflict")
-
-func StageTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tbls []string) error {
-	rsw := dbData.Rsw
-	drw := dbData.Drw
-
-	tables, docs, err := GetTablesOrDocs(drw, tbls)
-	if err != nil {
-		return err
-	}
-
+func StageTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs, tbls []string) (doltdb.Roots, error) {
 	if len(docs) > 0 {
+		var err error
 		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
 		if err != nil {
-			return err
+			return doltdb.Roots{}, nil
 		}
 	}
 
-	return stageTables(ctx, roots, rsw, tables)
+	return stageTables(ctx, roots, tbls)
 }
 
 func StageTablesNoDocs(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
-	return stageTablesNoEnvUpdate(ctx, roots, tbls)
+	return stageTables(ctx, roots, tbls)
 }
 
-func StageAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) (doltdb.Roots, error) {
-	drw := dbData.Drw
+func StageAllTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs) (doltdb.Roots, error) {
+	var err error
 
-	docs, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
-	if err != nil {
-		return doltdb.Roots{}, err
+	// To stage all docs for removal, use an empty slice instead of nil
+	if docs != nil {
+		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
 	}
 
 	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
@@ -66,7 +53,7 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) 
 		return doltdb.Roots{}, err
 	}
 
-	return stageTablesNoEnvUpdate(ctx, roots, tbls)
+	return stageTables(ctx, roots, tbls)
 }
 
 func StageAllTablesNoDocs(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
@@ -75,10 +62,10 @@ func StageAllTablesNoDocs(ctx context.Context, roots doltdb.Roots) (doltdb.Roots
 		return doltdb.Roots{}, err
 	}
 
-	return stageTablesNoEnvUpdate(ctx, roots, tbls)
+	return stageTables(ctx, roots, tbls)
 }
 
-func stageTablesNoEnvUpdate(
+func stageTables(
 	ctx context.Context,
 	roots doltdb.Roots,
 	tbls []string,
@@ -100,27 +87,6 @@ func stageTablesNoEnvUpdate(
 	}
 
 	return roots, nil
-}
-
-func stageTables(
-	ctx context.Context,
-	roots doltdb.Roots,
-	rsw env.RepoStateWriter,
-	tbls []string,
-) error {
-	var err error
-	roots, err = stageTablesNoEnvUpdate(ctx, roots, tbls)
-	if err != nil {
-		return err
-	}
-
-	// TODO: combine to single operation
-	err = rsw.UpdateWorkingRoot(ctx, roots.Working)
-	if err != nil {
-		return err
-	}
-
-	return rsw.UpdateStagedRoot(ctx, roots.Staged)
 }
 
 // clearEmptyConflicts clears any 0-row conflicts from the tables named, and returns a new root.

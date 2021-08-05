@@ -48,7 +48,7 @@ func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.DbData())
+	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.Docs)
 	require.NoError(t, err)
 
 	return dEnv.UpdateRoots(context.Background(), roots)
@@ -112,7 +112,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.DbData())
+	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.Docs)
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
