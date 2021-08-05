@@ -368,6 +368,10 @@ func TestGC(t *testing.T) {
 	assert.True(ok)
 	h2 := mustRef(vs.WriteValue(ctx, set2)).TargetHash()
 
+	ok, err = vs.Commit(ctx, h1, h1)
+	require.NoError(t, err)
+	assert.True(ok)
+
 	v1, err := vs.ReadValue(ctx, h1) // non-nil
 	require.NoError(t, err)
 	assert.NotNil(v1)
