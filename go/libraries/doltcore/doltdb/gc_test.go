@@ -16,9 +16,6 @@ package doltdb_test
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/store/hash"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,20 +23,23 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type stage struct {
-	commands    []testCommand
+	commands     []testCommand
 	preStageFunc func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{}) interface{}
 }
 
 type gcTest struct {
-	name     string
-	stages   []stage
-	query    string
-	expected []sql.Row
+	name       string
+	stages     []stage
+	query      string
+	expected   []sql.Row
 	postGCFunc func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{})
 }
 
@@ -77,8 +77,8 @@ var gcTests = []gcTest{
 				},
 			},
 		},
-		query: "select * from test;",
-		expected: []sql.Row{{int32(4)},{int32(5)},{int32(6)}},
+		query:    "select * from test;",
+		expected: []sql.Row{{int32(4)}, {int32(5)}, {int32(6)}},
 		postGCFunc: func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{}) {
 			h := prevRes.(hash.Hash)
 			cs, err := doltdb.NewCommitSpec(h.String())
@@ -116,7 +116,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	}
 
 	var res interface{}
-	for _, stage := range test.stages{
+	for _, stage := range test.stages {
 		res = stage.preStageFunc(ctx, t, dEnv.DoltDB, res)
 		for _, c := range stage.commands {
 			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
