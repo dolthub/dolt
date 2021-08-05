@@ -532,7 +532,7 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 		cli.Println("<    " + sqlfmt.FmtColPrimaryKeyNoNewLine(4, fromPkStr))
 		cli.Println(">    " + sqlfmt.FmtColPrimaryKeyNoNewLine(4, toPkStr))
 	} else {
-		// Just display the normal primary keys tring
+		// Just display the normal primary keys string
 		pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
 		cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr))
 	}
@@ -682,6 +682,11 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 	}
 	if td.IsAdd() {
 		fromSch = toSch
+	}
+
+	// If the primary key sets of two tables are different throw an error
+	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+		return nil
 	}
 
 	fromRows, toRows, err := td.GetMaps(ctx)
