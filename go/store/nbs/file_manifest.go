@@ -234,7 +234,7 @@ func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newCon
 		if contents.gcGen == upstream.gcGen {
 			return errors.New("UpdateGCGen() must update the garbage collection generation")
 		}
-		
+
 		if contents.root != upstream.root {
 			return errors.New("UpdateGCGen() cannot update the root")
 		}
