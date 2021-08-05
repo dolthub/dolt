@@ -217,6 +217,8 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		contents = manifestContents{vers: nbs.upstream.vers}
 	}
 
+	originalLock := contents.lock
+
 	currSpecs := contents.getSpecSet()
 
 	var addCount int
@@ -228,6 +230,8 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 			contents.specs = append(contents.specs, tableSpec{a, count})
 		}
 	}
+
+	contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
 
 	if addCount == 0 {
 		return contents, nil
@@ -242,7 +246,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	}
 
 	var updatedContents manifestContents
-	updatedContents, err = nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
+	updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, &stats, nil)
 
 	if err != nil {
 		return manifestContents{}, err
@@ -289,6 +293,8 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		contents = manifestContents{vers: nbs.upstream.vers}
 	}
 
+	originalLock := contents.lock
+
 	currAppendixSpecs := contents.getAppendixSet()
 
 	appendixSpecs := make([]tableSpec, 0)
@@ -316,7 +322,7 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 	}
 
 	var updatedContents manifestContents
-	updatedContents, err = nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
+	updatedContents, err = nbs.mm.Update(ctx, originalLock, contents, &stats, nil)
 	if err != nil {
 		return manifestContents{}, err
 	}
@@ -349,6 +355,7 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 		newAppendixSpecs := append([]tableSpec{}, upstreamAppendixSpecs...)
 		contents.appendix = append(newAppendixSpecs, appendixSpecs...)
 
+		contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
 		return contents, nil
 	case ManifestAppendixOption_Set:
 		if len(appendixSpecs) < 1 {
@@ -362,6 +369,8 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 
 		// append new appendix specs to contents.appendix
 		contents.appendix = append([]tableSpec{}, appendixSpecs...)
+
+		contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
 		return contents, nil
 	default:
 		return manifestContents{}, ErrUnsupportedManifestAppendixOption
@@ -1070,7 +1079,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	newContents := manifestContents{
 		vers:     nbs.upstream.vers,
 		root:     current,
-		lock:     generateLockHash(current, specs),
+		lock:     generateLockHash(current, specs, appendixSpecs),
 		gcGen:    nbs.upstream.gcGen,
 		specs:    specs,
 		appendix: appendixSpecs,
@@ -1401,7 +1410,7 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 	}
 
 	// check to see if the specs have changed since last gc.  If they haven't bail early.
-	gcGenCheck := generateLockHash(last, nbs.upstream.specs)
+	gcGenCheck := generateLockHash(last, nbs.upstream.specs, nbs.upstream.appendix)
 	if nbs.upstream.gcGen == gcGenCheck {
 		return chunks.ErrNothingToCollect
 	}
@@ -1494,7 +1503,7 @@ func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
 }
 
 func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) error {
-	newLock := generateLockHash(nbs.upstream.root, specs)
+	newLock := generateLockHash(nbs.upstream.root, specs, []tableSpec{})
 	newContents := manifestContents{
 		vers:  nbs.upstream.vers,
 		root:  nbs.upstream.root,

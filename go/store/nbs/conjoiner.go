@@ -102,7 +102,7 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		newContents := manifestContents{
 			vers:     upstream.vers,
 			root:     upstream.root,
-			lock:     generateLockHash(upstream.root, specs),
+			lock:     generateLockHash(upstream.root, specs, appendixSpecs),
 			gcGen:    upstream.gcGen,
 			specs:    specs,
 			appendix: appendixSpecs,
