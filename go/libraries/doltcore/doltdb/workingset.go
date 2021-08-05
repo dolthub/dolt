@@ -307,16 +307,10 @@ func workingSetMetaFromNomsSt(st types.Struct) (WorkingSetMeta, error) {
 	}, nil
 }
 
-// RootValue returns the root value stored by this workingset
-// TODO: replace references with calls to WorkingRoot
-func (ws *WorkingSet) RootValue() *RootValue {
-	return ws.workingRoot
-}
-
 // HashOf returns the hash of the workingset struct, which is not the same as the hash of the root value stored in the
 // working set. This value is used for optimistic locking when updating a working set for a head ref.
 func (ws *WorkingSet) HashOf() (hash.Hash, error) {
-	if ws.st == nil {
+	if ws == nil || ws.st == nil {
 		return hash.Hash{}, nil
 	}
 	return ws.st.Hash(ws.format)

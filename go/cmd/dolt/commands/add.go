@@ -75,24 +75,39 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
-		cli.PrintErrln(err.Error())
-		return 1
+		return handleStageError(err)
 	}
 
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		err = actions.StageAllTables(ctx, roots, dEnv.DbData())
+		roots, err = actions.StageAllTables(ctx, roots, dEnv.Docs)
+		if err != nil {
+			return handleStageError(err)
+		}
 	} else {
-		err = actions.StageTables(ctx, roots, dEnv.DbData(), apr.Args())
+		tables, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), apr.Args())
+		if err != nil {
+			return handleStageError(err)
+		}
+
+		roots, err = actions.StageTables(ctx, roots, docs, tables)
+		if err != nil {
+			return handleStageError(err)
+		}
 	}
 
+	err = dEnv.UpdateRoots(ctx, roots)
 	if err != nil {
-		cli.PrintErrln(toAddVErr(err).Verbose())
-		return 1
+		return handleStageError(err)
 	}
 
 	return 0
+}
+
+func handleStageError(err error) int {
+	cli.PrintErrln(toAddVErr(err).Verbose())
+	return 1
 }
 
 func toAddVErr(err error) errhand.VerboseError {
