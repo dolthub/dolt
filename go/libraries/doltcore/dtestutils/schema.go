@@ -119,12 +119,13 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl)
 	require.NoError(t, err)
 
-	working, err := dEnv.WorkingRoot(ctx)
+	sch, err = tbl.GetSchema(ctx)
 	require.NoError(t, err)
-	working, err = working.PutTable(ctx, TableName, tbl)
+	rows, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
-
-	err = dEnv.UpdateWorkingRoot(ctx, working)
+	indexes, err := tbl.GetIndexData(ctx)
+	require.NoError(t, err)
+	err = putTableToWorking(ctx, dEnv, sch, rows, indexes, tableName, nil)
 	require.NoError(t, err)
 }
 
