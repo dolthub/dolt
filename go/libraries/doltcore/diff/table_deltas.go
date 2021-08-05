@@ -150,13 +150,39 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
-	keylessDeltas, err := getKeylessDeltas(ctx, fromRoot, toRoot, seenKeylessKeyedChanges)
+	keylessDeltas, err := getKeylessDeltas(ctx, fromRoot, toRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	deltas = append(deltas, keylessDeltas...)
+	deltas = append(deltas, pruneKeylessKeyedDeltas(keylessDeltas, seenKeylessKeyedChanges)...)
 
+	keyedDelta, err := getKeyedDeltas(ctx, fromRoot, toRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	deltas = append(deltas, pruneKeylessKeyedDeltas(keyedDelta, seenKeylessKeyedChanges)...)
+
+	return deltas, nil
+}
+
+func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (staged, unstaged []TableDelta, err error) {
+	staged, err = GetTableDeltas(ctx, roots.Head, roots.Staged)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	unstaged, err = GetTableDeltas(ctx, roots.Staged, roots.Working)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return staged, unstaged, nil
+}
+
+// getKeyedDeltas returns the deltas between all keyed tables
+func getKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
 	fromTables := make(map[uint64]*doltdb.Table)
 	fromTableNames := make(map[uint64]string)
 	fromTableFKs := make(map[uint64][]doltdb.ForeignKey)
@@ -246,35 +272,20 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 
 	// all unmatched tables in fromRoot must have been dropped
 	for pkTag, oldName := range fromTableNames {
-		if !seenKeylessKeyedChanges[oldName] {
-			deltas = append(deltas, TableDelta{
-				FromName:  oldName,
-				FromTable: fromTables[pkTag],
-				FromFks:   fromTableFKs[pkTag],
-			})
-		}
+		deltas = append(deltas, TableDelta{
+			FromName:  oldName,
+			FromTable: fromTables[pkTag],
+			FromFks:   fromTableFKs[pkTag],
+		})
 	}
 
 	return deltas, nil
 }
 
-func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (staged, unstaged []TableDelta, err error) {
-	staged, err = GetTableDeltas(ctx, roots.Head, roots.Staged)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	unstaged, err = GetTableDeltas(ctx, roots.Staged, roots.Working)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return staged, unstaged, nil
-}
-
 // we don't have any stable identifier to a keyless table, have to do an n^2 match
 // todo: this is a good reason to implement table tags
-func getKeylessDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, seenKeylessKeyedChanges map[string]bool) (deltas []TableDelta, err error) {
+// getKeylessDeltas returns the deltas between all keyless tables
+func getKeylessDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
 	type fromTable struct {
 		tags *set.Uint64Set
 		tbl  *doltdb.Table
@@ -341,6 +352,7 @@ func getKeylessDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, s
 
 		// append if matched or unmatched
 		deltas = append(deltas, delta)
+
 		return
 	})
 	if err != nil {
@@ -349,12 +361,10 @@ func getKeylessDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, s
 
 	// all unmatched pairs are table drops
 	for name, fromPair := range fromTables {
-		if !seenKeylessKeyedChanges[name] {
-			deltas = append(deltas, TableDelta{
-				FromName:  name,
-				FromTable: fromPair.tbl,
-			})
-		}
+		deltas = append(deltas, TableDelta{
+			FromName:  name,
+			FromTable: fromPair.tbl,
+		})
 	}
 
 	return deltas, nil
@@ -388,6 +398,7 @@ func getKeylessKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootVal
 			ToTable: tbl,
 		}
 
+		// TODO: is this the most efficient way to to do this
 		toTableTags := set.NewUint64Set(sch.GetAllCols().Tags)
 		for fromName, fromTbl := range fromTables {
 			// |tbl| and |fromTbl| have the same identity
@@ -414,6 +425,18 @@ func getKeylessKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootVal
 	}
 
 	return deltas, seenKeylessKeyedChanges, nil
+}
+
+func pruneKeylessKeyedDeltas(deltas []TableDelta, seenKeylessKeyedChanges map[string]bool) []TableDelta {
+	ret := make([]TableDelta, 0)
+
+	for _, d := range deltas {
+		if !seenKeylessKeyedChanges[d.FromName] && !seenKeylessKeyedChanges[d.ToName] {
+			ret = append(ret, d)
+		}
+	}
+
+	return ret
 }
 
 func getUniqueTag(sch schema.Schema) uint64 {

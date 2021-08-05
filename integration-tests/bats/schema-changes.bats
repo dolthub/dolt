@@ -483,11 +483,41 @@ SQL
     dolt checkout -b test
 
     dolt sql -q "ALTER TABLE t drop PRIMARY key"
+    dolt add .
 
-    # TODO: Fix the double add problem
+    run dolt status
+    [[ "$output" =~ 'Changes to be committed' ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*t) ]] || false
+    ! [[ "$output" =~ 'deleted' ]] || false
+    ! [[ "$output" =~ 'added' ]] || false
+
+    dolt commit -m "cm2"
+    dolt checkout master
+
+    dolt sql -q "INSERT INTO t values (2,2,2)"
+    dolt commit -am "cm3"
+
+    run dolt merge test
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'different primary key definitions for our column pk and their column pk' ]] || false
+}
+
+@test "schema-changes: same as the previous test but in the opposite direction" {
+    dolt sql -q "create table t(pk int, val1 int, val2 int)"
+    dolt sql -q "INSERT INTO t values (1,1,1)"
+    dolt commit -am "cm1"
+    dolt checkout -b test
+
+    dolt sql -q "ALTER TABLE t add PRIMARY key (pk)"
     dolt add .
-    dolt add .
-    dolt commit m "cm2"
+
+    run dolt status
+    [[ "$output" =~ 'Changes to be committed' ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*t) ]] || false
+    ! [[ "$output" =~ 'deleted' ]] || false
+    ! [[ "$output" =~ 'added' ]] || false
+
+    dolt commit -m "cm2"
     dolt checkout master
 
     dolt sql -q "INSERT INTO t values (2,2,2)"
