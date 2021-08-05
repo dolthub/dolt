@@ -16,6 +16,9 @@ package doltdb_test
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/store/hash"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,29 +28,71 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/store/types"
 )
+
+type stage struct {
+	commands    []testCommand
+	preStageFunc func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{}) interface{}
+}
 
 type gcTest struct {
 	name     string
-	setup    []testCommand
-	garbage  types.Value
+	stages   []stage
 	query    string
 	expected []sql.Row
+	postGCFunc func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{})
 }
 
 var gcTests = []gcTest{
 	{
 		name: "gc test",
-		setup: []testCommand{
-			{commands.SqlCmd{}, []string{"-q", "INSERT INTO test VALUES (0),(1),(2);"}},
+		stages: []stage{
+			{
+				preStageFunc: func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, i interface{}) interface{} {
+					return nil
+				},
+				commands: []testCommand{
+					{commands.CheckoutCmd{}, []string{"-b", "temp"}},
+					{commands.SqlCmd{}, []string{"-q", "INSERT INTO test VALUES (0),(1),(2);"}},
+					{commands.AddCmd{}, []string{"."}},
+					{commands.CommitCmd{}, []string{"-m", "commit"}},
+				},
+			},
+			{
+				preStageFunc: func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, i interface{}) interface{} {
+					cm, err := ddb.ResolveCommitRef(ctx, ref.NewBranchRef("temp"))
+					require.NoError(t, err)
+					h, err := cm.HashOf()
+					require.NoError(t, err)
+					cs, err := doltdb.NewCommitSpec(h.String())
+					require.NoError(t, err)
+					_, err = ddb.Resolve(ctx, cs, nil)
+					require.NoError(t, err)
+					return h
+				},
+				commands: []testCommand{
+					{commands.CheckoutCmd{}, []string{"master"}},
+					{commands.BranchCmd{}, []string{"-D", "temp"}},
+					{commands.SqlCmd{}, []string{"-q", "INSERT INTO test VALUES (4),(5),(6);"}},
+				},
+			},
 		},
-		garbage: types.String("supercalifragilisticexpialidocious"),
+		query: "select * from test;",
+		expected: []sql.Row{{int32(4)},{int32(5)},{int32(6)}},
+		postGCFunc: func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{}) {
+			h := prevRes.(hash.Hash)
+			cs, err := doltdb.NewCommitSpec(h.String())
+			require.NoError(t, err)
+			_, err = ddb.Resolve(ctx, cs, nil)
+			require.Error(t, err)
+		},
 	},
 }
 
 var gcSetupCommon = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "CREATE TABLE test (pk int PRIMARY KEY)"}},
+	{commands.AddCmd{}, []string{"."}},
+	{commands.CommitCmd{}, []string{"-m", "created test table"}},
 }
 
 func TestGarbageCollection(t *testing.T) {
@@ -59,7 +104,6 @@ func TestGarbageCollection(t *testing.T) {
 			testGarbageCollection(t, gct)
 		})
 	}
-
 }
 
 func testGarbageCollection(t *testing.T, test gcTest) {
@@ -70,24 +114,25 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 		require.Equal(t, 0, exitCode)
 	}
-	for _, c := range test.setup {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-		require.Equal(t, 0, exitCode)
-	}
 
-	garbageRef, err := dEnv.DoltDB.ValueReadWriter().WriteValue(ctx, test.garbage)
-	require.NoError(t, err)
-	val, err := dEnv.DoltDB.ValueReadWriter().ReadValue(ctx, garbageRef.TargetHash())
-	require.NoError(t, err)
-	assert.NotNil(t, val)
+	var res interface{}
+	for _, stage := range test.stages{
+		res = stage.preStageFunc(ctx, t, dEnv.DoltDB, res)
+		for _, c := range stage.commands {
+			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+			require.Equal(t, 0, exitCode)
+		}
+	}
 
 	working, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 	h, err := working.HashOf()
 	require.NoError(t, err)
 	// save working root during GC
+
 	err = dEnv.DoltDB.GC(ctx, h)
 	require.NoError(t, err)
+	test.postGCFunc(ctx, t, dEnv.DoltDB, res)
 
 	working, err = dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
@@ -95,9 +140,4 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	actual, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, working, test.query)
 	require.NoError(t, err)
 	assert.Equal(t, test.expected, actual)
-
-	// assert that garbage was collected
-	val, err = dEnv.DoltDB.ValueReadWriter().ReadValue(ctx, garbageRef.TargetHash())
-	require.NoError(t, err)
-	assert.Nil(t, val)
 }
