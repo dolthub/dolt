@@ -515,6 +515,7 @@ func generateLockHash(root hash.Hash, specs []tableSpec, appendix []tableSpec) (
 	for _, spec := range appendix {
 		blockHash.Write(spec.name[:])
 	}
+	blockHash.Write([]byte{0})
 	for _, spec := range specs {
 		blockHash.Write(spec.name[:])
 	}
