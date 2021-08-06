@@ -14,7 +14,11 @@
 
 package strhelp
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 // NthToken returns the Nth token in s, delimited by delim. There is always at least one token: the zeroth token is the
 // input string if delim doesn't occur in s. The second return value will be false if there is no Nth token.
@@ -62,4 +66,20 @@ func CommaIfy(n int64) string {
 	}
 
 	return result
+}
+
+// LineStrBuilder is a utility class for building strings line by line
+type LineStrBuilder []string
+
+// AppendLine works like append in that it returns an instance of a LineStrBuilder with the contents updated to contain
+// the additional line. lsb = lsb.AppendLine("n: %d, s: %s", n, s)
+func (lsb LineStrBuilder) AppendLine(strFmt string, args ...interface{}) LineStrBuilder {
+	updated := append(lsb, fmt.Sprintf(strFmt, args...))
+	return updated
+}
+
+// String returns the built string with all lines separated by newlines
+func (lsb LineStrBuilder) String() string {
+	s := strings.Join(lsb, "\n")
+	return s
 }

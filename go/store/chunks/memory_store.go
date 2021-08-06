@@ -227,7 +227,11 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	return success, nil
 }
 
-func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
+func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error {
+	if dest != ms {
+		panic("unsupported")
+	}
+
 	if last != ms.rootHash {
 		return fmt.Errorf("last does not match ms.Root()")
 	}

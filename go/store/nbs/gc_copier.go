@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 	"strings"
 )
@@ -65,9 +66,9 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) ([]tab
 	}
 
 	filepath := path.Join(destDir, filename)
-	err = gcc.writer.FlushToFile(filepath)
-	if err != nil {
-		return nil, err
+
+	if gcc.writer.Size() == 0 {
+		return []tableSpec{}, nil
 	}
 
 	addr, err := parseAddr(filename)
@@ -75,8 +76,21 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) ([]tab
 		return nil, err
 	}
 
+	if info, err := os.Stat(filepath); err == nil {
+		// file already exists
+		if gcc.writer.ContentLength() != uint64(info.Size()) {
+			return nil, fmt.Errorf("'%s' already exists with different contents.", filepath)
+		}
+	} else {
+		// file does not exist or error determining if it existed.  Try to create it.
+		err = gcc.writer.FlushToFile(filepath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return []tableSpec{
-		tableSpec{
+		{
 			name:       addr,
 			chunkCount: gcc.writer.ChunkCount(),
 		},

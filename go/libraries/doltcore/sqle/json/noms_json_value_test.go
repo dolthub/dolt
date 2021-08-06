@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -205,7 +206,7 @@ func TestJSONStructuralSharing(t *testing.T) {
 
 		err = db.Flush(ctx)
 		require.NoError(t, err)
-		err = db.(datas.GarbageCollector).GC(ctx)
+		err = db.(datas.GarbageCollector).GC(ctx, hash.HashSet{}, hash.HashSet{})
 		require.NoError(t, err)
 		after := ts.Len()
 
