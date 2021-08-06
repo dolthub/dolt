@@ -44,14 +44,14 @@ func (q *q) NumVisiblePending() int {
 }
 
 func (q *q) Push(x interface{}) {
-        q.pending = append(q.pending, x.(*c))
+	q.pending = append(q.pending, x.(*c))
 }
 
 func (q *q) Pop() interface{} {
-        old := q.pending
-        ret := old[len(old)-1]
-        q.pending = old[:len(old)-1]
-        return ret
+	old := q.pending
+	ret := old[len(old)-1]
+	q.pending = old[:len(old)-1]
+	return ret
 }
 
 func (q *q) Len() int {

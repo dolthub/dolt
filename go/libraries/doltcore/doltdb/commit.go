@@ -159,19 +159,19 @@ func (c *Commit) Height() (uint64, error) {
 }
 
 func maxChunkHeight(v types.Value, nbf *types.NomsBinFormat) (max uint64, err error) {
-        err = v.WalkRefs(nbf, func(r types.Ref) error {
-                if height := r.Height(); height > max {
-                        max = height
-                }
+	err = v.WalkRefs(nbf, func(r types.Ref) error {
+		if height := r.Height(); height > max {
+			max = height
+		}
 
-                return nil
-        })
+		return nil
+	})
 
-        if err != nil {
-                return 0, err
-        }
+	if err != nil {
+		return 0, err
+	}
 
-        return max, nil
+	return max, nil
 }
 
 func (c *Commit) getParent(ctx context.Context, idx int) (*types.Struct, error) {
