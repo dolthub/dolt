@@ -367,7 +367,12 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
 	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
 
-	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
+	rd, err := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
+
+	if err != nil {
+		return sql.RowsToRowIter(), err
+	}
+
 	rd.Start(ctx, fromData, toData)
 
 	src := diff.NewRowDiffSource(rd, joiner)

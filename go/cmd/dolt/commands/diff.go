@@ -712,7 +712,10 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 		return verr
 	}
 
-	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
+	rd, err := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
+	if err != nil {
+		return errhand.BuildDError("").AddCause(err).Build()
+	}
 
 	rd.Start(ctx, fromRows, toRows)
 	defer rd.Close()
