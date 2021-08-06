@@ -618,3 +618,19 @@ func (fk ForeignKey) ValidateData(
 		}
 	}
 }
+
+// ColumnHasFkRelationship returns true if a columns is either a parent or child in a foreign key column
+func (fkc *ForeignKeyCollection) ColumnHasFkRelationship(tag uint64) bool {
+	fks := fkc.AllKeys()
+	for _, key := range fks {
+		tags := append(key.TableColumns, key.ReferencedTableColumns...)
+
+		for _, keyTag := range tags {
+			if tag == keyTag {
+				return true
+			}
+		}
+	}
+
+	return false
+}

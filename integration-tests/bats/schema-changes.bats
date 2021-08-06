@@ -603,21 +603,21 @@ SQL
 }
 
 @test "schema-changes: error dropping foreign key when used as a child in Fk relationship" {
-    skip "unimplemented"
     dolt sql -q "CREATE TABLE child(pk int primary key)"
     dolt sql -q "CREATE TABLE parent(pk int primary key, val int);"
     dolt sql -q "ALTER TABLE parent ADD CONSTRAINT myfk FOREIGN KEY (val) REFERENCES child (pk);"
 
     run dolt sql -q "ALTER TABLE child DROP PRIMARY KEY"
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
 }
 
 @test "schema-changes: error dropping primary key when used as a parent in Fk relationship" {
-    skip "unimplemented"
     dolt sql -q "CREATE TABLE child(pk int primary key)"
     dolt sql -q "CREATE TABLE parent(pk int primary key, val int);"
     dolt sql -q "ALTER TABLE parent ADD CONSTRAINT myfk FOREIGN KEY (pk) REFERENCES child (pk);"
 
     run dolt sql -q "ALTER TABLE parent DROP PRIMARY KEY"
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
 }

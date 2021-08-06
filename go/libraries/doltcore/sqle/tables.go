@@ -1729,8 +1729,6 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 		return sql.ErrMultiplePrimaryKeyDefined.New() // Also caught in GMD
 	}
 
-	// TODO: Add foreign key checks
-
 	// Map function for converting columns to a primary key
 	newCollection := schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
 		for _, c := range columns {
@@ -1799,8 +1797,6 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-
-
 func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, sch schema.Schema) (types.Map, error) {
 	newMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
@@ -1852,6 +1848,28 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return sql.ErrWrongAutoKey.New()
 	}
 
+	// Ensure that any primary key column is neither a parent nor child in a fk relationship
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = currSch.GetPKCols().Iter(func (tag uint64, col schema.Column) (bool, error) {
+		if fkc.ColumnHasFkRelationship(tag) {
+			return true, sql.ErrCantDropIndex.New("PRIMARY")
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		return err
+	}
+
 	newCollection := schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
 		col.IsPartOfPK = false
 		return col
@@ -1863,8 +1881,6 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	}
 
 	newSchema.Indexes().AddIndex(currSch.Indexes().AllIndexes()...)
-
-	// TODO: Add foreign key checks
 
 	table, err := t.doltTable(ctx)
 	if err != nil {
@@ -1893,11 +1909,6 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 
 	// Rebuild all of the indexes now that the primary key has been changed
 	table, err = editor.RebuildAllIndexes(ctx, table)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
