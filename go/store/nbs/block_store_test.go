@@ -561,7 +561,7 @@ func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents,
 		vers:  constants.NomsVersion,
 		root:  upstream.root,
 		specs: canned.specs,
-		lock:  generateLockHash(upstream.root, canned.specs),
+		lock:  generateLockHash(upstream.root, canned.specs, []tableSpec{}),
 	}
 
 	var err error
