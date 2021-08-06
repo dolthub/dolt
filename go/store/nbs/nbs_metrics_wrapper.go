@@ -71,8 +71,8 @@ func (nbsMW *NBSMetricWrapper) SupportedOperations() TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
 }
 
-func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
-	return nbsMW.nbs.MarkAndSweepChunks(ctx, last, keepChunks)
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
+	return nbsMW.nbs.MarkAndSweepChunks(ctx, last, keepChunks, dest)
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.

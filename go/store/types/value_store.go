@@ -35,6 +35,12 @@ import (
 	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
+type HashFilterFunc func(context.Context, hash.HashSet) (hash.HashSet, error)
+
+func unfilteredHashFunc(_ context.Context, hs hash.HashSet) (hash.HashSet, error) {
+	return hs, nil
+}
+
 // ValueReader is an interface that knows how to read Noms Values, e.g.
 // datas/Database. Required to avoid import cycle between this package and the
 // package that implements Value reading.
@@ -551,12 +557,43 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 	}()
 }
 
-// GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
-func (lvs *ValueStore) GC(ctx context.Context) error {
-	collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector)
+func makeBatches(hss []hash.HashSet, count int) [][]hash.Hash {
+	const maxBatchSize = 16384
 
-	if !ok {
-		return chunks.ErrUnsupportedOperation
+	buffer := make([]hash.Hash, count)
+	i := 0
+	for _, hs := range hss {
+		for h := range hs {
+			buffer[i] = h
+			i++
+		}
+	}
+
+	numBatches := (count + (maxBatchSize - 1)) / maxBatchSize
+	batchSize := count / numBatches
+
+	res := make([][]hash.Hash, numBatches)
+	for i := 0; i < numBatches; i++ {
+		if i != numBatches-1 {
+			res[i] = buffer[i*batchSize : (i+1)*batchSize]
+		} else {
+			res[i] = buffer[i*batchSize:]
+		}
+	}
+
+	return res
+}
+
+func (lvs *ValueStore) numBuffChunks() int {
+	lvs.bufferMu.RLock()
+	defer lvs.bufferMu.RUnlock()
+	return len(lvs.bufferedChunks)
+}
+
+// GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
+func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet) error {
+	if lvs.numBuffChunks() > 0 {
+		return errors.New("invalid GC state; bufferedChunks must be empty.")
 	}
 
 	err := func() error {
@@ -583,16 +620,39 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	if rootVal == nil {
 		// empty root
 		return nil
 	}
 
+	newGenRefs.Insert(root)
+	if gcs, ok := lvs.cs.(chunks.GenerationalCS); ok {
+		oldGen := gcs.OldGen()
+		newGen := gcs.NewGen()
+		err = lvs.gc(ctx, root, oldGenRefs, oldGen.HasMany, newGen, oldGen)
+		if err != nil {
+			return err
+		}
+
+		return lvs.gc(ctx, root, newGenRefs, oldGen.HasMany, newGen, newGen)
+	} else if collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector); ok {
+		if len(oldGenRefs) > 0 {
+			newGenRefs.InsertAll(oldGenRefs)
+		}
+
+		return lvs.gc(ctx, root, newGenRefs, unfilteredHashFunc, collector, collector)
+	} else {
+		return chunks.ErrUnsupportedOperation
+	}
+}
+
+func (lvs *ValueStore) gc(ctx context.Context, root hash.Hash, toVisit hash.HashSet, hashFilter HashFilterFunc, src, dest chunks.ChunkStoreGarbageCollector) error {
 	keepChunks := make(chan []hash.Hash, gcBuffSize)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		return collector.MarkAndSweepChunks(ctx, root, keepChunks)
+		return src.MarkAndSweepChunks(ctx, root, keepChunks, dest)
 	})
 
 	keepHashes := func(hs []hash.Hash) error {
@@ -603,20 +663,6 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
-	const batchSize = 16384
-	batches := func(hss [][]hash.Hash) [][]hash.Hash {
-		var res [][]hash.Hash
-		for _, hs := range hss {
-			i := 0
-			for ; i+batchSize < len(hs); i += batchSize {
-				res = append(res, hs[i:i+batchSize])
-			}
-			if i < len(hs) {
-				res = append(res, hs[i:])
-			}
-		}
-		return res
-	}
 
 	concurrency := runtime.GOMAXPROCS(0) - 1
 	if concurrency < 1 {
@@ -625,49 +671,72 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 	walker := newParallelRefWalker(ctx, lvs.nbf, concurrency)
 
 	eg.Go(func() error {
-		toVisitCount := 1
-		toVisit := [][]hash.Hash{{root}}
-		visited := hash.NewHashSet(root)
-		for toVisitCount > 0 {
-			batches := batches(toVisit)
-			toVisit = make([][]hash.Hash, len(batches))
-			toVisitCount = 0
-			for i, batch := range batches {
-				if err := keepHashes(batch); err != nil {
-					return err
-				}
-				vals, err := lvs.ReadManyValues(ctx, batch)
-				if err != nil {
-					return err
-				}
-				if len(vals) != len(batch) {
-					return errors.New("dangling reference found in chunk store")
-				}
-				hashes, err := walker.GetRefs(visited, vals)
-				if err != nil {
-					return err
-				}
-				toVisit[i] = hashes
-				toVisitCount += len(hashes)
-			}
-		}
-		walker.Close()
+		defer func() {
+			close(keepChunks)
+			_ = walker.Close()
+		}()
 
-		lvs.bufferMu.Lock()
-		defer lvs.bufferMu.Unlock()
-		if len(lvs.bufferedChunks) > 0 {
-			return errors.New("invalid GC state; bufferedChunks started empty and was not empty at end of run.")
-		}
-		lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
-		lvs.bufferedChunks = make(map[hash.Hash]chunks.Chunk, lvs.bufferedChunkSize)
-		lvs.bufferedChunkSize = 0
-		lvs.withBufferedChildren = map[hash.Hash]uint64{}
-
-		close(keepChunks)
-		return nil
+		visited := toVisit.Copy()
+		return lvs.gcProcessRefs(ctx, visited, []hash.HashSet{toVisit}, keepHashes, walker, hashFilter)
 	})
 
+	err := eg.Wait()
+	if err != nil {
+		return err
+	}
+
+	if lvs.numBuffChunks() > 0 {
+		return errors.New("invalid GC state; bufferedChunks started empty and was not empty at end of run.")
+	}
+
+	// purge the cache
+	lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
+	lvs.bufferedChunks = make(map[hash.Hash]chunks.Chunk, lvs.bufferedChunkSize)
+	lvs.bufferedChunkSize = 0
+	lvs.withBufferedChildren = map[hash.Hash]uint64{}
+
 	return eg.Wait()
+}
+
+func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, toVisit []hash.HashSet, keepHashes func(hs []hash.Hash) error, walker *parallelRefWalker, hashFilter HashFilterFunc) error {
+	if len(toVisit) != 1 {
+		panic("Must be one initial hashset to visit")
+	}
+
+	toVisitCount := len(toVisit[0])
+	for toVisitCount > 0 {
+		batches := makeBatches(toVisit, toVisitCount)
+		toVisit = make([]hash.HashSet, len(batches))
+		toVisitCount = 0
+		for i, batch := range batches {
+			if err := keepHashes(batch); err != nil {
+				return err
+			}
+
+			vals, err := lvs.ReadManyValues(ctx, batch)
+			if err != nil {
+				return err
+			}
+			if len(vals) != len(batch) {
+				return errors.New("dangling reference found in chunk store")
+			}
+
+			hashes, err := walker.GetRefSet(visited, vals)
+			if err != nil {
+				return err
+			}
+
+			// continue processing
+			hashes, err = hashFilter(ctx, hashes)
+			if err != nil {
+				return err
+			}
+
+			toVisit[i] = hashes
+			toVisitCount += len(hashes)
+		}
+	}
+	return nil
 }
 
 // Close closes the underlying ChunkStore

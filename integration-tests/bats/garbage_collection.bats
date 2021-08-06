@@ -116,7 +116,7 @@ SQL
     # leave data in the working set
     dolt sql -q "INSERT INTO test VALUES (11),(12),(13),(14),(15);"
 
-    BEFORE=$(du .dolt/noms/ | sed 's/[^0-9]*//g')
+    BEFORE=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
 
     run dolt gc
     [ "$status" -eq 0 ]
@@ -125,7 +125,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "80" ]] || false
 
-    AFTER=$(du .dolt/noms/ | sed 's/[^0-9]*//g')
+    AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
 
     # assert space was reclaimed
     echo "$BEFORE"

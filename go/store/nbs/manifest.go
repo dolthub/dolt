@@ -464,6 +464,15 @@ func (ts tableSpec) GetChunkCount() uint32 {
 	return ts.chunkCount
 }
 
+func tableSpecsToMap(specs []tableSpec) map[string]int {
+	m := make(map[string]int)
+	for _, spec := range specs {
+		m[spec.name.String()] = int(spec.chunkCount)
+	}
+
+	return m
+}
+
 func parseSpecs(tableInfo []string) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(tableInfo)/2)
 	for i := range specs {

@@ -1314,6 +1314,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 
 // AddTableFilesToManifest adds table files to the manifest
 func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
+	var totalChunks int
 	fileIdHashToNumChunks := make(map[hash.Hash]uint32)
 	for fileId, numChunks := range fileIdToNumChunks {
 		fileIdHash, ok := hash.MaybeParse(fileId)
@@ -1323,6 +1324,11 @@ func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 		}
 
 		fileIdHashToNumChunks[fileIdHash] = uint32(numChunks)
+		totalChunks += numChunks
+	}
+
+	if totalChunks == 0 {
+		return nil
 	}
 
 	_, err := nbs.UpdateManifest(ctx, fileIdHashToNumChunks)
@@ -1400,7 +1406,7 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	return nbs.p.PruneTableFiles(ctx, contents)
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return chunks.ErrUnsupportedOperation
@@ -1427,7 +1433,17 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		return err
 	}
 
-	specs, err := nbs.copyMarkedChunks(ctx, keepChunks)
+	destNBS := nbs
+	if dest != nil {
+		switch typed := dest.(type) {
+		case *NomsBlockStore:
+			destNBS = typed
+		case NBSMetricWrapper:
+			destNBS = typed.nbs
+		}
+	}
+
+	specs, err := nbs.copyMarkedChunks(ctx, keepChunks, destNBS)
 	if err != nil {
 		return err
 	}
@@ -1435,24 +1451,35 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		return ctx.Err()
 	}
 
-	err = nbs.swapTables(ctx, specs)
-	if err != nil {
-		return err
-	}
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
+	if destNBS == nbs {
+		err = nbs.swapTables(ctx, specs)
+		if err != nil {
+			return err
+		}
 
-	currentContents := func() manifestContents {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
-		return nbs.upstream
-	}()
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 
-	return nbs.p.PruneTableFiles(ctx, currentContents)
+		currentContents := func() manifestContents {
+			nbs.mu.RLock()
+			defer nbs.mu.RUnlock()
+			return nbs.upstream
+		}()
+
+		return nbs.p.PruneTableFiles(ctx, currentContents)
+	} else {
+		fileIdToNumChunks := tableSpecsToMap(specs)
+		err = destNBS.AddTableFilesToManifest(ctx, fileIdToNumChunks)
+
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 }
 
-func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash) ([]tableSpec, error) {
+func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash, dest *NomsBlockStore) ([]tableSpec, error) {
 	gcc, err := newGarbageCollectionCopier()
 	if err != nil {
 		return nil, err
@@ -1487,7 +1514,7 @@ LOOP:
 		}
 	}
 
-	nomsDir := nbs.p.(*fsTablePersister).dir
+	nomsDir := dest.p.(*fsTablePersister).dir
 
 	return gcc.copyTablesToDir(ctx, nomsDir)
 }
@@ -1528,6 +1555,11 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 		lock:  newLock,
 		gcGen: newLock,
 		specs: specs,
+	}
+
+	// nothing has changed.  Bail early
+	if newContents.gcGen == nbs.upstream.gcGen {
+		return nil
 	}
 
 	upstream, uerr := nbs.mm.UpdateGCGen(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)

@@ -382,6 +382,8 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, mvOpts)
 
+	cli.PrintErrln()
+
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 	}

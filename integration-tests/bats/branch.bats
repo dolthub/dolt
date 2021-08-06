@@ -11,26 +11,22 @@ teardown() {
 }
 
 @test "branch: deleting a branch deletes its working set" {
-    dolt gc
     dolt checkout -b to_delete
-    dolt sql -q 'create table test (id int primary key);'
-    values=""
-    for i in `seq 0 1024`; do
-      values="$values""${values:+,}""($i)"
-    done
-    dolt sql -q 'insert into test values '"$values"';'
-    dolt add .
-    dolt commit -m 'making a new commit'
-    dolt gc
-    with_values_sz=`du -s | awk '{print $1}'`
+
+    root=$(noms root .dolt/noms)
+    run noms show .dolt/noms::#$root
+    [[ "$show_tables" -eq 0 ]] || false
+    echo $output
+    [[ "$output" =~ "workingSets/heads/master" ]] || false
+    [[ "$output" =~ "workingSets/heads/to_delete" ]] || false
+
     dolt checkout master
     dolt branch -d -f to_delete
-    num_branches=`dolt branch | wc -l`
-    [[ "$num_branches" -eq 1 ]] || fail "expected num_branches to be 1"
-    dolt gc
-    without_values_sz=`du -s | awk '{print $1}'`
-    echo "$sz $new_sz $post_delete_sz"
-    [[ "$without_values_sz" -lt "$with_values_sz" ]] || false
+
+    root=$(noms root .dolt/noms)
+    run noms show .dolt/noms::#$root
+    [[ "$show_tables" -eq 0 ]] || false
+    [[ ! "$output" =~ "to_delete" ]] || false
 }
 
 @test "branch: moving current working branch takes its working set" {
