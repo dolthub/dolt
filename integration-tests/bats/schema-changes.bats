@@ -614,9 +614,14 @@ SQL
     dolt add .
     dolt commit -m "cm2"
 
-    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t"
+    # run the diff command and validate the appropriate warning is there
+    run dolt sql << SQL
+SELECT COUNT(*) from dolt_diff_t;
+SHOW WARNINGS;
+SQL
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '0' ]] || false
+    [[ "$output" =~ '| 0' ]] || false
+    [[ "$output" =~ 'cannot render diff between commits' ]] || false
 }
 
 @test "schema-change: dolt commit diff prints diff until schema change occurs" {
@@ -636,9 +641,14 @@ SQL
     dolt sql -q "INSERT INTO t values (4,4)"
     dolt commit -am "cm4"
 
-    run dolt sql -q "SELECT COUNT(DISTINCT to_commit) from dolt_commit_diff_t where from_commit=HASHOF('HEAD~4') and to_commit=HASHOF('HEAD')"
+    # run the diff command and validate the appropriate warning is there
+    run dolt sql << SQL
+SELECT COUNT(DISTINCT to_commit) from dolt_commit_diff_t where from_commit=HASHOF('HEAD~4') and to_commit=HASHOF('HEAD');
+SHOW WARNINGS;
+SQL
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '1' ]] || false
+    [[ "$output" =~ '| 1' ]] || false
+    [[ "$output" =~ 'cannot render diff between commits' ]] || false
 }
 
 @test "schema-changes: error dropping foreign key when used as a child in Fk relationship" {
