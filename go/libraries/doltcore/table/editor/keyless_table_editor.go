@@ -39,6 +39,7 @@ type keylessTableEditor struct {
 	acc      keylessEditAcc
 	indexEds []*IndexEditor
 	cvEditor *types.MapEditor
+	dirty    bool
 
 	eg *errgroup.Group
 	mu *sync.Mutex
@@ -129,6 +130,7 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 		name:     name,
 		acc:      acc,
 		indexEds: make([]*IndexEditor, sch.Indexes().Count()),
+		dirty:    false,
 		eg:       eg,
 		mu:       &sync.Mutex{},
 	}
@@ -144,7 +146,11 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 }
 
 func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
-	panic("not implemented")
+	dRow, err := row.FromNoms(kte.sch, key, val)
+	if err != nil {
+		return err
+	}
+	return kte.InsertRow(ctx, dRow, errFunc)
 }
 
 func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) (err error) {
@@ -175,6 +181,7 @@ func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple,
 		return err
 	}
 
+	kte.dirty = true
 	return kte.acc.decrement(key, val)
 }
 
@@ -191,6 +198,7 @@ func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, _ PKDup
 		return err
 	}
 
+	kte.dirty = true
 	return kte.acc.increment(key, val)
 }
 
@@ -207,6 +215,7 @@ func (kte *keylessTableEditor) DeleteRow(ctx context.Context, r row.Row) (err er
 		return err
 	}
 
+	kte.dirty = true
 	return kte.acc.decrement(key, val)
 }
 
@@ -233,7 +242,12 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 		return err
 	}
 
+	kte.dirty = true
 	return kte.acc.increment(key, val)
+}
+
+func (kte *keylessTableEditor) hasEdits() bool {
+	return kte.dirty
 }
 
 // GetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
@@ -243,6 +257,7 @@ func (kte *keylessTableEditor) GetAutoIncrementValue() types.Value {
 
 // SetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
 func (kte *keylessTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
+	kte.dirty = true
 	return fmt.Errorf("keyless tables do not support AUTO_INCREMENT")
 }
 
@@ -250,6 +265,10 @@ func (kte *keylessTableEditor) SetAutoIncrementValue(v types.Value) (err error) 
 func (kte *keylessTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
+
+	if !kte.dirty {
+		return kte.tbl, nil
+	}
 
 	err := kte.flush(ctx)
 	if err != nil {
@@ -304,6 +323,7 @@ func (kte *keylessTableEditor) SetConstraintViolation(ctx context.Context, k typ
 		kte.cvEditor = cvMap.Edit()
 	}
 	kte.cvEditor.Set(k, v)
+	kte.dirty = true
 	return nil
 }
 
