@@ -621,7 +621,7 @@ SHOW WARNINGS;
 SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ '| 0' ]] || false
-    [[ "$output" =~ 'cannot render diff between commits' ]] || false
+    [[ "$output" =~ 'cannot render full diff between commits' ]] || false
 
     dolt sql -q "INSERT INTO t values (3,3)"
     dolt commit -am "cm3"
@@ -635,7 +635,7 @@ SHOW WARNINGS;
 SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ '| 2' ]] || false
-    [[ "$output" =~ 'cannot render diff between commits' ]] || false
+    [[ "$output" =~ 'cannot render full diff between commits' ]] || false
 }
 
 @test "schema-change: dolt_commit_diff prints diff until schema change occurs" {
@@ -662,7 +662,7 @@ SHOW WARNINGS;
 SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ '| 0' ]] || false
-    [[ "$output" =~ 'cannot render diff between commits' ]] || false
+    [[ "$output" =~ 'cannot render full diff between commits' ]] || false
 }
 
 @test "schema-changes: error dropping foreign key when used as a child in Fk relationship" {
