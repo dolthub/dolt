@@ -16,7 +16,6 @@ package diff
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -40,20 +39,16 @@ type RowDiffer interface {
 	Close() error
 }
 
-var ErrDifferentSchemaSet = errors.New("error: cannot use diff table with evolved primary key set")
-
-func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) (RowDiffer, error) {
+func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
 	ad := NewAsyncDiffer(buf)
 
 	// assumes no PK changes
-	// mixed diffing of keyless and pk tables no supported
-	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		return &keylessDiffer{}, ErrDifferentSchemaSet
-	} else if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
-		return &keylessDiffer{AsyncDiffer: ad}, nil
+	// mixed diffing of keyless and pk tables not supported
+	if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
+		return &keylessDiffer{AsyncDiffer: ad}
 	}
 
-	return ad, nil
+	return ad
 }
 
 // todo: make package private

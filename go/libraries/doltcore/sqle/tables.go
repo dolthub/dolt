@@ -1870,6 +1870,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
+	// Modify the schema to convert the primary key cols into non primary key cols
 	newCollection := schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
 		col.IsPartOfPK = false
 		return col
@@ -1892,6 +1893,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
+	// Convert all of the keyed row data to keyless row data
 	rowData, err := table.GetRowData(ctx)
 	if err != nil {
 		return err

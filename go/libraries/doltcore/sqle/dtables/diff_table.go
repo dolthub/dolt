@@ -18,10 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -32,6 +28,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"io"
 )
 
 const (
@@ -367,12 +366,7 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
 	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
 
-	rd, err := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
-
-	if err != nil {
-		return sql.RowsToRowIter(), err
-	}
-
+	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
 	rd.Start(ctx, fromData, toData)
 
 	src := diff.NewRowDiffSource(rd, joiner)
@@ -386,6 +380,22 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 		fromCommitInfo: fromCmInfo,
 		toCommitInfo:   toCmInfo,
 	}, nil
+}
+
+// isDiffablePartition returns true if the fromSch and toSch have the same primary key set. Otherwise, the two
+// tables are encoded in different formats making diff a long operation.
+func (dp *diffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
+	fromSch, err := dp.from.GetSchema(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	toSch, err := dp.to.GetSchema(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()), nil
 }
 
 type partitionSelectFunc func(*sql.Context, diffPartition) (bool, error)
@@ -556,6 +566,15 @@ func (dp *diffPartitions) Next() (sql.Partition, error) {
 		}
 
 		if next != nil {
+			canDiff, err := next.isDiffablePartition(dp.ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			if !canDiff {
+				return nil, io.EOF
+			}
+
 			return *next, nil
 		}
 	}

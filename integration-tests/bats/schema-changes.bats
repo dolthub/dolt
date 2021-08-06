@@ -585,21 +585,60 @@ SQL
     ! [[ "$output" =~ 'new table' ]] || false
 }
 
-# do not allow sql style diffs
-# diff tabl diffs
-@test "schema-changes: dolt diff table returns an empty table" {
-    skip "unimplemented"
+@test "schema-change: dolt diff on working set shows correct status diff" {
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
+    run dolt sql -q "ALTER TABLE t DROP PRIMARY key"
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [[ "$output" =~ 'Untracked files' ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*t) ]] || false
+    ! [[ "$output" =~ 'deleted' ]] || false
+    ! [[ "$output" =~ 'modified' ]] || false
+
+    run dolt diff
+    [[ "$output" =~ 'added table' ]] || false
+}
+
+@test "schema-changes: dolt diff table returns top-down diff until schema change" {
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 1)"
+
+    dolt add .
+    dolt commit -m "cm1"
 
     dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
     dolt sql -q "INSERT INTO t values (2,2)"
 
     dolt add .
+    dolt commit -m "cm2"
 
     run dolt sql -q "SELECT COUNT(*) from dolt_diff_t"
     [ "$status" -eq 0 ]
     [[ "$output" =~ '0' ]] || false
+}
+
+@test "schema-change: dolt commit diff prints diff until schema change occurs" {
+    dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
+    dolt commit -am "cm0"
+
+    dolt sql -q "INSERT INTO t VALUES (1, 1)"
+    dolt commit -am "cm1"
+
+    dolt sql -q "ALTER TABLE t DROP PRIMARY KEY"
+    dolt sql -q "INSERT INTO t values (2,2)"
+    dolt commit -am "cm2"
+
+    dolt sql -q "INSERT INTO t values (3,3)"
+    dolt commit -am "cm3"
+
+    dolt sql -q "INSERT INTO t values (4,4)"
+    dolt commit -am "cm4"
+
+    run dolt sql -q "SELECT COUNT(DISTINCT to_commit) from dolt_commit_diff_t where from_commit=HASHOF('HEAD~4') and to_commit=HASHOF('HEAD')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '1' ]] || false
 }
 
 @test "schema-changes: error dropping foreign key when used as a child in Fk relationship" {
