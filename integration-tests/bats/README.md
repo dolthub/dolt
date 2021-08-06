@@ -17,11 +17,18 @@ If you find a bug in `dolt`, we would love a skipped bats test PR in addition to
 
 # Running for yourself
 
-First you need to install bats. 
+1. Install bats. 
 ```
 npm install -g bats
 ```
-Then, go to the directory with the bats tests and run: 
+2. Install `dolt`, `git-dolt`, `git-dolt-smudge`, and `noms`
+```
+cd go/cmd/dolt && go install . && cd -
+cd go/cmd/git-dolt && go install . && cd -
+cd go/cmd/git-dolt-smudge && go install . && cd -
+cd go/store/cmd/noms && go install . && cd -
+````
+3. Go to the directory with the bats tests and run: 
 ```
 bats . 
 ```
