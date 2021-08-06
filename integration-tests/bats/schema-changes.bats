@@ -622,9 +622,23 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ '| 0' ]] || false
     [[ "$output" =~ 'cannot render diff between commits' ]] || false
+
+    dolt sql -q "INSERT INTO t values (3,3)"
+    dolt commit -am "cm3"
+
+    dolt sql -q "INSERT INTO t values (4,4)"
+    dolt commit -am "cm4"
+
+    run dolt sql << SQL
+SELECT COUNT(DISTINCT to_commit) from dolt_diff_t;
+SHOW WARNINGS;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '| 2' ]] || false
+    [[ "$output" =~ 'cannot render diff between commits' ]] || false
 }
 
-@test "schema-change: dolt commit diff prints diff until schema change occurs" {
+@test "schema-change: dolt_commit_diff prints diff until schema change occurs" {
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt commit -am "cm0"
 
@@ -643,11 +657,11 @@ SQL
 
     # run the diff command and validate the appropriate warning is there
     run dolt sql << SQL
-SELECT COUNT(DISTINCT to_commit) from dolt_commit_diff_t where from_commit=HASHOF('HEAD~4') and to_commit=HASHOF('HEAD');
+SELECT COUNT(DISTINCT to_commit) from dolt_commit_diff_t where from_commit=HASHOF('HEAD~3') and to_commit=HASHOF('HEAD');
 SHOW WARNINGS;
 SQL
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '| 1' ]] || false
+    [[ "$output" =~ '| 0' ]] || false
     [[ "$output" =~ 'cannot render diff between commits' ]] || false
 }
 

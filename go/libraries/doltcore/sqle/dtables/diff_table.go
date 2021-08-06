@@ -346,6 +346,16 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 		return nil, err
 	}
 
+	isDiffable, err := dp.isDiffablePartition(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isDiffable {
+		ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, dp.fromName, dp.toName))
+		return sql.RowsToRowIter(), nil
+	}
+
 	vrw := types.NewMemoryValueStore() // We're displaying here, so all values that require a VRW will use an internal one
 
 	fromConv, err := rowConvForSchema(ctx, vrw, ss, fromSch)
