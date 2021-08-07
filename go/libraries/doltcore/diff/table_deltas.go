@@ -384,7 +384,7 @@ func getKeylessKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootVal
 		fromTables[name] = fromTable{
 			tags: set.NewUint64Set(sch.GetAllCols().Tags),
 			tbl:  tbl,
-			sch: sch,
+			sch:  sch,
 		}
 		return
 	})

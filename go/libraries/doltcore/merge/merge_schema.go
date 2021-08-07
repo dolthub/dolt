@@ -252,8 +252,8 @@ func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schem
 		// Throw a collision if the columns are differing parts of the primary key schema
 		if ok && (ourCol.IsPartOfPK != theirCol.IsPartOfPK) {
 			conflicts = append(conflicts, ColConflict{
-				Kind: PkCollision,
-				Ours: ourCol,
+				Kind:   PkCollision,
+				Ours:   ourCol,
 				Theirs: theirCol,
 			})
 		}

@@ -19,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"io"
 	"os"
 	"runtime"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -1859,7 +1859,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	err = currSch.GetPKCols().Iter(func (tag uint64, col schema.Column) (bool, error) {
+	err = currSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (bool, error) {
 		if fkc.ColumnHasFkRelationship(tag) {
 			return true, sql.ErrCantDropIndex.New("PRIMARY")
 		}
