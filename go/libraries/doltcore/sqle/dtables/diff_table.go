@@ -401,6 +401,10 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 // isDiffablePartition returns true if the fromSch and toSch have the same primary key set. Otherwise, the two
 // tables are encoded in different formats making diff a long operation.
 func (dp *diffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
+	if dp.from == nil {
+		return true, nil
+	}
+
 	fromSch, err := dp.from.GetSchema(ctx)
 	if err != nil {
 		return false, err

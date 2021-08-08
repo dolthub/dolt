@@ -1972,5 +1972,5 @@ func fmtDuplicateKeyError(sch schema.Schema, keylessRow row.Row) error {
 		vals[i] = val.HumanReadableString()
 	}
 
-	return sql.ErrDuplicateEntry.New(fmt.Sprintf("(%s)", strings.Join(vals, ",")))
+	return sql.ErrPrimaryKeyViolation.New(fmt.Sprintf("(%s)", strings.Join(vals, ",")))
 }
