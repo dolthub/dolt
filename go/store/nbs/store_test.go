@@ -263,7 +263,7 @@ func TestNBSCopyGC(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		msErr = st.MarkAndSweepChunks(ctx, r, keepChan)
+		msErr = st.MarkAndSweepChunks(ctx, r, keepChan, nil)
 		wg.Done()
 	}()
 	for h := range keepers {

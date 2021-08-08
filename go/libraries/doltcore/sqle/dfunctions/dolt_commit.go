@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -115,8 +116,18 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
 	ctx.SetTransaction(nil)
 
+	var mergeParentCommits []*doltdb.Commit
+	ws, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
 	// Now do a Dolt commit
-	commit, err := dSess.CommitToDolt(ctx, roots, dbName, actions.CommitStagedProps{
+	commit, err := dSess.CommitToDolt(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),

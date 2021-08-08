@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1096,55 +1095,39 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 		return err
 	}
 
-	rand.Seed(time.Now().UnixNano())
-	tmpDatasets := make([]datas.Dataset, len(uncommitedVals))
-	for i, h := range uncommitedVals {
-		v, err := ddb.db.ReadValue(ctx, h)
-		if err != nil {
-			return err
-		}
-		if v == nil {
-			return fmt.Errorf("empty value for value hash %s", h.String())
+	datasets, err := ddb.db.Datasets(ctx)
+	newGen := hash.NewHashSet(uncommitedVals...)
+	oldGen := make(hash.HashSet)
+	err = datasets.IterAll(ctx, func(key, value types.Value) error {
+		keyStr := string(key.(types.String))
+		h := value.(types.Ref).TargetHash()
+
+		var isOldGen bool
+		switch {
+		case ref.IsRef(keyStr):
+			parsed, err := ref.Parse(keyStr)
+			if err != nil && !errors.Is(err, ref.ErrUnknownRefType) {
+				return err
+			}
+
+			refType := parsed.GetType()
+			isOldGen = refType == ref.BranchRefType || refType == ref.RemoteRefType || refType == ref.InternalRefType
 		}
 
-		ds, err := ddb.db.GetDataset(ctx, fmt.Sprintf("tmp/%d", rand.Int63()))
-		if err != nil {
-			return err
+		if isOldGen {
+			oldGen.Insert(h)
+		} else {
+			newGen.Insert(h)
 		}
 
-		r, err := WriteValAndGetRef(ctx, ddb.db, v)
-		if err != nil {
-			return err
-		}
+		return nil
+	})
 
-		ds, err = ddb.db.CommitValue(ctx, ds, r)
-		if err != nil {
-			return err
-		}
-		if !ds.HasHead() {
-			return fmt.Errorf("could not save value %s", h.String())
-		}
-
-		tmpDatasets[i] = ds
-	}
-
-	err = collector.GC(ctx)
 	if err != nil {
 		return err
 	}
 
-	for _, ds := range tmpDatasets {
-		ds, err = ddb.db.Delete(ctx, ds)
-		if err != nil {
-			return err
-		}
-
-		if ds.HasHead() {
-			return fmt.Errorf("unsuccessful delete for dataset %s", ds.ID())
-		}
-	}
-
-	return nil
+	return collector.GC(ctx, oldGen, newGen)
 }
 
 func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {

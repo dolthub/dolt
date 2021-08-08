@@ -169,6 +169,11 @@ func (tes *TableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 	var tableErr error
 	var rootErr error
 	for tableName, ste := range tes.tables {
+		if !ste.hasEdits() {
+			wg.Done()
+			continue
+		}
+
 		// we can run all of the Table calls concurrently as long as we guard updating the root
 		go func(tableName string, ste *sessionedTableEditor) {
 			defer wg.Done()

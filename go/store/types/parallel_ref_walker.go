@@ -116,6 +116,28 @@ func (w *parallelRefWalker) GetRefs(visited hash.HashSet, vals ValueSlice) ([]ha
 	return res, nil
 }
 
+func (w *parallelRefWalker) GetRefSet(visited hash.HashSet, vals ValueSlice) (hash.HashSet, error) {
+	res := make(hash.HashSet)
+	numSent, resCh, err := w.sendAllWork(vals)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < numSent; i++ {
+		select {
+		case b := <-resCh:
+			for _, r := range b {
+				if !visited.Has(r) {
+					res[r] = struct{}{}
+					visited.Insert(r)
+				}
+			}
+		case <-w.ctx.Done():
+			return nil, w.ctx.Err()
+		}
+	}
+	return res, nil
+}
+
 func (w *parallelRefWalker) Close() error {
 	close(w.work)
 	return w.eg.Wait()

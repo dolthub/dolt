@@ -213,7 +213,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, roots.Working, cm2, dEnv.DbData())
+	tblNames, workingDiffs, err := merge.MergeWouldStompChanges(ctx, roots, cm2)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
@@ -295,7 +295,17 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	_, err = actions.CommitStaged(ctx, roots, dEnv.DbData(), actions.CommitStagedProps{
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
+	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -306,6 +316,11 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 
 	if err != nil {
 		return errhand.BuildDError("error: committing").AddCause(err).Build()
+	}
+
+	err = dEnv.ClearMerge(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil

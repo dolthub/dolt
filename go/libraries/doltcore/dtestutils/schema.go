@@ -125,7 +125,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	indexes, err := tbl.GetIndexData(ctx)
 	require.NoError(t, err)
-	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, tableName, nil)
+	err = putTableToWorking(ctx, dEnv, sch, rows, indexes, tableName, nil)
 	require.NoError(t, err)
 }
 

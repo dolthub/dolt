@@ -17,7 +17,6 @@ package doltdocs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -223,15 +222,6 @@ func getDocPKFromRow(r row.Row) (string, error) {
 
 		return docName, nil
 	}
-}
-
-// getFileFromDoc returns the file obj associated with the doc
-func getFileFromDoc(docName string) (string, error) {
-	if doc, ok := IsSupportedDoc(docName); ok {
-		return doc.File, nil
-	}
-
-	return "", fmt.Errorf("Doc name not provided %s", docName)
 }
 
 // GetAllDocs takes a root value and returns all the docs available in the root.

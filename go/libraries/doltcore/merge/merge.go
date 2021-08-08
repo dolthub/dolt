@@ -39,6 +39,7 @@ import (
 
 var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
+var ErrTableDeletedAndModified = errors.New("conflict: table with same name deleted and modified ")
 
 type Merger struct {
 	root      *doltdb.RootValue
@@ -54,59 +55,23 @@ func NewMerger(ctx context.Context, root, mergeRoot, ancRoot *doltdb.RootValue, 
 
 // MergeTable merges schema and table data for the table tblName.
 func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *editor.TableEditSession) (*doltdb.Table, *MergeStats, error) {
-	tbl, ok, err := merger.root.GetTable(ctx, tblName)
+	rootHasTable, tbl, rootSchema, rootHash, err := getTableInfoFromRoot(ctx, tblName, merger.root)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var h hash.Hash
-	var tblSchema schema.Schema
-	if ok {
-		h, err = tbl.HashOf()
-		if err != nil {
-			return nil, nil, err
-		}
-		tblSchema, err = tbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	mergeTbl, mergeOk, err := merger.mergeRoot.GetTable(ctx, tblName)
+	mergeHasTable, mergeTbl, mergeSchema, mergeHash, err := getTableInfoFromRoot(ctx, tblName, merger.mergeRoot)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var mh hash.Hash
-	var mergeTblSchema schema.Schema
-	if mergeOk {
-		mh, err = mergeTbl.HashOf()
-		if err != nil {
-			return nil, nil, err
-		}
-		mergeTblSchema, err = mergeTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	ancTbl, ancOk, err := merger.ancRoot.GetTable(ctx, tblName)
+	ancHasTable, ancTbl, ancSchema, ancHash, err := getTableInfoFromRoot(ctx, tblName, merger.ancRoot)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var anch hash.Hash
-	var ancTblSchema schema.Schema
 	var ancRows types.Map
-	if ancOk {
-		anch, err = ancTbl.HashOf()
-		if err != nil {
-			return nil, nil, err
-		}
-		ancTblSchema, err = ancTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
+	if ancHasTable {
 		ancRows, err = ancTbl.GetRowData(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -114,26 +79,30 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	{ // short-circuit logic
-		if ancOk && schema.IsKeyless(ancTblSchema) {
-			if ok && mergeOk && ancOk && h == mh && h == anch {
-				return tbl, &MergeStats{Operation: TableUnmodified}, nil
-			}
-		} else {
-			if ok && mergeOk && h == mh {
-				return tbl, &MergeStats{Operation: TableUnmodified}, nil
-			}
+
+		// Nothing changed
+		if rootHasTable && mergeHasTable && ancHasTable && rootHash == mergeHash && rootHash == ancHash {
+			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
 
-		if !ancOk {
-			if mergeOk && ok {
-				if schema.SchemasAreEqual(tblSchema, mergeTblSchema) {
-					// hackity hack
-					ancTblSchema, ancTbl = tblSchema, tbl
+		// Both made identical changes
+		// For keyless tables, this counts as a conflict
+		if rootHasTable && mergeHasTable && rootHash == mergeHash && !schema.IsKeyless(rootSchema) {
+			return tbl, &MergeStats{Operation: TableUnmodified}, nil
+		}
+
+		// One or both added this table
+		if !ancHasTable {
+			if mergeHasTable && rootHasTable {
+				if schema.SchemasAreEqual(rootSchema, mergeSchema) {
+					// If both added the same table, pretend it was in the ancestor all along with no data
+					// Don't touch ancHash to avoid triggering other short-circuit logic below
+					ancHasTable, ancSchema, ancTbl = true, rootSchema, tbl
 					ancRows, _ = types.NewMap(ctx, merger.vrw)
 				} else {
 					return nil, nil, ErrSameTblAddedTwice
 				}
-			} else if ok {
+			} else if rootHasTable {
 				// fast-forward
 				return tbl, &MergeStats{Operation: TableUnmodified}, nil
 			} else {
@@ -142,10 +111,30 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 			}
 		}
 
-		if h == anch {
+		// Deleted in both, fast-forward
+		if ancHasTable && !rootHasTable && !mergeHasTable {
+			return nil, &MergeStats{Operation: TableRemoved}, nil
+		}
+
+		// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
+		if ancHasTable && (!rootHasTable || !mergeHasTable) {
+			if (mergeHasTable && mergeHash != ancHash) ||
+				(rootHasTable && rootHash != ancHash) {
+				return nil, nil, ErrTableDeletedAndModified
+			}
 			// fast-forward
+			return nil, &MergeStats{Operation: TableRemoved}, nil
+		}
+
+		// Changes only in root, table unmodified
+		if mergeHash == ancHash {
+			return tbl, &MergeStats{Operation: TableUnmodified}, nil
+		}
+
+		// Changes only in merge root, fast-forward
+		if rootHash == ancHash {
 			ms := MergeStats{Operation: TableModified}
-			if h != mh {
+			if rootHash != mergeHash {
 				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
 				if err != nil {
 					return nil, nil, err
@@ -157,29 +146,16 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 				return nil, nil, err
 			}
 			return mergeTbl, &ms, nil
-		} else if mh == anch {
-			// fast-forward
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
 	}
 
-	postMergeSchema, schConflicts, err := SchemaMerge(tblSchema, mergeTblSchema, ancTblSchema, tblName)
+	postMergeSchema, schConflicts, err := SchemaMerge(rootSchema, mergeSchema, ancSchema, tblName)
 	if err != nil {
 		return nil, nil, err
 	}
 	if schConflicts.Count() != 0 {
 		// error on schema conflicts for now
 		return nil, nil, schConflicts.AsError()
-	}
-
-	rows, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeRows, err := mergeTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	updatedTbl, err := tbl.UpdateSchema(ctx, postMergeSchema)
@@ -192,7 +168,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	for _, index := range postMergeSchema.Indexes().AllIndexes() {
 		addedIndexesSet[strings.ToLower(index.Name())] = index.Name()
 	}
-	for _, index := range tblSchema.Indexes().AllIndexes() {
+	for _, index := range rootSchema.Indexes().AllIndexes() {
 		delete(addedIndexesSet, strings.ToLower(index.Name()))
 	}
 	for _, addedIndex := range addedIndexesSet {
@@ -218,6 +194,15 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 		return nil, nil, err
 	}
 
+	rows, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeRows, err := mergeTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	resultTbl, conflicts, stats, err := mergeTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, ancRows, updatedTblEditor, sess)
 	if err != nil {
 		return nil, nil, err
@@ -253,6 +238,32 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	return resultTbl, stats, nil
+}
+
+func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.RootValue) (
+	ok bool,
+	table *doltdb.Table,
+	sch schema.Schema,
+	h hash.Hash,
+	err error,
+) {
+	table, ok, err = root.GetTable(ctx, tblName)
+	if err != nil {
+		return false, nil, nil, hash.Hash{}, err
+	}
+
+	if ok {
+		h, err = table.HashOf()
+		if err != nil {
+			return false, nil, nil, hash.Hash{}, err
+		}
+		sch, err = table.GetSchema(ctx)
+		if err != nil {
+			return false, nil, nil, hash.Hash{}, err
+		}
+	}
+
+	return ok, table, sch, h, nil
 }
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {
@@ -842,8 +853,6 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit) (*dol
 }
 
 func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootValue) (*doltdb.RootValue, map[string]*MergeStats, error) {
-	merger := NewMerger(ctx, ourRoot, theirRoot, ancRoot, ourRoot.VRW())
-
 	tblNames, err := doltdb.UnionTableNames(ctx, ourRoot, theirRoot)
 
 	if err != nil {
@@ -856,10 +865,12 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	tableEditSession := editor.CreateTableEditSession(ourRoot, editor.TableEditSessionProps{
 		ForeignKeyChecksDisabled: true,
 	})
-	// need to validate merges can be done on all tables before starting the actual merges.
+
+	// Merge tables one at a time. This is done based on name, so will work badly for things like table renames.
+	// TODO: merge based on a more durable table identity that persists across renames
+	merger := NewMerger(ctx, ourRoot, theirRoot, ancRoot, ourRoot.VRW())
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, tableEditSession)
-
 		if err != nil {
 			return nil, nil, err
 		}
@@ -877,9 +888,10 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 			if err != nil {
 				return nil, nil, err
 			}
-		} else if has, err := newRoot.HasTable(ctx, tblName); err != nil {
+		} else if newRootHasTable, err := newRoot.HasTable(ctx, tblName); err != nil {
 			return nil, nil, err
-		} else if has {
+		} else if newRootHasTable {
+			// Merge root deleted this table
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
 			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 				return root.RemoveTables(ctx, tblName)
@@ -892,7 +904,11 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 				return nil, nil, err
 			}
 		} else {
-			panic("?")
+			// This is a deleted table that the merge root still has
+			if stats.Operation != TableRemoved {
+				panic(fmt.Sprintf("Invalid merge state for table %s. This is a bug.", tblName))
+			}
+			// Nothing to update, our root already has the table deleted
 		}
 	}
 
@@ -1024,4 +1040,63 @@ func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, drw e
 	}
 
 	return diff.NewDocDiffs(ctx, workingRoot, nil, docs)
+}
+
+func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit *doltdb.Commit) ([]string, map[string]hash.Hash, error) {
+	mergeRoot, err := mergeCommit.GetRootValue()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	headTableHashes, err := roots.Head.MapTableHashes(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	workingTableHashes, err := roots.Working.MapTableHashes(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeTableHashes, err := mergeRoot.MapTableHashes(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
+	mergedHeadDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
+
+	stompedTables := make([]string, 0, len(headWorkingDiffs))
+	for tName, _ := range headWorkingDiffs {
+		if _, ok := mergedHeadDiffs[tName]; ok {
+			// even if the working changes match the merge changes, don't allow (matches git behavior).
+			stompedTables = append(stompedTables, tName)
+		}
+	}
+
+	return stompedTables, headWorkingDiffs, nil
+}
+
+func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map[string]hash.Hash {
+	diffs := make(map[string]hash.Hash)
+	for tName, hh := range headTableHashes {
+		if h, ok := otherTableHashes[tName]; ok {
+			if h != hh {
+				// modification
+				diffs[tName] = h
+			}
+		} else {
+			// deletion
+			diffs[tName] = hash.Hash{}
+		}
+	}
+
+	for tName, h := range otherTableHashes {
+		if _, ok := headTableHashes[tName]; !ok {
+			// addition
+			diffs[tName] = h
+		}
+	}
+
+	return diffs
 }

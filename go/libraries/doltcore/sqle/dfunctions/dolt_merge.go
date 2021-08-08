@@ -60,7 +60,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	args, err := getDoltArgs(ctx, row, d.Children())
 
 	if err != nil {
-		return nil, err
+		return noConflicts, err
 	}
 
 	apr, err := ap.Parse(args)
@@ -74,7 +74,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	ws, err := sess.WorkingSet(ctx, dbName)
 	if err != nil {
-		return nil, err
+		return noConflicts, err
 	}
 	roots, ok := sess.GetRoots(ctx, dbName)
 
@@ -99,7 +99,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			return noConflicts, err
 		}
 
-		return "Merge aborted", nil
+		return noConflicts, nil
 	}
 
 	ddb, ok := sess.GetDoltDB(ctx, dbName)
@@ -129,7 +129,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	branchName := apr.Arg(0)
-	mergeCommit, cmh, err := getBranchCommit(ctx, branchName, ddb)
+	mergeCommit, _, err := getBranchCommit(ctx, branchName, ddb)
 	if err != nil {
 		return noConflicts, err
 	}
@@ -176,7 +176,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			}
 
 			if err != nil {
-				return nil, err
+				return noConflicts, err
 			}
 			return noConflicts, err
 		}
@@ -203,13 +203,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return noConflicts, err
 	}
 
-	hch, err := headCommit.HashOf()
-	if err != nil {
-		return noConflicts, err
-	}
-
-	returnMsg := fmt.Sprintf("Updating %s..%s", hch.String(), cmh.String())
-	return returnMsg, nil
+	return noConflicts, nil
 }
 
 func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Roots) (*doltdb.WorkingSet, error) {
@@ -331,9 +325,14 @@ func executeNoFFMerge(
 	// The roots need refreshing after the above
 	roots, _ := dSess.GetRoots(ctx, dbName)
 
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
 	// TODO: this does several session state updates, and it really needs to just do one
 	//  We also need to commit any pending transaction before we do this.
-	_, err = actions.CommitStaged(ctx, roots, dbData, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -345,7 +344,7 @@ func executeNoFFMerge(
 		return nil, err
 	}
 
-	return ws, dSess.SetWorkingSet(ctx, dbName, ws, nil)
+	return ws, dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
 }
 
 // TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.

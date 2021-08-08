@@ -539,9 +539,9 @@ DELIM
     [ "$status" -eq 0 ]
 
     # assert that we already collected garbage
-    BEFORE=$(du .dolt/noms/ | sed 's/[^0-9]*//g')
+    BEFORE=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
     dolt gc
-    AFTER=$(du .dolt/noms/ | sed 's/[^0-9]*//g')
+    AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
 
     # less than 10% smaller
     [ "$BEFORE" -lt $(($AFTER * 11 / 10)) ]
