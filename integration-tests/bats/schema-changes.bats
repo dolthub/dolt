@@ -685,4 +685,16 @@ SQL
     [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
 }
 
-# TODO: Fix bug with initial diff case
+@test "schema-changes: dolt constraints verify works gracefully with schema violations" {
+    dolt sql -q "CREATE table t (pk int primary key, val int)"
+    dolt commit -am "cm1"
+
+    dolt sql -q "alter table t drop primary key"
+    dolt sql -q "alter table t add index myidx (val)"
+    dolt sql -q "create table parent(pk int primary key)"
+    dolt sql -q "alter table parent add constraint fk FOREIGN KEY (pk) REFERENCES t (val);"
+
+    run dolt constraints verify
+    echo $output
+    [ "$status" -eq 0 ]
+}
