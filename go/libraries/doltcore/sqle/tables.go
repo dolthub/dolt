@@ -1812,7 +1812,7 @@ func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 		}
 
 		if card > 1 {
-			return true, fmtDuplicateKeyError(sch, keyless)
+			return true, fmtPrimaryKeyError(sch, keyless)
 		}
 
 		taggedVals, err := keyless.TaggedValues()
@@ -1959,7 +1959,7 @@ func keyedRowDataToKeylessRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 	return mapEditor.Map(ctx)
 }
 
-func fmtDuplicateKeyError(sch schema.Schema, keylessRow row.Row) error {
+func fmtPrimaryKeyError(sch schema.Schema, keylessRow row.Row) error {
 	pkTags := sch.GetPKCols().Tags
 
 	vals := make([]string, len(pkTags))
@@ -1972,5 +1972,5 @@ func fmtDuplicateKeyError(sch schema.Schema, keylessRow row.Row) error {
 		vals[i] = val.HumanReadableString()
 	}
 
-	return sql.ErrPrimaryKeyViolation.New(fmt.Sprintf("(%s)", strings.Join(vals, ",")))
+	return sql.NewUniqueKeyErr(fmt.Sprintf("[%s]", strings.Join(vals, ",")), true, sql.Row{vals})
 }

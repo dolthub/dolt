@@ -411,11 +411,11 @@ SQL
 
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk, val)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Duplicate entry for key '(1,1)'" ]] || false
+    [[ "$output" =~ "duplicate primary key given: [1,1]" ]] || false
 
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Duplicate entry for key '(1)'" ]] || false
+    [[ "$output" =~ "duplicate primary key given: [1]" ]] || false
 }
 
 @test "schema-changes: dropping a primary key still preserves secondary indexes" {
@@ -585,7 +585,7 @@ SQL
     ! [[ "$output" =~ 'new table' ]] || false
 }
 
-@test "schema-change: dolt diff on working set shows correct status diff" {
+@test "schema-changes: dolt diff on working set shows correct status diff" {
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
     run dolt sql -q "ALTER TABLE t DROP PRIMARY key"
@@ -638,7 +638,7 @@ SQL
     [[ "$output" =~ 'cannot render full diff between commits' ]] || false
 }
 
-@test "schema-change: dolt_commit_diff prints diff until schema change occurs" {
+@test "schema-changes: dolt_commit_diff prints diff until schema change occurs" {
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt commit -am "cm0"
 
