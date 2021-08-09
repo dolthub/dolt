@@ -1,0 +1,14 @@
+#name: Fuzzer Create Issue
+
+on:
+  repository_dispatch:
+    types: [ fuzzer-issue ]
+
+jobs:
+  create-issue:
+    name: Create Dolt Issue found by Dolthub/Fuzzer
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Print payload
+        run: |
+          echo "${{ github.event.client_payload }}"
