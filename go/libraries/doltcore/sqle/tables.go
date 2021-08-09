@@ -1726,7 +1726,7 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string) error {
 	currSch := t.sch
 	if currSch.GetPKCols().Size() > 0 {
-		return sql.ErrMultiplePrimaryKeyDefined.New() // Also caught in GMD
+		return sql.ErrMultiplePrimaryKeyDefined.New() // Also caught in GMS
 	}
 
 	// Map function for converting columns to a primary key
@@ -1758,6 +1758,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 		return err
 	}
 
+	// Convert the row data to match the new schema format
 	rowData, err := table.GetRowData(ctx)
 	if err != nil {
 		return err
@@ -1784,6 +1785,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 		return err
 	}
 
+	// Update the root with the new table
 	newRoot, err := root.PutTable(ctx, t.tableName, table)
 	if err != nil {
 		return err
@@ -1838,8 +1840,7 @@ func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 }
 
 func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
-	currSch := t.sch
-	if currSch.GetPKCols().Size() == 0 {
+	if t.sch.GetPKCols().Size() == 0 {
 		return sql.ErrCantDropFieldOrKey.New("PRIMARY")
 	}
 
@@ -1859,7 +1860,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	err = currSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (bool, error) {
+	err = t.sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (bool, error) {
 		if fkc.ColumnHasFkRelationship(tag) {
 			return true, sql.ErrCantDropIndex.New("PRIMARY")
 		}
@@ -1871,7 +1872,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	}
 
 	// Modify the schema to convert the primary key cols into non primary key cols
-	newCollection := schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
+	newCollection := schema.MapColCollection(t.sch.GetAllCols(), func(col schema.Column) schema.Column {
 		col.IsPartOfPK = false
 		return col
 	})
@@ -1881,7 +1882,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	newSchema.Indexes().AddIndex(currSch.Indexes().AllIndexes()...)
+	newSchema.Indexes().AddIndex(t.sch.Indexes().AllIndexes()...)
 
 	table, err := t.doltTable(ctx)
 	if err != nil {

@@ -217,7 +217,6 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (merged *schema.C
 				Theirs: theirCol,
 			})
 		}
-
 		return false, nil
 	})
 

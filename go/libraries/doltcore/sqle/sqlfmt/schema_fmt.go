@@ -64,13 +64,13 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 
 // FmtColPrimaryKey creates a string representing a primary key constraint within a sql create table statement with a
 // given indent.
-func FmtColPrimaryKey(indent int, colStr string) string {
-	fmtStr := fmt.Sprintf("%%%ds PRIMARY KEY (%s)\n", indent, colStr)
-	return fmt.Sprintf(fmtStr, "")
-}
+func FmtColPrimaryKey(indent int, colStr string, newline bool) string {
+	st := "%%%ds PRIMARY KEY (%s)"
+	if newline {
+		st += "\n"
+	}
 
-func FmtColPrimaryKeyNoNewLine(indent int, colStr string) string {
-	fmtStr := fmt.Sprintf("%%%ds PRIMARY KEY (%s)", indent, colStr)
+	fmtStr := fmt.Sprintf(st, indent, colStr)
 	return fmt.Sprintf(fmtStr, "")
 }
 

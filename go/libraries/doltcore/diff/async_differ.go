@@ -16,6 +16,7 @@ package diff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+var ErrChangedPkSet = errors.New("error: fromSch and toSch have different primary key sets")
 
 type RowDiffer interface {
 	// Start starts the RowDiffer.

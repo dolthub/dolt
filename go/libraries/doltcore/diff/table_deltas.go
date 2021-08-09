@@ -427,11 +427,12 @@ func getKeylessKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootVal
 	return deltas, seenKeylessKeyedChanges, nil
 }
 
+// pruneKeylessKeyedDeltas prunes any deltas that are located in the schema change deltas.
 func pruneKeylessKeyedDeltas(deltas []TableDelta, seenKeylessKeyedChanges map[string]bool) []TableDelta {
 	ret := make([]TableDelta, 0)
 
 	for _, d := range deltas {
-		if !seenKeylessKeyedChanges[d.FromName] && !seenKeylessKeyedChanges[d.ToName] {
+		if !(seenKeylessKeyedChanges[d.FromName] || seenKeylessKeyedChanges[d.ToName]) {
 			ret = append(ret, d)
 		}
 	}

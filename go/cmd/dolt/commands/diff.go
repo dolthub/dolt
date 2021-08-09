@@ -529,12 +529,12 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 	if !schema.ColCollsAreCompatible(fromSch.GetPKCols(), toSch.GetPKCols()) {
 		fromPkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
 		toPkStr := strings.Join(toSch.GetPKCols().GetColumnNames(), ", ")
-		cli.Println("<" + sqlfmt.FmtColPrimaryKeyNoNewLine(3, fromPkStr))
-		cli.Println(">" + sqlfmt.FmtColPrimaryKeyNoNewLine(3, toPkStr))
+		cli.Println("<" + sqlfmt.FmtColPrimaryKey(3, fromPkStr, true))
+		cli.Println(">" + sqlfmt.FmtColPrimaryKey(3, toPkStr, true))
 	} else {
 		// Just display the normal primary keys string
 		pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
-		cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr))
+		cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr, false))
 	}
 
 	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
