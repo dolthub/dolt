@@ -18,10 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -349,16 +348,6 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 		return nil, err
 	}
 
-	isDiffable, err := dp.isDiffablePartition(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !isDiffable {
-		ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, dp.fromName, dp.toName))
-		return sql.RowsToRowIter(), nil
-	}
-
 	vrw := types.NewMemoryValueStore() // We're displaying here, so all values that require a VRW will use an internal one
 
 	fromConv, err := rowConvForSchema(ctx, vrw, ss, fromSch)
@@ -382,7 +371,14 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
 	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
 
-	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
+	rd, err := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
+	if errors.Is(err, diff.ErrDifferentPkSet) {
+		ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, dp.fromName, dp.toName))
+		return sql.RowsToRowIter(), nil
+	} else if err != nil {
+		return nil, err
+	}
+
 	rd.Start(ctx, fromData, toData)
 
 	src := diff.NewRowDiffSource(rd, joiner)
@@ -461,7 +457,7 @@ func selectFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (p
 
 var _ sql.PartitionIter = &diffPartitions{}
 
-// collection of paratitions. Implements PartitionItr
+// collection of partitions. Implements PartitionItr
 type diffPartitions struct {
 	// TODO change the sql.PartitionIterator interface so that Next receives the context rather than caching it.
 	ctx             *sql.Context
@@ -586,6 +582,13 @@ func (dp *diffPartitions) Next() (sql.Partition, error) {
 		}
 
 		if next != nil {
+			// We want to render the dolt_diff table from a top down commit log traversal until we reach a point
+			// where we cannot diff two commits due to a schema difference. This logic is duplicated in dp.getRowIter()
+			// for two reasons.
+			// 1. The dolt_commit_diff table exclusively uses getRowIter and not the diffPartitions object
+			// 2. The GMS partition exchange does not process partitions in the order they are sent in. This can allow
+			// commits with the computable diffs before the schema change to be rendered, convoluting the UX of the diff
+			// table.
 			canDiff, err := next.isDiffablePartition(dp.ctx)
 			if err != nil {
 				return nil, err

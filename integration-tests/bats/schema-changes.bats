@@ -684,3 +684,5 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
 }
+
+# TODO: Fix bug with initial diff case

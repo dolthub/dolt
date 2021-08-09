@@ -163,7 +163,12 @@ func parentFkConstraintViolations(
 	}
 	postChildCVMapEditor := postChildCVMap.Edit()
 
-	differ := diff.NewRowDiffer(ctx, preParentSch, postParent.Schema, 1024)
+	differ, err := diff.NewRowDiffer(ctx, preParentSch, postParent.Schema, 1024)
+	// TODO: Clarify this behavior
+	if err != nil {
+		return nil, false, err
+	}
+
 	defer differ.Close()
 	differ.Start(ctx, preParentRowData, postParent.RowData)
 	for {
@@ -319,7 +324,11 @@ func childFkConstraintViolations(
 	}
 	postChildCVMapEditor := postChildCVMap.Edit()
 
-	differ := diff.NewRowDiffer(ctx, preChildSch, postChild.Schema, 1024)
+	differ, err := diff.NewRowDiffer(ctx, preChildSch, postChild.Schema, 1024)
+	if err != nil {
+		return nil, false, err
+	}
+
 	defer differ.Close()
 	differ.Start(ctx, preChildRowData, postChild.RowData)
 	for {

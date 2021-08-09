@@ -16,6 +16,7 @@ package diff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -39,16 +40,22 @@ type RowDiffer interface {
 	Close() error
 }
 
-func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
+var ErrDifferentPkSet = errors.New("error: schema to compare have different primary key set")
+
+func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) (RowDiffer, error) {
 	ad := NewAsyncDiffer(buf)
 
-	// assumes no PK changes
-	// mixed diffing of keyless and pk tables not supported
-	if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
-		return &keylessDiffer{AsyncDiffer: ad}
+	// Return an error is the two schemas have different primary key sets. Use the All Cols
+	// condition for initial case
+	if (fromSch.GetAllCols().Size() != 0 && toSch.GetAllCols().Size() != 0) && !(schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols())) {
+		return nil, ErrDifferentPkSet
 	}
 
-	return ad
+	if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
+		return &keylessDiffer{AsyncDiffer: ad}, nil
+	}
+
+	return ad, nil
 }
 
 // todo: make package private

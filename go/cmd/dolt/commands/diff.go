@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -684,9 +685,16 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 		fromSch = toSch
 	}
 
-	// If the primary key sets of two tables are different throw an error
-	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+	//// If the primary key sets of two tables are different throw an error
+	//if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+	//	return nil
+	//}
+
+	rd, err := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
+	if errors.Is(err, diff.ErrDifferentPkSet) {
 		return nil
+	} else if err != nil {
+		return errhand.BuildDError("").AddCause(err).Build()
 	}
 
 	fromRows, toRows, err := td.GetMaps(ctx)
@@ -711,8 +719,6 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 	if verr != nil {
 		return verr
 	}
-
-	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
 
 	rd.Start(ctx, fromRows, toRows)
 	defer rd.Close()
