@@ -405,10 +405,7 @@ func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.
 
 	nmu := noms.NewNomsMapUpdater(ctx, vrw, rebasedParentRows, rSch, func(stats types.AppliedEditStats) {})
 
-	ad, err := diff.NewRowDiffer(ctx, rSch, rSch, diffBufSize)
-	if err != nil {
-		return types.EmptyMap, err
-	}
+	ad := diff.NewRowDiffer(ctx, rSch, rSch, diffBufSize)
 	// get all differences (including merges) between original commit and its parent
 	ad.Start(ctx, parentRows, rows)
 	defer func() {

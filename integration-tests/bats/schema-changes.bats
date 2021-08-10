@@ -545,6 +545,7 @@ SQL
 
     # Make sure there is not data diff
     run dolt diff --data
+    echo $output
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
 }
@@ -695,6 +696,6 @@ SQL
     dolt sql -q "alter table parent add constraint fk FOREIGN KEY (pk) REFERENCES t (val);"
 
     run dolt constraints verify
-    echo $output
     [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
 }

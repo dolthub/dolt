@@ -16,7 +16,6 @@ package diff
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -40,22 +39,20 @@ type RowDiffer interface {
 	Close() error
 }
 
-var ErrDifferentPkSet = errors.New("error: schema to compare have different primary key set")
-
-func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) (RowDiffer, error) {
+func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
 	ad := NewAsyncDiffer(buf)
 
 	// Return an error is the two schemas have different primary key sets. Use the All Cols
 	// condition for initial case
 	if (fromSch.GetAllCols().Size() != 0 && toSch.GetAllCols().Size() != 0) && !(schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols())) {
-		return nil, ErrDifferentPkSet
+		return &EmptyRowDiffer{}
 	}
 
 	if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
-		return &keylessDiffer{AsyncDiffer: ad}, nil
+		return &keylessDiffer{AsyncDiffer: ad}
 	}
 
-	return ad, nil
+	return ad
 }
 
 // todo: make package private
@@ -271,4 +268,20 @@ func convertDiff(df diff.Difference) (diff.Difference, uint64, error) {
 	default:
 		return df, 0, fmt.Errorf("unexpected DiffChange type %d", df.ChangeType)
 	}
+}
+
+type EmptyRowDiffer struct {
+}
+
+var _ RowDiffer = &EmptyRowDiffer{}
+
+func (e EmptyRowDiffer) Start(ctx context.Context, from, to types.Map) {
+}
+
+func (e EmptyRowDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
+	return nil, false, nil
+}
+
+func (e EmptyRowDiffer) Close() error {
+	return nil
 }

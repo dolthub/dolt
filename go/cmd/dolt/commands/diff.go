@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -690,11 +689,9 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 	//	return nil
 	//}
 
-	rd, err := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
-	if errors.Is(err, diff.ErrDifferentPkSet) {
+	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
+	if _, ok := rd.(*diff.EmptyRowDiffer); ok {
 		return nil
-	} else if err != nil {
-		return errhand.BuildDError("").AddCause(err).Build()
 	}
 
 	fromRows, toRows, err := td.GetMaps(ctx)

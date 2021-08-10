@@ -18,9 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
-	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -371,12 +372,10 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
 	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
 
-	rd, err := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
-	if errors.Is(err, diff.ErrDifferentPkSet) {
+	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
+	if _, ok := rd.(*diff.EmptyRowDiffer); ok {
 		ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, dp.fromName, dp.toName))
 		return sql.RowsToRowIter(), nil
-	} else if err != nil {
-		return nil, err
 	}
 
 	rd.Start(ctx, fromData, toData)

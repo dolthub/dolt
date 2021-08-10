@@ -352,7 +352,6 @@ func getKeylessDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (
 
 		// append if matched or unmatched
 		deltas = append(deltas, delta)
-
 		return
 	})
 	if err != nil {

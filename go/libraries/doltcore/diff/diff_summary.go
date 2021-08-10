@@ -74,7 +74,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 	}
 
 	// If the primary key sets of two tables are different throw an error
-	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+	if (fromSch.GetAllCols().Size() != 0 && toSch.GetAllCols().Size() != 0) && !(schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols())) {
 		return nil
 	}
 
