@@ -1723,15 +1723,15 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 	return false, nil
 }
 
-func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string) error {
+func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.IndexColumn) error {
 	if t.sch.GetPKCols().Size() > 0 {
-		return sql.ErrMultiplePrimaryKeyDefined.New() // Also caught in GMS
+		return sql.ErrMultiplePrimaryKeysDefined.New() // Also caught in GMS
 	}
 
 	// Map function for converting columns to a primary key
 	newCollection := schema.MapColCollection(t.sch.GetAllCols(), func(col schema.Column) schema.Column {
 		for _, c := range columns {
-			if c == col.Name {
+			if strings.ToLower(c.Name) == strings.ToLower(col.Name) {
 				col.IsPartOfPK = true
 				return col
 			}

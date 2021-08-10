@@ -452,7 +452,7 @@ SQL
     dolt sql -q "create table t(pk int PRIMARY KEY AUTO_INCREMENT, val1 int, val2 int)"
     run dolt sql -q "alter table t drop primary key"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: incorrect table definition; there can be only one auto column and it must be defined as a key" ]] || false
+    [[ "$output" =~ "error: incorrect table definition: there can be only one auto column and it must be defined as a key" ]] || false
 }
 
 @test "schema-changes: ff merge with primary key schema differences correctly works" {
