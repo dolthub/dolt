@@ -73,8 +73,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	// If the primary key sets of two tables are different throw an error
-	if (fromSch.GetAllCols().Size() != 0 && toSch.GetAllCols().Size() != 0) && !(schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols())) {
+	if schema.SchemasAreNotDiffable(fromSch, toSch) {
 		return nil
 	}
 

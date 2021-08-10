@@ -684,16 +684,6 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 		fromSch = toSch
 	}
 
-	//// If the primary key sets of two tables are different throw an error
-	//if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-	//	return nil
-	//}
-
-	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
-	if _, ok := rd.(*diff.EmptyRowDiffer); ok {
-		return nil
-	}
-
 	fromRows, toRows, err := td.GetMaps(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not get row data for table %s", td.ToName).AddCause(err).Build()
@@ -717,6 +707,10 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 		return verr
 	}
 
+	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
+	if _, ok := rd.(*diff.EmptyRowDiffer); ok {
+		return nil
+	}
 	rd.Start(ctx, fromRows, toRows)
 	defer rd.Close()
 

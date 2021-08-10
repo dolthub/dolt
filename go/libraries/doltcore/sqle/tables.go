@@ -1724,13 +1724,12 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 }
 
 func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string) error {
-	currSch := t.sch
-	if currSch.GetPKCols().Size() > 0 {
+	if t.sch.GetPKCols().Size() > 0 {
 		return sql.ErrMultiplePrimaryKeyDefined.New() // Also caught in GMS
 	}
 
 	// Map function for converting columns to a primary key
-	newCollection := schema.MapColCollection(currSch.GetAllCols(), func(col schema.Column) schema.Column {
+	newCollection := schema.MapColCollection(t.sch.GetAllCols(), func(col schema.Column) schema.Column {
 		for _, c := range columns {
 			if c == col.Name {
 				col.IsPartOfPK = true
@@ -1746,7 +1745,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 		return err
 	}
 
-	newSchema.Indexes().AddIndex(currSch.Indexes().AllIndexes()...)
+	newSchema.Indexes().AddIndex(t.sch.Indexes().AllIndexes()...)
 
 	table, err := t.doltTable(ctx)
 	if err != nil {

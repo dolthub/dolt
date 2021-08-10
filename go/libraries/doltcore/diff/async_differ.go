@@ -42,9 +42,9 @@ type RowDiffer interface {
 func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
 	ad := NewAsyncDiffer(buf)
 
-	// Return an error is the two schemas have different primary key sets. Use the All Cols
-	// condition for initial case
-	if (fromSch.GetAllCols().Size() != 0 && toSch.GetAllCols().Size() != 0) && !(schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols())) {
+	// Returns an EmptyRowDiffer if the two schemas have different primary key sets. Use the AllCols method
+	// to ensure diffs where a table was dropped/created/truncated is included.
+	if schema.SchemasAreNotDiffable(fromSch, toSch) {
 		return &EmptyRowDiffer{}
 	}
 

@@ -360,7 +360,6 @@ SQL
     [[ "$output" =~ "2,2" ]] || false
 
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
-    echo $output
     [ "$status" -eq 0 ]
 
     run dolt sql -q "INSERT INTO t values (1, 5)"
@@ -545,7 +544,6 @@ SQL
 
     # Make sure there is not data diff
     run dolt diff --data
-    echo $output
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
 }
