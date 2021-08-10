@@ -10,7 +10,6 @@ teardown() {
     teardown_common
 }
 
-
 @test "status: dolt version --feature" {
     # bump this test with feature version bumps
     run dolt version --feature
@@ -287,6 +286,21 @@ SQL
     # Now verify that commit log has changes
     run dolt sql -q "SELECT count(*) from dolt_log"
     [[ "$output" =~ "1" ]] || false
+}
+
+@test "status: dolt reset with a renamed table" {
+    dolt sql <<SQL
+CREATE TABLE one (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+SQL
+    dolt commit -am "added table"
+    dolt sql -q "rename table one to one_super"
+
+    skip "fails with error error: Failed to reset changes. cause: error: failed to write table back to database"
+    dolt reset --hard
 }
 
 @test "status: dolt reset works with commit hash ref" {
