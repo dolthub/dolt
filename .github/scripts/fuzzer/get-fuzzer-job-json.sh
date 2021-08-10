@@ -36,7 +36,7 @@ echo '
               "--dolt-version='$version'",
               "--bucket=dolt-fuzzer-runs",
               "--region=us-west-2",
-              "--fuzzer-args=error, --cycles=4, --config=/configs/scheduled-job.toml"
+              "--fuzzer-args=basic, --cycles=4, --config=/configs/scheduled-job.toml"
             ]
           }
         ],
