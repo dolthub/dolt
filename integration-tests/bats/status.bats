@@ -83,6 +83,12 @@ SQL
     [[ "$output" =~ "	deleted:        u" ]] || false
 }
 
+@test "status: checkout current branch" {
+    run dolt checkout master
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Already on branch 'master'" ]] || false
+}
+
 @test "status: tables in conflict" {
     dolt sql <<SQL
 CREATE TABLE t (pk int PRIMARY KEY, c0 int);
