@@ -639,7 +639,7 @@ SQL
     [[ "$output" =~ '4,4,' ]] || false
 }
 
-@test "schema-changes: dolt_commit_diff returns empty diff if a schema change occurs between two commits" {
+@test "schema-changes: test whether dolt_commit_diff correctly returns a diff whether there is or isn't a schema change" {
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt commit -am "cm0"
 
