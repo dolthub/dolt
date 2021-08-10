@@ -393,11 +393,11 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 	}, nil
 }
 
-// isDiffablePartition returns true if the fromSch and toSch have the same primary key set. Otherwise, the two
+// isNonDiffablePartition returns true if the fromSch and toSch have the same primary key set. Otherwise, the two
 // tables are encoded in different formats making diff a long operation.
-func (dp *diffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
+func (dp *diffPartition) isNonDiffablePartition(ctx *sql.Context) (bool, error) {
 	if dp.from == nil {
-		return true, nil
+		return false, nil
 	}
 
 	fromSch, err := dp.from.GetSchema(ctx)
@@ -410,7 +410,7 @@ func (dp *diffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 		return false, err
 	}
 
-	return schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()), nil
+	return schema.SchemasAreNotDiffable(fromSch, toSch), nil
 }
 
 type partitionSelectFunc func(*sql.Context, diffPartition) (bool, error)
@@ -588,12 +588,12 @@ func (dp *diffPartitions) Next() (sql.Partition, error) {
 			// 2. The GMS partition exchange does not process partitions in the order they are sent in. This can allow
 			// commits with the computable diffs before the schema change to be rendered, convoluting the UX of the diff
 			// table.
-			canDiff, err := next.isDiffablePartition(dp.ctx)
+			cantDiff, err := next.isNonDiffablePartition(dp.ctx)
 			if err != nil {
 				return nil, err
 			}
 
-			if !canDiff {
+			if cantDiff {
 				dp.ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
 				return nil, io.EOF
 			}

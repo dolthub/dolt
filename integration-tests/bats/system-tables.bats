@@ -424,5 +424,3 @@ SQL
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
 }
-
-# TODO: Add test for table truncate.
