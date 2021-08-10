@@ -1,6 +1,6 @@
 <img height="100" src="./docs/Dolt-Logo@3x.svg"/>
 
-### Dolt is Git for Data!
+# Dolt is Git for Data!
 
 Dolt is a SQL database that you can fork, clone, branch, merge, push
 and pull just like a git repository. Connect to Dolt just like any
@@ -18,13 +18,13 @@ Dolt databases. We host public data for free!
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
 ask questions!
 
-### What's it for?
+## What's it for?
 
 Lots of things! Dolt is a generally useful tool with countless 
 applications. But if you want some ideas, [here's how people are using 
 it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
 
-### How do I use it?
+## How do I use it?
 
 Check out our [quick-start guide](docs/quickstart.md) to skip the docs
 and get started as fast as humanly possible! Or keep reading for a
