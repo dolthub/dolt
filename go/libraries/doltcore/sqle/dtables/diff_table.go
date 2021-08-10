@@ -580,8 +580,8 @@ func (dp *diffPartitions) Next() (sql.Partition, error) {
 
 		if next != nil {
 			// We want to render the dolt_diff table from a top down commit log traversal until we reach a point
-			// where we cannot diff two commits due to a schema difference. This logic is duplicated in dp.getRowIter()
-			// for two reasons.
+			// where we cannot diff two commits due to a schema difference. This logic is similar to whats in
+			// dp.getRowIter() for two reasons.
 			// 1. The dolt_commit_diff table exclusively uses getRowIter and not the diffPartitions object
 			// 2. The GMS partition exchange does not process partitions in the order they are sent in. This can allow
 			// commits with the computable diffs before the schema change to be rendered, convoluting the UX of the diff

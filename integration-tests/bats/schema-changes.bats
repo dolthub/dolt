@@ -352,8 +352,6 @@ SQL
     [ "$status" -eq 0 ]
 
     dolt sql -q "INSERT INTO t VALUES (1,1),(2,2)"
-    run dolt sql -q "SELECT * FROM t"
-
     run dolt sql -q "SELECT * FROM t" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
@@ -573,7 +571,6 @@ SQL
 
     run dolt diff --summary
     [ "$status" -eq 0 ]
-    echo $output
     [[ "$output" =~ "No data changes" ]] || false
 
     dolt add .
@@ -636,9 +633,13 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ '| 2' ]] || false
     [[ "$output" =~ 'cannot render full diff between commits' ]] || false
+
+    run dolt sql -q "SELECT to_val,to_pk,from_val,from_pk FROM dolt_diff_t" -r csv
+    [[ "$output" =~ '3,3,' ]] || false
+    [[ "$output" =~ '4,4,' ]] || false
 }
 
-@test "schema-changes: dolt_commit_diff prints diff until schema change occurs" {
+@test "schema-changes: dolt_commit_diff returns empty diff if a schema change occurs between two commits" {
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt commit -am "cm0"
 
@@ -663,6 +664,10 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ '| 0' ]] || false
     [[ "$output" =~ 'cannot render full diff between commits' ]] || false
+
+    run dolt sql -q "SELECT to_val,to_pk,from_val,from_pk from dolt_commit_diff_t where from_commit=HASHOF('HEAD~2') and to_commit=HASHOF('HEAD');" -r csv
+    [[ "$output" =~ '3,3,,' ]] || false
+    [[ "$output" =~ '4,4,,' ]] || false
 }
 
 @test "schema-changes: error dropping foreign key when used as a child in Fk relationship" {

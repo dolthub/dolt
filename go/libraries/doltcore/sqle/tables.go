@@ -1798,7 +1798,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []string
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, sch schema.Schema) (types.Map, error) {
+func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {
 	newMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return types.Map{}, err
@@ -1813,7 +1813,7 @@ func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 		}
 
 		if card > 1 {
-			return true, fmtPrimaryKeyError(sch, keyless)
+			return true, fmtPrimaryKeyError(newSch, keyless)
 		}
 
 		taggedVals, err := keyless.TaggedValues()
@@ -1821,12 +1821,12 @@ func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 			return true, err
 		}
 
-		keyedRow, err := row.New(nbf, sch, taggedVals)
+		keyedRow, err := row.New(nbf, newSch, taggedVals)
 		if err != nil {
 			return true, err
 		}
 
-		mapEditor = mapEditor.Set(keyedRow.NomsMapKey(sch), keyedRow.NomsMapValue(sch))
+		mapEditor = mapEditor.Set(keyedRow.NomsMapKey(newSch), keyedRow.NomsMapValue(newSch))
 
 		return false, nil
 	})
@@ -1928,7 +1928,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func keyedRowDataToKeylessRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, sch schema.Schema) (types.Map, error) {
+func keyedRowDataToKeylessRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {
 	newMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return types.Map{}, err
@@ -1942,12 +1942,12 @@ func keyedRowDataToKeylessRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vr
 			return true, err
 		}
 
-		keyedRow, err := row.New(nbf, sch, taggedVals)
+		keyedRow, err := row.New(nbf, newSch, taggedVals)
 		if err != nil {
 			return true, nil
 		}
 
-		mapEditor = mapEditor.Set(keyedRow.NomsMapKey(sch), keyedRow.NomsMapValue(sch))
+		mapEditor = mapEditor.Set(keyedRow.NomsMapKey(newSch), keyedRow.NomsMapValue(newSch))
 
 		return false, nil
 	})
