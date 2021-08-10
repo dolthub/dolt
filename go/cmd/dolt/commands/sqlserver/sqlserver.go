@@ -48,14 +48,8 @@ const (
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
 	LongDesc: `By default, starts a MySQL-compatible server which allows only one user connection at a time to the dolt repository in the current directory. Any edits made through this server will be automatically reflected in the working set.  This behavior can be modified using a yaml configuration file passed to the server via {{.EmphasisLeft}}--config <file>{{.EmphasisRight}}, or by using the supported switches and flags to configure the server directly on the command line (If {{.EmphasisLeft}}--config <file>{{.EmphasisRight}} is provided all other command line arguments are ignored). This is an example yaml configuration file showing all supported items and their default values:
-<div class="gatsby-highlight" data-language="text">
-	<pre class="By default, starts a MySQL-compatible server whilanguage-text">
-		<code class="language-text">
-			` + serverConfigAsYAMLConfig(DefaultServerConfig()).String() + `
-  		</code>
-	</pre>
-</div>
-		
+
+` + serverConfigAsYAMLConfig(DefaultServerConfig()).String() + "\n\n" + `
 SUPPORTED CONFIG FILE FIELDS:
 
 		{{.EmphasisLeft}}vlog_level{{.EmphasisRight}} - Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
