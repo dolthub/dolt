@@ -707,8 +707,9 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 		return verr
 	}
 
-	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
+	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
 	if _, ok := rd.(*diff.EmptyRowDiffer); ok {
+		cli.Println("warning: skipping data diff due to primary key set change")
 		return nil
 	}
 	rd.Start(ctx, fromRows, toRows)

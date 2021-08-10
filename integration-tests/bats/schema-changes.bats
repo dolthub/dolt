@@ -543,7 +543,7 @@ SQL
     # Make sure there is not data diff
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "warning: skipping data diff due to primary key set change" ]] || false
 }
 
 @test "schema-changes: diff on composite schema" {
@@ -564,14 +564,14 @@ SQL
     [[ "$output" =~ '<    PRIMARY KEY (pk)' ]] || false
     [[ "$output" =~ '>    PRIMARY KEY (pk, val)' ]] || false
 
-    # Make sure there is not data diff or summary diff
+    # Make sure there is not a data diff or summary diff
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "warning: skipping data diff due to primary key set change" ]] || false
 
     run dolt diff --summary
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No data changes" ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "diff summary will not compute due to primary key set change with table t" ]] || false
 
     dolt add .
 

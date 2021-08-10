@@ -74,7 +74,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 	}
 
 	if !schema.AreSchemasDiffable(fromSch, toSch) {
-		return nil
+		return errhand.BuildDError("diff summary will not compute due to primary key set change with table %s", td.CurName()).Build()
 	}
 
 	keyless, err := td.IsKeyless(ctx)
