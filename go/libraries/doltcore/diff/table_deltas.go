@@ -397,7 +397,6 @@ func getKeylessKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootVal
 			ToTable: tbl,
 		}
 
-		// TODO: is this the most efficient way to to do this
 		toTableTags := set.NewUint64Set(sch.GetAllCols().Tags)
 		for fromName, fromTbl := range fromTables {
 			// |tbl| and |fromTbl| have the same identity

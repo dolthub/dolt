@@ -44,7 +44,7 @@ func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) Ro
 
 	// Returns an EmptyRowDiffer if the two schemas have different primary key sets. Use the AllCols method
 	// to ensure diffs where a table was dropped/created/truncated is included.
-	if schema.SchemasAreNotDiffable(fromSch, toSch) {
+	if !schema.AreSchemasDiffable(fromSch, toSch) {
 		return &EmptyRowDiffer{}
 	}
 

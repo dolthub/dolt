@@ -573,6 +573,7 @@ SQL
 
     run dolt diff --summary
     [ "$status" -eq 0 ]
+    echo $output
     [[ "$output" =~ "No data changes" ]] || false
 
     dolt add .

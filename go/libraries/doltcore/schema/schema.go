@@ -141,18 +141,22 @@ func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) 
 	return reuseTags
 }
 
-// SchemasAreNotDiffable returns true if two schemas are not diffable.
-func SchemasAreNotDiffable(sch1, sch2 Schema) bool {
-	if sch1 == nil && sch2 == nil {
-		return true
-	} else if sch1 == nil || sch2 == nil {
+// AreSchemasDiffable checks if two schemas are diffable. Assumes the passed in schema are from the same table
+// between commits.
+func AreSchemasDiffable(fromSch, toSch Schema) bool {
+	if fromSch == nil && toSch == nil {
 		return false
+	} else if fromSch == nil {
+		return true
+	} else if fromSch.GetAllCols().Size() == 0 {
+		// Empty case
+		return true
 	}
 
-	cond1 := sch1.GetAllCols().Size() != 0 && sch2.GetAllCols().Size() != 0
+	// Keyless case for comparing
+	if IsKeyless(fromSch) && IsKeyless(toSch) {
+		return true
+	}
 
-	// Must have the same
-	cond2 := !ColCollsAreEqual(sch1.GetPKCols(), sch2.GetPKCols())
-
-	return cond1 && cond2
+	return ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols())
 }

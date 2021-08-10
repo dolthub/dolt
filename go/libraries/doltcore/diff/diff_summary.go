@@ -73,7 +73,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	if schema.SchemasAreNotDiffable(fromSch, toSch) {
+	if !schema.AreSchemasDiffable(fromSch, toSch) {
 		return nil
 	}
 
