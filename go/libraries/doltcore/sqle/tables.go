@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -1724,57 +1723,12 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 }
 
 func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.IndexColumn) error {
-	if t.sch.GetPKCols().Size() > 0 {
-		return sql.ErrMultiplePrimaryKeysDefined.New() // Also caught in GMS
-	}
-
-	// Map function for converting columns to a primary key
-	newCollection := schema.MapColCollection(t.sch.GetAllCols(), func(col schema.Column) schema.Column {
-		for _, c := range columns {
-			if strings.ToLower(c.Name) == strings.ToLower(col.Name) {
-				col.IsPartOfPK = true
-				return col
-			}
-		}
-
-		return col
-	})
-
-	newSchema, err := schema.SchemaFromCols(newCollection)
-	if err != nil {
-		return err
-	}
-
-	newSchema.Indexes().AddIndex(t.sch.Indexes().AllIndexes()...)
-
 	table, err := t.doltTable(ctx)
 	if err != nil {
 		return err
 	}
 
-	table, err = table.UpdateSchema(ctx, newSchema)
-	if err != nil {
-		return err
-	}
-
-	// Convert the row data to match the new schema format
-	rowData, err := table.GetRowData(ctx)
-	if err != nil {
-		return err
-	}
-
-	newRowData, err := keylessRowDataToKeyedRowData(ctx, t.nbf, table.ValueReadWriter(), rowData, newSchema)
-	if err != nil {
-		return err
-	}
-
-	table, err = table.UpdateRows(ctx, newRowData)
-	if err != nil {
-		return err
-	}
-
-	// Rebuild all of the indexes now that the primary key has been changed
-	table, err = editor.RebuildAllIndexes(ctx, table)
+	table, err = alterschema.AddPrimaryKeyToTable(ctx, table, t.nbf, columns)
 	if err != nil {
 		return err
 	}
@@ -1798,51 +1752,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.In
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {
-	newMap, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return types.Map{}, err
-	}
-
-	mapEditor := newMap.Edit()
-
-	err = rowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
-		keyless, card, err := row.KeylessRowsFromTuples(key.(types.Tuple), value.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-
-		if card > 1 {
-			return true, fmtPrimaryKeyError(newSch, keyless)
-		}
-
-		taggedVals, err := keyless.TaggedValues()
-		if err != nil {
-			return true, err
-		}
-
-		keyedRow, err := row.New(nbf, newSch, taggedVals)
-		if err != nil {
-			return true, err
-		}
-
-		mapEditor = mapEditor.Set(keyedRow.NomsMapKey(newSch), keyedRow.NomsMapValue(newSch))
-
-		return false, nil
-	})
-
-	if err != nil {
-		return types.Map{}, err
-	}
-
-	return mapEditor.Map(ctx)
-}
-
 func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
-	if t.sch.GetPKCols().Size() == 0 {
-		return sql.ErrCantDropFieldOrKey.New("PRIMARY")
-	}
-
 	// Ensure that no auto increment requirements exist on this table
 	if t.autoIncCol.AutoIncrement {
 		return sql.ErrWrongAutoKey.New()
@@ -1870,51 +1780,17 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	// Modify the schema to convert the primary key cols into non primary key cols
-	newCollection := schema.MapColCollection(t.sch.GetAllCols(), func(col schema.Column) schema.Column {
-		col.IsPartOfPK = false
-		return col
-	})
-
-	newSchema, err := schema.SchemaFromCols(newCollection)
-	if err != nil {
-		return err
-	}
-
-	newSchema.Indexes().AddIndex(t.sch.Indexes().AllIndexes()...)
-
 	table, err := t.doltTable(ctx)
 	if err != nil {
 		return err
 	}
 
-	table, err = table.UpdateSchema(ctx, newSchema)
+	table, err = alterschema.DropPrimaryKeyFromTable(ctx, table, t.nbf)
 	if err != nil {
 		return err
 	}
 
-	// Convert all of the keyed row data to keyless row data
-	rowData, err := table.GetRowData(ctx)
-	if err != nil {
-		return err
-	}
-
-	newRowData, err := keyedRowDataToKeylessRowData(ctx, t.nbf, table.ValueReadWriter(), rowData, newSchema)
-	if err != nil {
-		return err
-	}
-
-	table, err = table.UpdateRows(ctx, newRowData)
-	if err != nil {
-		return err
-	}
-
-	// Rebuild all of the indexes now that the primary key has been changed
-	table, err = editor.RebuildAllIndexes(ctx, table)
-	if err != nil {
-		return err
-	}
-
+	// Update the root with then new table
 	newRoot, err := root.PutTable(ctx, t.tableName, table)
 	if err != nil {
 		return err
@@ -1926,51 +1802,4 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
-}
-
-func keyedRowDataToKeylessRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {
-	newMap, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return types.Map{}, err
-	}
-
-	mapEditor := newMap.Edit()
-
-	err = rowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
-		taggedVals, err := row.TaggedValuesFromTupleKeyAndValue(key.(types.Tuple), value.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-
-		keyedRow, err := row.New(nbf, newSch, taggedVals)
-		if err != nil {
-			return true, nil
-		}
-
-		mapEditor = mapEditor.Set(keyedRow.NomsMapKey(newSch), keyedRow.NomsMapValue(newSch))
-
-		return false, nil
-	})
-
-	if err != nil {
-		return types.Map{}, err
-	}
-
-	return mapEditor.Map(ctx)
-}
-
-func fmtPrimaryKeyError(sch schema.Schema, keylessRow row.Row) error {
-	pkTags := sch.GetPKCols().Tags
-
-	vals := make([]string, len(pkTags))
-	for i, tg := range sch.GetPKCols().Tags {
-		val, ok := keylessRow.GetColVal(tg)
-		if !ok {
-			panic("tag for primary key wasn't found")
-		}
-
-		vals[i] = val.HumanReadableString()
-	}
-
-	return sql.NewUniqueKeyErr(fmt.Sprintf("[%s]", strings.Join(vals, ",")), true, sql.Row{vals})
 }
