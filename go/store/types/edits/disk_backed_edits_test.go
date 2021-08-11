@@ -17,19 +17,19 @@ package edits
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-
 func TestDiskBackedEdits(t *testing.T) {
 	const (
-		maxKVPs = 64*1024
+		maxKVPs = 64 * 1024
 	)
 
 	size := maxKVPs
@@ -57,7 +57,7 @@ func testDBE(t *testing.T, kvps []types.KVP) {
 	require.NoError(t, err)
 
 	newEA := func() types.EditAccumulator {
-		return NewAsyncSortedEdits(nbf, 64, 2,2)
+		return NewAsyncSortedEdits(nbf, 64, 2, 2)
 	}
 
 	dbe := NewDiskBackedEditAcc(ctx, nbf, vrw, 2*1024, tmpDir, newEA)
@@ -73,6 +73,6 @@ func testDBE(t *testing.T, kvps []types.KVP) {
 	inOrder, count, err := IsInOrder(itr)
 
 	assert.NoError(t, err)
-	require.Equal(t, len(kvps),count,  "Invalid count %d != %d", count, len(kvps))
+	require.Equal(t, len(kvps), count, "Invalid count %d != %d", count, len(kvps))
 	require.True(t, inOrder)
 }

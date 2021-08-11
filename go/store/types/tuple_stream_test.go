@@ -17,12 +17,13 @@ package types
 import (
 	"bytes"
 	"context"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 	"io"
 	"math/rand"
 	"sync"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 )
 
 var _ TupleReader = (*TestTupleStream)(nil)

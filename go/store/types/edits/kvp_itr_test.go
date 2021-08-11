@@ -31,7 +31,7 @@ func IsInOrder(itr types.EditProvider) (bool, int, error) {
 	if err == io.EOF {
 		return true, 0, nil
 	} else if err != nil {
-		 return false, 0, err
+		return false, 0, err
 	}
 
 	count := 1

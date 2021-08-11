@@ -17,13 +17,15 @@ package edits
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/dolt/go/store/types"
-	"github.com/stretchr/testify/require"
 	"io"
 	"math/rand"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestBinarySearch(t *testing.T) {
@@ -32,7 +34,7 @@ func TestBinarySearch(t *testing.T) {
 		t.Run(strconv.Itoa(count), func(t *testing.T) {
 			vals := make([]entry, count)
 			for i := 0; i < count; i++ {
-				vals[i] = entry{ kvp: &types.KVP{Key: types.Float(float64(i+1))} }
+				vals[i] = entry{kvp: &types.KVP{Key: types.Float(float64(i + 1))}}
 			}
 
 			for i := 0; i < count+1; i++ {
@@ -40,7 +42,7 @@ func TestBinarySearch(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, i, idx)
 
-				idx, err = search(types.Format_Default, types.Float(float64(i) + 0.5), vals)
+				idx, err = search(types.Format_Default, types.Float(float64(i)+0.5), vals)
 				require.NoError(t, err)
 				require.Equal(t, i, idx)
 			}
@@ -50,7 +52,7 @@ func TestBinarySearch(t *testing.T) {
 
 func genReader(t *testing.T, r *rand.Rand, nbf *types.NomsBinFormat, vrw types.ValueReadWriter) (int64, types.TupleReadCloser) {
 	// generate a random number of key value tuples
-	numItems := r.Int63() % (32*1024)
+	numItems := r.Int63() % (32 * 1024)
 
 	buf := bytes.NewBuffer(nil)
 	wr := types.NewTupleWriter(buf)
@@ -74,7 +76,7 @@ func genReader(t *testing.T, r *rand.Rand, nbf *types.NomsBinFormat, vrw types.V
 
 func TestTupleStreamMerger(t *testing.T) {
 	const (
-		numTests = 8
+		numTests   = 8
 		minReaders = 2
 		maxReaders = 8
 	)

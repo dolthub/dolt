@@ -17,28 +17,29 @@ package edits
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/store/types"
 	"io"
 	"os"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type entry struct {
-	kvp *types.KVP
+	kvp       *types.KVP
 	readerIdx int
 }
 
 var _ types.EditProvider = (*TupleStreamMerger)(nil)
 
 type TupleStreamMerger struct {
-	ctx context.Context
-	nbf *types.NomsBinFormat
-	numEdits int64
+	ctx       context.Context
+	nbf       *types.NomsBinFormat
+	numEdits  int64
 	editsRead int64
 
-	numReaders int
+	numReaders      int
 	readersWithData int
-	readers []types.TupleReadCloser
-	nextKVPS []entry
+	readers         []types.TupleReadCloser
+	nextKVPS        []entry
 
 	readerClosed func(i int)
 }
@@ -72,42 +73,42 @@ func EditProviderForFiles(ctx context.Context, nbf *types.NomsBinFormat, vrw typ
 // pairs, and return a *TupleStreamMerger
 func NewTupleStreamMerger(ctx context.Context, nbf *types.NomsBinFormat, readers []types.TupleReadCloser, numEdits int64, readerClosed func(i int)) (*TupleStreamMerger, error) {
 	fep := &TupleStreamMerger{
-		ctx:             ctx,
-		nbf:             nbf,
-		numEdits:        numEdits,
-		numReaders:      len(readers),
-		readers:         readers,
-		nextKVPS:        make([]entry, 0, len(readers)),
-		readerClosed:    readerClosed,
+		ctx:          ctx,
+		nbf:          nbf,
+		numEdits:     numEdits,
+		numReaders:   len(readers),
+		readers:      readers,
+		nextKVPS:     make([]entry, 0, len(readers)),
+		readerClosed: readerClosed,
 	}
 
 	// read in the initial values from each stream and put them into the nextKVPS slice in sorted order.
 	for i := range readers {
-		 kvp, err := fep.readKVP(i)
-		 if err == io.EOF {
-		 	continue
-		 } else if err != nil {
-		 	return nil, err
-		 }
+		kvp, err := fep.readKVP(i)
+		if err == io.EOF {
+			continue
+		} else if err != nil {
+			return nil, err
+		}
 
-		 // store the kvp along with the index of the reader it was read from.
-		 newEntry := entry{ kvp: kvp, readerIdx: i }
+		// store the kvp along with the index of the reader it was read from.
+		newEntry := entry{kvp: kvp, readerIdx: i}
 
-		 // binary search for where this entry should be inserted within the slice
-		 insIdx, err := search(nbf, kvp.Key, fep.nextKVPS)
-		 if err != nil {
-		 	return nil, err
-		 }
+		// binary search for where this entry should be inserted within the slice
+		insIdx, err := search(nbf, kvp.Key, fep.nextKVPS)
+		if err != nil {
+			return nil, err
+		}
 
-		 // grow the slice of entries
-		 fep.nextKVPS = fep.nextKVPS[:len(fep.nextKVPS) + 1]
+		// grow the slice of entries
+		fep.nextKVPS = fep.nextKVPS[:len(fep.nextKVPS)+1]
 
-		 // if necessary move existing entries to make room for new entry to be inserted in the correct place
-		 if insIdx < len(fep.nextKVPS) - 1 {
-		 	copy(fep.nextKVPS[insIdx+1:], fep.nextKVPS[insIdx:len(fep.nextKVPS) - 1])
-		 }
+		// if necessary move existing entries to make room for new entry to be inserted in the correct place
+		if insIdx < len(fep.nextKVPS)-1 {
+			copy(fep.nextKVPS[insIdx+1:], fep.nextKVPS[insIdx:len(fep.nextKVPS)-1])
+		}
 
-		 fep.nextKVPS[insIdx] = newEntry
+		fep.nextKVPS[insIdx] = newEntry
 	}
 
 	fep.readersWithData = len(fep.nextKVPS)
@@ -176,9 +177,9 @@ func (fep *TupleStreamMerger) readKVP(readerIdx int) (*types.KVP, error) {
 
 	v, err := rd.Read()
 	if err == io.EOF {
-		 return nil, errors.New("corrupt tuple stream has a key without a value")
+		return nil, errors.New("corrupt tuple stream has a key without a value")
 	} else if err != nil {
-		 return nil, err
+		return nil, err
 	}
 
 	return &types.KVP{Key: k, Val: v}, nil
@@ -214,7 +215,7 @@ func search(nbf *types.NomsBinFormat, key types.LesserValuable, vals []entry) (i
 		}
 
 		// choose the middle element and see i we need to cut off the top or bottom elements
-		pos := start + (entries/2)
+		pos := start + (entries / 2)
 		isLess, err := key.Less(nbf, vals[pos].kvp.Key)
 
 		if err != nil {
@@ -222,7 +223,7 @@ func search(nbf *types.NomsBinFormat, key types.LesserValuable, vals []entry) (i
 		}
 
 		if isLess {
-			end = pos -1
+			end = pos - 1
 		} else {
 			start = pos
 		}

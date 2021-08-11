@@ -15,8 +15,9 @@
 package edits
 
 import (
-	"github.com/dolthub/dolt/go/store/types"
 	"io"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // KVPCollItr is a KVPIterator implementation for iterating over a KVPCollection

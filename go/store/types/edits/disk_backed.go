@@ -31,22 +31,22 @@ var _ types.EditAccumulator = (*DiskBackedEditAcc)(nil)
 
 // DiskBackedEditAcc is an EditAccumulator implementation that flushes the edits to disk at regular intervals
 type DiskBackedEditAcc struct {
-	ctx context.Context
-	nbf *types.NomsBinFormat
-	vrw types.ValueReadWriter
-	directory string
+	ctx        context.Context
+	nbf        *types.NomsBinFormat
+	vrw        types.ValueReadWriter
+	directory  string
 	newEditAcc func() types.EditAccumulator
 
 	backing types.EditAccumulator
 
-	accumulated int64
+	accumulated   int64
 	flushInterval int64
 
 	ae *atomicerr.AtomicError
 	wg *sync.WaitGroup
 
 	flushResults chan string
-	flushCount int
+	flushCount   int
 }
 
 // NewDiskBackedEditAcc returns a new DiskBackedEditAccumulator instance
@@ -70,7 +70,7 @@ func (dbea *DiskBackedEditAcc) AddEdit(key types.LesserValuable, val types.Valua
 	dbea.backing.AddEdit(key, val)
 	dbea.accumulated++
 
-	if dbea.accumulated % dbea.flushInterval == 0 {
+	if dbea.accumulated%dbea.flushInterval == 0 {
 		// flush interval reached.  kick off a background routine to process everything
 		dbea.flushCount++
 		dbea.flushToDisk()
