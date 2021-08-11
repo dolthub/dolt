@@ -32,6 +32,7 @@ var DoltFunctions = []sql.Function{
 	sql.Function2{Name: DoltMergeBaseFuncName, Fn: NewMergeBase},
 	sql.FunctionN{Name: ConstraintsVerifyFuncName, Fn: NewConstraintsVerifyFunc},
 	sql.FunctionN{Name: ConstraintsVerifyAllFuncName, Fn: NewConstraintsVerifyAllFunc},
+	sql.FunctionN{Name: RevertFuncName, Fn: NewRevertFunc},
 }
 
 // These are the DoltFunctions that get exposed to Dolthub Api.
