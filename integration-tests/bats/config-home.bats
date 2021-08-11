@@ -32,7 +32,7 @@ teardown() {
     rm -rf "$BATS_TMPDIR/config-test$$"
 }
 
-@test "config: different HOME vars" {
+@test "config-home: different HOME vars" {
     mkdir "$BATS_TMPDIR/config-test$$/homeA"
     HOME="$BATS_TMPDIR/config-test$$/homeA"
 
