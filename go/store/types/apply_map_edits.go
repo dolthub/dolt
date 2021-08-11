@@ -25,7 +25,7 @@ import (
 // associated with the key for inserts and updates.  deletes are modeled as a key with no value
 type EditProvider interface {
 	// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
-	// in key sorted order
+	// in key sorted order.  Once all KVPs have been read io.EOF will be returned.
 	Next() (*KVP, error)
 
 	// NumEdits returns the number of KVPs representing the edits that will be provided when calling next
