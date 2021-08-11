@@ -16,14 +16,13 @@ package dbfactory
 
 import (
 	"context"
-	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks/boltdb"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -58,35 +57,13 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, err
 	}
 
-	newGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize)
-
+	//newGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize)
+	boltCS, err := boltdb.NewBoltDBChunkStore(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 
-	oldgenPath := filepath.Join(path, "oldgen")
-	err = validateDir(oldgenPath)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-
-		err = os.Mkdir(oldgenPath, os.ModePerm)
-		if err != nil && !errors.Is(err, os.ErrExist) {
-			return nil, err
-		}
-	}
-
-	oldGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), oldgenPath, defaultMemTableSize)
-
-	if err != nil {
-		return nil, err
-	}
-
-	st := nbs.NewGenerationalCS(oldGenSt, newGenSt)
-	// metrics?
-
-	return datas.NewDatabase(st), nil
+	return datas.NewDatabase(boltCS), nil
 }
 
 func validateDir(path string) error {
