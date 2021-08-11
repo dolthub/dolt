@@ -15,6 +15,8 @@
 package alterschema
 
 import (
+	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -24,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func DropPrimaryKeyFromTable(ctx *sql.Context, table *doltdb.Table, nbf *types.NomsBinFormat) (*doltdb.Table, error) {
+func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *types.NomsBinFormat) (*doltdb.Table, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -72,7 +74,7 @@ func DropPrimaryKeyFromTable(ctx *sql.Context, table *doltdb.Table, nbf *types.N
 	return editor.RebuildAllIndexes(ctx, table)
 }
 
-func keyedRowDataToKeylessRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {
+func keyedRowDataToKeylessRowData(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {
 	newMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return types.Map{}, err

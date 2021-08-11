@@ -15,6 +15,7 @@
 package alterschema
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -27,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func AddPrimaryKeyToTable(ctx *sql.Context, table *doltdb.Table, nbf *types.NomsBinFormat, columns []sql.IndexColumn) (*doltdb.Table, error) {
+func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, nbf *types.NomsBinFormat, columns []sql.IndexColumn) (*doltdb.Table, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -81,7 +82,7 @@ func AddPrimaryKeyToTable(ctx *sql.Context, table *doltdb.Table, nbf *types.Noms
 	return editor.RebuildAllIndexes(ctx, table)
 }
 
-func keylessRowDataToKeyedRowData(ctx *sql.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {
+func keylessRowDataToKeyedRowData(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {
 	newMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return types.Map{}, err
