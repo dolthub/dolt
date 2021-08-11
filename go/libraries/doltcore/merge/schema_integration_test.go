@@ -280,13 +280,13 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			ColConflicts: []merge.ColConflict{
 				{
 					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("c4", uint64(3), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c4", uint64(2), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("c4", uint64(4696), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c4", uint64(8539), typeinfo.Int32Type, false),
 				},
 				{
 					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("C6", uint64(13), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c6", uint64(19), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("C6", uint64(13258), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c6", uint64(13258), typeinfo.Int32Type, false),
 				},
 			},
 		},
@@ -364,6 +364,26 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 					Kind:   merge.TagCollision,
 					Ours:   schema.NewIndex("c3_idx", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
 					Theirs: schema.NewIndex("c3_index", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
+				},
+			},
+		},
+	},
+	{
+		name: "primary key conflicts",
+		setup: []testCommand{
+			{commands.CheckoutCmd{}, []string{"other"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test drop primary key;"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
+			{commands.CheckoutCmd{}, []string{"master"}},
+		},
+		expConflict: merge.SchemaConflict{
+			TableName: "test",
+			ColConflicts: []merge.ColConflict{
+				{
+					Kind:   merge.PkCollision,
+					Ours:   newColTypeInfo("pk", 3228, typeinfo.Int32Type, true, schema.ColConstraintFromTypeAndParams(schema.NotNullConstraintType, nil)),
+					Theirs: newColTypeInfo("pk", 3228, typeinfo.Int32Type, false, schema.ColConstraintFromTypeAndParams(schema.NotNullConstraintType, nil)),
 				},
 			},
 		},
@@ -532,10 +552,10 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 		assert.True(t, test.expConflict.IdxConflicts[i].Theirs.Equals(acc.Theirs))
 	}
 
-	require.Equal(t, len(test.expConflict.IdxConflicts), len(actConflicts.IdxConflicts))
-	for i, icc := range actConflicts.IdxConflicts {
-		assert.True(t, test.expConflict.IdxConflicts[i].Ours.Equals(icc.Ours))
-		assert.True(t, test.expConflict.IdxConflicts[i].Theirs.Equals(icc.Theirs))
+	require.Equal(t, len(test.expConflict.ColConflicts), len(actConflicts.ColConflicts))
+	for i, icc := range actConflicts.ColConflicts {
+		assert.True(t, test.expConflict.ColConflicts[i].Ours.Equals(icc.Ours))
+		assert.True(t, test.expConflict.ColConflicts[i].Theirs.Equals(icc.Theirs))
 	}
 }
 
