@@ -14,7 +14,10 @@
 
 package edits
 
-import "github.com/dolthub/dolt/go/store/types"
+import (
+	"github.com/dolthub/dolt/go/store/types"
+	"io"
+)
 
 // KVPCollItr is a KVPIterator implementation for iterating over a KVPCollection
 type KVPCollItr struct {
@@ -86,6 +89,11 @@ func (itr *KVPCollItr) nextForDestructiveMerge() (nextKVP *types.KVP, sliceIfExh
 // Next returns the next KVP
 func (itr *KVPCollItr) Next() (*types.KVP, error) {
 	kvp, _, _ := itr.nextForDestructiveMerge()
+
+	if kvp == nil {
+		return nil, io.EOF
+	}
+
 	return kvp, nil
 }
 
