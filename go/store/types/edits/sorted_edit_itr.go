@@ -15,8 +15,9 @@
 package edits
 
 import (
-	"github.com/dolthub/dolt/go/store/types"
 	"io"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SortedEditItr is a KVPIterator implementation that takes two KVPCollItr and merges them as it iterates

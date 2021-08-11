@@ -16,12 +16,12 @@ package edits
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -32,7 +32,7 @@ func createKVPs(t *testing.T, nbf *types.NomsBinFormat, rng *rand.Rand, size int
 	v, err := types.NewTuple(nbf, types.NullValue)
 	require.NoError(t, err)
 	for i := 0; i < size; i++ {
-		k, err := types.NewTuple(nbf, types.Uint(rng.Uint64() % 10000))
+		k, err := types.NewTuple(nbf, types.Uint(rng.Uint64()%10000))
 		require.NoError(t, err)
 		kvps[i] = types.KVP{Key: k, Val: v}
 	}

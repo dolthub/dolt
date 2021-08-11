@@ -61,7 +61,7 @@ type tupleWriterImpl struct {
 
 // NewTupleWriter returns a TupleWriteCloser that writes tuple data to the supplied io.Writer
 func NewTupleWriter(wr io.Writer) TupleWriteCloser {
-	return &tupleWriterImpl{ wr: wr }
+	return &tupleWriterImpl{wr: wr}
 }
 
 func (twr *tupleWriterImpl) write(t Tuple) error {
@@ -124,12 +124,12 @@ func (twr *tupleWriterImpl) Close(context.Context) error {
 type tupleReaderImpl struct {
 	nbf *NomsBinFormat
 	vrw ValueReadWriter
-	rd io.Reader
+	rd  io.Reader
 }
 
 // NewTupleReader returns a TupleReadCloser that reads tuple data from the supplied io.Reader
 func NewTupleReader(nbf *NomsBinFormat, vrw ValueReadWriter, rd io.Reader) TupleReadCloser {
-	return &tupleReaderImpl{ nbf: nbf, vrw: vrw, rd: rd }
+	return &tupleReaderImpl{nbf: nbf, vrw: vrw, rd: rd}
 }
 
 // Read reades the next tuple from the TupleReader
