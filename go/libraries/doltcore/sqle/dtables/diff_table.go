@@ -388,6 +388,9 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 	}, nil
 }
 
+// isDiffablePartition checks if the commit pair for this partition is "diffable".
+// If the primary key sets changed between the two commits, it may not be
+// possible to diff them.
 func (dp *diffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 	if dp.from == nil {
 		return true, nil
@@ -574,13 +577,7 @@ func (dp *diffPartitions) Next() (sql.Partition, error) {
 		}
 
 		if next != nil {
-			// We want to render the dolt_diff table from a top down commit log traversal until we reach a point
-			// where we cannot diff two commits due to a schema difference. This logic is similar to whats in
-			// dp.getRowIter() for two reasons.
-			// 1. The dolt_commit_diff table exclusively uses getRowIter and not the diffPartitions object
-			// 2. The GMS partition exchange does not process partitions in the order they are sent in. This can allow
-			// commits with the computable diffs before the schema change to be rendered, convoluting the UX of the diff
-			// table.
+			// If we can't diff this commit with its parent, don't traverse any lower
 			canDiff, err := next.isDiffablePartition(dp.ctx)
 			if err != nil {
 				return nil, err
