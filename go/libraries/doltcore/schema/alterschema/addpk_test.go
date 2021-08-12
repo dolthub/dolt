@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package alterschema
+package alterschema_test
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -63,7 +64,7 @@ func TestAddPk(t *testing.T) {
 		assert.False(t, originalMap.Empty())
 
 		// Add the Primary Key
-		table, err = AddPrimaryKeyToTable(ctx, table, nomsType, []sql.IndexColumn{{Name: "pk"}})
+		table, err = alterschema.AddPrimaryKeyToTable(ctx, table, "test", nomsType, []sql.IndexColumn{{Name: "id"}})
 		assert.NoError(t, err)
 
 		sch, err := table.GetSchema(ctx)

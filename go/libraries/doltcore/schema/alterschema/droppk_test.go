@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package alterschema
+package alterschema_test
 
 import (
 	"context"
@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -119,7 +120,7 @@ func TestDropPk(t *testing.T) {
 		assert.False(t, originalMap.Empty())
 
 		// Drop the Primary Key
-		table, err = DropPrimaryKeyFromTable(ctx, table, nomsType)
+		table, err = alterschema.DropPrimaryKeyFromTable(ctx, table, nomsType)
 		assert.NoError(t, err)
 
 		sch, err := table.GetSchema(ctx)

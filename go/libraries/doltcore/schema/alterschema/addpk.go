@@ -24,11 +24,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, nbf *types.NomsBinFormat, columns []sql.IndexColumn) (*doltdb.Table, error) {
+func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName string, nbf *types.NomsBinFormat, columns []sql.IndexColumn) (*doltdb.Table, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -55,49 +56,93 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, nbf *types.N
 		return nil, err
 	}
 
+	if !pkInCorrectOrder(newSchema, columns) {
+		newSchema, err = rearrangeSchema(newSchema, columns)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
-	table, err = table.UpdateSchema(ctx, newSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert the row data to match the new schema format
-	rowData, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	newRowData, err := keylessRowDataToKeyedRowData(ctx, nbf, table.ValueReadWriter(), rowData, newSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	table, err = table.UpdateRows(ctx, newRowData)
-	if err != nil {
-		return nil, err
-	}
-
 	// Rebuild all of the indexes now that the primary key has been changed
-	return editor.RebuildAllIndexes(ctx, table)
+	return insertKeyedData(ctx, nbf, table, newSchema, tableName)
 }
 
-func keylessRowDataToKeyedRowData(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {
-	newMap, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return types.Map{}, err
+func pkInCorrectOrder(sch schema.Schema, cols []sql.IndexColumn) bool {
+	pks := sch.GetPKCols()
+
+	if pks.Size() != len(cols) {
+		return false
 	}
 
-	mapEditor := newMap.Edit()
+	for i, c := range cols {
+		if strings.ToLower(c.Name) != strings.ToLower(pks.GetAtIndex(i).Name) {
+			return false
+		}
+	}
 
-	err = rowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
+	return true
+}
+
+func rearrangeSchema(sch schema.Schema, cols []sql.IndexColumn) (schema.Schema, error) {
+	currPks := sch.GetPKCols()
+	newPks := schema.NewColCollection()
+
+	for _, c := range cols {
+		foundCol, ok := currPks.GetByNameCaseInsensitive(c.Name)
+		if !ok {
+			return nil, fmt.Errorf("error: column %s was not found", foundCol.Name)
+		}
+
+		newPks.Append(foundCol)
+	}
+
+	return schema.SchemaFromCols(currPks.AppendColl(sch.GetNonPKCols()))
+}
+
+func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *doltdb.Table, newSchema schema.Schema, name string) (*doltdb.Table, error) {
+	marshalledSchema, err := encoding.MarshalSchemaAsNomsValue(context.Background(), oldTable.ValueReadWriter(), newSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	empty, err := types.NewMap(ctx, oldTable.ValueReadWriter())
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the new Table and rebuild all the indexes
+	newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), marshalledSchema, empty, empty, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the table editor and insert all of the new data into it
+	tableEditor, err := editor.NewTableEditor(ctx, newTable, newSchema, name)
+	if err != nil {
+		return nil, err
+	}
+
+	oldRowData, err := oldTable.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = oldRowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
 		keyless, card, err := row.KeylessRowsFromTuples(key.(types.Tuple), value.(types.Tuple))
 		if err != nil {
 			return true, err
 		}
 
+		// A row that exists more than once must be a duplicate.
 		if card > 1 {
-			return true, fmtPrimaryKeyError(newSch, keyless)
+			return true, fmtPrimaryKeyError(newSchema, keyless)
 		}
 
 		taggedVals, err := keyless.TaggedValues()
@@ -105,21 +150,24 @@ func keylessRowDataToKeyedRowData(ctx context.Context, nbf *types.NomsBinFormat,
 			return true, err
 		}
 
-		keyedRow, err := row.New(nbf, newSch, taggedVals)
+		keyedRow, err := row.New(nbf, newSchema, taggedVals)
 		if err != nil {
 			return true, err
 		}
 
-		mapEditor = mapEditor.Set(keyedRow.NomsMapKey(newSch), keyedRow.NomsMapValue(newSch))
+		err = tableEditor.InsertRow(ctx, keyedRow, duplicatePkFunction)
+		if err != nil {
+			return true, err
+		}
 
 		return false, nil
 	})
 
 	if err != nil {
-		return types.Map{}, err
+		return nil, err
 	}
 
-	return mapEditor.Map(ctx)
+	return tableEditor.Table(ctx)
 }
 
 func fmtPrimaryKeyError(sch schema.Schema, keylessRow row.Row) error {
@@ -136,4 +184,8 @@ func fmtPrimaryKeyError(sch schema.Schema, keylessRow row.Row) error {
 	}
 
 	return sql.NewUniqueKeyErr(fmt.Sprintf("[%s]", strings.Join(vals, ",")), true, sql.Row{vals})
+}
+
+func duplicatePkFunction(keyString, indexName string, k, v types.Tuple, isPk bool) error {
+	return sql.NewUniqueKeyErr(fmt.Sprintf("%s", keyString), true, sql.Row{})
 }

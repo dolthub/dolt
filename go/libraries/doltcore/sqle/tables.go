@@ -1728,7 +1728,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.In
 		return err
 	}
 
-	table, err = alterschema.AddPrimaryKeyToTable(ctx, table, t.nbf, columns)
+	table, err = alterschema.AddPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns)
 	if err != nil {
 		return err
 	}

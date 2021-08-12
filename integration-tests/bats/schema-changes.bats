@@ -258,6 +258,7 @@ SQL
 @test "schema-changes: add single primary key" {
     dolt sql -q "create table t(pk int, val int)"
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
+    echo $output
     [ "$status" -eq 0 ]
 
     dolt sql -q "INSERT INTO t VALUES (1,1),(2,2),(3,3)"
@@ -702,4 +703,29 @@ SQL
     run dolt constraints verify
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
+}
+
+@test "schema-changes: add/drop primary key in different order" {
+    dolt sql -q "CREATE table t (pk int primary key, val int)"
+    dolt commit -am "cm1"
+
+    dolt sql -q "alter table t drop primary key"
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (val, pk)"
+    [ "$status" -eq 0 ]
+
+    # Try a different table
+    dolt sql -q "CREATE table t2 (pk int primary key, val1 int, val2 int)"
+    dolt sql -q "INSERT INTO t2 VALUES (1, 2, 2), (2, 2, 2)"
+    dolt sql -q "alter table t2 drop primary key"
+    run dolt sql -q "ALTER TABLE t2 ADD PRIMARY KEY (val2, val1)"
+    [ "$status" -eq 1 ]
+    [[ "$output" = "duplicate primary key given: [2,2]" ]] || false
+}
+
+@test "schema-changes: add primary key on column that doesn't exist errors appropriately" {
+    dolt sql -q "CREATE table t (pk int primary key, val int)"
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk1)"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" = "error: key column 'pk1' doesn't exist in table" ]] || false
 }
