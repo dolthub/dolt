@@ -100,17 +100,27 @@ type HiddenCommand interface {
 type SubCommandHandler struct {
 	name        string
 	description string
+	// Unspecified ONLY applies when no other command has been given. This is different from how a default command would
+	// function, as a command that doesn't exist for this sub handler will result in an error.
+	Unspecified Command
 	Subcommands []Command
 	hidden      bool
 }
 
 // NewSubCommandHandler returns a new SubCommandHandler instance
 func NewSubCommandHandler(name, description string, subcommands []Command) SubCommandHandler {
-	return SubCommandHandler{name, description, subcommands, false}
+	return SubCommandHandler{name, description, nil, subcommands, false}
 }
 
+// NewHiddenSubCommandHandler returns a new SubCommandHandler instance that is hidden from display
 func NewHiddenSubCommandHandler(name, description string, subcommands []Command) SubCommandHandler {
-	return SubCommandHandler{name, description, subcommands, true}
+	return SubCommandHandler{name, description, nil, subcommands, true}
+}
+
+// NewSubCommandHandlerWithUnspecified returns a new SubCommandHandler that will invoke the unspecified command ONLY if
+// no direct command is given.
+func NewSubCommandHandlerWithUnspecified(name, description string, hidden bool, unspecified Command, subcommands []Command) SubCommandHandler {
+	return SubCommandHandler{name, description, unspecified, subcommands, hidden}
 }
 
 func (hc SubCommandHandler) Name() string {
@@ -134,42 +144,23 @@ func (hc SubCommandHandler) Hidden() bool {
 }
 
 func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	if len(args) < 1 {
+	if len(args) < 1 && hc.Unspecified == nil {
 		hc.printUsage(commandStr)
 		return 1
 	}
 
-	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
+	var subCommandStr string
+	if len(args) > 0 {
+		subCommandStr = strings.ToLower(strings.TrimSpace(args[0]))
+	}
 	for _, cmd := range hc.Subcommands {
 		lwrName := strings.ToLower(cmd.Name())
-
 		if lwrName == subCommandStr {
-			cmdRequiresRepo := true
-			if rnrCmd, ok := cmd.(RepoNotRequiredCommand); ok {
-				cmdRequiresRepo = rnrCmd.RequiresRepo()
-			}
-
-			if cmdRequiresRepo && !hasHelpFlag(args) {
-				isValid := CheckEnvIsValid(dEnv)
-				if !isValid {
-					return 2
-				}
-			}
-
-			var evt *events.Event
-			if evtCmd, ok := cmd.(EventMonitoredCommand); ok {
-				evt = events.NewEvent(evtCmd.EventType())
-				ctx = events.NewContextForEvent(ctx, evt)
-			}
-
-			ret := cmd.Exec(ctx, commandStr+" "+subCommandStr, args[1:], dEnv)
-
-			if evt != nil {
-				events.GlobalCollector.CloseEventAndAdd(evt)
-			}
-
-			return ret
+			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv)
 		}
+	}
+	if hc.Unspecified != nil {
+		return hc.handleCommand(ctx, commandStr, hc.Unspecified, args, dEnv)
 	}
 
 	if !isHelp(subCommandStr) {
@@ -178,6 +169,34 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 
 	hc.printUsage(commandStr)
 	return 1
+}
+
+func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
+	cmdRequiresRepo := true
+	if rnrCmd, ok := cmd.(RepoNotRequiredCommand); ok {
+		cmdRequiresRepo = rnrCmd.RequiresRepo()
+	}
+
+	if cmdRequiresRepo && !hasHelpFlag(args) {
+		isValid := CheckEnvIsValid(dEnv)
+		if !isValid {
+			return 2
+		}
+	}
+
+	var evt *events.Event
+	if evtCmd, ok := cmd.(EventMonitoredCommand); ok {
+		evt = events.NewEvent(evtCmd.EventType())
+		ctx = events.NewContextForEvent(ctx, evt)
+	}
+
+	ret := cmd.Exec(ctx, commandStr, args, dEnv)
+
+	if evt != nil {
+		events.GlobalCollector.CloseEventAndAdd(evt)
+	}
+
+	return ret
 }
 
 // CheckEnvIsValid validates that a DoltEnv has been initialized properly and no errors occur during load, and prints

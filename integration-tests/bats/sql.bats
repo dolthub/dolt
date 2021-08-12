@@ -1494,6 +1494,50 @@ SQL
     [[ "$output" =~ "table doesn't support UPDATE" ]] || false
 }
 
+# regression test for query errors involving partial and full index matches
+# See https://github.com/dolthub/dolt/issues/1131
+@test "sql: covering indexes" {
+    dolt sql <<SQL
+CREATE TABLE test4 (
+  a int NOT NULL,
+  b int NOT NULL,
+  c int NOT NULL,
+  d int NOT NULL,
+  PRIMARY KEY (a,b,c,d),
+  KEY t4bc (b,c)
+);
+CREATE TABLE test2 (
+  a int NOT NULL,
+  b int,
+  c int,
+  PRIMARY KEY (a),
+  KEY t2bc (b,c)
+);
+insert into test4 values (1,2,3,4), (5,6,7,8);
+insert into test2 values (1,2,3), (4,5,6);
+SQL
+
+    # non indexed lookup
+    run dolt sql -r csv -q "select * from test4 where b = 6;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5,6,7,8" ]] || false
+
+    # lookup on all columns in primary index
+    run dolt sql -r csv -q "select * from test4 where a = 5 and b = 6 and c = 7 and d = 8;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5,6,7,8" ]] || false
+
+    # lookup on all columns in secondary index
+    run dolt sql -r csv -q "select * from test4 where a = 5 and b = 6 and c = 7 and d = 8;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5,6,7,8" ]] || false
+
+    # lookup on covering index not part of primary key
+    run dolt sql -r csv -q "select * from test2 where b = 5 and c = 6;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "4,5,6" ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }

@@ -76,6 +76,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.PullCmd{},
 	commands.FetchCmd{},
 	commands.CloneCmd{},
+	commands.RevertCmd{},
 	credcmds.Commands,
 	commands.LoginCmd{},
 	commands.VersionCmd{VersionStr: Version},
@@ -320,6 +321,7 @@ func commandNeedsMigrationCheck(args []string) bool {
 	for _, cmd := range []cli.Command{
 		commands.ResetCmd{},
 		commands.CommitCmd{},
+		commands.RevertCmd{},
 		commands.SqlCmd{},
 		sqlserver.SqlServerCmd{},
 		sqlserver.SqlClientCmd{},
