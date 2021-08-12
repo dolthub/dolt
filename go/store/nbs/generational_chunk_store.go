@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -68,9 +69,15 @@ func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk,
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
 func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
+	mu := &sync.Mutex{}
 	notInOldGen := hashes.Copy()
 	err := gcs.oldGen.GetMany(ctx, hashes, func(chunk *chunks.Chunk) {
-		delete(notInOldGen, chunk.Hash())
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			delete(notInOldGen, chunk.Hash())
+		}()
+
 		found(chunk)
 	})
 
