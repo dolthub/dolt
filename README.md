@@ -85,6 +85,11 @@ sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/i
 This will download the latest `dolt` release and put it in
 `/usr/local/bin/`, which is probably on your `$PATH`.
 
+The install script needs sudo in order to put `dolt` in `/usr/local/bin`. If you don't have root
+privileges or aren't comfortable running a script with them, you can download the dolt binary
+for your platform from [the latest release](https://github.com/dolthub/dolt/releases), unzip it,
+and put the binary somewhere on your `$PATH`.
+
 ### Homebrew
 
 Dolt is on Homebrew, updated every release.
