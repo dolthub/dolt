@@ -18,43 +18,41 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func setupAdd(t *testing.T, dEnv *env.DoltEnv) {
-	cc := schema.NewColCollection(
-		schema.NewColumn("id", uint64(100), types.IntKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("c1", uint64(101), types.IntKind, false),
-	)
-	otherSch, err := schema.SchemaFromCols(cc)
-	assert.NoError(t, err)
+type testCommand struct {
+	cmd  cli.Command
+	args []string
+}
 
-	_, err = otherSch.Indexes().AddIndexByColTags(indexName, []uint64{101}, schema.IndexProperties{IsUnique: false, Comment: ""})
-	assert.NoError(t, err)
+func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) {
+	exitCode := tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv)
+	require.Equal(t, 0, exitCode)
+}
 
-	rows := []row.Row{
-		NewRowWithSchema(otherSch, types.Int(1), types.Int(1)),
-		NewRowWithSchema(otherSch, types.Int(2), types.Int(2)),
-	}
-
-	dtestutils.CreateTestTable(t, dEnv, "test", otherSch, rows...)
+var setupAdd = []testCommand{
+	{commands.SqlCmd{}, []string{"-q", "create table test (id int not null, c1 int);"}},
+	{commands.SqlCmd{}, []string{"-q", "create index c1_idx on test(c1)"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into test values (1,1),(2,2)"}},
 }
 
 func TestAddPk(t *testing.T) {
-	dEnv := dtestutils.CreateTestEnv()
-	ctx := context.Background()
-
-	setupAdd(t, dEnv)
-
 	t.Run("Add primary key to table with index", func(t *testing.T) {
+		dEnv := dtestutils.CreateTestEnv()
+		ctx := context.Background()
+
+		for _, c := range setupAdd {
+			c.exec(t, ctx, dEnv)
+		}
+
 		table, err := getTable(ctx, dEnv, "test")
 		assert.NoError(t, err)
 
@@ -63,8 +61,10 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, originalMap.Empty())
 
-		// Add the Primary Key
-		table, err = alterschema.AddPrimaryKeyToTable(ctx, table, "test", nomsType, []sql.IndexColumn{{Name: "id"}})
+		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		table, err = getTable(ctx, dEnv, "test")
 		assert.NoError(t, err)
 
 		sch, err := table.GetSchema(ctx)
@@ -77,7 +77,7 @@ func TestAddPk(t *testing.T) {
 		assert.Equal(t, newMap.Len(), uint64(2))
 
 		// Assert the noms level encoding of the map by ensuring the correct index values are present
-		kr1, err := createRow(sch, []uint64{pkTag, c1Tag}, []types.Value{types.Int(1), types.Int(1)})
+		kr1, err := createRow(sch, sch.GetAllCols().Tags, []types.Value{types.Int(1), types.Int(1)})
 		assert.NoError(t, err)
 
 		idx, ok := sch.Indexes().GetByNameCaseInsensitive(indexName)
@@ -89,12 +89,58 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, ok)
 
-		kr2, err := createRow(sch, []uint64{pkTag, c1Tag}, []types.Value{types.Int(2), types.Int(2)})
+		kr2, err := createRow(sch, sch.GetAllCols().Tags, []types.Value{types.Int(2), types.Int(2)})
 		assert.NoError(t, err)
 
 		full, _, _, err = kr2.ReduceToIndexKeys(idx)
 		assert.NoError(t, err)
 		ok, err = newMap.Has(ctx, full)
+		assert.NoError(t, err)
+		assert.True(t, ok)
+	})
+
+	t.Run("Add primary key with previous than before", func(t *testing.T) {
+		dEnv := dtestutils.CreateTestEnv()
+		ctx := context.Background()
+
+		for _, c := range setupAdd {
+			c.exec(t, ctx, dEnv)
+		}
+
+		table, err := getTable(ctx, dEnv, "test")
+		assert.NoError(t, err)
+
+		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (c1)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		table, err = getTable(ctx, dEnv, "test")
+		assert.NoError(t, err)
+
+		sch, err := table.GetSchema(ctx)
+		assert.NoError(t, err)
+
+		// Assert the new index map is not empty
+		newMap, err := table.GetRowData(ctx)
+		assert.NoError(t, err)
+		assert.False(t, newMap.Empty())
+		assert.Equal(t, newMap.Len(), uint64(2))
+
+		// Assert the noms level encoding of the map by ensuring the correct index values are present
+		kr1, err := createRow(sch, sch.GetAllCols().Tags, []types.Value{types.Int(1), types.Int(1)})
+		assert.NoError(t, err)
+		kr1Key, err := kr1.NomsMapKey(sch).Value(ctx)
+		assert.NoError(t, err)
+
+		ok, err := newMap.Has(ctx, kr1Key)
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		kr2, err := createRow(sch, sch.GetAllCols().Tags, []types.Value{types.Int(2), types.Int(2)})
+		assert.NoError(t, err)
+		kr2Key, err := kr2.NomsMapKey(sch).Value(ctx)
+		assert.NoError(t, err)
+
+		ok, err = newMap.Has(ctx, kr2Key)
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	})
