@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -83,6 +84,8 @@ type FKConflict struct {
 	Ours, Theirs doltdb.ForeignKey
 }
 
+var ErrMergeWithDifferentPkSets = errors.New("error: cannot merge two tables with different primary key sets")
+
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
 func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
@@ -92,7 +95,7 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	if !schema.AreSchemasDiffable(ourSch, theirSch) {
-		return nil, SchemaConflict{}, fmt.Errorf("error: cannot merge two tables with different primary key sets")
+		return nil, SchemaConflict{}, ErrMergeWithDifferentPkSets
 	}
 
 	var mergedCC *schema.ColCollection

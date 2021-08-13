@@ -16,6 +16,7 @@ package merge_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,6 +72,7 @@ type mergeSchemaConflictTest struct {
 	name        string
 	setup       []testCommand
 	expConflict merge.SchemaConflict
+	expectedErr error
 }
 
 type mergeForeignKeyTest struct {
@@ -377,16 +379,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{"master"}},
 		},
-		expConflict: merge.SchemaConflict{
-			TableName: "test",
-			ColConflicts: []merge.ColConflict{
-				{
-					Kind:   merge.PkCollision,
-					Ours:   newColTypeInfo("pk", 3228, typeinfo.Int32Type, true, schema.ColConstraintFromTypeAndParams(schema.NotNullConstraintType, nil)),
-					Theirs: newColTypeInfo("pk", 3228, typeinfo.Int32Type, false, schema.ColConstraintFromTypeAndParams(schema.NotNullConstraintType, nil)),
-				},
-			},
-		},
+		expectedErr: merge.ErrMergeWithDifferentPkSets,
 	},
 }
 
@@ -541,6 +534,11 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	otherSch := getSchema(t, dEnv)
 
 	_, actConflicts, err := merge.SchemaMerge(masterSch, otherSch, ancSch, "test")
+	if test.expectedErr != nil {
+		assert.True(t, errors.Is(err, test.expectedErr))
+		return
+	}
+
 	require.NoError(t, err)
 	assert.Equal(t, actConflicts.TableName, "test")
 

@@ -447,6 +447,8 @@ func getUniqueTag(sch schema.Schema) uint64 {
 	return sch.GetPKCols().Tags[0]
 }
 
+// Needed for determining tables that have an evolved primary key. Might need to change if keyless table schemas
+// are allowed.
 func getCorrectId(childSch schema.Schema, otherSchema map[uint64]schema.Schema) uint64 {
 	tg := getUniqueTag(childSch)
 
