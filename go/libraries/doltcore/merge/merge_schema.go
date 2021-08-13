@@ -211,7 +211,7 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (merged *schema.C
 	ourNewCols := schema.ColCollectionSetDifference(ourCC, ancCC)
 	theirNewCols := schema.ColCollectionSetDifference(theirCC, ancCC)
 
-	// check for name and pk conflicts between columns added on each branch since the ancestor
+	// check for name conflicts between columns added on each branch since the ancestor
 	_ = ourNewCols.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
 		theirCol, ok := theirNewCols.GetByNameCaseInsensitive(ourCol.Name)
 		if ok && ourCol.Tag != theirCol.Tag {
