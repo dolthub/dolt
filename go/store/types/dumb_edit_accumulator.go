@@ -51,7 +51,7 @@ func (dumb *DumbEditAccumulator) FinishedEditing() (EditProvider, error) {
 func (dumb *DumbEditAccumulator) Close() {}
 
 // Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
-// in key sorted order
+// in key sorted order. Once all KVPs have been read io.EOF will be returned.
 func (dumb *DumbEditAccumulator) Next() (*KVP, error) {
 	if dumb.pos < len(dumb.edits) {
 		curr := &dumb.edits[dumb.pos]

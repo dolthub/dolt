@@ -117,7 +117,7 @@ func NewTupleStreamMerger(ctx context.Context, nbf *types.NomsBinFormat, readers
 }
 
 // Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
-// in key sorted order
+// in key sorted order.  Once all KVPs have been read io.EOF will be returned.
 func (fep *TupleStreamMerger) Next() (*types.KVP, error) {
 	if fep.readersWithData == 0 {
 		return nil, io.EOF

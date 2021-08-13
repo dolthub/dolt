@@ -35,7 +35,7 @@ type EditProvider interface {
 // EmptyEditProvider is an EditProvider implementation that has no edits
 type EmptyEditProvider struct{}
 
-// Next will always return nil
+// Next will always return nil, io.EOF
 func (eep EmptyEditProvider) Next() (*KVP, error) {
 	return nil, io.EOF
 }
