@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -71,7 +72,7 @@ func genReader(t *testing.T, r *rand.Rand, nbf *types.NomsBinFormat, vrw types.V
 		require.NoError(t, err)
 	}
 
-	return numItems, types.NewTupleReader(nbf, vrw, io.NopCloser(bytes.NewBuffer(buf.Bytes())))
+	return numItems, types.NewTupleReader(nbf, vrw, ioutil.NopCloser(bytes.NewBuffer(buf.Bytes())))
 }
 
 func TestTupleStreamMerger(t *testing.T) {
@@ -103,7 +104,7 @@ func TestTupleStreamMerger(t *testing.T) {
 			}
 
 			// Throw in a reader with no data to check that case
-			readers = append(readers, types.NewTupleReader(nbf, vrw, io.NopCloser(bytes.NewBuffer([]byte{}))))
+			readers = append(readers, types.NewTupleReader(nbf, vrw, ioutil.NopCloser(bytes.NewBuffer([]byte{}))))
 			numReaders++
 
 			// create a merger and iterate through all values validating that every value is less than
