@@ -95,10 +95,10 @@ func rearrangeSchema(sch schema.Schema, cols []sql.IndexColumn) (schema.Schema, 
 			return nil, fmt.Errorf("error: column %s was not found", foundCol.Name)
 		}
 
-		newPks.Append(foundCol)
+		newPks = newPks.Append(foundCol)
 	}
 
-	return schema.SchemaFromCols(currPks.AppendColl(sch.GetNonPKCols()))
+	return schema.SchemaFromCols(newPks.AppendColl(sch.GetNonPKCols()))
 }
 
 func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *doltdb.Table, newSchema schema.Schema, name string) (*doltdb.Table, error) {

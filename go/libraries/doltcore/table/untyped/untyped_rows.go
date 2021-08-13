@@ -150,7 +150,8 @@ func UntypedSchemaUnion(schemas ...schema.Schema) (schema.Schema, error) {
 			if existingCol, ok := tags[tag]; !ok {
 				tags[tag] = col
 				allCols = append(allCols, col)
-			} else if !existingCol.Compatible(col) {
+			} else if existingCol.Kind != col.Kind {
+				// TODO: Need to rethink idea of diffability and compatibility
 				return true, schema.ErrColTagCollision
 			}
 

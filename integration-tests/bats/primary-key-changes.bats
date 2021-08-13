@@ -478,7 +478,7 @@ SQL
 }
 
 @test "primary-key-changes: add primary key on column that doesn't exist errors appropriately" {
-    dolt sql -q "CREATE table t (pk int primary key, val int)"
+    dolt sql -q "CREATE table t (pk int, val int)"
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk1)"
 
     [ "$status" -eq 1 ]
