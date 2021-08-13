@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"sync"
 	"testing"
@@ -83,8 +84,6 @@ func (st *TestTupleStream) CopyFrom(rd TupleReader) error {
 
 		st.tuples = append(st.tuples, t)
 	}
-
-	return nil
 }
 
 func (st *TestTupleStream) Read() (Tuple, error) {
@@ -196,7 +195,7 @@ func TestTupleReadersAndWriters(t *testing.T) {
 		require.NoError(t, err)
 
 		vrw := NewMemoryValueStore()
-		rd := NewTupleReader(Format_Default, vrw, io.NopCloser(buf))
+		rd := NewTupleReader(Format_Default, vrw, ioutil.NopCloser(buf))
 
 		read := make([]Tuple, 2*numTuples)
 		for i := 0; i < 2; i++ {
