@@ -112,16 +112,18 @@ func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Data
 
 	sqlCtx := NewTestSQLCtx(ctx)
 
-	_ = dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
-	sqlCtx.SetCurrentDatabase(db.Name())
-	err := db.SetRoot(sqlCtx, root)
+	err := dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
+	if err != nil {
+		return nil, nil, err
+	}
 
+	sqlCtx.SetCurrentDatabase(db.Name())
+	err = db.SetRoot(sqlCtx, root)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	err = RegisterSchemaFragments(sqlCtx, db, root)
-
 	if err != nil {
 		return nil, nil, err
 	}
