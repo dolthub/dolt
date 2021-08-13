@@ -15,6 +15,8 @@
 package sqle
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -67,8 +69,13 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		return nil, err
 	}
 
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	ait, _ := doltSession.GetDoltDbAutoIncrementTracker(ctx, t.db.Name())
+	err = fmt.Errorf("could not create auto_increment tracker for table %s", t.tableName)
+	ds := dsess.DSessFromSess(ctx.Session)
+	ws, err := ds.WorkingSet(ctx, t.db.name)
+	if err != nil {
+		return nil, err
+	}
+	ait := t.db.gs.GetAutoIncrementTracker(ws.Ref())
 
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{

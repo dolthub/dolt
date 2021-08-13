@@ -200,6 +200,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb Database, revSpec string) (D
 		rsw:  static,
 		rsr:  static,
 		drw:  static,
+		gs:   srcDb.gs,
 	}
 	init := dsess.InitialDbState{
 		Db:         db,
@@ -234,6 +235,7 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		rsw:  srcDb.rsw,
 		rsr:  srcDb.rsr,
 		drw:  srcDb.drw,
+		gs:   nil,
 	}}
 	init := dsess.InitialDbState{
 		Db:           db,

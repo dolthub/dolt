@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -58,6 +59,11 @@ type Database struct {
 	rsr  env.RepoStateReader
 	rsw  env.RepoStateWriter
 	drw  env.DocsReadWriter
+
+	// todo: needs a major refactor to
+	//   correctly handle persisted sequences
+	//   that must be coordinated across txs
+	gs globalstate.GlobalState
 }
 
 var _ sql.Database = Database{}
@@ -123,6 +129,7 @@ func NewDatabase(name string, dbData env.DbData) Database {
 		rsr:  dbData.Rsr,
 		rsw:  dbData.Rsw,
 		drw:  dbData.Drw,
+		gs:   globalstate.NewGlobalStateStore(),
 	}
 }
 
