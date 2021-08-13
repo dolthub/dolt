@@ -19,9 +19,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -187,6 +186,7 @@ func getKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	fromTableNames := make(map[uint64]string)
 	fromTableFKs := make(map[uint64][]doltdb.ForeignKey)
 	fromTableHashes := make(map[uint64]hash.Hash)
+	fromTableSchema := make(map[uint64]schema.Schema)
 
 	fromFKC, err := fromRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -208,6 +208,7 @@ func getKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		fromTableNames[pkTag] = name
 		fromTableHashes[pkTag] = th
 		fromTableFKs[pkTag], _ = fromFKC.KeysForTable(name)
+		fromTableSchema[pkTag] = sch
 		return false, nil
 	})
 	if err != nil {
@@ -235,7 +236,7 @@ func getKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 			return false, err
 		}
 
-		pkTag := getUniqueTag(sch)
+		pkTag := getCorrectId(sch, fromTableSchema)
 		oldName, ok := fromTableNames[pkTag]
 
 		if !ok {
@@ -247,7 +248,8 @@ func getKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 			})
 		} else if oldName != name ||
 			fromTableHashes[pkTag] != th ||
-			!fkSlicesAreEqual(fromTableFKs[pkTag], toFKs) {
+			!fkSlicesAreEqual(fromTableFKs[pkTag], toFKs) ||
+			!schema.AreSchemasDiffable(fromTableSchema[pkTag], sch) {
 
 			deltas = append(deltas, TableDelta{
 				FromName:       fromTableNames[pkTag],
@@ -443,6 +445,24 @@ func getUniqueTag(sch schema.Schema) uint64 {
 		panic("keyless tables have no stable column tags")
 	}
 	return sch.GetPKCols().Tags[0]
+}
+
+func getCorrectId(childSch schema.Schema, otherSchema map[uint64]schema.Schema) uint64 {
+	tg := getUniqueTag(childSch)
+
+	if _, ok := otherSchema[tg]; ok {
+		return tg
+	}
+
+	for k, v := range otherSchema {
+		otherSet := set.NewUint64Set(v.GetAllCols().Tags)
+		inter := set.NewUint64Set(childSch.GetAllCols().Tags).Intersection(otherSet)
+		if inter.Size() > 0 {
+			return k
+		}
+	}
+
+	return 0
 }
 
 func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.ForeignKey) (map[string]schema.Schema, error) {

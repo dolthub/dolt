@@ -86,6 +86,7 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	if !colCollIsEqual {
 		return false
 	}
+
 	return sch1.Indexes().Equals(sch2.Indexes())
 }
 

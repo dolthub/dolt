@@ -28,7 +28,6 @@ type conflictKind byte
 const (
 	TagCollision conflictKind = iota
 	NameCollision
-	PkCollision
 )
 
 type SchemaConflict struct {
@@ -66,8 +65,6 @@ func (c ColConflict) String() string {
 		return fmt.Sprintf("two columns with the name '%s'", c.Ours.Name)
 	case TagCollision:
 		return fmt.Sprintf("different column definitions for our column %s and their column %s", c.Ours.Name, c.Theirs.Name)
-	case PkCollision:
-		return fmt.Sprintf("different primary key definitions for our column %s and their column %s", c.Ours.Name, c.Theirs.Name)
 	}
 	return ""
 }
@@ -89,9 +86,13 @@ type FKConflict struct {
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
 func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
-
 	sc = SchemaConflict{
 		TableName: tblName,
+	}
+
+	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
+	if !schema.AreSchemasDiffable(ourSch, theirSch) {
+		return nil, SchemaConflict{}, fmt.Errorf("error: cannot merge two tables with different primary key sets")
 	}
 
 	var mergedCC *schema.ColCollection
@@ -246,15 +247,6 @@ func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schem
 		if ourCol.Equals(theirCol) {
 			common = common.Append(ourCol)
 			return false, nil
-		}
-
-		// Throw a collision if the columns are differing parts of the primary key schema
-		if ok && (ourCol.IsPartOfPK != theirCol.IsPartOfPK) {
-			conflicts = append(conflicts, ColConflict{
-				Kind:   PkCollision,
-				Ours:   ourCol,
-				Theirs: theirCol,
-			})
 		}
 
 		ancCol, ok := ancCC.GetByTag(ourCol.Tag)

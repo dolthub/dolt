@@ -526,7 +526,7 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 	}
 
 	// Display Primary Key Set Differences
-	if !schema.ColCollsAreCompatible(fromSch.GetPKCols(), toSch.GetPKCols()) {
+	if !schema.AreSchemasDiffable(fromSch, toSch) {
 		fromPkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
 		toPkStr := strings.Join(toSch.GetPKCols().GetColumnNames(), ", ")
 		cli.Println("<" + sqlfmt.FmtColPrimaryKey(3, fromPkStr, false))
