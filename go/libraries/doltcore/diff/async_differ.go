@@ -43,7 +43,7 @@ func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) Ro
 	ad := NewAsyncDiffer(buf)
 
 	// Returns an EmptyRowDiffer if the two schemas are not diffable.
-	if !schema.AreSchemasDiffable(fromSch, toSch) {
+	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
 		return &EmptyRowDiffer{}
 	}
 

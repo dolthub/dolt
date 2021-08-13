@@ -249,7 +249,7 @@ func getKeyedDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		} else if oldName != name ||
 			fromTableHashes[pkTag] != th ||
 			!fkSlicesAreEqual(fromTableFKs[pkTag], toFKs) ||
-			!schema.AreSchemasDiffable(fromTableSchema[pkTag], sch) {
+			!schema.ArePrimaryKeySetsDiffable(fromTableSchema[pkTag], sch) {
 
 			deltas = append(deltas, TableDelta{
 				FromName:       fromTableNames[pkTag],
@@ -447,7 +447,7 @@ func getUniqueTag(sch schema.Schema) uint64 {
 	return sch.GetPKCols().Tags[0]
 }
 
-// Needed for determining tables that have an evolved primary key. Might need to change if keyless table schemas
+// Needed for determining tables that have an evolved primary key. Might need to change if alters on keyless tables
 // are allowed.
 func getCorrectId(childSch schema.Schema, otherSchema map[uint64]schema.Schema) uint64 {
 	tg := getUniqueTag(childSch)

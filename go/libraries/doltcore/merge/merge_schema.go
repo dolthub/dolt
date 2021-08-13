@@ -94,7 +94,7 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 	}
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
-	if !schema.AreSchemasDiffable(ourSch, theirSch) {
+	if !schema.ArePrimaryKeySetsDiffable(ourSch, theirSch) {
 		return nil, SchemaConflict{}, ErrMergeWithDifferentPkSets
 	}
 

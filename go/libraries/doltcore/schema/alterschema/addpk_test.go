@@ -99,7 +99,7 @@ func TestAddPk(t *testing.T) {
 		assert.True(t, ok)
 	})
 
-	t.Run("Add primary key with previous than before", func(t *testing.T) {
+	t.Run("Add primary key with diff column set than before", func(t *testing.T) {
 		dEnv := dtestutils.CreateTestEnv()
 		ctx := context.Background()
 

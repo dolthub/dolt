@@ -13,7 +13,6 @@ teardown() {
 @test "primary-key-changes: add single primary key" {
     dolt sql -q "create table t(pk int, val int)"
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
-    echo $output
     [ "$status" -eq 0 ]
 
     dolt sql -q "INSERT INTO t VALUES (1,1),(2,2),(3,3)"
@@ -519,7 +518,7 @@ SQL
     [[ "$output" =~ 'error: cannot merge two tables with different primary key sets' ]] || false
 }
 
-@test "primary-key-changes: diff with a new added column works" {
+@test "primary-key-changes: correct diff is returned even with a new added column works" {
     dolt sql -q "CREATE table t (pk int, val int, primary key (pk, val))"
     dolt commit -am "cm1"
 
@@ -531,7 +530,6 @@ SQL
 
     dolt commit -am "cm2"
     run dolt status
-    echo $output
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     dolt checkout master
