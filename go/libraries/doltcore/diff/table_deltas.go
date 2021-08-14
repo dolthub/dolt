@@ -170,13 +170,13 @@ func mergeTableDeltas(from, to []TableDelta) (deltas []TableDelta) {
 			deltas = append(deltas, ff)
 		}
 	}
-	for j, tt := range from {
+	for j, tt := range to {
 		if _, ok := toMatched[j]; !ok {
 			deltas = append(deltas, tt)
 		}
 	}
 
-	return
+	return deltas
 }
 
 func schemasOverlap(from, to schema.Schema) bool {
