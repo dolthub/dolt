@@ -41,6 +41,7 @@ type TableDelta struct {
 	ToFksParentSch map[string]schema.Schema
 }
 
+// GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
 func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (staged, unstaged []TableDelta, err error) {
 	staged, err = GetTableDeltas(ctx, roots.Head, roots.Staged)
 	if err != nil {
@@ -56,7 +57,7 @@ func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (stag
 }
 
 // GetTableDeltas returns a slice of TableDelta objects for each table that changed between fromRoot and toRoot.
-// It matches tables across roots using the tag of the first primary key column in the table's schema.
+// It matches tables across roots by finding Schemas with Column tags in common.
 func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
 	fromDeltas := make([]TableDelta, 0)
 	err = fromRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
