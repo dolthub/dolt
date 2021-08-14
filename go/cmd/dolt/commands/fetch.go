@@ -205,19 +205,24 @@ func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, 
 
 				switch mode {
 				case ref.ForceUpdate:
-					err = dEnv.DoltDB.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
+					err := dEnv.DoltDB.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
+					if err != nil {
+						return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+					}
 				case ref.FastForwardOnly:
 					ok, err := dEnv.DoltDB.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
 					if !ok {
 						return errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").Build()
 					}
-					if err == nil {
-						err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
-					}
-				}
 
-				if err != nil {
-					return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+					if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
+						err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
+						if err != nil {
+							return errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").AddCause(err).Build()
+						}
+					} else if err != nil {
+						return errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").AddCause(err).Build()
+					}
 				}
 			}
 		}
