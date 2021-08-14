@@ -105,7 +105,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
-	return mergeTableDeltas(fromDeltas, toDeltas), nil
+	return matchTableDeltas(fromDeltas, toDeltas), nil
 }
 
 func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.ForeignKey) (map[string]schema.Schema, error) {
@@ -127,54 +127,60 @@ func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.
 	return schs, nil
 }
 
-func mergeTableDeltas(from, to []TableDelta) (deltas []TableDelta) {
-	sort.Slice(from, func(i, j int) bool {
-		return from[i].FromName < from[j].FromName
-	})
-	sort.Slice(to, func(i, j int) bool {
-		return to[i].ToName < to[j].ToName
-	})
+func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
+	from := make(map[string]TableDelta, len(fromDeltas))
+	for _, f := range fromDeltas {
+		from[f.FromName] = f
+	}
 
-	fromMatched := make(map[int]struct{})
-	toMatched := make(map[int]struct{})
+	to := make(map[string]TableDelta, len(toDeltas))
+	for _, t := range toDeltas {
+		to[t.ToName] = t
+	}
 
-	// performs all n^2 comparisons in the worst-case,
-	// but we expect linear perf after we sort by name
+	match := func(t, f TableDelta) TableDelta {
+		return TableDelta{
+			FromName:       f.FromName,
+			ToName:         t.ToName,
+			FromTable:      f.FromTable,
+			ToTable:        t.ToTable,
+			FromSch:        f.FromSch,
+			ToSch:          t.ToSch,
+			FromFks:        f.FromFks,
+			ToFks:          t.ToFks,
+			ToFksParentSch: t.ToFksParentSch,
+		}
+	}
+
 	deltas = make([]TableDelta, 0)
-	for i, ff := range from {
-		for j, tt := range to {
-			if _, ok := toMatched[j]; ok {
-				continue
-			}
+	for _, f := range from {
 
-			if schemasOverlap(ff.FromSch, tt.ToSch) {
-				deltas = append(deltas, TableDelta{
-					FromName:       ff.FromName,
-					ToName:         tt.ToName,
-					FromTable:      ff.FromTable,
-					ToTable:        tt.ToTable,
-					FromSch:        ff.FromSch,
-					ToSch:          tt.ToSch,
-					FromFks:        ff.FromFks,
-					ToFks:          tt.ToFks,
-					ToFksParentSch: tt.ToFksParentSch,
-				})
-				fromMatched[i] = struct{}{}
-				toMatched[j] = struct{}{}
+		// optimistically look for a match by name
+		t, ok := to[f.FromName]
+		if ok && schemasOverlap(t.ToSch, f.FromSch) {
+			deltas = append(deltas, match(t, f))
+			delete(from, f.FromName)
+			delete(to, t.ToName)
+			break
+		}
+
+		// otherwise, search pairwise
+		for _, t = range to {
+			if schemasOverlap(f.FromSch, t.ToSch) {
+				deltas = append(deltas, match(t, f))
+				delete(from, f.FromName)
+				delete(to, t.ToName)
+				break
 			}
 		}
 	}
 
 	// append unmatched TableDeltas
-	for i, ff := range from {
-		if _, ok := toMatched[i]; !ok {
-			deltas = append(deltas, ff)
-		}
+	for _, f := range from {
+		deltas = append(deltas, f)
 	}
-	for j, tt := range to {
-		if _, ok := toMatched[j]; !ok {
-			deltas = append(deltas, tt)
-		}
+	for _, t := range to {
+		deltas = append(deltas, t)
 	}
 
 	return deltas
