@@ -161,7 +161,6 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 			deltas = append(deltas, match(t, f))
 			delete(from, f.FromName)
 			delete(to, t.ToName)
-			break
 		}
 
 		// otherwise, search pairwise
