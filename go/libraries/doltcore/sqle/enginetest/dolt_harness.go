@@ -199,11 +199,10 @@ func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState g
 	require.NoError(t, err)
 
 	return dsess.InitialDbState{
-		Db:          db,
-		HeadCommit:  headCommit,
-		WorkingSet:  ws,
-		DbData:      dEnv.DbData(),
-		GlobalState: globalState,
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
 	}
 }
 

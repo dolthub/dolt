@@ -537,3 +537,13 @@ SQL
     [[ "$output" =~ '<    PRIMARY KEY (val2, pk)' ]] || false
     [[ "$output" =~ '>    PRIMARY KEY (pk, val)' ]] || false
 }
+
+@test "primary-key-changes: column with duplicates throws an error when added as pk" {
+    dolt sql -q "CREATE table t (pk int, val int)"
+    dolt sql -q "INSERT INTO t VALUES (1,1),(2,1)"
+    dolt commit -am "cm1"
+
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (val);"
+    [ "$status" -eq 1 ]
+    [[ "$output" = "duplicate primary key given: [1]" ]] || false
+}

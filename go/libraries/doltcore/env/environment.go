@@ -49,6 +49,8 @@ const (
 	tempTablesDir         = "temptf"
 )
 
+var zeroHashStr = (hash.Hash{}).String()
+
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
 var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
@@ -148,24 +150,35 @@ func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
 		return err
 	}
 
-	workingHash, ok := hash.MaybeParse(dEnv.RepoState.working)
-	if !ok {
-		return fmt.Errorf("Corrupt repo, invalid working hash %s", workingHash)
-	}
-
-	workingRoot, err := dEnv.DoltDB.ReadRootValue(ctx, workingHash)
+	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
 		return err
 	}
 
-	stagedHash, ok := hash.MaybeParse(dEnv.RepoState.staged)
-	if !ok {
-		return fmt.Errorf("Corrupt repo, invalid staged hash %s", stagedHash)
+	stagedRoot := headRoot
+	if len(dEnv.RepoState.staged) != 0 && dEnv.RepoState.staged != zeroHashStr {
+		stagedHash, ok := hash.MaybeParse(dEnv.RepoState.staged)
+		if !ok {
+			return fmt.Errorf("Corrupt repo, invalid staged hash %s", stagedHash)
+		}
+
+		stagedRoot, err = dEnv.DoltDB.ReadRootValue(ctx, stagedHash)
+		if err != nil {
+			return err
+		}
 	}
 
-	stagedRoot, err := dEnv.DoltDB.ReadRootValue(ctx, stagedHash)
-	if err != nil {
-		return err
+	workingRoot := stagedRoot
+	if len(dEnv.RepoState.working) != 0 && dEnv.RepoState.working != zeroHashStr {
+		workingHash, ok := hash.MaybeParse(dEnv.RepoState.working)
+		if !ok {
+			return fmt.Errorf("Corrupt repo, invalid working hash %s", workingHash)
+		}
+
+		workingRoot, err = dEnv.DoltDB.ReadRootValue(ctx, workingHash)
+		if err != nil {
+			return err
+		}
 	}
 
 	mergeState, err := mergeStateToMergeState(ctx, dEnv.RepoState.merge, dEnv.DoltDB)
