@@ -236,7 +236,7 @@ DELIM
     [[ "$output" =~ "1,1,2,3,4,8" ]] || false
 }
 
-@test "subsequent runs of same import with duplicate keys produces no modifications" {
+@test "import-update-tables: subsequent runs of same import with duplicate keys produces no modifications" {
     cat <<DELIM > 1pk5col-rpt-ints.csv
 pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
