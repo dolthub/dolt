@@ -15,9 +15,10 @@
 package env
 
 import (
-	"os"
 	"os/user"
 	"path/filepath"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 )

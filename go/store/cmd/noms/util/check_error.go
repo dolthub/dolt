@@ -23,10 +23,10 @@ package util
 
 import (
 	"fmt"
-	"os"
 
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/util/exit"
 )
 

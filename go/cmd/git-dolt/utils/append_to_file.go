@@ -16,7 +16,8 @@ package utils
 
 import (
 	"fmt"
-	"os"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 // AppendToFile appends the given string to the given file in the current

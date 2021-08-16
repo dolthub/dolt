@@ -21,11 +21,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
-	"os"
 	"path"
 	"sort"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 type Module struct {

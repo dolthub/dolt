@@ -28,13 +28,13 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"strings"
 	"time"
 
 	flag "github.com/juju/gnuflag"
 	"github.com/mgutz/ansi"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/d"

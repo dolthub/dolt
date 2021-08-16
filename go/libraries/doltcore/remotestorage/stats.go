@@ -17,9 +17,10 @@ package remotestorage
 import (
 	"fmt"
 	"io"
-	"os"
 	"sync"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/fatih/color"

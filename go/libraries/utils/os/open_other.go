@@ -14,11 +14,7 @@
 
 // +build !windows
 
-package file
-
-import (
-	"os"
-)
+package os
 
 // The file issues are only observed on Windows, therefore on other platforms these function no differently than direct
 // calls.
@@ -26,17 +22,17 @@ import (
 // Rename functions exactly like os.Rename, except that it retries upon failure on Windows. This "fixes" some errors
 // that appear on Windows.
 func Rename(oldpath, newpath string) error {
-	return os.Rename(oldpath, newpath)
+	return fileSystem.Rename(oldpath, newpath)
 }
 
 // Remove functions exactly like os.Remove, except that it retries upon failure on Windows. This "fixes" some errors
 // that appear on Windows.
 func Remove(name string) error {
-	return os.Remove(name)
+	return fileSystem.Remove(name)
 }
 
 // RemoveAll functions exactly like os.RemoveAll, except that it retries upon failure on Windows. This "fixes" some errors
 // that appear on Windows.
 func RemoveAll(path string) error {
-	return os.RemoveAll(path)
+	return fileSystem.RemoveAll(path)
 }

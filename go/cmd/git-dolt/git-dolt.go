@@ -16,13 +16,13 @@ package main
 
 import (
 	"log"
-	"os"
 	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/dolthub/dolt/go/cmd/git-dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 func main() {

@@ -16,7 +16,6 @@ package tblcmds
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -35,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 var exportDocs = cli.CommandDocumentationContent{

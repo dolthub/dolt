@@ -16,13 +16,14 @@ package editor
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"unicode"
 
 	"github.com/google/uuid"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 )
 
 //OpenCommitEditor allows user to write/edit commit message in temporary file

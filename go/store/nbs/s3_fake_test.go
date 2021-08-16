@@ -24,7 +24,6 @@ package nbs
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -37,6 +36,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )

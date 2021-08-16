@@ -16,6 +16,6 @@
 
 package nbs
 
-import "os"
+import "github.com/dolthub/dolt/go/libraries/utils/os"
 
 var mmapAlignment = int64(os.Getpagesize())

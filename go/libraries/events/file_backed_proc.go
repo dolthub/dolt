@@ -18,7 +18,6 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"errors"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	filesys "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 const (

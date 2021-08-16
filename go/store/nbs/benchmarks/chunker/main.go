@@ -23,11 +23,11 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/nbs/benchmarks/gen"
 )
@@ -51,7 +51,7 @@ func main() {
 
 	fileName := flag.Arg(0)
 
-	var fd *os.File
+	var fd os.File
 	var err error
 	if *chunkInput {
 		fd, err = os.Open(fileName)

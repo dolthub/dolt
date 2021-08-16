@@ -17,7 +17,8 @@ package iohelp
 import (
 	"fmt"
 	"io"
-	"os"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 func CopyFile(src, dest string) (size int64, err error) {

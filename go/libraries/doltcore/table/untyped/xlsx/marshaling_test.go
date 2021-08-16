@@ -17,8 +17,6 @@ package xlsx
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"reflect"
 	"testing"
 
@@ -27,6 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

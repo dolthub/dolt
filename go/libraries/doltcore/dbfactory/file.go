@@ -18,8 +18,9 @@ import (
 	"context"
 	"errors"
 	"net/url"
-	"os"
 	"path/filepath"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"

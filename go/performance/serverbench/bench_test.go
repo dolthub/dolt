@@ -17,7 +17,6 @@ package serverbench
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"runtime"
 	"runtime/pprof"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -164,7 +164,7 @@ listener:
 	return dEnv, cfg
 }
 
-func getProfFile(b *testing.B) *os.File {
+func getProfFile(b *testing.B) os.File {
 	_, testFile, _, _ := runtime.Caller(0)
 
 	f, err := os.Create(path.Join(path.Dir(testFile), b.Name()+".out"))

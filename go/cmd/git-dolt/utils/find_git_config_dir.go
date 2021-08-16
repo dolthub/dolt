@@ -16,9 +16,10 @@ package utils
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 // FindGitConfigUnderRoot will recurse upwards from the current working directory

@@ -24,12 +24,12 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/store/spec"
 )
 

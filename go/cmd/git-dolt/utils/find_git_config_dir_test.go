@@ -15,14 +15,13 @@
 package utils
 
 import (
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 )
 
 func TestFindGitConfigDir(t *testing.T) {
@@ -32,7 +31,7 @@ func TestFindGitConfigDir(t *testing.T) {
 		t.Errorf("Error creating temp directory: %v", err)
 	}
 	defer func() {
-		if err := file.RemoveAll(tmpDir); err != nil {
+		if err := os.RemoveAll(tmpDir); err != nil {
 			t.Errorf("Error removing test directories: %v", err)
 		}
 	}()

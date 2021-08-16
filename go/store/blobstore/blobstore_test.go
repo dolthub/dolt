@@ -19,16 +19,17 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
-	"os"
 	"reflect"
 	"runtime"
 	"testing"
 
 	"cloud.google.com/go/storage"
 	"github.com/google/uuid"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 )
 
 const (

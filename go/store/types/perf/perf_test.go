@@ -24,14 +24,13 @@ package perf
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"math/rand"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/perf/suite"
 	"github.com/dolthub/dolt/go/store/types"
@@ -162,10 +161,10 @@ func (s *perfSuite) testBuild500megBlob(p int) {
 	readers := make([]io.Reader, p)
 	defer func() {
 		for _, r := range readers {
-			f := r.(*os.File)
+			f := r.(os.File)
 			err := f.Close()
 			assert.NoError(err)
-			err = file.Remove(f.Name())
+			err = os.Remove(f.Name())
 			assert.NoError(err)
 		}
 	}()

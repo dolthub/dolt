@@ -26,13 +26,14 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
+	os2 "os"
 	"strings"
 	"time"
 
 	"github.com/attic-labs/kingpin"
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/util/exit"
 	"github.com/dolthub/dolt/go/store/util/profile"
@@ -117,6 +118,8 @@ func main() {
 
 	// fall back to previous (non-kingpin) noms commands
 
+	//TODO: this is trash eww
+	os2.Args = os.Args
 	flag.Parse(false)
 
 	args := flag.Args()

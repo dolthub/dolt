@@ -27,7 +27,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"os"
 	"sort"
 	"sync/atomic"
 
@@ -36,6 +35,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -144,7 +144,7 @@ func (i mmapTableIndex) Ordinals() []uint32 {
 	s := mmapOrdinalSlice(make([]mmapOrdinal, i.chunkCount))
 	for idx := 0; uint32(idx) < i.chunkCount; idx++ {
 		mi := idx * mmapIndexEntrySize
-		e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
+		e := mmapIndexEntry(i.data.Data()[mi : mi+mmapIndexEntrySize])
 		s[idx] = mmapOrdinal{idx, e.Offset()}
 	}
 	sort.Sort(s)
@@ -224,7 +224,7 @@ func (i mmapTableIndex) Lookup(h *addr) (indexEntry, bool) {
 	prefix := binary.BigEndian.Uint64(h[:])
 	for idx := i.prefixIdx(prefix); idx < i.chunkCount && i.prefixes[idx] == prefix; idx++ {
 		mi := idx * mmapIndexEntrySize
-		e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
+		e := mmapIndexEntry(i.data.Data()[mi : mi+mmapIndexEntrySize])
 		if bytes.Equal(e.suffix(), h[addrPrefixSize:]) {
 			return e, true
 		}
@@ -234,13 +234,13 @@ func (i mmapTableIndex) Lookup(h *addr) (indexEntry, bool) {
 
 func (i mmapTableIndex) EntrySuffixMatches(idx uint32, h *addr) bool {
 	mi := idx * mmapIndexEntrySize
-	e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
+	e := mmapIndexEntry(i.data.Data()[mi : mi+mmapIndexEntrySize])
 	return bytes.Equal(e.suffix(), h[addrPrefixSize:])
 }
 
 func (i mmapTableIndex) IndexEntry(idx uint32, a *addr) indexEntry {
 	mi := idx * mmapIndexEntrySize
-	e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
+	e := mmapIndexEntry(i.data.Data()[mi : mi+mmapIndexEntrySize])
 	if a != nil {
 		binary.BigEndian.PutUint64(a[:], i.prefixes[idx])
 		copy(a[addrPrefixSize:], e.suffix())
@@ -276,7 +276,7 @@ func mmapOffheapSize(chunks int) int {
 	}
 }
 
-func newMmapTableIndex(ti onHeapTableIndex, f *os.File) (mmapTableIndex, error) {
+func newMmapTableIndex(ti onHeapTableIndex, f os.File) (mmapTableIndex, error) {
 	flags := 0
 	if f == nil {
 		flags = mmap.ANON
@@ -288,9 +288,9 @@ func newMmapTableIndex(ti onHeapTableIndex, f *os.File) (mmapTableIndex, error) 
 	for i := range ti.ordinals {
 		idx := i * mmapIndexEntrySize
 		si := addrSuffixSize * ti.ordinals[i]
-		copy(arr[idx:], ti.suffixes[si:si+addrSuffixSize])
-		binary.BigEndian.PutUint64(arr[idx+mmapIndexEntryOffsetStart:], ti.offsets[ti.ordinals[i]])
-		binary.BigEndian.PutUint32(arr[idx+mmapIndexEntryLengthStart:], ti.lengths[ti.ordinals[i]])
+		copy(arr.Data()[idx:], ti.suffixes[si:si+addrSuffixSize])
+		binary.BigEndian.PutUint64(arr.Data()[idx+mmapIndexEntryOffsetStart:], ti.offsets[ti.ordinals[i]])
+		binary.BigEndian.PutUint32(arr.Data()[idx+mmapIndexEntryLengthStart:], ti.lengths[ti.ordinals[i]])
 	}
 
 	refCnt := new(int32)

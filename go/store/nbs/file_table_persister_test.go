@@ -25,21 +25,20 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 )
 
 func TestFSTableCacheOnOpen(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(t)
-	defer file.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 
 	names := []addr{}
 	cacheSize := 2
@@ -108,7 +107,7 @@ func writeTableData(dir string, chunx ...[]byte) (addr, error) {
 
 func removeTables(dir string, names ...addr) error {
 	for _, name := range names {
-		if err := file.Remove(filepath.Join(dir, name.String())); err != nil {
+		if err := os.Remove(filepath.Join(dir, name.String())); err != nil {
 			return err
 		}
 	}
@@ -118,7 +117,7 @@ func removeTables(dir string, names ...addr) error {
 func TestFSTablePersisterPersist(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(t)
-	defer file.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 	fc := newFDCache(defaultMaxTables)
 	defer fc.Drop()
 	fts := newFSTablePersister(dir, fc, nil)
@@ -156,7 +155,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	}
 
 	dir := makeTempDir(t)
-	defer file.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 	fc := newFDCache(defaultMaxTables)
 	defer fc.Drop()
 	fts := newFSTablePersister(dir, fc, nil)
@@ -175,7 +174,7 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	fc := newFDCache(1)
 	defer fc.Drop()
 	fts := newFSTablePersister(dir, fc, nil)
-	defer file.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 
 	var name addr
 	func() {
@@ -207,7 +206,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	sources := make(chunkSources, len(testChunks))
 
 	dir := makeTempDir(t)
-	defer file.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 	fc := newFDCache(len(sources))
 	defer fc.Drop()
 	fts := newFSTablePersister(dir, fc, nil)
@@ -242,7 +241,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(t)
-	defer file.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 	fc := newFDCache(defaultMaxTables)
 	defer fc.Drop()
 	fts := newFSTablePersister(dir, fc, nil)

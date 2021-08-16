@@ -17,9 +17,10 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 type gcErrAccum map[string]error

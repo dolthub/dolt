@@ -17,7 +17,6 @@ package commands
 import (
 	"bytes"
 	"context"
-	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 var commitDocs = cli.CommandDocumentationContent{

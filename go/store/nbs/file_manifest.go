@@ -26,15 +26,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/dolthub/fslock"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -178,7 +177,7 @@ func lockFileExists(dir string) (bool, error) {
 }
 
 // Returns nil if path does not exist
-func openIfExists(path string) (*os.File, error) {
+func openIfExists(path string) (os.File, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -389,7 +388,7 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 
 	// !exists(lockFileName) => uninitialized store
 	if locked {
-		var f *os.File
+		var f os.File
 		err = func() (ferr error) {
 			lck := newLock(dir)
 			ferr = lck.Lock()
@@ -450,7 +449,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
 	// The closure here ensures this file is closed before moving on.
 	tempManifestPath, err = func() (name string, ferr error) {
-		var temp *os.File
+		var temp os.File
 		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(dir, "nbs_manifest_")
 
 		if ferr != nil {
@@ -478,7 +477,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 		return manifestContents{}, err
 	}
 
-	defer file.Remove(tempManifestPath) // If we rename below, this will be a no-op
+	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
 
 	// Take manifest file lock
 	lck := newLock(dir)
@@ -555,7 +554,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 		return manifestContents{}, err
 	}
 
-	err = file.Rename(tempManifestPath, manifestPath)
+	err = os.Rename(tempManifestPath, manifestPath)
 	if err != nil {
 		return manifestContents{}, err
 	}

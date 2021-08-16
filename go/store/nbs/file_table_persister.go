@@ -26,13 +26,13 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
@@ -70,7 +70,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 	}
 
 	tempName, err := func() (tempName string, ferr error) {
-		var temp *os.File
+		var temp os.File
 		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(ftp.dir, tempTablePrefix)
 
 		if ferr != nil {
@@ -123,7 +123,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 		return nil, err
 	}
 
-	err = file.Rename(tempName, newName)
+	err = os.Rename(tempName, newName)
 
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 	name := nameFromSuffixes(plan.suffixes())
 	tempName, err := func() (tempName string, ferr error) {
-		var temp *os.File
+		var temp os.File
 		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(ftp.dir, tempTablePrefix)
 
 		if ferr != nil {
@@ -203,7 +203,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, err
 	}
 
-	err = file.Rename(tempName, filepath.Join(ftp.dir, name.String()))
+	err = os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
 
 	if err != nil {
 		return nil, err
@@ -236,7 +236,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 		filePath := path.Join(ftp.dir, info.Name())
 
 		if strings.HasPrefix(info.Name(), tempTablePrefix) {
-			err = file.Remove(filePath)
+			err = os.Remove(filePath)
 			if err != nil {
 				ea.add(filePath, err)
 			}
@@ -256,7 +256,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 			continue // file is referenced in the manifest
 		}
 
-		err = file.Remove(filePath)
+		err = os.Remove(filePath)
 		if err != nil {
 			ea.add(filePath, err)
 		}

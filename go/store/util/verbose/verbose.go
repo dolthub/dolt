@@ -23,7 +23,8 @@ package verbose
 
 import (
 	"context"
-	"os"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	flag "github.com/juju/gnuflag"
 	"go.uber.org/zap"

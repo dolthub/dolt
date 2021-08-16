@@ -23,22 +23,21 @@ package nbs
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"sort"
 	"sync"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 )
 
 func TestFDCache(t *testing.T) {
 	dir := makeTempDir(t)
-	defer file.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 
 	paths := [3]string{}
 	for i := range paths {
@@ -48,7 +47,7 @@ func TestFDCache(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	refNoError := func(fc *fdCache, p string, assert *assert.Assertions) *os.File {
+	refNoError := func(fc *fdCache, p string, assert *assert.Assertions) os.File {
 		f, err := fc.RefFile(p)
 		require.NoError(t, err)
 		assert.NotNil(f)

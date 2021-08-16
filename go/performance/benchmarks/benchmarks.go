@@ -17,13 +17,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
@@ -31,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -221,7 +220,7 @@ func setupDEnvImport(fs filesys.Filesys, sch *SeedSchema, workingDir, tableName,
 	return createTestEnvWithFS(fs, workingDir)
 }
 
-func getStdinForSQLBenchmark(fs filesys.Filesys, pathToImportFile string) *os.File {
+func getStdinForSQLBenchmark(fs filesys.Filesys, pathToImportFile string) os.File {
 	content, err := fs.ReadFile(pathToImportFile)
 	if err != nil {
 		log.Fatal(err)
@@ -231,7 +230,7 @@ func getStdinForSQLBenchmark(fs filesys.Filesys, pathToImportFile string) *os.Fi
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file.Remove(tmpfile.Name()) // clean up
+	defer os.Remove(tmpfile.Name()) // clean up
 
 	if _, err := tmpfile.Write(content); err != nil {
 		log.Fatal(err)

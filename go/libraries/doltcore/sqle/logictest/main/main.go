@@ -20,11 +20,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/dolthub/sqllogictest/go/logictest"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/logictest/dolt"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 var resultFormat = flag.String("r", "json", "format of parsed results")

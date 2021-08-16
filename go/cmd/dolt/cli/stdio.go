@@ -17,14 +17,14 @@ package cli
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-
 	"github.com/fatih/color"
 	"github.com/google/uuid"
+
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 var outputClosed uint64

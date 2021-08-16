@@ -91,8 +91,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
@@ -111,7 +109,8 @@ import (
 	"github.com/stretchr/testify/require"
 	testifySuite "github.com/stretchr/testify/suite"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -150,7 +149,7 @@ type PerfSuite struct {
 	// DatabaseSpec is the Noms spec of Database (typically a localhost URL).
 	DatabaseSpec string
 
-	tempFiles []*os.File
+	tempFiles []os.File
 	tempDirs  []string
 	paused    time.Duration
 	datasetID string
@@ -230,10 +229,10 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	defer func() {
 		for _, f := range suite.tempFiles {
 			f.Close()
-			file.Remove(f.Name())
+			os.Remove(f.Name())
 		}
 		for _, d := range suite.tempDirs {
-			file.RemoveAll(d)
+			os.RemoveAll(d)
 		}
 	}()
 
@@ -381,7 +380,7 @@ func (suite *PerfSuite) NewAssert() *assert.Assertions {
 
 // TempFile creates a temporary file, which will be automatically cleaned up by
 // the perf test suite. Files will be prefixed with the test's dataset ID
-func (suite *PerfSuite) TempFile() *os.File {
+func (suite *PerfSuite) TempFile() os.File {
 	f, err := ioutil.TempFile("", suite.tempPrefix())
 	require.NoError(suite.T, err)
 	suite.tempFiles = append(suite.tempFiles, f)
@@ -432,7 +431,7 @@ func (suite *PerfSuite) OpenGlob(pattern ...string) []io.Reader {
 // CloseGlob closes all of the files, designed to be used with OpenGlob.
 func (suite *PerfSuite) CloseGlob(files []io.Reader) {
 	for _, f := range files {
-		require.NoError(suite.T, f.(*os.File).Close())
+		require.NoError(suite.T, f.(os.File).Close())
 	}
 }
 

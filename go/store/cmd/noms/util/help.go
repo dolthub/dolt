@@ -26,9 +26,10 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"text/template"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 var usageTemplate = `{{.UsageLine}}

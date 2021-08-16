@@ -16,11 +16,11 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
@@ -41,14 +41,14 @@ func canMoveTempFile() bool {
 		return false
 	}
 
-	err = file.Rename(name, testfile)
+	err = os.Rename(name, testfile)
 
 	if err != nil {
-		_ = file.Remove(name)
+		_ = os.Remove(name)
 		return false
 	}
 
-	_ = file.Remove(testfile)
+	_ = os.Remove(testfile)
 	return true
 }
 

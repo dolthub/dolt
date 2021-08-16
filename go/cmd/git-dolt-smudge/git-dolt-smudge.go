@@ -17,13 +17,14 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 
 	"github.com/dolthub/dolt/go/cmd/git-dolt/config"
 	"github.com/dolthub/dolt/go/cmd/git-dolt/doltops"
 	"github.com/dolthub/dolt/go/cmd/git-dolt/utils"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 func main() {

@@ -22,14 +22,14 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/golang/snappy"
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/d"

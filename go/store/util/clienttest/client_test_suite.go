@@ -22,14 +22,13 @@
 package clienttest
 
 import (
-	"io/ioutil"
-	"os"
 	"path"
 
 	flag "github.com/juju/gnuflag"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/exit"
@@ -44,8 +43,8 @@ type ClientTestSuite struct {
 	DBDir      string
 	DBDir2     string
 	ExitStatus int
-	out        *os.File
-	err        *os.File
+	out        os.File
+	err        os.File
 }
 
 type ExitError struct {
@@ -75,7 +74,7 @@ func (suite *ClientTestSuite) SetupSuite() {
 func (suite *ClientTestSuite) TearDownSuite() {
 	suite.out.Close()
 	suite.err.Close()
-	err := file.RemoveAll(suite.TempDir)
+	err := os.RemoveAll(suite.TempDir)
 	if !osutil.IsWindows {
 		d.Chk.NoError(err)
 	}

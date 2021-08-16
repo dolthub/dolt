@@ -23,9 +23,7 @@ package nbs
 
 import (
 	"context"
-	"io/ioutil"
 	"net"
-	"os"
 	"syscall"
 	"testing"
 
@@ -34,6 +32,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 )
 
 func TestS3TableReaderAt(t *testing.T) {

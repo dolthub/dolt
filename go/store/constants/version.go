@@ -22,7 +22,7 @@
 // Package constants collects common constants used in Noms, such as the Noms data format version.
 package constants
 
-import "os"
+import "github.com/dolthub/dolt/go/libraries/utils/os"
 
 func init() {
 	nbfVerStr := os.Getenv("DOLT_DEFAULT_BIN_FORMAT")

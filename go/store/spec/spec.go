@@ -28,7 +28,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -40,6 +39,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"

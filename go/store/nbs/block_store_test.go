@@ -26,8 +26,6 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"sort"
 	"testing"
@@ -36,7 +34,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
@@ -71,7 +70,7 @@ func (suite *BlockStoreSuite) SetupTest() {
 func (suite *BlockStoreSuite) TearDownTest() {
 	err := suite.store.Close()
 	suite.NoError(err)
-	err = file.RemoveAll(suite.dir)
+	err = os.RemoveAll(suite.dir)
 	if !osutil.IsWindowsSharingViolation(err) {
 		suite.NoError(err)
 	}

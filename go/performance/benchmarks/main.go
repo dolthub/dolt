@@ -17,8 +17,9 @@ package main
 import (
 	"flag"
 	"log"
-	"os"
 	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )

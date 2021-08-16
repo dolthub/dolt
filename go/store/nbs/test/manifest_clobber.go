@@ -24,7 +24,8 @@ package main
 import (
 	"flag"
 	"log"
-	"os"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/dolthub/fslock"
 )

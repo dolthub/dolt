@@ -23,7 +23,8 @@ package main
 
 import (
 	"log"
-	"os"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 const dropCaches = "/proc/sys/vm/drop_caches"

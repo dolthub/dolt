@@ -24,11 +24,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/d"

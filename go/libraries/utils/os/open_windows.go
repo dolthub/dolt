@@ -14,10 +14,9 @@
 
 // +build windows
 
-package file
+package os
 
 import (
-	"os"
 	"syscall"
 	"time"
 
@@ -27,11 +26,11 @@ import (
 // Rename functions exactly like os.Rename, except that it retries upon failure on Windows. This "fixes" some errors
 // that appear on Windows.
 func Rename(oldpath, newpath string) error {
-	err := os.Rename(oldpath, newpath)
+	err := fileSystem.Rename(oldpath, newpath)
 	if isAccessError(err) {
 		for waitTime := time.Duration(1); isAccessError(err) && waitTime <= 10000; waitTime *= 10 {
 			time.Sleep(waitTime * time.Millisecond)
-			err = os.Rename(oldpath, newpath)
+			err = fileSystem.Rename(oldpath, newpath)
 		}
 	}
 	return err
@@ -40,11 +39,11 @@ func Rename(oldpath, newpath string) error {
 // Remove functions exactly like os.Remove, except that it retries upon failure on Windows. This "fixes" some errors
 // that appear on Windows.
 func Remove(name string) error {
-	err := os.Remove(name)
+	err := fileSystem.Remove(name)
 	if isAccessError(err) {
 		for waitTime := time.Duration(1); isAccessError(err) && waitTime <= 10000; waitTime *= 10 {
 			time.Sleep(waitTime * time.Millisecond)
-			err = os.Remove(name)
+			err = fileSystem.Remove(name)
 		}
 	}
 	return err
@@ -53,11 +52,11 @@ func Remove(name string) error {
 // RemoveAll functions exactly like os.RemoveAll, except that it retries upon failure on Windows. This "fixes" some errors
 // that appear on Windows.
 func RemoveAll(path string) error {
-	err := os.RemoveAll(path)
+	err := fileSystem.RemoveAll(path)
 	if isAccessError(err) {
 		for waitTime := time.Duration(1); isAccessError(err) && waitTime <= 10000; waitTime *= 10 {
 			time.Sleep(waitTime * time.Millisecond)
-			err = os.RemoveAll(path)
+			err = fileSystem.RemoveAll(path)
 		}
 	}
 	return err
@@ -65,17 +64,17 @@ func RemoveAll(path string) error {
 
 func isAccessError(err error) bool {
 	switch err := err.(type) {
-	case *os.LinkError:
+	case *LinkError:
 		sysErr, ok := err.Err.(syscall.Errno)
 		if ok && (sysErr == windows.ERROR_ACCESS_DENIED || sysErr == windows.ERROR_SHARING_VIOLATION) {
 			return true
 		}
-	case *os.PathError:
+	case *PathError:
 		sysErr, ok := err.Err.(syscall.Errno)
 		if ok && (sysErr == windows.ERROR_ACCESS_DENIED || sysErr == windows.ERROR_SHARING_VIOLATION) {
 			return true
 		}
-	case *os.SyscallError:
+	case *SyscallError:
 		sysErr, ok := err.Err.(syscall.Errno)
 		if ok && (sysErr == windows.ERROR_ACCESS_DENIED || sysErr == windows.ERROR_SHARING_VIOLATION) {
 			return true

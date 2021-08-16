@@ -17,8 +17,9 @@ package async
 import (
 	"errors"
 	"io"
-	"os"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 // RingBuffer is a dynamically sized ring buffer that is thread safe

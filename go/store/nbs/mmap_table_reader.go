@@ -27,10 +27,11 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/dolthub/mmap-go"
 )
@@ -74,7 +75,7 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 
 	if !found {
 		f := func() (ti onHeapTableIndex, err error) {
-			var f *os.File
+			var f os.File
 			f, err = fc.RefFile(path)
 
 			if err != nil {
@@ -126,7 +127,7 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 				}
 			}()
 
-			buff := []byte(mm)
+			buff := mm.Data()
 			ti, err = parseTableIndex(buff[indexOffset-aligned:])
 
 			if err != nil {

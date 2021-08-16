@@ -15,8 +15,9 @@
 package integration_test
 
 import (
-	"os"
 	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 func SkipByDefaultInCI(t *testing.T) {

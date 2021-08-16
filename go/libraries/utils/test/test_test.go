@@ -16,10 +16,12 @@ package test
 
 import (
 	"io"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 // test your tests so you can test while you test

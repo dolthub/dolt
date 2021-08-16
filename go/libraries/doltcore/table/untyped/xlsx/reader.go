@@ -19,7 +19,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"

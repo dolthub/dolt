@@ -17,14 +17,13 @@ package cli
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

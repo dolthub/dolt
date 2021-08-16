@@ -17,8 +17,9 @@
 package osutil
 
 import (
-	"os"
 	"path/filepath"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"golang.org/x/sys/windows"
 )

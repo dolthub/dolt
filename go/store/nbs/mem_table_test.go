@@ -24,8 +24,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/golang/snappy"
@@ -33,6 +31,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/types"

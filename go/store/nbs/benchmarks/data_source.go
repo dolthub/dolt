@@ -27,11 +27,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -55,7 +55,7 @@ func (s hashSlice) Swap(i, j int) {
 }
 
 type dataSource struct {
-	data, cm            *os.File
+	data, cm            os.File
 	totalData, dataRead uint64
 	hashes              hashSlice
 }

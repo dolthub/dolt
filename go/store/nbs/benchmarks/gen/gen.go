@@ -28,10 +28,10 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"os"
 
 	"github.com/dustin/go-humanize"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -41,7 +41,7 @@ const (
 	averageChunkSize = 4 * uint64(1<<10) // 4KB
 )
 
-func OpenOrGenerateDataFile(name string, totalData uint64) (data *os.File, err error) {
+func OpenOrGenerateDataFile(name string, totalData uint64) (data os.File, err error) {
 	data, err = os.Open(name)
 	if os.IsNotExist(err) {
 		data, _ = os.Create(name)
@@ -62,7 +62,7 @@ func OpenOrGenerateDataFile(name string, totalData uint64) (data *os.File, err e
 	return data, nil
 }
 
-func OpenOrBuildChunkMap(name string, data *os.File) *os.File {
+func OpenOrBuildChunkMap(name string, data os.File) os.File {
 	cm, err := os.Open(name)
 	if os.IsNotExist(err) {
 		cm, _ = os.Create(name)

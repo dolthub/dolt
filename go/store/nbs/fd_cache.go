@@ -22,9 +22,10 @@
 package nbs
 
 import (
-	"os"
 	"sort"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 func newFDCache(targetSize int) *fdCache {
@@ -44,18 +45,18 @@ type fdCache struct {
 
 type fdCacheEntry struct {
 	refCount uint32
-	f        *os.File
+	f        os.File
 }
 
-// RefFile returns an opened *os.File for the file at |path|, or an error
+// RefFile returns an opened os.File for the file at |path|, or an error
 // indicating why the file could not be opened. If the cache already had an
 // entry for |path|, RefFile increments its refcount and returns the cached
 // pointer. If not, it opens the file and caches the pointer for others to
 // use. If RefFile returns an error, it's guaranteed that no refCounts were
 // changed, so it's an error to make a subsequent call to UnrefFile().
 // This is intended for clients that hold fds for extremely short periods.
-func (fc *fdCache) RefFile(path string) (f *os.File, err error) {
-	refFile := func() *os.File {
+func (fc *fdCache) RefFile(path string) (f os.File, err error) {
+	refFile := func() os.File {
 		if ce, present := fc.cache[path]; present {
 			ce.refCount++
 			fc.cache[path] = ce
@@ -64,7 +65,7 @@ func (fc *fdCache) RefFile(path string) (f *os.File, err error) {
 		return nil
 	}
 
-	f = func() *os.File {
+	f = func() os.File {
 		fc.mu.Lock()
 		defer fc.mu.Unlock()
 		return refFile()

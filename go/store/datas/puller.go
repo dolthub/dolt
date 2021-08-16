@@ -19,15 +19,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -240,7 +239,7 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, ae *atomicerr.AtomicEr
 		fWithStats.Stop()
 
 		go func() {
-			_ = file.Remove(tmpTblFile.path)
+			_ = os.Remove(tmpTblFile.path)
 		}()
 	}()
 

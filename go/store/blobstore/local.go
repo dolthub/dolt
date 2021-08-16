@@ -19,13 +19,12 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
 
 	"github.com/dolthub/fslock"
 	"github.com/google/uuid"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
@@ -109,7 +108,7 @@ func (bs *LocalBlobstore) Get(ctx context.Context, key string, br BlobRange) (io
 	return rc, ver.String(), nil
 }
 
-func readCloserForFileRange(f *os.File, pos int, br BlobRange) (io.ReadCloser, error) {
+func readCloserForFileRange(f os.File, pos int, br BlobRange) (io.ReadCloser, error) {
 	seekType := 1
 	if br.offset < 0 {
 		info, err := f.Stat()
@@ -133,7 +132,7 @@ func readCloserForFileRange(f *os.File, pos int, br BlobRange) (io.ReadCloser, e
 	return f, nil
 }
 
-func writeAll(f *os.File, readers ...io.Reader) error {
+func writeAll(f os.File, readers ...io.Reader) error {
 	for _, reader := range readers {
 		_, err := io.Copy(f, reader)
 
@@ -170,7 +169,7 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader)
 	}
 
 	path := filepath.Join(bs.RootDir, key) + bsExt
-	err = file.Rename(tempFile, path)
+	err = os.Rename(tempFile, path)
 
 	if err != nil {
 		return "", err

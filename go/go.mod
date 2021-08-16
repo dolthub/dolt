@@ -20,7 +20,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/go-mysql-server v0.10.1-0.20210813175144-607fd4aa91c0
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
-	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
+	github.com/dolthub/mmap-go v1.0.4-0.20210816010827-76369409c98c
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
 	github.com/dolthub/vitess v0.0.0-20210802203534-01de666843ce
 	github.com/dustin/go-humanize v1.0.0
@@ -56,6 +56,7 @@ require (
 	github.com/shopspring/decimal v1.2.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
+	github.com/spf13/afero v1.6.0
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/spf13/cobra v1.0.0
 	github.com/stretchr/testify v1.7.0

@@ -17,9 +17,10 @@ package sqlexport
 import (
 	"context"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"

@@ -23,12 +23,12 @@ package profile
 
 import (
 	"io"
-	"os"
 	"runtime"
 	"runtime/pprof"
 
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/d"
 )
 

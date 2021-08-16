@@ -18,8 +18,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 var ErrIsDir = errors.New("operation not valid on a directory")

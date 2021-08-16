@@ -28,8 +28,9 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"os"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/codahale/blake2"
 	humanize "github.com/dustin/go-humanize"

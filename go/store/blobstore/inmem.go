@@ -18,8 +18,9 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 
 	"github.com/google/uuid"
 )

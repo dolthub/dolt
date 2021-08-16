@@ -16,7 +16,6 @@ package env
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -25,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/types"
 )

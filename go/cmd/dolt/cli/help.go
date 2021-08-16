@@ -16,7 +16,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 var underline = color.New(color.Underline)

@@ -15,11 +15,10 @@
 package tempfiles
 
 import (
-	"io/ioutil"
-	"os"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 )
 
 // TempFileProvider is an interface which provides methods for creating temporary files.
@@ -28,8 +27,8 @@ type TempFileProvider interface {
 	GetTempDir() string
 
 	// NewFile creates a new temporary file in the directory dir, opens the file for reading and writing, and returns
-	// the resulting *os.File. If dir is "" then the default temp dir is used.
-	NewFile(dir, pattern string) (*os.File, error)
+	// the resulting os.File. If dir is "" then the default temp dir is used.
+	NewFile(dir, pattern string) (os.File, error)
 
 	// Clean makes a best effort attempt to delete all temp files created by calls to NewFile
 	Clean()
@@ -54,8 +53,8 @@ func (tfp *TempFileProviderAt) GetTempDir() string {
 }
 
 // NewFile creates a new temporary file in the directory dir, opens the file for reading and writing, and returns
-// the resulting *os.File. If dir is "" then the default temp dir is used.
-func (tfp *TempFileProviderAt) NewFile(dir, pattern string) (*os.File, error) {
+// the resulting os.File. If dir is "" then the default temp dir is used.
+func (tfp *TempFileProviderAt) NewFile(dir, pattern string) (os.File, error) {
 	tfp.mu.Lock()
 	defer tfp.mu.Unlock()
 	if dir == "" {
@@ -77,7 +76,7 @@ func (tfp *TempFileProviderAt) Clean() {
 	defer tfp.mu.Unlock()
 	for _, filename := range tfp.filesCreated {
 		// best effort. ignore errors
-		_ = file.Remove(filename)
+		_ = os.Remove(filename)
 	}
 }
 

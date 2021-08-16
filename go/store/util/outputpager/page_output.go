@@ -23,13 +23,14 @@ package outputpager
 
 import (
 	"io"
-	"os"
+	os2 "os"
 	"os/exec"
 	"sync"
 
 	flag "github.com/juju/gnuflag"
 	goisatty "github.com/mattn/go-isatty"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/d"
 )
 
@@ -39,7 +40,7 @@ var (
 
 type Pager struct {
 	Writer        io.Writer
-	stdin, stdout *os.File
+	stdin, stdout os.File
 	mtx           *sync.Mutex
 	doneCh        chan struct{}
 }
@@ -99,5 +100,9 @@ func RegisterOutputpagerFlags(flags *flag.FlagSet) {
 }
 
 func IsStdoutTty() bool {
-	return goisatty.IsTerminal(os.Stdout.Fd())
+	if osFile, ok := os.Stdout.(*os2.File); ok {
+		return goisatty.IsTerminal(osFile.Fd())
+	} else {
+		return false
+	}
 }

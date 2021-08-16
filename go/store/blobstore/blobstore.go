@@ -18,7 +18,8 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 )
 
 // Blobstore is an interface for storing and retrieving blobs of data by key

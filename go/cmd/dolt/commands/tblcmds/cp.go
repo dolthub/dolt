@@ -17,7 +17,8 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"

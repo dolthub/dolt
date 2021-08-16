@@ -18,8 +18,9 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 
 	"github.com/dolthub/dolt/go/cmd/git-dolt/env"
 	"github.com/dolthub/dolt/go/cmd/git-dolt/utils"

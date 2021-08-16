@@ -26,7 +26,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"reflect"
 	"sync"
 	"testing"
@@ -35,6 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"

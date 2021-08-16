@@ -15,7 +15,6 @@
 package filesys
 
 import (
-	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 )

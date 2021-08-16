@@ -25,11 +25,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/types"

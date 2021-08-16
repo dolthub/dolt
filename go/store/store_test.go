@@ -18,7 +18,6 @@ import (
 	"context"
 	"io"
 	"math/rand"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"

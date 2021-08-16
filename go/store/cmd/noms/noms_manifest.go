@@ -18,13 +18,13 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"os"
 	"path/filepath"
 	"sort"
 
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/nbs"

@@ -16,11 +16,13 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os/ioutil"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2019-2020|2019-2021|2020-2021) Dolthub, Inc.

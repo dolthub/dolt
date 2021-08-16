@@ -15,8 +15,9 @@
 package test
 
 import (
-	"os"
 	"path/filepath"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/google/uuid"
 )

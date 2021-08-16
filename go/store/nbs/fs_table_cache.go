@@ -24,12 +24,11 @@ package nbs
 import (
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/util/sizecache"
@@ -90,7 +89,7 @@ func (ftc *fsTableCache) init(concurrency int) error {
 			}
 			if isTempTableFile(info) {
 				// ignore failure to remove temp file
-				_ = file.Remove(path)
+				_ = os.Remove(path)
 				return nil
 			}
 			if !isTableFile(info) {
@@ -172,7 +171,7 @@ func (ftc *fsTableCache) checkin(h addr) error {
 func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 	path := filepath.Join(ftc.dir, h.String())
 	tempName, err := func() (name string, ferr error) {
-		var temp *os.File
+		var temp os.File
 		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(ftc.dir, tempTablePrefix)
 
 		if ferr != nil {
@@ -206,7 +205,7 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 		return err
 	}
 
-	err = file.Rename(tempName, path)
+	err = os.Rename(tempName, path)
 
 	if err != nil {
 		return err
@@ -227,5 +226,5 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 }
 
 func (ftc *fsTableCache) expire(h addr) error {
-	return file.Remove(filepath.Join(ftc.dir, h.String()))
+	return os.Remove(filepath.Join(ftc.dir, h.String()))
 }

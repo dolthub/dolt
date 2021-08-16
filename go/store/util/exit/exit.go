@@ -24,7 +24,7 @@
 package exit
 
 import (
-	"os"
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 )
 
 var def = func(code int) {

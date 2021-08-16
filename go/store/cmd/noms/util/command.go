@@ -25,8 +25,9 @@ package util
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/os"
 
 	flag "github.com/juju/gnuflag"
 )
