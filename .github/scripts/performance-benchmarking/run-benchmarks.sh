@@ -47,7 +47,11 @@ if [ "$MODE" = "release" ]; then
   format="html"
 fi
 
-source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER" "$TO_VERSION" "$timeprefix" "$actorprefix" "$format" > job.json
+# set value to ISSUE_NUMBER environment variable
+# or default to -1
+issuenumber=${ISSUE_NUMBER:-"-1"}
+
+source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER" "$TO_VERSION" "$timeprefix" "$actorprefix" "$format" "$issuenumber" > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 

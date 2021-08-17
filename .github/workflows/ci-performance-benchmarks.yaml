@@ -73,6 +73,12 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
+      - name: Get pull number
+        uses: actions/github-script@v3
+        id: get_pull_number
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
       - name: Run benchmarks
         id: run-benchmarks
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
@@ -82,6 +88,7 @@ jobs:
           TO_SERVER: 'dolt'
           TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
           MODE: 'pullRequest'
+          ISSUE_NUMBER: ${{ steps.get_pull_number.outputs.pull_number }}
           ACTOR: ${{ github.actor }}
           KUBECONFIG: "./kubeconfig"
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"

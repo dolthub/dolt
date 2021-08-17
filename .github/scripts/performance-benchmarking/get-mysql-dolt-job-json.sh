@@ -2,7 +2,7 @@
 
 set -e
 
-if [ "$#" -ne 8 ]; then
+if [ "$#" -lt 8 ]; then
     echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix> <format>"
     exit 1
 fi
