@@ -1,11 +1,11 @@
-#name: Fuzzer
+name: Fuzzer
 
 on:
   push:
-#    paths:
-#      - 'go/'
+    paths:
+      - 'go/'
     branches:
-      - 'db/fuzzer-on-push'
+      - 'master'
 
 jobs:
   fuzzer:
