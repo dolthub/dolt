@@ -169,6 +169,8 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 			for _, t = range to {
 				if schemasOverlap(f.FromSch, t.ToSch) {
 					matched = match(t, f)
+					delete(from, f.FromName)
+					delete(to, t.ToName)
 					break
 				}
 			}
