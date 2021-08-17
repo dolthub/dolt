@@ -52,6 +52,10 @@ echo '
               {
                 "name": "GOMAXPROCS",
                 "value": "7"
+              },
+              {
+                "name": "ACTOR_EMAIL",
+                "value": "'$ACTOR_EMAIL'"
               }
             ],
             "args": [
