@@ -154,36 +154,39 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 
 	deltas = make([]TableDelta, 0)
 	for _, f := range from {
+		var matched TableDelta
+
 		// optimistically look for a match by name
 		t, ok := to[f.FromName]
 		if ok && schemasOverlap(t.ToSch, f.FromSch) {
-			deltas = append(deltas, match(t, f))
+			matched = match(t, f)
 			delete(from, f.FromName)
 			delete(to, t.ToName)
-			continue
 		}
 
-		// otherwise, search pairwise
-		for _, t = range to {
-			if schemasOverlap(f.FromSch, t.ToSch) {
-				deltas = append(deltas, match(t, f))
-				delete(from, f.FromName)
-				delete(to, t.ToName)
-				break
+		if !ok {
+			// otherwise, search pairwise
+			for _, t = range to {
+				if schemasOverlap(f.FromSch, t.ToSch) {
+					matched = match(t, f)
+					delete(from, f.FromName)
+					delete(to, t.ToName)
+					break
+				}
 			}
 		}
-	}
 
-	// cull deltas without changes
-	for i, td := range deltas {
-		hasChanges, err := td.hasChanges()
-		if err != nil {
-			return nil, err
-		}
-		if !hasChanges {
-			deltas = deltas[:i]
-			if i < len(deltas) {
-				deltas = append(deltas, deltas[i+1])
+		if matched.ToTable != nil && matched.FromTable != nil {
+			hasChanges, err := matched.HasChanges()
+			if err != nil {
+				return nil, err
+			}
+
+			// See if matched is worth appending
+			if hasChanges {
+				deltas = append(deltas, matched)
+				delete(from, f.FromName)
+				delete(to, t.ToName)
 			}
 		}
 	}
@@ -205,32 +208,6 @@ func schemasOverlap(from, to schema.Schema) bool {
 	return f.Intersection(t).Size() > 0
 }
 
-// hasChanges is used to decide whether to cull this
-// TableDelta from the set of TableDeltas.
-func (td TableDelta) hasChanges() (bool, error) {
-	if td.IsRename() {
-		return true, nil
-	}
-	if td.FromTable == nil || td.ToTable == nil {
-		return true, nil
-	}
-	if td.HasFKChanges() {
-		return true, nil
-	}
-
-	toHash, err := td.ToTable.HashOf()
-	if err != nil {
-		return false, err
-	}
-
-	fromHash, err := td.FromTable.HashOf()
-	if err != nil {
-		return false, err
-	}
-
-	return !toHash.Equal(fromHash), nil
-}
-
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
 func (td TableDelta) IsAdd() bool {
 	return td.FromTable == nil && td.ToTable != nil
@@ -247,6 +224,33 @@ func (td TableDelta) IsRename() bool {
 		return false
 	}
 	return td.FromName != td.ToName
+}
+
+func (td TableDelta) HasHashChanged() (bool, error) {
+	toHash, err := td.ToTable.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	fromHash, err := td.FromTable.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	return !toHash.Equal(fromHash), nil
+}
+
+func (td TableDelta) HasPrimaryKeySetChanged() bool {
+	return !schema.ArePrimaryKeySetsDiffable(td.FromSch, td.ToSch)
+}
+
+func (td TableDelta) HasChanges() (bool, error) {
+	hashChanged, err := td.HasHashChanged()
+	if err != nil {
+		return false, err
+	}
+
+	return td.HasFKChanges() || td.IsRename() || td.HasPrimaryKeySetChanged() || hashChanged, nil
 }
 
 // CurName returns the most recent name of the table.
