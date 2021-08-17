@@ -46,10 +46,10 @@ echo '
               }
             },
             "env": [
-              {
-                "name": "GOMAXPROCS",
-                "value": "7"
-              }
+              { "name": "GOMAXPROCS", "value": "7" },
+              { "name": "ACTOR", "value": "'$ACTOR'" },
+              { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'" },
+              { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'" }
             ],
             "args": [
               "--schema=/schema.sql",
