@@ -2,10 +2,10 @@
 
 on:
   push:
-    paths:
-      - 'go/'
+#    paths:
+#      - 'go/'
     branches:
-      - 'master'
+      - 'db/fuzzer-on-push'
 
 jobs:
   fuzzer:
