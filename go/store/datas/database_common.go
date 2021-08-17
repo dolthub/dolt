@@ -401,12 +401,12 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 
 // doMerge applies the merge policy given to the refs given to return a merged commit ref
 func (db *database) doMerge(
-		ctx context.Context,
-		ancestorRef types.Ref,
-		currentHeadRef types.Ref,
-		commit types.Struct,
-		commitRef types.Ref,
-		mergePolicy merge.Policy,
+	ctx context.Context,
+	ancestorRef types.Ref,
+	currentHeadRef types.Ref,
+	commit types.Struct,
+	commitRef types.Ref,
+	mergePolicy merge.Policy,
 ) (types.Ref, error) {
 	ancestor, err := db.validateRefAsCommit(ctx, ancestorRef)
 	if err != nil {
@@ -557,6 +557,16 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 		return err
 	}
 
+	workingSetRef, err := db.WriteValue(ctx, workingSet) // will be orphaned if the tryCommitChunks() below fails
+	if err != nil {
+		return err
+	}
+
+	wsValRef, err := types.ToRefOfValue(workingSetRef, db.Format())
+	if err != nil {
+		return err
+	}
+
 	// This could loop forever, given enough simultaneous writers. BUG 2565
 	var tryCommitErr error
 	testSetFailed := false
@@ -565,10 +575,13 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 			db.mu.Lock()
 			defer db.mu.Unlock()
 
-			currentRootHash, err := db.rt.Root(ctx)
-
+			success, err := db.assertWorkingSetHash(ctx, datasetID, currHash)
 			if err != nil {
 				return err
+			}
+
+			if !success {
+				testSetFailed = true
 			}
 
 			currentDatasets, err := db.Datasets(ctx)
@@ -576,48 +589,12 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 				return err
 			}
 
-			workingSetRef, err := db.WriteValue(ctx, workingSet) // will be orphaned if the tryCommitChunks() below fails
+			currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), wsValRef).Map(ctx)
 			if err != nil {
 				return err
 			}
 
-			ds, err := db.GetDataset(ctx, datasetID)
-			if err != nil {
-				return err
-			}
-
-			// Second level of locking: assert that the dataset value we read is unchanged from its expected value.
-			// This is separate than the whole-DB lock in the outer loop, as it only protects the value of this dataset
-			// entry. Other writers can update other values and writes chunks in the database and we will retry
-			// indefinitely. But if we find the expected value in the dataset has changed, we immediately abort and the
-			// caller must retry after reconciliation.
-			if ds.HasHead() {
-				head, ok := ds.MaybeHead()
-				if !ok {
-					panic("no head found")
-				}
-
-				h, err := head.Hash(db.Format())
-				if err != nil {
-					return err
-				}
-
-				if h != currHash {
-					testSetFailed = true
-					return ErrOptimisticLockFailed
-				}
-			} else {
-				if !currHash.IsEmpty() {
-					panic("No ref found for workspace " + datasetID)
-				}
-			}
-
-			valRef, err := types.ToRefOfValue(workingSetRef, db.Format())
-			if err != nil {
-				return err
-			}
-
-			currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), valRef).Map(ctx)
+			currentRootHash, err := db.rt.Root(ctx)
 			if err != nil {
 				return err
 			}
@@ -627,6 +604,71 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 	}
 
 	return tryCommitErr
+}
+
+func (db *database) assertWorkingSetHash(
+	ctx context.Context,
+	datasetID string,
+	currHash hash.Hash,
+) (bool, error) {
+
+	ds, err := db.GetDataset(ctx, datasetID)
+	if err != nil {
+		return false, err
+	}
+
+	// Second level of locking: assert that the dataset value we read is unchanged from its expected value.
+	// This is separate than the whole-DB lock in the outer loop, as it only protects the value of this dataset
+	// entry. Other writers can update other values and writes chunks in the database and we will retry
+	// indefinitely. But if we find the expected value in the dataset has changed, we immediately abort and the
+	// caller must retry after reconciliation.
+	if ds.HasHead() {
+		head, ok := ds.MaybeHead()
+		if !ok {
+			panic("no head found")
+		}
+
+		h, err := head.Hash(db.Format())
+		if err != nil {
+			return false, err
+		}
+
+		if h != currHash {
+			return false, err
+		}
+	} else {
+		if !currHash.IsEmpty() {
+			panic("No ref found for workspace " + datasetID)
+		}
+	}
+
+	return true, nil
+}
+
+func (db *database) CommitWithWorkingSet(
+	ctx context.Context,
+	commitDS, workingSetDS Dataset,
+	commit types.Value, workingSetSpec WorkingSetSpec,
+	prevWsHash hash.Hash,
+	commitOpts CommitOptions,
+) (Dataset, Dataset, error) {
+	workingSet, err := NewWorkingSet(ctx, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+
+	err = db.validateWorkingSet(workingSet)
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+
+	// This could loop forever, given enough simultaneous writers. BUG 2565
+	var tryCommitErr error
+	testSetFailed := false
+	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
+	}
+
+	return Dataset{}, Dataset{}, err
 }
 
 func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
