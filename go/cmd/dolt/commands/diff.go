@@ -525,12 +525,17 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 		}
 	}
 
-	if !schema.ColCollsAreCompatible(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		pkSetVErr := errhand.BuildDError("cannot diff tables with different primary key sets").Build()
-		return errhand.VerboseError(pkSetVErr)
+	// Display Primary Key Set Differences
+	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+		fromPkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
+		toPkStr := strings.Join(toSch.GetPKCols().GetColumnNames(), ", ")
+		cli.Println("<" + sqlfmt.FmtColPrimaryKey(3, fromPkStr, false))
+		cli.Println(">" + sqlfmt.FmtColPrimaryKey(3, toPkStr, false))
+	} else {
+		// Just display the normal primary keys string
+		pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
+		cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr, true))
 	}
-	pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
-	cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr))
 
 	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
 		switch idxDiff.DiffType {
@@ -702,8 +707,11 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 		return verr
 	}
 
-	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
-
+	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
+	if _, ok := rd.(*diff.EmptyRowDiffer); ok {
+		cli.Println("warning: skipping data diff due to primary key set change")
+		return nil
+	}
 	rd.Start(ctx, fromRows, toRows)
 	defer rd.Close()
 

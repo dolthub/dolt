@@ -407,3 +407,7 @@ func TestSystemTableQueries(t *testing.T) {
 func TestTestReadOnlyDatabases(t *testing.T) {
 	enginetest.TestReadOnlyDatabases(t, newDoltHarness(t))
 }
+
+func TestAddDropPks(t *testing.T) {
+	enginetest.TestAddDropPks(t, newDoltHarness(t))
+}
