@@ -328,19 +328,16 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 	var tryCommitErr error
 	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed; {
 		currentRootHash, err := db.rt.Root(ctx)
-
 		if err != nil {
 			return err
 		}
 
 		currentDatasets, err := db.Datasets(ctx)
-
 		if err != nil {
 			return err
 		}
 
 		commitRef, err := db.WriteValue(ctx, commit) // will be orphaned if the tryCommitChunks() below fails
-
 		if err != nil {
 			return err
 		}
@@ -348,7 +345,6 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 		// If there's nothing in the DB yet, skip all this logic.
 		if !currentRootHash.IsEmpty() {
 			r, hasHead, err := currentDatasets.MaybeGet(ctx, types.String(datasetID))
-
 			if err != nil {
 				return err
 			}
@@ -356,19 +352,16 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
 				head, err := r.(types.Ref).TargetValue(ctx, db)
-
 				if err != nil {
 					return err
 				}
 
 				currentHeadRef, err := types.NewRef(head, db.Format())
-
 				if err != nil {
 					return err
 				}
 
 				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
-
 				if err != nil {
 					return err
 				}
@@ -377,55 +370,12 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 					return ErrMergeNeeded
 				}
 
-				// This covers all cases where currentHeadRef is not an ancestor of commit, including the following edge cases:
-				//   - commit is a duplicate of currentHead.
-				//   - we hit an ErrOptimisticLockFailed and looped back around because some other process changed the Head out from under us.
-				if currentHeadRef.TargetHash() != ancestorRef.TargetHash() || currentHeadRef.TargetHash() == commitRef.TargetHash() {
+				if mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
 					if mergePolicy == nil {
 						return ErrMergeNeeded
 					}
 
-					ancestor, err := db.validateRefAsCommit(ctx, ancestorRef)
-					if err != nil {
-						return err
-					}
-
-					currentHead, err := db.validateRefAsCommit(ctx, currentHeadRef)
-					if err != nil {
-						return err
-					}
-
-					cmVal, _, err := commit.MaybeGet(ValueField)
-					if err != nil {
-						return err
-					}
-
-					curVal, _, err := currentHead.MaybeGet(ValueField)
-					if err != nil {
-						return err
-					}
-
-					ancVal, _, err := ancestor.MaybeGet(ValueField)
-					if err != nil {
-						return err
-					}
-
-					merged, err := mergePolicy(ctx, cmVal, curVal, ancVal, db, nil)
-					if err != nil {
-						return err
-					}
-
-					l, err := types.NewList(ctx, db, commitRef, currentHeadRef)
-					if err != nil {
-						return err
-					}
-
-					newCom, err := NewCommit(ctx, merged, l, types.EmptyStruct(db.Format()))
-					if err != nil {
-						return err
-					}
-
-					commitRef, err = db.WriteValue(ctx, newCom)
+					commitRef, err = db.doMerge(ctx, ancestorRef, currentHeadRef, commit, commitRef, mergePolicy)
 					if err != nil {
 						return err
 					}
@@ -447,6 +397,66 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 	}
 
 	return tryCommitErr
+}
+
+// doMerge applies the merge policy given to the refs given to return a merged commit ref
+func (db *database) doMerge(
+		ctx context.Context,
+		ancestorRef types.Ref,
+		currentHeadRef types.Ref,
+		commit types.Struct,
+		commitRef types.Ref,
+		mergePolicy merge.Policy,
+) (types.Ref, error) {
+	ancestor, err := db.validateRefAsCommit(ctx, ancestorRef)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	currentHead, err := db.validateRefAsCommit(ctx, currentHeadRef)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	cmVal, _, err := commit.MaybeGet(ValueField)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	curVal, _, err := currentHead.MaybeGet(ValueField)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	ancVal, _, err := ancestor.MaybeGet(ValueField)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	merged, err := mergePolicy(ctx, cmVal, curVal, ancVal, db, nil)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	parents, err := types.NewList(ctx, db, commitRef, currentHeadRef)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	newCom, err := NewCommit(ctx, merged, parents, types.EmptyStruct(db.Format()))
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	commitRef, err = db.WriteValue(ctx, newCom)
+	if err != nil {
+		return types.Ref{}, err
+	}
+	return commitRef, nil
+}
+
+func mergeNeeded(currentHeadRef types.Ref, ancestorRef types.Ref, commitRef types.Ref) bool {
+	return currentHeadRef.TargetHash() != ancestorRef.TargetHash() || currentHeadRef.TargetHash() == commitRef.TargetHash()
 }
 
 func (db *database) Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error) {
@@ -623,7 +633,10 @@ func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doDelete(ctx, ds.ID()) })
 }
 
-// doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
+// doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is
+// optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the
+// current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails
+// (e.g. because of a race with another writer) and the entire algorithm must be tried again.
 func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 	datasetID := types.String(datasetIDstr)
 	currentRootHash, err := db.rt.Root(ctx)
@@ -657,7 +670,8 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 			break
 		}
 
-		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it failed because someone changed a different Dataset, we should try again.
+		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it
+		// failed because someone changed a different Dataset, we should try again.
 		currentRootHash, err = db.rt.Root(ctx)
 
 		if err != nil {
