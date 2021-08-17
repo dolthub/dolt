@@ -105,7 +105,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
-	return matchTableDeltas(fromDeltas, toDeltas), nil
+	return matchTableDeltas(fromDeltas, toDeltas)
 }
 
 func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.ForeignKey) (map[string]schema.Schema, error) {
@@ -127,7 +127,7 @@ func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.
 	return schs, nil
 }
 
-func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
+func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, err error) {
 	from := make(map[string]TableDelta, len(fromDeltas))
 	for _, f := range fromDeltas {
 		from[f.FromName] = f
@@ -154,22 +154,37 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 
 	deltas = make([]TableDelta, 0)
 	for _, f := range from {
+		var matched TableDelta
 
 		// optimistically look for a match by name
 		t, ok := to[f.FromName]
 		if ok && schemasOverlap(t.ToSch, f.FromSch) {
-			deltas = append(deltas, match(t, f))
+			matched = match(t, f)
 			delete(from, f.FromName)
 			delete(to, t.ToName)
 		}
 
-		// otherwise, search pairwise
-		for _, t = range to {
-			if schemasOverlap(f.FromSch, t.ToSch) {
-				deltas = append(deltas, match(t, f))
+		if !ok {
+			// otherwise, search pairwise
+			for _, t = range to {
+				if schemasOverlap(f.FromSch, t.ToSch) {
+					matched = match(t, f)
+					break
+				}
+			}
+		}
+
+		if matched.ToTable != nil && matched.FromTable != nil {
+			hasChanges, err := matched.HasChanges()
+			if err != nil {
+				return nil, err
+			}
+
+			// See if matched is worth appending
+			if hasChanges {
+				deltas = append(deltas, matched)
 				delete(from, f.FromName)
 				delete(to, t.ToName)
-				break
 			}
 		}
 	}
@@ -182,7 +197,7 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 		deltas = append(deltas, t)
 	}
 
-	return deltas
+	return deltas, nil
 }
 
 func schemasOverlap(from, to schema.Schema) bool {
@@ -207,6 +222,33 @@ func (td TableDelta) IsRename() bool {
 		return false
 	}
 	return td.FromName != td.ToName
+}
+
+func (td TableDelta) HasHashChanged() (bool, error) {
+	toHash, err := td.ToTable.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	fromHash, err := td.FromTable.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	return !toHash.Equal(fromHash), nil
+}
+
+func (td TableDelta) HasPrimaryKeySetChanged() bool {
+	return !schema.ArePrimaryKeySetsDiffable(td.FromSch, td.ToSch)
+}
+
+func (td TableDelta) HasChanges() (bool, error) {
+	hashChanged, err := td.HasHashChanged()
+	if err != nil {
+		return false, err
+	}
+
+	return td.HasFKChanges() || td.IsRename() || td.HasPrimaryKeySetChanged() || hashChanged, nil
 }
 
 // CurName returns the most recent name of the table.
