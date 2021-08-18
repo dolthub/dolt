@@ -45,7 +45,7 @@ jobs:
             });
         env:
           ACTOR: ${{ github.event.client_payload.actor }}
-          ISSUE_NUMBER: ${ github.event.client_payload.issue_number }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
   report-email:
     name: Report Performance Benchmarks via Email
     runs-on: ubuntu-18.04
