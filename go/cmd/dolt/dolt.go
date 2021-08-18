@@ -54,6 +54,8 @@ const (
 	Version = "0.27.4"
 )
 
+// TESTING BENCHMARKING
+
 var dumpDocsCommand = &commands.DumpDocsCmd{}
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
 	commands.InitCmd{},
