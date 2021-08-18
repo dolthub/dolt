@@ -65,7 +65,7 @@ jobs:
         env:
           KEY: ${{ github.event.client_payload.key }}
       - name: Send Email
-        if: ${{ github.event.client_payload.actor_email == "" }}
+        if: ${{ github.event.client_payload.actor_email == '' }}
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
@@ -73,7 +73,7 @@ jobs:
           toAddresses: '["${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}"]'
           dataFile: ${{ format('{0}/results.log', github.workspace) }}
       - name: Send Email
-        if: ${{ github.event.client_payload.actor_email != "" }}
+        if: ${{ github.event.client_payload.actor_email != '' }}
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
