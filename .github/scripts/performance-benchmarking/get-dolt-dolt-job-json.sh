@@ -2,8 +2,8 @@
 
 set -e
 
-if [ "$#" -ne 8 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format>"
+if [ "$#" -lt 9 ]; then
+    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber>"
     exit 1
 fi
 
@@ -15,6 +15,7 @@ toVersion="$5"
 timePrefix="$6"
 actorPrefix="$7"
 format="$8"
+issueNumber="$9"
 
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan')"
 medianLatencyChangeReadsQuery="select f.test_name as read_tests, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) < -0.1 then 1 when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) > 0.1 then -1 else 0 end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $readTests group by f.test_name;"
@@ -45,10 +46,10 @@ echo '
               }
             },
             "env": [
-              {
-                "name": "GOMAXPROCS",
-                "value": "7"
-              }
+              { "name": "GOMAXPROCS", "value": "7" },
+              { "name": "ACTOR", "value": "'$ACTOR'" },
+              { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'" },
+              { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'" }
             ],
             "args": [
               "--schema=/schema.sql",
@@ -60,6 +61,7 @@ echo '
               "--to-version='$toVersion'",
               "--bucket=performance-benchmarking-github-actions-results",
               "--region=us-west-2",
+              "--issue-number='$issueNumber'",
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
               "'"$medianLatencyChangeReadsQuery"'",
