@@ -1036,11 +1036,11 @@ func (ddb *DoltDB) UpdateWorkingSet(
 // UpdateWorkingSet updates the working set with the ref given to the root value given
 // |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
 func (ddb *DoltDB) CommitWithWorkingSet(
-		ctx context.Context,
-		headRef ref.DoltRef, workingSetRef ref.WorkingSetRef,
-		commit *PendingCommit, workingSet *WorkingSet,
-		prevHash hash.Hash,
-		meta *WorkingSetMeta,
+	ctx context.Context,
+	headRef ref.DoltRef, workingSetRef ref.WorkingSetRef,
+	commit *PendingCommit, workingSet *WorkingSet,
+	prevHash hash.Hash,
+	meta *WorkingSetMeta,
 ) error {
 	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
@@ -1082,7 +1082,6 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 
 	return err
 }
-
 
 // DeleteWorkingSet deletes the working set given
 func (ddb *DoltDB) DeleteWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef) error {

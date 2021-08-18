@@ -116,10 +116,10 @@ type Database interface {
 
 	// TODO: document me
 	CommitWithWorkingSet(
-			ctx context.Context,
-			commitDS, workingSetDS Dataset,
-			commit types.Value, workingSetSpec WorkingSetSpec,
-			prevWsHash hash.Hash, opts CommitOptions,
+		ctx context.Context,
+		commitDS, workingSetDS Dataset,
+		commit types.Value, workingSetSpec WorkingSetSpec,
+		prevWsHash hash.Hash, opts CommitOptions,
 	) (Dataset, Dataset, error)
 
 	// Delete removes the Dataset named ds.ID() from the map at the root of
