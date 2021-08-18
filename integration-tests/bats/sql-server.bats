@@ -870,6 +870,7 @@ SQL
     server_query repo1 1 "SHOW tables" "" # no tables on master
 
     server_query repo1 1 "set GLOBAL dolt_sql_server_branch_ref = 'refs/heads/new';" ""
+    server_query repo1 1 "select @@GLOBAL.dolt_sql_server_branch_ref;" "@@GLOBAL.dolt_sql_server_branch_ref\nrefs/heads/new"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
     server_query repo1 1 "SHOW tables" "Table\nt"
 }
