@@ -181,6 +181,7 @@ func GetCommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, 
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
+	// TODO: kill off drw here, return an appropriate error type and make clients build this error as appropriate
 	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
 		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, drw)
 		if err != nil {
@@ -206,6 +207,11 @@ func GetCommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, 
 		}
 	}
 
+	roots.Staged, err = roots.Staged.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
+	if err != nil {
+		return nil, err
+	}
+
 	if !props.Force {
 		roots.Staged, err = roots.Staged.ValidateForeignKeysOnSchemas(ctx)
 		if err != nil {
@@ -213,13 +219,17 @@ func GetCommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, 
 		}
 	}
 
+	roots.Working, err = roots.Working.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
+	if err != nil {
+		return nil, err
+	}
+
 	meta, err := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: update super schemas
-	return ddb.NewPendingCommit(ctx, roots.Staged, rsr.CWBHeadRef(), mergeParents, meta)
+	return ddb.NewPendingCommit(ctx, roots, rsr.CWBHeadRef(), mergeParents, meta)
 }
 
 

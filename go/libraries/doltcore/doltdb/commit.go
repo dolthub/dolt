@@ -310,13 +310,13 @@ func (c *Commit) DebugString(ctx context.Context) string {
 }
 
 type PendingCommit struct {
-	RootVal       *RootValue
+	Roots         Roots
 	Val           types.Value
 	CommitOptions datas.CommitOptions
 }
 
-func (ddb *DoltDB) NewPendingCommit(ctx context.Context, root *RootValue, headRef ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*PendingCommit, error) {
-	val, err := ddb.writeRootValue(ctx, root)
+func (ddb *DoltDB) NewPendingCommit(ctx context.Context, roots Roots, headRef ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*PendingCommit, error) {
+	val, err := ddb.writeRootValue(ctx, roots.Staged)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func (ddb *DoltDB) NewPendingCommit(ctx context.Context, root *RootValue, headRe
 
 	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
 	return &PendingCommit{
-		RootVal:       root,
+		Roots:         roots,
 		Val:           val,
 		CommitOptions: commitOpts,
 	}, nil

@@ -17,6 +17,7 @@ package commands
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
@@ -142,12 +143,17 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	// TODO: fill in WS meta
-	dEnv.DoltDB.CommitWithWorkingSet(ctx, dEnv.RepoStateReader().CWBHeadRef(), ws.Ref(), pendingCommit, ws, prevHash, nil)
-
-	err = dEnv.ClearMerge(ctx)
+	err = dEnv.DoltDB.CommitWithWorkingSet(
+		ctx,
+		dEnv.RepoStateReader().CWBHeadRef(),
+		ws.Ref(),
+		pendingCommit,
+		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
+		prevHash,
+		dEnv.NewWorkingSetMeta(fmt.Sprintf("Updated by %s %s", commandStr, strings.Join(args, " "))),
+	)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't update working set").AddCause(err).Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage)
 	}
 
 	// if the commit was successful, print it out using the log command

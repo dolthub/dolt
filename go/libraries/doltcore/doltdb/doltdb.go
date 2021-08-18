@@ -1073,7 +1073,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		}
 	}
 
-	_, _, err = ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.RootVal.valueSt, datas.WorkingSetSpec{
+	_, _, err = ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{
 		Meta:        datas.WorkingSetMeta{Meta: metaSt},
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
