@@ -35,6 +35,10 @@ type testPerson struct {
 	Title      string
 }
 
+type testBranch struct {
+	Branch string
+}
+
 var (
 	bill = testPerson{"Bill Billerson", 32, true, "Senior Dufus"}
 	john = testPerson{"John Johnson", 25, false, "Dufus"}
@@ -240,4 +244,98 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 	err := serverController.WaitForStart()
 	require.Error(t, err)
 	server.Close()
+}
+
+func TestServerCheckout(t *testing.T) {
+	env := dtestutils.CreateEnvWithSeedData(t)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15302)
+
+	sc := CreateServerController()
+	defer sc.StopServer()
+	go func() {
+		_, _ = Serve(context.Background(), "", serverConfig, sc, env)
+	}()
+	err := sc.WaitForStart()
+	require.NoError(t, err)
+
+	const dbName = "dolt"
+
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	require.NoError(t, err)
+	sess := conn.NewSession(nil)
+
+	tests := []struct {
+		query       func() *dbr.SelectStmt
+		expectedRes []testBranch
+	}{
+		{
+			query: func() *dbr.SelectStmt {
+				return sess.Select("active_branch() as branch")
+			},
+			expectedRes: []testBranch{{"master"}},
+		},
+		{
+			query: func() *dbr.SelectStmt {
+				return sess.SelectBySql("set GLOBAL dolt_sql_server_branch_ref = 'refs/heads/new'")
+			},
+			expectedRes: []testBranch{},
+		},
+		{
+			query: func() *dbr.SelectStmt {
+				return sess.Select("active_branch() as branch")
+			},
+			expectedRes: []testBranch{{"master"}},
+		},
+		{
+			query: func() *dbr.SelectStmt {
+				return sess.Select("dolt_checkout('-b', 'new')")
+			},
+			expectedRes: []testBranch{{""}},
+		},
+		{
+			query: func() *dbr.SelectStmt {
+				return sess.Select("dolt_checkout('master')")
+			},
+			expectedRes: []testBranch{{""}},
+		},
+	}
+
+	for _, test := range tests {
+		query := test.query()
+		t.Run(query.Query, func(t *testing.T) {
+			var branch []testBranch
+			_, err := query.LoadContext(context.Background(), &branch)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, branch, test.expectedRes)
+		})
+	}
+	conn.Close()
+
+	conn, err = dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sess = conn.NewSession(nil)
+
+	tests = []struct {
+		query       func() *dbr.SelectStmt
+		expectedRes []testBranch
+	}{
+		{
+			query: func() *dbr.SelectStmt {
+				return sess.Select("active_branch() as branch")
+			},
+			expectedRes: []testBranch{{"new"}},
+		},
+	}
+
+	for _, test := range tests {
+		query := test.query()
+		t.Run(query.Query, func(t *testing.T) {
+			var branch []testBranch
+			_, err := query.LoadContext(context.Background(), &branch)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, branch, test.expectedRes)
+		})
+	}
 }

@@ -33,12 +33,29 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
+
+const SqlServerBranchRefKey = "dolt_sql_server_branch_ref"
+
+func init() {
+	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+		{
+			Name:              SqlServerBranchRefKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(SqlServerBranchRefKey),
+			Default:           "",
+		},
+	})
+
+}
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(ctx context.Context, version string, serverConfig ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
@@ -186,7 +203,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username string, email string, pr
 		}
 
 		err = doltSess.SetSessionVariable(tmpSqlCtx, sql.AutoCommitSessionVar, autocommit)
-
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -260,7 +276,18 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			return nil, fmt.Errorf("couldn't find environment for database %s", db.Name())
 		}
 
+		if _, val, ok := sql.SystemVariables.GetGlobal(SqlServerBranchRefKey); ok {
+			if refStr, ok := val.(string); ok && ref.IsRef(refStr) {
+				headRef, err := ref.Parse(refStr)
+				if err != nil {
+					break
+				}
+				dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: headRef})
+			}
+		}
+
 		head := dEnv.RepoStateReader().CWBHeadSpec()
+
 		headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
 		if err != nil {
 			return nil, err
