@@ -77,6 +77,6 @@ jobs:
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
-          version: ${{ needs.set-version-actor.outputs.dolt_version }}
+          version: ${{ github.event.client_payload.dolt_version }}
           toAddresses: '["${{ github.event.client_payload.actor_email }}"]'
           dataFile: ${{ format('{0}/results.log', github.workspace) }}
