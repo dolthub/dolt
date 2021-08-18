@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -306,4 +307,69 @@ func (c *Commit) DebugString(ctx context.Context) string {
 		panic(err)
 	}
 	return buf.String()
+}
+
+type PendingCommit struct {
+	RootVal       *RootValue
+	Val           types.Value
+	CommitOptions datas.CommitOptions
+}
+
+func (ddb *DoltDB) NewPendingCommit(ctx context.Context, root *RootValue, headRef ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*PendingCommit, error) {
+	val, err := ddb.writeRootValue(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: is this flush necessary?
+	err = ddb.db.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ds, err := ddb.db.GetDataset(ctx, headRef.String())
+	if err != nil {
+		return nil, err
+	}
+
+	nomsHeadRef, hasHead, err := ds.MaybeHeadRef()
+	if err != nil {
+		return nil, err
+	}
+
+	parents, err := types.NewList(ctx, ddb.db)
+	if err != nil {
+		return nil, err
+	}
+
+	parentEditor := parents.Edit()
+	if hasHead {
+		parentEditor = parentEditor.Append(nomsHeadRef)
+	}
+
+	for _, pc := range parentCommits {
+		rf, err := types.NewRef(pc.commitSt, ddb.db.Format())
+		if err != nil {
+			return nil, err
+		}
+
+		parentEditor = parentEditor.Append(rf)
+	}
+
+	parents, err = parentEditor.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	st, err := cm.toNomsStruct(ddb.db.Format())
+	if err != nil {
+		return nil, err
+	}
+
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
+	return &PendingCommit{
+		RootVal:       root,
+		Val:           val,
+		CommitOptions: commitOpts,
+	}, nil
 }

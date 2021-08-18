@@ -568,7 +568,6 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 }
 
 func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
-	var commitSt types.Struct
 	val, err := ddb.db.ReadValue(ctx, valHash)
 
 	if err != nil {
@@ -638,8 +637,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, err
 	}
 
-	var ok bool
-	commitSt, ok = ds.MaybeHead()
+	commitSt, ok := ds.MaybeHead()
 	if !ok {
 		return nil, errors.New("commit has no head but commit succeeded (How?!?!?)")
 	}
@@ -1034,6 +1032,57 @@ func (ddb *DoltDB) UpdateWorkingSet(
 
 	return err
 }
+
+// UpdateWorkingSet updates the working set with the ref given to the root value given
+// |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
+func (ddb *DoltDB) CommitWithWorkingSet(
+		ctx context.Context,
+		headRef ref.DoltRef, workingSetRef ref.WorkingSetRef,
+		commit *PendingCommit, workingSet *WorkingSet,
+		prevHash hash.Hash,
+		meta *WorkingSetMeta,
+) error {
+	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
+	if err != nil {
+		return err
+	}
+
+	headDs, err := ddb.db.GetDataset(ctx, headRef.String())
+	if err != nil {
+		return err
+	}
+
+	// logrus.Tracef("Updating working set with root %s", workingSet.RootValue().DebugString(ctx, true))
+
+	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb)
+	if err != nil {
+		return err
+	}
+
+	// While we still have places that need user info threaded through, we're lenient on providing the meta
+	var metaSt types.Struct
+	if meta != nil {
+		metaSt, err = meta.toNomsStruct(types.Format_Default)
+		if err != nil {
+			return err
+		}
+	} else {
+		metaSt, err = datas.NewWorkingSetMeta(types.Format_Default, "incomplete", "incomplete", uint64(time.Now().Unix()), "incomplete")
+		if err != nil {
+			return err
+		}
+	}
+
+	_, _, err = ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.RootVal.valueSt, datas.WorkingSetSpec{
+		Meta:        datas.WorkingSetMeta{Meta: metaSt},
+		WorkingRoot: workingRootRef,
+		StagedRoot:  stagedRef,
+		MergeState:  mergeStateRef,
+	}, prevHash, commit.CommitOptions)
+
+	return err
+}
+
 
 // DeleteWorkingSet deletes the working set given
 func (ddb *DoltDB) DeleteWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef) error {

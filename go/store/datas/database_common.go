@@ -650,16 +650,9 @@ func (db *database) assertWorkingSetHash(
 func (db *database) CommitWithWorkingSet(
 	ctx context.Context,
 	commitDS, workingSetDS Dataset,
-	commit types.Value, workingSetSpec WorkingSetSpec,
-	prevWsHash hash.Hash,
+	val types.Value, workingSetSpec WorkingSetSpec,
+	prevWsHash hash.Hash, opts CommitOptions,
 ) (Dataset, Dataset, error) {
-
-	if is, err := IsCommit(commit); err != nil {
-		return Dataset{}, Dataset{}, err
-	} else if !is {
-		d.Panic("Can't commit a non-Commit struct to dataset %s", commitDS)
-	}
-
 	workingSet, err := NewWorkingSet(ctx, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
@@ -676,6 +669,11 @@ func (db *database) CommitWithWorkingSet(
 	}
 
 	wsValRef, err := types.ToRefOfValue(workingSetRef, db.Format())
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+
+	commit, err := buildNewCommit(ctx, commitDS, val, opts)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}

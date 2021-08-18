@@ -157,6 +157,72 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 	return c, nil
 }
 
+// CommitStaged adds a new commit to HEAD with the given props. Returns the new commit's hash as a string and an error.
+func GetCommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mergeParents []*doltdb.Commit, dbData env.DbData, props CommitStagedProps) (*doltdb.PendingCommit, error) {
+	ddb := dbData.Ddb
+	rsr := dbData.Rsr
+	drw := dbData.Drw
+
+	if props.Message == "" {
+		return nil, doltdb.ErrEmptyCommitMessage
+	}
+
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
+	if err != nil {
+		return nil, err
+	}
+
+	var stagedTblNames []string
+	for _, td := range staged {
+		n := td.ToName
+		if td.IsDrop() {
+			n = td.FromName
+		}
+		stagedTblNames = append(stagedTblNames, n)
+	}
+
+	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
+		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, drw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, NothingStaged{notStaged, notStagedDocs}
+	}
+
+	if !props.Force {
+		inConflict, err := roots.Working.TablesInConflict(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(inConflict) > 0 {
+			return nil, NewTblInConflictError(inConflict)
+		}
+		violatesConstraints, err := roots.Working.TablesWithConstraintViolations(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(violatesConstraints) > 0 {
+			return nil, NewTblHasConstraintViolations(violatesConstraints)
+		}
+	}
+
+	if !props.Force {
+		roots.Staged, err = roots.Staged.ValidateForeignKeysOnSchemas(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	meta, err := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: update super schemas
+	return ddb.NewPendingCommit(ctx, roots.Staged, rsr.CWBHeadRef(), mergeParents, meta)
+}
+
+
 // TimeSortedCommits returns a reverse-chronological (latest-first) list of the most recent `n` ancestors of `commit`.
 // Passing a negative value for `n` will result in all ancestors being returned.
 func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
