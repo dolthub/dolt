@@ -829,7 +829,7 @@ SQL
     # fails
     server_query "repo1/$hash" 1 "insert into test values (7)" "" "read-only"
 
-    # server should still be alive afexchange.goter an error
+    # server should still be alive after an error
     server_query "repo1/$hash" 1 "select count(*) from test" "count(*)\n3"
 }
 
