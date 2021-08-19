@@ -93,9 +93,15 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 }
 
 func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
+	mu := &sync.Mutex{}
 	notInOldGen := hashes.Copy()
 	err := gcs.oldGen.GetManyCompressed(ctx, hashes, func(chunk CompressedChunk) {
-		delete(notInOldGen, chunk.Hash())
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			delete(notInOldGen, chunk.Hash())
+		}()
+
 		found(chunk)
 	})
 
