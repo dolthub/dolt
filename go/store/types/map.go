@@ -263,6 +263,14 @@ func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value, error) {
 	return entry.key, entry.value, nil
 }
 
+func (m Map) Empty() bool {
+	if m.orderedSequence == nil {
+		return true
+	}
+
+	return m.orderedSequence.Empty()
+}
+
 func (m Map) Format() *NomsBinFormat {
 	return m.format()
 }
