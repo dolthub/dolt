@@ -92,7 +92,7 @@ func (dbea *DiskBackedEditAcc) FinishedEditing() (types.EditProvider, error) {
 
 	// If there are no background errors, flush any data we haven't flushed yet before processing
 	if !dbea.ae.IsSet() {
-		sinceLastFlush := dbea.accumulated%dbea.flushInterval
+		sinceLastFlush := dbea.accumulated % dbea.flushInterval
 		if sinceLastFlush > 0 {
 			dbea.flushCount++
 			dbea.flushToDisk()
