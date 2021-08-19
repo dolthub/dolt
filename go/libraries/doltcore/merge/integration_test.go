@@ -32,6 +32,7 @@ func TestMerge(t *testing.T) {
 
 	setupCommon := []testCommand{
 		{cmd.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY, c0 int);"}},
+		{cmd.AddCmd{}, args{"."}},
 		{cmd.CommitCmd{}, args{"-am", "created table test"}},
 	}
 

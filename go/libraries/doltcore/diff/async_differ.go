@@ -42,8 +42,11 @@ type RowDiffer interface {
 func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
 	ad := NewAsyncDiffer(buf)
 
-	// assumes no PK changes
-	// mixed diffing of keyless and pk tables no supported
+	// Returns an EmptyRowDiffer if the two schemas are not diffable.
+	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+		return &EmptyRowDiffer{}
+	}
+
 	if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
 		return &keylessDiffer{AsyncDiffer: ad}
 	}
@@ -264,4 +267,20 @@ func convertDiff(df diff.Difference) (diff.Difference, uint64, error) {
 	default:
 		return df, 0, fmt.Errorf("unexpected DiffChange type %d", df.ChangeType)
 	}
+}
+
+type EmptyRowDiffer struct {
+}
+
+var _ RowDiffer = &EmptyRowDiffer{}
+
+func (e EmptyRowDiffer) Start(ctx context.Context, from, to types.Map) {
+}
+
+func (e EmptyRowDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
+	return nil, false, nil
+}
+
+func (e EmptyRowDiffer) Close() error {
+	return nil
 }

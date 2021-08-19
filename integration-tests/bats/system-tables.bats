@@ -410,3 +410,17 @@ SQL
     run dolt sql -q "DELETE FROM dolt_branches"
     [ "$status" -ne 0 ]
 }
+
+@test "system-tables: dolt diff includes changes from initial commit" {
+    dolt sql -q "CREATE TABLE test(pk int primary key, val int)"
+    dolt sql -q "INSERT INTO test VALUES (1,1)"
+    dolt commit -am "cm1"
+
+    dolt sql -q "INSERT INTO test VALUES (2,2)"
+    dolt commit -am "cm2"
+
+    run dolt sql -q "SELECT to_val,to_pk FROM dolt_diff_test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+}

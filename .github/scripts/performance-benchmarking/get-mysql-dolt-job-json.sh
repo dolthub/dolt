@@ -2,7 +2,7 @@
 
 set -e
 
-if [ "$#" -ne 8 ]; then
+if [ "$#" -lt 8 ]; then
     echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix> <format>"
     exit 1
 fi
@@ -49,10 +49,10 @@ echo '
               }
             },
             "env": [
-              {
-                "name": "GOMAXPROCS",
-                "value": "7"
-              }
+              { "name": "GOMAXPROCS", "value": "7" },
+              { "name": "ACTOR", "value": "'$ACTOR'" },
+              { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'" },
+              { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'" }
             ],
             "args": [
               "--schema=/schema.sql",

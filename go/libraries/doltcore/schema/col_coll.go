@@ -219,19 +219,14 @@ func ColCollsAreEqual(cc1, cc2 *ColCollection) bool {
 		return false
 	}
 
-	areEqual := true
-	_ = cc1.Iter(func(tag uint64, col1 Column) (stop bool, err error) {
-		col2, ok := cc2.GetByTag(tag)
-
-		if !ok || !col1.Equals(col2) {
-			areEqual = false
-			return true, nil
+	// Pks Cols need to be in the same order and equivalent.
+	for i := 0; i < cc1.Size(); i++ {
+		if !cc1.GetAtIndex(i).Equals(cc2.GetAtIndex(i)) {
+			return false
 		}
+	}
 
-		return false, nil
-	})
-
-	return areEqual
+	return true
 }
 
 // ColCollsAreCompatible determines whether two ColCollections are compatible with each other. Compatible columns have

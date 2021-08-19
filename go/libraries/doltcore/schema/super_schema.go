@@ -62,7 +62,9 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 	ac := ss.allCols
 	existingCol, found := ac.GetByTag(ct)
 	if found {
-		if !existingCol.Compatible(col) {
+		// TODO: We need to rethink the nature of column compatibility with primary key changes being allowed.
+		// We can't necessary say compatibility == diffability as primary key set changes cannot be diffed
+		if existingCol.Kind != col.Kind {
 			ecName := ss.tagNames[col.Tag][0]
 			return fmt.Errorf("tag collision for columns %s and %s, different definitions (tag: %d)",
 				ecName, col.Name, col.Tag)

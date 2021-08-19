@@ -232,7 +232,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *do
 		case merge.ErrFastForward:
 			panic("fast forward merge")
 		default:
-			return nil, errors.New("Bad merge")
+			return nil, err
 		}
 	}
 
