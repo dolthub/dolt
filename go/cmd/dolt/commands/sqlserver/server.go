@@ -17,7 +17,6 @@ package sqlserver
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"net"
 	"strconv"
 	"time"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -42,16 +42,16 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
-const SqlServerBranchRefKey = "dolt_sql_server_branch_ref"
+const DoltDefaultBranchKey = "dolt_default_branch"
 
 func init() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{
-			Name:              SqlServerBranchRefKey,
+			Name:              DoltDefaultBranchKey,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(SqlServerBranchRefKey),
+			Type:              sql.NewSystemStringType(DoltDefaultBranchKey),
 			Default:           "",
 		},
 	})
@@ -282,13 +282,13 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 		var ws *doltdb.WorkingSet
 		var headCommit *doltdb.Commit
 		var err error
-		if _, val, ok := sql.SystemVariables.GetGlobal(SqlServerBranchRefKey); ok {
+		if _, val, ok := sql.SystemVariables.GetGlobal(DoltDefaultBranchKey); ok {
 			if refStr, ok := val.(string); ok && ref.IsRef(refStr) {
 				headRef, err := ref.Parse(refStr)
 				if err != nil {
 					break
 				}
-				headCommit, err = dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+				headCommit, err = dEnv.DoltDB.Resolve(ctx, head, headRef)
 				if err != nil {
 					return nil, err
 				}
@@ -302,17 +302,25 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 				if err != nil {
 					return nil, err
 				}
-			}
-		} else {
-			headCommit, err = dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-			if err != nil {
-				return nil, err
-			}
 
-			ws, err = dEnv.WorkingSet(ctx)
-			if err != nil {
-				return nil, err
+				dbStates = append(dbStates, dsess.InitialDbState{
+					Db:         db,
+					HeadCommit: headCommit,
+					WorkingSet: ws,
+					DbData:     dEnv.DbData(),
+				})
+				continue
 			}
+		}
+
+		headCommit, err = dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+		if err != nil {
+			return nil, err
+		}
+
+		ws, err = dEnv.WorkingSet(ctx)
+		if err != nil {
+			return nil, err
 		}
 
 		dbStates = append(dbStates, dsess.InitialDbState{

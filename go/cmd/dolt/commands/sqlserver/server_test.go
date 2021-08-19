@@ -276,7 +276,7 @@ func TestServerCheckout(t *testing.T) {
 		},
 		{
 			query: func() *dbr.SelectStmt {
-				return sess.SelectBySql("set GLOBAL dolt_sql_server_branch_ref = 'refs/heads/new'")
+				return sess.SelectBySql("set GLOBAL dolt_default_branch = 'refs/heads/new'")
 			},
 			expectedRes: []testBranch{},
 		},

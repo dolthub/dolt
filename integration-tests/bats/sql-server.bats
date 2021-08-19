@@ -27,7 +27,7 @@ teardown() {
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
-    
+
     run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt
     [ "$status" -eq 1 ]
     [[ "$output" =~ "in use" ]] || false
@@ -869,8 +869,8 @@ SQL
 
     server_query repo1 1 "SHOW tables" "" # no tables on master
 
-    server_query repo1 1 "set GLOBAL dolt_sql_server_branch_ref = 'refs/heads/new';" ""
-    server_query repo1 1 "select @@GLOBAL.dolt_sql_server_branch_ref;" "@@GLOBAL.dolt_sql_server_branch_ref\nrefs/heads/new"
+    server_query repo1 1 "set GLOBAL dolt_default_branch = 'refs/heads/new';" ""
+    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
     server_query repo1 1 "SHOW tables" "Table\nt"
 }
@@ -891,9 +891,10 @@ SQL
     server_query repo1 1 "SHOW tables" "" # no tables on master
 
     multi_query repo1 1 '
-    set GLOBAL dolt_sql_server_branch_ref = "refs/heads/new";
+    set GLOBAL dolt_default_branch = "refs/heads/new";
     show tables;' "" # SET GLOBAL does not affect current connection
 
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
+    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
     server_query repo1 1 "SHOW tables" "Table\nt"
 }
