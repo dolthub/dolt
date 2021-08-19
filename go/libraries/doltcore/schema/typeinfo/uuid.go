@@ -155,6 +155,8 @@ func uuidTypeConverter(ctx context.Context, src *uuidType, destTi TypeInfo) (tc 
 	switch dest := destTi.(type) {
 	case *bitType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *blobStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *datetimeType:

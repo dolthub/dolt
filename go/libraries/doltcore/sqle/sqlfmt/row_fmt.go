@@ -204,6 +204,8 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 		return singleQuote + *str + singleQuote, nil
 	case typeinfo.DatetimeTypeIdentifier:
 		return singleQuote + *str + singleQuote, nil
+	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier:
+		return quoteAndEscapeString(*str), nil
 	case typeinfo.VarStringTypeIdentifier:
 		s, ok := value.(types.String)
 		if !ok {

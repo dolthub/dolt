@@ -212,12 +212,12 @@ var systemTableDeleteTests = []DeleteTest{
 	{
 		Name: "delete dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			schemasTableDoltSchema(),
+			SchemasTableSchema(),
 			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
 		DeleteQuery:    "delete from dolt_schemas",
 		SelectQuery:    "select * from dolt_schemas",
 		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
-		ExpectedSchema: schemasTableDoltSchema(),
+		ExpectedSchema: SchemasTableSchema(),
 	},
 }
 

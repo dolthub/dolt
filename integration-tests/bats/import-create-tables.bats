@@ -522,7 +522,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]]
     [[ "$output" =~ "\`pk\` int" ]]
-    [[ "$output" =~ "\`str\` longtext" ]]
+    [[ "$output" =~ "\`str\` varchar(16383)" ]]
     [[ "$output" =~ "\`int\` int unsigned" ]]
     [[ "$output" =~ "\`bool\` bit(1)" ]]
     [[ "$output" =~ "\`float\` float" ]]
