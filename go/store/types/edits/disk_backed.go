@@ -45,8 +45,8 @@ type DiskBackedEditAcc struct {
 	ae *atomicerr.AtomicError
 	wg *sync.WaitGroup
 
-	flushResults chan string
-	flushCount   int
+	files      chan string
+	flushCount int
 }
 
 // NewDiskBackedEditAcc returns a new DiskBackedEditAccumulator instance
@@ -61,7 +61,7 @@ func NewDiskBackedEditAcc(ctx context.Context, nbf *types.NomsBinFormat, vrw typ
 		flushInterval: flushInterval,
 		ae:            atomicerr.New(),
 		wg:            &sync.WaitGroup{},
-		flushResults:  make(chan string, 32),
+		files:         make(chan string, 32),
 	}
 }
 
@@ -92,7 +92,9 @@ func (dbea *DiskBackedEditAcc) FinishedEditing() (types.EditProvider, error) {
 
 	// If there are no background errors, flush any data we haven't flushed yet before processing
 	if !dbea.ae.IsSet() {
-		if dbea.accumulated%dbea.flushInterval != 0 {
+		sinceLastFlush := dbea.accumulated%dbea.flushInterval
+		if sinceLastFlush > 0 {
+			dbea.flushCount++
 			dbea.flushToDisk()
 			dbea.backing = nil
 		}
@@ -101,12 +103,12 @@ func (dbea *DiskBackedEditAcc) FinishedEditing() (types.EditProvider, error) {
 	// spawn a routine to watch the flush routines and close the result channel once they have all closed
 	go func() {
 		dbea.wg.Wait()
-		close(dbea.flushResults)
+		close(dbea.files)
 	}()
 
 	// stream all the results off the result channel even if an error has occurred
 	var files []string
-	for flushedFile := range dbea.flushResults {
+	for flushedFile := range dbea.files {
 		files = append(files, flushedFile)
 	}
 
@@ -156,7 +158,7 @@ func (dbea *DiskBackedEditAcc) flushToDisk() {
 			return
 		}
 
-		dbea.flushResults <- path
+		dbea.files <- path
 	}(dbea.backing, dbea.ae)
 }
 

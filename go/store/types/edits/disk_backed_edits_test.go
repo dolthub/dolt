@@ -42,7 +42,7 @@ func TestDiskBackedEdits(t *testing.T) {
 		size = rng.Intn(maxKVPs)
 	}
 
-	// test something smaller thar the flush interval
+	// test something smaller than the flush interval
 	size = 4
 	t.Run(fmt.Sprintf("size_%d", size), func(t *testing.T) {
 		testDBE(t, kvps[:size])

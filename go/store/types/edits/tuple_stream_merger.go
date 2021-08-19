@@ -19,6 +19,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sort"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -188,44 +189,20 @@ func (fep *TupleStreamMerger) readKVP(readerIdx int) (*types.KVP, error) {
 // search does a binary search or a sorted []entry and returns an integer representing the insertion index where the
 // item should be placed in order to keep the vals sorted
 func search(nbf *types.NomsBinFormat, key types.LesserValuable, vals []entry) (int, error) {
-	const linearScanSize = 3
-
-	if len(vals) == 0 {
-		return 0, nil
-	}
-
-	start := 0
-	end := len(vals) - 1
-
-	for {
-		entries := end - start
-
-		if entries <= linearScanSize {
-			// when the number of items left to check is below some threshold do a linear scan to find the insertion index
-			for i := start; i <= end; i++ {
-				isLess, err := key.Less(nbf, vals[i].kvp.Key)
-				if err != nil {
-					return 0, err
-				} else if isLess {
-					return i, nil
-				}
-			}
-
-			return end + 1, nil
-		}
-
-		// choose the middle element and see i we need to cut off the top or bottom elements
-		pos := start + (entries / 2)
-		isLess, err := key.Less(nbf, vals[pos].kvp.Key)
-
+	var err error
+	n := sort.Search(len(vals), func(i int) bool {
 		if err != nil {
-			return 0, err
+			return false
 		}
 
-		if isLess {
-			end = pos - 1
-		} else {
-			start = pos
-		}
+		var isLess bool
+		isLess, err = key.Less(nbf, vals[i].kvp.Key)
+		return isLess
+	})
+
+	if err != nil {
+		return 0, err
 	}
+
+	return n, nil
 }
