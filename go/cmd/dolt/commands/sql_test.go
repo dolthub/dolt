@@ -492,7 +492,7 @@ func TestDelete(t *testing.T) {
 		expectedRes int
 		deletedIds  []uuid.UUID
 	}{
-		{
+		/*{
 			name:  "bad syntax",
 			query: "delete table", expectedRes: 1,
 		},
@@ -503,13 +503,13 @@ func TestDelete(t *testing.T) {
 		{
 			name:  "table doesn't exist",
 			query: "delete from dne", expectedRes: 1,
-		},
+		},*/
 		{
 			name:       "delete one row",
 			query:      `delete from people where id = '00000000-0000-0000-0000-000000000002'`,
 			deletedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000002")},
 		},
-		{
+		/*{
 			name:  "delete two rows",
 			query: `delete from people where age > 21`,
 			deletedIds: []uuid.UUID{
@@ -525,7 +525,7 @@ func TestDelete(t *testing.T) {
 				uuid.MustParse("00000000-0000-0000-0000-000000000001"),
 				uuid.MustParse("00000000-0000-0000-0000-000000000002"),
 			},
-		},
+		},*/
 	}
 
 	for _, test := range tests {
