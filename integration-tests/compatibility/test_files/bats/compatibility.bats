@@ -128,6 +128,9 @@ teardown() {
 @test "dolt diff other" {
     run dolt diff other
     [ "$status" -eq 0 ]
+    echo $output
+    echo lines[3]
+    echo ${lines[3]}
     [[ "${lines[3]}"  =~ "  CREATE TABLE abc ("       ]] || false
     [[ "${lines[4]}"  =~ "    \`pk\` BIGINT NOT NULL" ]] || false
     [[ "${lines[5]}"  =~ "    \`a\` LONGTEXT"         ]] || false
