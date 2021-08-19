@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,10 @@ package typeinfo
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
-	"unsafe"
+	"unicode/utf8"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -30,39 +28,46 @@ import (
 )
 
 const (
-	varBinaryTypeParam_Length = "length"
+	blobStringTypeParam_Collate = "collate"
+	blobStringTypeParam_Length  = "length"
 )
 
-// As a type, this is modeled more after MySQL's story for binary data. There, it's treated
-// as a string that is interpreted as raw bytes, rather than as a bespoke data structure,
-// and thus this is mirrored here in its implementation. This will minimize any differences
-// that could arise.
-type varBinaryType struct {
-	sqlBinaryType sql.StringType
+type blobStringType struct {
+	sqlStringType sql.StringType
 }
 
-var _ TypeInfo = (*varBinaryType)(nil)
+var _ TypeInfo = (*blobStringType)(nil)
 
-func CreateVarBinaryTypeFromParams(params map[string]string) (TypeInfo, error) {
+func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var length int64
+	var collation sql.Collation
 	var err error
-	if lengthStr, ok := params[varBinaryTypeParam_Length]; ok {
-		length, err = strconv.ParseInt(lengthStr, 10, 64)
+	if collationStr, ok := params[blobStringTypeParam_Collate]; ok {
+		collation, err = sql.ParseCollation(nil, &collationStr, false)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		return nil, fmt.Errorf(`create varbinary type info is missing param "%v"`, varBinaryTypeParam_Length)
+		return nil, fmt.Errorf(`create blobstring type info is missing param "%v"`, blobStringTypeParam_Collate)
 	}
-	sqlType, err := sql.CreateBinary(sqltypes.Blob, length)
+	if maxLengthStr, ok := params[blobStringTypeParam_Length]; ok {
+		length, err = strconv.ParseInt(maxLengthStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		return nil, fmt.Errorf(`create blobstring type info is missing param "%v"`, blobStringTypeParam_Length)
+	}
+	sqlType, err := sql.CreateString(sqltypes.Text, length, collation)
 	if err != nil {
 		return nil, err
 	}
-	return &varBinaryType{sqlType}, nil
+	return &blobStringType{sqlType}, nil
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *varBinaryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+func (ti *blobStringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Blob); ok {
 		return fromBlob(val)
 	}
@@ -73,7 +78,7 @@ func (ti *varBinaryType) ConvertNomsValueToValue(v types.Value) (interface{}, er
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *varBinaryType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+func (ti *blobStringType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.PeekKind()
 	switch k {
 	case types.BlobKind:
@@ -91,34 +96,35 @@ func (ti *varBinaryType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecRead
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *varBinaryType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+func (ti *blobStringType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlBinaryType.Convert(v)
+	strVal, err := ti.sqlStringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 	val, ok := strVal.(string)
-	if ok {
+	if ok && utf8.ValidString(val) { // We need to move utf8 (collation) validation into the server
 		return types.NewBlob(ctx, vrw, strings.NewReader(val))
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *varBinaryType) Equals(other TypeInfo) bool {
+func (ti *blobStringType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*varBinaryType); ok {
-		return ti.sqlBinaryType.MaxCharacterLength() == ti2.sqlBinaryType.MaxCharacterLength()
+	if ti2, ok := other.(*blobStringType); ok {
+		return ti.sqlStringType.MaxCharacterLength() == ti2.sqlStringType.MaxCharacterLength() &&
+			ti.sqlStringType.Collation().Equals(ti2.sqlStringType.Collation())
 	}
 	return false
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *varBinaryType) FormatValue(v types.Value) (*string, error) {
+func (ti *blobStringType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.Blob); ok {
 		resStr, err := fromBlob(val)
 		if err != nil {
@@ -133,21 +139,22 @@ func (ti *varBinaryType) FormatValue(v types.Value) (*string, error) {
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *varBinaryType) GetTypeIdentifier() Identifier {
-	return VarBinaryTypeIdentifier
+func (ti *blobStringType) GetTypeIdentifier() Identifier {
+	return BlobStringTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *varBinaryType) GetTypeParams() map[string]string {
+func (ti *blobStringType) GetTypeParams() map[string]string {
 	return map[string]string{
-		varBinaryTypeParam_Length: strconv.FormatInt(ti.sqlBinaryType.MaxCharacterLength(), 10),
+		blobStringTypeParam_Collate: ti.sqlStringType.Collation().String(),
+		blobStringTypeParam_Length:  strconv.FormatInt(ti.sqlStringType.MaxCharacterLength(), 10),
 	}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *varBinaryType) IsValid(v types.Value) bool {
+func (ti *blobStringType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Blob); ok {
-		if int64(val.Len()) <= ti.sqlBinaryType.MaxByteLength() {
+		if int64(val.Len()) <= ti.sqlStringType.MaxByteLength() {
 			return true
 		}
 	}
@@ -158,16 +165,16 @@ func (ti *varBinaryType) IsValid(v types.Value) bool {
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *varBinaryType) NomsKind() types.NomsKind {
+func (ti *blobStringType) NomsKind() types.NomsKind {
 	return types.BlobKind
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *varBinaryType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
+func (ti *blobStringType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	if str == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlBinaryType.Convert(*str)
+	strVal, err := ti.sqlStringType.Convert(*str)
 	if err != nil {
 		return nil, err
 	}
@@ -178,69 +185,22 @@ func (ti *varBinaryType) ParseValue(ctx context.Context, vrw types.ValueReadWrit
 }
 
 // Promote implements TypeInfo interface.
-func (ti *varBinaryType) Promote() TypeInfo {
-	return &varBinaryType{ti.sqlBinaryType.Promote().(sql.StringType)}
+func (ti *blobStringType) Promote() TypeInfo {
+	return &blobStringType{ti.sqlStringType.Promote().(sql.StringType)}
 }
 
 // String implements TypeInfo interface.
-func (ti *varBinaryType) String() string {
-	return fmt.Sprintf(`VarBinary(%v)`, ti.sqlBinaryType.MaxCharacterLength())
+func (ti *blobStringType) String() string {
+	return fmt.Sprintf(`BlobString(%v, %v)`, ti.sqlStringType.Collation().String(), ti.sqlStringType.MaxCharacterLength())
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *varBinaryType) ToSqlType() sql.Type {
-	return ti.sqlBinaryType
+func (ti *blobStringType) ToSqlType() sql.Type {
+	return ti.sqlStringType
 }
 
-// fromBlob returns a string from a types.Blob.
-func fromBlob(b types.Blob) (string, error) {
-	strLength := b.Len()
-	if strLength == 0 {
-		return "", nil
-	}
-	str := make([]byte, strLength)
-	n, err := b.ReadAt(context.Background(), str, 0)
-	if err != nil && err != io.EOF {
-		return "", err
-	}
-	if uint64(n) != strLength {
-		return "", fmt.Errorf("wanted %d bytes from blob for data, got %d", strLength, n)
-	}
-
-	// For very large byte slices, the standard method of converting a byte slice to a string using "string(str)" will
-	// cause it to duplicate the entire string. This uses a lot more memory and significantly impact performance.
-	// Using an unsafe pointer, we can avoid the duplication and get a fairly large performance gain. In some unofficial
-	// testing, performance improved by 40%.
-	// This is inspired by Go's own source code in strings.Builder.String(): https://golang.org/src/strings/builder.go#L48
-	// This is also marked as a valid strategy in unsafe.Pointer's own method documentation.
-	return *(*string)(unsafe.Pointer(&str)), nil
-}
-
-// hasPrefix finds out if a Blob has a prefixed integer. Initially blobs for varBinary prepended an integer indicating
-// the length, which was unnecessary (as the underlying sequence tracks the total size). It's been removed, but this
-// may be used to see if a Blob is one of those older Blobs. A false positive is possible, but EXTREMELY unlikely.
-func hasPrefix(b types.Blob, ctx context.Context) (bool, error) {
-	blobLength := b.Len()
-	if blobLength < 8 {
-		return false, nil
-	}
-	countBytes := make([]byte, 8)
-	n, err := b.ReadAt(ctx, countBytes, 0)
-	if err != nil {
-		return false, err
-	}
-	if n != 8 {
-		return false, fmt.Errorf("wanted 8 bytes from blob for count, got %d", n)
-	}
-	prefixedLength := binary.LittleEndian.Uint64(countBytes)
-	if prefixedLength == blobLength-8 {
-		return true, nil
-	}
-	return false, nil
-}
-
-// varBinaryTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func varBinaryTypeConverter(ctx context.Context, src *varBinaryType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+// blobStringTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func blobStringTypeConverter(ctx context.Context, src *blobStringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

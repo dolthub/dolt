@@ -209,6 +209,14 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 			}
 			return dest.ConvertValueToNomsValue(ctx, vrw, decimal.Decimal(val))
 		}, true, nil
+	case *blobStringType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			s, err := src.ConvertNomsValueToValue(v)
+			if err != nil {
+				return nil, err
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, s)
+		}, true, nil
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *datetimeType:

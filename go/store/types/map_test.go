@@ -1354,20 +1354,12 @@ func TestMapEquals(t *testing.T) {
 
 func TestMapNotStringKeys(t *testing.T) {
 	assert := assert.New(t)
-
 	vrw := newTestValueStore()
-
-	b1, err := NewBlob(context.Background(), vrw, bytes.NewBufferString("blob1"))
-	require.NoError(t, err)
-	b2, err := NewBlob(context.Background(), vrw, bytes.NewBufferString("blob2"))
-	require.NoError(t, err)
 	l := []Value{
 		Bool(true), String("true"),
 		Bool(false), String("false"),
 		Float(1), String("Float: 1"),
 		Float(0), String("Float: 0"),
-		b1, String("blob1"),
-		b2, String("blob2"),
 		mustList(NewList(context.Background(), vrw)), String("empty list"),
 		mustList(NewList(context.Background(), vrw, mustList(NewList(context.Background(), vrw)))), String("list of list"),
 		mustMap(NewMap(context.Background(), vrw)), String("empty map"),
@@ -1377,7 +1369,7 @@ func TestMapNotStringKeys(t *testing.T) {
 	}
 	m1, err := NewMap(context.Background(), vrw, l...)
 	require.NoError(t, err)
-	assert.Equal(uint64(12), m1.Len())
+	assert.Equal(uint64(10), m1.Len())
 	for i := 0; i < len(l); i += 2 {
 		v, ok, err := m1.MaybeGet(context.Background(), l[i])
 		require.NoError(t, err)

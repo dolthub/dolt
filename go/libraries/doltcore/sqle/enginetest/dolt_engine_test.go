@@ -181,6 +181,9 @@ func TestTruncate(t *testing.T) {
 func TestScripts(t *testing.T) {
 	skipped := []string{
 		"create index r_c0 on r (c0);",
+		// These rely on keyless tables which orders its rows by hash rather than contents, meaning changing types causes different ordering
+		"SELECT group_concat(attribute) FROM t where o_id=2",
+		"SELECT group_concat(o_id) FROM t WHERE attribute='color'",
 	}
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }

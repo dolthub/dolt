@@ -25,7 +25,7 @@ teardown() {
         run dolt schema show
         [ "$status" -eq "0" ]
         [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
-        [[ "$output" =~ "\`a\` longtext" ]] || false
+        [[ "$output" =~ "\`a\` longtext" || "$output" =~ "\`a\` varchar(16383)" ]] || false
         [[ "$output" =~ "\`b\` datetime" ]] || false
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
@@ -36,7 +36,7 @@ teardown() {
         run dolt schema show
         [ "$status" -eq "0" ]
         [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
-        [[ "$output" =~ "\`a\` longtext" ]] || false
+        [[ "$output" =~ "\`a\` longtext" || "$output" =~ "\`a\` varchar(16383)" ]] || false
         [[ "$output" =~ "\`b\` datetime" ]] || false
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
@@ -50,7 +50,7 @@ teardown() {
         run dolt schema show
         [ "$status" -eq "0" ]
         [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
-        [[ "$output" =~ "\`a\` longtext" ]] || false
+        [[ "$output" =~ "\`a\` longtext" || "$output" =~ "\`a\` varchar(16383)" ]] || false
         [[ "$output" =~ "\`b\` datetime" ]] || false
         [[ "$output" =~ "\`c\` bigint unsigned" ]] || false
         run dolt sql -q "select * from abc order by pk asc"
