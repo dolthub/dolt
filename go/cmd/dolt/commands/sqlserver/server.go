@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"net"
 	"strconv"
 	"time"
@@ -276,26 +277,42 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			return nil, fmt.Errorf("couldn't find environment for database %s", db.Name())
 		}
 
+		head := dEnv.RepoStateReader().CWBHeadSpec()
+
+		var ws *doltdb.WorkingSet
+		var headCommit *doltdb.Commit
+		var err error
 		if _, val, ok := sql.SystemVariables.GetGlobal(SqlServerBranchRefKey); ok {
 			if refStr, ok := val.(string); ok && ref.IsRef(refStr) {
 				headRef, err := ref.Parse(refStr)
 				if err != nil {
 					break
 				}
-				dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: headRef})
+				headCommit, err = dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+				if err != nil {
+					return nil, err
+				}
+
+				workingSetRef, err := ref.WorkingSetRefForHead(headRef)
+				if err != nil {
+					return nil, err
+				}
+
+				ws, err = dEnv.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
+				if err != nil {
+					return nil, err
+				}
 			}
-		}
+		} else {
+			headCommit, err = dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+			if err != nil {
+				return nil, err
+			}
 
-		head := dEnv.RepoStateReader().CWBHeadSpec()
-
-		headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-		if err != nil {
-			return nil, err
-		}
-
-		ws, err := dEnv.WorkingSet(ctx)
-		if err != nil {
-			return nil, err
+			ws, err = dEnv.WorkingSet(ctx)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		dbStates = append(dbStates, dsess.InitialDbState{
