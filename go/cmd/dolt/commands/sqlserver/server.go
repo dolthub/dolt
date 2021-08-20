@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -263,73 +264,95 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			return false, nil
 		})
 
+		var dbState *dsess.InitialDbState
+		var err error
 		if dEnv == nil {
 			init, err := pro.RevisionDbState(ctx, db.Name())
 			if err != nil {
 				return nil, err
 			}
-
-			dbStates = append(dbStates, init)
-			continue
-		}
-
-		if dEnv == nil {
-			return nil, fmt.Errorf("couldn't find environment for database %s", db.Name())
-		}
-
-		head := dEnv.RepoStateReader().CWBHeadSpec()
-
-		var ws *doltdb.WorkingSet
-		var headCommit *doltdb.Commit
-		var err error
-		if _, val, ok := sql.SystemVariables.GetGlobal(DoltDefaultBranchKey); ok {
-			if refStr, ok := val.(string); ok && ref.IsRef(refStr) {
-				headRef, err := ref.Parse(refStr)
-				if err != nil {
-					break
-				}
-				headCommit, err = dEnv.DoltDB.Resolve(ctx, head, headRef)
-				if err != nil {
-					return nil, err
-				}
-
-				workingSetRef, err := ref.WorkingSetRefForHead(headRef)
-				if err != nil {
-					return nil, err
-				}
-
-				ws, err = dEnv.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
-				if err != nil {
-					return nil, err
-				}
-
-				dbStates = append(dbStates, dsess.InitialDbState{
-					Db:         db,
-					HeadCommit: headCommit,
-					WorkingSet: ws,
-					DbData:     dEnv.DbData(),
-				})
-				continue
+			dbState = &init
+		} else if _, val, ok := sql.SystemVariables.GetGlobal(DoltDefaultBranchKey); ok && val != "" {
+			dbState, err = getDbStateForDefaultBranch(ctx, val, db, dEnv)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			dbState, err = getDbStateForDEnv(ctx, db, dEnv)
+			if err != nil {
+				return nil, err
 			}
 		}
 
-		headCommit, err = dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-		if err != nil {
-			return nil, err
+		if dbState == nil {
+			return nil, errors.New("unexpected error initializing dbState")
 		}
-
-		ws, err = dEnv.WorkingSet(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		dbStates = append(dbStates, dsess.InitialDbState{
-			Db:         db,
-			HeadCommit: headCommit,
-			WorkingSet: ws,
-			DbData:     dEnv.DbData(),
-		})
+		dbStates = append(dbStates, *dbState)
 	}
 
 	return dbStates, nil
+}
+
+func getDbStateForDefaultBranch(ctx context.Context, branch interface{}, db sql.Database, dEnv *env.DoltEnv) (*dsess.InitialDbState, error) {
+	branchRef, ok := branch.(string)
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("invalid type for @@GLOBAL.dolt_default_branch. got: %s, want: string", branch))
+	}
+
+	if !ref.IsRef(branchRef) {
+		branchRef = fmt.Sprintf("refs/heads/%s", branchRef)
+		if !ref.IsRef(branchRef) {
+			return nil, errors.New("@@GLOBAL.dolt_default_branch set as invalid ref")
+		}
+	}
+
+	headRef, err := ref.Parse(branchRef)
+	if err != nil {
+		return nil, err
+	}
+
+	head, _ := doltdb.NewCommitSpec("HEAD")
+
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, headRef)
+	if err != nil {
+		return nil, err
+	}
+
+	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
+	if err != nil {
+		return nil, err
+	}
+
+	ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+	}, nil
+}
+
+func getDbStateForDEnv(ctx context.Context, db sql.Database, dEnv *env.DoltEnv) (*dsess.InitialDbState, error) {
+	head, _ := doltdb.NewCommitSpec("HEAD")
+
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+	}, nil
 }

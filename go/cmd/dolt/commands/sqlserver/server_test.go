@@ -246,7 +246,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 	server.Close()
 }
 
-func TestServerCheckout(t *testing.T) {
+func TestServerSetDefaultBranch(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15302)
 
@@ -297,6 +297,41 @@ func TestServerCheckout(t *testing.T) {
 				return sess.Select("dolt_checkout('master')")
 			},
 			expectedRes: []testBranch{{""}},
+		},
+	}
+
+	for _, test := range tests {
+		query := test.query()
+		t.Run(query.Query, func(t *testing.T) {
+			var branch []testBranch
+			_, err := query.LoadContext(context.Background(), &branch)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, branch, test.expectedRes)
+		})
+	}
+	conn.Close()
+
+	conn, err = dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	sess = conn.NewSession(nil)
+
+	tests = []struct {
+		query       func() *dbr.SelectStmt
+		expectedRes []testBranch
+	}{
+		{
+			query: func() *dbr.SelectStmt {
+				return sess.Select("active_branch() as branch")
+			},
+			expectedRes: []testBranch{{"new"}},
+		},
+		{
+			query: func() *dbr.SelectStmt {
+				return sess.SelectBySql("set GLOBAL dolt_default_branch = 'new'")
+			},
+			expectedRes: []testBranch{},
 		},
 	}
 

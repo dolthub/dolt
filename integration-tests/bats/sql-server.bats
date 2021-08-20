@@ -854,7 +854,7 @@ SQL
     server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
 }
 
-@test "sql-server: SET GLOBAL default branch" {
+@test "sql-server: SET GLOBAL default branch as ref" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -868,14 +868,13 @@ SQL
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
     server_query repo1 1 "SHOW tables" "" # no tables on master
-
     server_query repo1 1 "set GLOBAL dolt_default_branch = 'refs/heads/new';" ""
     server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
     server_query repo1 1 "SHOW tables" "Table\nt"
 }
 
-@test "sql-server: SET GLOBAL default branch does not affect current session" {
+@test "sql-server: SET GLOBAL default branch as branch name" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -889,12 +888,8 @@ SQL
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
     server_query repo1 1 "SHOW tables" "" # no tables on master
-
-    multi_query repo1 1 '
-    set GLOBAL dolt_default_branch = "refs/heads/new";
-    show tables;' "" # SET GLOBAL does not affect current connection
-
+    server_query repo1 1 "set GLOBAL dolt_default_branch = 'new';" ""
+    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nnew"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
-    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
     server_query repo1 1 "SHOW tables" "Table\nt"
 }
