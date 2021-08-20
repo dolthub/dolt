@@ -547,3 +547,35 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" = "duplicate primary key given: [1]" ]] || false
 }
+
+@test "primary-key-changes: can drop pk with supporting backup index" {
+    dolt sql -q "CREATE table t1 (pk int, val int, primary key (pk, val), key `backup` (pk, val))"
+    dolt sql -q "CREATE table c1 (pk int, val int, foreign key (pk, val) references t1 (pk, val))"
+    dolt sql -q "alter table t1 drop primary key"
+
+    dolt sql -q "CREATE table t2 (pk int, val int, primary key (pk, val), key `backup` (val))"
+    dolt sql -q "CREATE table c2 (pk int, val int, foreign key (val) references t2 (val))"
+    dolt sql -q "alter table t2 drop primary key"
+
+    dolt sql -q "CREATE table t3 (pk int, val int, primary key (val, pk), key `backup` (pk))"
+    dolt sql -q "CREATE table c3 (pk int, val int, foreign key (val) references t3 (val))"
+    run dolt sql -q "alter table t3 drop primary key"
+    [ "$status" -eq 1 ]
+}
+
+@test "primary-key-changes: foreign key lookup switch to backup index" {
+    dolt sql -q "CREATE table t (pk int, val int, primary key (pk, val), key `backup` (val))"
+    dolt sql -q "CREATE table c (pk int, val int, foreign key (val) references t (val))"
+    dolt sql -q "insert into t values (1,1), (2,2)"
+    dolt sql -q "insert into c values (1,1), (2,2)"
+    dolt sql -q "alter table t drop primary key"
+
+    run dolt sql -q "explain select * from c where val = 2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Filter" ]] || false
+
+    run dolt sql -q "select * from c where val = 2" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "2,2" ]] || false
+
+}
