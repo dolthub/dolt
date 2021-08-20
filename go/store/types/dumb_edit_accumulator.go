@@ -14,6 +14,8 @@
 
 package types
 
+import "io"
+
 // DumbEditAccumulator is a simple EditAccumulator and EditProvider implementation that allows for more complex
 // implementations to be put into other packages. It is fine for small edits, and tests, but edits.AsyncSortedEdits
 // performs much better for large amounts of data
@@ -49,15 +51,16 @@ func (dumb *DumbEditAccumulator) FinishedEditing() (EditProvider, error) {
 func (dumb *DumbEditAccumulator) Close() {}
 
 // Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
-// in key sorted order
+// in key sorted order. Once all KVPs have been read io.EOF will be returned.
 func (dumb *DumbEditAccumulator) Next() (*KVP, error) {
-	var curr *KVP
 	if dumb.pos < len(dumb.edits) {
-		curr = &dumb.edits[dumb.pos]
+		curr := &dumb.edits[dumb.pos]
 		dumb.pos++
+
+		return curr, nil
 	}
 
-	return curr, nil
+	return nil, io.EOF
 }
 
 // NumEdits returns the number of KVPs representing the edits that will be provided when calling next
