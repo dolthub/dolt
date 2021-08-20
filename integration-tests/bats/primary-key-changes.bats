@@ -439,16 +439,6 @@ SQL
     [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
 }
 
-@test "primary-key-changes: error dropping primary key when used as a parent in Fk relationship" {
-    dolt sql -q "CREATE TABLE child(pk int primary key)"
-    dolt sql -q "CREATE TABLE parent(pk int primary key, val int);"
-    dolt sql -q "ALTER TABLE parent ADD CONSTRAINT myfk FOREIGN KEY (pk) REFERENCES child (pk);"
-
-    run dolt sql -q "ALTER TABLE parent DROP PRIMARY KEY"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
-}
-
 @test "primary-key-changes: dolt constraints verify works gracefully with schema violations" {
     dolt sql -q "CREATE table t (pk int primary key, val int)"
     dolt commit -am "cm1"
