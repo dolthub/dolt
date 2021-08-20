@@ -1758,28 +1758,19 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return sql.ErrWrongAutoKey.New()
 	}
 
-	// Ensure that any primary key column is neither a parent nor child in a fk relationship
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
 
-	fkc, err := root.GetForeignKeyCollection(ctx)
+	fkc, err := t.verifyCanDropPk(ctx, root)
 	if err != nil {
 		return err
 	}
-
-	err = t.sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (bool, error) {
-		if fkc.ColumnHasFkRelationship(tag) {
-			return true, sql.ErrCantDropIndex.New("PRIMARY")
-		}
-
-		return false, nil
-	})
+	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
 	if err != nil {
 		return err
 	}
-
 	table, err := t.doltTable(ctx)
 	if err != nil {
 		return err
@@ -1791,7 +1782,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	}
 
 	// Update the root with then new table
-	newRoot, err := root.PutTable(ctx, t.tableName, table)
+	newRoot, err = newRoot.PutTable(ctx, t.tableName, table)
 	if err != nil {
 		return err
 	}
@@ -1802,4 +1793,70 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
+}
+
+// canDropPk checks whether there are conflicting foreign key relationships referencing this
+// table's primary key tags
+func (t *AlterableDoltTable) verifyCanDropPk(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.ForeignKeyCollection, error) {
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	indexes := t.sch.Indexes().AllIndexes()
+	if err != nil {
+		return nil, err
+	}
+
+	// pkBackups is a mapping from the table's PL tags to potentially compensating indexes
+	pkBackups := make(map[uint64][]schema.Index, len(t.sch.GetPKCols().TagToIdx))
+	for tag, _ := range t.sch.GetPKCols().TagToIdx {
+		pkBackups[tag] = nil
+	}
+	for _, idx := range indexes {
+		if !idx.IsUserDefined() || !!idx.IsUnique() {
+			continue
+		}
+
+		for _, tag := range idx.AllTags() {
+			if _, ok := pkBackups[tag]; ok {
+				pkBackups[tag] = append(pkBackups[tag], idx)
+			}
+		}
+	}
+
+	for _, fk := range fkc.AllKeys() {
+		// check whether or not this FK parent references a PK tag we are about to drop
+		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
+			covered := false
+			for _, idx := range backups {
+				idxTags := idx.AllTags()
+				if len(fk.TableColumns) > len(idxTags) {
+					continue
+				}
+				failed := false
+				for i := 0; i < len(fk.ReferencedTableColumns); i++ {
+					if idxTags[i] != fk.ReferencedTableColumns[i] {
+						failed = true
+						break
+					}
+				}
+				if failed {
+					continue
+				}
+
+				fkc.RemoveKeys(fk)
+				fk.ReferencedTableIndex = idx.Name()
+				fkc.AddKeys(fk)
+
+				err = fk.ValidateReferencedTableSchema(t.sch)
+				covered = true
+				break
+			}
+			if !covered {
+				return nil, sql.ErrCantDropIndex.New("PRIMARY")
+			}
+		}
+	}
+	return fkc, nil
 }

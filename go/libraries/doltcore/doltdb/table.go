@@ -366,7 +366,6 @@ func (t *Table) GetSchema(ctx context.Context) (schema.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	schemaRef := schemaRefVal.(types.Ref)
 	return RefToSchema(ctx, t.vrw, schemaRef)
 }
