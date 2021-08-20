@@ -1826,7 +1826,7 @@ func (t *AlterableDoltTable) verifyCanDropPk(ctx *sql.Context, root *doltdb.Root
 	}
 
 	for _, fk := range fkc.AllKeys() {
-		// check whether or not this FK parent references a PK tag we are about to drop
+		// check if this FK references a parent PK tag we are trying to change
 		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
 			covered := false
 			for _, idx := range backups {
