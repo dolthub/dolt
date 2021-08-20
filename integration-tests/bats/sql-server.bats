@@ -27,7 +27,7 @@ teardown() {
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
-    
+
     run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt
     [ "$status" -eq 1 ]
     [[ "$output" =~ "in use" ]] || false
@@ -656,7 +656,7 @@ SQL
 }
 
 @test "sql-server: LOAD DATA LOCAL INFILE works" {
-	skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
+    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
      cd repo1
@@ -850,6 +850,46 @@ SQL
     )' ""
 
     server_query repo1 1 "SHOW tables" "" # no tables on master
-    
+
     server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
+}
+
+@test "sql-server: SET GLOBAL default branch as ref" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt checkout -b "new"
+    dolt checkout master
+    start_sql_server repo1
+
+    multi_query repo1 1 '
+    select dolt_checkout("new");
+    CREATE TABLE t (a int primary key, b int);
+    INSERT INTO t VALUES (2,2),(3,3);' ""
+
+    server_query repo1 1 "SHOW tables" "" # no tables on master
+    server_query repo1 1 "set GLOBAL dolt_default_branch = 'refs/heads/new';" ""
+    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
+    server_query repo1 1 "select active_branch()" "active_branch()\nnew"
+    server_query repo1 1 "SHOW tables" "Table\nt"
+}
+
+@test "sql-server: SET GLOBAL default branch as branch name" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt checkout -b "new"
+    dolt checkout master
+    start_sql_server repo1
+
+    multi_query repo1 1 '
+    select dolt_checkout("new");
+    CREATE TABLE t (a int primary key, b int);
+    INSERT INTO t VALUES (2,2),(3,3);' ""
+
+    server_query repo1 1 "SHOW tables" "" # no tables on master
+    server_query repo1 1 "set GLOBAL dolt_default_branch = 'new';" ""
+    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nnew"
+    server_query repo1 1 "select active_branch()" "active_branch()\nnew"
+    server_query repo1 1 "SHOW tables" "Table\nt"
 }
