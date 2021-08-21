@@ -129,8 +129,6 @@ func TestDropPks(t *testing.T) {
 	var dropTests = []struct {
 		name      string
 		setup     []string
-		check     []string
-		want      []row.Row
 		exit      int
 		fkIdxName string
 	}{
