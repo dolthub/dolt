@@ -147,8 +147,6 @@ func TestDropPks(t *testing.T) {
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, primary key (id), key `backup` (id))",
 				"create table child (id int, name varchar(1), age int, primary key (id), constraint `fk` foreign key (id) references parent (id))",
-				"insert into parent values (1,1,1),(2,2,2)",
-				"insert into child values (1,1,1),(2,2,2)",
 			},
 			exit:      0,
 			fkIdxName: "backup",
@@ -158,8 +156,6 @@ func TestDropPks(t *testing.T) {
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `backup` (age))",
 				"create table child (id int, name varchar(1), age int, primary key (id), constraint `fk` foreign key (age) references parent (age))",
-				"insert into parent values (1,1,1),(2,2,2)",
-				"insert into child values (1,1,1),(2,2,2)",
 			},
 			exit:      0,
 			fkIdxName: "backup",
@@ -169,8 +165,6 @@ func TestDropPks(t *testing.T) {
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `backup` (id, age))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id, age) references parent (id, age))",
-				"insert into parent values (1,1,1),(2,2,2)",
-				"insert into child values (1,1,1),(2,2,2)",
 			},
 			exit:      0,
 			fkIdxName: "backup",
@@ -180,8 +174,6 @@ func TestDropPks(t *testing.T) {
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup1` (id, age), key `bad_backup2` (id), key `backup` (age, id))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age) references parent (age))",
-				"insert into parent values (1,1,1),(2,2,2)",
-				"insert into child values (1,1,1),(2,2,2)",
 			},
 			exit:      0,
 			fkIdxName: "backup",
@@ -191,8 +183,6 @@ func TestDropPks(t *testing.T) {
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, primary key (id))",
 				"create table child (id int, name varchar(1), age int, primary key (id), constraint `fk` foreign key (id) references parent (id))",
-				"insert into parent values (1,1,1),(2,2,2)",
-				"insert into child values (1,1,1),(2,2,2)",
 			},
 			exit:      1,
 			fkIdxName: "id",
@@ -202,8 +192,6 @@ func TestDropPks(t *testing.T) {
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, primary key (id), key `bad_backup2` (age))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
-				"insert into parent values (1,1,1),(2,2,2)",
-				"insert into child values (1,1,1),(2,2,2)",
 			},
 			exit:      1,
 			fkIdxName: "id",
@@ -213,8 +201,6 @@ func TestDropPks(t *testing.T) {
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, constraint `primary` primary key (id), key `backup` (age, id))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
-				"insert into parent values (1,1,1),(2,2,2)",
-				"insert into child values (1,1,1),(2,2,2)",
 			},
 			exit:      1,
 			fkIdxName: "id",
@@ -224,8 +210,6 @@ func TestDropPks(t *testing.T) {
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, constraint `primary` primary key (age, id), key `backup` (age, name))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age, id) references parent (age,  id))",
-				"insert into parent values (1,1,1),(2,2,2)",
-				"insert into child values (1,1,1),(2,2,2)",
 			},
 			exit:      1,
 			fkIdxName: "ageid",
