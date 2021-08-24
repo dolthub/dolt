@@ -3,7 +3,7 @@ name: Fuzzer
 on:
   push:
     paths:
-      - 'go/'
+      - 'go/**'
     branches:
       - 'master'
 
