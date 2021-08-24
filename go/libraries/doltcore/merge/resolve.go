@@ -57,22 +57,12 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 		return err
 	}
 
-	schemas, _, err := tbl.GetConflicts(ctx)
+	tbl, err = tbl.ClearConflicts()
 	if err != nil {
 		return err
 	}
 
 	return sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-		m, err := types.NewMap(ctx, vrw)
-		if err != nil {
-			return nil, err
-		}
-
-		tbl, err = tbl.SetConflicts(ctx, schemas, m)
-		if err != nil {
-			return nil, err
-		}
-
 		return root.PutTable(ctx, tblName, tbl)
 	})
 }

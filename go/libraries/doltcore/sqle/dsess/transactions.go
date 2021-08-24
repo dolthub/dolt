@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 
@@ -117,6 +118,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 
 	for i := 0; i < maxTxCommitRetries; i++ {
 		updatedWs, err := func() (*doltdb.WorkingSet, error) {
+			// Serialize commits, since only one can possibly succeed at a time anyway
 			txLock.Lock()
 			defer txLock.Unlock()
 
@@ -158,10 +160,23 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 			}
 			logrus.Tracef("merge took %s", time.Since(start))
 
+			var tablesWithConflicts []string
 			for table, mergeStats := range stats {
 				if mergeStats.Conflicts > 0 {
-					// TODO: surface duplicate key errors as appropriate
-					return nil, fmt.Errorf("conflict in table %s", table)
+					if transactionMergeStomp {
+						tablesWithConflicts = append(tablesWithConflicts, table)
+					} else {
+						// TODO: surface duplicate key errors as appropriate
+						return nil, fmt.Errorf("conflict in table %s", table)
+					}
+				}
+			}
+
+			// Only resolve conflicts automatically if the stomp environment key is set
+			if len(tablesWithConflicts) > 0 {
+				mergedRoot, err = tx.stompConflicts(ctx, mergedRoot, tablesWithConflicts)
+				if err != nil {
+					return nil, err
 				}
 			}
 
@@ -185,6 +200,34 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 
 	// TODO: different error type for retries exhausted
 	return nil, datas.ErrOptimisticLockFailed
+}
+
+// stompConflicts resolves the conflicted tables in the root given by blindly accepting theirs, and returns the
+// updated root value
+func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.RootValue, tablesWithConflicts []string) (*doltdb.RootValue, error) {
+	start := time.Now()
+	tableEditSession := editor.CreateTableEditSession(mergedRoot, editor.TableEditSessionProps{})
+
+	for _, tblName := range tablesWithConflicts {
+		tbl, _, err := mergedRoot.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+
+		err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, tbl, merge.Theirs, tableEditSession)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var err error
+	mergedRoot, err = tableEditSession.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Tracef("resolving conflicts took %s", time.Since(start))
+
+	return mergedRoot, nil
 }
 
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given
