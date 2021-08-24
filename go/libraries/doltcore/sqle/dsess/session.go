@@ -17,6 +17,7 @@ package dsess
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -38,11 +39,13 @@ const (
 )
 
 const (
-	EnableTransactionsEnvKey      = "DOLT_ENABLE_TRANSACTIONS"
+	TransactionMergeStompEnvKey   = "DOLT_TRANSACTION_MERGE_STOMP"
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
 )
+
+var transactionMergeStomp = false
 
 type batchMode int8
 
@@ -94,6 +97,11 @@ func init() {
 			Default:           int8(0),
 		},
 	})
+
+	_, ok := os.LookupEnv(TransactionMergeStompEnvKey)
+	if ok {
+		transactionMergeStomp = true
+	}
 }
 
 func IsHeadKey(key string) (bool, string) {
