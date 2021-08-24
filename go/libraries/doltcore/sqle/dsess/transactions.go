@@ -146,6 +146,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 				// ff merge
 				err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
 				if err == datas.ErrOptimisticLockFailed {
+					// this is effectively a `continue` in the loop
 					return nil, nil
 				} else if err != nil {
 					return nil, err
@@ -184,6 +185,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 			mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
 			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash, tx.getWorkingSetMeta(ctx))
 			if err == datas.ErrOptimisticLockFailed {
+				// this is effectively a `continue` in the loop
 				return nil, nil
 			} else if err != nil {
 				return nil, err
