@@ -16,11 +16,11 @@ package dbfactory
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/datas"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
