@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -215,6 +216,19 @@ func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.R
 		}
 
 		err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, tbl, merge.Theirs, tableEditSession)
+		if err != nil {
+			return nil, err
+		}
+
+		err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+			tbl, err = tbl.ClearConflicts()
+			if err != nil {
+				return nil, err
+			}
+
+			return root.PutTable(ctx, tblName, tbl)
+		})
+
 		if err != nil {
 			return nil, err
 		}
