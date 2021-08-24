@@ -128,7 +128,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return res
 	}
 
-	// Pass in the final parameters for the autho string
+	// Pass in the final parameters for the author string.
 	commitParams := []string{"-m", revertMessage}
 	authorStr, ok := apr.GetValue(cli.AuthorParam)
 	if ok {

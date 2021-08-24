@@ -70,13 +70,6 @@ teardown() {
     [[ "$output" =~ "conflict" ]] || false
 }
 
-@test "revert: --author parameter" {
-    dolt revert HEAD --author "john <johndoe@gmail.com>"
-    run dolt log -n 1
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "Author: john <johndoe@gmail.com>" ]] || false
-}
-
 @test "revert: constraint violations" {
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
@@ -113,6 +106,33 @@ SQL
     run dolt revert aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     [ "$status" -eq "1" ]
     [[ "$output" =~ "hash" ]] || false
+}
+
+@test "revert: HEAD with --author parameter" {
+    dolt revert HEAD --author "john <johndoe@gmail.com>"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt log -n 1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Author: john <johndoe@gmail.com>" ]] || false
+}
+
+@test "revert: HEAD & HEAD~1 with --author parameter" {
+    dolt revert HEAD HEAD~1 --author "john <johndoe@gmail.com>"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt log -n 1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Author: john <johndoe@gmail.com>" ]] || false
 }
 
 @test "revert: SQL HEAD" {
