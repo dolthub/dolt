@@ -17,9 +17,11 @@ package dsess
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -80,6 +82,8 @@ func (tx DoltTransaction) String() string {
 	return "DoltTransaction"
 }
 
+var txLock sync.Mutex
+
 // Commit attempts to merge newRoot into the working set
 // Uses the same algorithm as merge.Merger:
 // |ws.root| is the root
@@ -112,58 +116,71 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 	}
 
 	for i := 0; i < maxTxCommitRetries; i++ {
-		newWorkingSet := false
+		updatedWs, err := func() (*doltdb.WorkingSet, error) {
+			txLock.Lock()
+			defer txLock.Unlock()
 
-		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
-		if err == doltdb.ErrWorkingSetNotFound {
-			// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
-			// first time. Can be removed and called an error post 1.0
-			ws = doltdb.EmptyWorkingSet(tx.workingSetRef)
-			newWorkingSet = true
-		} else if err != nil {
-			return nil, err
-		}
+			newWorkingSet := false
 
-		existingWorkingRoot := ws.WorkingRoot()
-
-		hash, err := ws.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
-			// ff merge
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
-			if err == datas.ErrOptimisticLockFailed {
-				continue
+			ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
+			if err == doltdb.ErrWorkingSetNotFound {
+				// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
+				// first time. Can be removed and called an error post 1.0
+				ws = doltdb.EmptyWorkingSet(tx.workingSetRef)
+				newWorkingSet = true
 			} else if err != nil {
 				return nil, err
 			}
 
-			return workingSet, nil
-		}
+			existingWorkingRoot := ws.WorkingRoot()
 
-		mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot())
+			hash, err := ws.HashOf()
+			if err != nil {
+				return nil, err
+			}
+
+			if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
+				// ff merge
+				err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
+				if err == datas.ErrOptimisticLockFailed {
+					return nil, nil
+				} else if err != nil {
+					return nil, err
+				}
+
+				return workingSet, nil
+			}
+
+			start := time.Now()
+			mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot())
+			if err != nil {
+				return nil, err
+			}
+			logrus.Tracef("merge took %s", time.Since(start))
+
+			for table, mergeStats := range stats {
+				if mergeStats.Conflicts > 0 {
+					// TODO: surface duplicate key errors as appropriate
+					return nil, fmt.Errorf("conflict in table %s", table)
+				}
+			}
+
+			mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
+			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash, tx.getWorkingSetMeta(ctx))
+			if err == datas.ErrOptimisticLockFailed {
+				return nil, nil
+			} else if err != nil {
+				return nil, err
+			}
+
+			return mergedWorkingSet, nil
+		}()
+
 		if err != nil {
 			return nil, err
+		} else if updatedWs != nil {
+			return updatedWs, nil
 		}
-
-		for table, mergeStats := range stats {
-			if mergeStats.Conflicts > 0 {
-				// TODO: surface duplicate key errors as appropriate
-				return nil, fmt.Errorf("conflict in table %s", table)
-			}
-		}
-
-		mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
-		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash, tx.getWorkingSetMeta(ctx))
-		if err == datas.ErrOptimisticLockFailed {
-			continue
-		} else if err != nil {
-			return nil, err
-		}
-
-		return mergedWorkingSet, nil
 	}
 
 	// TODO: different error type for retries exhausted
