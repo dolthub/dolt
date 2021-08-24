@@ -40,6 +40,7 @@ func NewNBSMetricWrapper(nbs *NomsBlockStore) *NBSMetricWrapper {
 
 var _ TableFileStore = &NBSMetricWrapper{}
 var _ chunks.ChunkStoreGarbageCollector = &NBSMetricWrapper{}
+var _ chunks.ChunkStoreManifestVersionGetter = &NBSMetricWrapper{}
 
 // Sources retrieves the current root hash, a list of all the table files,
 // and a list of the appendix table files.

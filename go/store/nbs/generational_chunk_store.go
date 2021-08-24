@@ -26,6 +26,7 @@ import (
 var _ chunks.ChunkStore = (*GenerationalNBS)(nil)
 var _ chunks.GenerationalCS = (*GenerationalNBS)(nil)
 var _ TableFileStore = (*GenerationalNBS)(nil)
+var _ chunks.ChunkStoreManifestVersionGetter = (*GenerationalNBS)(nil)
 
 type GenerationalNBS struct {
 	oldGen *NomsBlockStore
@@ -307,4 +308,9 @@ func (gcs *GenerationalNBS) SetRootChunk(ctx context.Context, root, previous has
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
 func (gcs *GenerationalNBS) SupportedOperations() TableFileStoreOps {
 	return gcs.newGen.SupportedOperations()
+}
+
+// Returns the NomsVersion with which this ChunkSource is compatible.
+func (gcs *GenerationalNBS) GetManifestStorageVersion(ctx context.Context) (string, error) {
+	return gcs.newGen.GetManifestStorageVersion(ctx)
 }

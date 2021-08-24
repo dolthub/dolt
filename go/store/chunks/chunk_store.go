@@ -117,9 +117,9 @@ type GenerationalCS interface {
 	OldGen() ChunkStoreGarbageCollector
 }
 
-// ChunkStoreVersionGetter is a ChunkStore that supports getting the manifest's
+// ChunkStoreManifestVersionGetter is a ChunkStore that supports getting the manifest's
 // storage version
-type ChunkStoreVersionGetter interface {
+type ChunkStoreManifestVersionGetter interface {
 	ChunkStore
 
 	// GetManifestStorageVersion returns the storage version of the Chunkstore's manifest

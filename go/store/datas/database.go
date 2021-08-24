@@ -193,3 +193,9 @@ func GetCSStatSummaryForDB(db Database) string {
 	cs := db.chunkStore()
 	return cs.StatsSummary()
 }
+
+func IsChunkStoreManifestVersionGetter(db Database) bool {
+	cs := db.chunkStore()
+	_, ok := cs.(chunks.ChunkStoreManifestVersionGetter)
+	return ok
+}

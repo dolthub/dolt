@@ -99,6 +99,7 @@ type NomsBlockStore struct {
 
 var _ TableFileStore = &NomsBlockStore{}
 var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
+var _ chunks.ChunkStoreManifestVersionGetter = &NomsBlockStore{}
 
 type Range struct {
 	Offset uint64

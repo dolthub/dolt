@@ -21,7 +21,7 @@ import (
 )
 
 func GetManifestStorageVersion(ctx context.Context, db Database) (string, error) {
-	store, ok := db.chunkStore().(chunks.ChunkStoreVersionGetter)
+	store, ok := db.chunkStore().(chunks.ChunkStoreManifestVersionGetter)
 	if !ok {
 		return "", chunks.ErrUnsupportedOperation
 	}
