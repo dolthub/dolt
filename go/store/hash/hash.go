@@ -124,18 +124,23 @@ func Parse(s string) Hash {
 
 // Less compares two hashes returning whether this Hash is less than other.
 func (h Hash) Less(other Hash) bool {
-	return bytes.Compare(h[:], other[:]) < 0
+	return h.Compare(other) < 0
+}
+
+// Compare compares two hashes returning a negative value if h < other, 0 if h == other, and 1 if h > other
+func (h Hash) Compare(other Hash) int {
+	return bytes.Compare(h[:], other[:])
 }
 
 // Greater compares two hashes returning whether this Hash is greater than other.
 func (h Hash) Greater(other Hash) bool {
 	// TODO: Remove this
-	return bytes.Compare(h[:], other[:]) > 0
+	return h.Compare(other) > 0
 }
 
 // Equal compares two hashes returning whether this Hash is equal to other.
 func (h Hash) Equal(other Hash) bool {
-	return bytes.Compare(h[:], other[:]) == 0
+	return h.Compare(other) == 0
 }
 
 // HashSet is a set of Hashes.
