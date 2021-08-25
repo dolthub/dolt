@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"path/filepath"
 	"strings"
 	"time"
@@ -773,6 +772,22 @@ func (ddb *DoltDB) GetBranches(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, branchRefFilter)
 }
 
+type BranchWithHash struct {
+	Ref  ref.DoltRef
+	Hash hash.Hash
+}
+
+func (ddb *DoltDB) GetBranchesWithHashes(ctx context.Context) ([]BranchWithHash, error) {
+	var refs []BranchWithHash
+	err := ddb.VisitRefsOfType(ctx, branchRefFilter, func(r ref.DoltRef, v types.Value) error {
+		if tr, ok := v.(types.Ref); ok {
+			refs = append(refs, BranchWithHash{r, tr.TargetHash()})
+		}
+		return nil
+	})
+	return refs, err
+}
+
 var tagsRefFilter = map[ref.RefType]struct{}{ref.TagRefType: {}}
 
 // GetTags returns a list of all tags in the database.
@@ -799,15 +814,13 @@ func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.HeadRefTypes)
 }
 
-func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
-	var refs []ref.DoltRef
+func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, visit func(r ref.DoltRef, v types.Value) error) error {
 	dss, err := ddb.db.Datasets(ctx)
-
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = dss.IterAll(ctx, func(key, _ types.Value) error {
+	return dss.IterAll(ctx, func(key, v types.Value) error {
 		keyStr := string(key.(types.String))
 
 		var dref ref.DoltRef
@@ -818,18 +831,24 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 			}
 
 			if _, ok := refTypeFilter[dref.GetType()]; ok {
-				refs = append(refs, dref)
+				err = visit(dref, v)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
 		return nil
 	})
+}
 
-	if err != nil {
-		return nil, err
-	}
-
-	return refs, nil
+func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
+	var refs []ref.DoltRef
+	err := ddb.VisitRefsOfType(ctx, refTypeFilter, func(r ref.DoltRef, v types.Value) error {
+		refs = append(refs, r)
+		return nil
+	})
+	return refs, err
 }
 
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
@@ -875,6 +894,37 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 
 	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
 	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, nil)
+}
+
+// CopyWorkingSet copies a WorkingSetRef from one ref to another. If `force` is
+// true, will overwrite any existing value in the destination ref. Otherwise
+// will fail if the destination ref exists.
+//
+// If fromWSRef does not exist, this method does not return an error, but
+// returns `nil`. In that case, the destination ref is left alone.
+func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetRef, toWSRef ref.WorkingSetRef, force bool) error {
+	ws, err := ddb.ResolveWorkingSet(ctx, fromWSRef)
+	if err == ErrWorkingSetNotFound {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	var currWsHash hash.Hash
+	toWS, err := ddb.ResolveWorkingSet(ctx, toWSRef)
+	if err != nil && err != ErrWorkingSetNotFound {
+		return err
+	}
+	if !force && err != ErrWorkingSetNotFound {
+		return errors.New("cannot overwrite existing working set " + toWSRef.String() + " without force.")
+	} else if err == nil {
+		currWsHash, err = toWS.HashOf()
+		if err != nil {
+			return err
+		}
+	}
+
+	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, nil)
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
@@ -1052,55 +1102,39 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 		return err
 	}
 
-	rand.Seed(time.Now().UnixNano())
-	tmpDatasets := make([]datas.Dataset, len(uncommitedVals))
-	for i, h := range uncommitedVals {
-		v, err := ddb.db.ReadValue(ctx, h)
-		if err != nil {
-			return err
-		}
-		if v == nil {
-			return fmt.Errorf("empty value for value hash %s", h.String())
+	datasets, err := ddb.db.Datasets(ctx)
+	newGen := hash.NewHashSet(uncommitedVals...)
+	oldGen := make(hash.HashSet)
+	err = datasets.IterAll(ctx, func(key, value types.Value) error {
+		keyStr := string(key.(types.String))
+		h := value.(types.Ref).TargetHash()
+
+		var isOldGen bool
+		switch {
+		case ref.IsRef(keyStr):
+			parsed, err := ref.Parse(keyStr)
+			if err != nil && !errors.Is(err, ref.ErrUnknownRefType) {
+				return err
+			}
+
+			refType := parsed.GetType()
+			isOldGen = refType == ref.BranchRefType || refType == ref.RemoteRefType || refType == ref.InternalRefType
 		}
 
-		ds, err := ddb.db.GetDataset(ctx, fmt.Sprintf("tmp/%d", rand.Int63()))
-		if err != nil {
-			return err
+		if isOldGen {
+			oldGen.Insert(h)
+		} else {
+			newGen.Insert(h)
 		}
 
-		r, err := WriteValAndGetRef(ctx, ddb.db, v)
-		if err != nil {
-			return err
-		}
+		return nil
+	})
 
-		ds, err = ddb.db.CommitValue(ctx, ds, r)
-		if err != nil {
-			return err
-		}
-		if !ds.HasHead() {
-			return fmt.Errorf("could not save value %s", h.String())
-		}
-
-		tmpDatasets[i] = ds
-	}
-
-	err = collector.GC(ctx)
 	if err != nil {
 		return err
 	}
 
-	for _, ds := range tmpDatasets {
-		ds, err = ddb.db.Delete(ctx, ds)
-		if err != nil {
-			return err
-		}
-
-		if ds.HasHead() {
-			return fmt.Errorf("unsuccessful delete for dataset %s", ds.ID())
-		}
-	}
-
-	return nil
+	return collector.GC(ctx, oldGen, newGen)
 }
 
 func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
@@ -1176,7 +1210,7 @@ func (ddb *DoltDB) PushChunksForRefHash(ctx context.Context, tempDir string, src
 // communicated over the provided channel.
 func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, stRef types.Ref, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
-		puller, err := datas.NewPuller(ctx, tempDir, 256*1024, srcDB.db, ddb.db, stRef.TargetHash(), pullerEventCh)
+		puller, err := datas.NewPuller(ctx, tempDir, defaultChunksPerTF, srcDB.db, ddb.db, stRef.TargetHash(), pullerEventCh)
 
 		if err == datas.ErrDBUpToDate {
 			return nil

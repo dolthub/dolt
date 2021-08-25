@@ -22,10 +22,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
-
 	"github.com/dolthub/fslock"
 	"github.com/google/uuid"
+
+	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
@@ -169,7 +170,7 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader)
 	}
 
 	path := filepath.Join(bs.RootDir, key) + bsExt
-	err = os.Rename(tempFile, path)
+	err = file.Rename(tempFile, path)
 
 	if err != nil {
 		return "", err

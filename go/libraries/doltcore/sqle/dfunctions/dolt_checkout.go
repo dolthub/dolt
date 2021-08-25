@@ -38,8 +38,6 @@ type DoltCheckoutFunc struct {
 	expression.NaryExpression
 }
 
-// TODO: the semantics here are wrong. They mirror the command line's view of "taking your working set with you", when
-//  you change branches, and that's not right.
 func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
 
@@ -65,12 +63,12 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 
 	// Checking out new branch.
 	dSess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := dSess.GetDbData(dbName)
+	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	roots, ok := dSess.GetRoots(dbName)
+	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
@@ -172,13 +170,8 @@ func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []
 		}
 	}
 
-	return updateHeadAndWorkingSessionVars(ctx, name, roots)
-}
-
-// updateHeadAndWorkingSessionVars explicitly sets the head and working hash.
-func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	return dSess.SetRoots(ctx, dbName, roots)
+	return dSess.SetRoots(ctx, name, roots)
 }
 
 func (d DoltCheckoutFunc) String() string {

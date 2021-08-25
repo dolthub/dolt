@@ -229,9 +229,25 @@ DELIM
 
     # Output to a file from the error stderr
     dolt sql -q "DELETE FROM test WHERE pk = 1"
-    dolt table import -u --continue test 1pk5col-rpt-ints.csv 2> skipped.csv
-    run cat skipped.csv
+    run dolt table import -u --continue test 1pk5col-rpt-ints.csv
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "The following rows were skipped:" ]] || false
     [[ "$output" =~ "1,1,2,3,4,7" ]] || false
     [[ "$output" =~ "1,1,2,3,4,8" ]] || false
+}
+
+@test "import-update-tables: subsequent runs of same import with duplicate keys produces no modifications" {
+    cat <<DELIM > 1pk5col-rpt-ints.csv
+pk,c1,c2,c3,c4,c5
+1,1,2,3,4,5
+1,1,2,3,4,7
+1,1,2,3,4,8
+DELIM
+
+    dolt sql < 1pk5col-ints-sch.sql
+    dolt table import -u --continue test 1pk5col-rpt-ints.csv
+    run dolt table import -u --continue test 1pk5col-rpt-ints.csv
+    [ "$status" -eq 0 ]
+    skip "Running this file on repeat produces modifications"
+    ! [[ "$output" =~ "Modifications: 2" ]] || falsa 
 }

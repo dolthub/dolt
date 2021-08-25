@@ -57,6 +57,7 @@ type fileToData map[string][]byte
 func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fileToData {
 	ctx := context.Background()
 	fileToData := make(fileToData, numTableFiles)
+	fileIDToNumChunks := make(map[string]int)
 	for i := 0; i < numTableFiles; i++ {
 		var chunkData [][]byte
 		for j := 0; j < i+1; j++ {
@@ -66,9 +67,13 @@ func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fil
 		require.NoError(t, err)
 		fileID := addr.String()
 		fileToData[fileID] = data
+		fileIDToNumChunks[fileID] = i + 1
 		err = st.WriteTableFile(ctx, fileID, i+1, bytes.NewReader(data), 0, nil)
 		require.NoError(t, err)
 	}
+	err := st.AddTableFilesToManifest(ctx, fileIDToNumChunks)
+	require.NoError(t, err)
+
 	return fileToData
 }
 
@@ -82,7 +87,6 @@ func TestNBSAsTableFileStore(t *testing.T) {
 
 	_, sources, _, err := st.Sources(ctx)
 	require.NoError(t, err)
-
 	assert.Equal(t, numTableFiles, len(sources))
 
 	for _, src := range sources {
@@ -259,7 +263,7 @@ func TestNBSCopyGC(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		msErr = st.MarkAndSweepChunks(ctx, r, keepChan)
+		msErr = st.MarkAndSweepChunks(ctx, r, keepChan, nil)
 		wg.Done()
 	}()
 	for h := range keepers {

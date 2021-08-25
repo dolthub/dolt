@@ -15,6 +15,7 @@
 package commitwalk
 
 import (
+	"container/heap"
 	"context"
 	"io"
 
@@ -25,6 +26,7 @@ import (
 type c struct {
 	ddb       *doltdb.DoltDB
 	commit    *doltdb.Commit
+	meta      *doltdb.CommitMeta
 	hash      hash.Hash
 	height    uint64
 	invisible bool
@@ -41,9 +43,37 @@ func (q *q) NumVisiblePending() int {
 	return q.numVisiblePending
 }
 
+func (q *q) Push(x interface{}) {
+	q.pending = append(q.pending, x.(*c))
+}
+
+func (q *q) Pop() interface{} {
+	old := q.pending
+	ret := old[len(old)-1]
+	q.pending = old[:len(old)-1]
+	return ret
+}
+
+func (q *q) Len() int {
+	return len(q.pending)
+}
+
+func (q *q) Swap(i, j int) {
+	q.pending[i], q.pending[j] = q.pending[j], q.pending[i]
+}
+
+func (q *q) Less(i, j int) bool {
+	if q.pending[i].height > q.pending[j].height {
+		return true
+	}
+	if q.pending[i].height == q.pending[j].height {
+		return q.pending[i].meta.UserTimestamp > q.pending[j].meta.UserTimestamp
+	}
+	return false
+}
+
 func (q *q) PopPending() *c {
-	c := q.pending[len(q.pending)-1]
-	q.pending = q.pending[:len(q.pending)-1]
+	c := heap.Pop(q).(*c)
 	if !c.invisible {
 		q.numVisiblePending--
 	}
@@ -57,31 +87,7 @@ func (q *q) AddPendingIfUnseen(ctx context.Context, ddb *doltdb.DoltDB, id hash.
 	}
 	if !c.queued {
 		c.queued = true
-		var i int
-		for i = 0; i < len(q.pending); i++ {
-			if q.pending[i].height > c.height {
-				break
-			}
-			if q.pending[i].height < c.height {
-				continue
-			}
-
-			// if the commits have equal height, tiebreak on timestamp
-			pendingMeta, err := q.pending[i].commit.GetCommitMeta()
-			if err != nil {
-				return err
-			}
-			commitMeta, err := c.commit.GetCommitMeta()
-			if err != nil {
-				return err
-			}
-			if pendingMeta.UserTimestamp > commitMeta.UserTimestamp {
-				break
-			}
-		}
-		q.pending = append(q.pending, nil)
-		copy(q.pending[i+1:], q.pending[i:])
-		q.pending[i] = c
+		heap.Push(q, c)
 		if !c.invisible {
 			q.numVisiblePending++
 		}
@@ -128,8 +134,12 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 	if err != nil {
 		return nil, err
 	}
+	meta, err := l.GetCommitMeta()
+	if err != nil {
+		return nil, err
+	}
 
-	c := &c{ddb: ddb, commit: l, height: h, hash: id}
+	c := &c{ddb: ddb, commit: l, meta: meta, height: h, hash: id}
 	q.loaded[id] = c
 	return c, nil
 }

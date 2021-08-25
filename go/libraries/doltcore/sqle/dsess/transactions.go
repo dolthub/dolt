@@ -15,22 +15,49 @@
 package dsess
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
 const (
 	maxTxCommitRetries = 5
 )
+
+func TransactionsDisabled(ctx *sql.Context) bool {
+	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
+	if err != nil {
+		panic(err)
+	}
+
+	switch enabled.(int8) {
+	case 0:
+		return false
+	case 1:
+		return true
+	default:
+		panic(fmt.Sprintf("Unexpected value %v", enabled))
+	}
+}
+
+// DisabledTransaction is a no-op transaction type that lets us feature-gate transaction logic changes
+type DisabledTransaction struct{}
+
+func (d DisabledTransaction) String() string {
+	return "Disabled transaction"
+}
 
 type DoltTransaction struct {
 	startState    *doltdb.WorkingSet
@@ -57,6 +84,8 @@ func (tx DoltTransaction) String() string {
 	return "DoltTransaction"
 }
 
+var txLock sync.Mutex
+
 // Commit attempts to merge newRoot into the working set
 // Uses the same algorithm as merge.Merger:
 // |ws.root| is the root
@@ -66,75 +95,155 @@ func (tx DoltTransaction) String() string {
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
 //  strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
-	// logrus.Errorf("Committing working root %s", workingSet.WorkingRoot().DebugString(ctx, true))
-
-	// Don't allow a root value with conflicts to be committed. Later we may open this up via configuration
-	hasConflicts, err := workingSet.WorkingRoot().HasConflicts(ctx)
+	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
 		return nil, err
 	}
-
-	if hasConflicts {
-		return nil, doltdb.ErrUnresolvedConflicts
-	}
-
-	for i := 0; i < maxTxCommitRetries; i++ {
-		newWorkingSet := false
-
-		ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
-		if err == doltdb.ErrWorkingSetNotFound {
-			// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
-			// first time. Can be removed and called an error post 1.0
-			ws = doltdb.EmptyWorkingSet(tx.workingSetRef)
-			newWorkingSet = true
-		} else if err != nil {
-			return nil, err
-		}
-
-		existingWorkingRoot := ws.RootValue()
-
-		hash, err := ws.HashOf()
+	if forceTransactionCommit.(int8) != 1 {
+		workingRoot := workingSet.WorkingRoot()
+		hasConflicts, err := workingRoot.HasConflicts(ctx)
 		if err != nil {
 			return nil, err
 		}
+		if hasConflicts {
+			return nil, doltdb.ErrUnresolvedConflicts
+		}
+		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if hasConstraintViolations {
+			return nil, doltdb.ErrUnresolvedConstraintViolations
+		}
+	}
 
-		if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
-			// ff merge
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
-			if err == datas.ErrOptimisticLockFailed {
-				continue
+	for i := 0; i < maxTxCommitRetries; i++ {
+		updatedWs, err := func() (*doltdb.WorkingSet, error) {
+			// Serialize commits, since only one can possibly succeed at a time anyway
+			txLock.Lock()
+			defer txLock.Unlock()
+
+			newWorkingSet := false
+
+			ws, err := tx.dbData.Ddb.ResolveWorkingSet(ctx, tx.workingSetRef)
+			if err == doltdb.ErrWorkingSetNotFound {
+				// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
+				// first time. Can be removed and called an error post 1.0
+				ws = doltdb.EmptyWorkingSet(tx.workingSetRef)
+				newWorkingSet = true
 			} else if err != nil {
 				return nil, err
 			}
 
-			return workingSet, nil
-		}
+			existingWorkingRoot := ws.WorkingRoot()
 
-		mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot())
+			hash, err := ws.HashOf()
+			if err != nil {
+				return nil, err
+			}
+
+			if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
+				// ff merge
+				err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
+				if err == datas.ErrOptimisticLockFailed {
+					// this is effectively a `continue` in the loop
+					return nil, nil
+				} else if err != nil {
+					return nil, err
+				}
+
+				return workingSet, nil
+			}
+
+			start := time.Now()
+			mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot())
+			if err != nil {
+				return nil, err
+			}
+			logrus.Tracef("merge took %s", time.Since(start))
+
+			var tablesWithConflicts []string
+			for table, mergeStats := range stats {
+				if mergeStats.Conflicts > 0 {
+					if transactionMergeStomp {
+						tablesWithConflicts = append(tablesWithConflicts, table)
+					} else {
+						// TODO: surface duplicate key errors as appropriate
+						return nil, fmt.Errorf("conflict in table %s", table)
+					}
+				}
+			}
+
+			// Only resolve conflicts automatically if the stomp environment key is set
+			if len(tablesWithConflicts) > 0 {
+				mergedRoot, err = tx.stompConflicts(ctx, mergedRoot, tablesWithConflicts)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
+			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash, tx.getWorkingSetMeta(ctx))
+			if err == datas.ErrOptimisticLockFailed {
+				// this is effectively a `continue` in the loop
+				return nil, nil
+			} else if err != nil {
+				return nil, err
+			}
+
+			return mergedWorkingSet, nil
+		}()
+
 		if err != nil {
 			return nil, err
+		} else if updatedWs != nil {
+			return updatedWs, nil
 		}
-
-		for table, mergeStats := range stats {
-			if mergeStats.Conflicts > 0 {
-				// TODO: surface duplicate key errors as appropriate
-				return nil, fmt.Errorf("conflict in table %s", table)
-			}
-		}
-
-		mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
-		err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash, tx.getWorkingSetMeta(ctx))
-		if err == datas.ErrOptimisticLockFailed {
-			continue
-		} else if err != nil {
-			return nil, err
-		}
-
-		return mergedWorkingSet, nil
 	}
 
 	// TODO: different error type for retries exhausted
 	return nil, datas.ErrOptimisticLockFailed
+}
+
+// stompConflicts resolves the conflicted tables in the root given by blindly accepting theirs, and returns the
+// updated root value
+func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.RootValue, tablesWithConflicts []string) (*doltdb.RootValue, error) {
+	start := time.Now()
+	tableEditSession := editor.CreateTableEditSession(mergedRoot, editor.TableEditSessionProps{})
+
+	for _, tblName := range tablesWithConflicts {
+		tbl, _, err := mergedRoot.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+
+		err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, tbl, merge.Theirs, tableEditSession)
+		if err != nil {
+			return nil, err
+		}
+
+		err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+			tbl, err = tbl.ClearConflicts()
+			if err != nil {
+				return nil, err
+			}
+
+			return root.PutTable(ctx, tblName, tbl)
+		})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var err error
+	mergedRoot, err = tableEditSession.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Tracef("resolving conflicts took %s", time.Since(start))
+
+	return mergedRoot, nil
 }
 
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given

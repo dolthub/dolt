@@ -336,3 +336,247 @@ SQL
     [[ "${lines[2]}" =~ "2,2" ]] || false
     [[ "${lines[3]}" =~ "3,3" ]] || false
 }
+
+@test "auto_increment: truncate in session correctly resets auto increment values" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO t (c0) VALUES (1),(2),(3);
+TRUNCATE t;
+INSERT INTO t (c0) VALUES (1),(2),(3);
+TRUNCATE t;
+INSERT INTO t (c0) VALUES (1),(2),(3);
+SQL
+
+    run dolt sql -q "SELECT * FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "3,3" ]] || false
+}
+
+@test "auto_increment: separate insert statements doesn't cause problems" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO t (c0) VALUES (1),(2),(3);
+INSERT INTO t (c0) VALUES (4),(5),(6);
+SQL
+
+    run dolt sql -q "SELECT * FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "3,3" ]] || false
+    [[ "${lines[4]}" =~ "4,4" ]] || false
+    [[ "${lines[5]}" =~ "5,5" ]] || false
+    [[ "${lines[6]}" =~ "6,6" ]] || false
+}
+
+@test "auto_increment: skipping works" {
+dolt sql <<SQL
+CREATE TABLE t (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO t (c0) VALUES (1), (2);
+INSERT INTO t VALUES (4, 4);
+INSERT INTO t (c0) VALUES (5),(6),(7);
+SQL
+
+    run dolt sql -q "SELECT * FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "4,4" ]] || false
+    [[ "${lines[4]}" =~ "5,5" ]] || false
+    [[ "${lines[5]}" =~ "6,6" ]] || false
+    [[ "${lines[6]}" =~ "7,7" ]] || false
+    ! [[ "$output" =~ "3" ]] || false
+}
+
+@test "auto_increment: go forward then backwards" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO t (c0) VALUES (1), (2);
+INSERT INTO t VALUES (4, 4);
+INSERT INTO t (c0) VALUES (5),(6),(7);
+INSERT into t VALUES (3, 3);
+INSERT INTO t (c0) VALUES (8);
+SQL
+
+    run dolt sql -q "SELECT * FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "3,3" ]] || false
+    [[ "${lines[4]}" =~ "4,4" ]] || false
+    [[ "${lines[5]}" =~ "5,5" ]] || false
+    [[ "${lines[6]}" =~ "6,6" ]] || false
+    [[ "${lines[7]}" =~ "7,7" ]] || false
+    [[ "${lines[8]}" =~ "8,8" ]] || false
+}
+
+@test "auto_increment: dolt_merge() works with no auto increment overlap" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO t (c0) VALUES (1), (2);
+SELECT DOLT_COMMIT('-a', '-m', 'cm1');
+SELECT DOLT_CHECKOUT('-b', 'test');
+
+INSERT INTO t (c0) VALUES (3), (4);
+SELECT DOLT_COMMIT('-a', '-m', 'cm2');
+SELECT DOLT_CHECKOUT('master');
+
+SELECT DOLT_MERGE('test');
+INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);
+SQL
+
+    run dolt sql -q "SELECT * FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "3,3" ]] || false
+    [[ "${lines[4]}" =~ "4,4" ]] || false
+    [[ "${lines[5]}" =~ "5,5" ]] || false
+    [[ "${lines[6]}" =~ "6,6" ]] || false
+    [[ "${lines[7]}" =~ "7,7" ]] || false
+}
+
+@test "auto_increment: Jump in auto increment values after a dolt merge" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO t (c0) VALUES (1), (2);
+SELECT DOLT_COMMIT('-a', '-m', 'cm1');
+SELECT DOLT_CHECKOUT('-b', 'test');
+
+INSERT INTO t (c0) VALUES (3), (4);
+SELECT DOLT_COMMIT('-a', '-m', 'cm2');
+SELECT DOLT_CHECKOUT('master');
+
+SELECT DOLT_MERGE('test');
+INSERT INTO t VALUES (10,10),(NULL,11);
+SQL
+
+    run dolt sql -q "SELECT * FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "3,3" ]] || false
+    [[ "${lines[4]}" =~ "4,4" ]] || false
+    [[ "${lines[5]}" =~ "10,10" ]] || false
+    [[ "${lines[6]}" =~ "11,11" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM t"
+    [[ "$output" =~ "6" ]] || false
+}
+
+@test "auto_increment: dolt_merge() with a gap in an auto increment key" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO t (c0) VALUES (1), (2);
+SELECT DOLT_COMMIT('-a', '-m', 'cm1');
+SELECT DOLT_CHECKOUT('-b', 'test');
+
+INSERT INTO t VALUES (4,4), (5,5);
+SELECT DOLT_COMMIT('-a', '-m', 'cm2');
+SELECT DOLT_CHECKOUT('master');
+
+SELECT DOLT_MERGE('test');
+INSERT INTO t VALUES (3,3),(NULL,6);
+SQL
+
+    run dolt sql -q "SELECT * FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "3,3" ]] || false
+    [[ "${lines[4]}" =~ "4,4" ]] || false
+    [[ "${lines[5]}" =~ "5,5" ]] || false
+    [[ "${lines[6]}" =~ "6,6" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM t"
+    [[ "$output" =~ "6" ]] || false
+}
+
+@test "auto_increment: dolt_merge() with lesser auto increment keys" {
+    dolt sql <<SQL
+CREATE TABLE t (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO t VALUES (4, 4), (5, 5);
+SELECT DOLT_COMMIT('-a', '-m', 'cm1');
+SELECT DOLT_CHECKOUT('-b', 'test');
+
+INSERT INTO t VALUES (1,1), (2, 2);
+SELECT DOLT_COMMIT('-a', '-m', 'cm2');
+SELECT DOLT_CHECKOUT('master');
+
+SELECT DOLT_MERGE('test');
+INSERT INTO t VALUES (NULL,6);
+SQL
+
+    run dolt sql -q "SELECT * FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "4,4" ]] || false
+    [[ "${lines[4]}" =~ "5,5" ]] || false
+    [[ "${lines[5]}" =~ "6,6" ]] || false
+}
+
+@test "auto_increment: alter table autoincrement on table with no AI key nops" {
+    dolt sql -q "create table test2(pk int primary key, name varchar(255), type int);"
+    run dolt sql -q "alter table test2 auto_increment = 2;"
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "insert into test2 values (0, 'john', 0)"
+    run dolt sql -q "SELECT * from test2" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0,john,0" ]] || false
+}
+
+@test "auto_increment: alter table change column works" {
+    dolt sql -q "create table t(pk int primary key);"
+    dolt sql -q "ALTER TABLE t CHANGE COLUMN pk pk int NOT NULL AUTO_INCREMENT PRIMARY KEY;"
+
+    dolt sql -q 'insert into t values (NULL), (NULL), (NULL)'
+    run dolt sql -q "SELECT * FROM t" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+    [[ "${lines[3]}" =~ "3" ]] || false
+}

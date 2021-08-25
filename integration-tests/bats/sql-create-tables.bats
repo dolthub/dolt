@@ -290,15 +290,16 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "comment" ]] || false
     [[ "$output" =~ "date" ]] || false
+
     run dolt sql <<SQL
-CREATE TABLE test (
+CREATE TABLE test2 (
     pk INT NOT NULL,
     comment INT,
     date INT,
     PRIMARY KEY (pk)
 );
 SQL
-    skip "Current SQL parser requires backticks around keywords, not just reserved words"
+
     [ "$status" -eq 0 ]
     run dolt schema show
     [ "$status" -eq 0 ]

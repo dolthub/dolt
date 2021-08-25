@@ -24,9 +24,10 @@ const (
 )
 
 type MergeStats struct {
-	Operation     TableMergeOp
-	Adds          int
-	Deletes       int
-	Modifications int
-	Conflicts     int
+	Operation            TableMergeOp
+	Adds                 int
+	Deletes              int
+	Modifications        int
+	Conflicts            int
+	ConstraintViolations int
 }

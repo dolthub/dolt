@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/fatih/color"
 
@@ -32,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -51,10 +49,6 @@ The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be 
 		"--abort",
 	},
 }
-
-var fkWarningMessage = "Warning: This merge is being applied to tables that have foreign key constraints. These constraints " +
-	"will not be enforced during the merge process to allow you to fix constraint issues that arise from merge conflicts. " +
-	"to check for foreign key constraint violations run `dolt verify-constraints` on this repo after merging."
 
 type MergeCmd struct{}
 
@@ -118,17 +112,30 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		if verr == nil {
 			mergeActive, err := dEnv.IsMergeActive(ctx)
 			if err != nil {
-				cli.PrintErrln("error: Merging is not possible because you have not committed an active merge:", err.Error())
+				cli.PrintErrln(err.Error())
 				return 1
 			}
 
-			if has, err := root.HasConflicts(ctx); err != nil {
+			// If there are any conflicts or constraint violations then we disallow the merge
+			hasCnf, err := root.HasConflicts(ctx)
+			if err != nil {
 				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
-			} else if has {
+			}
+			hasCV, err := root.HasConstraintViolations(ctx)
+			if err != nil {
+				verr = errhand.BuildDError("error: failed to get constraint violations").AddCause(err).Build()
+			}
+			if hasCnf || hasCV {
 				cli.Println("error: Merging is not possible because you have unmerged tables.")
 				cli.Println("hint: Fix them up in the working tree, and then use 'dolt add <table>'")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
-				cli.Println("fatal: Exiting because of an unresolved conflict.")
+				if hasCnf && hasCV {
+					cli.Println("fatal: Exiting because of an unresolved conflict and constraint violation.")
+				} else if hasCnf {
+					cli.Println("fatal: Exiting because of an unresolved conflict.")
+				} else {
+					cli.Println("fatal: Exiting because of an unresolved constraint violation.")
+				}
 				return 1
 			} else if mergeActive {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
@@ -206,7 +213,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, roots.Working, cm2, dEnv.DbData())
+	tblNames, workingDiffs, err := merge.MergeWouldStompChanges(ctx, roots, cm2)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
@@ -222,6 +229,19 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	}
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
+		ancRoot, err := cm1.GetRootValue()
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		mergedRoot, err := cm2.GetRootValue()
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
+			return errhand.VerboseErrorFromError(err)
+		} else if cvPossible {
+			return executeMerge(ctx, squash, dEnv, cm1, cm2, workingDiffs)
+		}
 		if apr.Contains(cli.NoFFParam) {
 			return execNoFFMerge(ctx, apr, dEnv, roots, cm2, verr, workingDiffs)
 		} else {
@@ -275,17 +295,32 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	_, err = actions.CommitStaged(ctx, roots, dEnv.DbData(), actions.CommitStagedProps{
-		Message:          msg,
-		Date:             t,
-		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(forceFlag),
-		Name:             name,
-		Email:            email,
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
+	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
+		Message:    msg,
+		Date:       t,
+		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		Force:      apr.Contains(forceFlag),
+		Name:       name,
+		Email:      email,
 	})
 
 	if err != nil {
 		return errhand.BuildDError("error: committing").AddCause(err).Build()
+	}
+
+	err = dEnv.ClearMerge(ctx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil
@@ -366,12 +401,6 @@ and take the hash for your current branch and use it for the value for "staged" 
 }
 
 func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
-	verr := fkConstraintWarning(ctx, cm1, cm2)
-
-	if verr != nil {
-		return verr
-	}
-
 	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, cm1, cm2)
 
 	if err != nil {
@@ -386,98 +415,6 @@ func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 
 	}
 
 	return mergedRootToWorking(ctx, squash, dEnv, mergedRoot, workingDiffs, cm2, tblToStats)
-}
-
-func fkConstraintWarning(ctx context.Context, cm1, cm2 *doltdb.Commit) errhand.VerboseError {
-	verrBuild := errhand.BuildDError("failed to read from database.")
-	r1, err := cm1.GetRootValue()
-
-	if err != nil {
-		return verrBuild.AddCause(err).Build()
-	}
-
-	r2, err := cm2.GetRootValue()
-
-	if err != nil {
-		return verrBuild.AddCause(err).Build()
-	}
-
-	fks1, err := r1.GetForeignKeyCollection(ctx)
-
-	if err != nil {
-		return verrBuild.AddCause(err).Build()
-	}
-
-	fks2, err := r2.GetForeignKeyCollection(ctx)
-
-	if err != nil {
-		return verrBuild.AddCause(err).Build()
-	}
-
-	tblNames1, err := r1.GetTableNames(ctx)
-
-	if err != nil {
-		return verrBuild.AddCause(err).Build()
-	}
-
-	tblNames2, err := r2.GetTableNames(ctx)
-
-	if err != nil {
-		return verrBuild.AddCause(err).Build()
-	}
-
-	allNames := set.NewStrSet(tblNames1)
-	allNames.Add(tblNames2...)
-
-	var warnTables []string
-	for _, name := range allNames.AsSlice() {
-		tbl1, ok1, err := r1.GetTable(ctx, name)
-
-		if err != nil {
-			return verrBuild.AddCause(err).Build()
-		}
-
-		tbl2, ok2, err := r2.GetTable(ctx, name)
-
-		if err != nil {
-			return verrBuild.AddCause(err).Build()
-		}
-
-		var h1, h2 hash.Hash
-		var fkOnTbl1, fkOnTbl2 bool
-		if ok1 {
-			h1, err = tbl1.HashOf()
-
-			if err != nil {
-				return verrBuild.AddCause(err).Build()
-			}
-
-			decl, refd := fks1.KeysForTable(name)
-			fkOnTbl1 = (len(decl) + len(refd)) > 0
-		}
-
-		if ok2 {
-			h2, err = tbl2.HashOf()
-
-			if err != nil {
-				return verrBuild.AddCause(err).Build()
-			}
-
-			decl, refd := fks2.KeysForTable(name)
-			fkOnTbl2 = (len(decl) + len(refd)) > 0
-		}
-
-		if h1 != h2 && (fkOnTbl1 || fkOnTbl2) {
-			warnTables = append(warnTables, name)
-		}
-	}
-
-	if len(warnTables) > 0 {
-		cli.Println(color.YellowString(fkWarningMessage))
-		cli.Println(color.YellowString("You are seeing this message due to changes in the following table(s): " + strings.Join(warnTables, ",")))
-	}
-
-	return nil
 }
 
 // TODO: change this to be functional and not write to repo state
@@ -517,10 +454,16 @@ func mergedRootToWorking(
 	verr := UpdateWorkingWithVErr(dEnv, workingRoot)
 
 	if verr == nil {
-		hasConflicts := printSuccessStats(tblToStats)
+		hasConflicts, hasConstraintViolations := printSuccessStats(tblToStats)
 
-		if hasConflicts {
+		if hasConflicts && hasConstraintViolations {
+			cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
+		} else if hasConflicts {
 			cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
+		} else if hasConstraintViolations {
+			cli.Println("Automatic merge failed; fix constraint violations and then commit the result.\n" +
+				"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n" +
+				"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.")
 		} else {
 			err = actions.SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 			if err != nil {
@@ -537,11 +480,12 @@ func mergedRootToWorking(
 	return verr
 }
 
-func printSuccessStats(tblToStats map[string]*merge.MergeStats) bool {
+// printSuccessStats returns whether there are conflicts or constraint violations.
+func printSuccessStats(tblToStats map[string]*merge.MergeStats) (conflicts bool, constraintViolations bool) {
 	printModifications(tblToStats)
 	printAdditions(tblToStats)
 	printDeletions(tblToStats)
-	return printConflicts(tblToStats)
+	return printConflictsAndViolations(tblToStats)
 }
 
 func printAdditions(tblToStats map[string]*merge.MergeStats) {
@@ -560,18 +504,24 @@ func printDeletions(tblToStats map[string]*merge.MergeStats) {
 	}
 }
 
-func printConflicts(tblToStats map[string]*merge.MergeStats) bool {
+func printConflictsAndViolations(tblToStats map[string]*merge.MergeStats) (conflicts bool, constraintViolations bool) {
 	hasConflicts := false
+	hasConstraintViolations := false
 	for tblName, stats := range tblToStats {
-		if stats.Operation == merge.TableModified && stats.Conflicts > 0 {
+		if stats.Operation == merge.TableModified && (stats.Conflicts > 0 || stats.ConstraintViolations > 0) {
 			cli.Println("Auto-merging", tblName)
-			cli.Println("CONFLICT (content): Merge conflict in", tblName)
-
-			hasConflicts = true
+			if stats.Conflicts > 0 {
+				cli.Println("CONFLICT (content): Merge conflict in", tblName)
+				hasConflicts = true
+			}
+			if stats.ConstraintViolations > 0 {
+				cli.Println("CONSTRAINT VIOLATION (content): Merge created constraint violation in", tblName)
+				hasConstraintViolations = true
+			}
 		}
 	}
 
-	return hasConflicts
+	return hasConflicts, hasConstraintViolations
 }
 
 func printModifications(tblToStats map[string]*merge.MergeStats) {
@@ -582,7 +532,7 @@ func printModifications(tblToStats map[string]*merge.MergeStats) {
 	rowsChanged := 0
 	var tbls []string
 	for tblName, stats := range tblToStats {
-		if stats.Operation == merge.TableModified && stats.Conflicts == 0 {
+		if stats.Operation == merge.TableModified && stats.Conflicts == 0 && stats.ConstraintViolations == 0 {
 			tbls = append(tbls, tblName)
 			nameLen := len(tblName)
 			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.Conflicts

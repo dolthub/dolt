@@ -47,18 +47,20 @@ if [ "$MODE" = "release" ]; then
   format="html"
 fi
 
-source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER" "$TO_VERSION" "$timeprefix" "$actorprefix" "$format" > job.json
+# set value to ISSUE_NUMBER environment variable
+# or default to -1
+issuenumber=${ISSUE_NUMBER:-"-1"}
 
-KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json
+source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER" "$TO_VERSION" "$timeprefix" "$actorprefix" "$format" "$issuenumber" > job.json
 
-out=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=7200s || true)
+out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 
-if [ "$out" != "job.batch/$jobname condition met" ]; then
-  echo "output of kubectl wait: $out"
-  KUBECONFIG="$KUBECONFIG" kubectl logs job/"$jobname" -n performance-benchmarking
+if [ "$out" != "job.batch/$jobname created" ]; then
+  echo "something went wrong creating job... this job likely already exists in the cluster"
+  echo "$out"
+  exit 1
 else
-  echo "::set-output name=object-key::$timeprefix/$actorprefix/comparison-results.log"
-  KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n performance-benchmarking
+  echo "$out"
 fi
 
 exit 0

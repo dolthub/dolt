@@ -44,13 +44,14 @@ AWS cloud remote urls should be of the form {{.EmphasisLeft}}aws://[dynamo-table
 
 aws-creds-type specifies the means by which credentials should be retrieved in order to access the specified cloud resources (specifically the dynamo table, and the s3 bucket). Valid values are 'role', 'env', or 'file'.
 
-	\trole: Use the credentials installed for the current user
-	\tenv: Looks for environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
-	\tfile: Uses the credentials file specified by the parameter aws-creds-file
+	role: Use the credentials installed for the current user
+	env: Looks for environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+	file: Uses the credentials file specified by the parameter aws-creds-file
 	
 GCP remote urls should be of the form gs://gcs-bucket/database and will use the credentials setup using the gcloud command line available from Google +
 
-The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_schemethi
+The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_scheme
+
 {{.EmphasisLeft}}remove{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}, 
 Remove the remote named {{.LessThan}}name{{.GreaterThan}}. All remote-tracking branches and configuration settings for the remote are removed.`,
 

@@ -184,6 +184,8 @@ func TestTableEditor(t *testing.T) {
 			root, err = db.GetRoot(ctx)
 			require.NoError(t, err)
 
+			require.NoError(t, dEnv.UpdateWorkingRoot(context.Background(), root))
+
 			actualRows, _, err := executeSelect(t, context.Background(), dEnv, root, test.selectQuery)
 			require.NoError(t, err)
 

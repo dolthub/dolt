@@ -41,7 +41,11 @@ type varStringType struct {
 }
 
 var _ TypeInfo = (*varStringType)(nil)
-var StringDefaultType = &varStringType{sql.CreateLongText(sql.Collation_Default)}
+
+var (
+	LegacyStringDefaultType = &varStringType{sql.CreateLongText(sql.Collation_Default)}
+	StringDefaultType       = &varStringType{sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)}
+)
 
 func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var length int64
@@ -253,6 +257,8 @@ func (ti *varStringType) ToSqlType() sql.Type {
 func varStringTypeConverter(ctx context.Context, src *varStringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *blobStringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)

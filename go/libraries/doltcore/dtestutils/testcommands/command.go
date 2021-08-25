@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package testcommands TODO: kill off this package, replace with the non-test commands directly
 package testcommands
 
 import (
@@ -48,7 +49,10 @@ func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	return actions.StageAllTables(context.Background(), roots, dEnv.DbData())
+	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.Docs)
+	require.NoError(t, err)
+
+	return dEnv.UpdateRoots(context.Background(), roots)
 }
 
 type CommitStaged struct {
@@ -71,16 +75,30 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 	dbData := dEnv.DbData()
 
-	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
-		Message:          c.Message,
-		Date:             time.Now(),
-		AllowEmpty:       false,
-		CheckForeignKeys: true,
-		Name:             name,
-		Email:            email,
+	ws, err := dEnv.WorkingSet(context.Background())
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
+	_, err = actions.CommitStaged(context.Background(), roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
+		Message:    c.Message,
+		Date:       time.Now(),
+		AllowEmpty: false,
+		Force:      false,
+		Name:       name,
+		Email:      email,
 	})
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	return dEnv.ClearMerge(context.Background())
 }
 
 type CommitAll struct {
@@ -95,7 +113,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	err = actions.StageAllTables(context.Background(), roots, dEnv.DbData())
+	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.Docs)
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
@@ -104,21 +122,30 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	dbData := dEnv.DbData()
-	// TODO: refactor StageAllTables to just modify roots in memory, not write to disk
-	roots, err = dEnv.Roots(context.Background())
-	require.NoError(t, err)
+	ws, err := dEnv.WorkingSet(context.Background())
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
-	_, err = actions.CommitStaged(context.Background(), roots, dbData, actions.CommitStagedProps{
-		Message:          c.Message,
-		Date:             time.Now(),
-		AllowEmpty:       false,
-		CheckForeignKeys: true,
-		Name:             name,
-		Email:            email,
+	var mergeParentCommits []*doltdb.Commit
+	if ws.MergeActive() {
+		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
+	}
+
+	_, err = actions.CommitStaged(context.Background(), roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
+		Message:    c.Message,
+		Date:       time.Now(),
+		AllowEmpty: false,
+		Force:      false,
+		Name:       name,
+		Email:      email,
 	})
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	return dEnv.ClearMerge(context.Background())
 }
 
 type ResetHard struct{}
@@ -237,10 +264,10 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	assert.NoError(t, err)
 	assert.NotEqual(t, h1, h2)
 
-	workingRoot, err := dEnv.WorkingRoot(context.Background())
+	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	tblNames, _, err := env.MergeWouldStompChanges(context.Background(), workingRoot, cm2, dEnv.DbData())
+	tblNames, _, err := merge.MergeWouldStompChanges(context.Background(), roots, cm2)
 	if err != nil {
 		return err
 	}

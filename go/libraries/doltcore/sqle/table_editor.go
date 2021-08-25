@@ -15,16 +15,18 @@
 package sqle
 
 import (
+	"fmt"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/types"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // sqlTableEditor is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
@@ -48,6 +50,7 @@ type sqlTableEditor struct {
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
 	temporary         bool
+	aiTracker         globalstate.AutoIncrementTracker
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -56,12 +59,23 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	sess := t.db.TableEditSession(ctx, t.IsTemporary())
+	sess, err := t.db.TableEditSession(ctx, t.IsTemporary())
+	if err != nil {
+		return nil, err
+	}
 
 	tableEditor, err := sess.GetTableEditor(ctx, t.tableName, t.sch)
 	if err != nil {
 		return nil, err
 	}
+
+	err = fmt.Errorf("could not create auto_increment tracker for table %s", t.tableName)
+	ds := dsess.DSessFromSess(ctx.Session)
+	ws, err := ds.WorkingSet(ctx, t.db.name)
+	if err != nil {
+		return nil, err
+	}
+	ait := t.db.gs.GetAutoIncrementTracker(ws.Ref())
 
 	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
@@ -74,10 +88,11 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 		tableEditor: tableEditor,
 		sess:        sess,
 		temporary:   t.IsTemporary(),
+		aiTracker:   ait,
 	}, nil
 }
 
-func (te *sqlTableEditor) duplicateKeyErrFunc(keyString string, k, v types.Tuple, isPk bool) error {
+func (te *sqlTableEditor) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
 	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
 	if err != nil {
 		return err
@@ -96,23 +111,28 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 
 		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
 	}
-
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
-
 	if err != nil {
 		return err
 	}
-
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
-	if err != nil {
-		return err
-	}
+	if !schema.IsKeyless(te.sch) {
+		k, tagToVal, err := sqlutil.DoltKeyAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
+		if err != nil {
+			return err
+		}
 
-	return te.tableEditor.DeleteRow(ctx, dRow)
+		return te.tableEditor.DeleteByKey(ctx, k, tagToVal)
+	} else {
+		dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
+		if err != nil {
+			return err
+		}
+		return te.tableEditor.DeleteRow(ctx, dRow)
+	}
 }
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
@@ -141,6 +161,9 @@ func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{
 	if err = te.tableEditor.SetAutoIncrementValue(nomsVal); err != nil {
 		return err
 	}
+
+	te.aiTracker.Reset(te.tableName, val)
+
 	return te.flush(ctx)
 }
 

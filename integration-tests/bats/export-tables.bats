@@ -186,3 +186,20 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     grep 'name,age,title' export.csv
     grep 'Bill Billerson,32,Senior Dufus' export.csv
 }
+
+@test "export-tables: exporting a table with datetimes can be reimported" {
+   dolt sql -q "create table timetable(pk int primary key, time datetime)"
+   dolt sql -q "insert into timetable values (1, '2021-06-02 15:37:24 +0000 UTC');"
+
+   run dolt table export -f timetable export.csv
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "Successfully exported data." ]] ||  false
+
+   # reimport the data
+   dolt table rm timetable
+   run dolt table import -c --pk=pk timetable export.csv
+   [ "$status" -eq 0 ]
+
+   run dolt sql -q "SELECT * FROM timetable" -r csv
+   [[ "$output" =~ "1,2021-06-02 15:37:24 +0000 UTC" ]] ||  false
+}

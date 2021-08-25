@@ -607,11 +607,35 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 	return te
 }
 
-// GetAutoIncrementValue gets the last AUTO_INCREMENT value
-func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+// PeekNextAutoIncrementValue implements sql.AutoIncrementTable
+func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if !t.autoIncCol.AutoIncrement {
 		return nil, sql.ErrNoAutoIncrementCol
 	}
+
+	return t.getTableAutoIncrementValue(ctx)
+}
+
+// GetNextAutoIncrementValue implements sql.AutoIncrementTable
+func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentialVal interface{}) (interface{}, error) {
+	if !t.autoIncCol.AutoIncrement {
+		return nil, sql.ErrNoAutoIncrementCol
+	}
+
+	ed, err := t.getTableEditor(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tableVal, err := t.getTableAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return ed.aiTracker.Next(t.tableName, potentialVal, tableVal)
+}
+
+func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if t.ed != nil {
 		return t.ed.GetAutoIncrementValue()
 	}
@@ -787,6 +811,7 @@ var _ sql.IndexAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyTable = (*AlterableDoltTable)(nil)
 var _ sql.CheckAlterableTable = (*AlterableDoltTable)(nil)
+var _ sql.PrimaryKeyAlterableTable = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
@@ -988,9 +1013,6 @@ func (t *AlterableDoltTable) CreateIndex(
 	columns []sql.IndexColumn,
 	comment string,
 ) error {
-	if schema.IsKeyless(t.sch) {
-		return fmt.Errorf("indexes on keyless tables are not supported")
-	}
 
 	table, err := t.doltTable(ctx)
 	if err != nil {
@@ -1294,6 +1316,10 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		return err
 	}
 
+	tableData, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
 	tableIndexData, err := table.GetIndexRowData(ctx, tableIndex.Name())
 	if err != nil {
 		return err
@@ -1302,7 +1328,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
-	err = foreignKey.ValidateData(ctx, tableIndexData, refTableIndexData, tableIndex, refTableIndex)
+	err = foreignKey.ValidateData(ctx, t.sch, tableData, tableIndexData, refTableIndexData, tableIndex, refTableIndex)
 	if err != nil {
 		return err
 	}
@@ -1694,4 +1720,86 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 	}
 
 	return false, nil
+}
+
+func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.IndexColumn) error {
+	table, err := t.doltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	table, err = alterschema.AddPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Update the root with the new table
+	newRoot, err := root.PutTable(ctx, t.tableName, table)
+	if err != nil {
+		return err
+	}
+
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
+	// Ensure that no auto increment requirements exist on this table
+	if t.autoIncCol.AutoIncrement {
+		return sql.ErrWrongAutoKey.New()
+	}
+
+	// Ensure that any primary key column is neither a parent nor child in a fk relationship
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = t.sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (bool, error) {
+		if fkc.ColumnHasFkRelationship(tag) {
+			return true, sql.ErrCantDropIndex.New("PRIMARY")
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	table, err := t.doltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	table, err = alterschema.DropPrimaryKeyFromTable(ctx, table, t.nbf)
+	if err != nil {
+		return err
+	}
+
+	// Update the root with then new table
+	newRoot, err := root.PutTable(ctx, t.tableName, table)
+	if err != nil {
+		return err
+	}
+
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }

@@ -41,7 +41,7 @@ type FeatureVersion int64
 
 // DoltFeatureVersion is described in feature_version.md.
 // only variable for testing.
-var DoltFeatureVersion FeatureVersion = 1 // last bumped for CHECK constraint storage
+var DoltFeatureVersion FeatureVersion = 2 // last bumped when changing TEXT types to use noms Blobs
 
 // RootValue defines the structure used inside all Dolthub noms dbs
 type RootValue struct {
@@ -533,6 +533,34 @@ func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
+// TablesWithConstraintViolations returns all tables that have constraint violations.
+func (root *RootValue) TablesWithConstraintViolations(ctx context.Context) ([]string, error) {
+	tableMap, err := root.getTableMap()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, tableMap.Len())
+
+	err = tableMap.Iter(ctx, func(key, tblRefVal types.Value) (stop bool, err error) {
+		tblVal, err := tblRefVal.(types.Ref).TargetValue(ctx, root.vrw)
+		if err != nil {
+			return false, err
+		}
+		tblSt := tblVal.(types.Struct)
+		tbl := &Table{root.vrw, tblSt}
+		if cvMap, err := tbl.GetConstraintViolations(ctx); err != nil {
+			return false, err
+		} else if !cvMap.Empty() {
+			names = append(names, string(key.(types.String)))
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
 func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	cnfTbls, err := root.TablesInConflict(ctx)
 
@@ -541,6 +569,15 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	}
 
 	return len(cnfTbls) > 0, nil
+}
+
+// HasConstraintViolations returns whether any tables have constraint violations.
+func (root *RootValue) HasConstraintViolations(ctx context.Context) (bool, error) {
+	tbls, err := root.TablesWithConstraintViolations(ctx)
+	if err != nil {
+		return false, err
+	}
+	return len(tbls) > 0, nil
 }
 
 // IterTables calls the callback function cb on each table in this RootValue.
@@ -1223,4 +1260,24 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 	}
 
 	return buf.String()
+}
+
+// MapTableHashes returns a map of each table name and hash.
+func (root *RootValue) MapTableHashes(ctx context.Context) (map[string]hash.Hash, error) {
+	names, err := root.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nameToHash := make(map[string]hash.Hash)
+	for _, name := range names {
+		h, ok, err := root.GetTableHash(ctx, name)
+		if err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, fmt.Errorf("root found a table with name '%s' but no hash", name)
+		} else {
+			nameToHash[name] = h
+		}
+	}
+	return nameToHash, nil
 }

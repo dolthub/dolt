@@ -28,10 +28,6 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
-	// TODO: get rid of this
-	IsMergeActive(ctx context.Context) (bool, error)
-	// TODO: get rid of this
-	GetMergeCommit(ctx context.Context) (*doltdb.Commit, error)
 	GetRemotes() (map[string]Remote, error)
 }
 
@@ -41,12 +37,6 @@ type RepoStateWriter interface {
 	// TODO: get rid of this
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
-	// TODO: get rid of this
-	AbortMerge(ctx context.Context) error
-	// TODO: get rid of this
-	ClearMerge(ctx context.Context) error
-	// TODO: get rid of this
-	StartMerge(ctx context.Context, commit *doltdb.Commit) error
 	AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error
 	RemoveRemote(ctx context.Context, name string) error
 }
@@ -213,6 +203,7 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 func (rs *RepoState) AddRemote(r Remote) {
 	rs.Remotes[r.Name] = r
 }
+<<<<<<< HEAD
 
 func (rs *RepoState) RemoveRemote(r Remote) {
 	delete(rs.Remotes, r.Name)
@@ -396,3 +387,5 @@ func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map
 
 	return diffs
 }
+=======
+>>>>>>> master

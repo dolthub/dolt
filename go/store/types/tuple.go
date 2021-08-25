@@ -420,6 +420,7 @@ func (t Tuple) IteratorAt(pos uint64) (*TupleIterator, error) {
 	return itr, nil
 }
 
+// AsSlice returns all of the values of this Tuple as a slice.
 func (t Tuple) AsSlice() (TupleValueSlice, error) {
 	dec, count := t.decoderSkipToFields()
 
@@ -434,6 +435,24 @@ func (t Tuple) AsSlice() (TupleValueSlice, error) {
 		sl[pos] = val
 	}
 
+	return sl, nil
+}
+
+// AsSubslice returns the first n values of this Tuple as a slice.
+func (t Tuple) AsSubslice(n uint64) (TupleValueSlice, error) {
+	dec, count := t.decoderSkipToFields()
+	if n < count {
+		count = n
+	}
+
+	sl := make(TupleValueSlice, count)
+	for pos := uint64(0); pos < count; pos++ {
+		val, err := dec.readValue(t.nbf)
+		if err != nil {
+			return nil, err
+		}
+		sl[pos] = val
+	}
 	return sl, nil
 }
 
@@ -516,7 +535,7 @@ func (t Tuple) Set(n uint64, v Value) (Tuple, error) {
 	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}, nil
 }
 
-func (t Tuple) Append(v Value) (Tuple, error) {
+func (t Tuple) Append(vals ...Value) (Tuple, error) {
 	dec := t.decoder()
 	dec.skipKind()
 	prolog := dec.buff[:dec.offset]
@@ -525,12 +544,13 @@ func (t Tuple) Append(v Value) (Tuple, error) {
 
 	w := binaryNomsWriter{make([]byte, len(t.buff)), 0}
 	w.writeRaw(prolog)
-	w.writeCount(count + 1)
+	w.writeCount(count + uint64(len(vals)))
 	w.writeRaw(dec.buff[fieldsOffset:])
-	err := v.writeTo(&w, t.format())
-
-	if err != nil {
-		return EmptyTuple(t.nbf), err
+	for _, val := range vals {
+		err := val.writeTo(&w, t.format())
+		if err != nil {
+			return EmptyTuple(t.nbf), err
+		}
 	}
 
 	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}, nil

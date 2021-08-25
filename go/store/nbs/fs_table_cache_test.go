@@ -30,6 +30,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +43,7 @@ func TestFSTableCache(t *testing.T) {
 	t.Run("ExpireLRU", func(t *testing.T) {
 		t.Parallel()
 		dir := makeTempDir(t)
-		defer os.RemoveAll(dir)
+		defer file.RemoveAll(dir)
 
 		sum := 0
 		for _, s := range datas[1:] {
@@ -77,7 +79,7 @@ func TestFSTableCache(t *testing.T) {
 		t.Run("Success", func(t *testing.T) {
 			t.Parallel()
 			dir := makeTempDir(t)
-			defer os.RemoveAll(dir)
+			defer file.RemoveAll(dir)
 			assert := assert.New(t)
 
 			var names []addr
@@ -99,7 +101,7 @@ func TestFSTableCache(t *testing.T) {
 		t.Run("BadFile", func(t *testing.T) {
 			t.Parallel()
 			dir := makeTempDir(t)
-			defer os.RemoveAll(dir)
+			defer file.RemoveAll(dir)
 
 			require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "boo"), nil, 0666))
 			_, err := newFSTableCache(dir, 1024, 4)
@@ -109,7 +111,7 @@ func TestFSTableCache(t *testing.T) {
 		t.Run("ClearTempFile", func(t *testing.T) {
 			t.Parallel()
 			dir := makeTempDir(t)
-			defer os.RemoveAll(dir)
+			defer file.RemoveAll(dir)
 
 			tempFile := filepath.Join(dir, tempTablePrefix+"boo")
 			require.NoError(t, ioutil.WriteFile(tempFile, nil, 0666))
@@ -122,7 +124,7 @@ func TestFSTableCache(t *testing.T) {
 		t.Run("Dir", func(t *testing.T) {
 			t.Parallel()
 			dir := makeTempDir(t)
-			defer os.RemoveAll(dir)
+			defer file.RemoveAll(dir)
 			require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0777))
 			_, err := newFSTableCache(dir, 1024, 4)
 			assert.Error(t, err)

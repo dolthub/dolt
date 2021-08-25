@@ -217,7 +217,7 @@ SQL
     [[ "$output" =~ "test1,pk1,10458" ]] || false
     [[ "$output" =~ "test1,c1,5951" ]] || false
     [[ "$output" =~ "test1,c2,10358" ]] || false
-    [[ "$output" =~ "test1,c3,11314" ]] || false
+    [[ "$output" =~ "test1,c3,16293" ]] || false
 }
 
 @test "column_tags: dolt table import -c uses deterministic tag generation" {

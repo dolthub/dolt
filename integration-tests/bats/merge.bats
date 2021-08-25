@@ -88,6 +88,30 @@ teardown() {
     [[ "${lines[1]}" =~ "9,9,9" ]] || false
 }
 
+@test "merge: --abort leaves clean working, staging roots" {
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test1 VALUES (1,10,10);"
+    dolt commit -am "added rows to test1 on master"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test1 VALUES (2,20,20);"
+    dolt commit -am "added rows to test1 on other"
+
+    dolt checkout master
+    dolt merge other
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "still merging" ]] || false
+    [[ "$output" =~ "modified:       test" ]] || false
+
+    dolt merge --abort
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "On branch master" ]] || false
+    [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
+}
+
 @test "merge: squash merge" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
@@ -145,7 +169,7 @@ teardown() {
     [[ "$output" =~ "| 0 " ]] || false
 }
 
-@test "merge: dolt add fails on table with conflict" {
+@test "merge: dolt commit fails on table with conflict" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,1)"
     dolt add test1
@@ -160,10 +184,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test1" ]] || false
 
-    run dolt add test1
+    dolt add test1
+    run dolt commit -am "can't commit with conflicts"
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "not all tables merged" ]] || false
+    [[ "$output" =~ " unresolved conflicts from the merge" ]] || false
     [[ "$output" =~ "test1" ]] || false
+    dolt commit --force -am "force commit with conflicts"
 }
 
 @test "merge: dolt commit fails with unmerged tables in working set" {
@@ -406,4 +432,183 @@ SQL
 
     skip "merge fails on unique index violation, should log conflict"
     dolt merge other
+}
+
+@test "merge: merge a branch with a new table" {
+    dolt branch feature-branch
+    
+    dolt sql << SQL
+INSERT INTO test2 VALUES (0, 0, 0);
+INSERT INTO test2 VALUES (1, 1, 1);
+SQL
+    dolt add -A && dolt commit -am "add data to test 2"
+
+    dolt checkout feature-branch
+    dolt sql << SQL
+create table test3 (a int primary key);
+INSERT INTO test3 VALUES (0), (1);
+SQL
+    dolt commit -am "new table test3"
+
+    dolt checkout master
+    
+    run dolt merge feature-branch
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from test3"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 1 ]] || false
+}
+
+@test "merge: merge a branch that deletes a table" {
+    dolt branch feature-branch
+    
+    dolt sql << SQL
+INSERT INTO test1 VALUES (0, 0, 0);
+INSERT INTO test1 VALUES (1, 1, 1);
+SQL
+    dolt commit -am "add data to test1"
+
+    dolt checkout feature-branch
+    dolt sql << SQL
+INSERT INTO test1 VALUES (2, 2, 2);
+drop table test2;
+SQL
+    dolt commit -am "add data to test1, drop test2"
+
+    dolt checkout master
+    run dolt merge feature-branch
+    [ "$status" -eq 0 ]
+
+    dolt commit -m "merged feature-branch"
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "test2" ]] || false
+
+    run dolt sql -q "select * from test1" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,2,2" ]] || false
+}
+
+
+@test "merge: merge branch with table that was deleted" {
+    dolt sql << SQL
+INSERT INTO test2 VALUES (0, 0, 0);
+INSERT INTO test2 VALUES (1, 1, 1);
+SQL
+    dolt add -A && dolt commit -am "add data to test2"
+
+    dolt branch feature-branch
+    dolt sql -q "drop table test2"
+    dolt commit -am "drop table test2"
+
+    dolt sql << SQL
+INSERT INTO test1 VALUES (2, 2, 2);
+INSERT INTO test1 VALUES (3, 3, 3);
+SQL
+    dolt commit -am "add data to test1"
+    
+    dolt checkout feature-branch
+    dolt sql << SQL
+INSERT INTO test1 VALUES (0, 0, 0);
+INSERT INTO test1 VALUES (1, 1, 1);
+SQL
+    dolt commit -am "add data to test1"
+    
+    dolt checkout master
+    run dolt merge feature-branch
+    [ "$status" -eq 0 ]
+
+    dolt commit -m "merged feature-branch"
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "test2" ]] || false
+
+    run dolt sql -q "select * from test1" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,2,2" ]] || false
+}
+
+@test "merge: merge a branch that edits a deleted table" {
+    dolt sql << SQL
+INSERT INTO test2 VALUES (0, 0, 0);
+INSERT INTO test2 VALUES (1, 1, 1);
+SQL
+    dolt add -A && dolt commit -am "add data to test2"
+
+    dolt branch feature-branch
+    dolt sql -q "drop table test2"
+    dolt commit -am "drop table test2"
+
+    dolt checkout feature-branch
+    dolt sql << SQL
+INSERT INTO test2 VALUES (2, 2, 2);
+SQL
+    dolt commit -am "add data to test2"
+    
+    dolt checkout master
+    run dolt merge feature-branch
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "conflict" ]] || false
+}
+
+@test "merge: merge a branch that deletes an edited table" {
+    dolt sql << SQL
+INSERT INTO test2 VALUES (0, 0, 0);
+INSERT INTO test2 VALUES (1, 1, 1);
+SQL
+    dolt add -A && dolt commit -am "add data to test2"
+
+    dolt branch feature-branch
+    dolt sql << SQL
+INSERT INTO test2 VALUES (2, 2, 2);
+SQL
+    dolt commit -am "add data to test2"
+
+    dolt checkout feature-branch
+    dolt sql -q "drop table test2"
+    dolt commit -am "drop table test2"
+
+    dolt checkout master
+    run dolt merge feature-branch
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "conflict" ]] || false
+}
+
+@test "merge: merge a branch that deletes a deleted table" {
+    dolt sql << SQL
+INSERT INTO test2 VALUES (0, 0, 0);
+INSERT INTO test2 VALUES (1, 1, 1);
+SQL
+    dolt add -A && dolt commit -am "add data to test2"
+
+    dolt branch feature-branch
+    dolt sql << SQL
+INSERT INTO test2 VALUES (2, 2, 2);
+SQL
+    dolt commit -am "add data to test2"
+    dolt sql << SQL
+drop table test2;
+SQL
+    dolt commit -am "drop test2"
+    
+    dolt checkout feature-branch
+    dolt sql -q "drop table test2"
+    dolt commit -am "drop table test2"
+
+    dolt checkout master
+    run dolt merge feature-branch
+    [ "$status" -eq 0 ]
+    dolt commit -m "merged feature-branch"
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test1" ]] || false
+    [[ ! "$output" =~ "test2" ]] || false
 }

@@ -24,12 +24,12 @@ package nbs
 import (
 	"context"
 	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -144,5 +144,5 @@ func TestStats(t *testing.T) {
 	// TODO: Once random conjoin hack is out, test other conjoin stats
 
 	defer store.Close()
-	defer os.RemoveAll(dir)
+	defer file.RemoveAll(dir)
 }

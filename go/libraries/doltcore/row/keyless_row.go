@@ -264,3 +264,52 @@ func (r keylessRow) TaggedValues() (TaggedValues, error) {
 func (r keylessRow) Format() *types.NomsBinFormat {
 	return r.val.Format()
 }
+
+// ReduceToIndexKeys creates a full key, a partial key, and a cardinality value from the given row
+// (first tuple being the full key). Please refer to the note in the index editor for more information
+// regarding partial keys.
+func (r keylessRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, types.Tuple, error) {
+	vals := make([]types.Value, 0, len(idx.AllTags())*2)
+	for _, tag := range idx.AllTags() {
+		val, ok := r.GetColVal(tag)
+		if !ok {
+			val = types.NullValue
+		}
+		vals = append(vals, types.Uint(tag), val)
+	}
+	hashTag, err := r.key.Get(0)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+	hashVal, err := r.key.Get(1)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+
+	cardTag, err := r.val.Get(0)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+	cardVal, err := r.val.Get(1)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+
+	keyValue, err := types.NewTuple(r.Format(), cardTag, cardVal)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+
+	vals = append(vals, hashTag, hashVal)
+	fullKey, err := types.NewTuple(r.Format(), vals...)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+
+	partialKey, err := types.NewTuple(r.Format(), vals[:idx.Count()*2]...)
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+	}
+
+	return fullKey, partialKey, keyValue, nil
+}

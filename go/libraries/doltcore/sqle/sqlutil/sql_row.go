@@ -25,8 +25,44 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+type mapSqlIter struct {
+	ctx context.Context
+	nmr *noms.NomsMapReader
+	sch schema.Schema
+}
+
+var _ sql.RowIter = (*mapSqlIter)(nil)
+
+// Next implements the interface sql.RowIter.
+func (m *mapSqlIter) Next() (sql.Row, error) {
+	dRow, err := m.nmr.ReadRow(m.ctx)
+	if err != nil {
+		return nil, err
+	}
+	return DoltRowToSqlRow(dRow, m.sch)
+}
+
+// Close implements the interface sql.RowIter.
+func (m *mapSqlIter) Close(ctx *sql.Context) error {
+	return m.nmr.Close(ctx)
+}
+
+// MapToSqlIter returns a map reader that converts all rows to sql rows, creating a sql row iterator.
+func MapToSqlIter(ctx context.Context, sch schema.Schema, data types.Map) (sql.RowIter, error) {
+	mapReader, err := noms.NewNomsMapReader(ctx, data, sch)
+	if err != nil {
+		return nil, err
+	}
+	return &mapSqlIter{
+		ctx: ctx,
+		nmr: mapReader,
+		sch: sch,
+	}, nil
+}
 
 // DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
 func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
@@ -133,6 +169,64 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 	}
 
 	return keyTuple, valTuple, tagToVal, nil
+}
+
+// DoltKeyValueAndMappingFromSqlRow converts a sql.Row to key tuple and keeps a mapping from tag to value that
+// can be used to speed up index key generation for foreign key checks.
+func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, map[uint64]types.Value, error) {
+	allCols := doltSchema.GetAllCols()
+	pkCols := doltSchema.GetPKCols()
+
+	numCols := allCols.Size()
+	numPKCols := pkCols.Size()
+	pkVals := make([]types.Value, numPKCols*2)
+	tagToVal := make(map[uint64]types.Value, numCols)
+
+	if len(r) < numCols {
+		numCols = len(r)
+	}
+
+	// values for the pk tuple are in schema order
+	pkIdx := 0
+	for i := 0; i < numCols; i++ {
+		schCol := allCols.GetAtIndex(i)
+		val := r[i]
+		if val == nil {
+			if !schCol.IsNullable() {
+				return types.Tuple{}, nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
+			}
+			continue
+		}
+
+		tag := schCol.Tag
+		nomsVal, err := schCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
+
+		if err != nil {
+			return types.Tuple{}, nil, err
+		}
+
+		tagToVal[tag] = nomsVal
+
+		if schCol.IsPartOfPK {
+			pkVals[pkIdx] = types.Uint(tag)
+			pkVals[pkIdx+1] = nomsVal
+			pkIdx += 2
+		}
+	}
+
+	// no nulls in keys
+	if pkIdx != len(pkVals) {
+		return types.Tuple{}, nil, errors.New("not all pk columns have a value")
+	}
+
+	nbf := vrw.Format()
+	keyTuple, err := types.NewTuple(nbf, pkVals...)
+
+	if err != nil {
+		return types.Tuple{}, nil, err
+	}
+
+	return keyTuple, tagToVal, nil
 }
 
 func pkDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (row.Row, error) {

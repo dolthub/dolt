@@ -62,7 +62,7 @@ func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, 
 	}
 }
 
-// AddEdit adds an edit
+// AddEdit adds an edit. Not thread safe
 func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
 	if ase.accumulating == nil {
 		// TODO: buffer pool

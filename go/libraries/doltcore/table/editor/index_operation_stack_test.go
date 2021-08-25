@@ -26,30 +26,32 @@ func TestIndexOperationStack(t *testing.T) {
 	ios := &indexOperationStack{}
 	require.True(t, len(ios.entries) >= 2) // Entries should always at least have a length of 2
 
-	ios.Push(true, iosTuple(t, 100, 100), iosTuple(t, 100))
+	ios.Push(true, iosTuple(t, 100, 100), iosTuple(t, 100), iosTuple(t, 0))
 	entry, ok := ios.Pop()
 	require.True(t, ok)
 	iosTupleComp(t, entry.fullKey, 100, 100)
 	iosTupleComp(t, entry.partialKey, 100)
+	iosTupleComp(t, entry.value, 0)
 	require.True(t, entry.isInsert)
 	_, ok = ios.Pop()
 	require.False(t, ok)
 
 	for i := 0; i < len(ios.entries); i++ {
-		ios.Push(false, iosTuple(t, i, i), iosTuple(t, i))
+		ios.Push(false, iosTuple(t, i, i), iosTuple(t, i), iosTuple(t, i*2))
 	}
 	for i := len(ios.entries) - 1; i >= 0; i-- {
 		entry, ok = ios.Pop()
 		require.True(t, ok)
 		iosTupleComp(t, entry.fullKey, i, i)
 		iosTupleComp(t, entry.partialKey, i)
+		iosTupleComp(t, entry.partialKey, i*2)
 		require.False(t, entry.isInsert)
 	}
 	_, ok = ios.Pop()
 	require.False(t, ok)
 
 	for i := 0; i < (len(ios.entries)*2)+1; i++ {
-		ios.Push(true, iosTuple(t, i, i), iosTuple(t, i))
+		ios.Push(true, iosTuple(t, i, i), iosTuple(t, i), iosTuple(t, i*2))
 	}
 	for i := len(ios.entries) - 1; i >= 0; i-- {
 		entry, ok = ios.Pop()
@@ -57,6 +59,7 @@ func TestIndexOperationStack(t *testing.T) {
 		val := ((len(ios.entries) * 2) + 1) - i
 		iosTupleComp(t, entry.fullKey, val, val)
 		iosTupleComp(t, entry.partialKey, val)
+		iosTupleComp(t, entry.value, val*2)
 		require.True(t, entry.isInsert)
 	}
 	_, ok = ios.Pop()

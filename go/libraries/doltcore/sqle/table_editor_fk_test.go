@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -730,7 +731,172 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 				sqlRows = append(sqlRows, sqlRow)
 				return nil
 			})
+
+			if !reflect.DeepEqual(expectedIndexRows, sqlRows) {
+				sort.Slice(sqlRows, func(leftIndex, rightIndex int) bool {
+					a := sqlRows[leftIndex]
+					b := sqlRows[rightIndex]
+					for i := range a {
+						aVal, aNotNil := a[i].(int64)
+						bVal, bNotNil := b[i].(int64)
+						if !aNotNil {
+							aVal = math.MaxInt64
+						}
+						if !bNotNil {
+							bVal = math.MaxInt64
+						}
+						if aVal < bVal {
+							return true
+						}
+					}
+					return false
+				})
+			}
 			assert.Equal(t, expectedIndexRows, sqlRows)
 		}
+	}
+}
+
+func setupEditorKeylessFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
+	dEnv := dtestutils.CreateTestEnv()
+	root, err := dEnv.WorkingRoot(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	initialRoot, err := ExecuteSql(t, dEnv, root, `
+CREATE TABLE one (
+  pk BIGINT,
+  v1 BIGINT,
+  v2 BIGINT,
+  INDEX secondary (v1)
+);
+CREATE TABLE two (
+  pk BIGINT,
+  v1 BIGINT,
+  v2 BIGINT,
+  INDEX secondary (v1, v2)
+);
+CREATE TABLE three (
+  pk BIGINT,
+  v1 BIGINT,
+  v2 BIGINT,
+  INDEX v1 (v1),
+  INDEX v2 (v2)
+);
+CREATE TABLE parent (
+  id BIGINT,
+  v1 BIGINT,
+  v2 BIGINT,
+  INDEX v1 (v1),
+  INDEX v2 (v2)
+);
+CREATE TABLE child (
+  id BIGINT,
+  v1 BIGINT,
+  v2 BIGINT
+);
+`)
+	require.NoError(t, err)
+
+	return dEnv, initialRoot
+}
+
+func TestTableEditorKeylessFKCascade(t *testing.T) {
+	tests := []struct {
+		name          string
+		sqlStatement  string
+		expectedOne   []sql.Row
+		expectedTwo   []sql.Row
+		expectedThree []sql.Row
+	}{
+		{
+			"cascade updates",
+			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
+			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
+			UPDATE one SET v1 = v1 + v2;
+			UPDATE two SET v2 = v1 - 2;`,
+			[]sql.Row{{1, 5, 4}, {4, 9, 5}, {2, 7, 5}, {3, 9, 6}},
+			[]sql.Row{{3, 7, 5}, {2, 5, 3}, {5, 9, 7}, {4, 9, 7}},
+			[]sql.Row{{5, 9, 7}, {6, 9, 7}, {4, 7, 5}, {3, 5, 3}},
+		},
+		{
+			"cascade updates and deletes",
+			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
+			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
+			UPDATE one SET v1 = v1 + v2;
+			DELETE FROM one WHERE pk = 3;
+			UPDATE two SET v2 = v1 - 2;`,
+			[]sql.Row{{1, 5, 4}, {4, 9, 5}, {2, 7, 5}},
+			[]sql.Row{{3, 7, 5}, {2, 5, 3}},
+			[]sql.Row{{4, 7, 5}, {3, 5, 3}},
+		},
+		{
+			"cascade insertions",
+			`INSERT INTO three VALUES (1, NULL, NULL), (2, NULL, 2), (3, 3, NULL);
+			INSERT INTO two VALUES (1, NULL, 1);`,
+			[]sql.Row{},
+			[]sql.Row{{1, nil, 1}},
+			[]sql.Row{{3, 3, nil}, {2, nil, 2}, {1, nil, nil}},
+		},
+		{
+			"cascade updates and deletes after table and column renames",
+			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
+			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
+			RENAME TABLE one TO new;
+			ALTER  TABLE new RENAME COLUMN v1 TO vnew;
+			UPDATE new SET vnew = vnew + v2;
+			DELETE FROM new WHERE pk = 3;
+			UPDATE two SET v2 = v1 - 2;
+			RENAME TABLE new TO one;`,
+			[]sql.Row{{1, 5, 4}, {4, 9, 5}, {2, 7, 5}},
+			[]sql.Row{{3, 7, 5}, {2, 5, 3}},
+			[]sql.Row{{4, 7, 5}, {3, 5, 3}},
+		},
+		{
+			"cascade inserts and deletes",
+			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+			DELETE FROM one;`,
+			[]sql.Row{},
+			[]sql.Row{},
+			[]sql.Row{},
+		},
+		{
+			"cascade inserts and deletes (ep. 2)",
+			`INSERT INTO one VALUES (1, NULL, 1);
+			INSERT INTO two VALUES (1, NULL, 1), (2, NULL, 2);
+			INSERT INTO three VALUES (1, NULL, 1), (2, NULL, 2);
+			DELETE FROM one;
+			DELETE FROM two WHERE pk = 2`,
+			[]sql.Row{},
+			[]sql.Row{{1, nil, 1}},
+			[]sql.Row{{2, nil, 2}, {1, nil, 1}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dEnv, initialRoot := setupEditorKeylessFkTest(t)
+
+			testRoot, err := ExecuteSql(t, dEnv, initialRoot, `
+ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASCADE ON UPDATE CASCADE;
+`)
+			require.NoError(t, err)
+
+			root := testRoot
+			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
+				var err error
+				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
+				require.NoError(t, err)
+			}
+
+			assertTableEditorRows(t, root, test.expectedOne, "one")
+			assertTableEditorRows(t, root, test.expectedTwo, "two")
+			assertTableEditorRows(t, root, test.expectedThree, "three")
+		})
 	}
 }

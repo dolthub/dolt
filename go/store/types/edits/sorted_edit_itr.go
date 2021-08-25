@@ -14,7 +14,11 @@
 
 package edits
 
-import "github.com/dolthub/dolt/go/store/types"
+import (
+	"io"
+
+	"github.com/dolthub/dolt/go/store/types"
+)
 
 // SortedEditItr is a KVPIterator implementation that takes two KVPCollItr and merges them as it iterates
 type SortedEditItr struct {
@@ -32,10 +36,11 @@ func NewSortedEditItr(nbf *types.NomsBinFormat, left, right *KVPCollection) *Sor
 	return &SortedEditItr{leftItr, rightItr, false}
 }
 
-// Next returns the next KVP
+// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
+// in key sorted order.  Once all KVPs have been read io.EOF will be returned.
 func (itr *SortedEditItr) Next() (*types.KVP, error) {
 	if itr.done {
-		return nil, nil
+		return nil, io.EOF
 	}
 
 	lesser := itr.rightItr
@@ -56,6 +61,11 @@ func (itr *SortedEditItr) Next() (*types.KVP, error) {
 	}
 
 	itr.done = kvp == nil
+
+	if itr.done {
+		return nil, io.EOF
+	}
+
 	return kvp, nil
 }
 

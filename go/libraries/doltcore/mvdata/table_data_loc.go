@@ -218,13 +218,14 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 		te.statsCB(te.stats)
 	}
 
-	if atomic.LoadInt64(&te.gcOps) >= tableWriterGCRate {
+	gcOps := atomic.AddInt64(&te.gcOps, 1)
+
+	if gcOps%tableWriterGCRate == 0 {
 		atomic.StoreInt64(&te.gcOps, 0)
 		if err := te.GC(ctx); err != nil {
 			return err
 		}
 	}
-	_ = atomic.AddInt64(&te.gcOps, 1)
 
 	if te.insertOnly {
 		err := te.tableEditor.InsertRow(ctx, r, nil)

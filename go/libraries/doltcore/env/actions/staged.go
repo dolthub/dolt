@@ -16,69 +16,44 @@ package actions
 
 import (
 	"context"
-	"errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
-var ErrTablesInConflict = errors.New("table is in conflict")
-
-func StageTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData, tbls []string) error {
-	rsw := dbData.Rsw
-	drw := dbData.Drw
-
-	tables, docs, err := GetTablesOrDocs(drw, tbls)
-	if err != nil {
-		return err
-	}
-
+func StageTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs, tbls []string) (doltdb.Roots, error) {
 	if len(docs) > 0 {
+		var err error
 		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
 		if err != nil {
-			return err
+			return doltdb.Roots{}, err
 		}
 	}
 
-	err = stageTables(ctx, roots, rsw, tables)
-	if err != nil {
-		env.ResetWorkingDocsToStagedDocs(ctx, roots, rsw)
-		return err
-	}
-	return nil
+	return stageTables(ctx, roots, tbls)
 }
 
 func StageTablesNoDocs(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
-	return stageTablesNoEnvUpdate(ctx, roots, tbls)
+	return stageTables(ctx, roots, tbls)
 }
 
-func StageAllTables(ctx context.Context, roots doltdb.Roots, dbData env.DbData) error {
-	rsw := dbData.Rsw
-	drw := dbData.Drw
+func StageAllTables(ctx context.Context, roots doltdb.Roots, docs doltdocs.Docs) (doltdb.Roots, error) {
+	var err error
 
-	docs, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return err
-	}
-
-	roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
-	if err != nil {
-		return err
+	// To stage all docs for removal, use an empty slice instead of nil
+	if docs != nil {
+		roots.Working, err = doltdocs.UpdateRootWithDocs(ctx, roots.Working, docs)
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
 	}
 
 	tbls, err := doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 	if err != nil {
-		return err
+		return doltdb.Roots{}, err
 	}
 
-	err = stageTables(ctx, roots, rsw, tbls)
-	if err != nil {
-		env.ResetWorkingDocsToStagedDocs(ctx, roots, rsw)
-		return err
-	}
-
-	return nil
+	return stageTables(ctx, roots, tbls)
 }
 
 func StageAllTablesNoDocs(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
@@ -87,10 +62,10 @@ func StageAllTablesNoDocs(ctx context.Context, roots doltdb.Roots) (doltdb.Roots
 		return doltdb.Roots{}, err
 	}
 
-	return stageTablesNoEnvUpdate(ctx, roots, tbls)
+	return stageTables(ctx, roots, tbls)
 }
 
-func stageTablesNoEnvUpdate(
+func stageTables(
 	ctx context.Context,
 	roots doltdb.Roots,
 	tbls []string,
@@ -101,7 +76,7 @@ func stageTablesNoEnvUpdate(
 		return doltdb.Roots{}, err
 	}
 
-	roots.Working, err = checkTablesForConflicts(ctx, tbls, roots.Working)
+	roots.Working, err = clearEmptyConflicts(ctx, tbls, roots.Working)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -114,31 +89,8 @@ func stageTablesNoEnvUpdate(
 	return roots, nil
 }
 
-func stageTables(
-	ctx context.Context,
-	roots doltdb.Roots,
-	rsw env.RepoStateWriter,
-	tbls []string,
-) error {
-	var err error
-	roots, err = stageTablesNoEnvUpdate(ctx, roots, tbls)
-	if err != nil {
-		return err
-	}
-
-	// TODO: combine to single operation
-	err = env.UpdateWorkingRoot(ctx, rsw, roots.Working)
-	if err != nil {
-		return err
-	}
-
-	return env.UpdateStagedRoot(ctx, rsw, roots.Staged)
-}
-
-// checkTablesForConflicts clears any 0-row conflicts from the tables named, and returns a new root with those
-// conflicts cleared. If any tables named have real conflicts, returns an error.
-func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
-	var inConflict []string
+// clearEmptyConflicts clears any 0-row conflicts from the tables named, and returns a new root.
+func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for _, tblName := range tbls {
 		tbl, _, err := working.GetTable(ctx, tblName)
 		if err != nil {
@@ -166,15 +118,7 @@ func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb
 					return nil, err
 				}
 			}
-
-			if num > 0 {
-				inConflict = append(inConflict, tblName)
-			}
 		}
-	}
-
-	if len(inConflict) > 0 {
-		return nil, NewTblInConflictError(inConflict)
 	}
 
 	return working, nil

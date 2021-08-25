@@ -464,6 +464,15 @@ func (ts tableSpec) GetChunkCount() uint32 {
 	return ts.chunkCount
 }
 
+func tableSpecsToMap(specs []tableSpec) map[string]int {
+	m := make(map[string]int)
+	for _, spec := range specs {
+		m[spec.name.String()] = int(spec.chunkCount)
+	}
+
+	return m
+}
+
 func parseSpecs(tableInfo []string) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(tableInfo)/2)
 	for i := range specs {
@@ -500,9 +509,13 @@ func formatSpecs(specs []tableSpec, tableInfo []string) {
 // persisted manifest against the lock hash it saw last time it loaded the
 // contents of a manifest. If they do not match, the client must not update
 // the persisted manifest.
-func generateLockHash(root hash.Hash, specs []tableSpec) (lock addr) {
+func generateLockHash(root hash.Hash, specs []tableSpec, appendix []tableSpec) (lock addr) {
 	blockHash := sha512.New()
 	blockHash.Write(root[:])
+	for _, spec := range appendix {
+		blockHash.Write(spec.name[:])
+	}
+	blockHash.Write([]byte{0})
 	for _, spec := range specs {
 		blockHash.Write(spec.name[:])
 	}

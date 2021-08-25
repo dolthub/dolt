@@ -48,6 +48,7 @@ var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b a
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")
 
 var ErrUnresolvedConflicts = errors.New("merge has unresolved conflicts. please use the dolt_conflicts table to resolve")
+var ErrUnresolvedConstraintViolations = errors.New("merge has unresolved constraint violations. please use the dolt_constraint_violations table to resolve")
 var ErrMergeActive = errors.New("merging is not possible because you have not committed an active merge")
 
 type ErrClientOutOfDate struct {

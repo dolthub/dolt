@@ -43,7 +43,7 @@ func checkoutTables(ctx context.Context, dbData env.DbData, roots doltdb.Roots, 
 		return doltdb.Roots{}, err
 	}
 
-	err = env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
+	err = dbData.Rsw.UpdateWorkingRoot(ctx, roots.Working)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -112,7 +112,7 @@ func checkoutDocs(ctx context.Context, dbData env.DbData, roots doltdb.Roots, do
 		}
 	}
 
-	err := env.UpdateWorkingRoot(ctx, dbData.Rsw, roots.Working)
+	err := dbData.Rsw.UpdateWorkingRoot(ctx, roots.Working)
 	if err != nil {
 		return err
 	}

@@ -35,8 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -50,6 +48,8 @@ const (
 	DefaultRemotesApiPort = "443"
 	tempTablesDir         = "temptf"
 )
+
+var zeroHashStr = (hash.Hash{}).String()
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
 var ErrStateUpdate = errors.New("error updating local data repo state")
@@ -150,24 +150,35 @@ func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
 		return err
 	}
 
-	workingHash, ok := hash.MaybeParse(dEnv.RepoState.working)
-	if !ok {
-		return fmt.Errorf("Corrupt repo, invalid working hash %s", workingHash)
-	}
-
-	workingRoot, err := dEnv.DoltDB.ReadRootValue(ctx, workingHash)
+	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
 		return err
 	}
 
-	stagedHash, ok := hash.MaybeParse(dEnv.RepoState.staged)
-	if !ok {
-		return fmt.Errorf("Corrupt repo, invalid staged hash %s", stagedHash)
+	stagedRoot := headRoot
+	if len(dEnv.RepoState.staged) != 0 && dEnv.RepoState.staged != zeroHashStr {
+		stagedHash, ok := hash.MaybeParse(dEnv.RepoState.staged)
+		if !ok {
+			return fmt.Errorf("Corrupt repo, invalid staged hash %s", stagedHash)
+		}
+
+		stagedRoot, err = dEnv.DoltDB.ReadRootValue(ctx, stagedHash)
+		if err != nil {
+			return err
+		}
 	}
 
-	stagedRoot, err := dEnv.DoltDB.ReadRootValue(ctx, stagedHash)
-	if err != nil {
-		return err
+	workingRoot := stagedRoot
+	if len(dEnv.RepoState.working) != 0 && dEnv.RepoState.working != zeroHashStr {
+		workingHash, ok := hash.MaybeParse(dEnv.RepoState.working)
+		if !ok {
+			return fmt.Errorf("Corrupt repo, invalid working hash %s", workingHash)
+		}
+
+		workingRoot, err = dEnv.DoltDB.ReadRootValue(ctx, workingHash)
+		if err != nil {
+			return err
+		}
 	}
 
 	mergeState, err := mergeStateToMergeState(ctx, dEnv.RepoState.merge, dEnv.DoltDB)
@@ -422,6 +433,7 @@ type RootsProvider interface {
 	GetRoots(ctx context.Context) (doltdb.Roots, error)
 }
 
+// Roots returns the roots for this environment
 func (dEnv *DoltEnv) Roots(ctx context.Context) (doltdb.Roots, error) {
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
@@ -440,6 +452,23 @@ func (dEnv *DoltEnv) Roots(ctx context.Context) (doltdb.Roots, error) {
 	}, nil
 }
 
+// UpdateRoots updates the working and staged roots for this environment
+func (dEnv *DoltEnv) UpdateRoots(ctx context.Context, roots doltdb.Roots) error {
+	ws, err := dEnv.WorkingSet(ctx)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// first time updating roots
+		wsRef, err := ref.WorkingSetRefForHead(dEnv.RepoState.CWBHeadRef())
+		if err != nil {
+			return err
+		}
+		ws = doltdb.EmptyWorkingSet(wsRef)
+	} else if err != nil {
+		return err
+	}
+
+	return dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged))
+}
+
 // WorkingRoot returns the working root for the current working branch
 func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	workingSet, err := dEnv.WorkingSet(ctx)
@@ -447,7 +476,7 @@ func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
 		return nil, err
 	}
 
-	return workingSet.RootValue(), nil
+	return workingSet.WorkingRoot(), nil
 }
 
 func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
@@ -510,14 +539,6 @@ type repoStateReader struct {
 	dEnv *DoltEnv
 }
 
-func (r *repoStateReader) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	return r.dEnv.StagedRoot(ctx)
-}
-
-func (r *repoStateReader) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	return r.dEnv.WorkingRoot(ctx)
-}
-
 func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
 	return r.dEnv.RepoState.CWBHeadRef()
 }
@@ -526,37 +547,10 @@ func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
 	return r.dEnv.RepoState.CWBHeadSpec()
 }
 
-func (r *repoStateReader) CWBHeadHash(ctx context.Context) (hash.Hash, error) {
-	ref := r.CWBHeadRef()
-	cm, err := r.dEnv.DoltDB.ResolveCommitRef(ctx, ref)
-
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
-	return cm.HashOf()
-}
-
-func (r *repoStateReader) StagedHash() hash.Hash {
-	return hash.Parse(r.dEnv.RepoState.staged)
-}
-
-func (r *repoStateReader) IsMergeActive(ctx context.Context) (bool, error) {
-	return r.dEnv.IsMergeActive(ctx)
-}
-
-func (r *repoStateReader) GetMergeCommit(ctx context.Context) (*doltdb.Commit, error) {
-	ws, err := r.dEnv.WorkingSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return ws.MergeState().Commit(), nil
-}
-
 func (r *repoStateReader) GetRemotes() (map[string]Remote, error) {
 	return r.dEnv.GetRemotes()
 }
+
 
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
 	return &repoStateReader{dEnv}
@@ -575,19 +569,6 @@ func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.
 	}
 
 	return nil
-}
-
-// TODO: kill merge methods
-func (r *repoStateWriter) AbortMerge(ctx context.Context) error {
-	return r.DoltEnv.AbortMerge(ctx)
-}
-
-func (r *repoStateWriter) ClearMerge(ctx context.Context) error {
-	return r.DoltEnv.ClearMerge(ctx)
-}
-
-func (r *repoStateWriter) StartMerge(ctx context.Context, commit *doltdb.Commit) error {
-	return r.DoltEnv.StartMerge(ctx, commit)
 }
 
 func (r *repoStateWriter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
@@ -740,45 +721,6 @@ func (dEnv *DoltEnv) StartMerge(ctx context.Context, commit *doltdb.Commit) erro
 	}
 
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.StartMerge(commit), h, dEnv.workingSetMeta())
-}
-
-// todo: move this out of env to actions
-func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, sch schema.Schema, rows types.Map, indexData types.Map, tableName string, autoVal types.Value) error {
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return doltdb.ErrNomsIO
-	}
-
-	vrw := dEnv.DoltDB.ValueReadWriter()
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
-	if err != nil {
-		return ErrMarshallingSchema
-	}
-
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, indexData, autoVal)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutTable(ctx, tableName, tbl)
-	if err != nil {
-		return err
-	}
-
-	rootHash, err := root.HashOf()
-	if err != nil {
-		return err
-	}
-
-	newRootHash, err := newRoot.HashOf()
-	if err != nil {
-		return err
-	}
-	if rootHash == newRootHash {
-		return nil
-	}
-
-	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }
 
 func (dEnv *DoltEnv) IsMergeActive(ctx context.Context) (bool, error) {
@@ -1083,4 +1025,61 @@ func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
 
 func (dEnv *DoltEnv) TempTableFilesDir() string {
 	return mustAbs(dEnv, dEnv.GetDoltDir(), tempTablesDir)
+}
+
+// GetGCKeepers returns the hashes of all the objects in the environment provided that should be perserved during GC.
+// TODO: this should be unnecessary since we now store the working set in a noms dataset, remove it
+func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
+	workingRoot, err := env.WorkingRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	workingHash, err := workingRoot.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	stagedRoot, err := env.StagedRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	stagedHash, err := stagedRoot.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	keepers := []hash.Hash{
+		workingHash,
+		stagedHash,
+	}
+
+	mergeActive, err := env.IsMergeActive(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if mergeActive {
+		ws, err := env.WorkingSet(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		cm := ws.MergeState().Commit()
+		ch, err := cm.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		pmw := ws.MergeState().PreMergeWorkingRoot()
+		pmwh, err := pmw.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		keepers = append(keepers, ch, pmwh)
+	}
+
+	return keepers, nil
 }

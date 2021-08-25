@@ -21,15 +21,20 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func createKVPs(rng *rand.Rand, size int) types.KVPSlice {
+func createKVPs(t *testing.T, nbf *types.NomsBinFormat, rng *rand.Rand, size int) types.KVPSlice {
 	kvps := make(types.KVPSlice, size)
 
+	v, err := types.NewTuple(nbf, types.NullValue)
+	require.NoError(t, err)
 	for i := 0; i < size; i++ {
-		kvps[i] = types.KVP{Key: types.Uint(rng.Uint64() % 10000), Val: types.NullValue}
+		k, err := types.NewTuple(nbf, types.Uint(rng.Uint64()%10000))
+		require.NoError(t, err)
+		kvps[i] = types.KVP{Key: k, Val: v}
 	}
 
 	return kvps
@@ -70,7 +75,7 @@ func testASE(t *testing.T, rng *rand.Rand) {
 	name := fmt.Sprintf("kvps_%d_bs_%d_asc_%d_sc_%d", numKVPs, buffSize, asyncSortConcurrency, sortConcurrency)
 
 	t.Run(name, func(t *testing.T) {
-		kvps := createKVPs(rng, numKVPs)
+		kvps := createKVPs(t, types.Format_Default, rng, numKVPs)
 		asyncSorted := NewAsyncSortedEdits(types.Format_7_18, buffSize, asyncSortConcurrency, sortConcurrency)
 
 		for _, kvp := range kvps {

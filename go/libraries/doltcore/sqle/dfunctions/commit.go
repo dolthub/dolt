@@ -75,10 +75,11 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	root, ok := dSess.GetRoot(dbName)
+	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return nil, fmt.Errorf("unknown database '%s'", dbName)
 	}
+	root := roots.Working
 
 	// Update the superschema to with any new information from the table map.
 	tblNames, err := root.GetTableNames(ctx)
@@ -91,7 +92,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	ddb, ok := dSess.GetDoltDB(dbName)
+	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)

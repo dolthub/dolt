@@ -468,6 +468,11 @@ func (ttfs *TestTableFileStore) WriteTableFile(ctx context.Context, fileId strin
 	return tblFile.Close(ctx)
 }
 
+// AddTableFilesToManifest adds table files to the manifest
+func (ttfs *TestTableFileStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
+	return nil
+}
+
 func (ttfs *TestTableFileStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
 	ttfs.root = root
 	return nil

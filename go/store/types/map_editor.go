@@ -43,10 +43,10 @@ var CreateEditAccForMapEdits CreateEditAcc = NewDumbEditAccumulator
 // EditAccumulator is an interface for a datastructure that can have edits added to it. Once all edits are
 // added FinishedEditing can be called to get an EditProvider which provides the edits in sorted order
 type EditAccumulator interface {
-	// AddEdit adds an edit to the list of edits
+	// AddEdit adds an edit to the list of edits.  Not thread safe.
 	AddEdit(k LesserValuable, v Valuable)
 
-	// FinishEditing should be called when all edits have been added to get an EditProvider which provides the
+	// FinishedEditing should be called when all edits have been added to get an EditProvider which provides the
 	// edits in sorted order. Adding more edits after calling FinishedEditing is an error.
 	FinishedEditing() (EditProvider, error)
 
@@ -113,4 +113,8 @@ func (med *MapEditor) NumEdits() int64 {
 
 func (med *MapEditor) Format() *NomsBinFormat {
 	return med.m.format()
+}
+
+func (med *MapEditor) Close() {
+	med.acc.Close()
 }

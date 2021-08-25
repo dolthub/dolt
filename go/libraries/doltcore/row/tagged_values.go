@@ -62,6 +62,24 @@ func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) 
 	return types.TupleKind < other.Kind(), nil
 }
 
+func (tt TaggedValues) ToRow(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema) (Row, error) {
+	keyVals := tt.NomsTupleForNonPKCols(nbf, sch.GetPKCols())
+	valVals := tt.NomsTupleForNonPKCols(nbf, sch.GetNonPKCols())
+	key, err := keyVals.Value(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := valVals.Value(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
+}
+
 func (tt TaggedValues) NomsTupleForPKCols(nbf *types.NomsBinFormat, pkCols *schema.ColCollection) TupleVals {
 	return tt.nomsTupleForTags(nbf, pkCols.Tags, true)
 }

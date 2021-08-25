@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+var ErrNothingToCollect = errors.New("no changes since last gc")
+
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.
 type ChunkStore interface {
@@ -88,6 +90,15 @@ type ChunkStore interface {
 	io.Closer
 }
 
+type DebugLogger interface {
+	Logf(fmt string, args ...interface{})
+}
+
+type LoggingChunkStore interface {
+	ChunkStore
+	SetLogger(logger DebugLogger)
+}
+
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
 type ChunkStoreGarbageCollector interface {
 	ChunkStore
@@ -97,7 +108,13 @@ type ChunkStoreGarbageCollector interface {
 	// and MarkAndSweepChunks returns, the chunk store will only have the
 	// chunks sent on |keepChunks| and will have removed all other content
 	// from the ChunkStore.
-	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error
+	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error
+}
+
+// GenerationalCS is an interface supporting the getting old gen and new gen chunk stores
+type GenerationalCS interface {
+	NewGen() ChunkStoreGarbageCollector
+	OldGen() ChunkStoreGarbageCollector
 }
 
 // ChunkStoreVersionGetter is a ChunkStore that supports getting the manifest's

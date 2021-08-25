@@ -22,9 +22,9 @@
 package datas
 
 import (
+	"container/heap"
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -101,7 +101,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 		d.Panic("second reference is not a commit")
 	}
 
-	c1Q, c2Q := &types.RefByHeight{c1}, &types.RefByHeight{c2}
+	c1Q, c2Q := RefByHeightHeap{c1}, RefByHeightHeap{c2}
 	for !c1Q.Empty() && !c2Q.Empty() {
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
 		if c1Ht == c2Ht {
@@ -109,21 +109,21 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 			if common, ok := findCommonRef(c1Parents, c2Parents); ok {
 				return common, true, nil
 			}
-			err = parentsToQueue(ctx, c1Parents, c1Q, vr1)
+			err = parentsToQueue(ctx, c1Parents, &c1Q, vr1)
 			if err != nil {
 				return types.Ref{}, false, err
 			}
-			err = parentsToQueue(ctx, c2Parents, c2Q, vr2)
+			err = parentsToQueue(ctx, c2Parents, &c2Q, vr2)
 			if err != nil {
 				return types.Ref{}, false, err
 			}
 		} else if c1Ht > c2Ht {
-			err = parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), c1Q, vr1)
+			err = parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), &c1Q, vr1)
 			if err != nil {
 				return types.Ref{}, false, err
 			}
 		} else {
-			err = parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), c2Q, vr2)
+			err = parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), &c2Q, vr2)
 			if err != nil {
 				return types.Ref{}, false, err
 			}
@@ -133,7 +133,46 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 	return a, ok, nil
 }
 
-func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeight, vr types.ValueReader) error {
+// FindClosureCommonAncestor returns the most recent common ancestor of |cl| and |cm|,
+// where |cl| is the transitive closure of one or more refs. If a common ancestor
+// exists, |ok| is set to true, else false.
+func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref, vr types.ValueReader) (a types.Ref, ok bool, err error) {
+	t, err := types.TypeOf(cm)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+
+	// precondition checks
+	if !IsRefOfCommitType(cm.Format(), t) {
+		d.Panic("reference is not a commit")
+	}
+
+	q := &RefByHeightHeap{cm}
+	var curr types.RefSlice
+
+	for !q.Empty() {
+		curr = q.PopRefsOfHeight(q.MaxHeight())
+
+		for _, r := range curr {
+			ok, err = cl.Contains(ctx, r)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			if ok {
+				return r, ok, nil
+			}
+		}
+
+		err = parentsToQueue(ctx, curr, q, vr)
+		if err != nil {
+			return types.Ref{}, false, err
+		}
+	}
+
+	return types.Ref{}, false, nil
+}
+
+func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap, vr types.ValueReader) error {
 	seen := make(map[hash.Hash]bool)
 	for _, r := range refs {
 		if _, ok := seen[r.TargetHash()]; ok {
@@ -160,7 +199,7 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 		if ok {
 			p := ps.(types.List)
 			err = p.Iter(ctx, func(v types.Value, _ uint64) (stop bool, err error) {
-				q.PushBack(v.(types.Ref))
+				heap.Push(q, v)
 				return
 			})
 			if err != nil {
@@ -174,7 +213,7 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 			if ok {
 				p := ps.(types.Set)
 				err = p.Iter(ctx, func(v types.Value) (stop bool, err error) {
-					q.PushBack(v.(types.Ref))
+					heap.Push(q, v)
 					return
 				})
 				if err != nil {
@@ -184,7 +223,6 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 		}
 	}
 
-	sort.Sort(q)
 	return nil
 }
 
@@ -248,4 +286,45 @@ func IsCommit(v types.Value) (bool, error) {
 
 func IsRefOfCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
 	return t.TargetKind() == types.RefKind && IsCommitType(nbf, getRefElementType(t))
+}
+
+type RefByHeightHeap []types.Ref
+
+func (r RefByHeightHeap) Less(i, j int) bool {
+	return types.HeightOrder(r[i], r[j])
+}
+
+func (r RefByHeightHeap) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
+}
+
+func (r RefByHeightHeap) Len() int {
+	return len(r)
+}
+
+func (r *RefByHeightHeap) Push(x interface{}) {
+	*r = append(*r, x.(types.Ref))
+}
+
+func (r *RefByHeightHeap) Pop() interface{} {
+	old := *r
+	ret := old[len(old)-1]
+	*r = old[:len(old)-1]
+	return ret
+}
+
+func (r RefByHeightHeap) Empty() bool {
+	return len(r) == 0
+}
+
+func (r RefByHeightHeap) MaxHeight() uint64 {
+	return r[0].Height()
+}
+
+func (r *RefByHeightHeap) PopRefsOfHeight(h uint64) types.RefSlice {
+	var ret types.RefSlice
+	for !r.Empty() && r.MaxHeight() == h {
+		ret = append(ret, heap.Pop(r).(types.Ref))
+	}
+	return ret
 }

@@ -56,6 +56,11 @@ func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string
 	return nbsMW.nbs.WriteTableFile(ctx, fileId, numChunks, rd, contentLength, contentHash)
 }
 
+// AddTableFilesToManifest adds table files to the manifest
+func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
+	return nbsMW.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks)
+}
+
 // SetRootChunk changes the root chunk hash from the previous value to the new root.
 func (nbsMW *NBSMetricWrapper) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
 	return nbsMW.nbs.SetRootChunk(ctx, root, previous)
@@ -66,8 +71,8 @@ func (nbsMW *NBSMetricWrapper) SupportedOperations() TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
 }
 
-func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
-	return nbsMW.nbs.MarkAndSweepChunks(ctx, last, keepChunks)
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
+	return nbsMW.nbs.MarkAndSweepChunks(ctx, last, keepChunks, dest)
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.

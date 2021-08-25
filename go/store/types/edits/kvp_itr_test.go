@@ -16,6 +16,7 @@ package edits
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,12 +28,10 @@ import (
 func IsInOrder(itr types.EditProvider) (bool, int, error) {
 	prev, err := itr.Next()
 
-	if err != nil {
-		return false, 0, err
-	}
-
-	if prev == nil {
+	if err == io.EOF {
 		return true, 0, nil
+	} else if err != nil {
+		return false, 0, err
 	}
 
 	count := 1
@@ -40,29 +39,25 @@ func IsInOrder(itr types.EditProvider) (bool, int, error) {
 	for {
 		curr, err := itr.Next()
 
+		if err == io.EOF {
+			return true, count, nil
+		} else if err != nil {
+			return false, 0, err
+		}
+
+		isLess, err := curr.Key.Less(types.Format_7_18, prev.Key)
+
 		if err != nil {
 			return false, 0, err
 		}
 
-		if curr == nil {
-			break
-		} else {
-			isLess, err := curr.Key.Less(types.Format_7_18, prev.Key)
-
-			if err != nil {
-				return false, 0, err
-			}
-
-			if isLess {
-				return false, count, nil
-			}
+		if isLess {
+			return false, count, nil
 		}
 
 		count++
 		prev = curr
 	}
-
-	return true, count, nil
 }
 
 func TestKVPSliceSort(t *testing.T) {

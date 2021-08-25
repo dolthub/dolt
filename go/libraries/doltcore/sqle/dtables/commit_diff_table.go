@@ -116,7 +116,7 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 }
 
 func calcSuperDuperSchema(ctx context.Context, ddb *doltdb.DoltDB, working *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
-	refs, err := ddb.GetHeadRefs(ctx)
+	refs, err := ddb.GetBranches(ctx)
 
 	if err != nil {
 		return nil, err
@@ -242,18 +242,27 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 
 	fromTable, _, err := fromRoot.GetTable(ctx, dt.name)
 
-	if err != nil {
-		return nil, err
-	}
-
-	return NewSliceOfPartitionsItr([]sql.Partition{diffPartition{
+	dp := diffPartition{
 		to:       toTable,
 		from:     fromTable,
 		toName:   toName,
 		fromName: fromName,
 		toDate:   toDate,
 		fromDate: fromDate,
-	}}), nil
+	}
+
+	isDiffable, err := dp.isDiffablePartition(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !isDiffable {
+		ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, dp.fromName, dp.toName))
+		return NewSliceOfPartitionsItr([]sql.Partition{}), nil
+	}
+
+	return NewSliceOfPartitionsItr([]sql.Partition{dp}), nil
 }
 
 func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expression.Equals) (*doltdb.RootValue, string, *types.Timestamp, error) {

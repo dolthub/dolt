@@ -16,25 +16,23 @@ package actions
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/fkconstrain"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type CommitStagedProps struct {
-	Message          string
-	Date             time.Time
-	AllowEmpty       bool
-	CheckForeignKeys bool
-	Name             string
-	Email            string
+	Message    string
+	Date       time.Time
+	AllowEmpty bool
+	Force      bool
+	Name       string
+	Email      string
 }
 
 // GetNameAndEmail returns the name and email from the supplied config
@@ -59,7 +57,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 }
 
 // CommitStaged adds a new commit to HEAD with the given props. Returns the new commit's hash as a string and an error.
-func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, props CommitStagedProps) (*doltdb.Commit, error) {
+func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mergeParents []*doltdb.Commit, dbData env.DbData, props CommitStagedProps) (*doltdb.Commit, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
@@ -83,11 +81,6 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	mergeActive, err := rsr.IsMergeActive(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
 		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, drw)
 		if err != nil {
@@ -96,8 +89,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		return nil, NothingStaged{notStaged, notStagedDocs}
 	}
 
-	var mergeParentCommits []*doltdb.Commit
-	if mergeActive {
+	if !props.Force {
 		inConflict, err := roots.Working.TablesInConflict(ctx)
 		if err != nil {
 			return nil, err
@@ -105,13 +97,13 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		if len(inConflict) > 0 {
 			return nil, NewTblInConflictError(inConflict)
 		}
-
-		commit, err := rsr.GetMergeCommit(ctx)
+		violatesConstraints, err := roots.Working.TablesWithConstraintViolations(ctx)
 		if err != nil {
 			return nil, err
 		}
-
-		mergeParentCommits = []*doltdb.Commit{commit}
+		if len(violatesConstraints) > 0 {
+			return nil, NewTblHasConstraintViolations(violatesConstraints)
+		}
 	}
 
 	stagedRoot, err := roots.Staged.UpdateSuperSchemasFromOther(ctx, stagedTblNames, roots.Staged)
@@ -119,21 +111,15 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		return nil, err
 	}
 
-	if props.CheckForeignKeys {
+	if !props.Force {
 		stagedRoot, err = stagedRoot.ValidateForeignKeysOnSchemas(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
-		err = fkconstrain.Validate(ctx, roots.Head, stagedRoot)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// TODO: combine into a single update
-	err = env.UpdateStagedRoot(ctx, rsw, stagedRoot)
+	err = rsw.UpdateStagedRoot(ctx, stagedRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +129,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 		return nil, err
 	}
 
-	err = env.UpdateWorkingRoot(ctx, rsw, workingRoot)
+	err = rsw.UpdateWorkingRoot(ctx, workingRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -163,82 +149,12 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, dbData env.DbData, pr
 	// logrus.Errorf("staged root is %s", stagedRoot.DebugString(ctx, true))
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.
-	c, err := ddb.CommitWithParentCommits(ctx, h, rsr.CWBHeadRef(), mergeParentCommits, meta)
-	if err != nil {
-		return nil, err
-	}
-
-	err = rsw.ClearMerge(ctx)
+	c, err := ddb.CommitWithParentCommits(ctx, h, rsr.CWBHeadRef(), mergeParents, meta)
 	if err != nil {
 		return nil, err
 	}
 
 	return c, nil
-}
-
-func ValidateForeignKeysOnCommit(ctx context.Context, srt *doltdb.RootValue, stagedTblNames []string) (*doltdb.RootValue, error) {
-	// Validate schemas
-	srt, err := srt.ValidateForeignKeysOnSchemas(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// Validate data
-	//TODO: make this more efficient, perhaps by leveraging diffs?
-	fkColl, err := srt.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	fksToCheck := make(map[string]doltdb.ForeignKey)
-	for _, tblName := range stagedTblNames {
-		declaredFk, referencedByFk := fkColl.KeysForTable(tblName)
-		for _, fk := range declaredFk {
-			fksToCheck[fk.Name] = fk
-		}
-		for _, fk := range referencedByFk {
-			fksToCheck[fk.Name] = fk
-		}
-	}
-
-	for _, fk := range fksToCheck {
-		childTbl, _, ok, err := srt.GetTableInsensitive(ctx, fk.TableName)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("foreign key '%s' references missing table '%s'", fk.Name, fk.TableName)
-		}
-		childSch, err := childTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		childIdx := childSch.Indexes().GetByName(fk.TableIndex)
-		childIdxRowData, err := childTbl.GetIndexRowData(ctx, fk.TableIndex)
-		if err != nil {
-			return nil, err
-		}
-		parentTbl, _, ok, err := srt.GetTableInsensitive(ctx, fk.ReferencedTableName)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("foreign key '%s' references missing table '%s'", fk.Name, fk.ReferencedTableName)
-		}
-		parentTblSch, err := parentTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		parentIdx := parentTblSch.Indexes().GetByName(fk.ReferencedTableIndex)
-		parentIdxRowData, err := parentTbl.GetIndexRowData(ctx, fk.ReferencedTableIndex)
-		if err != nil {
-			return nil, err
-		}
-		err = fk.ValidateData(ctx, childIdxRowData, parentIdxRowData, childIdx, parentIdx)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return srt, nil
 }
 
 // TimeSortedCommits returns a reverse-chronological (latest-first) list of the most recent `n` ancestors of `commit`.

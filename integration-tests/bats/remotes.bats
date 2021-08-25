@@ -156,7 +156,7 @@ SQL
 
     cd dolt-repo-clones/test-repo
     run dolt pull
-    [[ "$output" =~ "Successfully" ]] || false
+    [ "$status" -eq 0 ]
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
@@ -186,7 +186,7 @@ SQL
 
     cd dolt-repo-clones/test-repo
     run dolt pull
-    [[ "$output" =~ "Successfully" ]] || false
+    [ "$status" -eq 0 ]
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
@@ -1025,4 +1025,16 @@ setup_ref_test() {
     [[ "$output" =~ "remotes/origin/master" ]] || false
     [[ "$output" =~ "remotes/origin/branch-one" ]] || false
     [[ "$output" =~ "remotes/origin/branch-two" ]] || false
+}
+
+@test "remotes: not specifying a branch throws an error" {
+    run dolt push -u origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: --set-upstream requires <remote> and <refspec> params." ]] || false
+}
+
+@test "remotes: pushing empty branch does not panic" {
+    run dolt push origin ''
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: invalid refspec ''" ]] || false
 }
