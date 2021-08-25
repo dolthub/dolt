@@ -1768,15 +1768,12 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	fkc, err := t.updateFkcIndex(ctx, root, fkcUpdates)
+
+	newRoot, err := t.updateFkcIndex(ctx, root, fkcUpdates)
 	if err != nil {
 		return err
 	}
 
-	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
-	if err != nil {
-		return err
-	}
 	table, err := t.doltTable(ctx)
 	if err != nil {
 		return err
@@ -1807,7 +1804,7 @@ type fkIndexSwitch struct {
 	toIdx   string
 }
 
-func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootValue, updates []fkIndexSwitch) (*doltdb.ForeignKeyCollection, error) {
+func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootValue, updates []fkIndexSwitch) (*doltdb.RootValue, error) {
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -1827,7 +1824,11 @@ func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootV
 		}
 	}
 
-	return fkc, nil
+	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return nil, err
+	}
+	return root, nil
 }
 
 // backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
