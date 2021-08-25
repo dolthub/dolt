@@ -96,7 +96,11 @@ func (b Blob) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
 			if n1 != n2 || uint64(n1) != length {
 				return 0, errors.New("incorrect length read from blob")
 			}
-			return bytes.Compare(b1Data, b2Data), nil
+			res := bytes.Compare(b1Data, b2Data)
+
+			if res != 0 {
+				return res, nil
+			}
 		}
 
 		if b1Length < b2Length {
