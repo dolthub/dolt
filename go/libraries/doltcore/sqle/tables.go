@@ -1763,10 +1763,15 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	fkc, err := t.verifyCanDropPk(ctx, root)
+	fkcUpdates, err := t.backupFkcIndexesForPkDrop(ctx, root)
 	if err != nil {
 		return err
 	}
+	fkc, err := t.updateFkcIndex(ctx, root, fkcUpdates)
+	if err != nil {
+		return err
+	}
+
 	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
 	if err != nil {
 		return err
@@ -1795,9 +1800,39 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-// canDropPk checks whether there are conflicting foreign key relationships referencing this
-// table's primary key tags
-func (t *AlterableDoltTable) verifyCanDropPk(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.ForeignKeyCollection, error) {
+type fkIndexSwitch struct {
+	fkName  string
+	fromIdx string
+	toIdx   string
+}
+
+func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootValue, updates []fkIndexSwitch) (*doltdb.ForeignKeyCollection, error) {
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, u := range updates {
+		fk, ok := fkc.GetByNameCaseInsensitive(u.fkName)
+		if !ok {
+			return nil, errors.New("foreign key not found")
+		}
+		fkc.RemoveKeys(fk)
+		fk.ReferencedTableIndex = u.toIdx
+		fkc.AddKeys(fk)
+		err := fk.ValidateReferencedTableSchema(t.sch)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return fkc, nil
+}
+
+// backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
+// key drop. If multiple indexes are valid, we select the first key given the default index sort order.
+// This will not work with a non-pk drop without a new `toDrop` argument.
+func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *doltdb.RootValue) ([]fkIndexSwitch, error) {
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -1808,13 +1843,13 @@ func (t *AlterableDoltTable) verifyCanDropPk(ctx *sql.Context, root *doltdb.Root
 		return nil, err
 	}
 
-	// pkBackups is a mapping from the table's PL tags to potentially compensating indexes
+	// pkBackups is a mapping from the table's PK tags to potentially compensating indexes
 	pkBackups := make(map[uint64][]schema.Index, len(t.sch.GetPKCols().TagToIdx))
 	for tag, _ := range t.sch.GetPKCols().TagToIdx {
 		pkBackups[tag] = nil
 	}
 	for _, idx := range indexes {
-		if !idx.IsUserDefined() || !!idx.IsUnique() {
+		if !idx.IsUserDefined() {
 			continue
 		}
 
@@ -1825,6 +1860,7 @@ func (t *AlterableDoltTable) verifyCanDropPk(ctx *sql.Context, root *doltdb.Root
 		}
 	}
 
+	fkUpdates := make([]fkIndexSwitch, 0)
 	for _, fk := range fkc.AllKeys() {
 		// check if this FK references a parent PK tag we are trying to change
 		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
@@ -1844,12 +1880,7 @@ func (t *AlterableDoltTable) verifyCanDropPk(ctx *sql.Context, root *doltdb.Root
 				if failed {
 					continue
 				}
-
-				fkc.RemoveKeys(fk)
-				fk.ReferencedTableIndex = idx.Name()
-				fkc.AddKeys(fk)
-
-				err = fk.ValidateReferencedTableSchema(t.sch)
+				fkUpdates = append(fkUpdates, fkIndexSwitch{fk.Name, fk.ReferencedTableIndex, idx.Name()})
 				covered = true
 				break
 			}
@@ -1858,5 +1889,5 @@ func (t *AlterableDoltTable) verifyCanDropPk(ctx *sql.Context, root *doltdb.Root
 			}
 		}
 	}
-	return fkc, nil
+	return fkUpdates, nil
 }

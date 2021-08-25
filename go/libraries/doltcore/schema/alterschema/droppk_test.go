@@ -17,6 +17,9 @@ package alterschema_test
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/go-mysql-server/sql"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -125,6 +128,32 @@ func TestDropPk(t *testing.T) {
 	})
 }
 
+func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, sql.Schema, error) {
+	var err error
+	db := sqle.NewDatabase("dolt", dEnv.DbData())
+	engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sch, iter, err := engine.Query(sqlCtx, query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sqlRows := make([]sql.Row, 0)
+	var r sql.Row
+	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
+		sqlRows = append(sqlRows, r)
+	}
+
+	if err != io.EOF {
+		return nil, nil, err
+	}
+
+	return sqlRows, sch, nil
+}
+
 func TestDropPks(t *testing.T) {
 	var dropTests = []struct {
 		name      string
@@ -222,19 +251,29 @@ func TestDropPks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			ctx := context.Background()
-			for _, c := range tt.setup {
-				exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{fmt.Sprintf("-q %s", c)}, dEnv)
-				require.Equal(t, 0, exitCode)
+
+			db := sqle.NewDatabase("dolt", dEnv.DbData())
+			root, _ := dEnv.WorkingRoot(ctx)
+			engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
+			require.NoError(t, err)
+
+			for _, query := range tt.setup {
+				_, _, err := engine.Query(sqlCtx, query)
+				require.NoError(t, err)
 			}
+
 			drop := "alter table parent drop primary key"
-			exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{fmt.Sprintf("-q %s", drop)}, dEnv)
-			require.Equal(t, tt.exit, exitCode)
+			_, _, err = engine.Query(sqlCtx, drop)
+			switch tt.exit {
+			case 1:
+				require.Error(t, err)
+			default:
+				require.NoError(t, err)
+			}
 
 			if tt.fkIdxName != "" {
-				wr, err := dEnv.WorkingRoot(ctx)
-				assert.NoError(t, err)
-
-				foreignKeyCollection, err := wr.GetForeignKeyCollection(ctx)
+				root, _ = db.GetRoot(sqlCtx)
+				foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)
 				assert.NoError(t, err)
 
 				fk, ok := foreignKeyCollection.GetByNameCaseInsensitive(childFkName)
@@ -242,7 +281,7 @@ func TestDropPks(t *testing.T) {
 				assert.Equal(t, childName, fk.TableName)
 				assert.Equal(t, tt.fkIdxName, fk.ReferencedTableIndex)
 
-				parent, ok, err := wr.GetTable(ctx, parentName)
+				parent, ok, err := root.GetTable(ctx, parentName)
 				assert.NoError(t, err)
 				assert.True(t, ok)
 

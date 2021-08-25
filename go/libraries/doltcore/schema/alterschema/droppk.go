@@ -48,9 +48,6 @@ func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *type
 	}
 
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
-	if err != nil {
-		return nil, err
-	}
 
 	table, err = table.UpdateSchema(ctx, newSchema)
 	if err != nil {
