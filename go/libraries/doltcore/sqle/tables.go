@@ -1798,13 +1798,14 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-type fkIndexSwitch struct {
+type fkIndexUpdate struct {
 	fkName  string
 	fromIdx string
 	toIdx   string
 }
 
-func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootValue, updates []fkIndexSwitch) (*doltdb.RootValue, error) {
+// updateFkcIndex applies a list of fkIndexUpdates to a ForeignKeyCollection and returns a new root value
+func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootValue, updates []fkIndexUpdate) (*doltdb.RootValue, error) {
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -1834,7 +1835,7 @@ func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootV
 // backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
 // key drop. If multiple indexes are valid, we select the first key given the default index sort order.
 // This will not work with a non-pk drop without a new `toDrop` argument.
-func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *doltdb.RootValue) ([]fkIndexSwitch, error) {
+func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *doltdb.RootValue) ([]fkIndexUpdate, error) {
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -1867,7 +1868,7 @@ func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *d
 		}
 	}
 
-	fkUpdates := make([]fkIndexSwitch, 0)
+	fkUpdates := make([]fkIndexUpdate, 0)
 	for _, fk := range fkc.AllKeys() {
 		// check if this FK references a parent PK tag we are trying to change
 		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
@@ -1887,7 +1888,7 @@ func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *d
 				if failed {
 					continue
 				}
-				fkUpdates = append(fkUpdates, fkIndexSwitch{fk.Name, fk.ReferencedTableIndex, idx.Name()})
+				fkUpdates = append(fkUpdates, fkIndexUpdate{fk.Name, fk.ReferencedTableIndex, idx.Name()})
 				covered = true
 				break
 			}
