@@ -118,9 +118,9 @@ func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
 }
 
 func (s SessionStateAdapter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
-	return fmt.Errorf("Cannot add remote with a SessionStateAdapter")
+	return fmt.Errorf("cannot insert remote in an SQL session")
 }
 
 func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) error {
-	return fmt.Errorf("Cannot remove remote with a SessionStateAdapter")
+	return fmt.Errorf("cannot delete remote in an SQL session")
 }

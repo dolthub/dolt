@@ -162,6 +162,18 @@ teardown() {
     [[ "${lines[1]}" =~ origin,$regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
 }
 
+@test "system-tables: check unsupported dolt_remote behavior" {
+    run dolt sql -q "insert into dolt_remotes (name, url) values ('origin1', 'file://remote')"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "cannot insert remote in an SQL session" ]] || false
+
+    mkdir remote
+    dolt remote add origin file://remote/
+    run dolt sql -q "delete from dolt_remotes where name = 'origin'"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "cannot delete remote in an SQL session" ]] || false
+}
+
 @test "system-tables: insert into dolt_remotes system table" {
     skip "Remotes table not yet mutable in SQL session"
     run dolt sql -q "insert into dolt_remotes (name, url) values ('origin', 'file://remote')"
