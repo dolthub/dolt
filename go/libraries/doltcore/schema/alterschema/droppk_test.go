@@ -233,6 +233,15 @@ func TestDropPks(t *testing.T) {
 			fkIdxName: "backup1",
 		},
 		{
+			name: "perfer unique key",
+			setup: []string{
+				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (id, age), key `backup1` (age, id, name), unique key `backup2` (age, id)	)",
+				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age) references parent (age))",
+			},
+			exit:      0,
+			fkIdxName: "backup2",
+		},
+		{
 			name: "error if FK ref but no backup index for single pk",
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, primary key (id))",

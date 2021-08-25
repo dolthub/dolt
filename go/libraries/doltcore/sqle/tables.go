@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1848,6 +1849,11 @@ func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *d
 	for tag, _ := range t.sch.GetPKCols().TagToIdx {
 		pkBackups[tag] = nil
 	}
+
+	sort.Slice(indexes[:], func(i, j int) bool {
+		return indexes[i].IsUnique() && !indexes[j].IsUnique()
+	})
+
 	for _, idx := range indexes {
 		if !idx.IsUserDefined() {
 			continue
