@@ -215,7 +215,12 @@ func (vs TupleSort) Swap(i, j int) {
 }
 
 func (vs TupleSort) Less(i, j int) (bool, error) {
-	return vs.Tuples[i].TupleLess(vs.Nbf, vs.Tuples[j])
+	res, err := vs.Tuples[i].TupleCompare(vs.Nbf, vs.Tuples[j])
+	if err != nil {
+		return false, err
+	}
+
+	return res < 0, nil
 }
 
 func (vs TupleSort) Equals(other TupleSort) bool {
@@ -275,7 +280,17 @@ func (v valueImpl) Equals(other Value) bool {
 }
 
 func (v valueImpl) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	return valueLess(nbf, v, other.(Value))
+	res, err := valueCompare(nbf, v, other.(Value))
+	if err != nil {
+		return false, nil
+	}
+
+	isLess := res < 0
+	return isLess, nil
+}
+
+func (v valueImpl) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+	return valueCompare(nbf, v, other.(Value))
 }
 
 func (v valueImpl) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {

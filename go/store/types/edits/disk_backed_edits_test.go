@@ -66,9 +66,7 @@ func testDBE(t *testing.T, kvps []types.KVP) {
 	}
 
 	itr, err := dbe.FinishedEditing()
-
 	assert.NoError(t, err)
-	require.Equal(t, int64(len(kvps)), itr.NumEdits(), "Invalid itr count %d != %d", itr.NumEdits(), len(kvps))
 
 	inOrder, count, err := IsInOrder(itr)
 

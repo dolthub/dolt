@@ -160,3 +160,49 @@ func (trd *tupleReaderImpl) Close(context.Context) error {
 
 	return nil
 }
+
+
+type TupleReadingEditProvider struct {
+	rd TupleReader
+	reachedEOF bool
+}
+
+func TupleReaderAsEditProvider(rd TupleReader) EditProvider {
+	return &TupleReadingEditProvider{rd: rd}
+}
+
+func (t TupleReadingEditProvider) Next() (*KVP, error) {
+	k, err := t.rd.Read()
+
+	if err == io.EOF {
+		t.reachedEOF = true
+		return nil, io.EOF
+	} else if err != nil {
+		return nil, err
+	}
+
+	v, err := t.rd.Read()
+
+	if err == io.EOF {
+		return nil, errors.New("corrupt tuple stream")
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &KVP{k, v}, nil
+}
+
+// ReachedEOF returns true once all data is exhausted.  If ReachedEOF returns false that does not mean that there
+// is more data, only that io.EOF has not been returned previously.  If ReachedEOF returns true then all edits have
+// been read
+func (t TupleReadingEditProvider) ReachedEOF() bool {
+	return t.reachedEOF
+}
+
+func (t TupleReadingEditProvider) Close(ctx context.Context) error {
+	if closer, ok := t.rd.(Closer); ok {
+		return closer.Close(ctx)
+	}
+
+	return nil
+}
