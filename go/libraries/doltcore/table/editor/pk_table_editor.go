@@ -69,14 +69,14 @@ type TableEditor interface {
 	StatementStarted(ctx context.Context)
 	StatementFinished(ctx context.Context, errored bool) error
 
-	Close() error
+	Close(ctx context.Context) error
 }
 
 func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string) (TableEditor, error) {
-	return NewTableEditorWithFactory(ctx, t, tableSch, name, &teaFactoryImpl{nbf: t.Format()})
+	return NewTableEditorWithFactory(ctx, t, tableSch, name, &teaFactoryImpl{})
 }
 
-func NewTableEditorWithFactory(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, teaf teaFactory) (TableEditor, error) {
+func NewTableEditorWithFactory(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, teaf TEAFactory) (TableEditor, error) {
 	if schema.IsKeyless(tableSch) {
 		return newKeylessTableEditor(ctx, t, tableSch, name)
 	}
@@ -92,9 +92,8 @@ type pkTableEditor struct {
 	tSch schema.Schema
 	name string
 
-	teaf     teaFactory
-	tea      tableEditAccumulator
-	savedTea tableEditAccumulator
+	teaf     TEAFactory
+	tea      TableEditAccumulator
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
 	cvEditor *types.MapEditor
@@ -110,7 +109,7 @@ type pkTableEditor struct {
 	writeMutex *sync.Mutex
 }
 
-func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, teaf teaFactory) (*pkTableEditor, error) {
+func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, teaf TEAFactory) (*pkTableEditor, error) {
 	te := &pkTableEditor{
 		t:          t,
 		tSch:       tableSch,
@@ -125,7 +124,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 	if err != nil {
 		return nil, err
 	}
-	te.tea = teaf.NewTEA(rowData)
+	te.tea = teaf.NewTEA(ctx, rowData)
 
 	for i, index := range tableSch.Indexes().AllIndexes() {
 		indexData, err := t.GetIndexRowData(ctx, index.Name())
@@ -388,7 +387,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 			if err != nil {
 				return err
 			}
-			kvp, pkExists, err := te.tea.MaybeGet(ctx, tableTupleHash, uke.TableTuple)
+			kvp, pkExists, err := te.tea.Get(ctx, tableTupleHash, uke.TableTuple)
 			if err != nil {
 				return err
 			}
@@ -404,7 +403,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 		indexOpsToUndo[i]++
 	}
 
-	if kvp, pkExists, err := te.tea.MaybeGet(ctx, keyHash, key); err != nil {
+	if kvp, pkExists, err := te.tea.Get(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
 		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
@@ -579,7 +578,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 			if err != nil {
 				return err
 			}
-			kvp, pkExists, err := te.tea.MaybeGet(ctx, tableTupleHash, uke.TableTuple)
+			kvp, pkExists, err := te.tea.Get(ctx, tableTupleHash, uke.TableTuple)
 			if err != nil {
 				return err
 			}
@@ -599,7 +598,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	te.setDirty(true)
 
 	dNewKeyTpl := dNewKeyVal.(types.Tuple)
-	if kvp, pkExists, err := te.tea.MaybeGet(ctx, newHash, dNewKeyTpl); err != nil {
+	if kvp, pkExists, err := te.tea.Get(ctx, newHash, dNewKeyTpl); err != nil {
 		return err
 	} else if pkExists {
 		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
@@ -643,7 +642,7 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 		te.writeMutex.Lock()
 		defer te.writeMutex.Unlock()
 
-		updatedMap, err := te.tea.ProcessEdits(ctx, te.nbf)
+		updatedMap, err := te.tea.MaterializeEdits(ctx, te.nbf)
 		if err != nil {
 			return err
 		}
@@ -726,8 +725,6 @@ func (te *pkTableEditor) ValueReadWriter() types.ValueReadWriter {
 func (te *pkTableEditor) StatementStarted(ctx context.Context) {
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
-	te.savedTea = te.tea
-	te.tea = te.teaf.TEAFromCurrent(te.tea, te.savedTea.OpCount())
 	for i := 0; i < len(te.indexEds); i++ {
 		te.indexEds[i].StatementStarted(ctx)
 	}
@@ -737,9 +734,9 @@ func (te *pkTableEditor) StatementStarted(ctx context.Context) {
 func (te *pkTableEditor) StatementFinished(ctx context.Context, errored bool) error {
 	var err error
 	if !errored {
-		te.tea, err = te.tea.Commit()
+		err = te.tea.Commit(ctx, te.nbf)
 	} else {
-		te.tea, err = te.tea.Rollback(te.savedTea)
+		err = te.tea.Rollback(ctx)
 	}
 
 	for i := 0; i < len(te.indexEds); i++ {
@@ -751,7 +748,6 @@ func (te *pkTableEditor) StatementFinished(ctx context.Context, errored bool) er
 	if err != nil {
 		return err
 	}
-	te.savedTea = nil
 	return nil
 }
 
@@ -774,11 +770,11 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 
 // Close ensures that all goroutines that may be open are properly disposed of. Attempting to call any other function
 // on this editor after calling this function is undefined behavior.
-func (te *pkTableEditor) Close() error {
+func (te *pkTableEditor) Close(ctx context.Context) error {
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 	if te.cvEditor != nil {
-		te.cvEditor.Close()
+		te.cvEditor.Close(ctx)
 		te.cvEditor = nil
 	}
 	for _, indexEd := range te.indexEds {

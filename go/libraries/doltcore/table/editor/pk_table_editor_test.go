@@ -59,7 +59,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{table.Format()})
+		tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -154,7 +154,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
-	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{table.Format()})
+	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
 	require.NoError(t, err)
 	for i := 0; i < tableEditorConcurrencyFinalCount*2; i++ {
 		dRow, err := row.New(format, tableSch, row.TaggedValues{
@@ -169,7 +169,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{table.Format()})
+		tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -248,7 +248,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
-	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{table.Format()})
+	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
 	require.NoError(t, err)
 
 	for i := 0; i < 20; i++ {
@@ -319,7 +319,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
-	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{table.Format()})
+	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -408,7 +408,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table)
 	require.NoError(t, err)
-	tableEditor, err := newPkTableEditor(ctx, table, tableSch, tableName, &teaFactoryImpl{table.Format()})
+	tableEditor, err := newPkTableEditor(ctx, table, tableSch, tableName, &teaFactoryImpl{})
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {

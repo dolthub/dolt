@@ -82,7 +82,7 @@ type uniqueKeyErr struct {
 
 var _ error = (*uniqueKeyErr)(nil)
 
-// indexEditAccumulator is the index equivalent of the tableEditAccumulator. It tracks all edits done, and allows for
+// indexEditAccumulator is the index equivalent of the TableEditAccumulator. It tracks all edits done, and allows for
 // value checking that uses both existing data and new data.
 type indexEditAccumulator struct {
 	// This is the indexEditAccumulator that is currently processing on the background thread. Once that thread has
@@ -522,7 +522,8 @@ func processIndexEditAccumulatorChain(ctx context.Context, futureIea *indexEditA
 	iea := futureIea.prevIea
 
 	ed := types.CreateEditAccForMapEdits(iea.nbf)
-	defer ed.Close()
+	defer ed.Close(ctx)
+
 	for _, hTpl := range iea.removedKeys {
 		ed.AddEdit(hTpl.key, nil)
 	}

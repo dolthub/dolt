@@ -2,8 +2,10 @@ package editor
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types/edits"
 )
 
 type doltKVP struct {
@@ -11,256 +13,316 @@ type doltKVP struct {
 	v types.Tuple
 }
 
-type tableEditAccumulator interface {
-	// OpCount returns the number of operations have been applied to the edit accumulator
-	OpCount() int64
-
+type TableEditAccumulator interface {
 	// Delete adds a row to be deleted when these edits are eventually applied. Updates are modeled as a delete and an insert
 	Delete(keyHash hash.Hash, key types.Tuple)
 
 	// Insert adds a row to be inserted when these edits are eventually applied. Updates are modeled as a delete and an insert.
 	Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple)
 
-	// MaybeGet returns a *doltKVP if the current tableEditAccumulator contains the given key, or it exists in the row data.
+	// Get returns a *doltKVP if the current TableEditAccumulator contains the given key, or it exists in the row data.
 	// This assumes that the given hash is for the given key.
-	MaybeGet(ctx context.Context, keyHash hash.Hash, key types.Tuple) (*doltKVP, bool, error)
+	Get(ctx context.Context, keyHash hash.Hash, key types.Tuple) (*doltKVP, bool, error)
 
 	// Commit applies the in memory edits to the list of committed in memory edits
-	Commit() (tableEditAccumulator, error)
+	Commit(ctx context.Context, nbf *types.NomsBinFormat) error
 
 	// Rollback rolls back in memory edits until it reaches the state represented by the savedTea
-	Rollback(savedTea tableEditAccumulator) (tableEditAccumulator, error)
+	Rollback(ctx context.Context) error
 
-	// ProcessEdits commits and applies the in memory edits to the row data
-	ProcessEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error)
+	// MaterializeEdits commits and applies the in memory edits to the row data
+	MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error)
 }
 
+const flushThreshold = 256 * 1024
+
+// inMemModifications represent row adds and deletes that have not been written to the underlying storage and only exist
+// in memory
+type inMemModifications struct {
+	ops int64
+	adds   map[hash.Hash]*doltKVP
+	deletes map[hash.Hash]types.Tuple
+}
+
+// NewInMemModifications returns a pointer to a newly created inMemModifications object
+func NewInMemModifications() *inMemModifications  {
+	return &inMemModifications{
+		adds: make(map[hash.Hash]*doltKVP),
+		deletes: make(map[hash.Hash]types.Tuple),
+	}
+}
+
+func (mods *inMemModifications) MergeIn(other *inMemModifications) {
+	for keyHash, key := range other.deletes {
+		delete(mods.adds, keyHash)
+		mods.deletes[keyHash] = key
+	}
+
+	for keyHash, kvp := range other.adds {
+		delete(mods.deletes, keyHash)
+		mods.adds[keyHash] = kvp
+	}
+
+	mods.ops += other.ops
+}
+
+func (mods *inMemModifications) Get(keyHash hash.Hash) (kvp *doltKVP, added, deleted bool) {
+	kvp, added = mods.adds[keyHash]
+
+	if added {
+		return kvp, true, false
+	}
+
+	_, deleted = mods.deletes[keyHash]
+
+	return nil, false, deleted
+}
+
+// tableEditAccumulatorImpl accumulates edits that need to be applied to the table row data.  It needs to be able to
+// support rollback and commit without having to materialize the types.Map. To do this it tracks committed and uncommitted
+// modifications in memory. When a commit occurs the list of uncommitted changes are added to the list of committed changes.
+// When a rollback occurs uncommitted changes are dropped.
+//
+// In addition to the in memory edits, the changes are applied to committedEA when a commit occurs. It is possible
+// for the uncommitted changes to become so large that they need to be flushed to disk.  When this happens we track the
+// in memory changes in uncommittedFlushed. When materializing the map, edits must be applied to the row data in order
+// so the types.EditAccumulators are numbered so their changes can be applied in order.
 type tableEditAccumulatorImpl struct {
 	nbf *types.NomsBinFormat
 
-	// prevTea contains the last committed tea
-	prevTea *tableEditAccumulatorImpl
-
-	// last materialized types.Map with edits applied
+	// initial state of the map
 	rowData types.Map
 
-	// rowDataEA contains edits that have been committed
-	rowDataEA types.EditAccumulator
+	// in memory changes which will be applied to the
+	committed          *inMemModifications
+	uncommitted        *inMemModifications
+	uncommittedFlushed *inMemModifications
 
-	// opCount contains the number of edits that would be applied in materializing the edits
-	opCount     int64
-	addedKeys   map[hash.Hash]*doltKVP
-	removedKeys map[hash.Hash]types.LesserValuable
+	// accumulatorIdx defines the order in which types.EditAccumulators will be applied
+	accumulatorIdx uint64
+
+	// flusher manages flushing of the types.EditAccumulators to disk when needed
+	flusher *edits.DiskEditFlusher
+
+	// committedEaIds tracks ids of edit accumulators which have changes that have been committed
+	committedEaIds *set.Uint64Set
+	// uncommittedEAIds tracks ids of edit accumulators which have not been committed yet.
+	uncommittedEaIds *set.Uint64Set
+
+	// commitEA is the types.EditAccumulator containing the committed changes that are being accumulated currently
+	commitEA types.EditAccumulator
+	// commitEAId is the id used for ordering the commitEA with other types.EditAccumulators that will be applied when
+	// materializing all changes.
+	commitEAId uint64
 }
 
-// MaybeGet returns a *doltKVP if the current tableEditAccumulator contains the given key, or it exists in the row data.
+// Get returns a *doltKVP if the current TableEditAccumulator contains the given key, or it exists in the row data.
 // This assumes that the given hash is for the given key.
-func (tea *tableEditAccumulatorImpl) MaybeGet(ctx context.Context, keyHash hash.Hash, key types.Tuple) (*doltKVP, bool, error) {
-	// No locks as all calls and modifications to tea are done from a lock that the caller handles
-	if kvp, ok := tea.addedKeys[keyHash]; ok {
-		return kvp, true, nil
-	}
-	if _, ok := tea.removedKeys[keyHash]; !ok {
-		// When rowData is updated, prevTea is set to nil. Therefore, if prevTea is non-nil, we use it.
-		if tea.prevTea != nil {
-			return tea.prevTea.MaybeGet(ctx, keyHash, key)
-		} else {
-			keyVal, err := key.Value(ctx)
-			if err != nil {
-				return nil, false, err
-			}
+func (tea *tableEditAccumulatorImpl) Get(ctx context.Context, keyHash hash.Hash, key types.Tuple) (*doltKVP, bool, error) {
+	// in order of most recent changes to least recent falling back to whats in the materialized row data
+	orderedMods := []*inMemModifications{tea.uncommitted, tea.uncommittedFlushed, tea.committed}
+	for _, mods := range orderedMods {
+		kvp, added, deleted := mods.Get(keyHash)
 
-			keyTup := keyVal.(types.Tuple)
-			v, ok, err := tea.rowData.MaybeGetTuple(ctx, keyTup)
-			if err != nil {
-				return nil, false, err
-			}
-			if !ok {
-				return nil, false, nil
-			}
-
-			return &doltKVP{k: keyTup, v: v}, true, err
+		if added {
+			return kvp, true, nil
+		} else if deleted {
+			return nil, false, nil
 		}
 	}
-	return nil, false, nil
+
+	v, ok, err := tea.rowData.MaybeGetTuple(ctx, key)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, nil
+	}
+
+	return &doltKVP{k: key, v: v}, true, err
 }
 
+func (tea *tableEditAccumulatorImpl) flushUncommitted() {
+	ea := edits.NewAsyncSortedEditsWithDefaults(tea.nbf)
+	for _, kvp := range tea.uncommitted.adds {
+		ea.AddEdit(kvp.k, kvp.v)
+	}
+
+	for _, key := range tea.uncommitted.deletes {
+		ea.AddEdit(key, nil)
+	}
+
+	tea.uncommittedEaIds.Add(tea.accumulatorIdx)
+	tea.flusher.Flush(ea, tea.accumulatorIdx)
+	tea.accumulatorIdx++
+
+	tea.uncommittedFlushed.MergeIn(tea.uncommitted)
+	tea.uncommitted = NewInMemModifications()
+}
 
 // Delete adds a row to be deleted when these edits are eventually applied. Updates are modeled as a delete and an insert
 func (tea *tableEditAccumulatorImpl) Delete(keyHash hash.Hash, key types.Tuple) {
-	delete(tea.addedKeys, keyHash)
-	tea.removedKeys[keyHash] = key
-	tea.opCount++
+	delete(tea.uncommitted.adds, keyHash)
+	tea.uncommitted.deletes[keyHash] = key
+	tea.uncommitted.ops++
+
+	if tea.uncommitted.ops > flushThreshold {
+		tea.flushUncommitted()
+	}
 }
 
 // Insert adds a row to be inserted when these edits are eventually applied. Updates are modeled as a delete and an insert.
 func (tea *tableEditAccumulatorImpl) Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple) {
-	delete(tea.removedKeys, keyHash)
-	tea.addedKeys[keyHash] = &doltKVP{k: key, v: val}
-	tea.opCount++
+	delete(tea.uncommitted.deletes, keyHash)
+	tea.uncommitted.adds[keyHash] = &doltKVP{k: key, v: val}
+	tea.uncommitted.ops++
+	if tea.uncommitted.ops > flushThreshold {
+		tea.flushUncommitted()
+	}
 }
 
 // Commit applies the in memory edits to the list of committed in memory edits
-func (tea *tableEditAccumulatorImpl) Commit() (tableEditAccumulator, error) {
-	targetTea := tea
+func (tea *tableEditAccumulatorImpl) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
+	if tea.uncommittedFlushed.ops > 0 {
+		if tea.committed.ops > 0 {
+			// if there are uncommitted flushed changes we need to flush the committed changes first
+			// so they can be applied before the uncommitted flushed changes and future changes can be applied after
+			tea.committedEaIds.Add(tea.commitEAId)
+			tea.flusher.Flush(tea.commitEA, tea.commitEAId)
 
-	// We collapse the changes in this tea to the last to reduce the number of map editors that will need to be opened
-	if tea.prevTea != nil {
-		targetTea = tea.prevTea
-		if targetTea.rowDataEA == nil {
-			targetTea.rowDataEA = types.CreateEditAccForMapEdits(targetTea.nbf)
-		}
-
-		for keyHash, key := range tea.removedKeys {
-			delete(targetTea.addedKeys, keyHash)
-			targetTea.removedKeys[keyHash] = key
-			targetTea.rowDataEA.AddEdit(key, nil)
-		}
-		for keyHash, kvp := range tea.addedKeys {
-			delete(targetTea.removedKeys, keyHash)
-			targetTea.addedKeys[keyHash] = kvp
-			targetTea.rowDataEA.AddEdit(kvp.k, kvp.v)
+			// initialize next types.EditAccumulator to handle future edits
+			tea.commitEA = types.CreateEditAccForMapEdits(nbf)
+			tea.commitEAId = tea.accumulatorIdx
+			tea.accumulatorIdx++
 		}
 
-		targetTea.opCount = tea.opCount
-		// An opCount of -1 lets us know that this tea was processed
-		tea.opCount = -1
-		tea.rowData = types.EmptyMap
-		tea.prevTea = nil
-		tea.addedKeys = nil
-		tea.removedKeys = nil
-	} else {
-		if targetTea.rowDataEA == nil {
-			targetTea.rowDataEA = types.CreateEditAccForMapEdits(targetTea.nbf)
-		}
+		// add uncommitted types.EditAccumulators which hold flushed uncommitted edits to the list of types.EditAccumulators
+		// that have been committed
+		tea.committedEaIds.Add(tea.uncommittedEaIds.AsSlice()...)
+		tea.uncommittedEaIds = set.NewUint64Set(nil)
 
-		for _, key := range tea.removedKeys {
-			tea.rowDataEA.AddEdit(key, nil)
-		}
+		// apply uncommitted flushed inmemory edits to the committed in memory edits
+		tea.committed.MergeIn(tea.uncommittedFlushed)
 
-		for _, kvp := range tea.addedKeys {
-			tea.rowDataEA.AddEdit(kvp.k, kvp.v)
-		}
+		// initialize empty inMemoryModifications to handle future uncommitted flushed edits
+		tea.uncommittedFlushed = NewInMemModifications()
 	}
 
-	return targetTea, nil
+	if tea.uncommitted.ops > 0 {
+		// if there are uncommitted changes add them to the committed list of map edits
+		for _, kvp := range tea.uncommitted.adds {
+			tea.commitEA.AddEdit(kvp.k, kvp.v)
+		}
+
+		for _, key := range tea.uncommitted.deletes {
+			tea.commitEA.AddEdit(key, nil)
+		}
+
+		// apply in memory uncommitted changes to the committed in memory edits
+		tea.committed.MergeIn(tea.uncommitted)
+
+		// initialize uncommitted to future in memory edits
+		tea.uncommitted = NewInMemModifications()
+	}
+
+	return nil
 }
 
 // Rollback rolls back in memory edits until it reaches the state represented by the savedTea
-func (tea *tableEditAccumulatorImpl) Rollback(savedTea tableEditAccumulator) (tableEditAccumulator, error) {
-	savedTeaImpl := savedTea.(*tableEditAccumulatorImpl)
-	currentTea := tea
+func (tea *tableEditAccumulatorImpl) Rollback(ctx context.Context) error {
+	// drop uncommitted ea IDs
+	tea.uncommittedEaIds = set.NewUint64Set(nil)
 
-	// Loop and remove all newer teas
-	for {
-		if currentTea == nil || currentTea == savedTeaImpl {
-			break
-		}
-		prevTea := currentTea.prevTea
-		// We're essentially deleting currentTea, so we're closing and removing everything.
-		// Some of this is taken from the steps followed when flushing, such as the map nils.
-		currentTea.prevTea = nil
-		currentTea.rowData = types.EmptyMap
-		currentTea.addedKeys = nil
-		currentTea.removedKeys = nil
-		currentTea = prevTea
+	// clear all in memory modifications
+	if tea.uncommittedFlushed.ops > 0 {
+		tea.uncommittedFlushed = NewInMemModifications()
 	}
 
-	// If the savedTea was processed create a new one.
-	if savedTea.OpCount() == -1 {
-		return (&teaFactoryImpl{tea.nbf}).NewTEA(savedTeaImpl.rowData), nil
-	} else {
-		return savedTea, nil
+	if tea.uncommitted.ops > 0 {
+		tea.uncommitted = NewInMemModifications()
 	}
+
+	return nil
 }
 
-func (tea *tableEditAccumulatorImpl) ProcessEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error) {
-	if tea.OpCount() < 1 {
-		return tea.rowData, nil
-	}
-
-	currTea, err := tea.Commit()
+func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error) {
+	err = tea.Commit(ctx, nbf)
 	if err != nil {
 		return types.EmptyMap, err
 	}
 
-	currImpl := currTea.(*tableEditAccumulatorImpl)
-	defer func() {
-		currImpl.rowDataEA.Close()
-		currImpl.rowDataEA = nil
-	}()
+	if tea.committed.ops == 0 {
+		return tea.rowData, nil
+	}
 
-	// If we encounter an error and return, then we need to remove this tea from the chain and update the next's rowData
-	encounteredErr := true
+	committedEP, err := tea.commitEA.FinishedEditing()
+	tea.commitEA = nil
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	flushedEPs, err := tea.flusher.WaitForIDs(ctx, tea.committedEaIds)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	eps := make([]types.EditProvider, 0, len(flushedEPs) + 1)
+	eps = append(eps, committedEP)
+	for i := 0; i < len(flushedEPs); i++ {
+		eps = append(eps, flushedEPs[i].Edits)
+	}
+
 	defer func() {
-		//TODO: need some way to reset an index editor to a previous point as well
-		if encounteredErr {
-			// As this is in a defer and we're attempting to capture all errors, that includes panics as well.
-			// Naturally a panic doesn't set the err variable, so we have to recover it.
-			if recoveredErr := recover(); recoveredErr != nil && err == nil {
-				err = recoveredErr.(error)
-			}
-			// All tea modifications are guarded by writeMutex locks, so we have to acquire it
-			tea.prevTea = nil
-			tea.rowData = currImpl.rowData
+		for _, ep := range eps {
+			_ = ep.Close(ctx)
 		}
 	}()
 
-	accEdits, err := currImpl.rowDataEA.FinishedEditing()
+	accEdits, err := edits.NewEPMerger(ctx, nbf, eps)
 	if err != nil {
 		return types.EmptyMap, err
 	}
 
 	// We are guaranteed that rowData is valid, as we process teas sequentially.
-	updatedMap, _, err := types.ApplyEdits(ctx, accEdits, currImpl.rowData)
+	updatedMap, _, err := types.ApplyEdits(ctx, accEdits, tea.rowData)
 	if err != nil {
 		return types.EmptyMap, err
 	}
 
-	encounteredErr = false
-
-	tea.prevTea = nil
 	tea.rowData = updatedMap
-
-	tea.opCount = 0
-	tea.addedKeys = make(map[hash.Hash]*doltKVP)
-	tea.removedKeys = make(map[hash.Hash]types.LesserValuable)
+	tea.committed = NewInMemModifications()
+	tea.commitEAId = tea.accumulatorIdx
+	tea.accumulatorIdx++
+	tea.commitEA = edits.NewAsyncSortedEditsWithDefaults(tea.nbf)
+	tea.committedEaIds = set.NewUint64Set(nil)
+	tea.uncommittedEaIds = set.NewUint64Set(nil)
 
 	return updatedMap, nil
 }
 
-// OpCount returns the number of operations have been applied to the edit accumulator
-func (tea *tableEditAccumulatorImpl) OpCount() int64 {
-	return tea.opCount
-}
-
-type teaFactory interface {
-	NewTEA(rowData types.Map) tableEditAccumulator
-	TEAFromCurrent(tea tableEditAccumulator, opCount int64) tableEditAccumulator
+type TEAFactory interface {
+	NewTEA(ctx context.Context, rowData types.Map) TableEditAccumulator
 }
 
 type teaFactoryImpl struct {
-	nbf *types.NomsBinFormat
+	directory string
+	vrw types.ValueReadWriter
 }
 
-func (teaf *teaFactoryImpl) NewTEA(rowData types.Map) tableEditAccumulator {
+func (teaf *teaFactoryImpl) NewTEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
 	return &tableEditAccumulatorImpl {
-		nbf:         teaf.nbf,
-		prevTea:     nil,
-		rowData:     rowData,
-		addedKeys:   make(map[hash.Hash]*doltKVP),
-		removedKeys: make(map[hash.Hash]types.LesserValuable),
+		nbf: rowData.Format(),
+		rowData:  rowData,
+		committed: NewInMemModifications(),
+		uncommitted: NewInMemModifications(),
+		uncommittedFlushed: NewInMemModifications(),
+		commitEA: edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
+		commitEAId: 0,
+		accumulatorIdx: 1,
+		flusher: edits.NewDiskEditFlusher(ctx, teaf.directory, rowData.Format(), teaf.vrw),
+		committedEaIds: set.NewUint64Set(nil),
+		uncommittedEaIds: set.NewUint64Set(nil),
 	}
 }
 
-// TEAFromCurrent returns a new tableEditAccumulator that references the current tableEditAccumulator.
-func (teaf *teaFactoryImpl) TEAFromCurrent(tea tableEditAccumulator, opCount int64) tableEditAccumulator {
-	return &tableEditAccumulatorImpl {
-		nbf:         teaf.nbf,
-		prevTea:     tea.(*tableEditAccumulatorImpl),
-		rowData:     types.EmptyMap,
-		opCount:     opCount,
-		addedKeys:   make(map[hash.Hash]*doltKVP),
-		removedKeys: make(map[hash.Hash]types.LesserValuable),
-	}
-}
+

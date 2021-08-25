@@ -58,7 +58,16 @@ func (tes *TableEditSession) GetTableEditor(ctx context.Context, tableName strin
 	tes.writeMutex.Lock()
 	defer tes.writeMutex.Unlock()
 
-	return tes.getTableEditor(ctx, tableName, tableSch)
+	return tes.getTableEditor(ctx, tableName, tableSch, nil)
+}
+
+// GetTableEditor returns a TableEditor for the given table. If a schema is provided and it does not match the one
+// that is used for currently open editors (if any), then those editors will reload the table from the root.
+func (tes *TableEditSession) GetTableEditorWithTEAFactory(ctx context.Context, tableName string, tableSch schema.Schema, teaf TEAFactory) (TableEditor, error) {
+	tes.writeMutex.Lock()
+	defer tes.writeMutex.Unlock()
+
+	return tes.getTableEditor(ctx, tableName, tableSch, teaf)
 }
 
 // Flush returns an updated root with all of the changed tables.
@@ -118,7 +127,7 @@ func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
 		// their own, which is not common, so the average perf hit is relatively minimal.
 		validationTes := CreateTableEditSession(tes.root, TableEditSessionProps{})
 		for tableName, _ := range tes.tables {
-			_, err = validationTes.getTableEditor(ctx, tableName, nil)
+			_, err = validationTes.getTableEditor(ctx, tableName, nil, nil)
 			if err != nil {
 				return err
 			}
@@ -206,7 +215,7 @@ func (tes *TableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 }
 
 // getTableEditor is the inner implementation for GetTableEditor, allowing recursive calls
-func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (*sessionedTableEditor, error) {
+func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName string, tableSch schema.Schema, teaf TEAFactory) (*sessionedTableEditor, error) {
 	if tes.root == nil {
 		return nil, fmt.Errorf("must call SetRoot before a table editor will be returned")
 	}
@@ -247,11 +256,22 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		}
 	}
 
-	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName)
-	if err != nil {
-		return nil, err
+	if teaf != nil {
+		tableEditor, err := NewTableEditorWithFactory(ctx, t, tableSch, tableName, teaf)
+		if err != nil {
+			return nil, err
+		}
+
+		localTableEditor.tableEditor = tableEditor
+	} else {
+		tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName)
+		if err != nil {
+			return nil, err
+		}
+
+		localTableEditor.tableEditor = tableEditor
 	}
-	localTableEditor.tableEditor = tableEditor
+
 	if tes.Props.ForeignKeyChecksDisabled {
 		return localTableEditor, nil
 	}
@@ -273,14 +293,14 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *sessionedTableEditor) error {
 	// these are the tables that reference us, so we need to update them
 	for _, foreignKey := range localTableEditor.referencingTables {
-		_, err := tes.getTableEditor(ctx, foreignKey.TableName, nil)
+		_, err := tes.getTableEditor(ctx, foreignKey.TableName, nil, nil)
 		if err != nil {
 			return err
 		}
 	}
 	// these are the tables that we reference, so we need to refer to them
 	for _, foreignKey := range localTableEditor.referencedTables {
-		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil)
+		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil, nil)
 		if err != nil {
 			return err
 		}
@@ -306,7 +326,7 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 			return err
 		}
 		if !ok { // table was removed in newer root
-			if err := localTableEditor.tableEditor.Close(); err != nil {
+			if err := localTableEditor.tableEditor.Close(ctx); err != nil {
 				return err
 			}
 			delete(tes.tables, tableName)
@@ -320,7 +340,7 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		if err != nil {
 			return err
 		}
-		if err := localTableEditor.tableEditor.Close(); err != nil {
+		if err := localTableEditor.tableEditor.Close(ctx); err != nil {
 			return err
 		}
 		localTableEditor.tableEditor = newTableEditor
