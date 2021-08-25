@@ -202,11 +202,21 @@ func flushKVPs(wr types.TupleWriter, itr types.EditProvider) error {
 			return err
 		}
 
-		k := kvp.Key.(types.Tuple)
-		v := kvp.Val.(types.Tuple)
-		err = wr.WriteTuples(k, v)
+		err = wr.WriteTuples(kvp.Key.(types.Tuple))
 		if err != nil {
 			return err
+		}
+
+		if kvp.Val != nil {
+			err = wr.WriteTuples(kvp.Key.(types.Tuple))
+			if err != nil {
+				return err
+			}
+		} else {
+			err = wr.WriteNull()
+			if err != nil {
+				return err
+			}
 		}
 	}
 }

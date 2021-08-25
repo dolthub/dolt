@@ -34,7 +34,7 @@ type TestTupleStream struct {
 	mu     *sync.Mutex
 	closed bool
 	i      int
-	tuples []Tuple
+	tuples []*Tuple
 }
 
 func NewTestTupleStream(initialSize int) *TestTupleStream {
@@ -47,10 +47,26 @@ func NewTestTupleStream(initialSize int) *TestTupleStream {
 }
 
 func NewTestTupleStreamFromTuples(tuples []Tuple) *TestTupleStream {
+	tuplePtrs := make([]*Tuple, len(tuples))
+	for i := range tuples {
+		tuplePtrs[i] = &tuples[i]
+	}
 	return &TestTupleStream{
 		mu:     &sync.Mutex{},
-		tuples: tuples,
+		tuples: tuplePtrs,
 	}
+}
+
+func (st *TestTupleStream) WriteNull() error {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	if st.closed {
+		return errClosed
+	}
+
+	st.tuples = append(st.tuples, nil)
+	return nil
 }
 
 func (st *TestTupleStream) WriteTuples(t ...Tuple) error {
@@ -61,7 +77,9 @@ func (st *TestTupleStream) WriteTuples(t ...Tuple) error {
 		return errClosed
 	}
 
-	st.tuples = append(st.tuples, t...)
+	for i := 0; i < len(st.tuples); i++ {
+		st.tuples = append(st.tuples, &t[i])
+	}
 	return nil
 }
 
@@ -86,16 +104,16 @@ func (st *TestTupleStream) CopyFrom(rd TupleReader) error {
 	}
 }
 
-func (st *TestTupleStream) Read() (Tuple, error) {
+func (st *TestTupleStream) Read() (*Tuple, error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 
 	if st.closed {
-		return Tuple{}, errClosed
+		return nil, errClosed
 	}
 
 	if st.i >= len(st.tuples) {
-		return Tuple{}, io.EOF
+		return nil, io.EOF
 	}
 
 	t := st.tuples[st.i]
@@ -164,7 +182,7 @@ func TestTupleReadersAndWriters(t *testing.T) {
 		err = dest.WriteTuples(tuples[1:]...)
 		require.NoError(t, err)
 
-		read := make([]Tuple, 2*numTuples)
+		read := make([]*Tuple, 2*numTuples)
 		for i := 0; i < 2; i++ {
 			for j := 0; j < numTuples; j++ {
 				read[i*numTuples+j], err = dest.Read()
@@ -176,8 +194,8 @@ func TestTupleReadersAndWriters(t *testing.T) {
 		require.Equal(t, io.EOF, err)
 
 		for i := 0; i < numTuples; i++ {
-			require.True(t, tuples[i].Equals(read[i]))
-			require.True(t, tuples[i].Equals(read[numTuples+i]))
+			require.True(t, tuples[i].Equals(*read[i]))
+			require.True(t, tuples[i].Equals(*read[numTuples+i]))
 		}
 	})
 
@@ -197,7 +215,7 @@ func TestTupleReadersAndWriters(t *testing.T) {
 		vrw := NewMemoryValueStore()
 		rd := NewTupleReader(Format_Default, vrw, ioutil.NopCloser(buf))
 
-		read := make([]Tuple, 2*numTuples)
+		read := make([]*Tuple, 2*numTuples)
 		for i := 0; i < 2; i++ {
 			for j := 0; j < numTuples; j++ {
 				read[i*numTuples+j], err = rd.Read()
@@ -209,8 +227,8 @@ func TestTupleReadersAndWriters(t *testing.T) {
 		require.Equal(t, io.EOF, err)
 
 		for i := 0; i < numTuples; i++ {
-			require.True(t, tuples[i].Equals(read[i]))
-			require.True(t, tuples[i].Equals(read[numTuples+i]))
+			require.True(t, tuples[i].Equals(*read[i]))
+			require.True(t, tuples[i].Equals(*read[numTuples+i]))
 		}
 	})
 }
