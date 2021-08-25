@@ -541,7 +541,7 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 		return verrBuilder.Build()
 	} else {
 		if len(message) > 0 {
-			err = fmt.Errorf("%s: %+v", message, err)
+			err = fmt.Errorf("%s: %v", message, err)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}
