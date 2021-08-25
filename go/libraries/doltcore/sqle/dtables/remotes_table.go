@@ -91,7 +91,7 @@ func NewRemoteItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(dbName)
+	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
@@ -214,7 +214,7 @@ func (bWr remoteWriter) Insert(ctx *sql.Context, r sql.Row) error {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(dbName)
+	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
@@ -254,7 +254,7 @@ func (bWr remoteWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(dbName)
+	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}

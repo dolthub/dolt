@@ -551,7 +551,6 @@ func (r *repoStateReader) GetRemotes() (map[string]Remote, error) {
 	return r.dEnv.GetRemotes()
 }
 
-
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
 	return &repoStateReader{dEnv}
 }

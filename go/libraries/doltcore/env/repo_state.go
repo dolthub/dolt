@@ -203,7 +203,6 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 func (rs *RepoState) AddRemote(r Remote) {
 	rs.Remotes[r.Name] = r
 }
-<<<<<<< HEAD
 
 func (rs *RepoState) RemoveRemote(r Remote) {
 	delete(rs.Remotes, r.Name)
@@ -284,63 +283,6 @@ func MergeWouldStompChanges(ctx context.Context, workingRoot *doltdb.RootValue, 
 	return stompedTables, headWorkingDiffs, nil
 }
 
-// GetGCKeepers queries |rsr| to find a list of values that need to be temporarily saved during GC.
-// TODO: move this out of repo_state.go
-func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
-	workingRoot, err := env.WorkingRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	workingHash, err := workingRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	stagedRoot, err := env.StagedRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	stagedHash, err := stagedRoot.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	keepers := []hash.Hash{
-		workingHash,
-		stagedHash,
-	}
-
-	mergeActive, err := env.IsMergeActive(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if mergeActive {
-		ws, err := env.WorkingSet(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		cm := ws.MergeState().Commit()
-		ch, err := cm.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		pmw := ws.MergeState().PreMergeWorkingRoot()
-		pmwh, err := pmw.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		keepers = append(keepers, ch, pmwh)
-	}
-
-	return keepers, nil
-}
-
 func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {
 	names, err := root.GetTableNames(ctx)
 
@@ -387,5 +329,3 @@ func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map
 
 	return diffs
 }
-=======
->>>>>>> master
