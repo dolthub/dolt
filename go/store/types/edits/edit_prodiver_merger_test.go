@@ -62,8 +62,8 @@ func TestBinarySearch(t *testing.T) {
 	}
 }
 
-func readerForTuples(t *testing.T, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, tuples ...types.Tuple) (types.TupleReadCloser) {
-	require.True(t, len(tuples) % 2 == 0)
+func readerForTuples(t *testing.T, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, tuples ...types.Tuple) types.TupleReadCloser {
+	require.True(t, len(tuples)%2 == 0)
 	prev := tuples[0]
 	for i := 2; i < len(tuples); i += 2 {
 		isLess, err := prev.Less(nbf, tuples[i])
@@ -92,7 +92,7 @@ func TestComparableBinarySearch(t *testing.T) {
 	nbf := types.Format_Default
 	vrw := types.NewMemoryValueStore()
 
-	readers := []types.EditProvider {
+	readers := []types.EditProvider{
 		types.TupleReaderAsEditProvider(readerForTuples(t, nbf, vrw, []types.Tuple{
 			newTuple(t, nbf), newTuple(t, nbf, types.Int(0)),
 			newTuple(t, nbf, types.Bool(false)), newTuple(t, nbf, types.Int(2)),

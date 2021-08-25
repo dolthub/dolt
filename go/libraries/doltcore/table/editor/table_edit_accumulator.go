@@ -2,6 +2,7 @@ package editor
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -39,15 +40,15 @@ const flushThreshold = 256 * 1024
 // inMemModifications represent row adds and deletes that have not been written to the underlying storage and only exist
 // in memory
 type inMemModifications struct {
-	ops int64
-	adds   map[hash.Hash]*doltKVP
+	ops     int64
+	adds    map[hash.Hash]*doltKVP
 	deletes map[hash.Hash]types.Tuple
 }
 
 // NewInMemModifications returns a pointer to a newly created inMemModifications object
-func NewInMemModifications() *inMemModifications  {
+func NewInMemModifications() *inMemModifications {
 	return &inMemModifications{
-		adds: make(map[hash.Hash]*doltKVP),
+		adds:    make(map[hash.Hash]*doltKVP),
 		deletes: make(map[hash.Hash]types.Tuple),
 	}
 }
@@ -266,7 +267,7 @@ func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 		return types.EmptyMap, err
 	}
 
-	eps := make([]types.EditProvider, 0, len(flushedEPs) + 1)
+	eps := make([]types.EditProvider, 0, len(flushedEPs)+1)
 	eps = append(eps, committedEP)
 	for i := 0; i < len(flushedEPs); i++ {
 		eps = append(eps, flushedEPs[i].Edits)
@@ -306,23 +307,21 @@ type TEAFactory interface {
 
 type teaFactoryImpl struct {
 	directory string
-	vrw types.ValueReadWriter
+	vrw       types.ValueReadWriter
 }
 
 func (teaf *teaFactoryImpl) NewTEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
-	return &tableEditAccumulatorImpl {
-		nbf: rowData.Format(),
-		rowData:  rowData,
-		committed: NewInMemModifications(),
-		uncommitted: NewInMemModifications(),
+	return &tableEditAccumulatorImpl{
+		nbf:                rowData.Format(),
+		rowData:            rowData,
+		committed:          NewInMemModifications(),
+		uncommitted:        NewInMemModifications(),
 		uncommittedFlushed: NewInMemModifications(),
-		commitEA: edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
-		commitEAId: 0,
-		accumulatorIdx: 1,
-		flusher: edits.NewDiskEditFlusher(ctx, teaf.directory, rowData.Format(), teaf.vrw),
-		committedEaIds: set.NewUint64Set(nil),
-		uncommittedEaIds: set.NewUint64Set(nil),
+		commitEA:           edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
+		commitEAId:         0,
+		accumulatorIdx:     1,
+		flusher:            edits.NewDiskEditFlusher(ctx, teaf.directory, rowData.Format(), teaf.vrw),
+		committedEaIds:     set.NewUint64Set(nil),
+		uncommittedEaIds:   set.NewUint64Set(nil),
 	}
 }
-
-

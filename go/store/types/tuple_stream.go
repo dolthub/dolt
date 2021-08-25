@@ -178,9 +178,8 @@ func (trd *tupleReaderImpl) Close(context.Context) error {
 	return nil
 }
 
-
 type TupleReadingEditProvider struct {
-	rd TupleReader
+	rd         TupleReader
 	reachedEOF bool
 }
 

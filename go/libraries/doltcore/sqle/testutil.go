@@ -18,13 +18,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+	"testing"
+
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
-	"io"
-	"strings"
-	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
