@@ -31,10 +31,10 @@ type entry struct {
 var _ types.EditProvider = (*EPMerger)(nil)
 
 type EPMerger struct {
-	ctx       context.Context
-	nbf       *types.NomsBinFormat
+	ctx        context.Context
+	nbf        *types.NomsBinFormat
 	reachedEOF bool
-	editsRead int64
+	editsRead  int64
 
 	numEPs      int
 	epsWithData int
@@ -46,11 +46,11 @@ type EPMerger struct {
 // pairs, and return a *EPMerger
 func NewEPMerger(ctx context.Context, nbf *types.NomsBinFormat, eps []types.EditProvider) (*EPMerger, error) {
 	fep := &EPMerger{
-		ctx:          ctx,
-		nbf:          nbf,
-		numEPs:       len(eps),
-		eps:          eps,
-		nextKVPS:     make([]entry, 0, len(eps)),
+		ctx:      ctx,
+		nbf:      nbf,
+		numEPs:   len(eps),
+		eps:      eps,
+		nextKVPS: make([]entry, 0, len(eps)),
 	}
 
 	// read in the initial values from each stream and put them into the nextKVPS slice in sorted order.
@@ -188,7 +188,7 @@ func search(nbf *types.NomsBinFormat, readerIdx int, key types.Value, vals []ent
 	} else {
 		n = sort.Search(len(vals), func(i int) bool {
 			if err != nil {
-				 return false
+				return false
 			}
 
 			var isLess bool

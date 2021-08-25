@@ -783,7 +783,6 @@ func (t Tuple) TupleCompare(nbf *NomsBinFormat, otherTuple Tuple) (int, error) {
 		}
 	}
 
-
 	return int(itr.Len()) - int(otherItr.Len()), nil
 }
 

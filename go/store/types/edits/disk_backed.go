@@ -25,13 +25,13 @@ var _ types.EditAccumulator = (*DiskBackedEditAcc)(nil)
 
 // DiskBackedEditAcc is an EditAccumulator implementation that flushes the edits to disk at regular intervals
 type DiskBackedEditAcc struct {
-	ctx        context.Context
-	nbf        *types.NomsBinFormat
+	ctx context.Context
+	nbf *types.NomsBinFormat
 
-	flusher    *DiskEditFlusher
+	flusher *DiskEditFlusher
 
 	newEditAcc func() types.EditAccumulator
-	backing types.EditAccumulator
+	backing    types.EditAccumulator
 
 	accumulated   int64
 	flushInterval int64
@@ -96,7 +96,7 @@ func (dbea *DiskBackedEditAcc) FinishedEditing() (types.EditProvider, error) {
 
 // Close ensures that the accumulator is closed. Repeat calls are allowed. Not guaranteed to be thread-safe, thus
 // requires external synchronization.
-func (dbea *DiskBackedEditAcc) Close(ctx context.Context) error{
+func (dbea *DiskBackedEditAcc) Close(ctx context.Context) error {
 	if dbea.backing != nil {
 		err := dbea.backing.Close(ctx)
 		dbea.backing = nil

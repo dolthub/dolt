@@ -2,10 +2,12 @@ package edits
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/types"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestFlushingNoEdits(t *testing.T) {

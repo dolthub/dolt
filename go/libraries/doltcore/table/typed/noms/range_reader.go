@@ -166,7 +166,7 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 				var res int
 				res, err = r.Start.Compare(nbf, k)
 				if err == nil && res == 0 {
-					 k, v, err = nrr.itr.NextTuple(ctx)
+					k, v, err = nrr.itr.NextTuple(ctx)
 				}
 			}
 		} else {

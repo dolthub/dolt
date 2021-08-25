@@ -2,26 +2,28 @@ package edits
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/types"
-	"github.com/google/uuid"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
+
+	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type flusherEntry struct {
-	path  string
-	id    uint64
+	path string
+	id   uint64
 }
 
 // FlushResult contains the results of flushing a types.EditAccumulator to disk and the ID associated with it
 type FlushResult struct {
 	Edits types.EditProvider
-	ID uint64
+	ID    uint64
 }
 
 // FlushResults is a sortable slice of FlushResult instances
@@ -36,13 +38,13 @@ func (res FlushResults) Sort() {
 // DiskEditFlusher is a class that handles asynchronously flushing types.EditAccumulators to disk then allows getting
 // an associated types.EditProvider for each flushed accumulator at a later time.
 type DiskEditFlusher struct {
-	ctx context.Context
+	ctx       context.Context
 	directory string
-	nbf *types.NomsBinFormat
-	vrw types.ValueReadWriter
+	nbf       *types.NomsBinFormat
+	vrw       types.ValueReadWriter
 
-	eg *errgroup.Group
-	mu *sync.Mutex
+	eg      *errgroup.Group
+	mu      *sync.Mutex
 	entries []flusherEntry
 }
 
@@ -77,7 +79,7 @@ func (ef *DiskEditFlusher) Flush(accumulator types.EditAccumulator, id uint64) {
 	})
 }
 
-func (ef *DiskEditFlusher) resultsFromEntries(ctx context.Context, entries []flusherEntry) (FlushResults, error){
+func (ef *DiskEditFlusher) resultsFromEntries(ctx context.Context, entries []flusherEntry) (FlushResults, error) {
 	eps := make(FlushResults, 0, len(entries))
 	for _, entry := range entries {
 		ep, err := EditProviderFromDisk(ef.nbf, ef.vrw, entry.path)
@@ -133,7 +135,7 @@ func (ef *DiskEditFlusher) WaitForIDs(ctx context.Context, idFilter *set.Uint64S
 
 	if len(excluded) > 0 {
 		// best effort async delete excluded files
-		go func(){
+		go func() {
 			for i := range excluded {
 				_ = os.Remove(excluded[i].path)
 			}
@@ -145,13 +147,13 @@ func (ef *DiskEditFlusher) WaitForIDs(ctx context.Context, idFilter *set.Uint64S
 
 // EditProviderFromDisk returns a types.EditProvider instance which reads data from the specified file
 func EditProviderFromDisk(nbf *types.NomsBinFormat, vrw types.ValueReadWriter, path string) (types.EditProvider, error) {
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
 
-		ep := types.TupleReaderAsEditProvider(types.NewTupleReader(nbf, vrw, f))
-		return &deleteOnCloseEP{EditProvider: ep, path: path}, nil
+	ep := types.TupleReaderAsEditProvider(types.NewTupleReader(nbf, vrw, f))
+	return &deleteOnCloseEP{EditProvider: ep, path: path}, nil
 }
 
 // FlushEditsToDisk writes the contents of a types.EditAccumulator to disk and returns the path where the
@@ -228,6 +230,7 @@ func closeTupleWriter(ctx context.Context, absPath string, wr types.TupleWriteCl
 }
 
 var _ types.EditProvider = (*deleteOnCloseEP)(nil)
+
 type deleteOnCloseEP struct {
 	types.EditProvider
 	path string

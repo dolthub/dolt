@@ -32,7 +32,7 @@ type KVPCollItr struct {
 	currKey    types.LesserValuable
 	nbf        *types.NomsBinFormat
 
-	read       int64
+	read int64
 }
 
 // NewItr creates a new KVPCollItr from a KVPCollection
