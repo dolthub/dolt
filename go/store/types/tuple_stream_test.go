@@ -77,7 +77,7 @@ func (st *TestTupleStream) WriteTuples(t ...Tuple) error {
 		return errClosed
 	}
 
-	for i := 0; i < len(st.tuples); i++ {
+	for i := 0; i < len(t); i++ {
 		st.tuples = append(st.tuples, &t[i])
 	}
 	return nil
