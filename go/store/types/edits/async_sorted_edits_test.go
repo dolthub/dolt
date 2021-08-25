@@ -90,10 +90,6 @@ func testASE(t *testing.T, rng *rand.Rand) {
 			t.Error("Invalid count", asyncSorted.Size(), "!=", numKVPs)
 		}
 
-		if itr.NumEdits() != int64(numKVPs) {
-			t.Error("Invalid itr count", itr.NumEdits(), "!=", numKVPs)
-		}
-
 		inOrder, count, err := IsInOrder(itr)
 
 		assert.NoError(t, err)

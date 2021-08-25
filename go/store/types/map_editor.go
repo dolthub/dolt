@@ -52,7 +52,7 @@ type EditAccumulator interface {
 
 	// Close ensures that the accumulator is closed. Repeat calls are allowed. Not guaranteed to be thread-safe, thus
 	// requires external synchronization.
-	Close()
+	Close(context.Context) error
 }
 
 // MapEditor allows for efficient editing of Map-typed prolly trees.
@@ -115,6 +115,6 @@ func (med *MapEditor) Format() *NomsBinFormat {
 	return med.m.format()
 }
 
-func (med *MapEditor) Close() {
-	med.acc.Close()
+func (med *MapEditor) Close(ctx context.Context) error {
+	return med.acc.Close(ctx)
 }

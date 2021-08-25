@@ -43,6 +43,11 @@ type AsyncSortedEdits struct {
 	sema      *semaphore.Weighted
 }
 
+// NewAsyncSortedEditsWithDefaults creates a new AsyncSortedEdit instance with default concurrency and buffer size values
+func NewAsyncSortedEditsWithDefaults(nbf *types.NomsBinFormat) types.EditAccumulator {
+	return NewAsyncSortedEdits(nbf, 16*1024, 4, 2)
+}
+
 // NewAsyncSortedEdits creates an AsyncSortedEdits object that creates batches of size 'sliceSize' and kicks off
 // 'asyncConcurrency' go routines for background sorting of batches.  The final Sort call is processed with
 // 'sortConcurrency' go routines
@@ -157,10 +162,19 @@ func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 
 // Close ensures that the accumulator is closed. Repeat calls are allowed. This and FinishedEditing are not thread safe,
 // and thus external synchronization is required.
-func (ase *AsyncSortedEdits) Close() {
+func (ase *AsyncSortedEdits) Close(ctx context.Context) error {
 	if !ase.closed {
-		_, _ = ase.FinishedEditing()
+		itr, err := ase.FinishedEditing()
+		itrCloseErr := itr.Close(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		return itrCloseErr
 	}
+
+	return nil
 }
 
 // mergeCollections performs a concurrent sorted-merge of |sortedColls|. Must be called after |sortGroup| is complete.

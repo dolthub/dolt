@@ -375,10 +375,6 @@ func (t Tuple) PrefixEquals(ctx context.Context, other Tuple, prefixCount uint64
 	return true, nil
 }
 
-func (t Tuple) Compare(other Tuple) int {
-	return bytes.Compare(t.buff, other.buff)
-}
-
 var tupleType = newType(CompoundDesc{UnionKind, nil})
 
 func (t Tuple) typeOf() (*Type, error) {
@@ -594,7 +590,7 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return
 }
 
-func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
+func (t Tuple) TupleCompare(nbf *NomsBinFormat, otherTuple Tuple) (int, error) {
 	itrs := tupItrPairPool.Get().(*tupleItrPair)
 	defer tupItrPairPool.Put(itrs)
 
@@ -602,14 +598,14 @@ func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 	err := itr.InitForTuple(t)
 
 	if err != nil {
-		return false, err
+		return 0, err
 	}
 
 	otherItr := itrs.otherItr
 	err = otherItr.InitForTuple(otherTuple)
 
 	if err != nil {
-		return false, err
+		return 0, err
 	}
 
 	smallerCount := itr.count
@@ -624,7 +620,7 @@ func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 		otherKind := otherDec.ReadKind()
 
 		if kind != otherKind {
-			return kind < otherKind, nil
+			return int(kind) - int(otherKind), nil
 		}
 
 		var res int
@@ -664,7 +660,11 @@ func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 			if n == otherN {
 				continue
 			} else {
-				return n < otherN, nil
+				if n < otherN {
+					return -1, nil
+				}
+
+				return 1, nil
 			}
 
 		case UintKind:
@@ -674,20 +674,24 @@ func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 			if n == otherN {
 				continue
 			} else {
-				return n < otherN, nil
+				if n < otherN {
+					return -1, nil
+				}
+
+				return 1, nil
 			}
 
 		case DecimalKind:
 			d, err := dec.ReadDecimal()
 
 			if err != nil {
-				return false, err
+				return 0, err
 			}
 
 			otherD, err := otherDec.ReadDecimal()
 
 			if err != nil {
-				return false, err
+				return 0, err
 			}
 
 			res = d.Cmp(otherD)
@@ -700,72 +704,87 @@ func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 			if f == otherF {
 				continue
 			} else {
-				return f < otherF, nil
+				if f < otherF {
+					return -1, nil
+				}
+
+				return 1, nil
 			}
 
 		case TimestampKind:
 			tm, err := dec.ReadTimestamp()
 
 			if err != nil {
-				return false, err
+				return 0, err
 			}
 
 			otherTm, err := otherDec.ReadTimestamp()
 
 			if err != nil {
-				return false, err
+				return 0, err
 			}
 
 			if tm.Equal(otherTm) {
 				continue
 			} else {
-				return tm.Before(otherTm), nil
+				if tm.Before(otherTm) {
+					return -1, nil
+				}
+
+				return 1, nil
 			}
 
 		case BlobKind:
 			// readValue expects the Kind to still be there, so we put it back by decrementing the offset
 			dec.offset--
 			otherDec.offset--
-			v, err := dec.readValue(nbf)
+			blob, err := dec.ReadBlob()
 			if err != nil {
-				return false, err
+				return 0, err
 			}
-			otherV, err := otherDec.readValue(nbf)
+			otherBlob, err := otherDec.ReadBlob()
 			if err != nil {
-				return false, err
+				return 0, err
 			}
-			if v.Equals(otherV) {
-				continue
-			} else {
-				return v.Less(nbf, otherV)
+			res, err = blob.Compare(nbf, otherBlob)
+			if err != nil {
+				return 0, err
 			}
 
 		default:
 			v, err := dec.readValue(nbf)
 
 			if err != nil {
-				return false, err
+				return 0, err
 			}
 
 			otherV, err := otherDec.readValue(nbf)
 
 			if err != nil {
-				return false, err
+				return 0, err
 			}
 
 			if v.Equals(otherV) {
 				continue
 			} else {
-				return v.Less(nbf, otherV)
+				isLess, err := v.Less(nbf, otherV)
+				if err != nil {
+					return 0, err
+				} else if isLess {
+					return -1, nil
+				}
+
+				return 1, nil
 			}
 		}
 
 		if res != 0 {
-			return res < 0, nil
+			return res, nil
 		}
 	}
 
-	return itr.Len() < otherItr.Len(), nil
+
+	return int(itr.Len()) - int(otherItr.Len()), nil
 }
 
 func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
@@ -774,7 +793,26 @@ func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 		return TupleKind < other.Kind(), nil
 	}
 
-	return t.TupleLess(nbf, otherTuple)
+	res, err := t.TupleCompare(nbf, otherTuple)
+	if err != nil {
+		return false, err
+	}
+
+	return res < 0, err
+}
+
+func (t Tuple) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+	otherTuple, ok := other.(Tuple)
+	if !ok {
+		return int(TupleKind) - int(other.Kind()), nil
+	}
+
+	res, err := t.TupleCompare(nbf, otherTuple)
+	if err != nil {
+		return 0, err
+	}
+
+	return res, err
 }
 
 func (t Tuple) StartsWith(otherTuple Tuple) bool {
