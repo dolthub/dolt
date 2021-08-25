@@ -197,13 +197,40 @@ func TestDropPks(t *testing.T) {
 			fkIdxName: "backup",
 		},
 		{
-			name: "no error if both invalid and valid backup index",
+			name: "no error if compound backup index for compound FK, 3-compound PK",
+			setup: []string{
+				"create table parent (id int, name varchar(1), age int, primary key (id, age, name), key `backup` (id, age))",
+				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id, age) references parent (id, age))",
+			},
+			exit:      0,
+			fkIdxName: "backup",
+		},
+		{
+			name: "no error if single backup index for single FK, compound primary",
+			setup: []string{
+				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `backup` (id))",
+				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
+			},
+			exit:      0,
+			fkIdxName: "backup",
+		},
+		{
+			name: "no error if both several invalid and one valid backup index",
 			setup: []string{
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup1` (id, age), key `bad_backup2` (id), key `backup` (age, id))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age) references parent (age))",
 			},
 			exit:      0,
 			fkIdxName: "backup",
+		},
+		{
+			name: "no error if one invalid and several valid backup indexes",
+			setup: []string{
+				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (id, age), key `backup1` (age, id, name), key `backup2` (age, id))",
+				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age) references parent (age))",
+			},
+			exit:      0,
+			fkIdxName: "backup1",
 		},
 		{
 			name: "error if FK ref but no backup index for single pk",
