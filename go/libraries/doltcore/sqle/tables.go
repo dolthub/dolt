@@ -1833,8 +1833,8 @@ func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootV
 }
 
 // backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
-// key drop. If multiple indexes are valid, we select the first key given the default index sort order.
-// This will not work with a non-pk drop without a new `toDrop` argument.
+// key drop. If multiple indexes are valid, we sort by unique and select the first.
+// This will not work with a non-pk index drop without an additional index filter argument.
 func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *doltdb.RootValue) ([]fkIndexUpdate, error) {
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -1852,6 +1852,7 @@ func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *d
 		pkBackups[tag] = nil
 	}
 
+	// prefer unique key backups
 	sort.Slice(indexes[:], func(i, j int) bool {
 		return indexes[i].IsUnique() && !indexes[j].IsUnique()
 	})
