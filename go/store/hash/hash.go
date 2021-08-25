@@ -132,12 +132,6 @@ func (h Hash) Compare(other Hash) int {
 	return bytes.Compare(h[:], other[:])
 }
 
-// Greater compares two hashes returning whether this Hash is greater than other.
-func (h Hash) Greater(other Hash) bool {
-	// TODO: Remove this
-	return h.Compare(other) > 0
-}
-
 // Equal compares two hashes returning whether this Hash is equal to other.
 func (h Hash) Equal(other Hash) bool {
 	return h.Compare(other) == 0
