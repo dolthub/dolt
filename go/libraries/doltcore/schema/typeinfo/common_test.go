@@ -15,8 +15,11 @@
 package typeinfo
 
 import (
+	"bytes"
+	"context"
 	"math"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -24,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func generateBitTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
@@ -112,27 +116,27 @@ func generateSetType(t *testing.T, numOfElements int) *setType {
 	return &setType{sql.MustCreateSetType(vals, sql.Collation_Default)}
 }
 
-func generateVarBinaryTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
+func generateInlineBlobTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
 	var res []TypeInfo
 	loop(t, 1, 500, numOfTypes, func(i int64) {
 		pad := false
 		if i%2 == 0 {
 			pad = true
 		}
-		res = append(res, generateVarBinaryType(t, i, pad))
+		res = append(res, generateInlineBlobType(t, i, pad))
 	})
 	return res
 }
 
-func generateVarBinaryType(t *testing.T, length int64, pad bool) *varBinaryType {
+func generateInlineBlobType(t *testing.T, length int64, pad bool) *inlineBlobType {
 	require.True(t, length > 0)
 	if pad {
 		t, err := sql.CreateBinary(sqltypes.Binary, length)
 		if err == nil {
-			return &varBinaryType{t}
+			return &inlineBlobType{t}
 		}
 	}
-	return &varBinaryType{sql.MustCreateBinary(sqltypes.VarBinary, length)}
+	return &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, length)}
 }
 
 func generateVarStringTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
@@ -156,6 +160,25 @@ func generateVarStringType(t *testing.T, length int64, rts bool) *varStringType 
 		}
 	}
 	return &varStringType{sql.MustCreateStringWithDefaults(sqltypes.VarChar, length)}
+}
+
+func generateBlobStringType(t *testing.T, length int64) *blobStringType {
+	require.True(t, length > 0)
+	return &blobStringType{sql.MustCreateStringWithDefaults(sqltypes.Text, length)}
+}
+
+func mustBlobString(t *testing.T, str string) types.Blob {
+	vrw := types.NewMemoryValueStore()
+	blob, err := types.NewBlob(context.Background(), vrw, strings.NewReader(str))
+	require.NoError(t, err)
+	return blob
+}
+
+func mustBlobBytes(t *testing.T, b []byte) types.Blob {
+	vrw := types.NewMemoryValueStore()
+	blob, err := types.NewBlob(context.Background(), vrw, bytes.NewReader(b))
+	require.NoError(t, err)
+	return blob
 }
 
 func loop(t *testing.T, start int64, endInclusive int64, numOfSteps uint16, loopedFunc func(int64)) {

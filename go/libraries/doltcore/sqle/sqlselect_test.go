@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
@@ -446,7 +447,7 @@ var BasicSelectTests = []SelectTest{
 			{"Homer", true},
 		},
 		ExpectedSqlSchema: sql.Schema{
-			&sql.Column{Name: "first_name", Type: sql.LongText},
+			&sql.Column{Name: "first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 			&sql.Column{Name: "not_marge", Type: sql.Int8},
 		},
 	},
@@ -711,7 +712,7 @@ var BasicSelectTests = []SelectTest{
 		Query: "select * from dolt_log",
 		ExpectedRows: []sql.Row{
 			{
-				"m8lrhp8bmfesmknc6d5iatmjbcjf17al",
+				"so275enkvulb96mkckbun1kjo9seg7c9",
 				"billy bob",
 				"bigbillieb@fake.horse",
 				time.Date(1970, 1, 1, 0, 0, 0, 0, &time.Location{}),
@@ -741,7 +742,7 @@ var BasicSelectTests = []SelectTest{
 		ExpectedRows: []sql.Row{
 			{
 				"master",
-				"m8lrhp8bmfesmknc6d5iatmjbcjf17al",
+				"so275enkvulb96mkckbun1kjo9seg7c9",
 				"billy bob", "bigbillieb@fake.horse",
 				time.Date(1970, 1, 1, 0, 0, 0, 0, &time.Location{}),
 				"Initialize data repository",
@@ -760,13 +761,13 @@ var BasicSelectTests = []SelectTest{
 
 var sqlDiffSchema = sql.Schema{
 	&sql.Column{Name: "to_id", Type: sql.Int64},
-	&sql.Column{Name: "to_first_name", Type: sql.LongText},
-	&sql.Column{Name: "to_last_name", Type: sql.LongText},
-	&sql.Column{Name: "to_addr", Type: sql.LongText},
+	&sql.Column{Name: "to_first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
+	&sql.Column{Name: "to_last_name", Type: typeinfo.StringDefaultType.ToSqlType()},
+	&sql.Column{Name: "to_addr", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "from_id", Type: sql.Int64},
-	&sql.Column{Name: "from_first_name", Type: sql.LongText},
-	&sql.Column{Name: "from_last_name", Type: sql.LongText},
-	&sql.Column{Name: "from_addr", Type: sql.LongText},
+	&sql.Column{Name: "from_first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
+	&sql.Column{Name: "from_last_name", Type: typeinfo.StringDefaultType.ToSqlType()},
+	&sql.Column{Name: "from_addr", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "diff_type", Type: sql.Text},
 }
 
@@ -1494,18 +1495,18 @@ var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			schemasTableDoltSchema(),
-			NewRowWithSchema(schemasTableDoltSchema(),
+			SchemasTableSchema(),
+			NewRowWithSchema(SchemasTableSchema(),
 				types.String("view"),
 				types.String("name"),
 				types.String("select 2+2 from dual"),
 				types.Int(1),
 			)),
 		Query: "select * from dolt_schemas",
-		ExpectedRows: ToSqlRows(CompressSchema(schemasTableDoltSchema()),
+		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
 			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1)),
 		),
-		ExpectedSchema: CompressSchema(schemasTableDoltSchema()),
+		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }
 

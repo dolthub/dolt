@@ -51,6 +51,8 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 	switch src := srcTi.(type) {
 	case *bitType:
 		return bitTypeConverter(ctx, src, destTi)
+	case *blobStringType:
+		return blobStringTypeConverter(ctx, src, destTi)
 	case *boolType:
 		return boolTypeConverter(ctx, src, destTi)
 	case *datetimeType:

@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,7 +39,7 @@ func TestModifyColumn(t *testing.T) {
 		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 	)
-	ti, err := typeinfo.FromSqlType(sql.TinyText)
+	ti, err := typeinfo.FromSqlType(sql.MustCreateStringWithDefaults(sqltypes.VarChar, 599))
 	require.NoError(t, err)
 	newNameColSameTag, err := schema.NewColumnWithTypeInfo("name", dtestutils.NameTag, ti, false, "", false, "", schema.NotNullConstraint{})
 	require.NoError(t, err)

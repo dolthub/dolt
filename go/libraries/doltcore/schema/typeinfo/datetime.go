@@ -222,6 +222,8 @@ func datetimeTypeConverter(ctx context.Context, src *datetimeType, destTi TypeIn
 	switch dest := destTi.(type) {
 	case *bitType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *blobStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *datetimeType:

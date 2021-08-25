@@ -521,7 +521,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 	}{
 		{
 			name:  "alter modify column reorder middle",
-			query: "alter table people modify column first_name longtext not null after last_name",
+			query: "alter table people modify column first_name varchar(16383) not null after last_name",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -536,7 +536,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter modify column reorder first",
-			query: "alter table people modify column first_name longtext not null first",
+			query: "alter table people modify column first_name varchar(16383) not null first",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
@@ -551,7 +551,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter modify column drop null constraint",
-			query: "alter table people modify column first_name longtext null",
+			query: "alter table people modify column first_name varchar(16383) null",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false),
@@ -566,7 +566,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter change column rename and reorder",
-			query: "alter table people change first_name christian_name longtext not null after last_name",
+			query: "alter table people change first_name christian_name varchar(16383) not null after last_name",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -581,7 +581,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter change column rename and reorder first",
-			query: "alter table people change column first_name christian_name longtext not null first",
+			query: "alter table people change column first_name christian_name varchar(16383) not null first",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("christian_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
@@ -596,7 +596,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter change column drop null constraint",
-			query: "alter table people change column first_name first_name longtext null",
+			query: "alter table people change column first_name first_name varchar(16383) null",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false),
@@ -1171,7 +1171,7 @@ func TestAlterSystemTables(t *testing.T) {
 			dtables.DoltQueryCatalogSchema,
 			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
 		dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
-			schemasTableDoltSchema(),
+			SchemasTableSchema(),
 			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
 	}
 
@@ -1571,13 +1571,6 @@ INSERT INTO fail_unique VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3);
 	if assert.Error(t, err) {
 		assert.Contains(t, strings.ToLower(err.Error()), "unique")
 	}
-}
-
-func schemasTableDoltSchema() schema.Schema {
-	// this is a dummy test environment and will not be used,
-	// dolt_schema table tags will be parsed from the comments in SchemaTableSchema()
-	testEnv := dtestutils.CreateTestEnv()
-	return mustGetDoltSchema(SchemasTableSqlSchema(), doltdb.SchemasTableName, testEnv)
 }
 
 func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {

@@ -222,6 +222,8 @@ func inlineBlobTypeConverter(ctx context.Context, src *inlineBlobType, destTi Ty
 	switch dest := destTi.(type) {
 	case *bitType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *blobStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *datetimeType:

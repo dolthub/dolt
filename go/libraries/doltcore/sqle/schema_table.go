@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -38,12 +39,23 @@ func SchemasTableSqlSchema() sql.Schema {
 
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
-	colColl := schema.NewColCollection(
-		schema.NewColumn(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, types.StringKind, false),
-		schema.NewColumn(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, types.StringKind, false),
-		schema.NewColumn(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, types.StringKind, false),
-		schema.NewColumn(doltdb.SchemasTablesIdCol, schema.DoltSchemasIdTag, types.IntKind, true, schema.NotNullConstraint{}),
-	)
+	typeCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
+	if err != nil {
+		panic(err)
+	}
+	nameCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
+	if err != nil {
+		panic(err)
+	}
+	fragmentCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
+	if err != nil {
+		panic(err)
+	}
+	idCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesIdCol, schema.DoltSchemasIdTag, typeinfo.Int64Type, true, "", false, "", schema.NotNullConstraint{})
+	if err != nil {
+		panic(err)
+	}
+	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol)
 	return schema.MustSchemaFromCols(colColl)
 }
 

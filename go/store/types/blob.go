@@ -22,14 +22,16 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"runtime"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
 
+	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/d"
 )
 
@@ -50,6 +52,49 @@ func NewEmptyBlob(vrw ValueReadWriter) (Blob, error) {
 	}
 
 	return Blob{seq}, nil
+}
+
+// Less implements the LesserValuable interface.
+func (b Blob) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	if b2, ok := other.(Blob); ok {
+		// Blobs can have an arbitrary length, so we compare in chunks rather than loading it entirely
+		ctx := context.Background()
+		b1Length := b.Len()
+		b2Length := b2.Len()
+		b1Reader := b.Reader(ctx)
+		b2Reader := b2.Reader(ctx)
+		minBlobLength := b1Length
+		if b1Length > b2Length {
+			minBlobLength = b2Length
+		}
+
+		const maxSliceSize = 1024 * 64 // arbitrary size
+		var b1Array [maxSliceSize]byte
+		var b2Array [maxSliceSize]byte
+		length := uint64(0)
+		for i := uint64(0); i < minBlobLength; i += length {
+			length = mathutil.MinUint64(maxSliceSize, minBlobLength-i)
+			b1Data := b1Array[:length]
+			b2Data := b2Array[:length]
+			n1, err := b1Reader.Read(b1Data)
+			if err != nil && err != io.EOF {
+				return false, err
+			}
+			n2, err := b2Reader.Read(b2Data)
+			if err != nil && err != io.EOF {
+				return false, err
+			}
+			if n1 != n2 || uint64(n1) != length {
+				return false, errors.New("incorrect length read from blob")
+			}
+			cmp := bytes.Compare(b1Data, b2Data)
+			if cmp != 0 {
+				return cmp < 0, nil
+			}
+		}
+		return b1Length < b2Length, nil
+	}
+	return BlobKind < other.Kind(), nil
 }
 
 // ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
@@ -209,6 +254,10 @@ func (b Blob) asSequence() sequence {
 // Value interface
 func (b Blob) Value(ctx context.Context) (Value, error) {
 	return b, nil
+}
+
+func (b Blob) Len() uint64 {
+	return b.sequence.Len()
 }
 
 func (b Blob) isPrimitive() bool {
@@ -485,9 +534,9 @@ func (b Blob) skip(nbf *NomsBinFormat, bnr *binaryNomsReader) {
 }
 
 func (b Blob) String() string {
-	panic("unreachable")
+	return "BLOB"
 }
 
 func (b Blob) HumanReadableString() string {
-	panic("unreachable")
+	return "BLOB"
 }

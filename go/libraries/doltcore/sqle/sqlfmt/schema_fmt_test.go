@@ -36,7 +36,7 @@ func TestFmtCol(t *testing.T) {
 			0,
 			0,
 			0,
-			"`first` LONGTEXT",
+			"`first` VARCHAR(16383)",
 		},
 		{
 			schema.NewColumn("last", 123, types.IntKind, true),

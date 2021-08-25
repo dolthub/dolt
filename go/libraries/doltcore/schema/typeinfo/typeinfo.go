@@ -30,6 +30,7 @@ type Identifier string
 const (
 	UnknownTypeIdentifier    Identifier = "unknown"
 	BitTypeIdentifier        Identifier = "bit"
+	BlobStringTypeIdentifier Identifier = "blobstring"
 	BoolTypeIdentifier       Identifier = "bool"
 	DatetimeTypeIdentifier   Identifier = "datetime"
 	DecimalTypeIdentifier    Identifier = "decimal"
@@ -51,6 +52,7 @@ const (
 var Identifiers = map[Identifier]struct{}{
 	UnknownTypeIdentifier:    {},
 	BitTypeIdentifier:        {},
+	BlobStringTypeIdentifier: {},
 	BoolTypeIdentifier:       {},
 	DatetimeTypeIdentifier:   {},
 	DecimalTypeIdentifier:    {},
@@ -167,7 +169,7 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Text"`)
 		}
-		return &varStringType{stringType}, nil
+		return &blobStringType{stringType}, nil
 	case sqltypes.Blob:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
@@ -232,6 +234,8 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 	switch id {
 	case BitTypeIdentifier:
 		return CreateBitTypeFromParams(params)
+	case BlobStringTypeIdentifier:
+		return CreateBlobStringTypeFromParams(params)
 	case BoolTypeIdentifier:
 		return BoolType, nil
 	case DatetimeTypeIdentifier:
