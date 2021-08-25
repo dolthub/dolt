@@ -131,11 +131,12 @@ func (nrr *NomsRangeReader) ReadKey(ctx context.Context) (types.Tuple, error) {
 }
 
 func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tuple, error) {
+	nbf := nrr.m.Format()
+
 	var err error
 	var k types.Tuple
 	var v types.Tuple
 	for nrr.itr != nil || nrr.idx < len(nrr.ranges) {
-
 		if !nrr.cardCounter.empty() {
 			if nrr.cardCounter.done() {
 				nrr.cardCounter.reset()
@@ -161,8 +162,12 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 
 			k, v, err = nrr.itr.NextTuple(ctx)
 
-			if err == nil && !r.Inclusive && r.Start.Compare(k) == 0 {
-				k, v, err = nrr.itr.NextTuple(ctx)
+			if err == nil && !r.Inclusive {
+				var res int
+				res, err = r.Start.Compare(nbf, k)
+				if err == nil && res == 0 {
+					 k, v, err = nrr.itr.NextTuple(ctx)
+				}
 			}
 		} else {
 			k, v, err = nrr.itr.NextTuple(ctx)
