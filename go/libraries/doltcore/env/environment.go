@@ -857,7 +857,7 @@ func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, par
 
 	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
 	if err != nil {
-		return fmt.Errorf("%w; %w", ErrInvalidRemoteURL, err)
+		return fmt.Errorf("%w; %s", ErrInvalidRemoteURL, err.Error())
 	}
 
 	r := Remote{name, absRemoteUrl, fetchSpecs, params}
@@ -889,7 +889,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 			err = ddb.DeleteBranch(ctx, rr)
 
 			if err != nil {
-				return fmt.Errorf("%w; failed to delete remote tracking ref '%s'; %w", ErrFailedToDeleteRemote, rr.String(), err)
+				return fmt.Errorf("%w; failed to delete remote tracking ref '%s'; %s", ErrFailedToDeleteRemote, rr.String(), err.Error())
 			}
 		}
 	}
