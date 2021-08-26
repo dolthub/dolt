@@ -1038,3 +1038,11 @@ setup_ref_test() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: invalid refspec ''" ]] || false
 }
+
+@test "remotes: fetching unknown remotes doesn't error" {
+   skip "needs to be fixed"
+   run dolt fetch remotes/dasdas
+   [ "$status" -eq 1 ]
+   [[ ! "$output" =~ "panic" ]] || false
+   # Insert check for error msg
+}
