@@ -55,6 +55,13 @@ var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
 var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 var ErrInvalidCredsFile = errors.New("invalid creds file")
+var ErrRemoteAlreadyExists = errors.New("remote already exists")
+var ErrInvalidRemoteURL = errors.New("remote URL invalid")
+var ErrRemoteNotFound = errors.New("remote not found")
+var ErrInvalidRemoteName = errors.New("remote name invalid")
+var ErrFailedToReadFromDb = errors.New("failed to read from db")
+var ErrFailedToDeleteRemote = errors.New("failed to read from db")
+var ErrFailedToWriteRepoState = errors.New("failed to read from db")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -841,16 +848,16 @@ func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 
 func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
 	if _, ok := dEnv.RepoState.Remotes[name]; ok {
-		return errhand.BuildDError("error: A remote named '%s' already exists.", name).AddDetails("remove it before running this command again").Build()
+		return ErrRemoteAlreadyExists
 	}
 
 	if strings.IndexAny(name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
-		return errhand.BuildDError("invalid remote name: " + name).Build()
+		return ErrInvalidRemoteName
 	}
 
 	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
 	if err != nil {
-		return errhand.BuildDError("error: '%s' is not valid.", url).AddCause(err).Build()
+		return fmt.Errorf("%w; %w", ErrInvalidRemoteURL, err)
 	}
 
 	r := Remote{name, absRemoteUrl, fetchSpecs, params}
@@ -865,14 +872,14 @@ func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, par
 func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	remote, ok := dEnv.RepoState.Remotes[name]
 	if !ok {
-		return errhand.BuildDError("error: unknown remote " + name).Build()
+		return ErrRemoteNotFound
 	}
 
 	ddb := dEnv.DoltDB
 	refs, err := ddb.GetRemoteRefs(ctx)
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+		return ErrFailedToReadFromDb
 	}
 
 	for _, r := range refs {
@@ -882,7 +889,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 			err = ddb.DeleteBranch(ctx, rr)
 
 			if err != nil {
-				return errhand.BuildDError("error: failed to delete remote tracking ref '%s'", rr.String()).Build()
+				return fmt.Errorf("%w; failed to delete remote tracking ref '%s'; %w", ErrFailedToDeleteRemote, rr.String(), err)
 			}
 		}
 	}
@@ -890,7 +897,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	dEnv.RepoState.RemoveRemote(remote)
 	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
-		return errhand.BuildDError("error: failed to save change to repo state").AddCause(err).Build()
+		return ErrFailedToWriteRepoState
 	}
 	return nil
 }

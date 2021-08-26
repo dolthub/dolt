@@ -138,11 +138,21 @@ func removeRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 	old := strings.TrimSpace(apr.Arg(1))
 	err := dEnv.RemoveRemote(ctx, old)
-	if err != nil {
-		return err.(errhand.VerboseError)
-	}
 
-	return nil
+	switch err {
+	case nil:
+		return nil
+	case env.ErrFailedToWriteRepoState:
+		return errhand.BuildDError("error: failed to save change to repo state").AddCause(err).Build()
+	case env.ErrFailedToDeleteRemote:
+		return errhand.BuildDError("error: failed to delete remote tracking ref").AddCause(err).Build()
+	case env.ErrFailedToReadFromDb:
+		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+	case env.ErrRemoteNotFound:
+		return errhand.BuildDError("error: unknown remote: '%s' ", old).Build()
+	default:
+		return errhand.BuildDError("error: unknown error").AddCause(err).Build()
+	}
 }
 
 func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
@@ -165,11 +175,21 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
 	err = dEnv.AddRemote(r.Name, r.Url, r.FetchSpecs, r.Params)
-	if err != nil {
+
+	switch err {
+	case nil:
+		return nil
+	case env.ErrRemoteAlreadyExists:
+		return errhand.BuildDError("error: a remote named '%s' already exists.", r.Name).AddDetails("remove it before running this command again").Build()
+	case env.ErrRemoteNotFound:
+		return errhand.BuildDError("error: unknown remote: '%s' ", r.Name).Build()
+	case env.ErrInvalidRemoteURL:
+		return errhand.BuildDError("error: '%s' is not valid.", r.Url).AddCause(err).Build()
+	case env.ErrInvalidRemoteName:
+		return errhand.BuildDError("error: invalid remote name: " + r.Name).Build()
+	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}
-
-	return nil
 }
 
 func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map[string]string, errhand.VerboseError) {
