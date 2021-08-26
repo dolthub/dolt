@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:21.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update -y
@@ -45,7 +45,7 @@ RUN go version
 RUN go get -u github.com/go-sql-driver/mysql
 
 # install dotnet
-RUN wget https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+RUN wget https://packages.microsoft.com/config/ubuntu/21.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
 RUN dpkg -i packages-microsoft-prod.deb
 RUN apt-get update; \
       apt-get install -y apt-transport-https && \
