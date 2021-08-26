@@ -17,10 +17,8 @@ package alterschema_test
 import (
 	"context"
 	"fmt"
-	"io"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -126,32 +124,6 @@ func TestDropPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	})
-}
-
-func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, sql.Schema, error) {
-	var err error
-	db := sqle.NewDatabase("dolt", dEnv.DbData())
-	engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	sch, iter, err := engine.Query(sqlCtx, query)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	sqlRows := make([]sql.Row, 0)
-	var r sql.Row
-	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
-		sqlRows = append(sqlRows, r)
-	}
-
-	if err != io.EOF {
-		return nil, nil, err
-	}
-
-	return sqlRows, sch, nil
 }
 
 func TestDropPks(t *testing.T) {
