@@ -1493,6 +1493,7 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 		HeadCommit: headCommit,
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
 	}, nil
 }
 

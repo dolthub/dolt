@@ -109,7 +109,7 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	branch := apr.GetValueOrDefault(branchParam, "")
 	dir, urlStr, verr := parseArgs(apr)
 
-	scheme, remoteUrl, err := getAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
+	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
 
 	if err != nil {
 		verr = errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()

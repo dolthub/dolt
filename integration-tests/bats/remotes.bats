@@ -46,7 +46,7 @@ teardown() {
     [[ ! "$output" =~ "test-remote" ]] || false
     run dolt remote remove poop
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote poop" ]] || false
+    [[ "$output" =~ "unknown remote: 'poop'" ]] || false
 }
 
 @test "remotes: push and pull an unknown remote" {

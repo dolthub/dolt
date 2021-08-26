@@ -146,6 +146,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialD
 		HeadCommit: headCommit,
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
 	}
 }
 

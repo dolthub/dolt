@@ -28,6 +28,7 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
+	GetRemotes() (map[string]Remote, error)
 }
 
 type RepoStateWriter interface {
@@ -36,6 +37,8 @@ type RepoStateWriter interface {
 	// TODO: get rid of this
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
+	AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error
+	RemoveRemote(ctx context.Context, name string) error
 }
 
 type DocsReadWriter interface {
@@ -199,4 +202,8 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 
 func (rs *RepoState) AddRemote(r Remote) {
 	rs.Remotes[r.Name] = r
+}
+
+func (rs *RepoState) RemoveRemote(r Remote) {
+	delete(rs.Remotes, r.Name)
 }

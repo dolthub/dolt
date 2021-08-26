@@ -103,7 +103,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(errhand.BuildDError(`parameter %s has an invalid value of ""`, dirParamName).Build(), usage)
 	}
 
-	scheme, remoteUrl, err := getAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
+	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("Invalid remote url").AddCause(err).Build(), usage)
