@@ -60,8 +60,8 @@ var ErrInvalidRemoteURL = errors.New("remote URL invalid")
 var ErrRemoteNotFound = errors.New("remote not found")
 var ErrInvalidRemoteName = errors.New("remote name invalid")
 var ErrFailedToReadFromDb = errors.New("failed to read from db")
-var ErrFailedToDeleteRemote = errors.New("failed to read from db")
-var ErrFailedToWriteRepoState = errors.New("failed to read from db")
+var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
+var ErrFailedToWriteRepoState = errors.New("failed to write repo state")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -877,7 +877,6 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 
 	ddb := dEnv.DoltDB
 	refs, err := ddb.GetRemoteRefs(ctx)
-
 	if err != nil {
 		return ErrFailedToReadFromDb
 	}
@@ -899,6 +898,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	if err != nil {
 		return ErrFailedToWriteRepoState
 	}
+
 	return nil
 }
 
