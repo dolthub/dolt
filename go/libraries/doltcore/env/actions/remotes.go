@@ -17,11 +17,19 @@ package actions
 import (
 	"context"
 	"errors"
-
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/events"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"sync"
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")
@@ -73,6 +81,62 @@ func Push(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateMode, destRef r
 	return err
 }
 
+func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStarter func () (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent), progStopper func (wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)) (verr errhand.VerboseError) {
+	destDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+
+	if err != nil {
+		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
+
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			urlObj, _ := earl.Parse(opts.Remote.Url)
+			bdr.AddDetails("For the remote: %s %s", opts.Remote.Name, opts.Remote.Url)
+
+			path := urlObj.Path
+			if path[0] == '/' {
+				path = path[1:]
+			}
+
+			bdr.AddDetails("'%s' should be in the format 'organization/repo'", path)
+		}
+
+		return bdr.Build()
+	}
+
+	switch opts.SrcRef.GetType() {
+	case ref.BranchRefType:
+		if opts.SrcRef == ref.EmptyBranchRef {
+			verr = deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, dEnv.DoltDB, destDB, opts.Remote)
+		} else {
+			verr = PushToRemoteBranch(ctx, dEnv, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, dEnv.DoltDB, destDB, opts.Remote, progStarter, progStopper)
+		}
+	case ref.TagRefType:
+		verr = pushTagToRemote(ctx, dEnv, opts.SrcRef, opts.DestRef, dEnv.DoltDB, destDB, progStarter, progStopper)
+	default:
+		verr = errhand.BuildDError("cannot push ref %s of type %s", opts.SrcRef.String(), opts.SrcRef.GetType()).Build()
+	}
+
+	if verr != nil {
+		return verr
+	}
+
+	if opts.SetUpstream {
+		dEnv.RepoState.Branches[opts.SrcRef.GetPath()] = env.BranchConfig{
+			Merge: ref.MarshalableRef{
+				Ref: opts.DestRef,
+			},
+			Remote: opts.Remote.Name,
+		}
+
+		err := dEnv.RepoState.Save(dEnv.FS)
+
+		if err != nil {
+			verr = errhand.BuildDError("error: failed to save repo state").AddCause(err).Build()
+		}
+	}
+
+	return verr
+}
+
 // PushTag pushes a commit tag and all underlying data from a local source database to a remote destination database.
 func PushTag(ctx context.Context, dEnv *env.DoltEnv, destRef ref.TagRef, srcDB, destDB *doltdb.DoltDB, tag *doltdb.Tag, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	var err error
@@ -90,6 +154,91 @@ func PushTag(ctx context.Context, dEnv *env.DoltEnv, destRef ref.TagRef, srcDB, 
 	}
 
 	return destDB.SetHead(ctx, destRef, rf)
+}
+
+
+func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) errhand.VerboseError {
+	err := DeleteRemoteBranch(ctx, toDelete.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to delete '%s' from remote '%s'", toDelete.String(), remote.Name).Build()
+	}
+
+	return nil
+}
+
+func PushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateMode, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote, progStarter func () (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent), progStopper func (wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)) errhand.VerboseError {
+	evt := events.GetEventFromContext(ctx)
+
+	u, err := earl.Parse(remote.Url)
+
+	if err == nil {
+		if u.Scheme != "" {
+			evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
+		}
+	}
+
+	cs, _ := doltdb.NewCommitSpec(srcRef.GetPath())
+	cm, err := localDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
+
+	if err != nil {
+		return errhand.BuildDError("error: refspec '%v' not found.", srcRef.GetPath()).Build()
+	} else {
+		wg, progChan, pullerEventCh := progStarter()
+		err = Push(ctx, dEnv, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
+		progStopper(wg, progChan, pullerEventCh)
+
+		if err != nil {
+			if err == doltdb.ErrUpToDate {
+				cli.Println("Everything up-to-date")
+			} else if err == doltdb.ErrIsAhead || err == ErrCantFF || err == datas.ErrMergeNeeded {
+				cli.Printf("To %s\n", remote.Url)
+				cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef.String(), remoteRef.String())
+				cli.Printf("error: failed to push some refs to '%s'\n", remote.Url)
+				cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
+				cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
+				cli.Println("hint: 'dolt pull ...') before pushing again.")
+				return errhand.BuildDError("").Build()
+			} else {
+				status, ok := status.FromError(err)
+				if ok && status.Code() == codes.PermissionDenied {
+					cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
+					cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
+				}
+				if rpcErr, ok := err.(*remotestorage.RpcError); ok {
+					return errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
+				} else {
+					return errhand.BuildDError("error: push failed").AddCause(err).Build()
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func pushTagToRemote(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, progStarter func () (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent), progStopper func (wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)) errhand.VerboseError {
+	tg, err := localDB.ResolveTag(ctx, srcRef.(ref.TagRef))
+
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	wg, progChan, pullerEventCh := progStarter()
+
+	err = PushTag(ctx, dEnv, destRef.(ref.TagRef), localDB, remoteDB, tg, progChan, pullerEventCh)
+
+	progStopper(wg, progChan, pullerEventCh)
+
+	if err != nil {
+		if err == doltdb.ErrUpToDate {
+			cli.Println("Everything up-to-date")
+		} else {
+			return errhand.BuildDError("error: push failed").AddCause(err).Build()
+		}
+	}
+
+	return nil
 }
 
 // DeleteRemoteBranch validates targetRef is a branch on the remote database, and then deletes it, then deletes the

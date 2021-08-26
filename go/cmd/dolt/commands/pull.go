@@ -72,6 +72,8 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	// TODO: select single arg: remoteName
+	// TODO: env.PullFromRemote
 	verr := pullFromRemote(ctx, dEnv, apr)
 
 	return HandleVErrAndExitCode(verr, usage)
@@ -89,6 +91,7 @@ func pullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 		remoteName = apr.Arg(0)
 	}
 
+	// TODO: move this logic to env
 	refSpecs, verr := dEnv.GetRefSpecs(remoteName)
 	if verr != nil {
 		return verr

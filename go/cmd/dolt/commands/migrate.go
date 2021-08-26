@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 
 	"github.com/fatih/color"
 
@@ -179,7 +180,7 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 			src := refSpec.SrcRef(branch)
 			dest := refSpec.DestRef(src)
 
-			remoteRef, err := getTrackingRef(dest, remote)
+			remoteRef, err := env.GetTrackingRef(dest, remote)
 
 			if err != nil {
 				return err
@@ -193,7 +194,7 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 
 			cli.Println(color.BlueString(fmt.Sprintf("Pushing migrated branch %s to %s", branch.String(), remoteName)))
 			mode := ref.UpdateMode{Force: true}
-			err = pushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
+			err = actions.PushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote, runProgFuncs, stopProgFuncs)
 
 			if err != nil {
 				return err
