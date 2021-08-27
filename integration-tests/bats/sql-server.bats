@@ -896,7 +896,7 @@ SQL
 
 @test "sql-server: auto increment for a table should reset between drops" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-    skip "This is an incrorrect test"
+    skip "This test fails due to the auto increment tracker"
     cd repo1
     start_sql_server repo1
 
