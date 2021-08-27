@@ -100,7 +100,14 @@ func (r *RevertFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		commits[i] = commit
 	}
 
-	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, commits)
+	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, commits, dbState.EditSession.Opts)
 	if err != nil {
 		return nil, err
 	}

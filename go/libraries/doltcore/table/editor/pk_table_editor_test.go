@@ -45,6 +45,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
+	opts := TestEditorOptions(db)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false),
@@ -59,7 +60,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
+		tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -141,6 +142,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
+	opts := TestEditorOptions(db)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false),
@@ -154,7 +156,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
-	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
+	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
 	require.NoError(t, err)
 	for i := 0; i < tableEditorConcurrencyFinalCount*2; i++ {
 		dRow, err := row.New(format, tableSch, row.TaggedValues{
@@ -169,7 +171,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
+		tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -235,6 +237,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
+	opts := TestEditorOptions(db)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false),
@@ -248,7 +251,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
-	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
+	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
 	require.NoError(t, err)
 
 	for i := 0; i < 20; i++ {
@@ -306,6 +309,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
+	opts := TestEditorOptions(db)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false),
@@ -319,7 +323,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
-	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, &teaFactoryImpl{})
+	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -386,6 +390,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
 	require.NoError(t, err)
+	opts := TestEditorOptions(db)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false),
@@ -406,9 +411,9 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	table, err := doltdb.NewTable(ctx, db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
-	table, err = RebuildAllIndexes(ctx, table)
+	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)
-	tableEditor, err := newPkTableEditor(ctx, table, tableSch, tableName, &teaFactoryImpl{})
+	tableEditor, err := newPkTableEditor(ctx, table, tableSch, tableName, opts)
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {

@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -401,7 +402,8 @@ and take the hash for your current branch and use it for the value for "staged" 
 }
 
 func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
-	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, cm1, cm2)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, cm1, cm2, opts)
 
 	if err != nil {
 		switch err {

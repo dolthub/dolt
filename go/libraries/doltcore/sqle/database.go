@@ -64,6 +64,12 @@ type Database struct {
 	//   correctly handle persisted sequences
 	//   that must be coordinated across txs
 	gs globalstate.GlobalState
+
+	editOpts editor.Options
+}
+
+func (db Database) EditOptions() editor.Options {
+	return db.editOpts
 }
 
 var _ sql.Database = Database{}
@@ -122,14 +128,15 @@ var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, dbData env.DbData) Database {
+func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Database {
 	return Database{
-		name: name,
-		ddb:  dbData.Ddb,
-		rsr:  dbData.Rsr,
-		rsw:  dbData.Rsw,
-		drw:  dbData.Drw,
-		gs:   globalstate.NewGlobalStateStore(),
+		name:     name,
+		ddb:      dbData.Ddb,
+		rsr:      dbData.Rsr,
+		rsw:      dbData.Rsw,
+		drw:      dbData.Drw,
+		gs:       globalstate.NewGlobalStateStore(),
+		editOpts: editOpts,
 	}
 }
 
@@ -422,7 +429,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 
 	var table sql.Table
 
-	readonlyTable := NewDoltTable(tableName, sch, tbl, db, temporary)
+	readonlyTable := NewDoltTable(tableName, sch, tbl, db, temporary, db.editOpts)
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {

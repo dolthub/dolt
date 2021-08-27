@@ -17,6 +17,7 @@ package editor
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -28,24 +29,35 @@ import (
 // TableEditSession handles all edit operations on a table that may also update other tables. Serves as coordination
 // for SessionedTableEditors.
 type TableEditSession struct {
-	Props TableEditSessionProps
+	Opts Options
 
 	root       *doltdb.RootValue
 	tables     map[string]*sessionedTableEditor
 	writeMutex *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
 }
 
-// TableEditSessionProps are properties that define different functionality for the TableEditSession.
-type TableEditSessionProps struct {
+// Options are properties that define different functionality for the TableEditSession.
+type Options struct {
 	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
+	Deaf                     DbEaFactory
+}
+
+func TestEditorOptions(vrw types.ValueReadWriter) Options {
+	return Options{
+		ForeignKeyChecksDisabled: false,
+		Deaf: &dbEaFactory{
+			directory: os.TempDir(),
+			vrw:       vrw,
+		},
+	}
 }
 
 // CreateTableEditSession creates and returns a TableEditSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
-func CreateTableEditSession(root *doltdb.RootValue, props TableEditSessionProps) *TableEditSession {
+func CreateTableEditSession(root *doltdb.RootValue, opts Options) *TableEditSession {
 	return &TableEditSession{
-		Props:      props,
+		Opts:       opts,
 		root:       root,
 		tables:     make(map[string]*sessionedTableEditor),
 		writeMutex: &sync.RWMutex{},
@@ -58,16 +70,7 @@ func (tes *TableEditSession) GetTableEditor(ctx context.Context, tableName strin
 	tes.writeMutex.Lock()
 	defer tes.writeMutex.Unlock()
 
-	return tes.getTableEditor(ctx, tableName, tableSch, nil)
-}
-
-// GetTableEditor returns a TableEditor for the given table. If a schema is provided and it does not match the one
-// that is used for currently open editors (if any), then those editors will reload the table from the root.
-func (tes *TableEditSession) GetTableEditorWithTEAFactory(ctx context.Context, tableName string, tableSch schema.Schema, teaf TEAFactory) (TableEditor, error) {
-	tes.writeMutex.Lock()
-	defer tes.writeMutex.Unlock()
-
-	return tes.getTableEditor(ctx, tableName, tableSch, teaf)
+	return tes.getTableEditor(ctx, tableName, tableSch)
 }
 
 // Flush returns an updated root with all of the changed tables.
@@ -119,15 +122,15 @@ func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
 		return err
 	}
 
-	if tes.Props.ForeignKeyChecksDisabled {
+	if tes.Opts.ForeignKeyChecksDisabled {
 		// When fk checks are disabled, we don't load any foreign key data. Although we could load them here now, we can
 		// take a bit of a performance hit and create an internal edit session that loads all of the foreign keys.
 		// Otherwise, to preserve this edit session would create a much larger (and more difficult to understand) block
 		// of code. The primary perf hit comes from foreign keys that reference tables that declare foreign keys of
 		// their own, which is not common, so the average perf hit is relatively minimal.
-		validationTes := CreateTableEditSession(tes.root, TableEditSessionProps{})
+		validationTes := CreateTableEditSession(tes.root, Options{})
 		for tableName, _ := range tes.tables {
-			_, err = validationTes.getTableEditor(ctx, tableName, nil, nil)
+			_, err = validationTes.getTableEditor(ctx, tableName, nil)
 			if err != nil {
 				return err
 			}
@@ -215,7 +218,7 @@ func (tes *TableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 }
 
 // getTableEditor is the inner implementation for GetTableEditor, allowing recursive calls
-func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName string, tableSch schema.Schema, teaf TEAFactory) (*sessionedTableEditor, error) {
+func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (*sessionedTableEditor, error) {
 	if tes.root == nil {
 		return nil, fmt.Errorf("must call SetRoot before a table editor will be returned")
 	}
@@ -256,23 +259,14 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		}
 	}
 
-	if teaf != nil {
-		tableEditor, err := NewTableEditorWithFactory(ctx, t, tableSch, tableName, teaf)
-		if err != nil {
-			return nil, err
-		}
-
-		localTableEditor.tableEditor = tableEditor
-	} else {
-		tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName)
-		if err != nil {
-			return nil, err
-		}
-
-		localTableEditor.tableEditor = tableEditor
+	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName, tes.Opts)
+	if err != nil {
+		return nil, err
 	}
 
-	if tes.Props.ForeignKeyChecksDisabled {
+	localTableEditor.tableEditor = tableEditor
+
+	if tes.Opts.ForeignKeyChecksDisabled {
 		return localTableEditor, nil
 	}
 
@@ -293,14 +287,14 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *sessionedTableEditor) error {
 	// these are the tables that reference us, so we need to update them
 	for _, foreignKey := range localTableEditor.referencingTables {
-		_, err := tes.getTableEditor(ctx, foreignKey.TableName, nil, nil)
+		_, err := tes.getTableEditor(ctx, foreignKey.TableName, nil)
 		if err != nil {
 			return err
 		}
 	}
 	// these are the tables that we reference, so we need to refer to them
 	for _, foreignKey := range localTableEditor.referencedTables {
-		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil, nil)
+		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil)
 		if err != nil {
 			return err
 		}
@@ -336,7 +330,7 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		if err != nil {
 			return err
 		}
-		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName)
+		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName, tes.Opts)
 		if err != nil {
 			return err
 		}

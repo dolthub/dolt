@@ -39,6 +39,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
@@ -251,7 +252,8 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 		return nil, nil, err
 	}
 
-	db := dsqle.NewDatabase(dbName, dEnv.DbData())
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	db := dsqle.NewDatabase(dbName, dEnv.DbData(), opts)
 
 	cat := sql.NewCatalog()
 	err = cat.Register(dfunctions.DoltFunctions...)

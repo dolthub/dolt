@@ -116,7 +116,7 @@ func (acc keylessEditAcc) getRowDelta(key types.Tuple) (rowDelta, error) {
 	return vd, nil
 }
 
-func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, name string) (TableEditor, error) {
+func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, name string, opts Options) (TableEditor, error) {
 	acc := keylessEditAcc{
 		deltas: make(map[hash.Hash]rowDelta),
 		nbf:    tbl.Format(),
@@ -140,7 +140,7 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 		if err != nil {
 			return nil, err
 		}
-		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, sch)
+		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, sch, opts)
 	}
 	return te, nil
 }

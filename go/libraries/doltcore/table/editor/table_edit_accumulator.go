@@ -30,10 +30,10 @@ type doltKVP struct {
 
 type TableEditAccumulator interface {
 	// Delete adds a row to be deleted when these edits are eventually applied. Updates are modeled as a delete and an insert
-	Delete(keyHash hash.Hash, key types.Tuple)
+	Delete(keyHash hash.Hash, key types.Tuple) error
 
 	// Insert adds a row to be inserted when these edits are eventually applied. Updates are modeled as a delete and an insert.
-	Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple)
+	Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple) error
 
 	// Get returns a *doltKVP if the current TableEditAccumulator contains the given key, or it exists in the row data.
 	// This assumes that the given hash is for the given key.
@@ -59,14 +59,15 @@ type inMemModifications struct {
 	deletes map[hash.Hash]types.Tuple
 }
 
-// NewInMemModifications returns a pointer to a newly created inMemModifications object
-func NewInMemModifications() *inMemModifications {
+// newInMemModifications returns a pointer to a newly created inMemModifications object
+func newInMemModifications() *inMemModifications {
 	return &inMemModifications{
 		adds:    make(map[hash.Hash]*doltKVP),
 		deletes: make(map[hash.Hash]types.Tuple),
 	}
 }
 
+// MergeIn merges changes from another inMemModifications object into this instance
 func (mods *inMemModifications) MergeIn(other *inMemModifications) {
 	for keyHash, key := range other.deletes {
 		delete(mods.adds, keyHash)
@@ -81,6 +82,8 @@ func (mods *inMemModifications) MergeIn(other *inMemModifications) {
 	mods.ops += other.ops
 }
 
+// Get returns whether a key hash has been added as an insert, or a delete in this inMemModifications object. If it is
+// an insert the associated KVP is returned as well.
 func (mods *inMemModifications) Get(keyHash hash.Hash) (kvp *doltKVP, added, deleted bool) {
 	kvp, added = mods.adds[keyHash]
 
@@ -108,7 +111,7 @@ type tableEditAccumulatorImpl struct {
 	// initial state of the map
 	rowData types.Map
 
-	// in memory changes which will be applied to the
+	// in memory changes which will be applied to the rowData when the map is materialized
 	committed          *inMemModifications
 	uncommitted        *inMemModifications
 	uncommittedFlushed *inMemModifications
@@ -172,11 +175,11 @@ func (tea *tableEditAccumulatorImpl) flushUncommitted() {
 	tea.accumulatorIdx++
 
 	tea.uncommittedFlushed.MergeIn(tea.uncommitted)
-	tea.uncommitted = NewInMemModifications()
+	tea.uncommitted = newInMemModifications()
 }
 
 // Delete adds a row to be deleted when these edits are eventually applied. Updates are modeled as a delete and an insert
-func (tea *tableEditAccumulatorImpl) Delete(keyHash hash.Hash, key types.Tuple) {
+func (tea *tableEditAccumulatorImpl) Delete(keyHash hash.Hash, key types.Tuple) error {
 	delete(tea.uncommitted.adds, keyHash)
 	tea.uncommitted.deletes[keyHash] = key
 	tea.uncommitted.ops++
@@ -184,16 +187,21 @@ func (tea *tableEditAccumulatorImpl) Delete(keyHash hash.Hash, key types.Tuple) 
 	if tea.uncommitted.ops > flushThreshold {
 		tea.flushUncommitted()
 	}
+
+	return nil
 }
 
 // Insert adds a row to be inserted when these edits are eventually applied. Updates are modeled as a delete and an insert.
-func (tea *tableEditAccumulatorImpl) Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple) {
+func (tea *tableEditAccumulatorImpl) Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple) error {
 	delete(tea.uncommitted.deletes, keyHash)
 	tea.uncommitted.adds[keyHash] = &doltKVP{k: key, v: val}
 	tea.uncommitted.ops++
+
 	if tea.uncommitted.ops > flushThreshold {
 		tea.flushUncommitted()
 	}
+
+	return nil
 }
 
 // Commit applies the in memory edits to the list of committed in memory edits
@@ -220,7 +228,7 @@ func (tea *tableEditAccumulatorImpl) Commit(ctx context.Context, nbf *types.Noms
 		tea.committed.MergeIn(tea.uncommittedFlushed)
 
 		// initialize empty inMemoryModifications to handle future uncommitted flushed edits
-		tea.uncommittedFlushed = NewInMemModifications()
+		tea.uncommittedFlushed = newInMemModifications()
 	}
 
 	if tea.uncommitted.ops > 0 {
@@ -237,7 +245,7 @@ func (tea *tableEditAccumulatorImpl) Commit(ctx context.Context, nbf *types.Noms
 		tea.committed.MergeIn(tea.uncommitted)
 
 		// initialize uncommitted to future in memory edits
-		tea.uncommitted = NewInMemModifications()
+		tea.uncommitted = newInMemModifications()
 	}
 
 	return nil
@@ -250,16 +258,17 @@ func (tea *tableEditAccumulatorImpl) Rollback(ctx context.Context) error {
 
 	// clear all in memory modifications
 	if tea.uncommittedFlushed.ops > 0 {
-		tea.uncommittedFlushed = NewInMemModifications()
+		tea.uncommittedFlushed = newInMemModifications()
 	}
 
 	if tea.uncommitted.ops > 0 {
-		tea.uncommitted = NewInMemModifications()
+		tea.uncommitted = newInMemModifications()
 	}
 
 	return nil
 }
 
+// MaterializeEdits applies the in memory edits to the row data and returns types.Map
 func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error) {
 	err = tea.Commit(ctx, nbf)
 	if err != nil {
@@ -305,36 +314,60 @@ func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 	}
 
 	tea.rowData = updatedMap
-	tea.committed = NewInMemModifications()
+	tea.committed = newInMemModifications()
 	tea.commitEAId = tea.accumulatorIdx
 	tea.accumulatorIdx++
-	tea.commitEA = edits.NewAsyncSortedEditsWithDefaults(tea.nbf)
+	tea.commitEA = edits.NewAsyncSortedEditsWithDefaults(nbf)
 	tea.committedEaIds = set.NewUint64Set(nil)
 	tea.uncommittedEaIds = set.NewUint64Set(nil)
 
 	return updatedMap, nil
 }
 
-type TEAFactory interface {
-	NewTEA(ctx context.Context, rowData types.Map) TableEditAccumulator
+type DbEaFactory interface {
+	NewTableEA(ctx context.Context, rowData types.Map) TableEditAccumulator
+	NewIndexEA(ctx context.Context, rowData types.Map) IndexEditAccumulator
 }
 
-type teaFactoryImpl struct {
+type dbEaFactory struct {
 	directory string
 	vrw       types.ValueReadWriter
 }
 
-func (teaf *teaFactoryImpl) NewTEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
+func NewDbEaFactory(directory string, vrw types.ValueReadWriter) DbEaFactory {
+	return &dbEaFactory{
+		directory: directory,
+		vrw:       vrw,
+	}
+}
+
+func (deaf *dbEaFactory) NewTableEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
 	return &tableEditAccumulatorImpl{
 		nbf:                rowData.Format(),
 		rowData:            rowData,
-		committed:          NewInMemModifications(),
-		uncommitted:        NewInMemModifications(),
-		uncommittedFlushed: NewInMemModifications(),
+		committed:          newInMemModifications(),
+		uncommitted:        newInMemModifications(),
+		uncommittedFlushed: newInMemModifications(),
 		commitEA:           edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
 		commitEAId:         0,
 		accumulatorIdx:     1,
-		flusher:            edits.NewDiskEditFlusher(ctx, teaf.directory, rowData.Format(), teaf.vrw),
+		flusher:            edits.NewDiskEditFlusher(ctx, deaf.directory, rowData.Format(), deaf.vrw),
+		committedEaIds:     set.NewUint64Set(nil),
+		uncommittedEaIds:   set.NewUint64Set(nil),
+	}
+}
+
+func (deaf *dbEaFactory) NewIndexEA(ctx context.Context, rowData types.Map) IndexEditAccumulator {
+	return &indexEditAccumulatorImpl{
+		nbf:                rowData.Format(),
+		rowData:            rowData,
+		committed:          newInMemIndexEdits(),
+		uncommitted:        newInMemIndexEdits(),
+		uncommittedFlushed: newInMemIndexEdits(),
+		commitEA:           edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
+		commitEAId:         0,
+		accumulatorIdx:     1,
+		flusher:            edits.NewDiskEditFlusher(ctx, deaf.directory, rowData.Format(), deaf.vrw),
 		committedEaIds:     set.NewUint64Set(nil),
 		uncommittedEaIds:   set.NewUint64Set(nil),
 	}

@@ -83,9 +83,11 @@ type DoltTable struct {
 
 	projectedCols []string
 	temporary     bool
+
+	opts editor.Options
 }
 
-func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool) *DoltTable {
+func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool, opts editor.Options) *DoltTable {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
@@ -103,6 +105,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		autoIncCol:    autoCol,
 		projectedCols: nil,
 		temporary:     isTemporary,
+		opts:          opts,
 	}
 }
 
@@ -568,7 +571,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
+	newTable, err = editor.RebuildAllIndexes(ctx, newTable, t.opts)
 	if err != nil {
 		return 0, err
 	}
@@ -991,7 +994,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, orderToOrder(order))
+	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, orderToOrder(order), t.opts)
 	if err != nil {
 		return err
 	}
@@ -1019,7 +1022,7 @@ func (t *AlterableDoltTable) CreateIndex(
 		return err
 	}
 
-	ret, err := createIndexForTable(ctx, table, indexName, using, constraint, columns, true, comment)
+	ret, err := createIndexForTable(ctx, table, indexName, using, constraint, columns, true, comment, t.opts)
 	if err != nil {
 		return err
 	}
@@ -1249,7 +1252,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	tableIndex, ok := t.sch.Indexes().GetIndexByTags(colTags...)
 	if !ok {
 		// if child index doesn't exist, create it
-		ret, err := createIndexForTable(ctx, table, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, false, "")
+		ret, err := createIndexForTable(ctx, table, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, false, "", t.opts)
 		if err != nil {
 			return err
 		}
@@ -1276,7 +1279,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 				c, _ := refSch.GetAllCols().GetByTag(t)
 				colNames = append(colNames, sql.IndexColumn{Name: c.Name})
 			}
-			ret, err := createIndexForTable(ctx, refTbl, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, false, "")
+			ret, err := createIndexForTable(ctx, refTbl, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, false, "", t.opts)
 			if err != nil {
 				return err
 			}
@@ -1451,6 +1454,7 @@ func createIndexForTable(
 	columns []sql.IndexColumn,
 	isUserDefined bool,
 	comment string,
+	opts editor.Options,
 ) (*createIndexReturn, error) {
 	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
 		return nil, fmt.Errorf("not yet supported")
@@ -1527,7 +1531,7 @@ func createIndexForTable(
 			return nil, err
 		}
 	} else { // set the index row data and get a new root with the updated table
-		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name())
+		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
 		if err != nil {
 			return nil, err
 		}
@@ -1728,7 +1732,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.In
 		return err
 	}
 
-	table, err = alterschema.AddPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns)
+	table, err = alterschema.AddPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns, t.opts)
 	if err != nil {
 		return err
 	}
@@ -1785,7 +1789,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	table, err = alterschema.DropPrimaryKeyFromTable(ctx, table, t.nbf)
+	table, err = alterschema.DropPrimaryKeyFromTable(ctx, table, t.nbf, t.opts)
 	if err != nil {
 		return err
 	}

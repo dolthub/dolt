@@ -354,17 +354,17 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 
 	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows, emptyMap, nil)
 	require.NoError(t, err)
-	tbl, err = editor.RebuildAllIndexes(context.Background(), tbl)
+	tbl, err = editor.RebuildAllIndexes(context.Background(), tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
 	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows, emptyMap, nil)
 	require.NoError(t, err)
-	updatedTbl, err = editor.RebuildAllIndexes(context.Background(), updatedTbl)
+	updatedTbl, err = editor.RebuildAllIndexes(context.Background(), updatedTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
 	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows, emptyMap, nil)
 	require.NoError(t, err)
-	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl)
+	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
 	mRoot, err := masterHead.GetRootValue()
@@ -421,7 +421,8 @@ func TestMergeCommits(t *testing.T) {
 	require.False(t, ff)
 
 	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
-	tableEditSession := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
+	opts := editor.TestEditorOptions(vrw)
+	tableEditSession := editor.CreateTableEditSession(root, opts)
 	merged, stats, err := merger.MergeTable(context.Background(), tableName, tableEditSession)
 
 	if err != nil {
@@ -442,7 +443,7 @@ func TestMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	expected, err := doltdb.NewTable(context.Background(), vrw, targVal, expectedRows, emptyMap, nil)
 	assert.NoError(t, err)
-	expected, err = editor.RebuildAllIndexes(context.Background(), expected)
+	expected, err = editor.RebuildAllIndexes(context.Background(), expected, editor.TestEditorOptions(vrw))
 	assert.NoError(t, err)
 	expected, err = expected.SetConflicts(context.Background(), doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)
 	assert.NoError(t, err)

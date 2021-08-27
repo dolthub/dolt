@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *types.NomsBinFormat) (*doltdb.Table, error) {
+func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *types.NomsBinFormat, opts editor.Options) (*doltdb.Table, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *type
 	}
 
 	// Rebuild all of the indexes now that the primary key has been changed
-	return editor.RebuildAllIndexes(ctx, table)
+	return editor.RebuildAllIndexes(ctx, table, opts)
 }
 
 func keyedRowDataToKeylessRowData(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {

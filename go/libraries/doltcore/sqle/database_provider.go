@@ -195,12 +195,13 @@ func dbRevisionForBranch(ctx context.Context, srcDb Database, revSpec string) (D
 		DocsReadWriter:  srcDb.drw,
 	}
 	db := Database{
-		name: dbName,
-		ddb:  srcDb.ddb,
-		rsw:  static,
-		rsr:  static,
-		drw:  static,
-		gs:   srcDb.gs,
+		name:     dbName,
+		ddb:      srcDb.ddb,
+		rsw:      static,
+		rsr:      static,
+		drw:      static,
+		gs:       srcDb.gs,
+		editOpts: srcDb.editOpts,
 	}
 	init := dsess.InitialDbState{
 		Db:         db,
@@ -230,12 +231,13 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 
 	name := srcDb.Name() + dbRevisionDelimiter + revSpec
 	db := ReadOnlyDatabase{Database: Database{
-		name: name,
-		ddb:  srcDb.ddb,
-		rsw:  srcDb.rsw,
-		rsr:  srcDb.rsr,
-		drw:  srcDb.drw,
-		gs:   nil,
+		name:     name,
+		ddb:      srcDb.ddb,
+		rsw:      srcDb.rsw,
+		rsr:      srcDb.rsr,
+		drw:      srcDb.drw,
+		gs:       nil,
+		editOpts: srcDb.editOpts,
 	}}
 	init := dsess.InitialDbState{
 		Db:           db,

@@ -72,15 +72,11 @@ type TableEditor interface {
 	Close(ctx context.Context) error
 }
 
-func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string) (TableEditor, error) {
-	return NewTableEditorWithFactory(ctx, t, tableSch, name, &teaFactoryImpl{})
-}
-
-func NewTableEditorWithFactory(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, teaf TEAFactory) (TableEditor, error) {
+func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, opts Options) (TableEditor, error) {
 	if schema.IsKeyless(tableSch) {
-		return newKeylessTableEditor(ctx, t, tableSch, name)
+		return newKeylessTableEditor(ctx, t, tableSch, name, opts)
 	}
-	return newPkTableEditor(ctx, t, tableSch, name, teaf)
+	return newPkTableEditor(ctx, t, tableSch, name, opts)
 }
 
 // pkTableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
@@ -92,7 +88,7 @@ type pkTableEditor struct {
 	tSch schema.Schema
 	name string
 
-	teaf     TEAFactory
+	opts     Options
 	tea      TableEditAccumulator
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
@@ -109,12 +105,12 @@ type pkTableEditor struct {
 	writeMutex *sync.Mutex
 }
 
-func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, teaf TEAFactory) (*pkTableEditor, error) {
+func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, opts Options) (*pkTableEditor, error) {
 	te := &pkTableEditor{
 		t:          t,
 		tSch:       tableSch,
 		name:       name,
-		teaf:       teaf,
+		opts:       opts,
 		nbf:        t.Format(),
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
 		writeMutex: &sync.Mutex{},
@@ -124,14 +120,14 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 	if err != nil {
 		return nil, err
 	}
-	te.tea = teaf.NewTEA(ctx, rowData)
+	te.tea = opts.Deaf.NewTableEA(ctx, rowData)
 
 	for i, index := range tableSch.Indexes().AllIndexes() {
 		indexData, err := t.GetIndexRowData(ctx, index.Name())
 		if err != nil {
 			return nil, err
 		}
-		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, tableSch)
+		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, tableSch, opts)
 	}
 
 	err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -409,7 +405,10 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
-	te.tea.Insert(keyHash, key, val)
+	err = te.tea.Insert(keyHash, key, val)
+	if err != nil {
+		return err
+	}
 
 	if te.hasAutoInc {
 		insertVal, ok := tagToVal[te.autoIncCol.Tag]
@@ -500,10 +499,8 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 		return err
 	}
 
-	te.tea.Delete(keyHash, key)
-
 	te.setDirty(true)
-	return nil
+	return te.tea.Delete(keyHash, key)
 }
 
 // DeleteRow removes the given row from the table. This essentially acts as a convenience function for DeleteKey, while
@@ -594,7 +591,11 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		indexOpsToUndo[i]++
 	}
 
-	te.tea.Delete(oldHash, dOldKeyVal.(types.Tuple))
+	err = te.tea.Delete(oldHash, dOldKeyVal.(types.Tuple))
+	if err != nil {
+		return err
+	}
+
 	te.setDirty(true)
 
 	dNewKeyTpl := dNewKeyVal.(types.Tuple)
@@ -604,8 +605,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
-	te.tea.Insert(newHash, dNewKeyTpl, dNewRowVal.(types.Tuple))
-	return nil
+	return te.tea.Insert(newHash, dNewKeyTpl, dNewRowVal.(types.Tuple))
 }
 
 func (te *pkTableEditor) GetAutoIncrementValue() types.Value {

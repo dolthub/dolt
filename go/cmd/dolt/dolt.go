@@ -128,7 +128,7 @@ func ResetColorHandler() {
 }
 
 func main() {
-	ResetColorHandler()
+	//ResetColorHandler()
 
 	os.Exit(runMain())
 }

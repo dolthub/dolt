@@ -17,6 +17,8 @@ package editor
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/utils/set"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
@@ -25,7 +27,7 @@ import (
 var _ TableEditAccumulator = (*BulkImportTEA)(nil)
 
 type BulkImportTEA struct {
-	teaf       TEAFactory
+	teaf       DbEaFactory
 	emptyTuple types.Tuple
 
 	ea      types.EditAccumulator
@@ -41,20 +43,22 @@ func (tea *BulkImportTEA) OpCount() int64 {
 	return tea.opCount
 }
 
-func (tea *BulkImportTEA) Delete(keyHash hash.Hash, key types.Tuple) {
+func (tea *BulkImportTEA) Delete(keyHash hash.Hash, key types.Tuple) error {
 	tea.opCount++
 	tea.ea.AddEdit(key, nil)
 
 	tea.deletes[keyHash] = true
 	delete(tea.adds, keyHash)
+	return nil
 }
 
-func (tea *BulkImportTEA) Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple) {
+func (tea *BulkImportTEA) Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple) error {
 	tea.opCount++
 	tea.ea.AddEdit(key, val)
 
 	tea.adds[keyHash] = true
 	delete(tea.deletes, keyHash)
+	return nil
 }
 
 func (tea *BulkImportTEA) Get(ctx context.Context, keyHash hash.Hash, key types.Tuple) (*doltKVP, bool, error) {
@@ -104,11 +108,11 @@ func (tea *BulkImportTEA) MaterializeEdits(ctx context.Context, nbf *types.NomsB
 		}
 	}
 
-	*tea = *(tea.teaf.NewTEA(ctx, currMap).(*BulkImportTEA))
+	*tea = *(tea.teaf.NewTableEA(ctx, currMap).(*BulkImportTEA))
 	return currMap, nil
 }
 
-var _ TEAFactory = (*BulkImportTEAFactory)(nil)
+var _ DbEaFactory = (*BulkImportTEAFactory)(nil)
 
 type BulkImportTEAFactory struct {
 	nbf       *types.NomsBinFormat
@@ -124,7 +128,7 @@ func NewBulkImportTEAFactory(nbf *types.NomsBinFormat, vrw types.ValueReadWriter
 	}
 }
 
-func (b *BulkImportTEAFactory) NewTEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
+func (b *BulkImportTEAFactory) NewTableEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
 	const flushInterval = 256 * 1024
 
 	createMapEA := func() types.EditAccumulator {
@@ -139,5 +143,21 @@ func (b *BulkImportTEAFactory) NewTEA(ctx context.Context, rowData types.Map) Ta
 		adds:       make(map[hash.Hash]bool),
 		deletes:    make(map[hash.Hash]bool),
 		emptyTuple: types.EmptyTuple(b.nbf),
+	}
+}
+
+func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map) IndexEditAccumulator {
+	return &indexEditAccumulatorImpl{
+		nbf:                rowData.Format(),
+		rowData:            rowData,
+		committed:          newInMemIndexEdits(),
+		uncommitted:        newInMemIndexEdits(),
+		uncommittedFlushed: newInMemIndexEdits(),
+		commitEA:           edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
+		commitEAId:         0,
+		accumulatorIdx:     1,
+		flusher:            edits.NewDiskEditFlusher(ctx, b.directory, rowData.Format(), b.vrw),
+		committedEaIds:     set.NewUint64Set(nil),
+		uncommittedEaIds:   set.NewUint64Set(nil),
 	}
 }

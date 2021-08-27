@@ -53,7 +53,8 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver merg
 }
 
 func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.AutoResolver, tbls []string) error {
-	tableEditSession := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	tableEditSession := editor.CreateTableEditSession(root, opts)
 
 	for _, tblName := range tbls {
 		tbl, ok, err := root.GetTable(ctx, tblName)
