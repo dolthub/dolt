@@ -18,22 +18,23 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/utils/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/fatih/color"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
@@ -266,7 +267,6 @@ func parseCommitMessage(cm string) string {
 	return strings.Join(filtered, "\n")
 }
 
-
 func docCnfsOnWorkingRoot(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
@@ -283,7 +283,6 @@ func docCnfsOnWorkingRoot(ctx context.Context, dEnv *env.DoltEnv) (bool, error) 
 
 	return docTbl.HasConflicts()
 }
-
 
 func PrintDiffsNotStaged(
 	ctx context.Context,
@@ -547,4 +546,3 @@ func printStagedDiffs(wr io.Writer, stagedTbls []diff.TableDelta, stagedDocs *di
 
 	return 0
 }
-

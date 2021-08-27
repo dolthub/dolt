@@ -16,8 +16,8 @@ package env
 
 import (
 	"context"
+	"errors"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 
@@ -28,6 +28,14 @@ import (
 )
 
 var NoRemote = Remote{}
+
+var ErrBranchDoesNotMatchUpstream = errors.New("the upstream branch of your current branch does not match the nane if your current branch")
+var ErrUpstreamBranchAlreadySet = errors.New("upstream branch already set")
+var ErrNoUpstreamForBranch = errors.New("the current branch has no upstream branch")
+var ErrFailedToReadDb = errors.New("failed to read from the db")
+var ErrUnknownBranch = errors.New("unknown branch")
+var ErrCannotSetUpstreamForTag = errors.New("cannot set upstream for tag")
+var ErrCannotPushRef = errors.New("cannot push ref")
 
 func IsEmptyRemote(r Remote) bool {
 	return len(r.Name) == 0 && len(r.Url) == 0 && r.FetchSpecs == nil && r.Params == nil
@@ -86,11 +94,13 @@ type PushOpts struct {
 	SetUpstream bool
 }
 
-func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *DoltEnv) (*PushOpts, errhand.VerboseError) {
+func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *DoltEnv) (*PushOpts, error) {
+	var err error
 	remotes, err := dEnv.GetRemotes()
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to read remotes from config.").Build()
+		//return nil, errhand.BuildDError("error: failed to read remotes from config.").Build()
+		return nil, err
 	}
 
 	remoteName := "origin"
@@ -108,19 +118,19 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 	upstream, hasUpstream := dEnv.RepoState.Branches[currentBranch.GetPath()]
 
 	var refSpec ref.RefSpec
-	var verr errhand.VerboseError
 	if remoteOK && len(args) == 1 {
 		refSpecStr := args[0]
 
 		refSpecStr, err = disambiguateRefSpecStr(ctx, dEnv.DoltDB, refSpecStr)
 		if err != nil {
-			verr = errhand.VerboseErrorFromError(err)
+			return nil, err
 		}
 
 		refSpec, err = ref.ParseRefSpec(refSpecStr)
 
 		if err != nil {
-			verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
+			//verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
+			return nil, err
 		}
 	} else if len(args) == 2 {
 		remoteName = args[0]
@@ -128,28 +138,34 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 
 		refSpecStr, err = disambiguateRefSpecStr(ctx, dEnv.DoltDB, refSpecStr)
 		if err != nil {
-			verr = errhand.VerboseErrorFromError(err)
+			//verr = errhand.VerboseErrorFromError(err)
+			return nil, err
 		}
 
 		refSpec, err = ref.ParseRefSpec(refSpecStr)
 		if err != nil {
-			verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
+			//verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
+			return nil, err
 		}
 	} else if apr.Contains(SetUpstreamFlag) {
-		verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
+		//verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
+		return nil, err
 	} else if hasUpstream {
 		if len(args) > 0 {
-			return nil, errhand.BuildDError("fatal: upstream branch set for '%s'.  Use 'dolt push' without arguments to push.\n", currentBranch).Build()
+			//return nil, errhand.BuildDError("fatal: upstream branch set for '%s'.  Use 'dolt push' without arguments to push.\n", currentBranch).Build()
+			return nil, ErrUpstreamBranchAlreadySet
+
 		}
 
 		if currentBranch.GetPath() != upstream.Merge.Ref.GetPath() {
-			return nil, errhand.BuildDError("fatal: The upstream branch of your current branch does not match"+
-				"the name of your current branch.  To push to the upstream branch\n"+
-				"on the remote, use\n\n"+
-				"\tdolt push origin HEAD: %s\n\n"+
-				"To push to the branch of the same name on the remote, use\n\n"+
-				"\tdolt push origin HEAD",
-				currentBranch.GetPath()).Build()
+			//return nil, errhand.BuildDError("fatal: The upstream branch of your current branch does not match"+
+			//	"the name of your current branch.  To push to the upstream branch\n"+
+			//	"on the remote, use\n\n"+
+			//	"\tdolt push origin HEAD: %s\n\n"+
+			//	"To push to the branch of the same name on the remote, use\n\n"+
+			//	"\tdolt push origin HEAD",
+			//	currentBranch.GetPath()).Build()
+			return nil, ErrBranchDoesNotMatchUpstream
 		}
 
 		remoteName = upstream.Remote
@@ -160,31 +176,31 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 			if defRemote, verr := dEnv.GetDefaultRemote(); verr == nil {
 				remoteName = defRemote.Name
 			}
-
-			return nil, errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
-				"To push the current branch and set the remote as upstream, use\n" +
-				"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath()).Build()
+			return nil, ErrNoUpstreamForBranch
+			//return nil, errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
+			//	"To push the current branch and set the remote as upstream, use\n" +
+			//	"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath()).Build()
 		}
 
-		verr = errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	if verr != nil {
-		return nil, verr
+		//verr = errhand.BuildDError("").SetPrintUsage().Build()
+		return nil, errors.New("unknown error for remote push args")
 	}
 
 	remote, remoteOK = remotes[remoteName]
 
 	if !remoteOK {
-		return nil, errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
+		//return nil, errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
+		return nil, ErrUnknownRemote
 	}
 
 	hasRef, err := dEnv.DoltDB.HasRef(ctx, currentBranch)
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+		//return nil, errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+		return nil, ErrFailedToReadDb
 	} else if !hasRef {
-		return nil, errhand.BuildDError("fatal: unknown branch " + currentBranch.GetPath()).Build()
+		//return nil, errhand.BuildDError("fatal: unknown branch " + currentBranch.GetPath()).Build()
+		return nil, ErrUnknownBranch
 	}
 
 	src := refSpec.SrcRef(currentBranch)
@@ -194,17 +210,19 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 
 	switch src.GetType() {
 	case ref.BranchRefType:
-		remoteRef, verr = GetTrackingRef(dest, remote)
+		remoteRef, err = GetTrackingRef(dest, remote)
 	case ref.TagRefType:
 		if apr.Contains(SetUpstreamFlag) {
-			verr = errhand.BuildDError("cannot set upstream for tag").Build()
+			//verr = errhand.BuildDError("cannot set upstream for tag").Build()
+			err = ErrCannotSetUpstreamForTag
 		}
 	default:
-		verr = errhand.BuildDError("cannot push ref %s of type %s", src.String(), src.GetType()).Build()
+		//verr = errhand.BuildDError("cannot push ref %s of type %s", src.String(), src.GetType()).Build()
+		err = ErrCannotPushRef
 	}
 
-	if verr != nil {
-		return nil, verr
+	if err != nil {
+		return nil, err
 	}
 
 	opts := &PushOpts{
@@ -251,12 +269,13 @@ func disambiguateRefSpecStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr 
 	return refSpecStr, nil
 }
 
-func GetTrackingRef(branchRef ref.DoltRef, remote Remote) (ref.DoltRef, errhand.VerboseError) {
+func GetTrackingRef(branchRef ref.DoltRef, remote Remote) (ref.DoltRef, error) {
 	for _, fsStr := range remote.FetchSpecs {
 		fs, err := ref.ParseRefSpecForRemote(remote.Name, fsStr)
 
 		if err != nil {
-			return nil, errhand.BuildDError("error: invalid fetch spec '%s' for remote '%s'", fsStr, remote.Name).Build()
+			//return nil, errhand.BuildDError("error: invalid fetch spec '%s' for remote '%s'", fsStr, remote.Name).Build()
+			return nil, err
 		}
 
 		remoteRef := fs.DestRef(branchRef)

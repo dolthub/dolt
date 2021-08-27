@@ -36,6 +36,8 @@ import (
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")
+var ErrInvalidPullArgs = errors.New("dolt pull takes at most one arg")
+var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
 
 type ProgStarter func() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent)
 type ProgStopper func(wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)
@@ -87,7 +89,7 @@ func Push(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateMode, destRef r
 	return err
 }
 
-func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStarter func() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent), progStopper func(wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)) (verr errhand.VerboseError) {
+func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStarter func() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent), progStopper func(wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)) error {
 	destDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
@@ -111,18 +113,18 @@ func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStar
 	switch opts.SrcRef.GetType() {
 	case ref.BranchRefType:
 		if opts.SrcRef == ref.EmptyBranchRef {
-			verr = deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, dEnv.DoltDB, destDB, opts.Remote)
+			err = deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, dEnv.DoltDB, destDB, opts.Remote)
 		} else {
-			verr = PushToRemoteBranch(ctx, dEnv, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, dEnv.DoltDB, destDB, opts.Remote, progStarter, progStopper)
+			err = PushToRemoteBranch(ctx, dEnv, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, dEnv.DoltDB, destDB, opts.Remote, progStarter, progStopper)
 		}
 	case ref.TagRefType:
-		verr = pushTagToRemote(ctx, dEnv, opts.SrcRef, opts.DestRef, dEnv.DoltDB, destDB, progStarter, progStopper)
+		err = pushTagToRemote(ctx, dEnv, opts.SrcRef, opts.DestRef, dEnv.DoltDB, destDB, progStarter, progStopper)
 	default:
-		verr = errhand.BuildDError("cannot push ref %s of type %s", opts.SrcRef.String(), opts.SrcRef.GetType()).Build()
+		err = errhand.BuildDError("cannot push ref %s of type %s", opts.SrcRef.String(), opts.SrcRef.GetType()).Build()
 	}
 
-	if verr != nil {
-		return verr
+	if err != nil {
+		return err
 	}
 
 	if opts.SetUpstream {
@@ -136,11 +138,11 @@ func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStar
 		err := dEnv.RepoState.Save(dEnv.FS)
 
 		if err != nil {
-			verr = errhand.BuildDError("error: failed to save repo state").AddCause(err).Build()
+			err = errhand.BuildDError("error: failed to save repo state").AddCause(err).Build()
 		}
 	}
 
-	return verr
+	return err
 }
 
 // PushTag pushes a commit tag and all underlying data from a local source database to a remote destination database.
@@ -299,9 +301,10 @@ func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- dat
 	return srcDB.Clone(ctx, destDB, eventCh)
 }
 
-func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, progStarter ProgStarter, progStopper ProgStopper) errhand.VerboseError {
+func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, progStarter ProgStarter, progStopper ProgStopper) ([]string, []string, error) {
 	if apr.NArg() > 1 {
-		return errhand.BuildDError("dolt pull takes at most one arg").SetPrintUsage().Build()
+		//return errhand.BuildDError("dolt pull takes at most one arg").SetPrintUsage().Build()
+		return []string{}, []string{}, ErrInvalidPullArgs
 	}
 
 	branch := dEnv.RepoStateReader().CWBHeadRef()
@@ -312,25 +315,34 @@ func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 	}
 
 	// TODO: move this logic to env
-	refSpecs, verr := dEnv.GetRefSpecs(remoteName)
-	if verr != nil {
-		return verr
+	refSpecs, err := dEnv.GetRefSpecs(remoteName)
+	if err != nil {
+		return []string{}, []string{}, err
 	}
 
 	if len(refSpecs) == 0 {
-		return errhand.BuildDError("error: no refspec for remote").Build()
+		//return errhand.BuildDError("error: no refspec for remote").Build()
+		return []string{}, []string{}, ErrNoRefSpecForRemote
 	}
 
 	remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
 
+	allConflicts := make([]string, 0)
+	allConstraintViolations := make([]string, 0)
 	for _, refSpec := range refSpecs {
 		remoteTrackRef := refSpec.DestRef(branch)
 
 		if remoteTrackRef != nil {
-			verr = pullRemoteBranch(ctx, apr, dEnv, remote, branch, remoteTrackRef, progStarter, progStopper)
-
-			if verr != nil {
-				return verr
+			conflicts, constraintViolations, err := pullRemoteBranch(ctx, apr, dEnv, remote, branch, remoteTrackRef, progStarter, progStopper)
+			if len(conflicts) > 0 {
+				allConflicts = append(allConflicts, conflicts...)
+			}
+			if len(constraintViolations) > 0 {
+				allConstraintViolations = append(allConstraintViolations, constraintViolations...)
+			}
+			// TODO: are conflicts, constraintViolations OK here? do we need to collect them all for cli to print
+			if err != nil {
+				return allConflicts, allConstraintViolations, err
 			}
 		}
 	}
@@ -338,22 +350,22 @@ func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 	srcDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+		return allConflicts, allConstraintViolations, err
 	}
 
-	verr = FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, progStarter, progStopper)
-
-	if verr != nil {
-		return verr
+	err = FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, progStarter, progStopper)
+	if err != nil {
+		return allConflicts, allConstraintViolations, err
 	}
 
-	return nil
+	return allConflicts, allConstraintViolations, nil
 }
 
 // fetchFollowTags fetches all tags from the source DB whose commits have already
 // been fetched into the destination DB.
 // todo: potentially too expensive to iterate over all srcDB tags
-func FetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB, progStarter ProgStarter, progStopper ProgStopper) errhand.VerboseError {
+func FetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB, progStarter ProgStarter, progStopper ProgStopper) error {
 	err := IterResolvedTags(ctx, srcDB, func(tag *doltdb.Tag) (stop bool, err error) {
 		stRef, err := tag.GetStRef()
 		if err != nil {
@@ -399,29 +411,31 @@ func FetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *dolt
 	})
 
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return err
 	}
 
 	return nil
 }
 
-func pullRemoteBranch(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) errhand.VerboseError {
+func pullRemoteBranch(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) ([]string, []string, error) {
 	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+		return []string{}, []string{}, err
 	}
 
-	srcDBCommit, verr := FetchRemoteBranch(ctx, dEnv, r, srcDB, dEnv.DoltDB, srcRef, destRef, progStarter, progStopper)
+	srcDBCommit, err := FetchRemoteBranch(ctx, dEnv, r, srcDB, dEnv.DoltDB, srcRef, destRef, progStarter, progStopper)
 
-	if verr != nil {
-		return verr
+	if err != nil {
+		return []string{}, []string{}, err
 	}
 
 	err = dEnv.DoltDB.FastForward(ctx, destRef, srcDBCommit)
 
 	if err != nil {
-		return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+		//return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+		return []string{}, []string{}, err
 	}
 
 	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
@@ -429,10 +443,20 @@ func pullRemoteBranch(ctx context.Context, apr *argparser.ArgParseResults, dEnv 
 		//msg = GetCommitMessageFromEditor(ctx, dEnv)
 		panic("max fix")
 	}
-	return MergeCommitSpec(ctx, apr, dEnv, destRef.String(), msg)
+	squash := apr.Contains(cli.SquashParam)
+	commitSpecStr := apr.Arg(0)
+	mergeSpec, ok, err := PrepareMergeSpec(ctx, squash, dEnv, commitSpecStr, msg, apr.Contains(cli.NoFFParam))
+	if err != nil {
+		return []string{}, []string{}, err
+	}
+	if !ok {
+		return []string{}, []string{}, nil
+
+	}
+	return MergeCommitSpec(ctx, apr, dEnv, mergeSpec)
 }
 
-func FetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) (*doltdb.Commit, errhand.VerboseError) {
+func FetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) (*doltdb.Commit, error) {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(rem.Url)
@@ -447,14 +471,16 @@ func FetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 	srcDBCommit, err := srcDB.Resolve(ctx, cs, nil)
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
+		//return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
+		return nil, err
 	} else {
 		wg, progChan, pullerEventCh := progStarter()
 		err = FetchCommit(ctx, dEnv, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
 		progStopper(wg, progChan, pullerEventCh)
 
 		if err != nil {
-			return nil, errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+			//return nil,
+			return nil, err
 		}
 	}
 

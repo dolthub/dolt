@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -70,8 +72,8 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	
-	verr := actions.PullFromRemote(ctx, dEnv, apr, runProgFuncs, stopProgFuncs)
 
-	return HandleVErrAndExitCode(verr, usage)
+	_, _, err := actions.PullFromRemote(ctx, dEnv, apr, runProgFuncs, stopProgFuncs)
+
+	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }

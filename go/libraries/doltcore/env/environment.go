@@ -889,20 +889,20 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 
 // GetRefSpecs takes an optional remoteName and returns all refspecs associated with that remote.  If "" is passed as
 // the remoteName then the default remote is used.
-func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhand.VerboseError) {
+func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, error) {
 	var remote Remote
-	var verr errhand.VerboseError
+	var err error
 
 	if remoteName == "" {
-		remote, verr = dEnv.GetDefaultRemote()
+		remote, err = dEnv.GetDefaultRemote()
 	} else if r, ok := dEnv.RepoState.Remotes[remoteName]; ok {
 		remote = r
 	} else {
-		verr = errhand.BuildDError("error: unknown remote '%s'", remoteName).Build()
+		err = ErrUnknownRemote
 	}
 
-	if verr != nil {
-		return nil, verr
+	if err != nil {
+		return nil, err
 	}
 
 	var refSpecs []ref.RemoteRefSpec
@@ -914,9 +914,11 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhan
 		}
 
 		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
-			return nil, errhand.BuildDError("error: '%s' is not a valid refspec referring to a remote tracking branch", remote.Name).Build()
+			//return nil, errhand.BuildDError("error: '%s' is not a valid refspec referring to a remote tracking branch", remote.Name).Build()
+			return nil, ErrInvalidRefSpec
 		} else if rrs.GetRemote() != remote.Name {
-			return nil, errhand.BuildDError("error: remote '%s' refers to remote '%s'", remote.Name, rrs.GetRemote()).Build()
+			//return nil, errhand.BuildDError("error: remote '%s' refers to remote '%s'", remote.Name, rrs.GetRemote()).Build()
+			return nil, ErrInvalidRefSpecRemote
 		} else {
 			refSpecs = append(refSpecs, rrs)
 		}
@@ -925,12 +927,15 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhan
 	return refSpecs, nil
 }
 
-var ErrNoRemote = errhand.BuildDError("error: no remote.").Build()
-var ErrCantDetermineDefault = errhand.BuildDError("error: unable to determine the default remote.").Build()
+var ErrInvalidRefSpecRemote = errors.New("refspec refers to different remote")
+var ErrInvalidRefSpec = errors.New("invalid refspec")
+var ErrNoRemote = errors.New("no remote")
+var ErrUnknownRemote = errors.New("remote not found")
+var ErrCantDetermineDefault = errors.New("unable to determine the default remote")
 
 // GetDefaultRemote gets the default remote for the environment.  Not fully implemented yet.  Needs to support multiple
 // repos and a configurable default.
-func (dEnv *DoltEnv) GetDefaultRemote() (Remote, errhand.VerboseError) {
+func (dEnv *DoltEnv) GetDefaultRemote() (Remote, error) {
 	remotes := dEnv.RepoState.Remotes
 
 	if len(remotes) == 0 {

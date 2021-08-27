@@ -16,11 +16,9 @@ package actions
 
 import (
 	"context"
-
-	"github.com/fatih/color"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -30,128 +28,78 @@ import (
 
 const forceFlag = "force"
 
-func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, errhand.VerboseError) {
-	cs, err := doltdb.NewCommitSpec(cSpecStr)
-
-	if err != nil {
-		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoStateReader().CWBHeadRef())
-
-	if err != nil {
-		if err == doltdb.ErrInvalidAncestorSpec {
-			return nil, errhand.BuildDError("'%s' could not resolve ancestor spec", cSpecStr).Build()
-		} else if err == doltdb.ErrBranchNotFound {
-			return nil, errhand.BuildDError("unknown ref in commit spec: '%s'", cSpecStr).Build()
-		} else if doltdb.IsNotFoundErr(err) {
-			return nil, errhand.BuildDError("'%s' not found", cSpecStr).Build()
-		} else if err == doltdb.ErrFoundHashNotACommit {
-			return nil, errhand.BuildDError("'%s' is not a commit", cSpecStr).Build()
-		} else {
-			return nil, errhand.BuildDError("Unexpected error resolving '%s'", cSpecStr).AddCause(err).Build()
-		}
-	}
-
-	return cm, nil
+type MergeSpec struct {
+	H1           hash.Hash
+	H2           hash.Hash
+	Cm1          *doltdb.Commit
+	Cm2          *doltdb.Commit
+	TblNames     []string
+	WorkingDiffs map[string]hash.Hash
+	squash       bool
+	msg          string
+	noff         bool
 }
 
-func MergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, commitSpecStr string, msg string) (error, []string, []string) {
-	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD")
-
-	if verr != nil {
-		return verr
+func PrepareMergeSpec(ctx context.Context, squash bool, dEnv *env.DoltEnv, commitSpecStr string, msg string, noff bool) (*MergeSpec, bool, error) {
+	cs1, err := doltdb.NewCommitSpec("HEAD")
+	if err != nil {
+		//return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
+		return nil, false, err
 	}
 
-	cm2, verr := ResolveCommitWithVErr(dEnv, commitSpecStr)
+	cm1, err := dEnv.DoltDB.Resolve(context.TODO(), cs1, dEnv.RepoStateReader().CWBHeadRef())
 
-	if verr != nil {
-		return verr
+	cs2, err := doltdb.NewCommitSpec(commitSpecStr)
+	if err != nil {
+		//return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
+		return nil, false, err
 	}
+
+	cm2, err := dEnv.DoltDB.Resolve(context.TODO(), cs2, dEnv.RepoStateReader().CWBHeadRef())
 
 	h1, err := cm1.HashOf()
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
+		//return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
+		return nil, false, err
 	}
 
 	h2, err := cm2.HashOf()
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
+		//return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
+		return nil, false, err
+
 	}
 
 	if h1 == h2 {
-		cli.Println("Everything up-to-date")
-		return nil
-	}
-
-	cli.Println("Updating", h1.String()+".."+h2.String())
-
-	squash := apr.Contains(cli.SquashParam)
-	if squash {
-		cli.Println("Squash commit -- not updating HEAD")
+		return nil, false, err
 	}
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return nil, false, err
 	}
 
 	tblNames, workingDiffs, err := merge.MergeWouldStompChanges(ctx, roots, cm2)
-
 	if err != nil {
-		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
+		return nil, false, err
+		//return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
 	}
 
-	if len(tblNames) != 0 {
-		bldr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by merge:")
-		for _, tName := range tblNames {
-			bldr.AddDetails(tName)
-		}
-		bldr.AddDetails("Please commit your changes before you merge.")
-		return bldr.Build()
-	}
-
-	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		ancRoot, err := cm1.GetRootValue()
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		mergedRoot, err := cm2.GetRootValue()
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
-			return errhand.VerboseErrorFromError(err)
-		} else if cvPossible {
-			return ExecuteMerge(ctx, squash, dEnv, cm1, cm2, workingDiffs)
-		}
-		if apr.Contains(cli.NoFFParam) {
-			return ExecNoFFMerge(ctx, apr, dEnv, roots, cm2, verr, workingDiffs, msg)
-		} else {
-			return ExecuteFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
-		}
-	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
-		cli.Println("Already up to date.")
-		return nil
-	} else {
-		return ExecuteMerge(ctx, squash, dEnv, cm1, cm2, workingDiffs)
-	}
+	return &MergeSpec{
+		H1:           h1,
+		H2:           h2,
+		Cm1:          cm1,
+		Cm2:          cm2,
+		TblNames:     tblNames,
+		WorkingDiffs: workingDiffs,
+		squash:       squash,
+		msg:          msg,
+		noff:         noff,
+	}, true, nil
 }
-
-func ExecNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, roots doltdb.Roots, cm2 *doltdb.Commit, verr errhand.VerboseError, workingDiffs map[string]hash.Hash, msg string) errhand.VerboseError {
-	mergedRoot, err := cm2.GetRootValue()
-
-	if err != nil {
-		return errhand.BuildDError("error: reading from database").AddCause(err).Build()
-	}
-
-	verr = mergedRootToWorking(ctx, false, dEnv, mergedRoot, workingDiffs, cm2, map[string]*merge.MergeStats{})
-
-	if verr != nil {
-		return verr
-	}
+func MergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, mergeSpec *MergeSpec) ([]string, []string, error) {
 
 	t := doltdb.CommitNowFunc()
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
@@ -159,25 +107,68 @@ func ExecNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		t, err = cli.ParseDate(commitTimeStr)
 
 		if err != nil {
-			return errhand.BuildDError("error: invalid date").AddCause(err).Build()
+			//verr = errhand.BuildDError("error: invalid date").AddCause(err).Build()
+			//return handleCommitErr(ctx, dEnv, verr, usage)
+			return []string{}, []string{}, err
 		}
 	}
 
 	name, email, err := GetNameAndEmail(dEnv.Config)
+	if err != nil {
+		//verr = errhand.BuildDError("error: committing").AddCause(err).Build()
+		//return handleCommitErr(ctx, dEnv, verr, usage)
+		return []string{}, []string{}, err
+	}
+
+	if ok, err := mergeSpec.Cm1.CanFastForwardTo(ctx, mergeSpec.Cm2); ok {
+		ancRoot, err := mergeSpec.Cm2.GetRootValue()
+		if err != nil {
+			return []string{}, []string{}, err
+		}
+		mergedRoot, err := mergeSpec.Cm2.GetRootValue()
+		if err != nil {
+			return []string{}, []string{}, err
+		}
+		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
+			return []string{}, []string{}, err
+		} else if cvPossible {
+			return ExecuteMerge(ctx, mergeSpec.squash, dEnv, mergeSpec.Cm1, mergeSpec.Cm2, mergeSpec.WorkingDiffs)
+		}
+		if mergeSpec.noff {
+			return ExecNoFFMerge(ctx, apr, dEnv, mergeSpec.Cm2, mergeSpec.WorkingDiffs, mergeSpec.msg, name, email, t)
+		} else {
+			return []string{}, []string{}, ExecuteFFMerge(ctx, mergeSpec.squash, dEnv, mergeSpec.Cm2, mergeSpec.WorkingDiffs)
+		}
+	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
+		return []string{}, []string{}, nil
+	} else {
+		return ExecuteMerge(ctx, mergeSpec.squash, dEnv, mergeSpec.Cm1, mergeSpec.Cm2, mergeSpec.WorkingDiffs)
+	}
+}
+
+func ExecNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash, msg string, name string, email string, t time.Time) ([]string, []string, error) {
+	mergedRoot, err := cm2.GetRootValue()
 
 	if err != nil {
-		return errhand.BuildDError("error: committing").AddCause(err).Build()
+		//return errhand.BuildDError("error: reading from database").AddCause(err).Build()
+		return []string{}, []string{}, err
+	}
+
+	conflicts, constraintViolations, err := mergedRootToWorking(ctx, false, dEnv, mergedRoot, workingDiffs, cm2, map[string]*merge.MergeStats{})
+
+	if err != nil {
+		return conflicts, constraintViolations, err
 	}
 
 	// Reload roots since the above method writes new values to the working set
-	roots, err = dEnv.Roots(ctx)
+	roots, err := dEnv.Roots(ctx)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return conflicts, constraintViolations, err
 	}
 
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return conflicts, constraintViolations, err
 	}
 
 	var mergeParentCommits []*doltdb.Commit
@@ -195,24 +186,26 @@ func ExecNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	})
 
 	if err != nil {
-		return errhand.BuildDError("error: committing").AddCause(err).Build()
+		//return errhand.BuildDError("error: committing").AddCause(err).Build()
+		return conflicts, constraintViolations, err
 	}
 
 	err = dEnv.ClearMerge(ctx)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return conflicts, constraintViolations, err
 	}
 
-	return nil
+	return conflicts, constraintViolations, nil
 }
 
-func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, errhand.VerboseError) {
+func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, error) {
 	var err error
 	for tblName, h := range workingDiffs {
 		root, err = root.SetTableHash(ctx, tblName, h)
 
 		if err != nil {
-			return nil, errhand.BuildDError("error: Failed to update table '%s'.", tblName).AddCause(err).Build()
+			//return nil, errhand.BuildDError("error: Failed to update table '%s'.", tblName).AddCause(err).Build()
+			return nil, err
 		}
 	}
 
@@ -225,12 +218,11 @@ func ExecuteFFMerge(
 	dEnv *env.DoltEnv,
 	mergeCommit *doltdb.Commit,
 	workingDiffs map[string]hash.Hash,
-) errhand.VerboseError {
-	cli.Println("Fast-forward")
-
+) error {
 	stagedRoot, err := mergeCommit.GetRootValue()
 	if err != nil {
-		return errhand.BuildDError("error: failed to get root value").AddCause(err).Build()
+		//return errhand.BuildDError("error: failed to get root value").AddCause(err).Build()
+		return err
 	}
 
 	workingRoot := stagedRoot
@@ -238,52 +230,57 @@ func ExecuteFFMerge(
 		workingRoot, err = applyChanges(ctx, stagedRoot, workingDiffs)
 
 		if err != nil {
-			return errhand.BuildDError("Failed to re-apply working changes.").AddCause(err).Build()
+			//return errhand.BuildDError("Failed to re-apply working changes.").AddCause(err).Build()
+			return err
 		}
 	}
 
 	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
-		return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
+		//return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
+		return err
 	}
 
 	if !squash {
 		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoStateReader().CWBHeadRef(), mergeCommit)
 
 		if err != nil {
-			return errhand.BuildDError("Failed to write database").AddCause(err).Build()
+			//return errhand.BuildDError("Failed to write database").AddCause(err).Build()
+			return err
 		}
 	}
 
 	workingSet, err := dEnv.WorkingSet(ctx)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return err
 	}
 
 	err = dEnv.UpdateWorkingSet(ctx, workingSet.WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot))
 	if err != nil {
-		return errhand.BuildDError("unable to execute repo state update.").
-			AddDetails(`As a result your .dolt/repo_state.json file may have invalid values for "staged" and "working".
-At the moment the best way to fix this is to run:
-
-    dolt branch -v
-
-and take the hash for your current branch and use it for the value for "staged" and "working"`).
-			AddCause(err).Build()
+		//		return errhand.BuildDError("unable to execute repo state update.").
+		//			AddDetails(`As a result your .dolt/repo_state.json file may have invalid values for "staged" and "working".
+		//At the moment the best way to fix this is to run:
+		//
+		//    dolt branch -v
+		//
+		//and take the hash for your current branch and use it for the value for "staged" and "working"`).
+		//			AddCause(err).Build()
+		return err
 	}
 
 	err = SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 	if err != nil {
-		return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+		//return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+		return err
 	}
 
 	return nil
 }
 
-func ExecuteMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) (error, []string, []string){
+func ExecuteMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) ([]string, []string, error) {
 	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, cm1, cm2)
 	if err != nil {
-		return err,[]string{}, []string{}
+		return []string{}, []string{}, err
 	}
 	//if err != nil {
 	//	switch err {
@@ -308,7 +305,7 @@ func mergedRootToWorking(
 	workingDiffs map[string]hash.Hash,
 	cm2 *doltdb.Commit,
 	tblToStats map[string]*merge.MergeStats,
-) (error, []string, []string) {
+) ([]string, []string, error) {
 	var err error
 
 	workingRoot := mergedRoot
@@ -317,7 +314,7 @@ func mergedRootToWorking(
 
 		if err != nil {
 			//return errhand.BuildDError("").AddCause(err).Build()
-			return err, []string{}, []string{}
+			return []string{}, []string{}, err
 
 		}
 	}
@@ -327,62 +324,36 @@ func mergedRootToWorking(
 
 		if err != nil {
 			//return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
-			return err, []string{}, []string{}
+			return []string{}, []string{}, err
 		}
 	}
 
 	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
 		//return errhand.BuildDError("error: failed to determine unstaged docs").AddCause(err).Build()
-		return err, []string{}, []string{}
+		return []string{}, []string{}, err
 	}
 
 	//verr := UpdateWorkingWithVErr(dEnv, workingRoot)
-	err := dEnv.UpdateWorkingRoot(context.Background(), workingRoot)
+	err = dEnv.UpdateWorkingRoot(context.Background(), workingRoot)
 	if err != nil {
 		panic("max fix")
 	}
 
 	conflicts, constraintViolations := conflictsAndViolations(tblToStats)
 	if len(conflicts) > 0 || len(constraintViolations) > 0 {
-		return nil, conflicts, constraintViolations
+		return conflicts, constraintViolations, nil
 	}
 
 	if err = SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs); err != nil {
-		return err, conflicts, constraintViolations
+		return conflicts, constraintViolations, err
 	}
 
 	if err = dEnv.UpdateStagedRoot(context.Background(), mergedRoot); err != nil {
-		return err, conflicts, constraintViolations
+		return conflicts, constraintViolations, err
 	}
 
-	return nil, conflicts, constraintViolations
-
-	//
-	//if verr == nil {
-	//	hasConflicts, hasConstraintViolations := printSuccessStats(tblToStats)
-	//
-	//	if hasConflicts && hasConstraintViolations {
-	//		cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
-	//	} else if hasConflicts {
-	//		cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
-	//	} else if hasConstraintViolations {
-	//		cli.Println("Automatic merge failed; fix constraint violations and then commit the result.\n" +
-	//			"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n" +
-	//			"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.")
-	//	} else {
-	//		err = SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
-	//		if err != nil {
-	//			return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
-	//		}
-	//		verr = UpdateStagedWithVErr(dEnv, mergedRoot)
-	//		if verr != nil {
-	//			// Log a new message here to indicate that merge was successful, only staging failed.
-	//			cli.Println("Unable to stage changes: add and commit to finish merge")
-	//		}
-	//	}
-	//}
-
+	return conflicts, constraintViolations, nil
 }
 
 func conflictsAndViolations(tblToStats map[string]*merge.MergeStats) (conflicts []string, constraintViolations []string) {
@@ -396,5 +367,5 @@ func conflictsAndViolations(tblToStats map[string]*merge.MergeStats) (conflicts 
 			}
 		}
 	}
+	return
 }
-

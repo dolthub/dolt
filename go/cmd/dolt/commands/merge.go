@@ -17,9 +17,10 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"sort"
 	"strconv"
+
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -27,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -144,8 +146,44 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			if !msgOk {
 				msg = getCommitMessageFromEditor(ctx, dEnv)
 			}
-			if verr == nil {
-				verr = actions.MergeCommitSpec(ctx, apr, dEnv, commitSpecStr, msg)
+			squash := apr.Contains(cli.SquashParam)
+
+			mergeSpec, ok, err := actions.PrepareMergeSpec(ctx, squash, dEnv, commitSpecStr, msg, apr.Contains(cli.NoFFParam))
+			if err != nil {
+				// TODO: the build error handling
+				// invalid commit
+				// failed to get hash of commit
+			}
+			if !ok {
+				// TODO: everything up to date
+				cli.Println("Everything up-to-date")
+			}
+
+			// TODO: we need to print stuff before and after merging
+			if len(mergeSpec.TblNames) != 0 {
+				bldr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by merge:")
+				for _, tName := range mergeSpec.TblNames {
+					bldr.AddDetails(tName)
+				}
+				bldr.AddDetails("Please commit your changes before you merge.")
+				return handleCommitErr(ctx, dEnv, bldr.Build(), usage)
+			}
+
+			conflicts, constraintViolations, err := actions.MergeCommitSpec(ctx, apr, dEnv, mergeSpec)
+			if err != nil {
+				//TODO handle error building
+				// return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+				// cli.Println("Unable to stage changes: add and commit to finish merge")
+			} else if len(conflicts) > 0 && len(constraintViolations) > 0 {
+				cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
+			} else if len(conflicts) > 0 {
+				cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
+			} else if len(constraintViolations) > 0 {
+				cli.Println("Automatic merge failed; fix constraint violations and then commit the result.\n" +
+					"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n" +
+					"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.")
+			} else {
+				cli.Println("Already up to date.")
 			}
 		}
 	}

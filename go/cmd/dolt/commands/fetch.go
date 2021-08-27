@@ -117,10 +117,14 @@ func getRefSpecs(args []string, dEnv *env.DoltEnv, remotes map[string]env.Remote
 
 	var rs []ref.RemoteRefSpec
 	var verr errhand.VerboseError
+	var err error
 	if len(args) != 0 {
 		rs, verr = parseRSFromArgs(remName, args)
 	} else {
-		rs, verr = dEnv.GetRefSpecs(remName)
+		rs, err = dEnv.GetRefSpecs(remName)
+		if err != nil {
+			verr = errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	if verr != nil {
@@ -196,10 +200,10 @@ func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, 
 			remoteTrackRef := rs.DestRef(branchRef)
 
 			if remoteTrackRef != nil {
-				srcDBCommit, verr := actions.FetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef, runProgFuncs, stopProgFuncs)
+				srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef, runProgFuncs, stopProgFuncs)
 
-				if verr != nil {
-					return verr
+				if err != nil {
+					return errhand.VerboseErrorFromError(err)
 				}
 
 				switch mode {
@@ -227,10 +231,10 @@ func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, 
 		}
 	}
 
-	verr := actions.FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
+	err = actions.FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
 
-	if verr != nil {
-		return verr
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil

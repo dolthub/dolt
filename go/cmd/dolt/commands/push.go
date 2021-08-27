@@ -23,6 +23,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -83,15 +84,17 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	opts, verr := env.ParsePushArgs(ctx, apr, dEnv)
+	opts, err := env.ParsePushArgs(ctx, apr, dEnv)
 
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+	//TODO build verbose error
+	//errhand.BuildDError("error: failed to read remotes from config."
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	verr = actions.DoPush(ctx, dEnv, opts, runProgFuncs, stopProgFuncs)
+	err = actions.DoPush(ctx, dEnv, opts, runProgFuncs, stopProgFuncs)
 
-	return HandleVErrAndExitCode(verr, usage)
+	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 
 const minUpdate = 100 * time.Millisecond
