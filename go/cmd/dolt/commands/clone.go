@@ -108,6 +108,7 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	remoteName := apr.GetValueOrDefault(remoteParam, "origin")
 	branch := apr.GetValueOrDefault(branchParam, "")
 	dir, urlStr, verr := parseArgs(apr)
+	userDirExists := doesDirExist(dir)
 
 	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
 
@@ -141,10 +142,17 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 						}
 					}
 
-					// Make best effort to delete the directory we created.
 					if verr != nil {
-						_ = os.Chdir("../")
-						_ = dEnv.FS.Delete(dir, true)
+						// If we're cloning into a directory that already exists do not erase it. Otherwise
+						// make best effort to delete the directory we created.
+						if userDirExists {
+							// Set the working dir to the parent .dir
+							_ = os.Chdir(filepath.Dir(path.Join(dir, dbfactory.DoltDir)))
+							_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
+						} else {
+							_ = os.Chdir("../")
+							_ = dEnv.FS.Delete(dir, true)
+						}
 					}
 				}
 			}
@@ -408,4 +416,17 @@ func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 	}
 
 	return nil
+}
+
+func doesDirExist(dir string) bool {
+	if dir == "" {
+		return false
+	}
+
+	_, err := os.Stat(dir)
+	if err != nil {
+		return false
+	}
+
+	return true
 }
