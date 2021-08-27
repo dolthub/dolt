@@ -6,7 +6,7 @@ setup() {
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
-    mkdir remotes-$$/empty
+    mkdir remotes-$$/emptyv
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
     remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     remotesrv_pid=$!
@@ -1066,6 +1066,7 @@ setup_ref_test() {
     cd ..
     run dolt clone file://$testdir/clone_root dest/
     [ "$status" -eq 1 ]
+    echo $output
     [[ "$output" =~ "error: clone failed" ]] || false
 
     run ls $testdir
