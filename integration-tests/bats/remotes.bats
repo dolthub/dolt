@@ -1044,4 +1044,5 @@ setup_ref_test() {
     run dolt fetch remotes/dasdas
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "error: invalid refspec ''" ]] || false
 }
