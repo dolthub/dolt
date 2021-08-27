@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -93,7 +91,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	err = actions.PrintStatus(ctx, dEnv, staged, notStaged, workingTblsInConflict, workingTblsWithViolations, stagedDocDiffs, notStagedDocDiffs)
+	err = PrintStatus(ctx, dEnv, staged, notStaged, workingTblsInConflict, workingTblsWithViolations, stagedDocDiffs, notStagedDocDiffs)
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1

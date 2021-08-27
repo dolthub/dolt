@@ -16,6 +16,10 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"sort"
+	"strconv"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -136,8 +140,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return 1
 			}
 
+			msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+			if !msgOk {
+				msg = getCommitMessageFromEditor(ctx, dEnv)
+			}
 			if verr == nil {
-				verr = actions.MergeCommitSpec(ctx, apr, dEnv, commitSpecStr)
+				verr = actions.MergeCommitSpec(ctx, apr, dEnv, commitSpecStr, msg)
 			}
 		}
 	}
@@ -161,4 +169,145 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 	}
 
 	return errhand.BuildDError("fatal: failed to revert changes").AddCause(err).Build()
+}
+
+// printSuccessStats returns whether there are conflicts or constraint violations.
+func printSuccessStats(tblToStats map[string]*merge.MergeStats) (conflicts bool, constraintViolations bool) {
+	printModifications(tblToStats)
+	printAdditions(tblToStats)
+	printDeletions(tblToStats)
+	return printConflictsAndViolations(tblToStats)
+}
+
+func printAdditions(tblToStats map[string]*merge.MergeStats) {
+	for tblName, stats := range tblToStats {
+		if stats.Operation == merge.TableRemoved {
+			cli.Println(tblName, "added")
+		}
+	}
+}
+
+func printDeletions(tblToStats map[string]*merge.MergeStats) {
+	for tblName, stats := range tblToStats {
+		if stats.Operation == merge.TableRemoved {
+			cli.Println(tblName, "deleted")
+		}
+	}
+}
+
+func printConflictsAndViolations(tblToStats map[string]*merge.MergeStats) (conflicts bool, constraintViolations bool) {
+	hasConflicts := false
+	hasConstraintViolations := false
+	for tblName, stats := range tblToStats {
+		if stats.Operation == merge.TableModified && (stats.Conflicts > 0 || stats.ConstraintViolations > 0) {
+			cli.Println("Auto-merging", tblName)
+			if stats.Conflicts > 0 {
+				cli.Println("CONFLICT (content): Merge conflict in", tblName)
+				hasConflicts = true
+			}
+			if stats.ConstraintViolations > 0 {
+				cli.Println("CONSTRAINT VIOLATION (content): Merge created constraint violation in", tblName)
+				hasConstraintViolations = true
+			}
+		}
+	}
+
+	return hasConflicts, hasConstraintViolations
+}
+
+func printModifications(tblToStats map[string]*merge.MergeStats) {
+	maxNameLen := 0
+	maxModCount := 0
+	rowsAdded := 0
+	rowsDeleted := 0
+	rowsChanged := 0
+	var tbls []string
+	for tblName, stats := range tblToStats {
+		if stats.Operation == merge.TableModified && stats.Conflicts == 0 && stats.ConstraintViolations == 0 {
+			tbls = append(tbls, tblName)
+			nameLen := len(tblName)
+			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.Conflicts
+
+			if nameLen > maxNameLen {
+				maxNameLen = nameLen
+			}
+
+			if modCount > maxModCount {
+				maxModCount = modCount
+			}
+
+			rowsAdded += stats.Adds
+			rowsChanged += stats.Modifications + stats.Conflicts
+			rowsDeleted += stats.Deletes
+		}
+	}
+
+	if len(tbls) == 0 {
+		return
+	}
+
+	sort.Strings(tbls)
+	modCountStrLen := len(strconv.FormatInt(int64(maxModCount), 10))
+	format := fmt.Sprintf("%%-%ds | %%-%ds %%s", maxNameLen, modCountStrLen)
+
+	for _, tbl := range tbls {
+		stats := tblToStats[tbl]
+		if stats.Operation == merge.TableModified {
+			modCount := stats.Adds + stats.Modifications + stats.Deletes + stats.Conflicts
+			modCountStr := strconv.FormatInt(int64(modCount), 10)
+			visualizedChanges := visualizeChangeTypes(stats, maxModCount)
+
+			cli.Println(fmt.Sprintf(format, tbl, modCountStr, visualizedChanges))
+		}
+	}
+
+	details := fmt.Sprintf("%d tables changed, %d rows added(+), %d rows modified(*), %d rows deleted(-)", len(tbls), rowsAdded, rowsChanged, rowsDeleted)
+	cli.Println(details)
+}
+
+func visualizeChangeTypes(stats *merge.MergeStats, maxMods int) string {
+	const maxVisLen = 30 //can be a bit longer due to min len and rounding
+
+	resultStr := ""
+	if stats.Adds > 0 {
+		addLen := int(maxVisLen * (float64(stats.Adds) / float64(maxMods)))
+		if addLen > stats.Adds {
+			addLen = stats.Adds
+		}
+		addStr := fillStringWithChar('+', addLen)
+		resultStr += color.GreenString(addStr)
+	}
+
+	if stats.Modifications > 0 {
+		modLen := int(maxVisLen * (float64(stats.Modifications) / float64(maxMods)))
+		if modLen > stats.Modifications {
+			modLen = stats.Modifications
+		}
+		modStr := fillStringWithChar('*', modLen)
+		resultStr += color.YellowString(modStr)
+	}
+
+	if stats.Deletes > 0 {
+		delLen := int(maxVisLen * (float64(stats.Deletes) / float64(maxMods)))
+		if delLen > stats.Deletes {
+			delLen = stats.Deletes
+		}
+		delStr := fillStringWithChar('-', delLen)
+		resultStr += color.GreenString(delStr)
+	}
+
+	return resultStr
+}
+
+func fillStringWithChar(ch rune, strLen int) string {
+	if strLen == 0 {
+		strLen = 1
+	}
+
+	runes := make([]rune, strLen)
+	for i := 0; i < strLen; i++ {
+		runes[i] = ch
+	}
+
+	return string(runes)
 }
