@@ -146,7 +146,7 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 						// If we're cloning into a directory that already exists do not erase it. Otherwise
 						// make best effort to delete the directory we created.
 						if userDirExists {
-							// Set the working dir to the parent .dir
+							// Set the working dir to the parent of the .dolt folder so we can delete .dolt
 							_ = os.Chdir(filepath.Dir(path.Join(dir, dbfactory.DoltDir)))
 							_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
 						} else {
