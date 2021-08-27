@@ -97,7 +97,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
 	} else {
-		name, email, err = actions.GetNameAndEmail(dEnv.Config)
+		name, email, err = env.GetNameAndEmail(dEnv.Config)
 	}
 
 	if err != nil {
@@ -106,7 +106,10 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
-		msg = getCommitMessageFromEditor(ctx, dEnv)
+		msg, err = getCommitMessageFromEditor(ctx, dEnv)
+		if err != nil {
+			return handleCommitErr(ctx, dEnv, err, usage)
+		}
 	}
 
 	t := doltdb.CommitNowFunc()
@@ -198,9 +201,12 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) string {
+func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) (string, error) {
 	var finalMsg string
-	initialMsg := buildInitalCommitMsg(ctx, dEnv)
+	initialMsg, err := buildInitalCommitMsg(ctx, dEnv)
+	if err != nil {
+		return "", err
+	}
 	backupEd := "vim"
 	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
 		backupEd = ed
@@ -211,11 +217,11 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) string {
 		commitMsg, _ := editor.OpenCommitEditor(*editorStr, initialMsg)
 		finalMsg = parseCommitMessage(commitMsg)
 	})
-	return finalMsg
+	return finalMsg, nil
 }
 
 // TODO: return an error here
-func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
+func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) (string, error) {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
@@ -235,7 +241,14 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 		workingTblsWithViolations = []string{}
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
+	docsOnDisk, err := dEnv.DocsReadWriter().GetDocsOnDisk()
+	if err != nil {
+		return "", err
+	}
+	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
+	if err != nil {
+		return "", err
+	}
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
@@ -252,7 +265,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	statusMsg := strings.Join(msgLines, "\n")
 
 	color.NoColor = initialNoColor
-	return initialCommitMessage + statusMsg
+	return initialCommitMessage + statusMsg, nil
 }
 
 func parseCommitMessage(cm string) string {

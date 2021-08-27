@@ -85,7 +85,13 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
+	docsOnDisk, err := dEnv.DocsReadWriter().GetDocsOnDisk()
+	if err != nil {
+		cli.PrintErrln(toStatusVErr(err).Verbose())
+		return 1
+	}
+
+	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1

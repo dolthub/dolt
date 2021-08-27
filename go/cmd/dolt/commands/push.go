@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -94,6 +95,11 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	err = actions.DoPush(ctx, dEnv, opts, runProgFuncs, stopProgFuncs)
 
+	switch err {
+	case doltdb.ErrUpToDate:
+		cli.Println("Everything up-to-date")
+	default:
+	}
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 

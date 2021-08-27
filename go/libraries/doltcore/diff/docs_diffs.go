@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 type TableDiffType int
@@ -104,12 +103,12 @@ func (nd *DocDiffs) Len() int {
 func GetDocDiffs(
 	ctx context.Context,
 	roots doltdb.Roots,
-	drw env.DocsReadWriter,
+	docsOnDisk doltdocs.Docs,
 ) (*DocDiffs, *DocDiffs, error) {
-	docsOnDisk, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return nil, nil, err
-	}
+	//docsOnDisk, err := drw.GetDocsOnDisk()
+	//if err != nil {
+	//	return nil, nil, err
+	//}
 
 	notStagedDocDiffs, err := NewDocDiffs(ctx, roots.Working, nil, docsOnDisk)
 	if err != nil {

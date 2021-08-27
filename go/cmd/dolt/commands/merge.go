@@ -104,6 +104,18 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 		commitSpecStr := apr.Arg(0)
 
+		t := doltdb.CommitNowFunc()
+		if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+			var err error
+			t, err = cli.ParseDate(commitTimeStr)
+
+			if err != nil {
+				verr = errhand.BuildDError("error: invalid date").AddCause(err).Build()
+				return handleCommitErr(ctx, dEnv, verr, usage)
+				//return nil ,nil, err
+			}
+		}
+
 		var root *doltdb.RootValue
 		root, verr = GetWorkingWithVErr(dEnv)
 
@@ -144,11 +156,14 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 			msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 			if !msgOk {
-				msg = getCommitMessageFromEditor(ctx, dEnv)
+				msg, err = getCommitMessageFromEditor(ctx, dEnv)
+				if err != nil {
+					return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
+				}
 			}
-			squash := apr.Contains(cli.SquashParam)
 
-			mergeSpec, ok, err := actions.PrepareMergeSpec(ctx, squash, dEnv, commitSpecStr, msg, apr.Contains(cli.NoFFParam))
+			//mergeSpec, ok, err := actions.PrepareMergeSpec(ctx, squash, dEnv, commitSpecStr, msg, apr.Contains(cli.NoFFParam))
+			mergeSpec, ok, err := env.ParseMergeSpec(ctx, dEnv, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
 			if err != nil {
 				// TODO: the build error handling
 				// invalid commit
@@ -169,7 +184,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return handleCommitErr(ctx, dEnv, bldr.Build(), usage)
 			}
 
-			conflicts, constraintViolations, err := actions.MergeCommitSpec(ctx, apr, dEnv, mergeSpec)
+			conflicts, constraintViolations, err := actions.MergeCommitSpec(ctx, dEnv, mergeSpec)
 			if err != nil {
 				//TODO handle error building
 				// return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()

@@ -73,7 +73,25 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	_, _, err := actions.PullFromRemote(ctx, dEnv, apr, runProgFuncs, stopProgFuncs)
+	if apr.NArg() > 1 {
+		verr := errhand.BuildDError("dolt pull takes at most one arg").SetPrintUsage().Build()
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+	var err error
+	if !msgOk {
+		msg, err = getCommitMessageFromEditor(ctx, dEnv)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+	}
+
+	remoteName := apr.Arg(0)
+
+	pullSpec, err := env.ParsePullSpec(ctx, dEnv, remoteName, msg, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
+
+	_, _, err = actions.PullFromRemote(ctx, dEnv, pullSpec, runProgFuncs, stopProgFuncs)
 
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
