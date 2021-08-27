@@ -1051,7 +1051,6 @@ setup_ref_test() {
 
     run dolt clone file://$testdir/clone_root .
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: clone failed" ]] || false
 
     # Validates that the directory exists
     run ls $testdir
