@@ -58,45 +58,6 @@ func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) err
 	return nil
 }
 
-func UpdateStagedWithVErr(doltEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	err := doltEnv.UpdateStagedRoot(context.Background(), updatedRoot)
-
-	switch err {
-	case doltdb.ErrNomsIO:
-		return errhand.BuildDError("fatal: failed to write value").Build()
-	case env.ErrStateUpdate:
-		return errhand.BuildDError("fatal: failed to update the staged root state").Build()
-	}
-
-	return nil
-}
-
-func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, errhand.VerboseError) {
-	cs, err := doltdb.NewCommitSpec(cSpecStr)
-
-	if err != nil {
-		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoStateReader().CWBHeadRef())
-
-	if err != nil {
-		if err == doltdb.ErrInvalidAncestorSpec {
-			return nil, errhand.BuildDError("'%s' could not resolve ancestor spec", cSpecStr).Build()
-		} else if err == doltdb.ErrBranchNotFound {
-			return nil, errhand.BuildDError("unknown ref in commit spec: '%s'", cSpecStr).Build()
-		} else if doltdb.IsNotFoundErr(err) {
-			return nil, errhand.BuildDError("'%s' not found", cSpecStr).Build()
-		} else if err == doltdb.ErrFoundHashNotACommit {
-			return nil, errhand.BuildDError("'%s' is not a commit", cSpecStr).Build()
-		} else {
-			return nil, errhand.BuildDError("Unexpected error resolving '%s'", cSpecStr).AddCause(err).Build()
-		}
-	}
-
-	return cm, nil
-}
-
 func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Commit, errhand.VerboseError) {
 	cm, err := actions.MaybeGetCommit(context.TODO(), dEnv, maybeCommit)
 

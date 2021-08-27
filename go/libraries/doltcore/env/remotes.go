@@ -16,6 +16,7 @@ package env
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -219,7 +220,6 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 
 	return opts, nil
 }
-
 
 // if possible, convert refs to full spec names. prefer branches over tags.
 // eg "master" -> "refs/heads/master", "v1" -> "refs/tags/v1"

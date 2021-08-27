@@ -18,10 +18,9 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -71,83 +70,8 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-
-	// TODO: select single arg: remoteName
-	// TODO: env.PullFromRemote
-	verr := pullFromRemote(ctx, dEnv, apr)
+	
+	verr := actions.PullFromRemote(ctx, dEnv, apr, runProgFuncs, stopProgFuncs)
 
 	return HandleVErrAndExitCode(verr, usage)
-}
-
-func pullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() > 1 {
-		return errhand.BuildDError("dolt pull takes at most one arg").SetPrintUsage().Build()
-	}
-
-	branch := dEnv.RepoStateReader().CWBHeadRef()
-
-	var remoteName string
-	if apr.NArg() == 1 {
-		remoteName = apr.Arg(0)
-	}
-
-	// TODO: move this logic to env
-	refSpecs, verr := dEnv.GetRefSpecs(remoteName)
-	if verr != nil {
-		return verr
-	}
-
-	if len(refSpecs) == 0 {
-		return errhand.BuildDError("error: no refspec for remote").Build()
-	}
-
-	remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
-
-	for _, refSpec := range refSpecs {
-		remoteTrackRef := refSpec.DestRef(branch)
-
-		if remoteTrackRef != nil {
-			verr = pullRemoteBranch(ctx, apr, dEnv, remote, branch, remoteTrackRef)
-
-			if verr != nil {
-				return verr
-			}
-		}
-	}
-
-	srcDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-	}
-
-	verr = fetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB)
-
-	if verr != nil {
-		return verr
-	}
-
-	return nil
-}
-
-func pullRemoteBranch(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) errhand.VerboseError {
-	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-	}
-
-	srcDBCommit, verr := fetchRemoteBranch(ctx, dEnv, r, srcDB, dEnv.DoltDB, srcRef, destRef)
-
-	if verr != nil {
-		return verr
-	}
-
-	err = dEnv.DoltDB.FastForward(ctx, destRef, srcDBCommit)
-
-	if err != nil {
-		return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-	}
-
-	return mergeCommitSpec(ctx, apr, dEnv, destRef.String())
 }

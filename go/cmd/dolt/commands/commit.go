@@ -15,21 +15,13 @@
 package commands
 
 import (
-	"bytes"
 	"context"
-	"os"
-	"strings"
-
-	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -102,7 +94,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
-		msg = getCommitMessageFromEditor(ctx, dEnv)
+		msg = actions.GetCommitMessageFromEditor(ctx, dEnv)
 	}
 
 	t := doltdb.CommitNowFunc()
@@ -176,7 +168,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	if actions.IsNothingStaged(err) {
 		notStagedTbls := actions.NothingStagedTblDiffs(err)
 		notStagedDocs := actions.NothingStagedDocsDiffs(err)
-		n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, nil, nil)
+		n := actions.PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, nil, nil)
 
 		if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
@@ -192,73 +184,4 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 
 	verr := errhand.BuildDError("error: Failed to commit changes.").AddCause(err).Build()
 	return HandleVErrAndExitCode(verr, usage)
-}
-
-func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) string {
-	var finalMsg string
-	initialMsg := buildInitalCommitMsg(ctx, dEnv)
-	backupEd := "vim"
-	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
-		backupEd = ed
-	}
-	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, backupEd)
-
-	cli.ExecuteWithStdioRestored(func() {
-		commitMsg, _ := editor.OpenCommitEditor(*editorStr, initialMsg)
-		finalMsg = parseCommitMessage(commitMsg)
-	})
-	return finalMsg
-}
-
-// TODO: return an error here
-func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
-	initialNoColor := color.NoColor
-	color.NoColor = true
-
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, roots)
-
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
-	if err != nil {
-		workingTblsInConflict = []string{}
-	}
-	workingTblsWithViolations, _, _, err := merge.GetTablesWithConstraintViolations(ctx, roots)
-	if err != nil {
-		workingTblsWithViolations = []string{}
-	}
-
-	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
-
-	buf := bytes.NewBuffer([]byte{})
-	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
-	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict, workingTblsWithViolations)
-
-	currBranch := dEnv.RepoStateReader().CWBHeadRef()
-	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
-		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"
-
-	msgLines := strings.Split(buf.String(), "\n")
-	for i, msg := range msgLines {
-		msgLines[i] = "# " + msg
-	}
-	statusMsg := strings.Join(msgLines, "\n")
-
-	color.NoColor = initialNoColor
-	return initialCommitMessage + statusMsg
-}
-
-func parseCommitMessage(cm string) string {
-	lines := strings.Split(cm, "\n")
-	filtered := make([]string, 0, len(lines))
-	for _, line := range lines {
-		if len(line) >= 1 && line[0] == '#' {
-			continue
-		}
-		filtered = append(filtered, line)
-	}
-	return strings.Join(filtered, "\n")
 }

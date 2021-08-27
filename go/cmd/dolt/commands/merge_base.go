@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -75,12 +77,12 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	left, verr := ResolveCommitWithVErr(dEnv, apr.Arg(0))
+	left, verr := actions.ResolveCommitWithVErr(dEnv, apr.Arg(0))
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	right, verr := ResolveCommitWithVErr(dEnv, apr.Arg(1))
+	right, verr := actions.ResolveCommitWithVErr(dEnv, apr.Arg(1))
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
