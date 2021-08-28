@@ -1067,7 +1067,6 @@ setup_ref_test() {
     cd ..
     run dolt clone "file://./clone_root" dest/
     [ "$status" -eq 1 ]
-    echo $output
     [[ "$output" =~ "error: clone failed" ]] || false
 
     run ls $testdir
