@@ -15,15 +15,20 @@
 package kvbench
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-// usage: `go test -bench .`
 func BenchmarkMemoryStore(b *testing.B) {
 	benchmarkKVStore(b, newMemStore())
+}
+
+func BenchmarkProllyStore(b *testing.B) {
+	ctx := context.Background()
+	benchmarkKVStore(b, newMemoryProllyStore(ctx))
 }
 
 func benchmarkKVStore(b *testing.B, store keyValStore) {
@@ -35,7 +40,7 @@ func benchmarkKVStore(b *testing.B, store keyValStore) {
 	b.ResetTimer()
 	b.StartTimer()
 
-	benchStore(b, store, keys)
+	runBenchmark(b, store, keys)
 }
 
 func loadStore(b *testing.B, store keyValStore) (keys [][]byte) {
@@ -72,7 +77,7 @@ func loadStoreWithParams(b *testing.B, store keyValStore, p loadParams) (keys []
 			offset := j * pairSize
 			key := buf[offset : offset+p.keySize]
 			val := buf[offset+p.keySize : offset+pairSize]
-			store.put(key, val)
+			store.load(key, val)
 			keys[k] = key
 			k++
 		}
@@ -80,9 +85,9 @@ func loadStoreWithParams(b *testing.B, store keyValStore, p loadParams) (keys []
 	return
 }
 
-func benchStore(b *testing.B, store keyValStore, keys [][]byte) {
-	benchStoreWithParams(b, store, keys, benchParams{
-		numReads: 10_000,
+func runBenchmark(b *testing.B, store keyValStore, keys [][]byte) {
+	runBenchmarkWithParams(b, store, keys, benchParams{
+		numReads: 1000,
 	})
 }
 
@@ -90,7 +95,7 @@ type benchParams struct {
 	numReads uint32
 }
 
-func benchStoreWithParams(b *testing.B, store keyValStore, keys [][]byte, p benchParams) {
+func runBenchmarkWithParams(b *testing.B, store keyValStore, keys [][]byte, p benchParams) {
 	for _, k := range keys[:p.numReads] {
 		_, ok := store.get(k)
 		require.True(b, ok)

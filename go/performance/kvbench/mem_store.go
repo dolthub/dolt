@@ -20,6 +20,9 @@ type keyValStore interface {
 	get(key []byte) (val []byte, ok bool)
 	put(key, val []byte)
 	delete(key []byte)
+
+	// non-atomic put
+	load(key, val []byte)
 }
 
 type orderedKeyValStore interface {
@@ -29,19 +32,19 @@ type orderedKeyValStore interface {
 }
 
 func newMemStore() keyValStore {
-	return memKV{
+	return memStore{
 		store: make(map[string][]byte),
 	}
 }
 
-type memKV struct {
+type memStore struct {
 	store map[string][]byte
 	mu    sync.RWMutex
 }
 
-var _ keyValStore = memKV{}
+var _ keyValStore = memStore{}
 
-func (m memKV) get(key []byte) (val []byte, ok bool) {
+func (m memStore) get(key []byte) (val []byte, ok bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -49,16 +52,20 @@ func (m memKV) get(key []byte) (val []byte, ok bool) {
 	return val, ok
 }
 
-func (m memKV) put(key, val []byte) {
+func (m memStore) put(key, val []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.store[string(key)] = val
+	m.load(key, val)
 }
 
-func (m memKV) delete(key []byte) {
+func (m memStore) delete(key []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.store, string(key))
+}
+
+func (m memStore) load(key, val []byte) {
+	m.store[string(key)] = val
 }
