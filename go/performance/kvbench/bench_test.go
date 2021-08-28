@@ -16,36 +16,53 @@ package kvbench
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
+	"os"
+	"path"
+	"runtime"
+	"runtime/pprof"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
+// usage: `go test -bench BenchmarkMemoryStore`
 func BenchmarkMemoryStore(b *testing.B) {
 	benchmarkKVStore(b, newMemStore())
 }
 
+// usage: `go test -bench BenchmarkProllyStore`
 func BenchmarkProllyStore(b *testing.B) {
 	ctx := context.Background()
 	benchmarkKVStore(b, newMemoryProllyStore(ctx))
 }
 
 func benchmarkKVStore(b *testing.B, store keyValStore) {
-	b.StopTimer()
 	keys := loadStore(b, store)
-	rand.Shuffle(len(keys), func(i, j int) {
-		keys[i], keys[j] = keys[j], keys[i]
-	})
-	b.ResetTimer()
-	b.StartTimer()
 
-	runBenchmark(b, store, keys)
+	f := makePprofFile(b)
+	err := pprof.StartCPUProfile(f)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer func() {
+		pprof.StopCPUProfile()
+		if err = f.Close(); err != nil {
+			b.Fatal(err)
+		}
+		fmt.Printf("\twriting CPU profile for %s: %s\n", b.Name(), f.Name())
+	}()
+
+	b.Run("point reads", func(b *testing.B) {
+		runBenchmark(b, store, keys)
+	})
 }
 
 func loadStore(b *testing.B, store keyValStore) (keys [][]byte) {
 	return loadStoreWithParams(b, store, loadParams{
-		cardinality: 100_000,
+		cardinality: 1_000_000,
 		keySize:     16,
 		valSize:     128,
 	})
@@ -82,12 +99,17 @@ func loadStoreWithParams(b *testing.B, store keyValStore, p loadParams) (keys []
 			k++
 		}
 	}
+
+	if fs, ok := store.(flushingKeyValStore); ok {
+		fs.flush()
+	}
+
 	return
 }
 
 func runBenchmark(b *testing.B, store keyValStore, keys [][]byte) {
 	runBenchmarkWithParams(b, store, keys, benchParams{
-		numReads: 1000,
+		numReads: 10_000,
 	})
 }
 
@@ -100,4 +122,15 @@ func runBenchmarkWithParams(b *testing.B, store keyValStore, keys [][]byte, p be
 		_, ok := store.get(k)
 		require.True(b, ok)
 	}
+}
+
+func makePprofFile(b *testing.B) *os.File {
+	_, testFile, _, _ := runtime.Caller(0)
+
+	name := fmt.Sprintf("%s_%d.pprof", b.Name(), time.Now().Unix())
+	f, err := os.Create(path.Join(path.Dir(testFile), name))
+	if err != nil {
+		b.Fatal(err)
+	}
+	return f
 }

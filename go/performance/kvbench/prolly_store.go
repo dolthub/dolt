@@ -48,9 +48,9 @@ func (m *prollyStore) get(key []byte) (val []byte, ok bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	ctx := context.Background()
-	m.flush(ctx)
+	m.flush()
 
+	ctx := context.Background()
 	v, ok, err := m.store.MaybeGet(ctx, types.String(key))
 	if err != nil {
 		panic(err)
@@ -64,17 +64,15 @@ func (m *prollyStore) put(key, val []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ctx := context.Background()
 	m.load(key, val)
-	m.flush(ctx)
+	m.flush()
 }
 
 func (m *prollyStore) delete(key []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	ctx := context.Background()
 	m.load(key, nil)
-	m.flush(ctx)
+	m.flush()
 }
 
 func (m *prollyStore) load(key, val []byte) {
@@ -86,12 +84,13 @@ func (m *prollyStore) load(key, val []byte) {
 	m.editor.Set(k, v)
 }
 
-func (m *prollyStore) flush(ctx context.Context) {
+func (m *prollyStore) flush() {
 	if m.editor.NumEdits() == 0 {
 		return
 	}
 
 	var err error
+	ctx := context.Background()
 	m.store, err = m.editor.Map(ctx)
 	if err != nil {
 		panic(err)

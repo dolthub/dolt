@@ -25,6 +25,11 @@ type keyValStore interface {
 	load(key, val []byte)
 }
 
+type flushingKeyValStore interface {
+	keyValStore
+	flush()
+}
+
 type orderedKeyValStore interface {
 	keyValStore
 	getRange(low, hi []byte) (vals [][]byte)
