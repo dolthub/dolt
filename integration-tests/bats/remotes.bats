@@ -6,7 +6,7 @@ setup() {
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
-    mkdir remotes-$$/emptyv
+    mkdir remotes-$$/empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
     remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     remotesrv_pid=$!
