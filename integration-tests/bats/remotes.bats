@@ -1049,7 +1049,7 @@ setup_ref_test() {
     mkdir clone_root
     mkdir dest && cd dest
 
-    run dolt clone "file://$testdir/clone_root" .
+    run dolt clone "file://../clone_root" .
     [ "$status" -eq 1 ]
     echo $output
     [[ "$output" =~ "error: clone failed" ]] || false
@@ -1067,7 +1067,7 @@ setup_ref_test() {
 
     # try again and now make sure that /dest/.dolt is correctly deleted instead of dest/
     cd ..
-    run dolt clone "file://$testdir/clone_root" dest/
+    run dolt clone "file:/./clone_root" dest/
     [ "$status" -eq 1 ]
     echo $output
     [[ "$output" =~ "error: clone failed" ]] || false
