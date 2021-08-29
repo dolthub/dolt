@@ -40,10 +40,8 @@ func BenchmarkProllyStore(b *testing.B) {
 }
 
 func BenchmarkBoltStore(b *testing.B) {
-	ctx := context.Background()
-	benchmarkKVStore(b, newBoltStore(ctx))
+	benchmarkKVStore(b, newBoltStore(os.TempDir()))
 }
-
 
 func benchmarkKVStore(b *testing.B, store keyValStore) {
 	keys := loadStore(b, store)

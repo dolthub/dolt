@@ -15,9 +15,9 @@
 package kvbench
 
 import (
-	"context"
+	"path"
 
-	//"github.com/boltdb/bolt"
+	"github.com/boltdb/bolt"
 )
 
 const (
@@ -25,50 +25,66 @@ const (
 	bucketName = "bench"
 )
 
-func newBoltStore(ctx context.Context) keyValStore {
-	panic("unimplemented")
-	//db, err := bolt.Open(dbFileName, 0600, nil)
-	//if err != nil {
-	//	panic(err)
-	//}
-	//
-	//err = db.Update(func(tx *bolt.Tx) error {
-	//	_, err := tx.CreateBucketIfNotExists(bucketName)
-	//	return err
-	//})
-	//if err != nil {
-	//	panic(err)
-	//}
-	//
-	//return boltStore{DB: db}
+func newBoltStore(dir string) keyValStore {
+	db, err := bolt.Open(path.Join(dir, dbFileName), 0600, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte(bucketName))
+		return err
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	return boltStore{DB: db}
 }
 
 type boltStore struct {
-	//*bolt.DB
+	*bolt.DB
 }
 
 var _ keyValStore = boltStore{}
 
-
 func (bs boltStore) get(key []byte) (val []byte, ok bool) {
-	panic("unimplemented")
-	//_ = bs.DB.View(func(tx *bolt.Tx) (err error) {
-	//	b := tx.Bucket(bucketName)
-	//	val = b.Get(key)
-	//	ok = val != nil
-	//	return
-	//})
-	//return val, ok
+	err := bs.DB.View(func(tx *bolt.Tx) (err error) {
+		b := tx.Bucket([]byte(bucketName))
+		v := b.Get(key)
+		ok = val != nil
+		if ok {
+			val = make([]byte, len(v))
+			copy(v, val)
+		}
+		return
+	})
+	if err != nil {
+		panic(err)
+	}
+	return val, ok
 }
 
 func (bs boltStore) put(key, val []byte) {
-	panic("unimplemented")
+	err := bs.DB.Update(func(tx *bolt.Tx) (err error) {
+		b := tx.Bucket([]byte(bucketName))
+		return b.Put(key, val)
+	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (bs boltStore) delete(key []byte) {
-	panic("unimplemented")
+	err := bs.DB.Update(func(tx *bolt.Tx) (err error) {
+		b := tx.Bucket([]byte(bucketName))
+		return b.Put(key, nil)
+	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (bs boltStore) load(key, val []byte) {
-	panic("unimplemented")
+	bs.put(key, val)
 }
