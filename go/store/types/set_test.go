@@ -1134,7 +1134,7 @@ func TestSetModifyAfterRead(t *testing.T) {
 	vs := newTestValueStore()
 	set, err := getTestNativeOrderSet(2, vs).toSet(vs)
 	require.NoError(t, err)
-	// DropTable chunk values.
+	// Drop chunk values.
 	ref, err := vs.WriteValue(context.Background(), set)
 	require.NoError(t, err)
 	val, err := vs.ReadValue(context.Background(), ref.TargetHash())

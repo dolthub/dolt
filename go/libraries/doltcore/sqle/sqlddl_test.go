@@ -1184,7 +1184,7 @@ func TestAlterSystemTables(t *testing.T) {
 
 	// The _history and _diff tables give not found errors right now because of https://github.com/dolthub/dolt/issues/373.
 	// We can remove the divergent failure logic when the issue is fixed.
-	t.Run("DropTable", func(t *testing.T) {
+	t.Run("Drop", func(t *testing.T) {
 		setup()
 		for _, tableName := range systemTableNames {
 			expectedErr := "system table"

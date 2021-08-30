@@ -806,7 +806,7 @@ func TestListModifyAfterRead(t *testing.T) {
 
 	list, err := getTestList().toList(vs)
 	require.NoError(t, err)
-	// DropTable chunk values.
+	// Drop chunk values.
 	ref, err := vs.WriteValue(context.Background(), list)
 	require.NoError(t, err)
 	v, err := vs.ReadValue(context.Background(), ref.TargetHash())
