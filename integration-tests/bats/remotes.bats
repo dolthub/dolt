@@ -1078,7 +1078,7 @@ setup_ref_test() {
     ! [[ "$output" =~ ".dolt" ]] || false
 }
 
-@test "remotes: fetching unknown remotes doesn't error" {
+@test "remotes: fetching unknown remotes should error" {
     setup_ref_test
     cd ../../
     cd dolt-repo-clones/test-repo
@@ -1098,4 +1098,16 @@ setup_ref_test() {
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "permission denied" ]] || false
+}
+
+@test "remotes: fetching unknown remote ref errors accordingly" {
+   setup_ref_test
+   cd ../../
+   cd dolt-repo-clones/test-repo
+   # Add a dummy remove to allow for fetching
+   dolt remote add myremote dolthub/fake
+
+   run dolt fetch dadasdfasdfa
+   [ "$status" -eq 1 ]
+   [[ "$output" =~ "error: dadasdfasdfa does not appear to be a dolt database" ]] || false
 }
