@@ -562,7 +562,27 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
+	err = db.dropTableFromAiTracker(ctx, tableName)
+	if err != nil {
+		return err
+	}
+
 	return db.SetRoot(ctx, newRoot)
+}
+
+// dropTableFromAiTracker grabs the auto increment tracker and removes the table from it.
+func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) error {
+	sess := dsess.DSessFromSess(ctx.Session)
+	ws, err := sess.WorkingSet(ctx, db.Name())
+
+	if err != nil {
+		return err
+	}
+
+	ait := db.gs.GetAutoIncrementTracker(ws.Ref())
+	ait.Drop(tableName)
+
+	return nil
 }
 
 // CreateTable creates a table with the name and schema given.

@@ -397,7 +397,7 @@ teardown() {
     INSERT INTO one_pk values (8,8,8);"
 
     skip "Unclear behavior below here, need a simpler test of these assertions"
-    
+
     # check that squash with uncommitted changes throws an error
     run server_query repo1 0 "SET @@repo1_working = squash('test_branch');" ""
     [ "$status" -eq 1 ]
@@ -605,12 +605,12 @@ SQL
      "
 
      server_query repo1 1 "SELECT * FROM test" "pk\n0\n1\n2"
-     
+
      multi_query repo1 1 "
      SELECT DOLT_CHECKOUT('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
-     
+
      multi_query repo1 1 "
      INSERT INTO test VALUES (500000);
      INSERT INTO test VALUES (500001);
@@ -621,7 +621,7 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
      "
-     
+
      server_query repo1 1 "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
 
      run dolt status
@@ -843,7 +843,7 @@ SQL
 
     multi_query repo1 1 '
     USE `repo1/feature-branch`;
-    CREATE TABLE test ( 
+    CREATE TABLE test (
         pk int,
         c1 int,
         PRIMARY KEY (pk)
@@ -892,4 +892,21 @@ SQL
     server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nnew"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
     server_query repo1 1 "SHOW tables" "Table\nt"
+}
+
+@test "sql-server: auto increment for a table should reset between drops" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+
+    # drop the table and try again
+    server_query repo1 1 "drop table t1;"
+    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
 }
