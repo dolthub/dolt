@@ -1046,3 +1046,11 @@ setup_ref_test() {
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "error: invalid refspec ''" ]] || false
 }
+
+@test "remotes: fetching added invalid remotes correctly errors"{
+    setup_ref_test
+    run dolt remote add myremote http://localhost:50051/test-org/fake
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "permission denied" ]] || false
+}
