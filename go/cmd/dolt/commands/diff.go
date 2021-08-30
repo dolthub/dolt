@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -385,8 +386,10 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
 	}
 
+	sort.Slice(tableDeltas, func(i, j int) bool {
+		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
+	})
 	for _, td := range tableDeltas {
-
 		if dArgs.diffOutput == SQLDiffOutput {
 			ok, err := td.IsKeyless(ctx)
 			if err != nil {
