@@ -25,8 +25,8 @@ type AutoIncrementTracker interface {
 	Next(tableName string, insertVal interface{}, diskVal interface{}) (interface{}, error)
 	// Reset resets the auto increment tracker value for a table. Typically used in truncate statements.
 	Reset(tableName string, val interface{})
-	// Drop removes a table from the autoincrement tracker.
-	Drop(tableName string)
+	// DropTable removes a table from the autoincrement tracker.
+	DropTable(tableName string)
 }
 
 // AutoIncrementTracker is a global map that tracks which auto increment keys have been given for each table. At runtime
@@ -96,7 +96,7 @@ func (a *autoIncrementTracker) Reset(tableName string, val interface{}) {
 	a.valuePerTable[tableName] = val
 }
 
-func (a *autoIncrementTracker) Drop(tableName string) {
+func (a *autoIncrementTracker) DropTable(tableName string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 

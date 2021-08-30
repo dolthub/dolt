@@ -1820,7 +1820,7 @@ func TestMapModifyAfterRead(t *testing.T) {
 
 	vs := newTestValueStore()
 	m := getTestNativeOrderMap(2, vs).toMap(vs)
-	// Drop chunk values.
+	// DropTable chunk values.
 
 	ref, err := vs.WriteValue(context.Background(), m)
 	require.NoError(t, err)

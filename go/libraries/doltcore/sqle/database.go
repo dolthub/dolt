@@ -580,7 +580,7 @@ func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) er
 	}
 
 	ait := db.gs.GetAutoIncrementTracker(ws.Ref())
-	ait.Drop(tableName)
+	ait.DropTable(tableName)
 
 	return nil
 }
