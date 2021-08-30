@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"sync"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -35,6 +37,7 @@ var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrFailedToSaveRepoState = errors.New("failed to save repo state")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToGetRemoteDb = errors.New("failed to get remote db")
+var ErrUnknownPushErr = errors.New("unknown push error")
 
 type ProgStarter func() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent)
 type ProgStopper func(wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)
@@ -90,7 +93,17 @@ func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStar
 	destDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
-		return ErrFailedToGetRemoteDb
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			urlObj, _ := earl.Parse(opts.Remote.Url)
+			path := urlObj.Path
+			if path[0] == '/' {
+				path = path[1:]
+			}
+
+			var detail = fmt.Sprintf("the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
+			return fmt.Errorf("%w; %s; %s", ErrFailedToGetRemoteDb, detail, err.Error())
+		}
+		return err
 	}
 
 	switch opts.SrcRef.GetType() {
@@ -103,8 +116,7 @@ func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStar
 	case ref.TagRefType:
 		err = pushTagToRemote(ctx, dEnv, opts.SrcRef, opts.DestRef, dEnv.DoltDB, destDB, progStarter, progStopper)
 	default:
-		//err = errhand.BuildDError("cannot push ref %s of type %s", opts.SrcRef.String(), opts.SrcRef.GetType()).Build()
-		err = fmt.Errorf("%w %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
+		err = fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
 	}
 
 	if err != nil {
@@ -153,8 +165,8 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 	err := DeleteRemoteBranch(ctx, toDelete.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB)
 
 	if err != nil {
-		//return fmt.Errorf("%w; '%s' from remote '%s'", ErrFailedToDeleteRemote,  toDelete.String(), remote.Name)
-		return err
+		return fmt.Errorf("%w; '%s' from remote '%s'", ErrFailedToDeleteRemote,  toDelete.String(), remote.Name)
+		//return err
 	}
 
 	return nil
@@ -182,9 +194,15 @@ func PushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateM
 		err = Push(ctx, dEnv, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
 		progStopper(wg, progChan, pullerEventCh)
 
-		if err != nil {
+		switch err {
+		case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
 			return err
+		default:
+			return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
 		}
+		//if err != nil {
+		//	return err
+		//}
 		//if err != nil {
 		//	if err == doltdb.ErrUpToDate {
 		//		cli.Println("Everything up-to-date")
@@ -292,24 +310,26 @@ func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- dat
 	return srcDB.Clone(ctx, destDB, eventCh)
 }
 
-func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, progStarter ProgStarter, progStopper ProgStopper) ([]string, []string, error) {
+func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, progStarter ProgStarter, progStopper ProgStopper) (map[string]*merge.MergeStats, error) {
 
-	allConflicts := make([]string, 0)
-	allConstraintViolations := make([]string, 0)
+	tblToStats := make(map[string]*merge.MergeStats)
 	for _, refSpec := range pullSpec.RefSpecs {
 		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
 
 		if remoteTrackRef != nil {
-			conflicts, constraintViolations, err := pullRemoteBranch(ctx, dEnv, pullSpec, remoteTrackRef, progStarter, progStopper)
-			if len(conflicts) > 0 {
-				allConflicts = append(allConflicts, conflicts...)
+			stats, err := pullRemoteBranch(ctx, dEnv, pullSpec, remoteTrackRef, progStarter, progStopper)
+			for k, v := range stats {
+				tblToStats[k] = v
 			}
-			if len(constraintViolations) > 0 {
-				allConstraintViolations = append(allConstraintViolations, constraintViolations...)
-			}
+			//if len(conflicts) > 0 {
+			//	allConflicts = append(allConflicts, conflicts...)
+			//}
+			//if len(constraintViolations) > 0 {
+			//	allConstraintViolations = append(allConstraintViolations, constraintViolations...)
+			//}
 			// TODO: are conflicts, constraintViolations OK here? do we need to collect them all for cli to print
 			if err != nil {
-				return allConflicts, allConstraintViolations, err
+				return tblToStats, err
 			}
 		}
 	}
@@ -318,15 +338,15 @@ func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSp
 
 	if err != nil {
 		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-		return allConflicts, allConstraintViolations, err
+		return tblToStats, err
 	}
 
 	err = FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, progStarter, progStopper)
 	if err != nil {
-		return allConflicts, allConstraintViolations, err
+		return tblToStats, err
 	}
 
-	return allConflicts, allConstraintViolations, nil
+	return tblToStats, nil
 }
 
 // fetchFollowTags fetches all tags from the source DB whose commits have already
@@ -384,34 +404,34 @@ func FetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *dolt
 	return nil
 }
 
-func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) ([]string, []string, error) {
+func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) (map[string]*merge.MergeStats, error) {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
 		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-		return nil, nil, fmt.Errorf("failed to get remote db; %w", err)
+		return nil, fmt.Errorf("failed to get remote db; %w", err)
 	}
 
 	srcDBCommit, err := FetchRemoteBranch(ctx, dEnv, pullSpec.Remote, srcDB, dEnv.DoltDB, pullSpec.Branch, destRef, progStarter, progStopper)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	err = dEnv.DoltDB.FastForward(ctx, destRef, srcDBCommit)
 
 	if err != nil {
 		//return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-		return nil, nil, fmt.Errorf("fetch failed; %w", err)
+		return nil, fmt.Errorf("fetch failed; %w", err)
 	}
 
 	t := doltdb.CommitNowFunc()
 	mergeSpec, ok, err := env.ParseMergeSpec(ctx, dEnv, pullSpec.Msg, pullSpec.RemoteName, pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if !ok {
-		return nil, nil, nil
+		return nil, nil
 
 	}
 	return MergeCommitSpec(ctx, dEnv, mergeSpec)

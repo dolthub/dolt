@@ -16,6 +16,8 @@ package actions
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -23,59 +25,63 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-const forceFlag = "force"
+var ErrFailedToDetermineUnstagedDocs = errors.New("failed to determine unstaged docs")
+var ErrFailedToReadDatabase = errors.New("failed to read database")
+var ErrMergeFailedToUpdateDocs = errors.New("failed to update docs to the new working root")
+var ErrMergeFailedToUpdateRepoState = errors.New("unable to execute repo state update")
 
-func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) ([]string, []string, error) {
+func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) (map[string]*merge.MergeStats, error) {
 
 	if ok, err := mergeSpec.Cm1.CanFastForwardTo(ctx, mergeSpec.Cm2); ok {
 		ancRoot, err := mergeSpec.Cm2.GetRootValue()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		mergedRoot, err := mergeSpec.Cm2.GetRootValue()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
-			return nil, nil, err
+			return nil, err
 		} else if cvPossible {
 			return ExecuteMerge(ctx, dEnv, mergeSpec)
 		}
 		if mergeSpec.Noff {
 			return ExecNoFFMerge(ctx, dEnv, mergeSpec)
 		} else {
-			return nil, nil, ExecuteFFMerge(ctx, dEnv, mergeSpec)
+			return nil, ExecuteFFMerge(ctx, dEnv, mergeSpec)
 		}
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
-		return nil, nil, nil
+		return nil, err
 	} else {
 		return ExecuteMerge(ctx, dEnv, mergeSpec)
 	}
 }
 
-func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) ([]string, []string, error) {
+func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) (map[string]*merge.MergeStats, error) {
 	mergedRoot, err := mergeSpec.Cm2.GetRootValue()
 
 	if err != nil {
 		//return errhand.BuildDError("error: reading from database").AddCause(err).Build()
-		return nil, nil, err
+		return nil, ErrFailedToReadDatabase
 	}
 
-	conflicts, constraintViolations, err := mergedRootToWorking(ctx, false, dEnv, mergedRoot, mergeSpec.WorkingDiffs, mergeSpec.Cm2, map[string]*merge.MergeStats{})
+	tblToStats := make(map[string]*merge.MergeStats)
+	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, mergeSpec.WorkingDiffs, mergeSpec.Cm2, tblToStats)
 
 	if err != nil {
-		return conflicts, constraintViolations, err
+		return tblToStats, err
 	}
 
 	// Reload roots since the above method writes new values to the working set
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
-		return conflicts, constraintViolations, err
+		return tblToStats, err
 	}
 
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
-		return conflicts, constraintViolations, err
+		return tblToStats, err
 	}
 
 	var mergeParentCommits []*doltdb.Commit
@@ -94,15 +100,15 @@ func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeS
 
 	if err != nil {
 		//return errhand.BuildDError("error: committing").AddCause(err).Build()
-		return conflicts, constraintViolations, err
+		return tblToStats, fmt.Errorf("%w; failed to commit", err)
 	}
 
 	err = dEnv.ClearMerge(ctx)
 	if err != nil {
-		return conflicts, constraintViolations, err
+		return tblToStats, err
 	}
 
-	return conflicts, constraintViolations, nil
+	return tblToStats, err
 }
 
 func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, error) {
@@ -112,7 +118,7 @@ func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[
 
 		if err != nil {
 			//return nil, errhand.BuildDError("error: Failed to update table '%s'.", tblName).AddCause(err).Build()
-			return nil, err
+			return nil, fmt.Errorf("failed to update table; %w", err)
 		}
 	}
 
@@ -170,22 +176,22 @@ func ExecuteFFMerge(
 		//
 		//and take the hash for your current branch and use it for the value for "staged" and "working"`).
 		//			AddCause(err).Build()
-		return err
+		return ErrMergeFailedToUpdateRepoState
 	}
 
 	err = SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 	if err != nil {
 		//return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
-		return err
+		return ErrMergeFailedToUpdateDocs
 	}
 
 	return nil
 }
 
-func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) ([]string, []string, error) {
+func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) (map[string]*merge.MergeStats, error) {
 	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, mergeSpec.Cm1, mergeSpec.Cm2)
 	if err != nil {
-		return nil, nil, err
+		return tblToStats, err
 	}
 	//if err != nil {
 	//	switch err {
@@ -198,7 +204,7 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSp
 	//	}
 	//}
 
-	return mergedRootToWorking(ctx, mergeSpec.Squash, dEnv, mergedRoot, mergeSpec.WorkingDiffs, mergeSpec.Cm2, tblToStats)
+	return tblToStats, mergedRootToWorking(ctx, mergeSpec.Squash, dEnv, mergedRoot, mergeSpec.WorkingDiffs, mergeSpec.Cm2, tblToStats)
 }
 
 // TODO: change this to be functional and not write to repo state
@@ -210,7 +216,7 @@ func mergedRootToWorking(
 	workingDiffs map[string]hash.Hash,
 	cm2 *doltdb.Commit,
 	tblToStats map[string]*merge.MergeStats,
-) ([]string, []string, error) {
+) error {
 	var err error
 
 	workingRoot := mergedRoot
@@ -218,8 +224,7 @@ func mergedRootToWorking(
 		workingRoot, err = applyChanges(ctx, mergedRoot, workingDiffs)
 
 		if err != nil {
-			//return errhand.BuildDError("").AddCause(err).Build()
-			return nil, nil, err
+			return err
 		}
 	}
 
@@ -228,36 +233,36 @@ func mergedRootToWorking(
 
 		if err != nil {
 			//return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
-			return nil, nil, err
+			return ErrFailedToSaveRepoState
 		}
 	}
 
 	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
 		//return errhand.BuildDError("error: failed to determine unstaged docs").AddCause(err).Build()
-		return nil, nil, err
+		return ErrFailedToDetermineUnstagedDocs
 	}
 
 	//verr := UpdateWorkingWithVErr(dEnv, workingRoot)
 	err = dEnv.UpdateWorkingRoot(context.Background(), workingRoot)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
 	conflicts, constraintViolations := conflictsAndViolations(tblToStats)
 	if len(conflicts) > 0 || len(constraintViolations) > 0 {
-		return conflicts, constraintViolations, nil
+		return err
 	}
 
 	if err = SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs); err != nil {
-		return conflicts, constraintViolations, err
+		return err
 	}
 
 	if err = dEnv.UpdateStagedRoot(context.Background(), mergedRoot); err != nil {
-		return conflicts, constraintViolations, err
+		return err
 	}
 
-	return conflicts, constraintViolations, nil
+	return nil
 }
 
 func conflictsAndViolations(tblToStats map[string]*merge.MergeStats) (conflicts []string, constraintViolations []string) {

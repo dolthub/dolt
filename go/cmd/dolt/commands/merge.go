@@ -154,12 +154,9 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return 1
 			}
 
-			msg, msgOk := apr.GetValue(cli.CommitMessageArg)
-			if !msgOk {
-				msg, err = getCommitMessageFromEditor(ctx, dEnv)
-				if err != nil {
-					return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
-				}
+			msg := ""
+			if m, ok := apr.GetValue(cli.CommitMessageArg); ok {
+				msg = m
 			}
 
 			//mergeSpec, ok, err := actions.PrepareMergeSpec(ctx, squash, dEnv, commitSpecStr, msg, apr.Contains(cli.NoFFParam))
@@ -168,44 +165,98 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				// TODO: the build error handling
 				// invalid commit
 				// failed to get hash of commit
+				return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
 			}
 			if !ok {
 				// TODO: everything up to date
 				cli.Println("Everything up-to-date")
+				return handleCommitErr(ctx, dEnv, nil, usage)
 			}
 
-			// TODO: we need to print stuff before and after merging
-			if len(mergeSpec.TblNames) != 0 {
-				bldr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by merge:")
-				for _, tName := range mergeSpec.TblNames {
-					bldr.AddDetails(tName)
-				}
-				bldr.AddDetails("Please commit your changes before you merge.")
-				return handleCommitErr(ctx, dEnv, bldr.Build(), usage)
+			err = mergePrinting(ctx, dEnv, mergeSpec)
+			if err != nil {
+				return handleCommitErr(ctx, dEnv, err, usage)
 			}
+			//if !msgOk {
+			//	msg, err = getCommitMessageFromEditor(ctx, dEnv)
+			//	if err != nil {
+			//		return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
+			//	}
+			//}
 
-			conflicts, constraintViolations, err := actions.MergeCommitSpec(ctx, dEnv, mergeSpec)
+			tblToStats, err := actions.MergeCommitSpec(ctx, dEnv, mergeSpec)
+			printSuccessStats(tblToStats)
 			if err != nil {
 				//TODO handle error building
-				// return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
-				// cli.Println("Unable to stage changes: add and commit to finish merge")
-			} else if len(conflicts) > 0 && len(constraintViolations) > 0 {
-				cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
-			} else if len(conflicts) > 0 {
-				cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
-			} else if len(constraintViolations) > 0 {
-				cli.Println("Automatic merge failed; fix constraint violations and then commit the result.\n" +
-					"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n" +
-					"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.")
-			} else {
-				cli.Println("Already up to date.")
+				//return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+				cli.Println("Unable to stage changes: add and commit to finish merge")
+				return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
 			}
+
+			//if len(conflicts) > 0 && len(constraintViolations) > 0 {
+			//	cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
+			//} else if len(conflicts) > 0 {
+			//	cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
+			//} else if len(constraintViolations) > 0 {
+			//	cli.Println("Automatic merge failed; fix constraint violations and then commit the result.\n" +
+			//		"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n" +
+			//		"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.")
+			//} else {
+			//	cli.Println("Already up to date.")
+			//}
 		}
 	}
 
 	return handleCommitErr(ctx, dEnv, verr, usage)
 }
 
+func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) errhand.VerboseError {
+	cli.Println("Updating", mergeSpec.H1.String()+".."+mergeSpec.H2.String())
+
+	if mergeSpec.Squash {
+		cli.Println("Squash commit -- not updating HEAD")
+	}
+	fmt.Println(mergeSpec.TblNames, mergeSpec.WorkingDiffs)
+	if len(mergeSpec.TblNames) != 0 {
+		bldr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by merge:")
+		for _, tName := range mergeSpec.TblNames {
+			bldr.AddDetails(tName)
+		}
+		bldr.AddDetails("Please commit your changes before you merge.")
+		return bldr.Build()
+	}
+
+	if ok, err := mergeSpec.Cm1.CanFastForwardTo(ctx, mergeSpec.Cm2); ok {
+		ancRoot, err := mergeSpec.Cm1.GetRootValue()
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		mergedRoot, err := mergeSpec.Cm2.GetRootValue()
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		if _, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+
+		if mergeSpec.Noff {
+			if mergeSpec.Msg == "" {
+				msg , err := getCommitMessageFromEditor(ctx, dEnv)
+				if err != nil {
+					return errhand.VerboseErrorFromError(err)
+				}
+				mergeSpec.Msg = msg
+			}
+			//return execNoFFMerge(ctx, apr, dEnv, roots, cm2, verr, workingDiffs)
+		} else {
+			cli.Println("Fast-forward")
+			//return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
+		}
+	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
+		cli.Println("Already up to date.")
+	}
+	return nil
+}
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
 	roots, err := doltEnv.Roots(ctx)
 	if err != nil {

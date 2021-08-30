@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -84,11 +85,6 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
-const (
-	SetUpstreamFlag = "set-upstream"
-	ForcePushFlag   = "force"
-)
-
 type PushOpts struct {
 	SrcRef      ref.DoltRef
 	DestRef     ref.DoltRef
@@ -98,7 +94,7 @@ type PushOpts struct {
 	SetUpstream bool
 }
 
-func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *DoltEnv) (*PushOpts, error) {
+func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *DoltEnv, force bool, setUpstream bool) (*PushOpts, error) {
 	var err error
 	remotes, err := dEnv.GetRemotes()
 
@@ -151,7 +147,7 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 			//verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
 			return nil, err
 		}
-	} else if apr.Contains(SetUpstreamFlag) {
+	} else if setUpstream {
 		//verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
 		return nil, err
 	} else if hasUpstream {
@@ -216,7 +212,7 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 	case ref.BranchRefType:
 		remoteRef, err = GetTrackingRef(dest, remote)
 	case ref.TagRefType:
-		if apr.Contains(SetUpstreamFlag) {
+		if setUpstream {
 			//verr = errhand.BuildDError("cannot set upstream for tag").Build()
 			err = ErrCannotSetUpstreamForTag
 		}
@@ -235,9 +231,9 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 		RemoteRef: remoteRef,
 		Remote:    remote,
 		Mode: ref.UpdateMode{
-			Force: apr.Contains(ForcePushFlag),
+			Force: force,
 		},
-		SetUpstream: apr.Contains(SetUpstreamFlag),
+		SetUpstream: setUpstream,
 	}
 
 	return opts, nil
@@ -389,6 +385,7 @@ func ParseMergeSpec(ctx context.Context, dEnv *DoltEnv, msg string, commitSpecSt
 	}
 
 	tblNames, workingDiffs, err := merge.MergeWouldStompChanges(ctx, roots, cm2)
+	fmt.Println("tablenames", tblNames)
 	if err != nil {
 		return nil, false, err
 		//return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()

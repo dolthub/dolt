@@ -17,8 +17,10 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"sync"
 	"time"
 
@@ -71,8 +73,8 @@ func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 
 func (cmd PushCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(env.SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
-	ap.SupportsFlag(env.ForcePushFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
+	ap.SupportsFlag(cli.SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
+	ap.SupportsFlag(cli.ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
 	return ap
 }
 
@@ -87,7 +89,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	opts, err := env.ParsePushArgs(ctx, apr, dEnv)
+	opts, err := env.ParsePushArgs(ctx, apr, dEnv, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
 
 	//TODO build verbose error
 	if err != nil {
@@ -95,31 +97,32 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	err = actions.DoPush(ctx, dEnv, opts, runProgFuncs, stopProgFuncs)
+	verr := printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
 
-	var verr errhand.VerboseError
-	switch err {
-	case nil:
-		verr = nil
-	case doltdb.ErrUpToDate:
-		cli.Println("Everything up-to-date")
-	case actions.ErrFailedToGetRemoteDb:
-		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
-
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(opts.Remote.Url)
-			path := urlObj.Path
-			if path[0] == '/' {
-				path = path[1:]
-			}
-
-			bdr.AddDetails("For the remote: %s %s", opts.Remote.Name, opts.Remote.Url)
-			//var detail = fmt.Sprintf("For the remote: %s %s '%s' should be in the format 'organization/repo'", path)
-			//bdr.AddDetails("'%s' should be in the format 'organization/repo'", path)
-		}
-		verr = bdr.Build()
-	default:
-		verr = errhand.VerboseErrorFromError(err)
-	}
+	//var verr errhand.VerboseError
+	//switch err {
+	//case nil:
+	//	verr = nil
+	//case doltdb.ErrUpToDate:
+	//	cli.Println("Everything up-to-date")
+	//case actions.ErrFailedToGetRemoteDb:
+	//	bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
+	//
+	//	if err == remotestorage.ErrInvalidDoltSpecPath {
+	//		urlObj, _ := earl.Parse(opts.Remote.Url)
+	//		path := urlObj.Path
+	//		if path[0] == '/' {
+	//			path = path[1:]
+	//		}
+	//
+	//		bdr.AddDetails("For the remote: %s %s", opts.Remote.Name, opts.Remote.Url)
+	//		//var detail = fmt.Sprintf("For the remote: %s %s '%s' should be in the format 'organization/repo'", path)
+	//		//bdr.AddDetails("'%s' should be in the format 'organization/repo'", path)
+	//	}
+	//	verr = bdr.Build()
+	//default:
+	//	verr = errhand.VerboseErrorFromError(err)
+	//}
 	return HandleVErrAndExitCode(verr, usage)
 }
 
@@ -130,6 +133,36 @@ var spinnerSeq = []rune{'|', '/', '-', '\\'}
 type TextSpinner struct {
 	seqPos     int
 	lastUpdate time.Time
+}
+
+func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.DoltRef) errhand.VerboseError {
+	switch err {
+	case nil:
+		return nil
+	case doltdb.ErrUpToDate:
+		cli.Println("Everything up-to-date")
+	case doltdb.ErrIsAhead, actions.ErrCantFF, datas.ErrMergeNeeded:
+		cli.Printf("To %s\n", remote.Url)
+		cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef.String(), remoteRef.String())
+		cli.Printf("error: failed to push some refs to '%s'\n", remote.Url)
+		cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
+		cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
+		cli.Println("hint: 'dolt pull ...') before pushing again.")
+		return errhand.BuildDError("").Build()
+	case actions.ErrUnknownPushErr:
+		status, ok := status.FromError(err)
+		if ok && status.Code() == codes.PermissionDenied {
+			cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
+			cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
+		}
+		if rpcErr, ok := err.(*remotestorage.RpcError); ok {
+			return errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
+		} else {
+			return errhand.BuildDError("error: push failed").AddCause(err).Build()
+		}
+	default:
+	}
+	return errhand.BuildDError("error: push failed").AddCause(err).Build()
 }
 
 func (ts *TextSpinner) next() string {

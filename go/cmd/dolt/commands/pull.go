@@ -90,8 +90,10 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	remoteName := apr.Arg(0)
 
 	pullSpec, err := env.ParsePullSpec(ctx, dEnv, remoteName, msg, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
-
-	_, _, err = actions.PullFromRemote(ctx, dEnv, pullSpec, runProgFuncs, stopProgFuncs)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	_, err = actions.PullFromRemote(ctx, dEnv, pullSpec, runProgFuncs, stopProgFuncs)
 
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
