@@ -15,7 +15,6 @@
 package kvbench
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -39,12 +38,17 @@ func BenchmarkMemoryStore(b *testing.B) {
 	benchmarkKVStore(b, newMemStore())
 }
 
-// usage: `go test -bench BenchmarkProllyStore`
-func BenchmarkProllyStore(b *testing.B) {
-	ctx := context.Background()
-	benchmarkKVStore(b, newMemoryProllyStore(ctx))
+// usage: `go test -bench BenchmarkMemProllyStore`
+func BenchmarkMemProllyStore(b *testing.B) {
+	benchmarkKVStore(b, newMemoryProllyStore())
 }
 
+// usage: `go test -bench BenchmarkNBSProllyStore`
+func BenchmarkNBSProllyStore(b *testing.B) {
+	benchmarkKVStore(b, newNBSProllyStore(os.TempDir()))
+}
+
+// usage: `go test -bench BenchmarkBoltStore`
 func BenchmarkBoltStore(b *testing.B) {
 	benchmarkKVStore(b, newBoltStore(os.TempDir()))
 }

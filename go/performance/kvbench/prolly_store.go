@@ -18,27 +18,50 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/nbs"
+
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func newMemoryProllyStore(ctx context.Context) keyValStore {
-	return newProllyStore(ctx, types.NewMemoryValueStore())
+const (
+	defaultMemTableSize = 256 * 1024 * 1024
+)
+
+func newMemoryProllyStore() keyValStore {
+	ctx := context.Background()
+	cs := &chunks.TestStorage{}
+	return newProllyStore(ctx, cs.NewViewWithDefaultFormat())
 }
 
-func newProllyStore(ctx context.Context, vrw types.ValueReadWriter) keyValStore {
-	m, err := types.NewMap(ctx, vrw)
+func newNBSProllyStore(dir string) keyValStore {
+	ctx := context.Background()
+	verStr := types.Format_Default.VersionString()
+	cs, err := nbs.NewLocalStore(ctx, verStr, dir, defaultMemTableSize)
+	if err != nil {
+		panic(err)
+	}
+	return newProllyStore(ctx, cs)
+}
+
+func newProllyStore(ctx context.Context, cs chunks.ChunkStore) keyValStore {
+	db := datas.NewDatabase(cs)
+	m, err := types.NewMap(ctx, db)
 	if err != nil {
 		panic(err)
 	}
 	return &prollyStore{
 		store:  m,
 		editor: types.NewMapEditor(m),
+		db:     db,
 	}
 }
 
 type prollyStore struct {
 	store  types.Map
 	editor *types.MapEditor
+	db     datas.Database
 	mu     sync.RWMutex
 }
 
@@ -104,9 +127,20 @@ func (m *prollyStore) flush() {
 
 	var err error
 	ctx := context.Background()
+
 	m.store, err = m.editor.Map(ctx)
 	if err != nil {
 		panic(err)
 	}
+
+	// persist
+	_, err = m.db.WriteValue(ctx, m.store)
+	if err != nil {
+		panic(err)
+	}
+	if err = m.db.Flush(ctx); err != nil {
+		panic(err)
+	}
+
 	m.editor = types.NewMapEditor(m.store)
 }
