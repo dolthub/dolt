@@ -43,6 +43,7 @@ var Format_LD_1 = &NomsBinFormat{formatTag_LD_1}
 var Format_Default *NomsBinFormat
 
 var emptyTuples = make(map[*NomsBinFormat]Tuple)
+
 func init() {
 	emptyTuples[Format_7_18], _ = NewTuple(Format_7_18)
 	emptyTuples[Format_LD_1], _ = NewTuple(Format_LD_1)
