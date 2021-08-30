@@ -1046,14 +1046,16 @@ setup_ref_test() {
     run dolt fetch remotes/dasdas
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "error: invalid refspec ''" ]] || false
+    [[ "$output" =~ "error: 'remotes/dasdas' is not a valid refspec." ]] || false
 }
 
 @test "remotes: fetching added invalid remotes correctly errors" {
     setup_ref_test
     cd ../../
     cd dolt-repo-clones/test-repo
-    run dolt remote add myremote http://localhost:50051/test-org/fake
+    dolt remote add myremote dolthub/fake
+
+    run dolt fetch myremote
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "permission denied" ]] || false
