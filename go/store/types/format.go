@@ -44,8 +44,8 @@ var Format_Default *NomsBinFormat
 
 var emptyTuples = make(map[*NomsBinFormat]Tuple)
 func init() {
-	emptyTuples[Format_7_18] = EmptyTuple(Format_7_18)
-	emptyTuples[Format_LD_1] = EmptyTuple(Format_7_18)
+	emptyTuples[Format_7_18], _ = NewTuple(Format_7_18)
+	emptyTuples[Format_LD_1], _ = NewTuple(Format_LD_1)
 }
 
 func isFormat_7_18(nbf *NomsBinFormat) bool {
