@@ -241,7 +241,7 @@ func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeS
 
 		if mergeSpec.Noff {
 			if mergeSpec.Msg == "" {
-				msg , err := getCommitMessageFromEditor(ctx, dEnv)
+				msg, err := getCommitMessageFromEditor(ctx, dEnv)
 				if err != nil {
 					return errhand.VerboseErrorFromError(err)
 				}

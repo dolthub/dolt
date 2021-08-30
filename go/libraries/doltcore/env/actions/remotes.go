@@ -18,9 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
-	"sync"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -165,7 +166,7 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 	err := DeleteRemoteBranch(ctx, toDelete.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB)
 
 	if err != nil {
-		return fmt.Errorf("%w; '%s' from remote '%s'", ErrFailedToDeleteRemote,  toDelete.String(), remote.Name)
+		return fmt.Errorf("%w; '%s' from remote '%s'", ErrFailedToDeleteRemote, toDelete.String(), remote.Name)
 		//return err
 	}
 
