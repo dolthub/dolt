@@ -73,7 +73,7 @@ var setupDrop = []testCommand{
 }
 
 func TestDropPk(t *testing.T) {
-	t.Run("DropTable primary key from table with index", func(t *testing.T) {
+	t.Run("Drop primary key from table with index", func(t *testing.T) {
 		dEnv := dtestutils.CreateTestEnv()
 		ctx := context.Background()
 
@@ -89,7 +89,7 @@ func TestDropPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, originalMap.Empty())
 
-		// DropTable the Primary Key
+		// Drop the Primary Key
 		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test DROP PRIMARY KEY"}, dEnv)
 		require.Equal(t, 0, exitCode)
 
