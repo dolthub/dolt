@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -79,16 +80,19 @@ func (r *RevertFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	commits := make([]*doltdb.Commit, len(r.ChildExpressions))
-	for i, expr := range r.ChildExpressions {
-		res, err := expr.Eval(ctx, row)
-		if err != nil {
-			return nil, err
-		}
-		revisionStr, ok := res.(string)
-		if !ok {
-			return nil, sql.ErrUnexpectedType.New(i, fmt.Sprintf("%T", res))
-		}
+
+	args, err := getDoltArgs(ctx, row, r.ChildExpressions)
+	if err != nil {
+		return nil, err
+	}
+
+	apr, err := cli.CreateRevertArgParser().Parse(args)
+	if err != nil {
+		return nil, err
+	}
+
+	commits := make([]*doltdb.Commit, apr.NArg())
+	for i, revisionStr := range apr.Args() {
 		commitSpec, err := doltdb.NewCommitSpec(revisionStr)
 		if err != nil {
 			return nil, err
@@ -114,8 +118,15 @@ func (r *RevertFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return nil, err
 		}
 		stringType := typeinfo.StringDefaultType.ToSqlType()
-		commitFunc, err := NewDoltCommitFunc(ctx,
-			expression.NewLiteral("-a", stringType), expression.NewLiteral("-m", stringType), expression.NewLiteral(revertMessage, stringType))
+
+		expressions := []sql.Expression{expression.NewLiteral("-a", stringType), expression.NewLiteral("-m", stringType), expression.NewLiteral(revertMessage, stringType)}
+
+		author, hasAuthor := apr.GetValue(cli.AuthorParam)
+		if hasAuthor {
+			expressions = append(expressions, expression.NewLiteral("--author", stringType), expression.NewLiteral(author, stringType))
+		}
+
+		commitFunc, err := NewDoltCommitFunc(ctx, expressions...)
 		if err != nil {
 			return nil, err
 		}
