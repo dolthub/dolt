@@ -37,12 +37,13 @@ type orderedKeyValStore interface {
 func newMemStore() keyValStore {
 	return memStore{
 		store: make(map[string][]byte),
+		mu:    &sync.RWMutex{},
 	}
 }
 
 type memStore struct {
 	store map[string][]byte
-	mu    sync.RWMutex
+	mu    *sync.RWMutex
 }
 
 var _ keyValStore = memStore{}
