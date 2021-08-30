@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"sync"
 	"time"
 
@@ -88,19 +90,37 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	opts, err := env.ParsePushArgs(ctx, apr, dEnv)
 
 	//TODO build verbose error
-	//errhand.BuildDError("error: failed to read remotes from config."
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	err = actions.DoPush(ctx, dEnv, opts, runProgFuncs, stopProgFuncs)
 
+	var verr errhand.VerboseError
 	switch err {
+	case nil:
+		verr = nil
 	case doltdb.ErrUpToDate:
 		cli.Println("Everything up-to-date")
+	case actions.ErrFailedToGetRemoteDb:
+		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
+
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			urlObj, _ := earl.Parse(opts.Remote.Url)
+			path := urlObj.Path
+			if path[0] == '/' {
+				path = path[1:]
+			}
+
+			bdr.AddDetails("For the remote: %s %s", opts.Remote.Name, opts.Remote.Url)
+			//var detail = fmt.Sprintf("For the remote: %s %s '%s' should be in the format 'organization/repo'", path)
+			//bdr.AddDetails("'%s' should be in the format 'organization/repo'", path)
+		}
+		verr = bdr.Build()
 	default:
+		verr = errhand.VerboseErrorFromError(err)
 	}
-	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 const minUpdate = 100 * time.Millisecond

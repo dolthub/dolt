@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -35,6 +34,7 @@ var ErrInvalidPullArgs = errors.New("dolt pull takes at most one arg")
 var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrFailedToSaveRepoState = errors.New("failed to save repo state")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
+var ErrFailedToGetRemoteDb = errors.New("failed to get remote db")
 
 type ProgStarter func() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent)
 type ProgStopper func(wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)
@@ -90,20 +90,7 @@ func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStar
 	destDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
-		//bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
-
-		if err == remotestorage.ErrInvalidDoltSpecPath {
-			urlObj, _ := earl.Parse(opts.Remote.Url)
-			path := urlObj.Path
-			if path[0] == '/' {
-				path = path[1:]
-			}
-
-			var detail = fmt.Sprintf("For the remote: %s %s '%s' should be in the format 'organization/repo'", opts.Remote.Name, opts.Remote.Url, path)
-			//bdr.AddDetails("'%s' should be in the format 'organization/repo'", path)
-			return fmt.Errorf("%w; %s", err, detail)
-		}
-		return err
+		return ErrFailedToGetRemoteDb
 	}
 
 	switch opts.SrcRef.GetType() {
@@ -136,7 +123,7 @@ func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStar
 
 		if err != nil {
 			//err = errhand.BuildDError("error: failed to save repo state").AddCause(err).Build()
-			err = ErrFailedToSaveRepoState
+			err = fmt.Errorf("%w; %s", ErrFailedToSaveRepoState, err.Error())
 		}
 	}
 
