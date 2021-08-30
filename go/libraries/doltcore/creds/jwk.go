@@ -32,10 +32,11 @@ const (
 )
 
 type jwkData struct {
-	D   *string `json:"d"`
-	X   *string `json:"x"`
-	Kty string  `json:"kty"`
-	Crv string  `json:"crv"`
+	D                *string `json:"d"`
+	X                *string `json:"x"`
+	Kty              string  `json:"kty"`
+	Crv              string  `json:"crv"`
+	BrowserGenerated bool    `json:"browser_generated"`
 }
 
 func JWKCredSerialize(dc DoltCreds) ([]byte, error) {
@@ -54,7 +55,7 @@ func JWKCredSerialize(dc DoltCreds) ([]byte, error) {
 		privKeyStr = base64.URLEncoding.EncodeToString(dc.PrivKey)
 	}
 
-	toSerialize := jwkData{&pubKeyStr, &privKeyStr, kty, ed25519Crv}
+	toSerialize := jwkData{&pubKeyStr, &privKeyStr, kty, ed25519Crv, false}
 	data, err := json.Marshal(toSerialize)
 
 	if err != nil {
@@ -79,7 +80,7 @@ func JWKCredsDeserialize(data []byte) (DoltCreds, error) {
 
 			if err == nil {
 				kid := PubKeyToKID(pub)
-				return DoltCreds{pub, priv, kid}, nil
+				return DoltCreds{pub, priv, kid, jwk.BrowserGenerated}, nil
 			}
 		}
 	}

@@ -52,9 +52,10 @@ var ErrBadB32CredsEncoding = errors.New("bad base32 credentials encoding")
 var ErrCredsNotFound = errors.New("credentials not found")
 
 type DoltCreds struct {
-	PubKey  []byte
-	PrivKey []byte
-	KeyID   []byte
+	PubKey           []byte
+	PrivKey          []byte
+	KeyID            []byte
+	BrowserGenerated bool
 }
 
 func PubKeyStrToKIDStr(pub string) (string, error) {
@@ -83,7 +84,7 @@ func GenerateCredentials() (DoltCreds, error) {
 
 	if err == nil {
 		kid := PubKeyToKID(pub)
-		return DoltCreds{pub, priv, kid}, nil
+		return DoltCreds{pub, priv, kid, false}, nil
 	}
 
 	return DoltCreds{}, err
@@ -94,6 +95,9 @@ func (dc DoltCreds) HasPrivKey() bool {
 }
 
 func (dc DoltCreds) IsPrivKeyValid() bool {
+	if dc.BrowserGenerated {
+		return len(dc.PrivKey) == pubKeySize
+	}
 	return len(dc.PrivKey) == privKeySize
 }
 
