@@ -89,6 +89,7 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 	if err == remotestorage.ErrInvalidDoltSpecPath {
 		return nil, fmt.Errorf("invalid dolt url '%s'", urlObj.String())
 	} else if err != nil {
+		// TODO: Make this error more expressive
 		return nil, err
 	}
 
