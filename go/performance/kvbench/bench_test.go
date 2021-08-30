@@ -25,7 +25,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boltdb/bolt"
+
 	"github.com/stretchr/testify/require"
+)
+
+const (
+	makeProfile = false
 )
 
 // usage: `go test -bench BenchmarkMemoryStore`
@@ -46,18 +52,20 @@ func BenchmarkBoltStore(b *testing.B) {
 func benchmarkKVStore(b *testing.B, store keyValStore) {
 	keys := loadStore(b, store)
 
-	f := makePprofFile(b)
-	err := pprof.StartCPUProfile(f)
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer func() {
-		pprof.StopCPUProfile()
-		if err = f.Close(); err != nil {
+	if makeProfile {
+		f := makePprofFile(b)
+		err := pprof.StartCPUProfile(f)
+		if err != nil {
 			b.Fatal(err)
 		}
-		fmt.Printf("\twriting CPU profile for %s: %s\n", b.Name(), f.Name())
-	}()
+		defer func() {
+			pprof.StopCPUProfile()
+			if err = f.Close(); err != nil {
+				b.Fatal(err)
+			}
+			fmt.Printf("\twriting CPU profile for %s: %s\n", b.Name(), f.Name())
+		}()
+	}
 
 	b.Run("point reads", func(b *testing.B) {
 		runBenchmark(b, store, keys)
@@ -66,7 +74,7 @@ func benchmarkKVStore(b *testing.B, store keyValStore) {
 
 func loadStore(b *testing.B, store keyValStore) (keys [][]byte) {
 	return loadStoreWithParams(b, store, loadParams{
-		cardinality: 1_000_000,
+		cardinality: 100_000,
 		keySize:     16,
 		valSize:     128,
 	})
@@ -79,7 +87,7 @@ type loadParams struct {
 }
 
 func loadStoreWithParams(b *testing.B, store keyValStore, p loadParams) (keys [][]byte) {
-	keys = make([][]byte, p.cardinality)
+	keys = make([][]byte, 0, p.cardinality)
 
 	// generate 10K rows at a time
 	const batchSize = uint32(10_000)
@@ -89,40 +97,45 @@ func loadStoreWithParams(b *testing.B, store keyValStore, p loadParams) (keys []
 	bufSize := pairSize * batchSize
 	buf := make([]byte, bufSize)
 
-	k := 0
 	for i := uint32(0); i < numBatches; i++ {
 		_, err := rand.Read(buf)
 		require.NoError(b, err)
 
+		kk := make([][]byte, batchSize)
+		vv := make([][]byte, batchSize)
+
 		for j := uint32(0); j < batchSize; j++ {
 			offset := j * pairSize
-			key := buf[offset : offset+p.keySize]
-			val := buf[offset+p.keySize : offset+pairSize]
-			store.load(key, val)
-			keys[k] = key
-			k++
+			kk[j] = buf[offset : offset+p.keySize]
+			vv[j] = buf[offset+p.keySize : offset+pairSize]
 		}
-	}
-
-	if fs, ok := store.(flushingKeyValStore); ok {
-		fs.flush()
+		store.putMany(kk, vv)
+		keys = append(keys, kk...)
 	}
 
 	return
 }
 
 func runBenchmark(b *testing.B, store keyValStore, keys [][]byte) {
-	runBenchmarkWithParams(b, store, keys, benchParams{
-		numReads: 10_000,
-	})
+	runBenchmarkWithParams(b, store, keys, benchParams{})
 }
 
-type benchParams struct {
-	numReads uint32
-}
+type benchParams struct{}
 
 func runBenchmarkWithParams(b *testing.B, store keyValStore, keys [][]byte, p benchParams) {
-	for _, k := range keys[:p.numReads] {
+	if bs, ok := store.(boltStore); ok {
+		err := bs.DB.View(func(tx *bolt.Tx) (err error) {
+			bk := tx.Bucket([]byte(bucketName))
+			err = bk.ForEach(func(k, v []byte) error {
+				return nil
+			})
+			require.NoError(b, err)
+			return nil
+		})
+		require.NoError(b, err)
+	}
+
+	for _, k := range keys {
 		_, ok := store.get(k)
 		require.True(b, ok)
 	}

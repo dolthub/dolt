@@ -52,10 +52,10 @@ func (bs boltStore) get(key []byte) (val []byte, ok bool) {
 	err := bs.DB.View(func(tx *bolt.Tx) (err error) {
 		b := tx.Bucket([]byte(bucketName))
 		v := b.Get(key)
-		ok = val != nil
+		ok = v != nil
 		if ok {
 			val = make([]byte, len(v))
-			copy(v, val)
+			copy(val, v)
 		}
 		return
 	})
@@ -75,6 +75,22 @@ func (bs boltStore) put(key, val []byte) {
 	}
 }
 
+func (bs boltStore) putMany(keys, vals [][]byte) {
+	err := bs.DB.Update(func(tx *bolt.Tx) (err error) {
+		b := tx.Bucket([]byte(bucketName))
+		for i := range keys {
+			err = b.Put(keys[i], vals[i])
+			if err != nil {
+				break
+			}
+		}
+		return
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
 func (bs boltStore) delete(key []byte) {
 	err := bs.DB.Update(func(tx *bolt.Tx) (err error) {
 		b := tx.Bucket([]byte(bucketName))
@@ -83,8 +99,4 @@ func (bs boltStore) delete(key []byte) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func (bs boltStore) load(key, val []byte) {
-	bs.put(key, val)
 }

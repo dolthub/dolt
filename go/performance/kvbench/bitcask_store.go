@@ -35,6 +35,6 @@ func (nbs BitcaskStore) delete(key []byte) {
 	panic("unimplemented")
 }
 
-func (nbs BitcaskStore) load(key, val []byte) {
+func (nbs BitcaskStore) putMany(keys, vals [][]byte) {
 	panic("unimplemented")
 }

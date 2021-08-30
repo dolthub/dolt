@@ -19,10 +19,8 @@ import "sync"
 type keyValStore interface {
 	get(key []byte) (val []byte, ok bool)
 	put(key, val []byte)
+	putMany(keys, vals [][]byte)
 	delete(key []byte)
-
-	// non-atomic put
-	load(key, val []byte)
 }
 
 type flushingKeyValStore interface {
@@ -61,7 +59,16 @@ func (m memStore) put(key, val []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.load(key, val)
+	m.store[string(key)] = val
+}
+
+func (m memStore) putMany(keys, vals [][]byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i := range keys {
+		m.store[string(keys[i])] = vals[i]
+	}
 }
 
 func (m memStore) delete(key []byte) {
@@ -69,8 +76,4 @@ func (m memStore) delete(key []byte) {
 	defer m.mu.Unlock()
 
 	delete(m.store, string(key))
-}
-
-func (m memStore) load(key, val []byte) {
-	m.store[string(key)] = val
 }

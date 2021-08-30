@@ -35,6 +35,6 @@ func (nbs NBSStore) delete(key []byte) {
 	panic("unimplemented")
 }
 
-func (nbs NBSStore) load(key, val []byte) {
+func (nbs NBSStore) putMany(keys, vals [][]byte) {
 	panic("unimplemented")
 }

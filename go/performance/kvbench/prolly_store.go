@@ -64,24 +64,37 @@ func (m *prollyStore) put(key, val []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.load(key, val)
+	m.set(key, val)
 	m.flush()
 }
 
 func (m *prollyStore) delete(key []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.load(key, nil)
+
+	m.set(key, nil)
 	m.flush()
 }
 
-func (m *prollyStore) load(key, val []byte) {
+func (m *prollyStore) set(key, val []byte) {
 	k := types.String(key)
 	v := types.Value(nil)
 	if val != nil {
 		v = types.String(val)
 	}
 	m.editor.Set(k, v)
+}
+
+func (m *prollyStore) putMany(keys, vals [][]byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i := range keys {
+		k := types.String(keys[i])
+		v := types.String(vals[i])
+		m.editor.Set(k, v)
+	}
+	m.flush()
 }
 
 func (m *prollyStore) flush() {
