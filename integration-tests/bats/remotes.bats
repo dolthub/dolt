@@ -1049,7 +1049,7 @@ setup_ref_test() {
     [[ "$output" =~ "error: 'remotes/dasdas' is not a valid refspec." ]] || false
 }
 
-@test "remotes: fetching added invalid remotes correctly errors" {
+@test "remotes: fetching added invalid remote correctly errors" {
     setup_ref_test
     cd ../../
     cd dolt-repo-clones/test-repo
