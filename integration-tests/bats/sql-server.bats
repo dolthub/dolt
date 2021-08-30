@@ -397,7 +397,7 @@ teardown() {
     INSERT INTO one_pk values (8,8,8);"
 
     skip "Unclear behavior below here, need a simpler test of these assertions"
-
+    
     # check that squash with uncommitted changes throws an error
     run server_query repo1 0 "SET @@repo1_working = squash('test_branch');" ""
     [ "$status" -eq 1 ]
@@ -605,12 +605,12 @@ SQL
      "
 
      server_query repo1 1 "SELECT * FROM test" "pk\n0\n1\n2"
-
+     
      multi_query repo1 1 "
      SELECT DOLT_CHECKOUT('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
      "
-
+     
      multi_query repo1 1 "
      INSERT INTO test VALUES (500000);
      INSERT INTO test VALUES (500001);
@@ -621,7 +621,7 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
      "
-
+     
      server_query repo1 1 "SELECT * FROM test order by pk" "pk\n0\n1\n2\n3\n21\n60"
 
      run dolt status
@@ -843,7 +843,7 @@ SQL
 
     multi_query repo1 1 '
     USE `repo1/feature-branch`;
-    CREATE TABLE test (
+    CREATE TABLE test ( 
         pk int,
         c1 int,
         PRIMARY KEY (pk)
