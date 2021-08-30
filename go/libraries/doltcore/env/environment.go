@@ -930,7 +930,7 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, error)
 var ErrInvalidRefSpecRemote = errors.New("refspec refers to different remote")
 var ErrInvalidRefSpec = errors.New("invalid refspec")
 var ErrNoRemote = errors.New("no remote")
-var ErrUnknownRemote = errors.New("remote not found")
+var ErrUnknownRemote = errors.New("unknown remote")
 var ErrCantDetermineDefault = errors.New("unable to determine the default remote")
 
 // GetDefaultRemote gets the default remote for the environment.  Not fully implemented yet.  Needs to support multiple

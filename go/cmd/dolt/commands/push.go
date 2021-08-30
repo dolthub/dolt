@@ -90,39 +90,27 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	opts, err := env.ParsePushArgs(ctx, apr, dEnv, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
-
-	//TODO build verbose error
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		var verr errhand.VerboseError
+		switch err {
+		case env.ErrNoUpstreamForBranch:
+			currentBranch := dEnv.RepoStateReader().CWBHeadRef()
+			remoteName := "<remote>"
+			if defRemote, verr := dEnv.GetDefaultRemote(); verr == nil {
+				remoteName = defRemote.Name
+			}
+			verr = errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
+				"To push the current branch and set the remote as upstream, use\n" +
+				"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath()).Build()
+		}
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	var verr errhand.VerboseError
 	err = actions.DoPush(ctx, dEnv, opts, runProgFuncs, stopProgFuncs)
-	verr := printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
-
-	//var verr errhand.VerboseError
-	//switch err {
-	//case nil:
-	//	verr = nil
-	//case doltdb.ErrUpToDate:
-	//	cli.Println("Everything up-to-date")
-	//case actions.ErrFailedToGetRemoteDb:
-	//	bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
-	//
-	//	if err == remotestorage.ErrInvalidDoltSpecPath {
-	//		urlObj, _ := earl.Parse(opts.Remote.Url)
-	//		path := urlObj.Path
-	//		if path[0] == '/' {
-	//			path = path[1:]
-	//		}
-	//
-	//		bdr.AddDetails("For the remote: %s %s", opts.Remote.Name, opts.Remote.Url)
-	//		//var detail = fmt.Sprintf("For the remote: %s %s '%s' should be in the format 'organization/repo'", path)
-	//		//bdr.AddDetails("'%s' should be in the format 'organization/repo'", path)
-	//	}
-	//	verr = bdr.Build()
-	//default:
-	//	verr = errhand.VerboseErrorFromError(err)
-	//}
+	if err != nil {
+		verr = printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
+	}
 	return HandleVErrAndExitCode(verr, usage)
 }
 
@@ -137,8 +125,6 @@ type TextSpinner struct {
 
 func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.DoltRef) errhand.VerboseError {
 	switch err {
-	case nil:
-		return nil
 	case doltdb.ErrUpToDate:
 		cli.Println("Everything up-to-date")
 	case doltdb.ErrIsAhead, actions.ErrCantFF, datas.ErrMergeNeeded:
@@ -161,8 +147,9 @@ func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.
 			return errhand.BuildDError("error: push failed").AddCause(err).Build()
 		}
 	default:
+		return errhand.BuildDError("error: push failed").AddCause(err).Build()
 	}
-	return errhand.BuildDError("error: push failed").AddCause(err).Build()
+	return nil
 }
 
 func (ts *TextSpinner) next() string {

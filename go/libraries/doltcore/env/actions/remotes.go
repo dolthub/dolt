@@ -189,18 +189,21 @@ func PushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateM
 
 	if err != nil {
 		//return errhand.BuildDError("error: refspec '%v' not found.", srcRef.GetPath()).Build()
-		return err
-	} else {
-		wg, progChan, pullerEventCh := progStarter()
-		err = Push(ctx, dEnv, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
-		progStopper(wg, progChan, pullerEventCh)
+		return fmt.Errorf("%w; refspec not found: '%s'; %s", env.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
+	}
 
+	wg, progChan, pullerEventCh := progStarter()
+	err = Push(ctx, dEnv, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
+	progStopper(wg, progChan, pullerEventCh)
+
+	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
 			return err
 		default:
 			return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
 		}
+	}
 		//if err != nil {
 		//	return err
 		//}
@@ -228,7 +231,7 @@ func PushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateM
 		//		}
 		//	}
 		//}
-	}
+
 
 	return nil
 }
@@ -298,6 +301,7 @@ func FetchCommit(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.D
 // FetchCommit takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
 func FetchTag(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB, srcDBTag *doltdb.Tag, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	stRef, err := srcDBTag.GetStRef()
+	println(stRef.HumanReadableString())
 
 	if err != nil {
 		return err
@@ -311,44 +315,46 @@ func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- dat
 	return srcDB.Clone(ctx, destDB, eventCh)
 }
 
-func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, progStarter ProgStarter, progStopper ProgStopper) (map[string]*merge.MergeStats, error) {
-
-	tblToStats := make(map[string]*merge.MergeStats)
-	for _, refSpec := range pullSpec.RefSpecs {
-		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
-
-		if remoteTrackRef != nil {
-			stats, err := pullRemoteBranch(ctx, dEnv, pullSpec, remoteTrackRef, progStarter, progStopper)
-			for k, v := range stats {
-				tblToStats[k] = v
-			}
-			//if len(conflicts) > 0 {
-			//	allConflicts = append(allConflicts, conflicts...)
-			//}
-			//if len(constraintViolations) > 0 {
-			//	allConstraintViolations = append(allConstraintViolations, constraintViolations...)
-			//}
-			// TODO: are conflicts, constraintViolations OK here? do we need to collect them all for cli to print
-			if err != nil {
-				return tblToStats, err
-			}
-		}
-	}
-
-	srcDB, err := pullSpec.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-
-	if err != nil {
-		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-		return tblToStats, err
-	}
-
-	err = FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, progStarter, progStopper)
-	if err != nil {
-		return tblToStats, err
-	}
-
-	return tblToStats, nil
-}
+//func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, progStarter ProgStarter, progStopper ProgStopper) (map[string]*merge.MergeStats, error) {
+//
+//	tblToStats := make(map[string]*merge.MergeStats)
+//	for _, refSpec := range pullSpec.RefSpecs {
+//		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
+//
+//		if remoteTrackRef != nil {
+//			stats, err := PullRemoteBranch(ctx, dEnv, pullSpec, remoteTrackRef, progStarter, progStopper)
+//			for k, v := range stats {
+//				tblToStats[k] = v
+//			}
+//			//if len(conflicts) > 0 {
+//			//	allConflicts = append(allConflicts, conflicts...)
+//			//}
+//			//if len(constraintViolations) > 0 {
+//			//	allConstraintViolations = append(allConstraintViolations, constraintViolations...)
+//			//}
+//			// TODO: are conflicts, constraintViolations OK here? do we need to collect them all for cli to print
+//			if err != nil {
+//				return tblToStats, err
+//			}
+//
+//			// TODO: need to print stats
+//		}
+//	}
+//
+//	srcDB, err := pullSpec.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+//
+//	if err != nil {
+//		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+//		return tblToStats, err
+//	}
+//
+//	err = FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, progStarter, progStopper)
+//	if err != nil {
+//		return tblToStats, err
+//	}
+//
+//	return tblToStats, nil
+//}
 
 // fetchFollowTags fetches all tags from the source DB whose commits have already
 // been fetched into the destination DB.
@@ -405,7 +411,7 @@ func FetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *dolt
 	return nil
 }
 
-func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) (map[string]*merge.MergeStats, error) {
+func FetchRemoteB(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) (map[string]*merge.MergeStats, error) {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
@@ -427,7 +433,7 @@ func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.Pull
 	}
 
 	t := doltdb.CommitNowFunc()
-	mergeSpec, ok, err := env.ParseMergeSpec(ctx, dEnv, pullSpec.Msg, pullSpec.RemoteName, pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
+	mergeSpec, ok, err := env.ParseMergeSpec(ctx, dEnv, pullSpec.Msg, destRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
 	if err != nil {
 		return nil, err
 	}

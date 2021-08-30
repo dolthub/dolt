@@ -112,7 +112,6 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			if err != nil {
 				verr = errhand.BuildDError("error: invalid date").AddCause(err).Build()
 				return handleCommitErr(ctx, dEnv, verr, usage)
-				//return nil ,nil, err
 			}
 		}
 
@@ -159,16 +158,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				msg = m
 			}
 
-			//mergeSpec, ok, err := actions.PrepareMergeSpec(ctx, squash, dEnv, commitSpecStr, msg, apr.Contains(cli.NoFFParam))
 			mergeSpec, ok, err := env.ParseMergeSpec(ctx, dEnv, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
 			if err != nil {
-				// TODO: the build error handling
-				// invalid commit
-				// failed to get hash of commit
 				return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
 			}
 			if !ok {
-				// TODO: everything up to date
 				cli.Println("Everything up-to-date")
 				return handleCommitErr(ctx, dEnv, nil, usage)
 			}
@@ -177,33 +171,14 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			if err != nil {
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
-			//if !msgOk {
-			//	msg, err = getCommitMessageFromEditor(ctx, dEnv)
-			//	if err != nil {
-			//		return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
-			//	}
-			//}
 
 			tblToStats, err := actions.MergeCommitSpec(ctx, dEnv, mergeSpec)
 			printSuccessStats(tblToStats)
 			if err != nil {
 				//TODO handle error building
-				//return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
 				cli.Println("Unable to stage changes: add and commit to finish merge")
 				return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
 			}
-
-			//if len(conflicts) > 0 && len(constraintViolations) > 0 {
-			//	cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
-			//} else if len(conflicts) > 0 {
-			//	cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
-			//} else if len(constraintViolations) > 0 {
-			//	cli.Println("Automatic merge failed; fix constraint violations and then commit the result.\n" +
-			//		"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n" +
-			//		"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.")
-			//} else {
-			//	cli.Println("Already up to date.")
-			//}
 		}
 	}
 
@@ -211,12 +186,16 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) errhand.VerboseError {
+	if mergeSpec.H1 == mergeSpec.H2 {
+		cli.Println("Already up to date.")
+		return errhand.VerboseErrorFromError(doltdb.ErrUpToDate)
+
+	}
 	cli.Println("Updating", mergeSpec.H1.String()+".."+mergeSpec.H2.String())
 
 	if mergeSpec.Squash {
 		cli.Println("Squash commit -- not updating HEAD")
 	}
-	fmt.Println(mergeSpec.TblNames, mergeSpec.WorkingDiffs)
 	if len(mergeSpec.TblNames) != 0 {
 		bldr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by merge:")
 		for _, tName := range mergeSpec.TblNames {
@@ -247,10 +226,8 @@ func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeS
 				}
 				mergeSpec.Msg = msg
 			}
-			//return execNoFFMerge(ctx, apr, dEnv, roots, cm2, verr, workingDiffs)
 		} else {
 			cli.Println("Fast-forward")
-			//return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
 		}
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")

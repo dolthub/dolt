@@ -41,6 +41,7 @@ var ErrUnknownBranch = errors.New("unknown branch")
 var ErrCannotSetUpstreamForTag = errors.New("cannot set upstream for tag")
 var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
+var ErrFailedToDetermineMergeability = errors.New("failed to determine mergeability")
 
 func IsEmptyRemote(r Remote) bool {
 	return len(r.Name) == 0 && len(r.Url) == 0 && r.FetchSpecs == nil && r.Params == nil
@@ -177,9 +178,6 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 				remoteName = defRemote.Name
 			}
 			return nil, ErrNoUpstreamForBranch
-			//return nil, errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
-			//	"To push the current branch and set the remote as upstream, use\n" +
-			//	"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath()).Build()
 		}
 
 		//verr = errhand.BuildDError("").SetPrintUsage().Build()
@@ -299,7 +297,7 @@ type PullSpec struct {
 	Branch     ref.DoltRef
 }
 
-func ParsePullSpec(ctx context.Context, dEnv *DoltEnv, remoteName, msg string, squash bool, noff bool, force bool) (*PullSpec, error) {
+func ParsePullSpec(ctx context.Context, dEnv *DoltEnv, remoteName string, squash, noff, force bool) (*PullSpec, error) {
 	branch := dEnv.RepoStateReader().CWBHeadRef()
 
 	refSpecs, err := dEnv.GetRefSpecs(remoteName)
@@ -313,9 +311,9 @@ func ParsePullSpec(ctx context.Context, dEnv *DoltEnv, remoteName, msg string, s
 	}
 
 	remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
+	fmt.Println(remote.Name)
 
 	return &PullSpec{
-		Msg:        msg,
 		Squash:     squash,
 		Noff:       noff,
 		RemoteName: remoteName,
@@ -375,9 +373,9 @@ func ParseMergeSpec(ctx context.Context, dEnv *DoltEnv, msg string, commitSpecSt
 
 	}
 
-	if h1 == h2 {
-		return nil, false, err
-	}
+	//if h1 == h2 {
+	//	return nil, false, doltdb.ErrUpToDate
+	//}
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
@@ -385,10 +383,8 @@ func ParseMergeSpec(ctx context.Context, dEnv *DoltEnv, msg string, commitSpecSt
 	}
 
 	tblNames, workingDiffs, err := merge.MergeWouldStompChanges(ctx, roots, cm2)
-	fmt.Println("tablenames", tblNames)
 	if err != nil {
-		return nil, false, err
-		//return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
+		return nil, false, fmt.Errorf("%w; %s", ErrFailedToDetermineMergeability, err.Error())
 	}
 
 	name, email, err := GetNameAndEmail(dEnv.Config)
