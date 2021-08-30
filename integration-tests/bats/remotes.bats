@@ -1041,14 +1041,18 @@ setup_ref_test() {
 
 @test "remotes: fetching unknown remotes doesn't error" {
     setup_ref_test
+    cd ../../
+    cd dolt-repo-clones/test-repo
     run dolt fetch remotes/dasdas
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "error: invalid refspec ''" ]] || false
 }
 
-@test "remotes: fetching added invalid remotes correctly errors"{
+@test "remotes: fetching added invalid remotes correctly errors" {
     setup_ref_test
+    cd ../../
+    cd dolt-repo-clones/test-repo
     run dolt remote add myremote http://localhost:50051/test-org/fake
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
