@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
@@ -86,7 +87,6 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
 	}
-
 
 	pullSpec, err := env.ParsePullSpec(ctx, dEnv, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
 	if err != nil {

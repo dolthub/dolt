@@ -33,7 +33,7 @@ var ErrMergeFailedToUpdateRepoState = errors.New("unable to execute repo state u
 func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) (map[string]*merge.MergeStats, error) {
 
 	if ok, err := mergeSpec.Cm1.CanFastForwardTo(ctx, mergeSpec.Cm2); ok {
-		ancRoot, err := mergeSpec.Cm2.GetRootValue()
+		ancRoot, err := mergeSpec.Cm1.GetRootValue()
 		if err != nil {
 			return nil, err
 		}
@@ -191,6 +191,12 @@ func ExecuteFFMerge(
 func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) (map[string]*merge.MergeStats, error) {
 	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, mergeSpec.Cm1, mergeSpec.Cm2)
 	if err != nil {
+		switch err {
+		case doltdb.ErrUpToDate:
+			return tblToStats, fmt.Errorf("already up to date; %w", err)
+		case merge.ErrFastForward:
+			panic("fast forward merge")
+		}
 		return tblToStats, err
 	}
 	//if err != nil {

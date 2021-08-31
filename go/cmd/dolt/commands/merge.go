@@ -233,7 +233,6 @@ func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeS
 		if _, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-
 		if mergeSpec.Noff {
 			if mergeSpec.Msg == "" {
 				msg, err := getCommitMessageFromEditor(ctx, dEnv)

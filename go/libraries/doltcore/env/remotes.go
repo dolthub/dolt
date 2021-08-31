@@ -223,7 +223,7 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 	opts := &PushOpts{
 		SrcRef:    src,
 		DestRef:   dest,
-			RemoteRef: remoteRef,
+		RemoteRef: remoteRef,
 		Remote:    remote,
 		Mode: ref.UpdateMode{
 			Force: force,

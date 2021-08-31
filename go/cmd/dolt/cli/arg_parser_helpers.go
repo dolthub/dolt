@@ -77,7 +77,7 @@ const (
 	CommitMessageArg = "message"
 	AuthorParam      = "author"
 	ForceFlag        = "force"
-	SetUpstreamFlag        = "set-upstream"
+	SetUpstreamFlag  = "set-upstream"
 	AllFlag          = "all"
 	HardResetParam   = "hard"
 	SoftResetParam   = "soft"
