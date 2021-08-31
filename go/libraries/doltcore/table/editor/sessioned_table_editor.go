@@ -187,8 +187,8 @@ func (ste *sessionedTableEditor) SetConstraintViolation(ctx context.Context, k t
 }
 
 // Close implements TableEditor.
-func (ste *sessionedTableEditor) Close() error {
-	return ste.tableEditor.Close()
+func (ste *sessionedTableEditor) Close(ctx context.Context) error {
+	return ste.tableEditor.Close(ctx)
 }
 
 // handleReferencingRowsOnDelete handles updating referencing foreign keys on delete operations

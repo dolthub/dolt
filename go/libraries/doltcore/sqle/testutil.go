@@ -44,7 +44,15 @@ func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, stateme
 		return nil, err
 	}
 
-	for _, query := range strings.Split(statements, ";\n") {
+	//var start time.Time
+	lines := strings.Split(statements, ";\n")
+	for _, query := range lines {
+		//if !start.IsZero() {
+		//	log.Println("Took:", time.Since(start))
+		//}
+
+		//log.Printf("%d / %d - %s", i, len(lines), query)
+		//start = time.Now()
 		if len(strings.Trim(query, " ")) == 0 {
 			continue
 		}

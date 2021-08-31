@@ -21,7 +21,12 @@ type Uint64Set struct {
 }
 
 func NewUint64Set(uints []uint64) *Uint64Set {
-	s := &Uint64Set{make(map[uint64]bool, len(uints))}
+	l := len(uints)
+	if l < 16 {
+		l = 16
+	}
+
+	s := &Uint64Set{make(map[uint64]bool, l)}
 
 	for _, b := range uints {
 		s.uints[b] = true
@@ -45,8 +50,10 @@ func (us *Uint64Set) ContainsAll(uints []uint64) bool {
 	return true
 }
 
-func (us *Uint64Set) Add(i uint64) {
-	us.uints[i] = true
+func (us *Uint64Set) Add(vals ...uint64) {
+	for _, val := range vals {
+		us.uints[val] = true
+	}
 }
 
 func (us *Uint64Set) Remove(i uint64) {

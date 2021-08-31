@@ -328,7 +328,7 @@ func (kte *keylessTableEditor) SetConstraintViolation(ctx context.Context, k typ
 }
 
 // Close implements TableEditor.
-func (kte *keylessTableEditor) Close() error {
+func (kte *keylessTableEditor) Close(ctx context.Context) error {
 	return nil
 }
 
