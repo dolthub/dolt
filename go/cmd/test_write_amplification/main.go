@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"gonum.org/v1/plot/vg"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -15,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -419,7 +419,6 @@ func histPlot(values plotter.Values, fname string) {
 		panic(err)
 	}
 	p.Add(hist)
-
 
 	if err := p.Save(3*vg.Inch, 3*vg.Inch, fname); err != nil {
 		panic(err)
