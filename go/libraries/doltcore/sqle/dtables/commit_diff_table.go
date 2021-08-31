@@ -53,10 +53,16 @@ type CommitDiffTable struct {
 }
 
 func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
+	tblName, ok, err := root.ResolveTableName(ctx, tblName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, sql.ErrTableNotFound.New(doltdb.DoltCommitDiffTablePrefix + tblName)
+	}
+
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
-
 	ss, err := calcSuperDuperSchema(ctx, ddb, root, tblName)
-
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +71,6 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 	_ = ss.AddColumn(schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
 
 	sch, err := ss.GenerateSchema()
-
 	if err != nil {
 		return nil, err
 	}
@@ -80,13 +85,11 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 			diff.To:   toNamer,
 			diff.From: fromNamer,
 		})
-
 	if err != nil {
 		return nil, err
 	}
 
 	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, j.GetSchema())
-
 	if err != nil {
 		return nil, err
 	}

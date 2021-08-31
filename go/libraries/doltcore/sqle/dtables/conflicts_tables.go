@@ -43,8 +43,7 @@ type RootSetter interface {
 
 // NewConflictsTable returns a new ConflictsTableTable instance
 func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	tbl, ok, err := root.GetTable(ctx, tblName)
-
+	tbl, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -52,13 +51,11 @@ func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue,
 	}
 
 	rd, err := merge.NewConflictReader(ctx, tbl)
-
 	if err != nil {
 		return nil, err
 	}
 
 	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, rd.GetSchema())
-
 	if err != nil {
 		return nil, err
 	}

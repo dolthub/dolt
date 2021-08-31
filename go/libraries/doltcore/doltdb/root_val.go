@@ -376,7 +376,38 @@ func (root *RootValue) SetTableHash(ctx context.Context, tName string, h hash.Ha
 	return putTable(ctx, root, tName, ref)
 }
 
-// GetTable will retrieve a table by name
+// ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
+// name was found.
+func (root *RootValue) ResolveTableName(ctx context.Context, tName string) (string, bool, error) {
+	tableMap, err := root.getTableMap()
+	if err != nil {
+		return "", false, err
+	}
+	if ok, err := tableMap.Has(ctx, types.String(tName)); err != nil {
+		return "", false, err
+	} else if ok {
+		return tName, true, nil
+	}
+
+	found := false
+	lwrName := strings.ToLower(tName)
+	err = tableMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		keyStr := string(key.(types.String))
+		if lwrName == strings.ToLower(keyStr) {
+			tName = keyStr
+			found = true
+			return true, nil
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		return "", false, nil
+	}
+	return tName, found, nil
+}
+
+// GetTable will retrieve a table by its case-sensitive name.
 func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool, error) {
 	if st, ok, err := root.getTableSt(ctx, tName); err != nil {
 		return nil, false, err
@@ -387,46 +418,20 @@ func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool
 	return nil, false, nil
 }
 
+// GetTableInsensitive will retrieve a table by its case-insensitive name.
 func (root *RootValue) GetTableInsensitive(ctx context.Context, tName string) (*Table, string, bool, error) {
-	tableMap, err := root.getTableMap()
-
+	resolvedName, ok, err := root.ResolveTableName(ctx, tName)
 	if err != nil {
 		return nil, "", false, err
 	}
-
-	var foundKey string
-	hasExact, err := tableMap.Has(ctx, types.String(tName))
-
+	if !ok {
+		return nil, "", false, nil
+	}
+	tbl, ok, err := root.GetTable(ctx, resolvedName)
 	if err != nil {
 		return nil, "", false, err
 	}
-
-	if hasExact {
-		foundKey = tName
-	} else {
-		lwrName := strings.ToLower(tName)
-		err = tableMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-			keyStr := string(key.(types.String))
-			if lwrName == strings.ToLower(keyStr) {
-				foundKey = keyStr
-				return true, nil
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return nil, "", false, nil
-		}
-	}
-
-	tbl, ok, err := root.GetTable(ctx, foundKey)
-
-	if err != nil {
-		return nil, "", false, err
-	}
-
-	return tbl, foundKey, ok, nil
+	return tbl, resolvedName, ok, nil
 }
 
 // GetTableByColTag looks for the table containing the given column tag. It returns false if no table exists in the history.
