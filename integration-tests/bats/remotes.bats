@@ -75,7 +75,7 @@ teardown() {
     [ -d "$BATS_TMPDIR/remotes-$$/test-org/test-repo" ]
     run dolt pull test-remote
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
+    [[ "$output" =~ "Everything up to date" ]] || false
 }
 
 @test "remotes: push and pull non-master branch from remote" {
@@ -85,7 +85,7 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt pull test-remote
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
+    [[ "$output" =~ "Everything up to date" ]] || false
 }
 
 @test "remotes: push and pull from non-master branch and use --set-upstream" {

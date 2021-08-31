@@ -173,11 +173,26 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 
 			tblToStats, err := actions.MergeCommitSpec(ctx, dEnv, mergeSpec)
-			printSuccessStats(tblToStats)
+			hasConflicts, hasConstraintViolations := printSuccessStats(tblToStats)
+			if hasConflicts && hasConstraintViolations {
+				cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
+			} else if hasConflicts {
+				cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
+			} else if hasConstraintViolations {
+				cli.Println("Automatic merge failed; fix constraint violations and then commit the result.\n" +
+					"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n" +
+					"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.")
+			}
 			if err != nil {
-				//TODO handle error building
-				cli.Println("Unable to stage changes: add and commit to finish merge")
-				return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
+				var verr errhand.VerboseError
+				switch err {
+				case doltdb.ErrIsAhead:
+					verr = nil
+				default:
+					verr = errhand.VerboseErrorFromError(err)
+					cli.Println("Unable to stage changes: add and commit to finish merge")
+				}
+				return handleCommitErr(ctx, dEnv, verr, usage)
 			}
 		}
 	}
@@ -188,7 +203,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) errhand.VerboseError {
 	if mergeSpec.H1 == mergeSpec.H2 {
 		//cli.Println("Already up to date.")
-		cli.Println("Everything up-to-date.")
+		cli.Println("Everything up to date.")
 		return nil
 
 	}
