@@ -62,8 +62,15 @@ type HistoryTable struct {
 
 // NewHistoryTable creates a history table
 func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
-	ss, err := calcSuperSchema(ctx, root, tblName)
+	tblName, ok, err := root.ResolveTableName(ctx, tblName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, sql.ErrTableNotFound.New(doltdb.DoltHistoryTablePrefix + tblName)
+	}
 
+	ss, err := calcSuperSchema(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +80,6 @@ func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root 
 	_ = ss.AddColumn(schema.NewColumn(CommitDateCol, schema.HistoryCommitDateTag, types.TimestampKind, false))
 
 	sch, err := ss.GenerateSchema()
-
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +90,6 @@ func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root 
 
 	tableName := doltdb.DoltHistoryTablePrefix + tblName
 	sqlSch, err := sqlutil.FromDoltSchema(tableName, sch)
-
 	if err != nil {
 		return nil, err
 	}
