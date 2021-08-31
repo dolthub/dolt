@@ -108,6 +108,33 @@ SQL
     [[ "$output" =~ "hash" ]] || false
 }
 
+@test "revert: HEAD with --author parameter" {
+    dolt revert HEAD --author "john <johndoe@gmail.com>"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt log -n 1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Author: john <johndoe@gmail.com>" ]] || false
+}
+
+@test "revert: HEAD & HEAD~1 with --author parameter" {
+    dolt revert HEAD HEAD~1 --author "john <johndoe@gmail.com>"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt log -n 1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Author: john <johndoe@gmail.com>" ]] || false
+}
+
 @test "revert: SQL HEAD" {
     dolt sql -q "SELECT DOLT_REVERT('HEAD')"
     run dolt sql -q "SELECT * FROM test" -r=csv
@@ -197,4 +224,29 @@ SQL
     run dolt sql -q "SELECT DOLT_REVERT('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "hash" ]] || false
+}
+
+@test "revert: SQL HEAD with author" {
+    dolt sql -q "SELECT DOLT_REVERT('HEAD', '--author', 'john doe <johndoe@gmail.com>')"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt log -n 1
+    [[ "$output" =~ "Author: john doe <johndoe@gmail.com>" ]] || false
+}
+
+@test "revert: SQL HEAD & HEAD~1 with author" {
+    dolt sql -q "SELECT DOLT_REVERT('HEAD', 'HEAD~1', '--author', 'john doe <johndoe@gmail.com>')"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt log -n 1
+    [[ "$output" =~ "Author: john doe <johndoe@gmail.com>" ]] || false
 }
