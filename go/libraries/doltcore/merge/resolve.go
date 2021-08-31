@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -207,4 +209,62 @@ func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolv
 	}
 
 	return tbl.UpdateRows(ctx, rowData)
+}
+
+type AutoResolveStats struct {
+}
+
+func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, autoResolver AutoResolver) error {
+	root, err := dEnv.WorkingRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	tbls, err := root.TablesInConflict(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	return autoResolve(ctx, dEnv, root, autoResolver, tbls)
+}
+
+func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver AutoResolver, tbls []string) error {
+	root, err := dEnv.WorkingRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	return autoResolve(ctx, dEnv, root, autoResolver, tbls)
+}
+
+func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver AutoResolver, tbls []string) error {
+	tableEditSession := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
+
+	for _, tblName := range tbls {
+		tbl, ok, err := root.GetTable(ctx, tblName)
+
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			return doltdb.ErrTableNotFound
+		}
+
+		err = ResolveTable(ctx, root.VRW(), tblName, tbl, autoResolver, tableEditSession)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	newRoot, err := tableEditSession.Flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }

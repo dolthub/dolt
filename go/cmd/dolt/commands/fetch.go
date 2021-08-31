@@ -17,16 +17,15 @@ package commands
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -118,10 +117,14 @@ func getRefSpecs(args []string, dEnv *env.DoltEnv, remotes map[string]env.Remote
 
 	var rs []ref.RemoteRefSpec
 	var verr errhand.VerboseError
+	var err error
 	if len(args) != 0 {
 		rs, verr = parseRSFromArgs(remName, args)
 	} else {
-		rs, verr = dEnv.GetRefSpecs(remName)
+		rs, err = dEnv.GetRefSpecs(remName)
+		if err != nil {
+			verr = errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	if verr != nil {
@@ -200,10 +203,10 @@ func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, 
 
 			if remoteTrackRef != nil {
 				rsSeen = true
-				srcDBCommit, verr := fetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
+				srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef, runProgFuncs, stopProgFuncs)
 
-				if verr != nil {
-					return verr
+				if err != nil {
+					return errhand.VerboseErrorFromError(err)
 				}
 
 				switch mode {
@@ -239,91 +242,7 @@ func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, 
 		}
 	}
 
-	verr := fetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB)
-
-	if verr != nil {
-		return verr
-	}
-
-	return nil
-}
-
-func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) (*doltdb.Commit, errhand.VerboseError) {
-	evt := events.GetEventFromContext(ctx)
-
-	u, err := earl.Parse(rem.Url)
-
-	if err == nil {
-		if u.Scheme != "" {
-			evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
-		}
-	}
-
-	cs, _ := doltdb.NewCommitSpec(srcRef.String())
-	srcDBCommit, err := srcDB.Resolve(ctx, cs, nil)
-
-	if err != nil {
-		return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
-	} else {
-		wg, progChan, pullerEventCh := runProgFuncs()
-		err = actions.FetchCommit(ctx, dEnv, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
-		stopProgFuncs(wg, progChan, pullerEventCh)
-
-		if err != nil {
-			return nil, errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-		}
-	}
-
-	return srcDBCommit, nil
-}
-
-// fetchFollowTags fetches all tags from the source DB whose commits have already
-// been fetched into the destination DB.
-// todo: potentially too expensive to iterate over all srcDB tags
-func fetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB) errhand.VerboseError {
-	err := actions.IterResolvedTags(ctx, srcDB, func(tag *doltdb.Tag) (stop bool, err error) {
-		stRef, err := tag.GetStRef()
-		if err != nil {
-			return true, err
-		}
-
-		tagHash := stRef.TargetHash()
-
-		tv, err := destDB.ValueReadWriter().ReadValue(ctx, tagHash)
-		if err != nil {
-			return true, err
-		}
-		if tv != nil {
-			// tag is already fetched
-			return false, nil
-		}
-
-		cmHash, err := tag.Commit.HashOf()
-		if err != nil {
-			return true, err
-		}
-
-		cv, err := destDB.ValueReadWriter().ReadValue(ctx, cmHash)
-		if err != nil {
-			return true, err
-		}
-		if cv == nil {
-			// neither tag nor commit has been fetched
-			return false, nil
-		}
-
-		wg, progChan, pullerEventCh := runProgFuncs()
-		err = actions.FetchTag(ctx, dEnv, srcDB, destDB, tag, progChan, pullerEventCh)
-		stopProgFuncs(wg, progChan, pullerEventCh)
-
-		if err != nil {
-			return true, err
-		}
-
-		err = destDB.SetHead(ctx, tag.GetDoltRef(), stRef)
-
-		return false, err
-	})
+	err = actions.FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
 
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)

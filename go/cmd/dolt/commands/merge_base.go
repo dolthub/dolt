@@ -16,6 +16,9 @@ package commands
 
 import (
 	"context"
+	"errors"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -93,4 +96,29 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 	cli.Println(mergeBase.String())
 	return 0
+}
+
+func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, errhand.VerboseError) {
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
+
+	if err != nil {
+		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		if errors.Is(err, doltdb.ErrInvalidAncestorSpec) {
+			return nil, errhand.BuildDError("'%s' could not resolve ancestor spec", cSpecStr).Build()
+		} else if errors.Is(err, doltdb.ErrBranchNotFound) {
+			return nil, errhand.BuildDError("unknown ref in commit spec: '%s'", cSpecStr).Build()
+		} else if doltdb.IsNotFoundErr(err) {
+			return nil, errhand.BuildDError("'%s' not found", cSpecStr).Build()
+		} else if errors.Is(err, doltdb.ErrFoundHashNotACommit) {
+			return nil, errhand.BuildDError("'%s' is not a commit", cSpecStr).Build()
+		} else {
+			return nil, errhand.BuildDError("Unexpected error resolving '%s'", cSpecStr).AddCause(err).Build()
+		}
+	}
+
+	return cm, nil
 }

@@ -111,7 +111,7 @@ teardown() {
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
-    
+
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -155,7 +155,7 @@ SQL
     dolt push test-remote v1
 
     cd dolt-repo-clones/test-repo
-    run dolt pull
+    dolt pull
     [ "$status" -eq 0 ]
     run dolt tag
     [ "$status" -eq 0 ]
@@ -1036,7 +1036,7 @@ setup_ref_test() {
 @test "remotes: pushing empty branch does not panic" {
     run dolt push origin ''
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: invalid refspec ''" ]] || false
+    [[ "$output" =~ "invalid ref spec: ''" ]] || false
 }
 
 @test "remotes: existing parent directory is not wiped when clone fails" {
