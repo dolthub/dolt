@@ -193,10 +193,13 @@ func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, 
 			return errhand.BuildDError("error: failed to read from ").AddCause(err).Build()
 		}
 
+		rsSeen := false
+
 		for _, branchRef := range branchRefs {
 			remoteTrackRef := rs.DestRef(branchRef)
 
 			if remoteTrackRef != nil {
+				rsSeen = true
 				srcDBCommit, verr := fetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
 
 				if verr != nil {
@@ -225,6 +228,14 @@ func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, 
 					}
 				}
 			}
+		}
+
+		if !rsSeen {
+			if rb, ok := rs.(ref.BranchToTrackingBranchRefSpec); ok {
+				return errhand.BuildDError("error: %s does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists", rb.GetRemRefToLocal()).Build()
+			}
+
+			return errhand.BuildDError("error: remote does not appear to be a dolt database. could not read from the remote database. lease make sure you have the correct access rights and the database exists").Build()
 		}
 	}
 
