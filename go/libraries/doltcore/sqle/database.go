@@ -570,7 +570,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	return db.SetRoot(ctx, newRoot)
 }
 
-// dropTableFromAiTracker grabs the auto increment tracker and removes the table from it.
+// dropTableFromAiTracker grabs the auto increment tracker and removes the table named tableName from it.
 func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) error {
 	sess := dsess.DSessFromSess(ctx.Session)
 	ws, err := sess.WorkingSet(ctx, db.Name())
