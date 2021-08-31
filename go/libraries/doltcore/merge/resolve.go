@@ -17,6 +17,7 @@ package merge
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -209,7 +210,6 @@ func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolv
 
 	return tbl.UpdateRows(ctx, rowData)
 }
-
 
 type AutoResolveStats struct {
 }

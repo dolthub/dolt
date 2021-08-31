@@ -187,7 +187,6 @@ func PushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateM
 	cm, err := localDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 
 	if err != nil {
-		//return errhand.BuildDError("error: refspec '%v' not found.", srcRef.GetPath()).Build()
 		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
 	}
 
@@ -203,33 +202,6 @@ func PushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateM
 			return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
 		}
 	}
-	//if err != nil {
-	//	return err
-	//}
-	//if err != nil {
-	//	if err == doltdb.ErrUpToDate {
-	//		cli.Println("Everything up-to-date")
-	//	} else if err == doltdb.ErrIsAhead || err == ErrCantFF || err == datas.ErrMergeNeeded {
-	//		cli.Printf("To %s\n", remote.Url)
-	//		cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef.String(), remoteRef.String())
-	//		cli.Printf("error: failed to push some refs to '%s'\n", remote.Url)
-	//		cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
-	//		cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
-	//		cli.Println("hint: 'dolt pull ...') before pushing again.")
-	//		return errhand.BuildDError("").Build()
-	//	} else {
-	//		status, ok := status.FromError(err)
-	//		if ok && status.Code() == codes.PermissionDenied {
-	//			cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
-	//			cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
-	//		}
-	//		if rpcErr, ok := err.(*remotestorage.RpcError); ok {
-	//			return errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
-	//		} else {
-	//			return errhand.BuildDError("error: push failed").AddCause(err).Build()
-	//		}
-	//	}
-	//}
 
 	return nil
 }
@@ -311,47 +283,6 @@ func FetchTag(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.Dolt
 func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- datas.TableFileEvent) error {
 	return srcDB.Clone(ctx, destDB, eventCh)
 }
-
-//func PullFromRemote(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, progStarter ProgStarter, progStopper ProgStopper) (map[string]*merge.MergeStats, error) {
-//
-//	tblToStats := make(map[string]*merge.MergeStats)
-//	for _, refSpec := range pullSpec.RefSpecs {
-//		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
-//
-//		if remoteTrackRef != nil {
-//			stats, err := PullRemoteBranch(ctx, dEnv, pullSpec, remoteTrackRef, progStarter, progStopper)
-//			for k, v := range stats {
-//				tblToStats[k] = v
-//			}
-//			//if len(conflicts) > 0 {
-//			//	allConflicts = append(allConflicts, conflicts...)
-//			//}
-//			//if len(constraintViolations) > 0 {
-//			//	allConstraintViolations = append(allConstraintViolations, constraintViolations...)
-//			//}
-//			// TODO: are conflicts, constraintViolations OK here? do we need to collect them all for cli to print
-//			if err != nil {
-//				return tblToStats, err
-//			}
-//
-//			// TODO: need to print stats
-//		}
-//	}
-//
-//	srcDB, err := pullSpec.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-//
-//	if err != nil {
-//		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-//		return tblToStats, err
-//	}
-//
-//	err = FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, progStarter, progStopper)
-//	if err != nil {
-//		return tblToStats, err
-//	}
-//
-//	return tblToStats, nil
-//}
 
 // fetchFollowTags fetches all tags from the source DB whose commits have already
 // been fetched into the destination DB.

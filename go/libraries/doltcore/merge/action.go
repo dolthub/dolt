@@ -4,25 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
-	"time"
 )
-
 
 var ErrFailedToDetermineUnstagedDocs = errors.New("failed to determine unstaged docs")
 var ErrFailedToReadDatabase = errors.New("failed to read database")
 var ErrMergeFailedToUpdateDocs = errors.New("failed to update docs to the new working root")
 var ErrMergeFailedToUpdateRepoState = errors.New("unable to execute repo state update")
 var ErrFailedToDetermineMergeability = errors.New("failed to determine mergeability")
-
-const (
-	UserEmailKey = "user.email"
-	UserNameKey  = "user.name"
-	)
 
 type MergeSpec struct {
 	H1           hash.Hash
@@ -43,7 +38,7 @@ type MergeSpec struct {
 
 // GetNameAndEmail returns the name and email from the supplied config
 func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
-	name, err := cfg.GetString(UserNameKey)
+	name, err := cfg.GetString(env.UserNameKey)
 
 	if err == config.ErrConfigParamNotFound {
 		return "", "", doltdb.ErrNameNotConfigured
@@ -51,7 +46,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 		return "", "", err
 	}
 
-	email, err := cfg.GetString(UserEmailKey)
+	email, err := cfg.GetString(env.UserEmailKey)
 
 	if err == config.ErrConfigParamNotFound {
 		return "", "", doltdb.ErrEmailNotConfigured
@@ -93,10 +88,6 @@ func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSp
 		return nil, false, err
 
 	}
-
-	//if h1 == h2 {
-	//	return nil, false, doltdb.ErrUpToDate
-	//}
 
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
@@ -301,16 +292,6 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec) 
 		}
 		return tblToStats, err
 	}
-	//if err != nil {
-	//	switch err {
-	//	case doltdb.ErrUpToDate:
-	//		return errhand.BuildDError("Already up to date.").AddCause(err).Build()
-	//	case merge.ErrFastForward:
-	//		panic("fast forward merge")
-	//	default:
-	//		return errhand.BuildDError("Bad merge").AddCause(err).Build()
-	//	}
-	//}
 
 	return tblToStats, mergedRootToWorking(ctx, mergeSpec.Squash, dEnv, mergedRoot, mergeSpec.WorkingDiffs, mergeSpec.Cm2, tblToStats)
 }
@@ -340,7 +321,6 @@ func mergedRootToWorking(
 		err = dEnv.StartMerge(ctx, cm2)
 
 		if err != nil {
-			//return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
 			return actions.ErrFailedToSaveRepoState
 		}
 	}
@@ -351,7 +331,6 @@ func mergedRootToWorking(
 		return ErrFailedToDetermineUnstagedDocs
 	}
 
-	//verr := UpdateWorkingWithVErr(dEnv, workingRoot)
 	err = dEnv.UpdateWorkingRoot(context.Background(), workingRoot)
 	if err != nil {
 		return err

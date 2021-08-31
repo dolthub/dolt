@@ -17,15 +17,14 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -83,7 +82,6 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	//remoteName := apr.Arg(0)
 	var remoteName string
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
@@ -98,31 +96,13 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	//srcDB, err := pullSpec.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-	//
-	//if err != nil {
-	//	//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-	//	//return tblToStats, err
-	//	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	//}
-	//
-	//err = actions.FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
-	//if err != nil {
-	//	//return tblToStats, err
-	//	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	//}
-
-	//return tblToStats, nil
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 
 func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) error {
-
-	//_, err = actions.PullFromRemote(ctx, dEnv, pullSpec, runProgFuncs, stopProgFuncs)
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
-		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
 		return fmt.Errorf("failed to get remote db; %w", err)
 	}
 	for _, refSpec := range pullSpec.RefSpecs {
@@ -130,10 +110,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 
 		if remoteTrackRef != nil {
 
-			// TODO: fetch, fast forward, collect mergeSpec, print options for merge spec, merge, print merge results
-			//srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv, pullSpec.Remote, srcDB, dEnv.DoltDB, pullSpec.Branch, remoteTrackRef, runProgFuncs, stopProgFuncs)
 			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv, pullSpec.Remote, srcDB, dEnv.DoltDB, pullSpec.Branch, remoteTrackRef, runProgFuncs, stopProgFuncs)
-
 			if err != nil {
 				return err
 			}
@@ -156,28 +133,14 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return err
 			}
 
-			//stats, err := actions.PullRemoteBranch(ctx, dEnv, pullSpec, remoteTrackRef, runProgFuncs, stopProgFuncs)
 			stats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
 			printSuccessStats(stats)
 			if err != nil {
 				return err
 			}
-			//if err != nil {
-			//	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+
 		}
 
-		//if len(conflicts) > 0 {
-		//	allConflicts = append(allConflicts, conflicts...)
-		//}
-		//if len(constraintViolations) > 0 {
-		//	allConstraintViolations = append(allConstraintViolations, constraintViolations...)
-		//}
-		// TODO: are conflicts, constraintViolations OK here? do we need to collect them all for cli to print
-		//if err != nil {
-		//	return tblToStats, err
-		//}
-
-		// TODO: need to print stats
 	}
 
 	srcDB, err = pullSpec.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
