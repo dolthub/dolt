@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -145,7 +144,7 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actions.TagProps, err error) {
-	name, email, err := merge.GetNameAndEmail(dEnv.Config)
+	name, email, err := env.GetNameAndEmail(dEnv.Config)
 	if err != nil {
 		return props, err
 	}

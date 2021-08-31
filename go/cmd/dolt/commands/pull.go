@@ -78,7 +78,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() > 1 {
-		verr := errhand.BuildDError("dolt pull takes at most one arg").SetPrintUsage().Build()
+		verr := errhand.VerboseErrorFromError(actions.ErrInvalidPullArgs)
 		return HandleVErrAndExitCode(verr, usage)
 	}
 

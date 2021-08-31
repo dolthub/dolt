@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -48,27 +47,6 @@ type MergeSpec struct {
 	Email        string
 	Name         string
 	Date         time.Time
-}
-
-// GetNameAndEmail returns the name and email from the supplied config
-func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
-	name, err := cfg.GetString(env.UserNameKey)
-
-	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrNameNotConfigured
-	} else if err != nil {
-		return "", "", err
-	}
-
-	email, err := cfg.GetString(env.UserEmailKey)
-
-	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrEmailNotConfigured
-	} else if err != nil {
-		return "", "", err
-	}
-
-	return name, email, nil
 }
 
 func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSpecStr string, squash bool, noff bool, force bool, date time.Time) (*MergeSpec, bool, error) {
@@ -113,7 +91,7 @@ func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSp
 		return nil, false, fmt.Errorf("%w; %s", ErrFailedToDetermineMergeability, err.Error())
 	}
 
-	name, email, err := GetNameAndEmail(dEnv.Config)
+	name, email, err := env.GetNameAndEmail(dEnv.Config)
 	if err != nil {
 		return nil, false, err
 	}

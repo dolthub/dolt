@@ -97,7 +97,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
 	} else {
-		name, email, err = merge.GetNameAndEmail(dEnv.Config)
+		name, email, err = env.GetNameAndEmail(dEnv.Config)
 	}
 
 	if err != nil {
@@ -220,7 +220,6 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) (string,
 	return finalMsg, nil
 }
 
-// TODO: return an error here
 func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) (string, error) {
 	initialNoColor := color.NoColor
 	color.NoColor = true

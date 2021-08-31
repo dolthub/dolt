@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -182,4 +182,25 @@ func (dcc *DoltCliConfig) IfEmptyUseConfig(val, key string) string {
 	}
 
 	return cfgVal
+}
+
+// GetNameAndEmail returns the name and email from the supplied config
+func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
+	name, err := cfg.GetString(UserNameKey)
+
+	if err == config.ErrConfigParamNotFound {
+		return "", "", doltdb.ErrNameNotConfigured
+	} else if err != nil {
+		return "", "", err
+	}
+
+	email, err := cfg.GetString(UserEmailKey)
+
+	if err == config.ErrConfigParamNotFound {
+		return "", "", doltdb.ErrEmailNotConfigured
+	} else if err != nil {
+		return "", "", err
+	}
+
+	return name, email, nil
 }

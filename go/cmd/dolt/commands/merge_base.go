@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
@@ -106,13 +107,13 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, 
 
 	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
-		if err == doltdb.ErrInvalidAncestorSpec {
+		if errors.Is(err, doltdb.ErrInvalidAncestorSpec) {
 			return nil, errhand.BuildDError("'%s' could not resolve ancestor spec", cSpecStr).Build()
-		} else if err == doltdb.ErrBranchNotFound {
+		} else if errors.Is(err, doltdb.ErrBranchNotFound) {
 			return nil, errhand.BuildDError("unknown ref in commit spec: '%s'", cSpecStr).Build()
 		} else if doltdb.IsNotFoundErr(err) {
 			return nil, errhand.BuildDError("'%s' not found", cSpecStr).Build()
-		} else if err == doltdb.ErrFoundHashNotACommit {
+		} else if errors.Is(err, doltdb.ErrFoundHashNotACommit) {
 			return nil, errhand.BuildDError("'%s' is not a commit", cSpecStr).Build()
 		} else {
 			return nil, errhand.BuildDError("Unexpected error resolving '%s'", cSpecStr).AddCause(err).Build()
