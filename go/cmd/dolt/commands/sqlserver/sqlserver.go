@@ -146,7 +146,14 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 
 // Exec executes the command
 func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return startServer(ctx, cmd.VersionStr, commandStr, args, dEnv, nil)
+	controller := CreateServerController()
+	newCtx, cancelF := context.WithCancel(context.Background())
+	go func() {
+		<-ctx.Done()
+		controller.StopServer()
+		cancelF()
+	}()
+	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 }
 
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
