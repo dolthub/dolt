@@ -333,6 +333,7 @@ func getDbStateForDefaultBranch(ctx context.Context, branch interface{}, db sql.
 		HeadCommit: headCommit,
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
 	}, nil
 }
 
@@ -354,5 +355,6 @@ func getDbStateForDEnv(ctx context.Context, db sql.Database, dEnv *env.DoltEnv) 
 		HeadCommit: headCommit,
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
 	}, nil
 }

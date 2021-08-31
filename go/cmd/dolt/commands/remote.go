@@ -18,8 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -27,10 +25,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -142,105 +137,22 @@ func removeRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	old := strings.TrimSpace(apr.Arg(1))
+	err := dEnv.RemoveRemote(ctx, old)
 
-	remotes, err := dEnv.GetRemotes()
-
-	if err != nil {
-		return errhand.BuildDError("error: unable to read remotes").Build()
-	}
-
-	if _, ok := remotes[old]; !ok {
-		return errhand.BuildDError("error: unknown remote " + old).Build()
-	}
-
-	refs, err := dEnv.DoltDB.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
-
-	if err != nil {
+	switch err {
+	case nil:
+		return nil
+	case env.ErrFailedToWriteRepoState:
+		return errhand.BuildDError("error: failed to save change to repo state").AddCause(err).Build()
+	case env.ErrFailedToDeleteRemote:
+		return errhand.BuildDError("error: failed to delete remote tracking ref").AddCause(err).Build()
+	case env.ErrFailedToReadFromDb:
 		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+	case env.ErrRemoteNotFound:
+		return errhand.BuildDError("error: unknown remote: '%s' ", old).Build()
+	default:
+		return errhand.BuildDError("error: unknown error").AddCause(err).Build()
 	}
-
-	for _, r := range refs {
-		rr := r.(ref.RemoteRef)
-
-		if rr.GetRemote() == old {
-			err = dEnv.DoltDB.DeleteBranch(ctx, rr)
-
-			if err != nil {
-				return errhand.BuildDError("error: failed to delete remote tracking ref '%s'", rr.String()).Build()
-			}
-		}
-	}
-
-	delete(dEnv.RepoState.Remotes, old)
-	err = dEnv.RepoState.Save(dEnv.FS)
-
-	if err != nil {
-		return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
-	}
-
-	return nil
-}
-
-func getAbsRemoteUrl(fs filesys.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {
-	u, err := earl.Parse(urlArg)
-
-	if err != nil {
-		return "", "", err
-	}
-
-	if u.Scheme != "" {
-		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
-			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, fs)
-
-			if err != nil {
-				return "", "", err
-			}
-
-			return u.Scheme, absUrl, err
-		}
-
-		return u.Scheme, urlArg, nil
-	} else if u.Host != "" {
-		return dbfactory.HTTPSScheme, "https://" + urlArg, nil
-	}
-
-	hostName, err := cfg.GetString(env.RemotesApiHostKey)
-
-	if err != nil {
-		if err != config.ErrConfigParamNotFound {
-			return "", "", err
-		}
-
-		hostName = env.DefaultRemotesApiHost
-	}
-
-	hostName = strings.TrimSpace(hostName)
-
-	return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, u.Path), nil
-}
-
-func getAbsFileRemoteUrl(urlStr string, fs filesys.Filesys) (string, error) {
-	var err error
-	urlStr = filepath.Clean(urlStr)
-	urlStr, err = fs.Abs(urlStr)
-
-	if err != nil {
-		return "", err
-	}
-
-	exists, isDir := fs.Exists(urlStr)
-
-	if !exists {
-		return "", filesys.ErrDirNotExist
-	} else if !isDir {
-		return "", filesys.ErrIsFile
-	}
-
-	urlStr = strings.ReplaceAll(urlStr, `\`, "/")
-	if !strings.HasPrefix(urlStr, "/") {
-		urlStr = "/" + urlStr
-	}
-	return dbfactory.FileScheme + "://" + urlStr, nil
 }
 
 func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
@@ -250,36 +162,34 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 
 	remoteName := strings.TrimSpace(apr.Arg(1))
 
-	if strings.IndexAny(remoteName, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
-		return errhand.BuildDError("invalid remote name: " + remoteName).Build()
-	}
-
-	if _, ok := dEnv.RepoState.Remotes[remoteName]; ok {
-		return errhand.BuildDError("error: A remote named '%s' already exists.", remoteName).AddDetails("remove it before running this command again").Build()
-	}
-
 	remoteUrl := apr.Arg(2)
-	scheme, absRemoteUrl, err := getAbsRemoteUrl(dEnv.FS, dEnv.Config, remoteUrl)
-
+	scheme, absRemoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, remoteUrl)
 	if err != nil {
 		return errhand.BuildDError("error: '%s' is not valid.", remoteUrl).AddCause(err).Build()
 	}
 
 	params, verr := parseRemoteArgs(apr, scheme, absRemoteUrl)
-
 	if verr != nil {
 		return verr
 	}
 
-	r := env.NewRemote(remoteName, absRemoteUrl, params)
-	dEnv.RepoState.AddRemote(r)
-	err = dEnv.RepoState.Save(dEnv.FS)
+	r := env.NewRemote(remoteName, remoteUrl, params)
+	err = dEnv.AddRemote(r.Name, r.Url, r.FetchSpecs, r.Params)
 
-	if err != nil {
+	switch err {
+	case nil:
+		return nil
+	case env.ErrRemoteAlreadyExists:
+		return errhand.BuildDError("error: a remote named '%s' already exists.", r.Name).AddDetails("remove it before running this command again").Build()
+	case env.ErrRemoteNotFound:
+		return errhand.BuildDError("error: unknown remote: '%s' ", r.Name).Build()
+	case env.ErrInvalidRemoteURL:
+		return errhand.BuildDError("error: '%s' is not valid.", r.Url).AddCause(err).Build()
+	case env.ErrInvalidRemoteName:
+		return errhand.BuildDError("error: invalid remote name: " + r.Name).Build()
+	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}
-
-	return nil
 }
 
 func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map[string]string, errhand.VerboseError) {

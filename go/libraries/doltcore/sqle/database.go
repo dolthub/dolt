@@ -200,7 +200,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	// NOTE: system tables are not suitable for caching
 	switch {
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
-		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
+		suffix := strings.ToLower(tblName[len(doltdb.DoltDiffTablePrefix):])
 		head, err := sess.GetHeadCommit(ctx, db.name)
 		if err != nil {
 			return nil, false, err
@@ -211,14 +211,14 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		}
 		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
-		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
+		suffix := strings.ToLower(tblName[len(doltdb.DoltCommitDiffTablePrefix):])
 		dt, err := dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root)
 		if err != nil {
 			return nil, false, err
 		}
 		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
-		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
+		suffix := strings.ToLower(tblName[len(doltdb.DoltHistoryTablePrefix):])
 		head, err := sess.GetHeadCommit(ctx, db.name)
 		if err != nil {
 			return nil, false, err
@@ -229,14 +229,14 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		}
 		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
-		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
+		suffix := strings.ToLower(tblName[len(doltdb.DoltConfTablePrefix):])
 		dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}
 		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltConstViolTablePrefix):
-		suffix := tblName[len(doltdb.DoltConstViolTablePrefix):]
+		suffix := strings.ToLower(tblName[len(doltdb.DoltConstViolTablePrefix):])
 		dt, err := dtables.NewConstraintViolationsTable(ctx, suffix, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
@@ -260,12 +260,14 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.BranchesTableName:
 		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
+	case doltdb.RemotesTableName:
+		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
 	case doltdb.CommitsTableName:
 		dt, found = dtables.NewCommitsTable(ctx, db.ddb), true
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name), db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name, map[string]env.Remote{}), db.drw), true
 	}
 	if found {
 		return dt, found, nil

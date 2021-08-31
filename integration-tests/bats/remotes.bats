@@ -46,7 +46,7 @@ teardown() {
     [[ ! "$output" =~ "test-remote" ]] || false
     run dolt remote remove poop
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote poop" ]] || false
+    [[ "$output" =~ "unknown remote: 'poop'" ]] || false
 }
 
 @test "remotes: push and pull an unknown remote" {
@@ -1037,4 +1037,43 @@ setup_ref_test() {
     run dolt push origin ''
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid ref spec: ''" ]] || false
+}
+
+@test "remotes: existing parent directory is not wiped when clone fails" {
+    # Create the new testdir and save it
+    mkdir testdir && cd testdir
+    run pwd
+    testdir=$output
+
+    # Create a clone operation that purposely fails on a valid remote
+    mkdir clone_root
+    mkdir dest && cd dest
+
+    run dolt clone "file://../clone_root" .
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: clone failed" ]] || false
+
+    # Validates that the directory exists
+    run ls $testdir
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "clone_root" ]] || false
+    [[ "$output" =~ "dest" ]] || false
+
+    # Check that .dolt was deleted
+    run ls -a $testdir/dest
+    ! [[ "$output" =~ ".dolt" ]] || false
+
+    # try again and now make sure that /dest/.dolt is correctly deleted instead of dest/
+    cd ..
+    run dolt clone "file://./clone_root" dest/
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: clone failed" ]] || false
+
+    run ls $testdir
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "clone_root" ]] || false
+    [[ "$output" =~ "dest" ]] || false
+
+    run ls -a $testdir/dest
+    ! [[ "$output" =~ ".dolt" ]] || false
 }

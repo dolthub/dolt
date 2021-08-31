@@ -439,16 +439,6 @@ SQL
     [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
 }
 
-@test "primary-key-changes: error dropping primary key when used as a parent in Fk relationship" {
-    dolt sql -q "CREATE TABLE child(pk int primary key)"
-    dolt sql -q "CREATE TABLE parent(pk int primary key, val int);"
-    dolt sql -q "ALTER TABLE parent ADD CONSTRAINT myfk FOREIGN KEY (pk) REFERENCES child (pk);"
-
-    run dolt sql -q "ALTER TABLE parent DROP PRIMARY KEY"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: can't drop index 'PRIMARY': needed in a foreign key constraint" ]] || false
-}
-
 @test "primary-key-changes: dolt constraints verify works gracefully with schema violations" {
     dolt sql -q "CREATE table t (pk int primary key, val int)"
     dolt commit -am "cm1"
@@ -546,4 +536,36 @@ SQL
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (val);"
     [ "$status" -eq 1 ]
     [[ "$output" = "duplicate primary key given: [1]" ]] || false
+}
+
+@test "primary-key-changes: can drop pk with supporting backup index" {
+    dolt sql -q "CREATE table t1 (pk int, val int, primary key (pk, val), key `backup` (pk, val))"
+    dolt sql -q "CREATE table c1 (pk int, val int, foreign key (pk, val) references t1 (pk, val))"
+    dolt sql -q "alter table t1 drop primary key"
+
+    dolt sql -q "CREATE table t2 (pk int, val int, primary key (pk, val), key `backup` (val))"
+    dolt sql -q "CREATE table c2 (pk int, val int, foreign key (val) references t2 (val))"
+    dolt sql -q "alter table t2 drop primary key"
+
+    dolt sql -q "CREATE table t3 (pk int, val int, primary key (val, pk), key `backup` (pk))"
+    dolt sql -q "CREATE table c3 (pk int, val int, foreign key (val) references t3 (val))"
+    run dolt sql -q "alter table t3 drop primary key"
+    [ "$status" -eq 1 ]
+}
+
+@test "primary-key-changes: foreign key lookup switch to backup index" {
+    dolt sql -q "CREATE table t (pk int, val int, primary key (pk, val), key `backup` (val))"
+    dolt sql -q "CREATE table c (pk int, val int, foreign key (val) references t (val))"
+    dolt sql -q "insert into t values (1,1), (2,2)"
+    dolt sql -q "insert into c values (1,1), (2,2)"
+    dolt sql -q "alter table t drop primary key"
+
+    run dolt sql -q "explain select * from c where val = 2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Filter" ]] || false
+
+    run dolt sql -q "select * from c where val = 2" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "2,2" ]] || false
+
 }
