@@ -202,8 +202,9 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *merge.MergeSpec) errhand.VerboseError {
 	if mergeSpec.H1 == mergeSpec.H2 {
-		//cli.Println("Already up to date.")
-		cli.Println("Everything up to date.")
+		//TODO - why is this different for merge/pull?
+		// cli.Println("Already up to date.")
+		cli.Println("Everything up-to-date.")
 		return nil
 
 	}

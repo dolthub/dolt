@@ -1,3 +1,17 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package merge
 
 import (
@@ -60,31 +74,31 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSpecStr string, squash bool, noff bool, force bool, date time.Time) (*MergeSpec, bool, error) {
 	cs1, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
-		//return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
 		return nil, false, err
 	}
 
 	cm1, err := dEnv.DoltDB.Resolve(context.TODO(), cs1, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		return nil, false, err
+	}
 
 	cs2, err := doltdb.NewCommitSpec(commitSpecStr)
 	if err != nil {
-		//return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
 		return nil, false, err
 	}
 
 	cm2, err := dEnv.DoltDB.Resolve(context.TODO(), cs2, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		return nil, false, err
+	}
 
 	h1, err := cm1.HashOf()
-
 	if err != nil {
-		//return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
 		return nil, false, err
 	}
 
 	h2, err := cm2.HashOf()
-
 	if err != nil {
-		//return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
 		return nil, false, err
 
 	}
@@ -101,8 +115,6 @@ func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSp
 
 	name, email, err := GetNameAndEmail(dEnv.Config)
 	if err != nil {
-		//verr = errhand.BuildDError("error: committing").AddCause(err).Build()
-		//return handleCommitErr(ctx, dEnv, verr, usage)
 		return nil, false, err
 	}
 

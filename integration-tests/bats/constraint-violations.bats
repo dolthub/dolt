@@ -57,7 +57,7 @@ SQL
     dolt commit -m "this works"
     run dolt merge other
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "up to date" ]] || false
+    [[ "$output" =~ "up-to-date" ]] || false
 }
 
 @test "constraint-violations: dolt_force_transaction_commit ignores constraint violations" {
