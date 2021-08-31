@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -143,7 +144,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			}
 
 			t := doltdb.CommitNowFunc()
-			mergeSpec, ok, err := env.ParseMergeSpec(ctx, dEnv, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
+			mergeSpec, ok, err := merge.ParseMergeSpec(ctx, dEnv, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
 			if err != nil {
 				return err
 			}
@@ -156,7 +157,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			}
 
 			//stats, err := actions.PullRemoteBranch(ctx, dEnv, pullSpec, remoteTrackRef, runProgFuncs, stopProgFuncs)
-			stats, err := actions.MergeCommitSpec(ctx, dEnv, mergeSpec)
+			stats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
 			printSuccessStats(stats)
 			if err != nil {
 				return err

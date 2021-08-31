@@ -14,69 +14,61 @@
 
 package actions
 
-import (
-	"context"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-)
-
-type AutoResolveStats struct {
-}
-
-func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.AutoResolver) error {
-	root, err := dEnv.WorkingRoot(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	tbls, err := root.TablesInConflict(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	return autoResolve(ctx, dEnv, root, autoResolver, tbls)
-}
-
-func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.AutoResolver, tbls []string) error {
-	root, err := dEnv.WorkingRoot(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	return autoResolve(ctx, dEnv, root, autoResolver, tbls)
-}
-
-func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.AutoResolver, tbls []string) error {
-	tableEditSession := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
-
-	for _, tblName := range tbls {
-		tbl, ok, err := root.GetTable(ctx, tblName)
-
-		if err != nil {
-			return err
-		}
-
-		if !ok {
-			return doltdb.ErrTableNotFound
-		}
-
-		err = merge.ResolveTable(ctx, root.VRW(), tblName, tbl, autoResolver, tableEditSession)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	newRoot, err := tableEditSession.Flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	return dEnv.UpdateWorkingRoot(ctx, newRoot)
-}
+//
+//type AutoResolveStats struct {
+//}
+//
+//func AutoResolveAll(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.AutoResolver) error {
+//	root, err := dEnv.WorkingRoot(ctx)
+//
+//	if err != nil {
+//		return err
+//	}
+//
+//	tbls, err := root.TablesInConflict(ctx)
+//
+//	if err != nil {
+//		return err
+//	}
+//
+//	return autoResolve(ctx, dEnv, root, autoResolver, tbls)
+//}
+//
+//func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver merge.AutoResolver, tbls []string) error {
+//	root, err := dEnv.WorkingRoot(ctx)
+//
+//	if err != nil {
+//		return err
+//	}
+//
+//	return autoResolve(ctx, dEnv, root, autoResolver, tbls)
+//}
+//
+//func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.AutoResolver, tbls []string) error {
+//	tableEditSession := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
+//
+//	for _, tblName := range tbls {
+//		tbl, ok, err := root.GetTable(ctx, tblName)
+//
+//		if err != nil {
+//			return err
+//		}
+//
+//		if !ok {
+//			return doltdb.ErrTableNotFound
+//		}
+//
+//		err = merge.ResolveTable(ctx, root.VRW(), tblName, tbl, autoResolver, tableEditSession)
+//
+//		if err != nil {
+//			return err
+//		}
+//	}
+//
+//	newRoot, err := tableEditSession.Flush(ctx)
+//	if err != nil {
+//		return err
+//	}
+//
+//	return dEnv.UpdateWorkingRoot(ctx, newRoot)
+//}

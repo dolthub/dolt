@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"strings"
 
 	"github.com/fatih/color"
@@ -144,7 +145,7 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actions.TagProps, err error) {
-	name, email, err := env.GetNameAndEmail(dEnv.Config)
+	name, email, err := merge.GetNameAndEmail(dEnv.Config)
 	if err != nil {
 		return props, err
 	}

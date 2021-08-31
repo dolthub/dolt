@@ -97,7 +97,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
 	} else {
-		name, email, err = env.GetNameAndEmail(dEnv.Config)
+		name, email, err = merge.GetNameAndEmail(dEnv.Config)
 	}
 
 	if err != nil {

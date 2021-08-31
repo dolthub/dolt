@@ -18,21 +18,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
-	"path/filepath"
-	"strings"
-	"time"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"path"
+	"path/filepath"
+	"strings"
 )
 
 var NoRemote = Remote{}
@@ -45,7 +41,6 @@ var ErrUnknownBranch = errors.New("unknown branch")
 var ErrCannotSetUpstreamForTag = errors.New("cannot set upstream for tag")
 var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
-var ErrFailedToDetermineMergeability = errors.New("failed to determine mergeability")
 var ErrInvalidSetUpstreamArgs = errors.New("invalid set-upstream arguments")
 
 func IsEmptyRemote(r Remote) bool {
@@ -323,114 +318,6 @@ func ParsePullSpec(ctx context.Context, dEnv *DoltEnv, remoteName string, squash
 		Branch:     branch,
 		Force:      force,
 	}, nil
-}
-
-type MergeSpec struct {
-	H1           hash.Hash
-	H2           hash.Hash
-	Cm1          *doltdb.Commit
-	Cm2          *doltdb.Commit
-	TblNames     []string
-	WorkingDiffs map[string]hash.Hash
-	Squash       bool
-	Msg          string
-	Noff         bool
-	Force        bool
-	AllowEmpty   bool
-	Email        string
-	Name         string
-	Date         time.Time
-}
-
-func ParseMergeSpec(ctx context.Context, dEnv *DoltEnv, msg string, commitSpecStr string, squash bool, noff bool, force bool, date time.Time) (*MergeSpec, bool, error) {
-	cs1, err := doltdb.NewCommitSpec("HEAD")
-	if err != nil {
-		//return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
-		return nil, false, err
-	}
-
-	cm1, err := dEnv.DoltDB.Resolve(context.TODO(), cs1, dEnv.RepoStateReader().CWBHeadRef())
-
-	cs2, err := doltdb.NewCommitSpec(commitSpecStr)
-	if err != nil {
-		//return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
-		return nil, false, err
-	}
-
-	cm2, err := dEnv.DoltDB.Resolve(context.TODO(), cs2, dEnv.RepoStateReader().CWBHeadRef())
-
-	h1, err := cm1.HashOf()
-
-	if err != nil {
-		//return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
-		return nil, false, err
-	}
-
-	h2, err := cm2.HashOf()
-
-	if err != nil {
-		//return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
-		return nil, false, err
-
-	}
-
-	//if h1 == h2 {
-	//	return nil, false, doltdb.ErrUpToDate
-	//}
-
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	tblNames, workingDiffs, err := merge.MergeWouldStompChanges(ctx, roots, cm2)
-	if err != nil {
-		return nil, false, fmt.Errorf("%w; %s", ErrFailedToDetermineMergeability, err.Error())
-	}
-
-	name, email, err := GetNameAndEmail(dEnv.Config)
-	if err != nil {
-		//verr = errhand.BuildDError("error: committing").AddCause(err).Build()
-		//return handleCommitErr(ctx, dEnv, verr, usage)
-		return nil, false, err
-	}
-
-	return &MergeSpec{
-		H1:           h1,
-		H2:           h2,
-		Cm1:          cm1,
-		Cm2:          cm2,
-		TblNames:     tblNames,
-		WorkingDiffs: workingDiffs,
-		Squash:       squash,
-		Msg:          msg,
-		Noff:         noff,
-		Force:        force,
-		Email:        email,
-		Name:         name,
-		Date:         date,
-	}, true, nil
-}
-
-// GetNameAndEmail returns the name and email from the supplied config
-func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
-	name, err := cfg.GetString(UserNameKey)
-
-	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrNameNotConfigured
-	} else if err != nil {
-		return "", "", err
-	}
-
-	email, err := cfg.GetString(UserEmailKey)
-
-	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrEmailNotConfigured
-	} else if err != nil {
-		return "", "", err
-	}
-
-	return name, email, nil
 }
 
 func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {

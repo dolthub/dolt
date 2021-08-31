@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -407,39 +406,6 @@ func FetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *dolt
 	}
 
 	return nil
-}
-
-func FetchRemoteB(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) (map[string]*merge.MergeStats, error) {
-	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-
-	if err != nil {
-		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-		return nil, fmt.Errorf("failed to get remote db; %w", err)
-	}
-
-	srcDBCommit, err := FetchRemoteBranch(ctx, dEnv, pullSpec.Remote, srcDB, dEnv.DoltDB, pullSpec.Branch, destRef, progStarter, progStopper)
-
-	if err != nil {
-		return nil, err
-	}
-
-	err = dEnv.DoltDB.FastForward(ctx, destRef, srcDBCommit)
-
-	if err != nil {
-		//return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-		return nil, fmt.Errorf("fetch failed; %w", err)
-	}
-
-	t := doltdb.CommitNowFunc()
-	mergeSpec, ok, err := env.ParseMergeSpec(ctx, dEnv, pullSpec.Msg, destRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
-
-	}
-	return MergeCommitSpec(ctx, dEnv, mergeSpec)
 }
 
 func FetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) (*doltdb.Commit, error) {

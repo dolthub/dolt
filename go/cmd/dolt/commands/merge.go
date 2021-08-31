@@ -158,7 +158,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				msg = m
 			}
 
-			mergeSpec, ok, err := env.ParseMergeSpec(ctx, dEnv, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
+			mergeSpec, ok, err := merge.ParseMergeSpec(ctx, dEnv, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
 			if err != nil {
 				return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
 			}
@@ -172,7 +172,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
 
-			tblToStats, err := actions.MergeCommitSpec(ctx, dEnv, mergeSpec)
+			tblToStats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
 			hasConflicts, hasConstraintViolations := printSuccessStats(tblToStats)
 			if hasConflicts && hasConstraintViolations {
 				cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
@@ -200,7 +200,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return handleCommitErr(ctx, dEnv, verr, usage)
 }
 
-func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *env.MergeSpec) errhand.VerboseError {
+func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *merge.MergeSpec) errhand.VerboseError {
 	if mergeSpec.H1 == mergeSpec.H2 {
 		//cli.Println("Already up to date.")
 		cli.Println("Everything up to date.")
