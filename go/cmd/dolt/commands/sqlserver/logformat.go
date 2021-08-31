@@ -24,7 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type LogFormat struct {}
+type LogFormat struct{}
 
 func (l LogFormat) Format(entry *logrus.Entry) ([]byte, error) {
 	lvl := ""
