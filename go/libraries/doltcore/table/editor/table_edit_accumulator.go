@@ -23,6 +23,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types/edits"
 )
 
+const (
+	invalidEaId =  0xFFFFFFFF
+)
+
 type doltKVP struct {
 	k types.Tuple
 	v types.Tuple
@@ -102,9 +106,8 @@ func (mods *inMemModifications) Get(keyHash hash.Hash) (kvp *doltKVP, added, del
 // When a rollback occurs uncommitted changes are dropped.
 //
 // In addition to the in memory edits, the changes are applied to committedEA when a commit occurs. It is possible
-// for the uncommitted changes to become so large that they need to be flushed to disk.  When this happens we track the
-// in memory changes in uncommittedFlushed. When materializing the map, edits must be applied to the row data in order
-// so the types.EditAccumulators are numbered so their changes can be applied in order.
+// for the uncommitted changes to become so large that they need to be flushed to disk. At this point we change modes to write all edits
+// to a separate map edit accumulator as they occur until the next commit occurs.
 type tableEditAccumulatorImpl struct {
 	nbf *types.NomsBinFormat
 
@@ -114,7 +117,6 @@ type tableEditAccumulatorImpl struct {
 	// in memory changes which will be applied to the rowData when the map is materialized
 	committed          *inMemModifications
 	uncommitted        *inMemModifications
-	uncommittedFlushed *inMemModifications
 
 	// accumulatorIdx defines the order in which types.EditAccumulators will be applied
 	accumulatorIdx uint64
@@ -132,13 +134,24 @@ type tableEditAccumulatorImpl struct {
 	// commitEAId is the id used for ordering the commitEA with other types.EditAccumulators that will be applied when
 	// materializing all changes.
 	commitEAId uint64
+
+	// flushingUncommitted is a flag that tracks whether we are in a state where we write uncommitted map edits to uncommittedEA
+	flushingUncommitted bool
+	// lastFlush is the number of uncommitted ops that had occurred at the time of the last flush
+	lastFlush int64
+	// uncommittedEA is a types.EditAccumulator that we write to as uncommitted edits come in when the number of uncommitted
+	// edits becomes large
+	uncommittedEA types.EditAccumulator
+	// uncommittedEAId is the id used for ordering the uncommitteudEA with other types.EditAccumulators that will be applied
+	// when materializing all changes
+	uncommittedEAId uint64
 }
 
 // Get returns a *doltKVP if the current TableEditAccumulator contains the given key, or it exists in the row data.
 // This assumes that the given hash is for the given key.
 func (tea *tableEditAccumulatorImpl) Get(ctx context.Context, keyHash hash.Hash, key types.Tuple) (*doltKVP, bool, error) {
-	// in order of most recent changes to least recent falling back to whats in the materialized row data
-	orderedMods := []*inMemModifications{tea.uncommitted, tea.uncommittedFlushed, tea.committed}
+	// in order of the most recent changes to the least recent falling back to what is in the materialized row data
+	orderedMods := []*inMemModifications{tea.uncommitted, tea.committed}
 	for _, mods := range orderedMods {
 		kvp, added, deleted := mods.Get(keyHash)
 
@@ -161,21 +174,43 @@ func (tea *tableEditAccumulatorImpl) Get(ctx context.Context, keyHash hash.Hash,
 }
 
 func (tea *tableEditAccumulatorImpl) flushUncommitted() {
-	ea := edits.NewAsyncSortedEditsWithDefaults(tea.nbf)
-	for _, kvp := range tea.uncommitted.adds {
-		ea.AddEdit(kvp.k, kvp.v)
+	// if we are not already actively writing edits to the uncommittedEA then change the state and push all in mem edits
+	// to a types.EditAccumulator
+	if !tea.flushingUncommitted {
+		tea.flushingUncommitted = true
+
+		if tea.commitEA != nil && tea.commitEA.EditsAdded() > 0 {
+			// if there are uncommitted flushed changes we need to flush the committed changes first
+			// so they can be applied before the uncommitted flushed changes and future changes can be applied after
+			tea.committedEaIds.Add(tea.commitEAId)
+			tea.flusher.Flush(tea.commitEA, tea.commitEAId)
+
+			tea.commitEA = nil
+			tea.commitEAId = invalidEaId
+		}
+
+		tea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(tea.nbf)
+		tea.uncommittedEAId = tea.accumulatorIdx
+		tea.accumulatorIdx++
+
+		for _, kvp := range tea.uncommitted.adds {
+			tea.uncommittedEA.AddEdit(kvp.k, kvp.v)
+		}
+
+		for _, key := range tea.uncommitted.deletes {
+			tea.uncommittedEA.AddEdit(key, nil)
+		}
 	}
 
-	for _, key := range tea.uncommitted.deletes {
-		ea.AddEdit(key, nil)
-	}
+	// flush uncommitted
+	tea.lastFlush = tea.uncommitted.ops
+	tea.uncommittedEaIds.Add(tea.uncommittedEAId)
+	tea.flusher.Flush(tea.uncommittedEA, tea.uncommittedEAId)
 
-	tea.uncommittedEaIds.Add(tea.accumulatorIdx)
-	tea.flusher.Flush(ea, tea.accumulatorIdx)
+	// initialize a new types.EditAccumulator for additional uncommitted edits to be written to.
+	tea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(tea.nbf)
+	tea.uncommittedEAId = tea.accumulatorIdx
 	tea.accumulatorIdx++
-
-	tea.uncommittedFlushed.MergeIn(tea.uncommitted)
-	tea.uncommitted = newInMemModifications()
 }
 
 // Delete adds a row to be deleted when these edits are eventually applied. Updates are modeled as a delete and an insert
@@ -184,7 +219,13 @@ func (tea *tableEditAccumulatorImpl) Delete(keyHash hash.Hash, key types.Tuple) 
 	tea.uncommitted.deletes[keyHash] = key
 	tea.uncommitted.ops++
 
-	if tea.uncommitted.ops > flushThreshold {
+	if tea.flushingUncommitted {
+		tea.uncommittedEA.AddEdit(key, nil)
+
+		if tea.uncommitted.ops - tea.lastFlush > flushThreshold {
+			tea.flushUncommitted()
+		}
+	} else if tea.uncommitted.ops > flushThreshold {
 		tea.flushUncommitted()
 	}
 
@@ -197,7 +238,13 @@ func (tea *tableEditAccumulatorImpl) Insert(keyHash hash.Hash, key types.Tuple, 
 	tea.uncommitted.adds[keyHash] = &doltKVP{k: key, v: val}
 	tea.uncommitted.ops++
 
-	if tea.uncommitted.ops > flushThreshold {
+	if tea.flushingUncommitted {
+		tea.uncommittedEA.AddEdit(key, val)
+
+		if tea.uncommitted.ops - tea.lastFlush > flushThreshold {
+			tea.flushUncommitted()
+		}
+	} else if tea.uncommitted.ops > flushThreshold {
 		tea.flushUncommitted()
 	}
 
@@ -206,39 +253,29 @@ func (tea *tableEditAccumulatorImpl) Insert(keyHash hash.Hash, key types.Tuple, 
 
 // Commit applies the in memory edits to the list of committed in memory edits
 func (tea *tableEditAccumulatorImpl) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
-	if tea.uncommittedFlushed.ops > 0 {
-		if tea.committed.ops > 0 {
-			// if there are uncommitted flushed changes we need to flush the committed changes first
-			// so they can be applied before the uncommitted flushed changes and future changes can be applied after
-			tea.committedEaIds.Add(tea.commitEAId)
-			tea.flusher.Flush(tea.commitEA, tea.commitEAId)
-
-			// initialize next types.EditAccumulator to handle future edits
-			tea.commitEA = types.CreateEditAccForMapEdits(nbf)
-			tea.commitEAId = tea.accumulatorIdx
-			tea.accumulatorIdx++
-		}
-
-		// add uncommitted types.EditAccumulators which hold flushed uncommitted edits to the list of types.EditAccumulators
-		// that have been committed
-		tea.committedEaIds.Add(tea.uncommittedEaIds.AsSlice()...)
-		tea.uncommittedEaIds = set.NewUint64Set(nil)
-
-		// apply uncommitted flushed inmemory edits to the committed in memory edits
-		tea.committed.MergeIn(tea.uncommittedFlushed)
-
-		// initialize empty inMemoryModifications to handle future uncommitted flushed edits
-		tea.uncommittedFlushed = newInMemModifications()
-	}
-
 	if tea.uncommitted.ops > 0 {
-		// if there are uncommitted changes add them to the committed list of map edits
-		for _, kvp := range tea.uncommitted.adds {
-			tea.commitEA.AddEdit(kvp.k, kvp.v)
-		}
+		if !tea.flushingUncommitted {
+			// if there are uncommitted changes add them to the committed list of map edits
+			for _, kvp := range tea.uncommitted.adds {
+				tea.commitEA.AddEdit(kvp.k, kvp.v)
+			}
 
-		for _, key := range tea.uncommitted.deletes {
-			tea.commitEA.AddEdit(key, nil)
+			for _, key := range tea.uncommitted.deletes {
+				tea.commitEA.AddEdit(key, nil)
+			}
+		} else {
+			// if we were flushing to the uncommittedEA make the current uncommittedEA the active committedEA and add
+			// any uncommittedEA IDs that we already flushed
+			tea.commitEA = tea.uncommittedEA
+			tea.commitEAId = tea.uncommittedEAId
+			tea.committedEaIds.Add(tea.uncommittedEaIds.AsSlice()...)
+
+			// reset state to not be flushing uncommitted
+			tea.uncommittedEA = nil
+			tea.uncommittedEAId = invalidEaId
+			tea.uncommittedEaIds = set.NewUint64Set(nil)
+			tea.lastFlush = 0
+			tea.flushingUncommitted = false
 		}
 
 		// apply in memory uncommitted changes to the committed in memory edits
@@ -256,13 +293,17 @@ func (tea *tableEditAccumulatorImpl) Rollback(ctx context.Context) error {
 	// drop uncommitted ea IDs
 	tea.uncommittedEaIds = set.NewUint64Set(nil)
 
-	// clear all in memory modifications
-	if tea.uncommittedFlushed.ops > 0 {
-		tea.uncommittedFlushed = newInMemModifications()
-	}
-
 	if tea.uncommitted.ops > 0 {
 		tea.uncommitted = newInMemModifications()
+
+		if tea.flushingUncommitted {
+			_ = tea.uncommittedEA.Close(ctx)
+			tea.uncommittedEA = nil
+			tea.uncommittedEAId = invalidEaId
+			tea.uncommittedEaIds = set.NewUint64Set(nil)
+			tea.lastFlush = 0
+			tea.flushingUncommitted = false
+		}
 	}
 
 	return nil
@@ -324,8 +365,11 @@ func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 	return updatedMap, nil
 }
 
+// DbEaFactory is an interface for a factory object used to make table and index edit accumulators
 type DbEaFactory interface {
+	// NewTableEA creates a TableEditAccumulator
 	NewTableEA(ctx context.Context, rowData types.Map) TableEditAccumulator
+	// NewIndexEA creates an IndexEditAccumulator
 	NewIndexEA(ctx context.Context, rowData types.Map) IndexEditAccumulator
 }
 
@@ -334,6 +378,7 @@ type dbEaFactory struct {
 	vrw       types.ValueReadWriter
 }
 
+// NewDbEaFactory creates a DbEaFatory which uses the provided directory to hold temp files
 func NewDbEaFactory(directory string, vrw types.ValueReadWriter) DbEaFactory {
 	return &dbEaFactory{
 		directory: directory,
@@ -341,34 +386,42 @@ func NewDbEaFactory(directory string, vrw types.ValueReadWriter) DbEaFactory {
 	}
 }
 
+// NewTableEA creates a TableEditAccumulator
 func (deaf *dbEaFactory) NewTableEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
 	return &tableEditAccumulatorImpl{
-		nbf:                rowData.Format(),
-		rowData:            rowData,
-		committed:          newInMemModifications(),
-		uncommitted:        newInMemModifications(),
-		uncommittedFlushed: newInMemModifications(),
-		commitEA:           edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
-		commitEAId:         0,
-		accumulatorIdx:     1,
-		flusher:            edits.NewDiskEditFlusher(ctx, deaf.directory, rowData.Format(), deaf.vrw),
-		committedEaIds:     set.NewUint64Set(nil),
-		uncommittedEaIds:   set.NewUint64Set(nil),
+		nbf:                 rowData.Format(),
+		rowData:             rowData,
+		committed:           newInMemModifications(),
+		uncommitted:         newInMemModifications(),
+		accumulatorIdx:      1,
+		flusher:             edits.NewDiskEditFlusher(ctx, deaf.directory, rowData.Format(), deaf.vrw),
+		committedEaIds:      set.NewUint64Set(nil),
+		uncommittedEaIds:    set.NewUint64Set(nil),
+		commitEA:            edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
+		commitEAId:          0,
+		flushingUncommitted: false,
+		lastFlush:           0,
+		uncommittedEA:       nil,
+		uncommittedEAId:     invalidEaId,
 	}
 }
 
+// NewIndexEA creates an IndexEditAccumulator
 func (deaf *dbEaFactory) NewIndexEA(ctx context.Context, rowData types.Map) IndexEditAccumulator {
 	return &indexEditAccumulatorImpl{
 		nbf:                rowData.Format(),
 		rowData:            rowData,
 		committed:          newInMemIndexEdits(),
 		uncommitted:        newInMemIndexEdits(),
-		uncommittedFlushed: newInMemIndexEdits(),
 		commitEA:           edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
 		commitEAId:         0,
 		accumulatorIdx:     1,
 		flusher:            edits.NewDiskEditFlusher(ctx, deaf.directory, rowData.Format(), deaf.vrw),
 		committedEaIds:     set.NewUint64Set(nil),
 		uncommittedEaIds:   set.NewUint64Set(nil),
+		flushingUncommitted: false,
+		lastFlush:           0,
+		uncommittedEA:       nil,
+		uncommittedEAId:     invalidEaId,
 	}
 }

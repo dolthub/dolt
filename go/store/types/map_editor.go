@@ -43,6 +43,9 @@ var CreateEditAccForMapEdits CreateEditAcc = NewDumbEditAccumulator
 // EditAccumulator is an interface for a datastructure that can have edits added to it. Once all edits are
 // added FinishedEditing can be called to get an EditProvider which provides the edits in sorted order
 type EditAccumulator interface {
+	// EditsAdded returns the number of edits that have been added to this EditAccumulator
+	EditsAdded() int
+
 	// AddEdit adds an edit to the list of edits.  Not thread safe.
 	AddEdit(k LesserValuable, v Valuable)
 

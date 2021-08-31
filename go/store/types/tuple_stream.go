@@ -66,10 +66,13 @@ func NewTupleWriter(wr io.Writer) TupleWriteCloser {
 	return &tupleWriterImpl{wr: wr}
 }
 
+var nullBytes [4]byte
+func init() {
+	binary.BigEndian.PutUint32(nullBytes[:], 0)
+}
+
 func (twr *tupleWriterImpl) WriteNull() error {
-	var sizeBytes [4]byte
-	binary.BigEndian.PutUint32(sizeBytes[:], 0)
-	return iohelp.WriteAll(twr.wr, sizeBytes[:])
+	return iohelp.WriteAll(twr.wr, nullBytes[:])
 }
 
 func (twr *tupleWriterImpl) write(t Tuple) error {

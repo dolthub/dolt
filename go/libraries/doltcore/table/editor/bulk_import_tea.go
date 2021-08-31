@@ -30,6 +30,8 @@ import (
 
 var _ TableEditAccumulator = (*BulkImportTEA)(nil)
 
+// BulkImportTEA is a TableEditAccumulator implementation used to improve the perf of bulk edits.  It does not implement
+// commit and rollback
 type BulkImportTEA struct {
 	teaf       DbEaFactory
 	emptyTuple types.Tuple
@@ -43,6 +45,7 @@ type BulkImportTEA struct {
 	deletes map[hash.Hash]bool
 }
 
+// Delete adds a row to be deleted when these edits are eventually applied. Updates are modeled as a delete and an insert
 func (tea *BulkImportTEA) Delete(keyHash hash.Hash, key types.Tuple) error {
 	tea.opCount++
 	tea.ea.AddEdit(key, nil)
@@ -52,6 +55,7 @@ func (tea *BulkImportTEA) Delete(keyHash hash.Hash, key types.Tuple) error {
 	return nil
 }
 
+// Insert adds a row to be inserted when these edits are eventually applied. Updates are modeled as a delete and an insert.
 func (tea *BulkImportTEA) Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple) error {
 	tea.opCount++
 	tea.ea.AddEdit(key, val)
@@ -61,6 +65,8 @@ func (tea *BulkImportTEA) Insert(keyHash hash.Hash, key types.Tuple, val types.T
 	return nil
 }
 
+// Get returns a *doltKVP if the current TableEditAccumulator contains the given key, or it exists in the row data.
+// This assumes that the given hash is for the given key.
 func (tea *BulkImportTEA) Get(ctx context.Context, keyHash hash.Hash, key types.Tuple) (*doltKVP, bool, error) {
 	if tea.deletes[keyHash] {
 		return nil, false, nil
@@ -83,14 +89,17 @@ func (tea *BulkImportTEA) Get(ctx context.Context, keyHash hash.Hash, key types.
 	return &doltKVP{k: key, v: v}, true, nil
 }
 
+// Commit operation not supported on BulkImportTEA
 func (tea *BulkImportTEA) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
 	panic("Not Supported")
 }
 
+// Rollback operation not supported on BulkImportTEA
 func (tea *BulkImportTEA) Rollback(ctx context.Context) error {
 	panic("Not Supported")
 }
 
+// MaterializeEdits applies the in memory edits to the row data and returns types.Map
 func (tea *BulkImportTEA) MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error) {
 	ea := tea.ea
 	defer ea.Close(ctx)
@@ -114,6 +123,8 @@ func (tea *BulkImportTEA) MaterializeEdits(ctx context.Context, nbf *types.NomsB
 
 var _ IndexEditAccumulator = (*BulkImportIEA)(nil)
 
+// BulkImportIEA is a IndexEditAccumulator implementation used to improve the perf of bulk edits.  It does not implement
+// commit and rollback
 type BulkImportIEA struct {
 	teaf       DbEaFactory
 	emptyTuple types.Tuple
@@ -128,6 +139,7 @@ type BulkImportIEA struct {
 	partialAdds map[hash.Hash]map[hash.Hash]types.Tuple
 }
 
+// Delete adds a row to be deleted when these edits are eventually applied.
 func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey, value types.Tuple) error {
 	iea.opCount++
 	iea.ea.AddEdit(key, nil)
@@ -139,6 +151,7 @@ func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash ha
 	return nil
 }
 
+// Insert adds a row to be inserted when these edits are eventually applied.
 func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey types.Tuple, val types.Tuple) error {
 	iea.opCount++
 	iea.ea.AddEdit(key, val)
@@ -155,6 +168,7 @@ func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash ha
 	return nil
 }
 
+// Has returns true if the current TableEditAccumulator contains the given key, or it exists in the row data.
 func (iea *BulkImportIEA) Has(ctx context.Context, keyHash hash.Hash, key types.Tuple) (bool, error) {
 	if iea.deletes[keyHash] {
 		return false, nil
@@ -175,6 +189,7 @@ func (iea *BulkImportIEA) Has(ctx context.Context, keyHash hash.Hash, key types.
 	return true, nil
 }
 
+// HasPartial returns true if the current TableEditAccumulator contains the given partialKey
 func (iea *BulkImportIEA) HasPartial(ctx context.Context, idxSch schema.Schema, partialKeyHash hash.Hash, partialKey types.Tuple) ([]hashedTuple, error) {
 	if hasNulls, err := partialKey.Contains(types.NullValue); err != nil {
 		return nil, err
@@ -225,14 +240,17 @@ func (iea *BulkImportIEA) HasPartial(ctx context.Context, idxSch schema.Schema, 
 	return matches, nil
 }
 
+// Commit operation not supported on BulkImportIEA
 func (iea *BulkImportIEA) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
 	panic("Not Supported")
 }
 
+// Rollback operation not supported on BulkImportIEA
 func (iea *BulkImportIEA) Rollback(ctx context.Context) error {
 	panic("Not Supported")
 }
 
+// MaterializeEdits commits and applies the in memory edits to the row data
 func (iea *BulkImportIEA) MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error) {
 	ea := iea.ea
 	defer ea.Close(ctx)

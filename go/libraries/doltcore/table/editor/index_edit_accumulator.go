@@ -112,7 +112,7 @@ func (edits *inMemIndexEdits) Has(keyHash hash.Hash) (added, deleted bool) {
 	if _, ok := edits.adds[keyHash]; ok {
 		return true, false
 	}
-	if _, ok := edits.deletes[keyHash]; !ok {
+	if _, ok := edits.deletes[keyHash]; ok {
 		return false, true
 	}
 	return false, false
@@ -126,9 +126,8 @@ func (edits *inMemIndexEdits) Has(keyHash hash.Hash) (added, deleted bool) {
 // When a rollback occurs uncommitted changes are dropped.
 //
 // In addition to the in memory edits, the changes are applied to committedEA when a commit occurs. It is possible
-// for the uncommitted changes to become so large that they need to be flushed to disk.  When this happens we track the
-// in memory changes in uncommittedFlushed. When materializing the map, edits must be applied to the row data in order
-// so the types.EditAccumulators are numbered so their changes can be applied in order.
+// for the uncommitted changes to become so large that they need to be flushed to disk. At this point we change modes to write all edits
+// to a separate map edit accumulator as they occur until the next commit occurs.
 type indexEditAccumulatorImpl struct {
 	nbf *types.NomsBinFormat
 
@@ -138,7 +137,6 @@ type indexEditAccumulatorImpl struct {
 	// in memory changes which will be applied to the rowData when the map is materialized
 	committed          *inMemIndexEdits
 	uncommitted        *inMemIndexEdits
-	uncommittedFlushed *inMemIndexEdits
 
 	// accumulatorIdx defines the order in which types.EditAccumulators will be applied
 	accumulatorIdx uint64
@@ -156,24 +154,57 @@ type indexEditAccumulatorImpl struct {
 	// commitEAId is the id used for ordering the commitEA with other types.EditAccumulators that will be applied when
 	// materializing all changes.
 	commitEAId uint64
+
+	// flushingUncommitted is a flag that tracks whether we are in a state where we write uncommitted map edits to uncommittedEA
+	flushingUncommitted bool
+	// lastFlush is the number of uncommitted ops that had occurred at the time of the last flush
+	lastFlush int64
+	// uncommittedEA is a types.EditAccumulator that we write to as uncommitted edits come in when the number of uncommitted
+	// edits becomes large
+	uncommittedEA types.EditAccumulator
+	// uncommittedEAId is the id used for ordering the uncommitteudEA with other types.EditAccumulators that will be applied
+	// when materializing all changes
+	uncommittedEAId uint64
 }
 
 func (iea *indexEditAccumulatorImpl) flushUncommitted() {
-	ea := edits.NewAsyncSortedEditsWithDefaults(iea.nbf)
-	for _, ht := range iea.uncommitted.adds {
-		ea.AddEdit(ht.key, ht.value)
+	// if we are not already actively writing edits to the uncommittedEA then change the state and push all in mem edits
+	// to a types.EditAccumulator
+	if !iea.flushingUncommitted {
+		iea.flushingUncommitted = true
+
+		if iea.commitEA != nil && iea.commitEA.EditsAdded() > 0 {
+			// if there are uncommitted flushed changes we need to flush the committed changes first
+			// so they can be applied before the uncommitted flushed changes and future changes can be applied after
+			iea.committedEaIds.Add(iea.commitEAId)
+			iea.flusher.Flush(iea.commitEA, iea.commitEAId)
+
+			iea.commitEA = nil
+			iea.commitEAId = invalidEaId
+		}
+
+		iea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(iea.nbf)
+		iea.uncommittedEAId = iea.accumulatorIdx
+		iea.accumulatorIdx++
+
+		for _, ht := range iea.uncommitted.adds {
+			iea.uncommittedEA.AddEdit(ht.key, ht.value)
+		}
+
+		for _, ht := range iea.uncommitted.deletes {
+			iea.uncommittedEA.AddEdit(ht.key, nil)
+		}
 	}
 
-	for _, ht := range iea.uncommitted.deletes {
-		ea.AddEdit(ht.key, nil)
-	}
+	// flush uncommitted
+	iea.lastFlush = iea.uncommitted.ops
+	iea.uncommittedEaIds.Add(iea.uncommittedEAId)
+	iea.flusher.Flush(iea.uncommittedEA, iea.uncommittedEAId)
 
-	iea.uncommittedEaIds.Add(iea.accumulatorIdx)
-	iea.flusher.Flush(ea, iea.accumulatorIdx)
+	// initialize a new types.EditAccumulator for additional uncommitted edits to be written to.
+	iea.uncommittedEA = edits.NewAsyncSortedEditsWithDefaults(iea.nbf)
+	iea.uncommittedEAId = iea.accumulatorIdx
 	iea.accumulatorIdx++
-
-	iea.uncommittedFlushed.MergeIn(iea.uncommitted)
-	iea.uncommitted = newInMemIndexEdits()
 }
 
 // Insert adds a row to be inserted when these edits are eventually applied.
@@ -190,7 +221,13 @@ func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partia
 	}
 
 	iea.uncommitted.ops++
-	if iea.uncommitted.ops > indexFlushThreshold {
+	if iea.flushingUncommitted {
+		iea.uncommittedEA.AddEdit(key, value)
+
+		if iea.uncommitted.ops - iea.lastFlush > flushThreshold {
+			iea.flushUncommitted()
+		}
+	} else if iea.uncommitted.ops > indexFlushThreshold {
 		iea.flushUncommitted()
 	}
 	return nil
@@ -206,7 +243,13 @@ func (iea *indexEditAccumulatorImpl) Delete(ctx context.Context, keyHash, partia
 	}
 
 	iea.uncommitted.ops++
-	if iea.uncommitted.ops > indexFlushThreshold {
+	if iea.flushingUncommitted {
+		iea.uncommittedEA.AddEdit(key, nil)
+
+		if iea.uncommitted.ops - iea.lastFlush > flushThreshold {
+			iea.flushUncommitted()
+		}
+	} else if iea.uncommitted.ops > indexFlushThreshold {
 		iea.flushUncommitted()
 	}
 	return nil
@@ -216,7 +259,7 @@ func (iea *indexEditAccumulatorImpl) Delete(ctx context.Context, keyHash, partia
 // the given key.
 func (iea *indexEditAccumulatorImpl) Has(ctx context.Context, keyHash hash.Hash, key types.Tuple) (bool, error) {
 	// in order of most recent changes to least recent falling back to whats in the materialized row data
-	orderedMods := []*inMemIndexEdits{iea.uncommitted, iea.uncommittedFlushed, iea.committed}
+	orderedMods := []*inMemIndexEdits{iea.uncommitted, iea.committed}
 	for _, mods := range orderedMods {
 		added, deleted := mods.Has(keyHash)
 
@@ -271,7 +314,7 @@ func (iea *indexEditAccumulatorImpl) HasPartial(ctx context.Context, idxSch sche
 	}
 
 	// reapply partial key edits in order
-	orderedMods := []*inMemIndexEdits{iea.committed, iea.uncommitted, iea.uncommittedFlushed}
+	orderedMods := []*inMemIndexEdits{iea.committed, iea.uncommitted}
 	for _, mods := range orderedMods {
 		for i := len(matches) - 1; i >= 0; i-- {
 			// If we've removed a key that's present here, remove it from the slice
@@ -289,39 +332,29 @@ func (iea *indexEditAccumulatorImpl) HasPartial(ctx context.Context, idxSch sche
 
 // Commit applies the in memory edits to the list of committed in memory edits
 func (iea *indexEditAccumulatorImpl) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
-	if iea.uncommittedFlushed.ops > 0 {
-		if iea.committed.ops > 0 {
-			// if there are uncommitted flushed changes we need to flush the committed changes first
-			// so they can be applied before the uncommitted flushed changes and future changes can be applied after
-			iea.committedEaIds.Add(iea.commitEAId)
-			iea.flusher.Flush(iea.commitEA, iea.commitEAId)
-
-			// initialize next types.EditAccumulator to handle future edits
-			iea.commitEA = types.CreateEditAccForMapEdits(nbf)
-			iea.commitEAId = iea.accumulatorIdx
-			iea.accumulatorIdx++
-		}
-
-		// add uncommitted types.EditAccumulators which hold flushed uncommitted edits to the list of types.EditAccumulators
-		// that have been committed
-		iea.committedEaIds.Add(iea.uncommittedEaIds.AsSlice()...)
-		iea.uncommittedEaIds = set.NewUint64Set(nil)
-
-		// apply uncommitted flushed inmemory edits to the committed in memory edits
-		iea.committed.MergeIn(iea.uncommittedFlushed)
-
-		// initialize empty inMemoryModifications to handle future uncommitted flushed edits
-		iea.uncommittedFlushed = newInMemIndexEdits()
-	}
-
 	if iea.uncommitted.ops > 0 {
-		// if there are uncommitted changes add them to the committed list of map edits
-		for _, ht := range iea.uncommitted.adds {
-			iea.commitEA.AddEdit(ht.key, ht.value)
-		}
+		if !iea.flushingUncommitted {
+			// if there are uncommitted changes add them to the committed list of map edits
+			for _, ht := range iea.uncommitted.adds {
+				iea.commitEA.AddEdit(ht.key, ht.value)
+			}
 
-		for _, ht := range iea.uncommitted.deletes {
-			iea.commitEA.AddEdit(ht.key, nil)
+			for _, ht := range iea.uncommitted.deletes {
+				iea.commitEA.AddEdit(ht.key, nil)
+			}
+		} else {
+			// if we were flushing to the uncommittedEA make the current uncommittedEA the active committedEA and add
+			// any uncommittedEA IDs that we already flushed
+			iea.commitEA = iea.uncommittedEA
+			iea.commitEAId = iea.uncommittedEAId
+			iea.committedEaIds.Add(iea.uncommittedEaIds.AsSlice()...)
+
+			// reset state to not be flushing uncommitted
+			iea.uncommittedEA = nil
+			iea.uncommittedEAId = invalidEaId
+			iea.uncommittedEaIds = set.NewUint64Set(nil)
+			iea.lastFlush = 0
+			iea.flushingUncommitted = false
 		}
 
 		// apply in memory uncommitted changes to the committed in memory edits
@@ -339,13 +372,17 @@ func (iea *indexEditAccumulatorImpl) Rollback(ctx context.Context) error {
 	// drop uncommitted ea IDs
 	iea.uncommittedEaIds = set.NewUint64Set(nil)
 
-	// clear all in memory modifications
-	if iea.uncommittedFlushed.ops > 0 {
-		iea.uncommittedFlushed = newInMemIndexEdits()
-	}
-
 	if iea.uncommitted.ops > 0 {
 		iea.uncommitted = newInMemIndexEdits()
+
+		if iea.flushingUncommitted {
+			_ = iea.uncommittedEA.Close(ctx)
+			iea.uncommittedEA = nil
+			iea.uncommittedEAId = invalidEaId
+			iea.uncommittedEaIds = set.NewUint64Set(nil)
+			iea.lastFlush = 0
+			iea.flushingUncommitted = false
+		}
 	}
 
 	return nil
