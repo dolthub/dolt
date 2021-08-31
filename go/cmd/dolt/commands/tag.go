@@ -144,7 +144,7 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actions.TagProps, err error) {
-	name, email, err := actions.GetNameAndEmail(dEnv.Config)
+	name, email, err := env.GetNameAndEmail(dEnv.Config)
 	if err != nil {
 		return props, err
 	}

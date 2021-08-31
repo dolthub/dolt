@@ -111,4 +111,77 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, defaultLogLevel, cfg.LogLevel())
 	assert.Equal(t, defaultAutoCommit, cfg.AutoCommit())
 	assert.Equal(t, uint64(defaultMaxConnections), cfg.MaxConnections())
+	assert.Equal(t, "", cfg.TLSKey())
+	assert.Equal(t, "", cfg.TLSCert())
+	assert.Equal(t, false, cfg.RequireSecureTransport())
+
+	c, err := LoadTLSConfig(cfg)
+	assert.NoError(t, err)
+	assert.Nil(t, c)
+}
+
+func TestYAMLConfigTLS(t *testing.T) {
+	var cfg YAMLConfig
+	err := yaml.Unmarshal([]byte(`
+listener:
+  tls_key: testdata/selfsigned_key.pem
+  tls_cert: testdata/selfsigned_cert.pem
+`), &cfg)
+	require.NoError(t, err)
+
+	c, err := LoadTLSConfig(cfg)
+	assert.NoError(t, err)
+	assert.NotNil(t, c)
+	assert.Len(t, c.Certificates, 1)
+	assert.Len(t, c.Certificates[0].Certificate, 1)
+
+	err = yaml.Unmarshal([]byte(`
+listener:
+  tls_key: testdata/chain_key.pem
+  tls_cert: testdata/chain_cert.pem
+`), &cfg)
+	require.NoError(t, err)
+
+	c, err = LoadTLSConfig(cfg)
+	assert.NoError(t, err)
+	assert.NotNil(t, c)
+	assert.Len(t, c.Certificates, 1)
+	assert.Len(t, c.Certificates[0].Certificate, 2)
+
+	cfg = YAMLConfig{}
+	err = yaml.Unmarshal([]byte(`
+listener:
+  tls_key: testdata/chain_key.pem
+`), &cfg)
+	require.NoError(t, err)
+	c, err = LoadTLSConfig(cfg)
+	assert.Error(t, err)
+
+	cfg = YAMLConfig{}
+	err = yaml.Unmarshal([]byte(`
+listener:
+  tls_cert: testdata/chain_cert.pem
+`), &cfg)
+	require.NoError(t, err)
+	c, err = LoadTLSConfig(cfg)
+	assert.Error(t, err)
+
+	cfg = YAMLConfig{}
+	err = yaml.Unmarshal([]byte(`
+listener:
+  tls_cert: testdata/doesnotexist_cert.pem
+  tls_key: testdata/doesnotexist_key.pem
+`), &cfg)
+	require.NoError(t, err)
+	c, err = LoadTLSConfig(cfg)
+	assert.Error(t, err)
+
+	cfg = YAMLConfig{}
+	err = yaml.Unmarshal([]byte(`
+listener:
+  require_secure_transport: true
+`), &cfg)
+	require.NoError(t, err)
+	err = ValidateConfig(cfg)
+	assert.Error(t, err)
 }

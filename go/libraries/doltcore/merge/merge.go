@@ -26,7 +26,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
@@ -1033,12 +1033,7 @@ func GetTablesWithConstraintViolations(ctx context.Context, roots doltdb.Roots) 
 	return workingViolations, stagedViolations, headViolations, err
 }
 
-func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
-	docs, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return nil, err
-	}
-
+func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, docs doltdocs.Docs) (*diff.DocDiffs, error) {
 	return diff.NewDocDiffs(ctx, workingRoot, nil, docs)
 }
 
