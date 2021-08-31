@@ -136,7 +136,6 @@ func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSp
 }
 
 func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec) (map[string]*MergeStats, error) {
-
 	if ok, err := mergeSpec.Cm1.CanFastForwardTo(ctx, mergeSpec.Cm2); ok {
 		ancRoot, err := mergeSpec.Cm1.GetRootValue()
 		if err != nil {
@@ -167,7 +166,6 @@ func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec)
 	mergedRoot, err := mergeSpec.Cm2.GetRootValue()
 
 	if err != nil {
-		//return errhand.BuildDError("error: reading from database").AddCause(err).Build()
 		return nil, ErrFailedToReadDatabase
 	}
 
@@ -204,7 +202,6 @@ func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec)
 	})
 
 	if err != nil {
-		//return errhand.BuildDError("error: committing").AddCause(err).Build()
 		return tblToStats, fmt.Errorf("%w; failed to commit", err)
 	}
 
@@ -222,7 +219,6 @@ func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[
 		root, err = root.SetTableHash(ctx, tblName, h)
 
 		if err != nil {
-			//return nil, errhand.BuildDError("error: Failed to update table '%s'.", tblName).AddCause(err).Build()
 			return nil, fmt.Errorf("failed to update table; %w", err)
 		}
 	}
@@ -237,7 +233,6 @@ func ExecuteFFMerge(
 ) error {
 	stagedRoot, err := mergeSpec.Cm2.GetRootValue()
 	if err != nil {
-		//return errhand.BuildDError("error: failed to get root value").AddCause(err).Build()
 		return err
 	}
 
@@ -253,7 +248,6 @@ func ExecuteFFMerge(
 
 	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
-		//return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
 		return err
 	}
 
@@ -261,7 +255,6 @@ func ExecuteFFMerge(
 		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoStateReader().CWBHeadRef(), mergeSpec.Cm2)
 
 		if err != nil {
-			//return errhand.BuildDError("Failed to write database").AddCause(err).Build()
 			return err
 		}
 	}
@@ -273,20 +266,11 @@ func ExecuteFFMerge(
 
 	err = dEnv.UpdateWorkingSet(ctx, workingSet.WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot))
 	if err != nil {
-		//		return errhand.BuildDError("unable to execute repo state update.").
-		//			AddDetails(`As a result your .dolt/repo_state.json file may have invalid values for "staged" and "working".
-		//At the moment the best way to fix this is to run:
-		//
-		//    dolt branch -v
-		//
-		//and take the hash for your current branch and use it for the value for "staged" and "working"`).
-		//			AddCause(err).Build()
 		return ErrMergeFailedToUpdateRepoState
 	}
 
 	err = actions.SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 	if err != nil {
-		//return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
 		return ErrMergeFailedToUpdateDocs
 	}
 
@@ -339,7 +323,6 @@ func mergedRootToWorking(
 
 	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
-		//return errhand.BuildDError("error: failed to determine unstaged docs").AddCause(err).Build()
 		return ErrFailedToDetermineUnstagedDocs
 	}
 

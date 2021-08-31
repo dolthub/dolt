@@ -99,6 +99,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 
+// pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
 func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) error {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
@@ -138,15 +139,12 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			if err != nil {
 				return err
 			}
-
 		}
-
 	}
 
 	srcDB, err = pullSpec.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
-		//return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
 		return err
 	}
 	err = actions.FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)

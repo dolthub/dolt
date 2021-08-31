@@ -43,6 +43,7 @@ var ErrCannotSetUpstreamForTag = errors.New("cannot set upstream for tag")
 var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
 var ErrInvalidSetUpstreamArgs = errors.New("invalid set-upstream arguments")
+var ErrInvalidFetchSpec = errors.New("invalid fetch spec")
 
 func IsEmptyRemote(r Remote) bool {
 	return len(r.Name) == 0 && len(r.Url) == 0 && r.FetchSpecs == nil && r.Params == nil
@@ -101,7 +102,6 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 	remotes, err := dEnv.GetRemotes()
 
 	if err != nil {
-		//return nil, errhand.BuildDError("error: failed to read remotes from config.").Build()
 		return nil, err
 	}
 
@@ -138,7 +138,6 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 
 		refSpecStr, err = disambiguateRefSpecStr(ctx, dEnv.DoltDB, refSpecStr)
 		if err != nil {
-			//verr = errhand.VerboseErrorFromError(err)
 			return nil, err
 		}
 
@@ -150,19 +149,11 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 		return nil, ErrInvalidSetUpstreamArgs
 	} else if hasUpstream {
 		if len(args) > 0 {
-			//return nil, errhand.BuildDError("fatal: upstream branch set for '%s'.  Use 'dolt push' without arguments to push.\n", currentBranch).Build()
-			return nil, ErrUpstreamBranchAlreadySet
+			return nil, fmt.Errorf("%w for '%s'", ErrUpstreamBranchAlreadySet, currentBranch)
 
 		}
 
 		if currentBranch.GetPath() != upstream.Merge.Ref.GetPath() {
-			//return nil, errhand.BuildDError("fatal: The upstream branch of your current branch does not match"+
-			//	"the name of your current branch.  To push to the upstream branch\n"+
-			//	"on the remote, use\n\n"+
-			//	"\tdolt push origin HEAD: %s\n\n"+
-			//	"To push to the branch of the same name on the remote, use\n\n"+
-			//	"\tdolt push origin HEAD",
-			//	currentBranch.GetPath()).Build()
 			return nil, ErrBranchDoesNotMatchUpstream
 		}
 
@@ -170,32 +161,25 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 		refSpec, _ = ref.NewBranchToBranchRefSpec(currentBranch.(ref.BranchRef), upstream.Merge.Ref.(ref.BranchRef))
 	} else {
 		if len(args) == 0 {
-			remoteName = "<remote>"
-			if defRemote, verr := dEnv.GetDefaultRemote(); verr == nil {
-				remoteName = defRemote.Name
-			}
 			return nil, ErrNoUpstreamForBranch
 		}
 
-		//verr = errhand.BuildDError("").SetPrintUsage().Build()
 		return nil, errors.New("unknown error for remote push args")
 	}
 
 	remote, remoteOK = remotes[remoteName]
 
 	if !remoteOK {
-		//return nil, errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
-		return nil, ErrUnknownRemote
+		return nil, fmt.Errorf("%w: '%s'", ErrUnknownRemote, remoteName)
 	}
 
 	hasRef, err := dEnv.DoltDB.HasRef(ctx, currentBranch)
 
 	if err != nil {
-		//return nil, errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
 		return nil, ErrFailedToReadDb
 	} else if !hasRef {
-		//return nil, errhand.BuildDError("fatal: unknown branch " + currentBranch.GetPath()).Build()
-		return nil, ErrUnknownBranch
+		return nil, fmt.Errorf("%w: '%s'", ErrUnknownBranch, currentBranch.GetPath())
+
 	}
 
 	src := refSpec.SrcRef(currentBranch)
@@ -208,12 +192,10 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 		remoteRef, err = GetTrackingRef(dest, remote)
 	case ref.TagRefType:
 		if setUpstream {
-			//verr = errhand.BuildDError("cannot set upstream for tag").Build()
 			err = ErrCannotSetUpstreamForTag
 		}
 	default:
-		//verr = errhand.BuildDError("cannot push ref %s of type %s", src.String(), src.GetType()).Build()
-		err = ErrCannotPushRef
+		err = fmt.Errorf("%w: '%s' of type '%s'", ErrCannotPushRef, src.String(), src.GetType())
 	}
 
 	if err != nil {
@@ -269,8 +251,7 @@ func GetTrackingRef(branchRef ref.DoltRef, remote Remote) (ref.DoltRef, error) {
 		fs, err := ref.ParseRefSpecForRemote(remote.Name, fsStr)
 
 		if err != nil {
-			//return nil, errhand.BuildDError("error: invalid fetch spec '%s' for remote '%s'", fsStr, remote.Name).Build()
-			return nil, err
+			return nil, fmt.Errorf("%w '%s' for remote '%s'", ErrInvalidFetchSpec, fsStr, remote.Name)
 		}
 
 		remoteRef := fs.DestRef(branchRef)
@@ -303,12 +284,10 @@ func ParsePullSpec(ctx context.Context, dEnv *DoltEnv, remoteName string, squash
 	}
 
 	if len(refSpecs) == 0 {
-		//return errhand.BuildDError("error: no refspec for remote").Build()
 		return nil, ErrNoRefSpecForRemote
 	}
 
 	remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
-	fmt.Println(remote.Name)
 
 	return &PullSpec{
 		Squash:     squash,

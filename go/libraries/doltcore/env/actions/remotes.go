@@ -134,7 +134,6 @@ func DoPush(ctx context.Context, dEnv *env.DoltEnv, opts *env.PushOpts, progStar
 		err := dEnv.RepoState.Save(dEnv.FS)
 
 		if err != nil {
-			//err = errhand.BuildDError("error: failed to save repo state").AddCause(err).Build()
 			err = fmt.Errorf("%w; %s", ErrFailedToSaveRepoState, err.Error())
 		}
 	}
@@ -221,11 +220,6 @@ func pushTagToRemote(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef ref
 
 	if err != nil {
 		return err
-		//if err == doltdb.ErrUpToDate {
-		//	cli.Println("Everything up-to-date")
-		//} else {
-		//	return errhand.BuildDError("error: push failed").AddCause(err).Build()
-		//}
 	}
 
 	return nil
@@ -354,8 +348,7 @@ func FetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 	srcDBCommit, err := srcDB.Resolve(ctx, cs, nil)
 
 	if err != nil {
-		//return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
-		return nil, err
+		return nil, fmt.Errorf("unable to find '%s' on '%s'; %w", srcRef.GetPath(), rem.Name, err)
 	}
 
 	wg, progChan, pullerEventCh := progStarter()
@@ -363,7 +356,6 @@ func FetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 	progStopper(wg, progChan, pullerEventCh)
 
 	if err != nil {
-		//return nil,
 		return nil, err
 	}
 

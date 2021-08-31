@@ -105,11 +105,6 @@ func GetDocDiffs(
 	roots doltdb.Roots,
 	docsOnDisk doltdocs.Docs,
 ) (*DocDiffs, *DocDiffs, error) {
-	//docsOnDisk, err := drw.GetDocsOnDisk()
-	//if err != nil {
-	//	return nil, nil, err
-	//}
-
 	notStagedDocDiffs, err := NewDocDiffs(ctx, roots.Working, nil, docsOnDisk)
 	if err != nil {
 		return nil, nil, err

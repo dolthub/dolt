@@ -225,7 +225,6 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 						return errhand.BuildDError("error: push failed").AddCause(err).Build()
 					}
 				}
-				//return err
 			}
 			cli.Println()
 		}
