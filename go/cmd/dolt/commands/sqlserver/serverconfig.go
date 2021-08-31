@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 
@@ -94,20 +95,29 @@ type ServerConfig interface {
 	MaxConnections() uint64
 	// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
 	QueryParallelism() int
+	// TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
+	TLSKey() string
+	// TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
+	TLSCert() string
+	// RequireSecureTransport is true if the server should reject non-TLS connections.
+	RequireSecureTransport() bool
 }
 
 type commandLineServerConfig struct {
-	host             string
-	port             int
-	user             string
-	password         string
-	timeout          uint64
-	readOnly         bool
-	logLevel         LogLevel
-	dbNamesAndPaths  []env.EnvNameAndPath
-	autoCommit       bool
-	maxConnections   uint64
-	queryParallelism int
+	host                   string
+	port                   int
+	user                   string
+	password               string
+	timeout                uint64
+	readOnly               bool
+	logLevel               LogLevel
+	dbNamesAndPaths        []env.EnvNameAndPath
+	autoCommit             bool
+	maxConnections         uint64
+	queryParallelism       int
+	tlsKey                 string
+	tlsCert                string
+	requireSecureTransport bool
 }
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
@@ -163,6 +173,18 @@ func (cfg *commandLineServerConfig) MaxConnections() uint64 {
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
 func (cfg *commandLineServerConfig) QueryParallelism() int {
 	return cfg.queryParallelism
+}
+
+func (cfg *commandLineServerConfig) TLSKey() string {
+	return cfg.tlsKey
+}
+
+func (cfg *commandLineServerConfig) TLSCert() string {
+	return cfg.tlsCert
+}
+
+func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
+	return cfg.requireSecureTransport
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
@@ -265,6 +287,9 @@ func ValidateConfig(config ServerConfig) error {
 	if config.LogLevel().String() == "unknown" {
 		return fmt.Errorf("loglevel is invalid: %v\n", string(config.LogLevel()))
 	}
+	if config.RequireSecureTransport() && config.TLSCert() == "" && config.TLSKey() == "" {
+		return fmt.Errorf("require_secure_transport can only be `true` when a tls_key and tls_cert are provided.")
+	}
 	return nil
 }
 
@@ -277,4 +302,21 @@ func ConnectionString(config ServerConfig) string {
 func ConfigInfo(config ServerConfig) string {
 	return fmt.Sprintf(`HP="%v:%v"|U="%v"|P="%v"|T="%v"|R="%v"|L="%v"`, config.Host(), config.Port(), config.User(),
 		config.Password(), config.ReadTimeout(), config.ReadOnly(), config.LogLevel())
+}
+
+// LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns
+// a *tls.Config configured for its use. Returns `nil` if key and cert are `""`.
+func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
+	if cfg.TLSKey() == "" && cfg.TLSCert() == "" {
+		return nil, nil
+	}
+	c, err := tls.LoadX509KeyPair(cfg.TLSCert(), cfg.TLSKey())
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{
+			c,
+		},
+	}, nil
 }
