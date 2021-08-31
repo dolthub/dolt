@@ -915,7 +915,7 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, error)
 
 		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
 			//return nil, errhand.BuildDError("error: '%s' is not a valid refspec referring to a remote tracking branch", remote.Name).Build()
-			return nil, ErrInvalidRefSpec
+			return nil, fmt.Errorf("%w; '%s' is not a valid refspec referring to a remote tracking branch", ref.ErrInvalidRefSpec, remote.Name)
 		} else if rrs.GetRemote() != remote.Name {
 			//return nil, errhand.BuildDError("error: remote '%s' refers to remote '%s'", remote.Name, rrs.GetRemote()).Build()
 			return nil, ErrInvalidRefSpecRemote
@@ -928,7 +928,6 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, error)
 }
 
 var ErrInvalidRefSpecRemote = errors.New("refspec refers to different remote")
-var ErrInvalidRefSpec = errors.New("invalid refspec")
 var ErrNoRemote = errors.New("no remote")
 var ErrUnknownRemote = errors.New("unknown remote")
 var ErrCantDetermineDefault = errors.New("unable to determine the default remote")

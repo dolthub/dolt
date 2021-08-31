@@ -189,7 +189,7 @@ func PushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.UpdateM
 
 	if err != nil {
 		//return errhand.BuildDError("error: refspec '%v' not found.", srcRef.GetPath()).Build()
-		return fmt.Errorf("%w; refspec not found: '%s'; %s", env.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
+		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
 	}
 
 	wg, progChan, pullerEventCh := progStarter()
@@ -301,7 +301,6 @@ func FetchCommit(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.D
 // FetchCommit takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
 func FetchTag(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB, srcDBTag *doltdb.Tag, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	stRef, err := srcDBTag.GetStRef()
-	println(stRef.HumanReadableString())
 
 	if err != nil {
 		return err
@@ -461,15 +460,15 @@ func FetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 	if err != nil {
 		//return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 		return nil, err
-	} else {
-		wg, progChan, pullerEventCh := progStarter()
-		err = FetchCommit(ctx, dEnv, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
-		progStopper(wg, progChan, pullerEventCh)
+	}
 
-		if err != nil {
-			//return nil,
-			return nil, err
-		}
+	wg, progChan, pullerEventCh := progStarter()
+	err = FetchCommit(ctx, dEnv, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
+	progStopper(wg, progChan, pullerEventCh)
+
+	if err != nil {
+		//return nil,
+		return nil, err
 	}
 
 	return srcDBCommit, nil

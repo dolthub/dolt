@@ -138,6 +138,9 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			}
 
 			err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
+			if err != nil {
+				return fmt.Errorf("fetch failed; %w", err)
+			}
 
 			t := doltdb.CommitNowFunc()
 			mergeSpec, ok, err := env.ParseMergeSpec(ctx, dEnv, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
@@ -148,8 +151,6 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			if !ok {
 				return nil
 			}
-
-			//err = mergePrinting(ctx, dEnv, mergeSpec)
 			if err != nil {
 				return err
 			}

@@ -42,6 +42,7 @@ var ErrCannotSetUpstreamForTag = errors.New("cannot set upstream for tag")
 var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
 var ErrFailedToDetermineMergeability = errors.New("failed to determine mergeability")
+var ErrInvalidSetUpstreamArgs = errors.New("invalid set-upstream arguments")
 
 func IsEmptyRemote(r Remote) bool {
 	return len(r.Name) == 0 && len(r.Url) == 0 && r.FetchSpecs == nil && r.Params == nil
@@ -128,10 +129,8 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 		}
 
 		refSpec, err = ref.ParseRefSpec(refSpecStr)
-
 		if err != nil {
-			//verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
-			return nil, err
+			return nil, fmt.Errorf("%w: '%s'", err, refSpecStr)
 		}
 	} else if len(args) == 2 {
 		remoteName = args[0]
@@ -145,12 +144,10 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 
 		refSpec, err = ref.ParseRefSpec(refSpecStr)
 		if err != nil {
-			//verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
-			return nil, err
+			return nil, fmt.Errorf("%w: '%s'", err, refSpecStr)
 		}
 	} else if setUpstream {
-		//verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
-		return nil, err
+		return nil, ErrInvalidSetUpstreamArgs
 	} else if hasUpstream {
 		if len(args) > 0 {
 			//return nil, errhand.BuildDError("fatal: upstream branch set for '%s'.  Use 'dolt push' without arguments to push.\n", currentBranch).Build()
@@ -226,7 +223,7 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 	opts := &PushOpts{
 		SrcRef:    src,
 		DestRef:   dest,
-		RemoteRef: remoteRef,
+			RemoteRef: remoteRef,
 		Remote:    remote,
 		Mode: ref.UpdateMode{
 			Force: force,

@@ -102,6 +102,10 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			verr = errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
 				"To push the current branch and set the remote as upstream, use\n" +
 				"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath()).Build()
+		case env.ErrInvalidSetUpstreamArgs:
+			verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
+		default:
+			verr = errhand.VerboseErrorFromError(err)
 		}
 		return HandleVErrAndExitCode(verr, usage)
 	}
