@@ -115,20 +115,7 @@ const traceProf = "trace"
 
 const featureVersionFlag = "--feature-version"
 
-func ResetColorHandler() {
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		cli.CloseOutput()
-		color.Unset()
-		os.Exit(0)
-	}()
-}
-
 func main() {
-	ResetColorHandler()
-
 	os.Exit(runMain())
 }
 
@@ -144,16 +131,16 @@ func runMain() int {
 				switch args[1] {
 				case cpuProf:
 					cli.Println("cpu profiling enabled.")
-					defer profile.Start(profile.CPUProfile).Stop()
+					defer profile.Start(profile.CPUProfile, profile.NoShutdownHook).Stop()
 				case memProf:
 					cli.Println("mem profiling enabled.")
-					defer profile.Start(profile.MemProfile).Stop()
+					defer profile.Start(profile.MemProfile, profile.NoShutdownHook).Stop()
 				case blockingProf:
 					cli.Println("block profiling enabled")
-					defer profile.Start(profile.BlockProfile).Stop()
+					defer profile.Start(profile.BlockProfile, profile.NoShutdownHook).Stop()
 				case traceProf:
 					cli.Println("trace profiling enabled")
-					defer profile.Start(profile.TraceProfile).Stop()
+					defer profile.Start(profile.TraceProfile, profile.NoShutdownHook).Stop()
 				default:
 					panic("Unexpected prof flag: " + args[1])
 				}
@@ -238,7 +225,14 @@ func runMain() int {
 
 	warnIfMaxFilesTooLow()
 
-	ctx := context.Background()
+	ctx, cancelF := context.WithCancel(context.Background())
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		cancelF()
+	}()
+
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
 	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {

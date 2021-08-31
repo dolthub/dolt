@@ -1077,3 +1077,37 @@ setup_ref_test() {
     run ls -a $testdir/dest
     ! [[ "$output" =~ ".dolt" ]] || false
 }
+
+@test "remotes: fetching unknown remotes should error" {
+    setup_ref_test
+    cd ../../
+    cd dolt-repo-clones/test-repo
+    run dolt fetch remotes/dasdas
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "error: 'remotes/dasdas' is not a valid refspec." ]] || false
+}
+
+@test "remotes: fetching added invalid remote correctly errors" {
+    setup_ref_test
+    cd ../../
+    cd dolt-repo-clones/test-repo
+    dolt remote add myremote dolthub/fake
+
+    run dolt fetch myremote
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "permission denied" ]] || false
+}
+
+@test "remotes: fetching unknown remote ref errors accordingly" {
+   setup_ref_test
+   cd ../../
+   cd dolt-repo-clones/test-repo
+   # Add a dummy remove to allow for fetching
+   dolt remote add myremote dolthub/fake
+
+   run dolt fetch dadasdfasdfa
+   [ "$status" -eq 1 ]
+   [[ "$output" =~ "error: dadasdfasdfa does not appear to be a dolt database" ]] || false
+}
