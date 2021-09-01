@@ -28,6 +28,20 @@ func strPtr(s string) *string {
 	return &s
 }
 
+func nillableStrPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func nillableBoolPtr(b bool) *bool {
+	if b == false {
+		return nil
+	}
+	return &b
+}
+
 func boolPtr(b bool) *bool {
 	return &b
 }
@@ -65,6 +79,12 @@ type ListenerYAMLConfig struct {
 	MaxConnections     *uint64 `yaml:"max_connections"`
 	ReadTimeoutMillis  *uint64 `yaml:"read_timeout_millis"`
 	WriteTimeoutMillis *uint64 `yaml:"write_timeout_millis"`
+	// TLSKey is a file system path to an unencrypted private TLS key in PEM format.
+	TLSKey *string `yaml:"tls_key"`
+	// TLSCert is a file system path to a TLS certificate chain in PEM format.
+	TLSCert *string `yaml:"tls_cert"`
+	// RequireSecureTransport can enable a mode where non-TLS connections are turned away.
+	RequireSecureTransport *bool `yaml:"require_secure_transport"`
 }
 
 // PerformanceYAMLConfig contains configuration parameters for performance tweaking
@@ -99,6 +119,9 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			uint64Ptr(cfg.MaxConnections()),
 			uint64Ptr(cfg.ReadTimeout()),
 			uint64Ptr(cfg.WriteTimeout()),
+			nillableStrPtr(cfg.TLSKey()),
+			nillableStrPtr(cfg.TLSCert()),
+			nillableBoolPtr(cfg.RequireSecureTransport()),
 		},
 		DatabaseConfig: nil,
 	}
@@ -245,4 +268,25 @@ func (cfg YAMLConfig) QueryParallelism() int {
 	}
 
 	return *cfg.PerformanceConfig.QueryParallelism
+}
+
+func (cfg YAMLConfig) TLSKey() string {
+	if cfg.ListenerConfig.TLSKey == nil {
+		return ""
+	}
+	return *cfg.ListenerConfig.TLSKey
+}
+
+func (cfg YAMLConfig) TLSCert() string {
+	if cfg.ListenerConfig.TLSCert == nil {
+		return ""
+	}
+	return *cfg.ListenerConfig.TLSCert
+}
+
+func (cfg YAMLConfig) RequireSecureTransport() bool {
+	if cfg.ListenerConfig.RequireSecureTransport == nil {
+		return false
+	}
+	return *cfg.ListenerConfig.RequireSecureTransport
 }

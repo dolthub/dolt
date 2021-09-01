@@ -42,7 +42,7 @@ var _ sql.DeletableTable = (*ConstraintViolationsTable)(nil)
 
 // NewConstraintViolationsTable returns a new ConstraintViolationsTable.
 func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	tbl, ok, err := root.GetTable(ctx, tblName)
+	tbl, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
 	} else if !ok {

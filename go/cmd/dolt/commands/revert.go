@@ -60,17 +60,9 @@ func (cmd RevertCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string)
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, revertDocs, ap))
 }
 
-// createArgParser creates the argument parser for this command.
-func (cmd RevertCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"revision",
-		"The commit revisions. If multiple revisions are given, they're applied in the order given."})
-	return ap
-}
-
 // Exec implements the interface cli.Command.
 func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cli.CreateRevertArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
@@ -135,5 +127,13 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if res != 0 {
 		return res
 	}
-	return CommitCmd{}.Exec(ctx, "commit", []string{"-m", revertMessage}, dEnv)
+
+	// Pass in the final parameters for the author string.
+	commitParams := []string{"-m", revertMessage}
+	authorStr, ok := apr.GetValue(cli.AuthorParam)
+	if ok {
+		commitParams = append(commitParams, "--author", authorStr)
+	}
+
+	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv)
 }

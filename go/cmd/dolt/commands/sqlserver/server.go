@@ -149,14 +149,22 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
+
+	tlsConfig, err := LoadTLSConfig(serverConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	mySQLServer, startError = server.NewServer(
 		server.Config{
-			Protocol:         "tcp",
-			Address:          hostPort,
-			Auth:             userAuth,
-			ConnReadTimeout:  readTimeout,
-			ConnWriteTimeout: writeTimeout,
-			MaxConnections:   serverConfig.MaxConnections(),
+			Protocol:               "tcp",
+			Address:                hostPort,
+			Auth:                   userAuth,
+			ConnReadTimeout:        readTimeout,
+			ConnWriteTimeout:       writeTimeout,
+			MaxConnections:         serverConfig.MaxConnections(),
+			TLSConfig:              tlsConfig,
+			RequireSecureTransport: serverConfig.RequireSecureTransport(),
 			// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
 			// to the value of mysql that we support.
 		},

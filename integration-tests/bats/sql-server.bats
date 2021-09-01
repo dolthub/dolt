@@ -893,3 +893,106 @@ SQL
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
     server_query repo1 1 "SHOW tables" "Table\nt"
 }
+
+@test "sql-server: require_secure_transport no key or cert" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+listener:
+  require_secure_transport: true
+EOF
+    run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --config ./config.yml
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: tls_key non-existant" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
+    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+listener:
+  tls_cert: doesnotexist_cert.pem
+  tls_key: chain_key.pem
+EOF
+    run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --config ./config.yml
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: tls_cert non-existant" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
+    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+listener:
+  tls_cert: chain_cert.pem
+  tls_key: doesnotexist.pem
+EOF
+    run dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --config ./config.yml
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: tls only server" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
+    cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+log_level: debug
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+  tls_cert: chain_cert.pem
+  tls_key: chain_key.pem
+  require_secure_transport: true
+EOF
+    dolt sql-server --config ./config.yml &
+    SERVER_PID=$!
+    # We do things manually here because we need TLS support.
+    python3 -c '
+import mysql.connector
+import sys
+import time
+i=0
+while True:
+  try:
+    with mysql.connector.connect(host="127.0.0.1", user="dolt", port='"$PORT"', database="repo1", connection_timeout=1) as c:
+      cursor = c.cursor()
+      cursor.execute("show tables")
+      for (t) in cursor:
+        print(t)
+      sys.exit(0)
+  except mysql.connector.Error as err:
+    if err.errno != 2003:
+      raise err
+    else:
+      i += 1
+      time.sleep(1)
+      if i == 10:
+        raise err
+'
+}
+
+@test "sql-server: auto increment for a table should reset between drops" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+
+    # drop the table and try again
+    server_query repo1 1 "drop table t1;"
+    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+}

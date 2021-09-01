@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !linux && !darwin
-// +build !linux,!darwin
+package kvbench
 
-package main
+// todo
+func newNBSStore() keyValStore {
+	panic("unimplemented")
+}
 
-func warnIfMaxFilesTooLow() {
+type NBSStore struct{}
+
+var _ keyValStore = NBSStore{}
+
+func (nbs NBSStore) get(key []byte) (val []byte, ok bool) {
+	panic("unimplemented")
+}
+
+func (nbs NBSStore) put(key, val []byte) {
+	panic("unimplemented")
+}
+
+func (nbs NBSStore) delete(key []byte) {
+	panic("unimplemented")
+}
+
+func (nbs NBSStore) putMany(keys, vals [][]byte) {
+	panic("unimplemented")
 }

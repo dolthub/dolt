@@ -12,7 +12,7 @@ teardown() {
 @test "conflict-detection: merge non-existant branch errors" {
     run dolt merge batmans-parents
     [ $status -eq 1 ]
-    [[ "$output" =~ "unknown ref" ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
 }
 

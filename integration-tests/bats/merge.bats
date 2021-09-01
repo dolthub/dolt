@@ -549,7 +549,7 @@ SQL
 INSERT INTO test2 VALUES (2, 2, 2);
 SQL
     dolt commit -am "add data to test2"
-    
+
     dolt checkout master
     run dolt merge feature-branch
 
