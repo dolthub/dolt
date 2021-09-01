@@ -32,6 +32,11 @@ teardown() {
 @test "branch: moving current working branch takes its working set" {
     dolt sql -q 'create table test (id int primary key);'
     dolt branch -m master new_master
-    show_tables=`dolt sql -q 'show tables' | wc -l`
-    [[ "$show_tables" -eq 5 ]] || false
+    run dolt sql -r csv <<SQL
+set dolt_hide_system_tables = 1;
+show tables;
+SQL
+
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
 }
