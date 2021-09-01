@@ -431,7 +431,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	return table, true, nil
 }
 
-var perTableSystemTablePrefixes = []string {
+var perTableSystemTablePrefixes = []string{
 	doltdb.DoltDiffTablePrefix,
 	doltdb.DoltCommitDiffTablePrefix,
 	doltdb.DoltHistoryTablePrefix,
@@ -439,7 +439,7 @@ var perTableSystemTablePrefixes = []string {
 	doltdb.DoltConstViolTablePrefix,
 }
 
-var systemTablesNames = []string {
+var systemTablesNames = []string{
 	doltdb.LogTableName,
 	doltdb.TableOfTablesInConflictName,
 	doltdb.TableOfTablesWithViolationsName,
