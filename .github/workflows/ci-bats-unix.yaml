@@ -58,9 +58,9 @@ jobs:
           npm i bats
           echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
-      - name: Install Doltpy
+      - name: Install Python Deps
         run: |
-          pip install doltpy
+          pip install mysql-connector-python
       - name: Install Dolt
         working-directory: ./go
         run: |
