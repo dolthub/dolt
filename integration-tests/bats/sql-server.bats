@@ -979,3 +979,20 @@ while True:
         raise err
 '
 }
+
+@test "sql-server: auto increment for a table should reset between drops" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+
+    # drop the table and try again
+    server_query repo1 1 "drop table t1;"
+    server_query repo1 1 "CREATE TABLE t1(pk int auto_increment primary key, val int)" ""
+    insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
+    server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
+}
