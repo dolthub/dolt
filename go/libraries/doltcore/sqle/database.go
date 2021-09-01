@@ -388,11 +388,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 		return nil, nil
 	}
 
-	tblNames, err := root.GetTableNames(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return filterDoltInternalTables(tblNames), nil
+	return tableNamesInRoot(ctx, root)
 }
 
 // getTable gets the table with the exact name given at the root value given. Does not handle system tables and other
@@ -464,6 +460,10 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 		return nil, err
 	}
 
+	return tableNamesInRoot(ctx, root)
+}
+
+func tableNamesInRoot(ctx *sql.Context, root *doltdb.RootValue) ([]string, error) {
 	tblNames, err := root.GetTableNames(ctx)
 	if err != nil {
 		return nil, err

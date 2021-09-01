@@ -502,13 +502,56 @@ SQL
 }
 
 @test "sql: show tables" {
-    run dolt sql -q "show tables"
+    run dolt sql -r csv -q "show tables"
     [ $status -eq 0 ]
-    echo ${#lines[@]}
-    [ "${#lines[@]}" -eq 7 ]
-    [[ "$output" =~ "one_pk" ]] || false
-    [[ "$output" =~ "two_pk" ]] || false
-    [[ "$output" =~ "has_datetimes" ]] || false
+    expected=(
+dolt_constraint_violations
+dolt_constraint_violations_has_datetimes
+dolt_constraint_violations_one_pk
+dolt_constraint_violations_two_pk
+dolt_diff_has_datetimes
+dolt_diff_one_pk
+dolt_diff_two_pk
+dolt_history_has_datetimes
+dolt_history_one_pk
+dolt_history_two_pk
+dolt_branches
+dolt_commit_ancestors
+dolt_commit_diff_has_datetimes
+dolt_commit_diff_one_pk
+dolt_commit_diff_two_pk
+dolt_commits
+dolt_conflicts
+dolt_conflicts_has_datetimes
+dolt_conflicts_one_pk
+dolt_conflicts_two_pk
+dolt_log
+dolt_remotes
+dolt_status
+has_datetimes
+one_pk
+two_pk
+    )
+
+    echo "$expected"
+    
+    [ "${#lines[@]}" -eq 27 ]
+    for table in "${expected[@]}"
+    do
+        [[ "$output" =~ "$table" ]] || false
+    done
+
+    run dolt sql -r csv <<SQL
+set dolt_hide_system_tables = 1;
+show tables;
+SQL
+    
+    [ $status -eq 0 ]
+
+    [ "${#lines[@]}" -eq 5 ] # one table, one ok message from set
+    [[ "$output" =~ "$one_pk" ]] || false
+    [[ "$output" =~ "$two_pk" ]] || false
+    [[ "$output" =~ "$has_datetimes" ]] || false
 }
 
 @test "sql: show tables AS OF" {
@@ -521,13 +564,102 @@ SQL
     
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
-    [[ "$output" =~ table_a ]] || false
+    
+    expected=(
+        dolt_branches
+        dolt_commit_ancestors
+        dolt_commit_diff_has_datetimes
+        dolt_commit_diff_one_pk
+        dolt_commit_diff_table_a
+        dolt_commit_diff_table_b
+        dolt_commit_diff_two_pk
+        dolt_commits
+        dolt_conflicts
+        dolt_conflicts_has_datetimes
+        dolt_conflicts_one_pk
+        dolt_conflicts_table_a
+        dolt_conflicts_table_b
+        dolt_conflicts_two_pk
+        dolt_constraint_violations
+        dolt_constraint_violations_has_datetimes
+        dolt_constraint_violations_one_pk
+        dolt_constraint_violations_table_a
+        dolt_constraint_violations_table_b
+        dolt_constraint_violations_two_pk
+        dolt_log
+        dolt_remotes
+        dolt_status
+        has_datetimes
+        one_pk
+        table_a
+        table_b
+        two_pk
+        dolt_diff_has_datetimes
+        dolt_diff_one_pk
+        dolt_diff_table_a
+        dolt_diff_table_b
+        dolt_diff_two_pk
+        dolt_history_has_datetimes
+        dolt_history_one_pk
+        dolt_history_table_a
+        dolt_history_table_b
+        dolt_history_two_pk
+    )
+    
+    [ "${#lines[@]}" -eq 39 ]
+
+    for table in "${expected[@]}"
+    do
+        [[ "$output" =~ "$table" ]] || false
+    done
 
     run dolt sql -q "show tables AS OF 'HEAD~'" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
-    [[ ! "$output" =~ table_a ]] || false    
+
+    expected=(
+        dolt_branches
+        dolt_commit_ancestors
+        dolt_commit_diff_has_datetimes
+        dolt_commit_diff_one_pk
+        dolt_commit_diff_two_pk
+        dolt_commits
+        dolt_conflicts
+        dolt_conflicts_has_datetimes
+        dolt_conflicts_one_pk
+        dolt_conflicts_two_pk
+        dolt_constraint_violations
+        dolt_constraint_violations_has_datetimes
+        dolt_constraint_violations_one_pk
+        dolt_constraint_violations_two_pk
+        dolt_log
+        dolt_remotes
+        dolt_status
+        has_datetimes
+        one_pk
+        two_pk
+        dolt_diff_has_datetimes
+        dolt_diff_one_pk
+        dolt_diff_two_pk
+        dolt_history_has_datetimes
+        dolt_history_one_pk
+        dolt_history_two_pk
+    )
+
+    [ "${#lines[@]}" -eq 27 ]
+    for table in "${expected[@]}"
+    do
+        [[ "$output" =~ "$table" ]] || false
+    done
+    [[ ! "$output" =~ table_a ]] || false
+    [[ ! "$output" =~ table_b ]] || false
+
+    run dolt sql -r csv <<SQL
+set dolt_hide_system_tables = 1;
+show tables as of 'HEAD~';
+SQL
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ] # 4 table lines plus output of set statement
+    [[ ! "$output" =~ table_a ]] || false
 }
 
 @test "sql: USE branch" {
@@ -542,15 +674,23 @@ CREATE TABLE table_b(x int primary key);
 SELECT DOLT_COMMIT('-a', '-m', 'two new tables');
 SQL
     
-    run dolt sql -q "show tables" -r csv
+    run dolt sql -r csv <<SQL
+set dolt_hide_system_tables = 1;
+show tables;
+SQL
+    
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 5 ] # 4 table lines, 1 line from set statement
     [[ ! "$output" =~ table_a ]] || false
 
     dolt checkout feature-branch
-    run dolt sql -q "show tables" -r csv
+    run dolt sql -r csv <<SQL
+set dolt_hide_system_tables = 1;
+show tables;
+SQL
+
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 7 ]
     [[ "$output" =~ table_a ]] || false
 }
 
@@ -569,13 +709,20 @@ CREATE TABLE test (x int primary key);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
 SQL
     
-    run dolt sql -q "show tables" -r csv
+    run dolt sql -r csv <<SQL
+set dolt_hide_system_tables = 1;
+show tables;
+SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     [[ ! "$output" =~ test ]] || false
 
     dolt checkout feature-branch
-    run dolt sql -q "show tables" -r csv
+
+    run dolt sql -r csv <<SQL
+set dolt_hide_system_tables = 1;
+show tables;
+SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ test ]] || false
