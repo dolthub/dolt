@@ -58,9 +58,6 @@ jobs:
           npm i bats
           echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
-      - name: Install Doltpy
-        run: |
-          pip install doltpy
       - name: Install Dolt
         working-directory: ./go
         run: |
