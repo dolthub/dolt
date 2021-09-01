@@ -39,6 +39,10 @@ class DoltConnection(object):
         try:
             self.cnx = _connect(self.user, self.host, self.port, self.database)
             self.cnx.autocommit=self.auto_commit
+            cursor = self.cnx.cursor()
+            # This is a bit of a hack to make the many tests that use show tables work more easily
+            cursor.execute("set dolt_hide_system_tables=1")
+            
         except BaseException as e:
             _print_err_and_exit(e)
 

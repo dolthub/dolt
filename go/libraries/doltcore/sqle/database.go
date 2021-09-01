@@ -490,16 +490,6 @@ func tableNamesInRoot(ctx *sql.Context, root *doltdb.RootValue) ([]string, error
 	return append(returnNames, systemTablesNames...), nil
 }
 
-func filterDoltInternalTables(tblNames []string) []string {
-	result := []string{}
-	for _, tbl := range tblNames {
-		if !doltdb.HasDoltPrefix(tbl) {
-			result = append(result, tbl)
-		}
-	}
-	return result
-}
-
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
 // GetRoot returns the root value for this database session
