@@ -714,7 +714,7 @@ set dolt_hide_system_tables = 1;
 show tables;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 5 ] # 4 table lines, one for set output
     [[ ! "$output" =~ test ]] || false
 
     dolt checkout feature-branch
@@ -724,7 +724,7 @@ set dolt_hide_system_tables = 1;
 show tables;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ]
+    [ "${#lines[@]}" -eq 6 ] # 5 table lines, one for set output
     [[ "$output" =~ test ]] || false
 
     dolt checkout master
