@@ -15,6 +15,7 @@ set id2 $spawn_id
 
 # Todo: Should this be a dolt ls instead ?
 expect -i id2 "doltsql> "
+send -i id2 "set dolt_hide_system_tables = 1;\r"
 send -i id2 "show tables;\r"
 
 expect -i id eof
