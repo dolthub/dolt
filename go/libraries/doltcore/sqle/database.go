@@ -15,7 +15,6 @@
 package sqle
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -396,10 +395,10 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 	return filterDoltInternalTables(tblNames), nil
 }
 
-// getTable gets the table with the exact name given at the root value given. The database caches tables for all root
-// values to avoid doing schema lookups on every table lookup, which are expensive.
+// getTable gets the table with the exact name given at the root value given. Does not handle system tables and other
+// virtual tables.
 func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string, temporary bool) (sql.Table, bool, error) {
-	tableNames, err := getAllTableNames(ctx, root)
+	tableNames, err := root.GetTableNames(ctx)
 	if err != nil {
 		return nil, true, err
 	}
@@ -436,32 +435,59 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	return table, true, nil
 }
 
+var perTableSystemTablePrefixes = []string {
+	doltdb.DoltDiffTablePrefix,
+	doltdb.DoltCommitDiffTablePrefix,
+	doltdb.DoltHistoryTablePrefix,
+	doltdb.DoltConfTablePrefix,
+	doltdb.DoltConstViolTablePrefix,
+}
+
+var systemTablesNames = []string {
+	doltdb.LogTableName,
+	doltdb.TableOfTablesInConflictName,
+	doltdb.TableOfTablesWithViolationsName,
+	doltdb.BranchesTableName,
+	doltdb.RemotesTableName,
+	doltdb.CommitsTableName,
+	doltdb.CommitAncestorsTableName,
+	doltdb.StatusTableName,
+}
+
 // GetTableNames returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog)
 // are filtered out. This method is used for queries that examine the schema of the database, e.g. show tables. Table
 // name resolution in queries is handled by GetTableInsensitive. Use GetAllTableNames for an unfiltered list of all
 // tables in user space.
 func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
-	tblNames, err := db.GetAllTableNames(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return filterDoltInternalTables(tblNames), nil
-}
-
-// GetAllTableNames returns all user-space tables, including system tables in user space
-// (e.g. dolt_docs, dolt_query_catalog).
-func (db Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
 	root, err := db.GetRoot(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return getAllTableNames(ctx, root)
-}
+	tblNames, err := root.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-func getAllTableNames(ctx context.Context, root *doltdb.RootValue) ([]string, error) {
-	return root.GetTableNames(ctx)
+	hideSystemTables, err := ctx.Session.GetSessionVariable(ctx, dsess.HideSystemTablesSysVar)
+	if err != nil {
+		return nil, err
+	} else if hideSystemTables.(int8) != 0 {
+		return tblNames, nil
+	}
+
+	// Add the system tables for each of the above tables
+	var returnNames []string
+	for _, name := range tblNames {
+		returnNames = append(returnNames, name)
+		if !doltdb.HasDoltPrefix(name) {
+			for _, prefix := range perTableSystemTablePrefixes {
+				returnNames = append(returnNames, fmt.Sprintf("%s%s", prefix, name))
+			}
+		}
+	}
+
+	return append(returnNames, systemTablesNames...), nil
 }
 
 func filterDoltInternalTables(tblNames []string) []string {

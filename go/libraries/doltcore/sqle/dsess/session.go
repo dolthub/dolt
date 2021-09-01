@@ -43,6 +43,7 @@ const (
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
+	HideSystemTablesSysVar        = "dolt_hide_system_tables"
 )
 
 var transactionMergeStomp = false
@@ -86,6 +87,14 @@ func init() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(TransactionsDisabledSysVar),
+			Default:           int8(0),
+		},
+		{
+			Name:              HideSystemTablesSysVar,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(HideSystemTablesSysVar),
 			Default:           int8(0),
 		},
 		{ // If true, disables the conflict and constraint violation check when you commit a transaction.
