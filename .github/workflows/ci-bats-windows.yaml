@@ -111,6 +111,7 @@ jobs:
           chmod 755 wslpath
           mv wslpath /usr/bin/
           cp /c/tools/php/php /usr/bin/
+      - name: Install Python Deps
         run: |
           pip install mysql-connector-python
       - name: Install Dolt
