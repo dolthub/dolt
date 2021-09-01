@@ -726,7 +726,7 @@ SQL
 
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "dolt_docs" ]] || false
+    [[ "$output" =~ "dolt_docs" ]] || false
 
     run dolt sql -q "INSERT INTO dolt_docs VALUES ('new_doc', 'new_text')"
     [ "$status" -eq 1 ]
