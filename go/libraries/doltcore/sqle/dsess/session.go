@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -1052,7 +1051,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
 		workingRoot := dbState.WorkingSet.WorkingRoot()
-		logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
+		// logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
 
 		err := sess.setRoot(ctx, db.Name(), workingRoot)
 		if err != nil {

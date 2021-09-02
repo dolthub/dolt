@@ -96,13 +96,14 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 		logrus.SetLevel(level)
 	}
+	logrus.SetFormatter(LogFormat{})
 
 	permissions := auth.AllPermissions
 	if serverConfig.ReadOnly() {
 		permissions = auth.ReadPerm
 	}
 
-	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions), auth.NewAuditLog(logrus.StandardLogger()))
+	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
 	var username string
 	var email string
