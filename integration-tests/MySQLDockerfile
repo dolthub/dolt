@@ -33,7 +33,10 @@ RUN apt install -y \
     libicu60 \
     libssl1.1 \
     libstdc++6 \
-    zlib1g
+    zlib1g \
+    r-base
+
+RUN Rscript -e 'install.packages("RMariaDB")'
 
 # install go
 WORKDIR /root
@@ -96,6 +99,11 @@ RUN wget https://packages.erlang-solutions.com/erlang-solutions_2.0_all.deb && d
 RUN apt-get update && apt-get -y upgrade
 RUN apt-get install -y esl-erlang
 RUN apt-get install -y elixir
+
+# install R
+RUN apt-get update && apt-get -y upgrade
+RUN apt-get install -y r-base
+RUN Rscript -e 'install.packages("RMariaDB")'
 
 # install postgres and psql
 RUN apt-get install -y postgresql postgresql-contrib libpq-dev postgresql-server-dev-all
