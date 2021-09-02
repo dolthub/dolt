@@ -36,8 +36,6 @@ RUN apt install -y \
     zlib1g \
     r-base
 
-RUN Rscript -e 'install.packages("RMariaDB")'
-
 # install go
 WORKDIR /root
 ENV GO_VERSION=1.15.1
