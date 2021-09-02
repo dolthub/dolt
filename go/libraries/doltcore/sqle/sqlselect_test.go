@@ -63,6 +63,26 @@ type SelectTest struct {
 	SkipOnSqlEngine bool
 }
 
+// We are doing structural equality tests on time.Time values in some of these
+// tests. The SQL value layer works with times in time.Local location, but
+// go standard library will return different values (which will have the same
+// behavior) depending on whether detailed timezone information has been loaded
+// for time.Local already. Here, we always load the detailed information so
+// that our structural equality tests will be reliable.
+var loadedLocalLocation *time.Location
+
+func LoadedLocalLocation() *time.Location {
+	var err error
+	loadedLocalLocation, err = time.LoadLocation(time.Local.String())
+	if err != nil {
+		panic(err)
+	}
+	if loadedLocalLocation == nil {
+		panic("nil LoadedLocalLocation " + time.Local.String())
+	}
+	return loadedLocalLocation
+}
+
 // BasicSelectTests cover basic select statement features and error handling
 var BasicSelectTests = []SelectTest{
 	{
@@ -715,7 +735,7 @@ var BasicSelectTests = []SelectTest{
 				"so275enkvulb96mkckbun1kjo9seg7c9",
 				"billy bob",
 				"bigbillieb@fake.horse",
-				time.Date(1970, 1, 1, 0, 0, 0, 0, &time.Location{}),
+				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 				"Initialize data repository",
 			},
 		},
@@ -744,7 +764,7 @@ var BasicSelectTests = []SelectTest{
 				"master",
 				"so275enkvulb96mkckbun1kjo9seg7c9",
 				"billy bob", "bigbillieb@fake.horse",
-				time.Date(1970, 1, 1, 0, 0, 0, 0, &time.Location{}),
+				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 				"Initialize data repository",
 			},
 		},
@@ -1528,14 +1548,25 @@ func (tcc *testCommitClock) Now() time.Time {
 	return now
 }
 
+func installTestCommitClock() func() {
+	oldNowFunc := doltdb.CommitNowFunc
+	oldCommitLoc := doltdb.CommitLoc
+	tcc := &testCommitClock{}
+	doltdb.CommitNowFunc = tcc.Now
+	doltdb.CommitLoc = time.UTC
+	return func() {
+		doltdb.CommitNowFunc = oldNowFunc
+		doltdb.CommitLoc = oldCommitLoc
+	}
+}
+
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
 func testSelectQuery(t *testing.T, test SelectTest) {
 	validateTest(t, test)
 
-	tcc := &testCommitClock{}
-	doltdb.CommitNowFunc = tcc.Now
-	doltdb.CommitLoc = time.UTC
+	cleanup := installTestCommitClock()
+	defer cleanup()
 
 	dEnv := dtestutils.CreateTestEnv()
 	CreateTestDatabase(dEnv, t)
@@ -1570,9 +1601,9 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	validateTest(t, test)
 
 	ctx := context.Background()
-	tcc := &testCommitClock{}
-	doltdb.CommitNowFunc = tcc.Now
-	doltdb.CommitLoc = time.UTC
+
+	cleanup := installTestCommitClock()
+	defer cleanup()
 
 	dEnv := dtestutils.CreateTestEnv()
 	envtestutils.InitializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
