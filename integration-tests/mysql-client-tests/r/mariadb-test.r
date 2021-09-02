@@ -1,6 +1,4 @@
 library(RMariaDB)
-library(DBI)
-library(testthat)
 
 args = commandArgs(trailingOnly=TRUE)
 
