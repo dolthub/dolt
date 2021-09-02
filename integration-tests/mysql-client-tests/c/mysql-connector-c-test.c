@@ -19,6 +19,7 @@ typedef struct statement_t {
   MYSQL_BIND bind[10];
   int expect_prepare_error;
   int expect_exec_error;
+  int expect_result_metadata;
 } statement;
 
 void test_statement(MYSQL *con, statement *stmt) {
@@ -37,6 +38,14 @@ void test_statement(MYSQL *con, statement *stmt) {
   }
   if ( mysql_stmt_bind_param(mstmt, stmt->bind) ) {
     fprintf(stderr, "failed to bind stmt: %s: %s\n", stmt->query, mysql_stmt_error(mstmt));
+    exit(1);
+  }
+  MYSQL_RES *metadata = mysql_stmt_result_metadata(mstmt);
+  if (stmt->expect_result_metadata && metadata == NULL) {
+    fprintf(stderr, "result metadata was unexpectedly NULL: %s\n", stmt->query);
+    exit(1);
+  } else if (!stmt->expect_result_metadata && metadata != NULL) {
+    fprintf(stderr, "result metadata was unexpectedly non-NULL: %s\n", stmt->query);
     exit(1);
   }
   if ( mysql_stmt_execute(mstmt) ) {
@@ -107,6 +116,7 @@ int main(int argc, char **argv) {
          .buffer_length = sizeof(pk),
         },
       },
+      .expect_result_metadata = 1,
     },
     {
       .query = "select * from test where pk = ?",
@@ -118,6 +128,7 @@ int main(int argc, char **argv) {
          .is_unsigned = 1,
         },
       },
+      .expect_result_metadata = 1,
     },
     {
       .query = "insert into test values (?, ?)",
@@ -133,6 +144,7 @@ int main(int argc, char **argv) {
          .buffer_length = sizeof(value),
         },
       },
+      .expect_result_metadata = 0,
     },
     {
       .query = "update test set `value` = ?",
@@ -145,6 +157,7 @@ int main(int argc, char **argv) {
         },
       },
       .expect_exec_error = 1,
+      .expect_result_metadata = 0,
     },
     {
       .query = "select * from test SYNTAX ERROR where pk = ?",
