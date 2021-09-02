@@ -260,12 +260,14 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.BranchesTableName:
 		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
+	case doltdb.RemotesTableName:
+		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
 	case doltdb.CommitsTableName:
 		dt, found = dtables.NewCommitsTable(ctx, db.ddb), true
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name), db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name, map[string]env.Remote{}), db.drw), true
 	}
 	if found {
 		return dt, found, nil
@@ -560,7 +562,27 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
+	err = db.dropTableFromAiTracker(ctx, tableName)
+	if err != nil {
+		return err
+	}
+
 	return db.SetRoot(ctx, newRoot)
+}
+
+// dropTableFromAiTracker grabs the auto increment tracker and removes the table named tableName from it.
+func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) error {
+	sess := dsess.DSessFromSess(ctx.Session)
+	ws, err := sess.WorkingSet(ctx, db.Name())
+
+	if err != nil {
+		return err
+	}
+
+	ait := db.gs.GetAutoIncrementTracker(ws.Ref())
+	ait.DropTable(tableName)
+
+	return nil
 }
 
 // CreateTable creates a table with the name and schema given.

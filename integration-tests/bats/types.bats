@@ -261,6 +261,22 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1000-01-01 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-02');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-02 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-3');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-03 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-04');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-04 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-5');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-05 00:00:00 +0000 UTC " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '9999-01-01 23:59:59.999999');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -290,6 +306,22 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1000-01-01 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-02');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-02 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-3');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-03 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-04');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-04 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-5');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-05 00:00:00 +0000 UTC " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '9999-01-01 23:59:59.999999');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]

@@ -380,19 +380,6 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 	}
 }
 
-// GetManifestStorageVersion returns the manifest storage version or an error if the operation is not supported
-func (nbs *NomsBlockStore) GetManifestStorageVersion(ctx context.Context) (version string, err error) {
-	// possibly unnecessary
-	nbs.mm.LockForUpdate()
-	defer func() {
-		err = nbs.mm.UnlockForUpdate()
-	}()
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
-
-	return nbs.mm.GetManifestVersion()
-}
-
 func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	readRateLimiter := make(chan struct{}, 32)

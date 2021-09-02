@@ -133,6 +133,18 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return handleResetError(err, usage)
 }
 
+var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{
+	diff.ModifiedTable: "M",
+	diff.RemovedTable:  "D",
+	diff.AddedTable:    "N",
+}
+
+var docDiffTypeToShortLabel = map[diff.DocDiffType]string{
+	diff.ModifiedDoc: "M",
+	diff.RemovedDoc:  "D",
+	diff.AddedDoc:    "N",
+}
+
 func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	// Printing here is best effort.  Fail silently
 	working, err := dEnv.WorkingRoot(ctx)

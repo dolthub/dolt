@@ -77,6 +77,7 @@ const (
 	CommitMessageArg = "message"
 	AuthorParam      = "author"
 	ForceFlag        = "force"
+	SetUpstreamFlag  = "set-upstream"
 	AllFlag          = "all"
 	HardResetParam   = "hard"
 	SoftResetParam   = "soft"
@@ -129,5 +130,14 @@ func CreateResetArgParser() *argparser.ArgParser {
 func CreateCheckoutArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(CheckoutCoBranch, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
+	return ap
+}
+
+func CreateRevertArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"revision",
+		"The commit revisions. If multiple revisions are given, they're applied in the order given."})
+
 	return ap
 }

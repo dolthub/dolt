@@ -91,24 +91,32 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	serverConfig, err := GetServerConfig(dEnv, apr)
-	if err != nil {
-		cli.PrintErrln(color.RedString("Bad Configuration"))
-		cli.PrintErrln(err.Error())
-		return 1
-	}
-
+	var serverConfig ServerConfig
 	var serverController *ServerController
+	var err error
 
 	if apr.Contains(sqlClientDualFlag) {
+		serverConfig, err = GetServerConfig(dEnv, apr, true)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Bad Configuration"))
+			cli.PrintErrln(err.Error())
+			return 1
+		}
 		cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
 		serverController = CreateServerController()
 		go func() {
 			_, _ = Serve(ctx, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
 		}()
-		err := serverController.WaitForStart()
+		err = serverController.WaitForStart()
 		if err != nil {
+			cli.PrintErrln(err.Error())
+			return 1
+		}
+	} else {
+		serverConfig, err = GetServerConfig(dEnv, apr, false)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())
 			return 1
 		}

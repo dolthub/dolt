@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -188,6 +187,7 @@ type InitialDbState struct {
 	ReadOnly     bool
 	WorkingSet   *doltdb.WorkingSet
 	DbData       env.DbData
+	Remotes      map[string]env.Remote
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -1040,7 +1040,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
-	adapter := NewSessionStateAdapter(sess, db.Name())
+	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
 	sessionState.readOnly, sessionState.detachedHead = dbState.ReadOnly, dbState.DetachedHead
@@ -1051,7 +1051,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
 		workingRoot := dbState.WorkingSet.WorkingRoot()
-		logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
+		// logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
 
 		err := sess.setRoot(ctx, db.Name(), workingRoot)
 		if err != nil {

@@ -800,6 +800,13 @@ func (ddb *DoltDB) GetWorkspaces(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, workspacesRefFilter)
 }
 
+var remotesRefFilter = map[ref.RefType]struct{}{ref.RemoteRefType: {}}
+
+// GetRemoteRefs returns a list of all remotes in the database.
+func (ddb *DoltDB) GetRemoteRefs(ctx context.Context) ([]ref.DoltRef, error) {
+	return ddb.GetRefsOfType(ctx, remotesRefFilter)
+}
+
 // GetHeadRefs returns a list of all refs that point to a Commit
 func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.HeadRefTypes)
@@ -1217,8 +1224,4 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- datas.TableFileEvent) error {
 	return datas.Clone(ctx, ddb.db, destDB.db, eventCh)
-}
-
-func (ddb *DoltDB) GetStorageVersion(ctx context.Context) (string, error) {
-	return datas.GetManifestStorageVersion(ctx, ddb.db)
 }
