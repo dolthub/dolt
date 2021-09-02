@@ -21,8 +21,6 @@ responses = list(NULL,
                  NULL,
                  data.frame(pk = c(0), value = c(0)))
 
-dbExecute(conn, "select dolt_checkout('test')")
-
 for(i in 1:length(queries)) {
     q = queries[[i]]
     want = responses[[i]]
