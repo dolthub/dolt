@@ -25,7 +25,7 @@ for(i in 1:length(queries)) {
     want = responses[[i]]
     if (!is.null(want)) {
         got <- dbGetQuery(conn, q)
-        if (!all.equal(want, got)) {
+        if (!isTRUE(all.equal(want, got))) {
             print(q)
             print(want)
             print(got)
@@ -57,7 +57,7 @@ if (rowsAff != 1) {
 
 rows <- dbGetQuery(conn, "select * from test where pk = 1")
 exp = data.frame(pk = c(1), value = c(1))
-if (!all.equal(rows, exp)) {
+if (!isTRUE(all.equal(rows, exp))) {
     print("unexpected prepared statement result")
     print(rows)
     quit(1)
