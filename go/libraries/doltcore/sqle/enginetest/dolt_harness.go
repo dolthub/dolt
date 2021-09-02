@@ -205,6 +205,7 @@ func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState g
 		HeadCommit: headCommit,
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
 	}
 }
 

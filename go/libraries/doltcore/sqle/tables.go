@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1762,24 +1763,17 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return sql.ErrWrongAutoKey.New()
 	}
 
-	// Ensure that any primary key column is neither a parent nor child in a fk relationship
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
 
-	fkc, err := root.GetForeignKeyCollection(ctx)
+	fkcUpdates, err := t.backupFkcIndexesForPkDrop(ctx, root)
 	if err != nil {
 		return err
 	}
 
-	err = t.sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (bool, error) {
-		if fkc.ColumnHasFkRelationship(tag) {
-			return true, sql.ErrCantDropIndex.New("PRIMARY")
-		}
-
-		return false, nil
-	})
+	newRoot, err := t.updateFkcIndex(ctx, root, fkcUpdates)
 	if err != nil {
 		return err
 	}
@@ -1795,7 +1789,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	}
 
 	// Update the root with then new table
-	newRoot, err := root.PutTable(ctx, t.tableName, table)
+	newRoot, err = newRoot.PutTable(ctx, t.tableName, table)
 	if err != nil {
 		return err
 	}
@@ -1806,4 +1800,107 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
+}
+
+type fkIndexUpdate struct {
+	fkName  string
+	fromIdx string
+	toIdx   string
+}
+
+// updateFkcIndex applies a list of fkIndexUpdates to a ForeignKeyCollection and returns a new root value
+func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootValue, updates []fkIndexUpdate) (*doltdb.RootValue, error) {
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, u := range updates {
+		fk, ok := fkc.GetByNameCaseInsensitive(u.fkName)
+		if !ok {
+			return nil, errors.New("foreign key not found")
+		}
+		fkc.RemoveKeys(fk)
+		fk.ReferencedTableIndex = u.toIdx
+		fkc.AddKeys(fk)
+		err := fk.ValidateReferencedTableSchema(t.sch)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return nil, err
+	}
+	return root, nil
+}
+
+// backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
+// key drop. If multiple indexes are valid, we sort by unique and select the first.
+// This will not work with a non-pk index drop without an additional index filter argument.
+func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *doltdb.RootValue) ([]fkIndexUpdate, error) {
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	indexes := t.sch.Indexes().AllIndexes()
+	if err != nil {
+		return nil, err
+	}
+
+	// pkBackups is a mapping from the table's PK tags to potentially compensating indexes
+	pkBackups := make(map[uint64][]schema.Index, len(t.sch.GetPKCols().TagToIdx))
+	for tag, _ := range t.sch.GetPKCols().TagToIdx {
+		pkBackups[tag] = nil
+	}
+
+	// prefer unique key backups
+	sort.Slice(indexes[:], func(i, j int) bool {
+		return indexes[i].IsUnique() && !indexes[j].IsUnique()
+	})
+
+	for _, idx := range indexes {
+		if !idx.IsUserDefined() {
+			continue
+		}
+
+		for _, tag := range idx.AllTags() {
+			if _, ok := pkBackups[tag]; ok {
+				pkBackups[tag] = append(pkBackups[tag], idx)
+			}
+		}
+	}
+
+	fkUpdates := make([]fkIndexUpdate, 0)
+	for _, fk := range fkc.AllKeys() {
+		// check if this FK references a parent PK tag we are trying to change
+		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
+			covered := false
+			for _, idx := range backups {
+				idxTags := idx.AllTags()
+				if len(fk.TableColumns) > len(idxTags) {
+					continue
+				}
+				failed := false
+				for i := 0; i < len(fk.ReferencedTableColumns); i++ {
+					if idxTags[i] != fk.ReferencedTableColumns[i] {
+						failed = true
+						break
+					}
+				}
+				if failed {
+					continue
+				}
+				fkUpdates = append(fkUpdates, fkIndexUpdate{fk.Name, fk.ReferencedTableIndex, idx.Name()})
+				covered = true
+				break
+			}
+			if !covered {
+				return nil, sql.ErrCantDropIndex.New("PRIMARY")
+			}
+		}
+	}
+	return fkUpdates, nil
 }

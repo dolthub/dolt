@@ -56,6 +56,13 @@ var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
 var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 var ErrInvalidCredsFile = errors.New("invalid creds file")
+var ErrRemoteAlreadyExists = errors.New("remote already exists")
+var ErrInvalidRemoteURL = errors.New("remote URL invalid")
+var ErrRemoteNotFound = errors.New("remote not found")
+var ErrInvalidRemoteName = errors.New("remote name invalid")
+var ErrFailedToReadFromDb = errors.New("failed to read from db")
+var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
+var ErrFailedToWriteRepoState = errors.New("failed to write repo state")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -548,6 +555,10 @@ func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
 	return r.dEnv.RepoState.CWBHeadSpec()
 }
 
+func (r *repoStateReader) GetRemotes() (map[string]Remote, error) {
+	return r.dEnv.GetRemotes()
+}
+
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
 	return &repoStateReader{dEnv}
 }
@@ -565,6 +576,14 @@ func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.
 	}
 
 	return nil
+}
+
+func (r *repoStateWriter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
+	return r.DoltEnv.AddRemote(name, url, fetchSpecs, params)
+}
+
+func (r *repoStateWriter) RemoveRemote(ctx context.Context, name string) error {
+	return r.DoltEnv.RemoveRemote(ctx, name)
 }
 
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
@@ -828,6 +847,62 @@ func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 	return dEnv.RepoState.Remotes, nil
 }
 
+func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
+	if _, ok := dEnv.RepoState.Remotes[name]; ok {
+		return ErrRemoteAlreadyExists
+	}
+
+	if strings.IndexAny(name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+		return ErrInvalidRemoteName
+	}
+
+	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
+	if err != nil {
+		return fmt.Errorf("%w; %s", ErrInvalidRemoteURL, err.Error())
+	}
+
+	r := Remote{name, absRemoteUrl, fetchSpecs, params}
+	dEnv.RepoState.AddRemote(r)
+	err = dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
+	remote, ok := dEnv.RepoState.Remotes[name]
+	if !ok {
+		return ErrRemoteNotFound
+	}
+
+	ddb := dEnv.DoltDB
+	refs, err := ddb.GetRemoteRefs(ctx)
+	if err != nil {
+		return ErrFailedToReadFromDb
+	}
+
+	for _, r := range refs {
+		rr := r.(ref.RemoteRef)
+
+		if rr.GetRemote() == remote.Name {
+			err = ddb.DeleteBranch(ctx, rr)
+
+			if err != nil {
+				return fmt.Errorf("%w; failed to delete remote tracking ref '%s'; %s", ErrFailedToDeleteRemote, rr.String(), err.Error())
+			}
+		}
+	}
+
+	dEnv.RepoState.RemoveRemote(remote)
+	err = dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return ErrFailedToWriteRepoState
+	}
+
+	return nil
+}
+
 var ErrNotACred = errors.New("not a valid credential key id or public key")
 
 func (dEnv *DoltEnv) FindCreds(credsDir, pubKeyOrId string) (string, error) {
@@ -890,20 +965,20 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 
 // GetRefSpecs takes an optional remoteName and returns all refspecs associated with that remote.  If "" is passed as
 // the remoteName then the default remote is used.
-func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhand.VerboseError) {
+func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, error) {
 	var remote Remote
-	var verr errhand.VerboseError
+	var err error
 
 	if remoteName == "" {
-		remote, verr = dEnv.GetDefaultRemote()
+		remote, err = dEnv.GetDefaultRemote()
 	} else if r, ok := dEnv.RepoState.Remotes[remoteName]; ok {
 		remote = r
 	} else {
-		verr = errhand.BuildDError("error: unknown remote '%s'", remoteName).Build()
+		err = ErrUnknownRemote
 	}
 
-	if verr != nil {
-		return nil, verr
+	if err != nil {
+		return nil, err
 	}
 
 	var refSpecs []ref.RemoteRefSpec
@@ -915,9 +990,9 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhan
 		}
 
 		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
-			return nil, errhand.BuildDError("error: '%s' is not a valid refspec referring to a remote tracking branch", remote.Name).Build()
+			return nil, fmt.Errorf("%w; '%s' is not a valid refspec referring to a remote tracking branch", ref.ErrInvalidRefSpec, remote.Name)
 		} else if rrs.GetRemote() != remote.Name {
-			return nil, errhand.BuildDError("error: remote '%s' refers to remote '%s'", remote.Name, rrs.GetRemote()).Build()
+			return nil, ErrInvalidRefSpecRemote
 		} else {
 			refSpecs = append(refSpecs, rrs)
 		}
@@ -926,12 +1001,14 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhan
 	return refSpecs, nil
 }
 
-var ErrNoRemote = errhand.BuildDError("error: no remote.").Build()
-var ErrCantDetermineDefault = errhand.BuildDError("error: unable to determine the default remote.").Build()
+var ErrInvalidRefSpecRemote = errors.New("refspec refers to different remote")
+var ErrNoRemote = errors.New("no remote")
+var ErrUnknownRemote = errors.New("unknown remote")
+var ErrCantDetermineDefault = errors.New("unable to determine the default remote")
 
 // GetDefaultRemote gets the default remote for the environment.  Not fully implemented yet.  Needs to support multiple
 // repos and a configurable default.
-func (dEnv *DoltEnv) GetDefaultRemote() (Remote, errhand.VerboseError) {
+func (dEnv *DoltEnv) GetDefaultRemote() (Remote, error) {
 	remotes := dEnv.RepoState.Remotes
 
 	if len(remotes) == 0 {

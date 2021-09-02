@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datas
+package kvbench
 
-import (
-	"context"
+// todo
+func newNBSStore() keyValStore {
+	panic("unimplemented")
+}
 
-	"github.com/dolthub/dolt/go/store/chunks"
-)
+type NBSStore struct{}
 
-func GetManifestStorageVersion(ctx context.Context, db Database) (string, error) {
-	store, ok := db.chunkStore().(chunks.ChunkStoreVersionGetter)
-	if !ok {
-		return "", chunks.ErrUnsupportedOperation
-	}
-	return store.GetManifestStorageVersion(ctx)
+var _ keyValStore = NBSStore{}
+
+func (nbs NBSStore) get(key []byte) (val []byte, ok bool) {
+	panic("unimplemented")
+}
+
+func (nbs NBSStore) put(key, val []byte) {
+	panic("unimplemented")
+}
+
+func (nbs NBSStore) delete(key []byte) {
+	panic("unimplemented")
+}
+
+func (nbs NBSStore) putMany(keys, vals [][]byte) {
+	panic("unimplemented")
 }

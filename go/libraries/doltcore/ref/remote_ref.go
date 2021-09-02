@@ -77,6 +77,10 @@ func NewRemoteRefFromPathStr(remoteAndPath string) (DoltRef, error) {
 		return nil, ErrInvalidRefSpec
 	}
 
+	if len(remote)+1 > len(remoteAndPath) {
+		return nil, ErrInvalidRefSpec
+	}
+
 	branch := remoteAndPath[len(remote)+1:]
 
 	if remote == "" || branch == "" {

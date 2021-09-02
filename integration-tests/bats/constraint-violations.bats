@@ -2660,7 +2660,7 @@ SQL
 }
 
 @test "constraint-violations: cyclic foreign keys, illegal deletion" {
-    # We're deleting a reference in a cycle from each table to make sure if properly applies a violation in both instances
+    # We're deleting a reference in a cycle from each table to make sure it properly applies a violation in both instances
     dolt sql <<"SQL"
 CREATE TABLE t1 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
 CREATE TABLE t2 (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_t2 FOREIGN KEY (v1) REFERENCES t1 (v1));

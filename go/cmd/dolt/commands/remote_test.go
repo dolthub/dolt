@@ -130,7 +130,7 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.str, func(t *testing.T) {
-			actualScheme, actualUrl, err := getAbsRemoteUrl(fs, test.cfg, test.str)
+			actualScheme, actualUrl, err := env.GetAbsRemoteUrl(fs, test.cfg, test.str)
 
 			if test.expectErr {
 				assert.Error(t, err)

@@ -132,9 +132,9 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	var err error
 	tbls := apr.Args()
 	if len(tbls) == 1 && tbls[0] == "." {
-		err = actions.AutoResolveAll(ctx, dEnv, autoResolveFunc)
+		err = merge.AutoResolveAll(ctx, dEnv, autoResolveFunc)
 	} else {
-		err = actions.AutoResolveTables(ctx, dEnv, autoResolveFunc, tbls)
+		err = merge.AutoResolveTables(ctx, dEnv, autoResolveFunc, tbls)
 	}
 
 	if err != nil {

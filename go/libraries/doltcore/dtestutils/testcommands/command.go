@@ -68,7 +68,7 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err := dEnv.Roots(context.Background())
 	require.NoError(t, err)
 
-	name, email, err := actions.GetNameAndEmail(dEnv.Config)
+	name, email, err := env.GetNameAndEmail(dEnv.Config)
 
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	roots, err = actions.StageAllTables(context.Background(), roots, dEnv.Docs)
 	require.NoError(t, err)
 
-	name, email, err := actions.GetNameAndEmail(dEnv.Config)
+	name, email, err := env.GetNameAndEmail(dEnv.Config)
 
 	if err != nil {
 		return err

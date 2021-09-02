@@ -43,13 +43,14 @@ var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 func NewDoltDatabaseProvider(databases ...Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
-		dbs[db.Name()] = db
+		dbs[strings.ToLower(db.Name())] = db
 	}
 
 	return DoltDatabaseProvider{databases: dbs, mu: &sync.RWMutex{}}
 }
 
 func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error) {
+	name = strings.ToLower(name)
 	var ok bool
 	func() {
 		p.mu.RLock()
@@ -98,14 +99,18 @@ func (p DoltDatabaseProvider) AddDatabase(db sql.Database) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.databases[db.Name()] = db
+	p.databases[strings.ToLower(db.Name())] = db
 }
 
 func (p DoltDatabaseProvider) DropDatabase(name string) {
-	delete(p.databases, name)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	delete(p.databases, strings.ToLower(name))
 }
 
 func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
+	revDB = strings.ToLower(revDB)
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
 		return nil, dsess.InitialDbState{}, false, nil
 	}

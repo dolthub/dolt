@@ -46,7 +46,7 @@ teardown() {
     [[ ! "$output" =~ "test-remote" ]] || false
     run dolt remote remove poop
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote poop" ]] || false
+    [[ "$output" =~ "unknown remote: 'poop'" ]] || false
 }
 
 @test "remotes: push and pull an unknown remote" {
@@ -111,7 +111,7 @@ teardown() {
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
-    
+
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -155,7 +155,7 @@ SQL
     dolt push test-remote v1
 
     cd dolt-repo-clones/test-repo
-    run dolt pull
+    dolt pull
     [ "$status" -eq 0 ]
     run dolt tag
     [ "$status" -eq 0 ]
@@ -1036,5 +1036,78 @@ setup_ref_test() {
 @test "remotes: pushing empty branch does not panic" {
     run dolt push origin ''
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: invalid refspec ''" ]] || false
+    [[ "$output" =~ "invalid ref spec: ''" ]] || false
+}
+
+@test "remotes: existing parent directory is not wiped when clone fails" {
+    # Create the new testdir and save it
+    mkdir testdir && cd testdir
+    run pwd
+    testdir=$output
+
+    # Create a clone operation that purposely fails on a valid remote
+    mkdir clone_root
+    mkdir dest && cd dest
+
+    run dolt clone "file://../clone_root" .
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: clone failed" ]] || false
+
+    # Validates that the directory exists
+    run ls $testdir
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "clone_root" ]] || false
+    [[ "$output" =~ "dest" ]] || false
+
+    # Check that .dolt was deleted
+    run ls -a $testdir/dest
+    ! [[ "$output" =~ ".dolt" ]] || false
+
+    # try again and now make sure that /dest/.dolt is correctly deleted instead of dest/
+    cd ..
+    run dolt clone "file://./clone_root" dest/
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: clone failed" ]] || false
+
+    run ls $testdir
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "clone_root" ]] || false
+    [[ "$output" =~ "dest" ]] || false
+
+    run ls -a $testdir/dest
+    ! [[ "$output" =~ ".dolt" ]] || false
+}
+
+@test "remotes: fetching unknown remotes should error" {
+    setup_ref_test
+    cd ../../
+    cd dolt-repo-clones/test-repo
+    run dolt fetch remotes/dasdas
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "error: 'remotes/dasdas' is not a valid refspec." ]] || false
+}
+
+@test "remotes: fetching added invalid remote correctly errors" {
+    setup_ref_test
+    cd ../../
+    cd dolt-repo-clones/test-repo
+    dolt remote add myremote dolthub/fake
+
+    run dolt fetch myremote
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "permission denied" ]] || false
+}
+
+@test "remotes: fetching unknown remote ref errors accordingly" {
+   setup_ref_test
+   cd ../../
+   cd dolt-repo-clones/test-repo
+   # Add a dummy remove to allow for fetching
+   dolt remote add myremote dolthub/fake
+
+   run dolt fetch dadasdfasdfa
+   [ "$status" -eq 1 ]
+   [[ "$output" =~ "error: dadasdfasdfa does not appear to be a dolt database" ]] || false
 }
