@@ -326,11 +326,11 @@ type PendingCommit struct {
 // parent.
 // |cm| is the metadata for the commit
 func (ddb *DoltDB) NewPendingCommit(
-		ctx context.Context,
-		roots Roots,
-		headRef ref.DoltRef,
-		parentCommits []*Commit,
-		cm *CommitMeta,
+	ctx context.Context,
+	roots Roots,
+	headRef ref.DoltRef,
+	parentCommits []*Commit,
+	cm *CommitMeta,
 ) (*PendingCommit, error) {
 	val, err := ddb.writeRootValue(ctx, roots.Staged)
 	if err != nil {
