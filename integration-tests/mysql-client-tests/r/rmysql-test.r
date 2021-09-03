@@ -17,16 +17,16 @@ queries = list("create table test (pk int, value int, primary key(pk))",
                "select * from test")
 
 responses = list(NULL,
-                 data.frame(Field = c("pk", "value"), Type = c("int", "int"), Null = c("NO", "YES"), Key = c("PRI", ""), Default = c("", ""), Extra = c("", "")),
+                 data.frame(Field = c("pk", "value"), Type = c("int", "int"), Null = c("NO", "YES"), Key = c("PRI", ""), Default = c("", ""), Extra = c("", ""), stringsAsFactors = FALSE),
                  NULL,
-                 data.frame(pk = c(0), value = c(0)))
+                 data.frame(pk = c(0), value = c(0), stringsAsFactors = FALSE))
 
 for(i in 1:length(queries)) {
     q = queries[[i]]
     want = responses[[i]]
     if (!is.null(want)) {
         got <- dbGetQuery(conn, q)
-        if (!all(want == got)) {
+        if (!isTRUE(all.equal(want, got))) {
             print(q)
             print(want)
             print(got)
@@ -36,4 +36,3 @@ for(i in 1:length(queries)) {
         dbExecute(conn, q)
     }
 }
-

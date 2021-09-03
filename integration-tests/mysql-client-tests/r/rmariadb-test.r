@@ -17,16 +17,16 @@ queries = list("create table test (pk int, value int, primary key(pk))",
                "select * from test")
 
 responses = list(NULL,
-                 data.frame(Field = c("pk", "value"), Type = c("int", "int"), Null = c("NO", "YES"), Key = c("PRI", ""), Default = c("", ""), Extra = c("", "")),
+                 data.frame(Field = c("pk", "value"), Type = c("int", "int"), Null = c("NO", "YES"), Key = c("PRI", ""), Default = c("", ""), Extra = c("", ""), stringsAsFactors = FALSE),
                  NULL,
-                 data.frame(pk = c(0), value = c(0)))
+                 data.frame(pk = c(0), value = c(0), stringsAsFactors = FALSE))
 
 for(i in 1:length(queries)) {
     q = queries[[i]]
     want = responses[[i]]
     if (!is.null(want)) {
         got <- dbGetQuery(conn, q)
-        if (!all(want == got)) {
+        if (!isTRUE(all.equal(want, got))) {
             print(q)
             print(want)
             print(got)
@@ -37,18 +37,10 @@ for(i in 1:length(queries)) {
     }
 }
 
-
 # check prepared statements
-statement <- enc2utf8(new("SQL", .Data = "INSERT INTO test (pk, value) values (?, ?)"))
-params <- unname(list(1,1))
-rs <- new("MariaDBResult",
-          sql = statement,
-          ptr = RMariaDB:::result_create(conn@ptr, statement, is_statement = TRUE),
-          bigint = conn@bigint,
-          conn = conn)
-
-dbBind(rs, params)
-rowsAff = dbGetRowsAffected(rs)
+stmt <- dbSendStatement(conn, "INSERT INTO test values (?, ?)")
+rs <- dbBind(stmt, list(1,1))
+rowsAff <- dbGetRowsAffected(rs)
 dbClearResult(rs)
 
 if (rowsAff != 1) {
@@ -58,7 +50,7 @@ if (rowsAff != 1) {
 
 got <- dbGetQuery(conn, "select * from test where pk = 1")
 want = data.frame(pk = c(1), value = c(1))
-if (!all(want == got)) {
+if (!isTRUE(all.equal(want, got))) {
     print("unexpected prepared statement result")
     print(rows)
     quit(1)
