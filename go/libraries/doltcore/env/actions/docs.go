@@ -148,7 +148,11 @@ func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (doltdocs.Docs, err
 		return nil, err
 	}
 
-	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, dEnv.DocsReadWriter())
+	docsOnDisk, err := dEnv.DocsReadWriter().GetDocsOnDisk()
+	if err != nil {
+		return nil, err
+	}
+	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
 	if err != nil {
 		return nil, err
 	}

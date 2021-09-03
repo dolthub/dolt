@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
@@ -60,6 +61,26 @@ type SelectTest struct {
 	// Whether to skip this test on SqlEngine (go-mysql-server) execution.
 	// Over time, this should become false for every query.
 	SkipOnSqlEngine bool
+}
+
+// We are doing structural equality tests on time.Time values in some of these
+// tests. The SQL value layer works with times in time.Local location, but
+// go standard library will return different values (which will have the same
+// behavior) depending on whether detailed timezone information has been loaded
+// for time.Local already. Here, we always load the detailed information so
+// that our structural equality tests will be reliable.
+var loadedLocalLocation *time.Location
+
+func LoadedLocalLocation() *time.Location {
+	var err error
+	loadedLocalLocation, err = time.LoadLocation(time.Local.String())
+	if err != nil {
+		panic(err)
+	}
+	if loadedLocalLocation == nil {
+		panic("nil LoadedLocalLocation " + time.Local.String())
+	}
+	return loadedLocalLocation
 }
 
 // BasicSelectTests cover basic select statement features and error handling
@@ -446,7 +467,7 @@ var BasicSelectTests = []SelectTest{
 			{"Homer", true},
 		},
 		ExpectedSqlSchema: sql.Schema{
-			&sql.Column{Name: "first_name", Type: sql.LongText},
+			&sql.Column{Name: "first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 			&sql.Column{Name: "not_marge", Type: sql.Int8},
 		},
 	},
@@ -711,10 +732,10 @@ var BasicSelectTests = []SelectTest{
 		Query: "select * from dolt_log",
 		ExpectedRows: []sql.Row{
 			{
-				"m8lrhp8bmfesmknc6d5iatmjbcjf17al",
+				"so275enkvulb96mkckbun1kjo9seg7c9",
 				"billy bob",
 				"bigbillieb@fake.horse",
-				time.Date(1970, 1, 1, 0, 0, 0, 0, &time.Location{}),
+				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 				"Initialize data repository",
 			},
 		},
@@ -741,9 +762,9 @@ var BasicSelectTests = []SelectTest{
 		ExpectedRows: []sql.Row{
 			{
 				"master",
-				"m8lrhp8bmfesmknc6d5iatmjbcjf17al",
+				"so275enkvulb96mkckbun1kjo9seg7c9",
 				"billy bob", "bigbillieb@fake.horse",
-				time.Date(1970, 1, 1, 0, 0, 0, 0, &time.Location{}),
+				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 				"Initialize data repository",
 			},
 		},
@@ -760,13 +781,13 @@ var BasicSelectTests = []SelectTest{
 
 var sqlDiffSchema = sql.Schema{
 	&sql.Column{Name: "to_id", Type: sql.Int64},
-	&sql.Column{Name: "to_first_name", Type: sql.LongText},
-	&sql.Column{Name: "to_last_name", Type: sql.LongText},
-	&sql.Column{Name: "to_addr", Type: sql.LongText},
+	&sql.Column{Name: "to_first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
+	&sql.Column{Name: "to_last_name", Type: typeinfo.StringDefaultType.ToSqlType()},
+	&sql.Column{Name: "to_addr", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "from_id", Type: sql.Int64},
-	&sql.Column{Name: "from_first_name", Type: sql.LongText},
-	&sql.Column{Name: "from_last_name", Type: sql.LongText},
-	&sql.Column{Name: "from_addr", Type: sql.LongText},
+	&sql.Column{Name: "from_first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
+	&sql.Column{Name: "from_last_name", Type: typeinfo.StringDefaultType.ToSqlType()},
+	&sql.Column{Name: "from_addr", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "diff_type", Type: sql.Text},
 }
 
@@ -1494,18 +1515,18 @@ var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			schemasTableDoltSchema(),
-			NewRowWithSchema(schemasTableDoltSchema(),
+			SchemasTableSchema(),
+			NewRowWithSchema(SchemasTableSchema(),
 				types.String("view"),
 				types.String("name"),
 				types.String("select 2+2 from dual"),
 				types.Int(1),
 			)),
 		Query: "select * from dolt_schemas",
-		ExpectedRows: ToSqlRows(CompressSchema(schemasTableDoltSchema()),
+		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
 			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1)),
 		),
-		ExpectedSchema: CompressSchema(schemasTableDoltSchema()),
+		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }
 
@@ -1527,14 +1548,25 @@ func (tcc *testCommitClock) Now() time.Time {
 	return now
 }
 
+func installTestCommitClock() func() {
+	oldNowFunc := doltdb.CommitNowFunc
+	oldCommitLoc := doltdb.CommitLoc
+	tcc := &testCommitClock{}
+	doltdb.CommitNowFunc = tcc.Now
+	doltdb.CommitLoc = time.UTC
+	return func() {
+		doltdb.CommitNowFunc = oldNowFunc
+		doltdb.CommitLoc = oldCommitLoc
+	}
+}
+
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
 func testSelectQuery(t *testing.T, test SelectTest) {
 	validateTest(t, test)
 
-	tcc := &testCommitClock{}
-	doltdb.CommitNowFunc = tcc.Now
-	doltdb.CommitLoc = time.UTC
+	cleanup := installTestCommitClock()
+	defer cleanup()
 
 	dEnv := dtestutils.CreateTestEnv()
 	CreateTestDatabase(dEnv, t)
@@ -1569,9 +1601,9 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	validateTest(t, test)
 
 	ctx := context.Background()
-	tcc := &testCommitClock{}
-	doltdb.CommitNowFunc = tcc.Now
-	doltdb.CommitLoc = time.UTC
+
+	cleanup := installTestCommitClock()
+	defer cleanup()
 
 	dEnv := dtestutils.CreateTestEnv()
 	envtestutils.InitializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)

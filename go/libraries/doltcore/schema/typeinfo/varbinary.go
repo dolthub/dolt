@@ -15,12 +15,12 @@
 package typeinfo
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -101,7 +101,7 @@ func (ti *varBinaryType) ConvertValueToNomsValue(ctx context.Context, vrw types.
 	}
 	val, ok := strVal.(string)
 	if ok {
-		return toBlob(ctx, vrw, val)
+		return types.NewBlob(ctx, vrw, strings.NewReader(val))
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
@@ -147,11 +147,7 @@ func (ti *varBinaryType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *varBinaryType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Blob); ok {
-		strLen, err := fromBlobLength(val)
-		if err != nil {
-			return false
-		}
-		if int64(strLen) <= ti.sqlBinaryType.MaxByteLength() {
+		if int64(val.Len()) <= ti.sqlBinaryType.MaxByteLength() {
 			return true
 		}
 	}
@@ -176,7 +172,7 @@ func (ti *varBinaryType) ParseValue(ctx context.Context, vrw types.ValueReadWrit
 		return nil, err
 	}
 	if val, ok := strVal.(string); ok {
-		return toBlob(ctx, vrw, val)
+		return types.NewBlob(ctx, vrw, strings.NewReader(val))
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
 }
@@ -198,15 +194,12 @@ func (ti *varBinaryType) ToSqlType() sql.Type {
 
 // fromBlob returns a string from a types.Blob.
 func fromBlob(b types.Blob) (string, error) {
-	strLength, err := fromBlobLength(b)
-	if err != nil {
-		return "", err
-	}
+	strLength := b.Len()
 	if strLength == 0 {
 		return "", nil
 	}
 	str := make([]byte, strLength)
-	n, err := b.ReadAt(context.Background(), str, 8)
+	n, err := b.ReadAt(context.Background(), str, 0)
 	if err != nil && err != io.EOF {
 		return "", err
 	}
@@ -223,28 +216,27 @@ func fromBlob(b types.Blob) (string, error) {
 	return *(*string)(unsafe.Pointer(&str)), nil
 }
 
-// fromBlobLength returns a string's length from a types.Blob.
-func fromBlobLength(b types.Blob) (uint64, error) {
-	countBytes := make([]byte, 8)
-	n, err := b.ReadAt(context.Background(), countBytes, 0)
-	if err == io.EOF {
-		return 0, nil
+// hasPrefix finds out if a Blob has a prefixed integer. Initially blobs for varBinary prepended an integer indicating
+// the length, which was unnecessary (as the underlying sequence tracks the total size). It's been removed, but this
+// may be used to see if a Blob is one of those older Blobs. A false positive is possible, but EXTREMELY unlikely.
+func hasPrefix(b types.Blob, ctx context.Context) (bool, error) {
+	blobLength := b.Len()
+	if blobLength < 8 {
+		return false, nil
 	}
+	countBytes := make([]byte, 8)
+	n, err := b.ReadAt(ctx, countBytes, 0)
 	if err != nil {
-		return 0, err
+		return false, err
 	}
 	if n != 8 {
-		return 0, fmt.Errorf("wanted 8 bytes from blob for count, got %d", n)
+		return false, fmt.Errorf("wanted 8 bytes from blob for count, got %d", n)
 	}
-	return binary.LittleEndian.Uint64(countBytes), nil
-}
-
-// toBlob returns a types.Blob from a string.
-func toBlob(ctx context.Context, vrw types.ValueReadWriter, s string) (types.Blob, error) {
-	data := make([]byte, 8+len(s))
-	binary.LittleEndian.PutUint64(data[:8], uint64(len(s)))
-	copy(data[8:], s)
-	return types.NewBlob(ctx, vrw, bytes.NewReader(data))
+	prefixedLength := binary.LittleEndian.Uint64(countBytes)
+	if prefixedLength == blobLength-8 {
+		return true, nil
+	}
+	return false, nil
 }
 
 // varBinaryTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
@@ -252,6 +244,8 @@ func varBinaryTypeConverter(ctx context.Context, src *varBinaryType, destTi Type
 	switch dest := destTi.(type) {
 	case *bitType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *blobStringType:
+		return wrapIsValid(dest.IsValid, src, dest)
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *datetimeType:

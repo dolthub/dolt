@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -33,27 +32,6 @@ type CommitStagedProps struct {
 	Force      bool
 	Name       string
 	Email      string
-}
-
-// GetNameAndEmail returns the name and email from the supplied config
-func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
-	name, err := cfg.GetString(env.UserNameKey)
-
-	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrNameNotConfigured
-	} else if err != nil {
-		return "", "", err
-	}
-
-	email, err := cfg.GetString(env.UserEmailKey)
-
-	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrEmailNotConfigured
-	} else if err != nil {
-		return "", "", err
-	}
-
-	return name, email, nil
 }
 
 // CommitStaged adds a new commit to HEAD with the given props. Returns the new commit's hash as a string and an error.
@@ -82,7 +60,12 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 	}
 
 	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
-		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, drw)
+		docsOnDisk, err := drw.GetDocsOnDisk()
+		if err != nil {
+			return nil, err
+		}
+
+		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
 		if err != nil {
 			return nil, err
 		}

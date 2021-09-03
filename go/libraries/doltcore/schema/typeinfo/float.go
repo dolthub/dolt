@@ -233,6 +233,8 @@ func floatTypeConverter(ctx context.Context, src *floatType, destTi TypeInfo) (t
 			}
 			return dest.ConvertValueToNomsValue(ctx, vrw, uint64(intVal.(int64)))
 		}, true, nil
+	case *blobStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *datetimeType:

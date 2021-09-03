@@ -16,6 +16,7 @@ package types
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
 )
@@ -24,7 +25,7 @@ import (
 // associated with the key for inserts and updates.  deletes are modeled as a key with no value
 type EditProvider interface {
 	// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
-	// in key sorted order
+	// in key sorted order.  Once all KVPs have been read io.EOF will be returned.
 	Next() (*KVP, error)
 
 	// NumEdits returns the number of KVPs representing the edits that will be provided when calling next
@@ -34,9 +35,9 @@ type EditProvider interface {
 // EmptyEditProvider is an EditProvider implementation that has no edits
 type EmptyEditProvider struct{}
 
-// Next will always return nil
+// Next will always return nil, io.EOF
 func (eep EmptyEditProvider) Next() (*KVP, error) {
-	return nil, nil
+	return nil, io.EOF
 }
 
 // NumEdits will always return 0
@@ -331,7 +332,9 @@ func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan ma
 	batchSize := batchSizeStart
 	nextEdit, err := edits.Next()
 
-	if ae.SetIfError(err) {
+	if err == io.EOF {
+		return
+	} else if ae.SetIfError(err) {
 		return
 	}
 
@@ -341,28 +344,26 @@ func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan ma
 		for len(batch) < batchSize {
 			edit := nextEdit
 
-			if edit == nil {
+			nextEdit, err = edits.Next()
+			if err == io.EOF {
+				if edit != nil {
+					batch = append(batch, edit)
+				}
 				break
+			} else if ae.SetIfError(err) {
+				return
 			}
 
-			nextEdit, err = edits.Next()
+			isLess, err := edit.Key.Less(nbf, nextEdit.Key)
 
 			if ae.SetIfError(err) {
 				return
 			}
 
-			if nextEdit != nil {
-				isLess, err := edit.Key.Less(nbf, nextEdit.Key)
-
-				if ae.SetIfError(err) {
-					return
-				}
-
-				// keys are sorted, so if this key is not less than the next key then they are equal and the next
-				// value will take precedence
-				if !isLess {
-					continue
-				}
+			// keys are sorted, so if this key is not less than the next key then they are equal and the next
+			// value will take precedence
+			if !isLess {
+				continue
 			}
 
 			batch = append(batch, edit)

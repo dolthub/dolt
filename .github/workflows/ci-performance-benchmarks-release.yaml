@@ -21,15 +21,18 @@ jobs:
     outputs:
       version: ${{ steps.set-vars.outputs.version }}
       actor: ${{ steps.set-vars.outputs.actor }}
+      actor_email: ${{ steps.set-vars.outputs.actor_email }}
     steps:
       - name: Set variables
         id: set-vars
         run: |
           echo "::set-output name=version::$VERSION"
           echo "::set-output name=actor::$ACTOR"
+          echo "::set-output name=actor_email::$ACTOR_EMAIL"
         env:
           VERSION: ${{ github.event.inputs.version || github.event.client_payload.version }}
           ACTOR: ${{ github.event.client_payload.actor || github.actor }}
+          ACTOR_EMAIL: ${{ github.event.inputs.email }}
 
   benchmark-release-mysql:
     runs-on: ubuntu-18.04
@@ -67,27 +70,7 @@ jobs:
           TO_VERSION: ${{ needs.set-version-actor.outputs.version }}
           MODE: 'release'
           ACTOR: ${{ needs.set-version-actor.outputs.actor }}
+          ACTOR_EMAIL: ${{ needs.set-version-actor.outputs.actor_email }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"
-      - name: Get benchmark results
-        id: get-results
-        run: |
-          aws s3api get-object --bucket=performance-benchmarking-github-actions-results --key="$KEY" results.log
-        env:
-          KEY: ${{ steps.run-benchmarks.outputs.object-key }}
-      - name: Send Email on Release
-        if: ${{ github.event_name == 'repository_dispatch' }}
-        uses: ./.github/actions/ses-email-action
-        with:
-          region: us-west-2
-          version: ${{ needs.set-version-actor.outputs.version }}
-          toAddresses: '["${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}"]'
-          dataFile: ${{ format('{0}/results.log', github.workspace) }}
-      - name: Send Email
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: ./.github/actions/ses-email-action
-        with:
-          region: us-west-2
-          version: ${{ needs.set-version-actor.outputs.version }}
-          toAddresses: '["${{ github.event.inputs.email }}"]'
-          dataFile: ${{ format('{0}/results.log', github.workspace) }}

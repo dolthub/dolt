@@ -76,8 +76,15 @@ var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s
 const PrimaryKeyChanceWarningCode int = 1105 // Since this our own custom warning we'll use 1105, the code for an unknown error
 
 func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
-	diffTblName := doltdb.DoltDiffTablePrefix + tblName
+	tblName, ok, err := root.ResolveTableName(ctx, tblName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, sql.ErrTableNotFound.New(doltdb.DoltDiffTablePrefix + tblName)
+	}
 
+	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 	ss, err := calcSuperSchema(ctx, root, tblName)
 	if err != nil {
 		return nil, err
@@ -87,7 +94,6 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 	_ = ss.AddColumn(schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
 
 	sch, err := ss.GenerateSchema()
-
 	if err != nil {
 		return nil, err
 	}
@@ -102,13 +108,11 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 			diff.To:   toNamer,
 			diff.From: fromNamer,
 		})
-
 	if err != nil {
 		return nil, err
 	}
 
 	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, j.GetSchema())
-
 	if err != nil {
 		return nil, err
 	}

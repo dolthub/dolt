@@ -199,6 +199,8 @@ func boolTypeConverter(ctx context.Context, src *boolType, destTi TypeInfo) (tc 
 				return types.Uint(0), nil
 			}
 		}, true, nil
+	case *blobStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
 		return identityTypeConverter, false, nil
 	case *datetimeType:

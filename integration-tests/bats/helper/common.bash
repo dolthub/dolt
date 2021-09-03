@@ -43,7 +43,7 @@ setup_no_dolt_init() {
 
 assert_feature_version() {
     run dolt version --feature
-    [[ "$output" =~ "feature version: 1" ]] || exit 1
+    [[ "$output" =~ "feature version: 2" ]] || exit 1
 }
 
 setup_common() {

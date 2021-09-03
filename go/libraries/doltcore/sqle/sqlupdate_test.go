@@ -403,8 +403,8 @@ var systemTableUpdateTests = []UpdateTest{
 	{
 		Name: "update dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			schemasTableDoltSchema(),
-			NewRowWithSchema(schemasTableDoltSchema(),
+			SchemasTableSchema(),
+			NewRowWithSchema(SchemasTableSchema(),
 				types.String("view"),
 				types.String("name"),
 				types.String("select 2+2 from dual"),
@@ -412,10 +412,10 @@ var systemTableUpdateTests = []UpdateTest{
 			)),
 		UpdateQuery: "update dolt_schemas set type = 'not a view'",
 		SelectQuery: "select * from dolt_schemas",
-		ExpectedRows: ToSqlRows(CompressSchema(schemasTableDoltSchema()),
+		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
 			NewRow(types.String("not a view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1)),
 		),
-		ExpectedSchema: CompressSchema(schemasTableDoltSchema()),
+		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
 }
 

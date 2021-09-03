@@ -138,6 +138,7 @@ var generatedSystemTables = []string{
 	CommitsTableName,
 	CommitAncestorsTableName,
 	StatusTableName,
+	RemotesTableName,
 }
 
 var generatedSystemTablePrefixes = []string{
@@ -218,6 +219,9 @@ const (
 
 	// BranchesTableName is the branches system table name
 	BranchesTableName = "dolt_branches"
+
+	// RemotesTableName is the remotes system table name
+	RemotesTableName = "dolt_remotes"
 
 	// CommitsTableName is the commits system table name
 	CommitsTableName = "dolt_commits"

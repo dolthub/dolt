@@ -498,3 +498,47 @@ SQL
     [ "$status" -eq "0" ]
     [[ ! "$output" =~ "conflicts" ]] || false
 }
+
+@test "conflict-detection-2: conflicts table properly cleared on dolt conflicts resolve" {
+    dolt sql -q "create table test(pk int, c1 int, primary key(pk))"
+
+    skip "This should be empty now but it's not"
+    run dolt conflicts cat test
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+    ! [[ "$output" =~ "pk" ]] || false
+    
+    dolt add .
+    dolt commit -m "created table"
+    dolt branch branch1
+    dolt sql -q "insert into test values (0,0)"
+    dolt add .
+    dolt commit -m "inserted 0,0"
+    dolt checkout branch1
+    dolt sql -q "insert into test values (0,1)"
+    dolt add .
+    dolt commit -m "inserted 0,1"
+    dolt checkout master
+    dolt merge branch1
+    dolt conflicts resolve --ours test
+
+    skip "This should be empty now but it's not"
+    run dolt conflicts cat test
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+    ! [[ "$output" =~ "pk" ]] || false
+
+    skip "Should not get a warning updating working set after resolve"
+    run dolt sql -q "update test set c1=1"
+    [ $status -eq 0 ]
+    ! [[ "$output" =~ "unresolved conflicts from the merge" ]] || false
+
+    dolt add .
+    dolt commit -m "Committing active merge"
+
+    skip "A commit should definitely clear the conflicts table"
+    run dolt conflicts cat test
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+    ! [[ "$output" =~ "pk" ]] || false
+}
