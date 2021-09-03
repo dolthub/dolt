@@ -31,8 +31,10 @@ type keylessTableReader struct {
 	iter types.MapIterator
 	sch  schema.Schema
 
-	row             row.Row
-	remainingCopies uint64
+	row              row.Row
+	remainingCopies  uint64
+	bounded          bool
+	remainingEntries uint64
 }
 
 var _ SqlTableReader = &keylessTableReader{}
@@ -46,6 +48,10 @@ func (rdr *keylessTableReader) GetSchema() schema.Schema {
 // ReadSqlRow implements the SqlTableReader interface.
 func (rdr *keylessTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 	if rdr.remainingCopies <= 0 {
+		if rdr.bounded && rdr.remainingEntries == 0 {
+			return nil, io.EOF
+		}
+
 		key, val, err := rdr.iter.Next(ctx)
 		if err != nil {
 			return nil, err
@@ -57,6 +63,11 @@ func (rdr *keylessTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		if rdr.remainingEntries > 0 {
+			rdr.remainingEntries -= 1
+		}
+
 		if rdr.remainingCopies == 0 {
 			return nil, row.ErrZeroCardinality
 		}
@@ -109,7 +120,6 @@ func newKeylessTableReaderForRows(ctx context.Context, rows types.Map, sch schem
 	}, nil
 }
 
-// TODO: this is broken! (for partition boundaries that hit rows with cardinality > 1)
 func newKeylessTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, start, end uint64) (SqlTableReader, error) {
 	rows, err := tbl.GetRowData(ctx)
 	if err != nil {
@@ -122,8 +132,10 @@ func newKeylessTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, s
 	}
 
 	return &keylessTableReader{
-		iter: iter,
-		sch:  sch,
+		iter:             iter,
+		sch:              sch,
+		remainingEntries: end - start,
+		bounded:          true,
 	}, nil
 }
 
