@@ -309,13 +309,29 @@ func (c *Commit) DebugString(ctx context.Context) string {
 	return buf.String()
 }
 
+// PendingCommit represents a commit that hasn't yet been written to storage. It contains a root value and options to
+// use when committing it. Use a PendingCommit when it's important to update the working set and HEAD together
+// atomically, via doltdb.CommitWithWorkingSet
 type PendingCommit struct {
 	Roots         Roots
 	Val           types.Value
 	CommitOptions datas.CommitOptions
 }
 
-func (ddb *DoltDB) NewPendingCommit(ctx context.Context, roots Roots, headRef ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*PendingCommit, error) {
+// NewPendingCommit returns a new PendingCommit object to be written with doltdb.CommitWithWorkingSet.
+// |roots| are the current roots to include in the PendingCommit. roots.Staged is used as the new root to package in the
+// commit, once written.
+// |headRef| is the ref of the HEAD the commit will update
+// |parentCommits| are any additional merge parents for this commit. The current HEAD commit is always considered a
+// parent.
+// |cm| is the metadata for the commit
+func (ddb *DoltDB) NewPendingCommit(
+		ctx context.Context,
+		roots Roots,
+		headRef ref.DoltRef,
+		parentCommits []*Commit,
+		cm *CommitMeta,
+) (*PendingCommit, error) {
 	val, err := ddb.writeRootValue(ctx, roots.Staged)
 	if err != nil {
 		return nil, err

@@ -114,13 +114,12 @@ type Database interface {
 	// upon return as well.
 	UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error)
 
-	// TODO: document me
-	CommitWithWorkingSet(
-		ctx context.Context,
-		commitDS, workingSetDS Dataset,
-		commit types.Value, workingSetSpec WorkingSetSpec,
-		prevWsHash hash.Hash, opts CommitOptions,
-	) (Dataset, Dataset, error)
+	// CommitWithWorkingSet combines Commit and UpdateWorkingSet, combining the parameters of both. It uses the
+	// pessimistic lock that UpdateWorkingSet does, asserting that the hash |prevWsHash| given is still the current one
+	// before attempting to write a new value. And it does the normal optimistic locking that Commit does, assuming the
+	// pessimistic locking passes. After this method runs, the two datasets given in |commitDS and |workingSetDS| are both
+	// updated in the new root, or neither of them are.
+	CommitWithWorkingSet(ctx context.Context, commitDS, workingSetDS Dataset, commit types.Value, workingSetSpec WorkingSetSpec, prevWsHash hash.Hash, opts CommitOptions) (Dataset, Dataset, error)
 
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. The Dataset data is not necessarily cleaned up at this

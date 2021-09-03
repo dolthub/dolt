@@ -1033,8 +1033,10 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	return err
 }
 
-// UpdateWorkingSet updates the working set with the ref given to the root value given
-// |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
+// CommitWithWorkingSet combines the functionality of CommitWithParents with UpdateWorking set, and takes a combination
+// of their parameters. It's a way to update the working set and current HEAD in the same atomic transaction. It commits
+// to disk a pending commit value previously created with NewPendingCommit, asserting that the working set hash given
+// is still current for that HEAD.
 func (ddb *DoltDB) CommitWithWorkingSet(
 	ctx context.Context,
 	headRef ref.DoltRef, workingSetRef ref.WorkingSetRef,

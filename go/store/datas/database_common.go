@@ -324,7 +324,6 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 		d.Panic("Can't commit a non-Commit struct to dataset %s", datasetID)
 	}
 
-	// This could loop forever, given enough simultaneous committers. BUG 2565
 	var tryCommitErr error
 	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed; {
 		currentRootHash, err := db.rt.Root(ctx)
@@ -484,7 +483,6 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 		return err
 	}
 
-	// This could loop forever, given enough simultaneous writers. BUG 2565
 	var tryCommitErr error
 	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed; {
 		currentRootHash, err := db.rt.Root(ctx)
@@ -567,7 +565,6 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 		return err
 	}
 
-	// This could loop forever, given enough simultaneous writers. BUG 2565
 	var tryCommitErr error
 	testSetFailed := false
 	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
@@ -575,7 +572,7 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 			db.mu.Lock()
 			defer db.mu.Unlock()
 
-			success, err := db.assertWorkingSetHash(ctx, datasetID, currHash)
+			success, err := db.assertDatasetHash(ctx, datasetID, currHash)
 			if err != nil {
 				return err
 			}
@@ -606,7 +603,10 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 	return tryCommitErr
 }
 
-func (db *database) assertWorkingSetHash(
+// assertDatasetHash returns true if the hash of the dataset matches the one given. Use an empty hash for a dataset you
+// expect not to exist.
+// Typically this is called using pessimistic locking by the caller in order to implement atomic test-and-set semantics.
+func (db *database) assertDatasetHash(
 	ctx context.Context,
 	datasetID string,
 	currHash hash.Hash,
@@ -617,11 +617,6 @@ func (db *database) assertWorkingSetHash(
 		return false, err
 	}
 
-	// Second level of locking: assert that the dataset value we read is unchanged from its expected value.
-	// This is separate than the whole-DB lock in the outer loop, as it only protects the value of this dataset
-	// entry. Other writers can update other values and writes chunks in the database and we will retry
-	// indefinitely. But if we find the expected value in the dataset has changed, we immediately abort and the
-	// caller must retry after reconciliation.
 	if ds.HasHead() {
 		head, ok := ds.MaybeHead()
 		if !ok {
@@ -688,7 +683,6 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	// This could loop forever, given enough simultaneous writers
 	var tryCommitErr error
 	testSetFailed := false
 	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
@@ -696,7 +690,7 @@ func (db *database) CommitWithWorkingSet(
 			db.mu.Lock()
 			defer db.mu.Unlock()
 
-			success, err := db.assertWorkingSetHash(ctx, workingSetDS.ID(), prevWsHash)
+			success, err := db.assertDatasetHash(ctx, workingSetDS.ID(), prevWsHash)
 			if err != nil {
 				return err
 			}
