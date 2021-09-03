@@ -26,7 +26,7 @@ for(i in 1:length(queries)) {
     want = responses[[i]]
     if (!is.null(want)) {
         got <- dbGetQuery(conn, q)
-        if (!isTRUE(all.equal(want, got))) {
+        if (!all(want == got)) {
             print(q)
             print(want)
             print(got)
