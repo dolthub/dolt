@@ -1,7 +1,11 @@
 #!/bin/bash
 
-go build -gcflags="-m -N -l" "$1" 2>&1 >/dev/null \
-  | grep -i "/$2" \
+LOGLEVEL=1
+
+# Compiles "$1" (golang pkg) with escape-analysis logging
+#   -m turns on logging with level=$LOGLEVEL
+#   -N disables optimizations
+#   -l disables inlining
+go build -gcflags="-m=$LOGLEVEL -N -l" "$1" 2>&1 >/dev/null \
   | sed '/does not escape/d' \
-  | sort -s \
-  | uniq
+  | sort | uniq
