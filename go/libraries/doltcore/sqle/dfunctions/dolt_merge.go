@@ -113,7 +113,13 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	//mergeSpec, ok, err := merge.ParseMergeSpec(ctx, dbData.Rsr, ddb, roots, author, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
 	mergeSpec, err := sqlMergeSpec(ctx, sess, dbName, apr, branchName)
+	if err != nil {
+		return noConflicts, err
+	}
 	ws, conflicts, err := mergeHelper(ctx, sess, roots, ws, dbName, mergeSpec)
+	if err != nil {
+		return conflicts, err
+	}
 
 	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
 	if err != nil {
@@ -175,7 +181,7 @@ func mergeHelper(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roots, ws *
 		} else if !cvPossible {
 			dbData, ok := sess.GetDbData(ctx, dbName)
 			if !ok {
-				return ws, noConflicts, fmt.Errorf("Could not load database %s", dbName)
+				return ws, noConflicts, fmt.Errorf("could not load database %s", dbName)
 			}
 			if spec.Noff {
 				ws, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData, spec.HeadC, spec.MergeC)
@@ -193,7 +199,7 @@ func mergeHelper(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roots, ws *
 					return ws, hasConflicts, nil
 				}
 			} else {
-				err = executeFFMerge(ctx, sess, spec.Squash, dbName, ws, dbData, spec.MergeC)
+				ws, err = executeFFMerge(ctx, sess, spec.Squash, dbName, ws, dbData, spec.MergeC)
 			}
 
 			if err != nil {
@@ -254,10 +260,10 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *do
 	return mergeRootToWorking(squash, ws, mergeRoot, cm, mergeStats)
 }
 
-func executeFFMerge(ctx *sql.Context, sess *dsess.Session, squash bool, dbName string, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) error {
+func executeFFMerge(ctx *sql.Context, sess *dsess.Session, squash bool, dbName string, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) (*doltdb.WorkingSet, error) {
 	rv, err := cm2.GetRootValue()
 	if err != nil {
-		return err
+		return ws, err
 	}
 
 	// TODO: This is all incredibly suspect, needs to be replaced with library code that is functional instead of
@@ -265,13 +271,14 @@ func executeFFMerge(ctx *sql.Context, sess *dsess.Session, squash bool, dbName s
 	if !squash {
 		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
 		if err != nil {
-			return err
+			return ws, err
 		}
 	}
 
-	ws = ws.WithWorkingRoot(rv).WithStagedRoot(rv)
+	return ws.WithWorkingRoot(rv).WithStagedRoot(rv), nil
 
-	return sess.SetWorkingSet(ctx, dbName, ws, nil)
+	//return sess.SetWorkingSet(ctx, dbName, ws, nil)
+
 }
 
 func executeNoFFMerge(
