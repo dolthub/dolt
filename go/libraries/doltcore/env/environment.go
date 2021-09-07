@@ -543,19 +543,15 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 }
 
 type repoStateReader struct {
-	dEnv *DoltEnv
+	*DoltEnv
 }
 
 func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
-	return r.dEnv.RepoState.CWBHeadRef()
+	return r.RepoState.CWBHeadRef()
 }
 
 func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
-	return r.dEnv.RepoState.CWBHeadSpec()
-}
-
-func (r *repoStateReader) GetRemotes() (map[string]Remote, error) {
-	return r.dEnv.GetRemotes()
+	return r.RepoState.CWBHeadSpec()
 }
 
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {

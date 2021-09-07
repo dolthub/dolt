@@ -29,6 +29,7 @@ type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
 	GetRemotes() (map[string]Remote, error)
+	GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, error)
 }
 
 type RepoStateWriter interface {
@@ -39,6 +40,7 @@ type RepoStateWriter interface {
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error
 	RemoveRemote(ctx context.Context, name string) error
+	TempTableFilesDir() string
 }
 
 type DocsReadWriter interface {

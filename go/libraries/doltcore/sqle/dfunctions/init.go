@@ -33,6 +33,7 @@ var DoltFunctions = []sql.Function{
 	sql.FunctionN{Name: ConstraintsVerifyFuncName, Fn: NewConstraintsVerifyFunc},
 	sql.FunctionN{Name: ConstraintsVerifyAllFuncName, Fn: NewConstraintsVerifyAllFunc},
 	sql.FunctionN{Name: RevertFuncName, Fn: NewRevertFunc},
+	sql.FunctionN{Name: DoltPullFuncName, Fn: NewPullFunc},
 }
 
 // These are the DoltFunctions that get exposed to Dolthub Api.

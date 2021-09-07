@@ -203,7 +203,7 @@ func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, 
 
 			if remoteTrackRef != nil {
 				rsSeen = true
-				srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef, runProgFuncs, stopProgFuncs)
+				srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv.TempTableFilesDir(), rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef, runProgFuncs, stopProgFuncs)
 
 				if err != nil {
 					return errhand.VerboseErrorFromError(err)
@@ -242,7 +242,7 @@ func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, 
 		}
 	}
 
-	err = actions.FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
+	err = actions.FetchFollowTags(ctx, dEnv.TempTableFilesDir(), srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
 
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)

@@ -50,11 +50,11 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	dbData, ok := sess.GetDbData(ctx, dbName)
+	//dbData, ok := sess.GetDbData(ctx, dbName)
 
-	if !ok {
-		return noConflicts, fmt.Errorf("Could not load database %s", dbName)
-	}
+	//if !ok {
+	//	return noConflicts, fmt.Errorf("Could not load database %s", dbName)
+	//}
 
 	ap := cli.CreateMergeArgParser()
 	args, err := getDoltArgs(ctx, row, d.Children())
@@ -77,12 +77,11 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return noConflicts, err
 	}
 	roots, ok := sess.GetRoots(ctx, dbName)
+	if !ok {
+		return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
+	}
 
 	// logrus.Errorf("heads are working: %s\nhead: %s", roots.Working.DebugString(ctx, true), roots.Head.DebugString(ctx, true))
-
-	if !ok {
-		return noConflicts, fmt.Errorf("Could not load database %s", dbName)
-	}
 
 	if apr.Contains(cli.AbortParam) {
 		if !ws.MergeActive() {
@@ -102,108 +101,124 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return noConflicts, nil
 	}
 
-	ddb, ok := sess.GetDoltDB(ctx, dbName)
-	if !ok {
-		return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
+	branchName := apr.Arg(0)
+	//
+	//ddb, ok := sess.GetDoltDB(ctx, dbName)
+	//
+	//dbData, ok := sess.GetDbData(ctx, dbName)
+	//
+	//msg, ok := apr.GetValue(cli.CommitMessageArg)
+
+	//author, email, t, err := parseOptionalMergeArgs(ctx, sess, apr)
+
+	//mergeSpec, ok, err := merge.ParseMergeSpec(ctx, dbData.Rsr, ddb, roots, author, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
+	mergeSpec, err := sqlMergeSpec(ctx, sess, dbName, apr, branchName)
+	ws, conflicts, err := mergeHelper(ctx, sess, roots, ws, dbName, mergeSpec)
+
+	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+	if err != nil {
+		return conflicts, err
 	}
 
+	return conflicts, nil
+}
+
+func mergeHelper(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec) (*doltdb.WorkingSet, interface{}, error) {
 	if hasConflicts, err := roots.Working.HasConflicts(ctx); err != nil {
-		return noConflicts, err
+		return ws, noConflicts, err
 	} else if hasConflicts {
-		return noConflicts, doltdb.ErrUnresolvedConflicts
+		return ws, noConflicts, doltdb.ErrUnresolvedConflicts
 	}
 
 	if hasConstraintViolations, err := roots.Working.HasConstraintViolations(ctx); err != nil {
-		return noConflicts, err
+		return ws, noConflicts, err
 	} else if hasConstraintViolations {
-		return noConflicts, doltdb.ErrUnresolvedConstraintViolations
+		return ws, noConflicts, doltdb.ErrUnresolvedConstraintViolations
 	}
 
 	if ws.MergeActive() {
-		return noConflicts, doltdb.ErrMergeActive
+		return ws, noConflicts, doltdb.ErrMergeActive
 	}
 
-	err = checkForUncommittedChanges(roots.Working, roots.Head)
+	err := checkForUncommittedChanges(roots.Working, roots.Head)
 	if err != nil {
-		return noConflicts, err
+		return ws, noConflicts, err
 	}
 
-	branchName := apr.Arg(0)
-	mergeCommit, _, err := getBranchCommit(ctx, branchName, ddb)
-	if err != nil {
-		return noConflicts, err
-	}
+	//branchName := apr.Arg(0)
+	//mergeCommit, _, err := getBranchCommit(ctx, spec., ddb)
+	//if err != nil {
+	//	return ws, noConflicts, err
+	//}
+	//
+	//headCommit, err := sess.GetHeadCommit(ctx, dbName)
+	//if err != nil {
+	//	return ws, noConflicts, err
+	//}
 
-	headCommit, err := sess.GetHeadCommit(ctx, dbName)
+	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
 	if err != nil {
-		return noConflicts, err
-	}
-
-	canFF, err := headCommit.CanFastForwardTo(ctx, mergeCommit)
-	if err != nil {
-		return noConflicts, err
+		return ws, noConflicts, err
 	}
 
 	if canFF {
-		headRoot, err := headCommit.GetRootValue()
+		headRoot, err := spec.HeadC.GetRootValue()
 		if err != nil {
-			return noConflicts, err
+			return ws, noConflicts, err
 		}
-		mergeRoot, err := mergeCommit.GetRootValue()
+		mergeRoot, err := spec.MergeC.GetRootValue()
 		if err != nil {
-			return noConflicts, err
+			return ws, noConflicts, err
 		}
 		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, headRoot, mergeRoot); err != nil {
-			return noConflicts, err
+			return ws, noConflicts, err
 		} else if !cvPossible {
-			if apr.Contains(cli.NoFFParam) {
-				ws, err = executeNoFFMerge(ctx, sess, apr, dbName, ws, dbData, headCommit, mergeCommit)
+			dbData, ok := sess.GetDbData(ctx, dbName)
+			if !ok {
+				return ws, noConflicts, fmt.Errorf("Could not load database %s", dbName)
+			}
+			if spec.Noff {
+				ws, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData, spec.HeadC, spec.MergeC)
 				if err == doltdb.ErrUnresolvedConflicts {
 					// if there are unresolved conflicts, write the resulting working set back to the session and return an
 					// error message
 					wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
 					if wsErr != nil {
-						return hasConflicts, wsErr
+						return ws, hasConflicts, wsErr
 					}
 
 					ctx.Warn(DoltConflictWarningCode, err.Error())
 
 					// Return 0 indicating there are conflicts
-					return hasConflicts, nil
+					return ws, hasConflicts, nil
 				}
 			} else {
-				err = executeFFMerge(ctx, sess, apr.Contains(cli.SquashParam), dbName, ws, dbData, mergeCommit)
+				err = executeFFMerge(ctx, sess, spec.Squash, dbName, ws, dbData, spec.MergeC)
 			}
 
 			if err != nil {
-				return noConflicts, err
+				return ws, noConflicts, err
 			}
-			return noConflicts, err
+			return ws, noConflicts, err
 		}
 	}
 
-	ws, err = executeMerge(ctx, apr.Contains(cli.SquashParam), headCommit, mergeCommit, ws)
+	ws, err = executeMerge(ctx, spec.Squash, spec.HeadC, spec.MergeC, ws)
 	if err == doltdb.ErrUnresolvedConflicts {
 		// if there are unresolved conflicts, write the resulting working set back to the session and return an
 		// error message
 		wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
 		if wsErr != nil {
-			return hasConflicts, wsErr
+			return ws, hasConflicts, wsErr
 		}
 
 		ctx.Warn(DoltConflictWarningCode, err.Error())
 
-		return hasConflicts, nil
+		return ws, hasConflicts, nil
 	} else if err != nil {
-		return noConflicts, err
+		return ws, noConflicts, err
 	}
-
-	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
-	if err != nil {
-		return noConflicts, err
-	}
-
-	return noConflicts, nil
+	return ws, noConflicts, nil
 }
 
 func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Roots) (*doltdb.WorkingSet, error) {
@@ -262,7 +277,8 @@ func executeFFMerge(ctx *sql.Context, sess *dsess.Session, squash bool, dbName s
 func executeNoFFMerge(
 	ctx *sql.Context,
 	dSess *dsess.Session,
-	apr *argparser.ArgParseResults,
+	//apr *argparser.ArgParseResults,
+	mergeSpec *merge.MergeSpec,
 	dbName string,
 	ws *doltdb.WorkingSet,
 	dbData env.DbData,
@@ -279,41 +295,26 @@ func executeNoFFMerge(
 		return ws, err
 	}
 
-	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
-	if !msgOk {
-		hh, err := headCommit.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		cmh, err := mergeCommit.HashOf()
-		if err != nil {
-			return nil, err
-		}
-
-		msg = fmt.Sprintf("SQL Generated commit merging %s into %s", hh.String(), cmh.String())
-	}
-
 	// TODO: refactor, redundant
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		name = dSess.Username
-		email = dSess.Email
-	}
+	//var name, email string
+	//if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+	//	name, email, err = cli.ParseAuthor(authorStr)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//} else {
+	//	name = dSess.Username
+	//	email = dSess.Email
+	//}
 
-	t := ctx.QueryTime()
-	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		var err error
-		t, err = cli.ParseDate(commitTimeStr)
-		if err != nil {
-			return nil, err
-		}
-	}
+	//t := ctx.QueryTime()
+	//if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+	//	var err error
+	//	t, err = cli.ParseDate(commitTimeStr)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
 
 	// Save our work so far in the session, as it will be referenced by the commit call below (badly in need of a
 	// refactoring)
@@ -333,18 +334,62 @@ func executeNoFFMerge(
 	// TODO: this does several session state updates, and it really needs to just do one
 	//  We also need to commit any pending transaction before we do this.
 	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
-		Message:    msg,
-		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
-		Force:      apr.Contains(cli.ForceFlag),
-		Name:       name,
-		Email:      email,
+		Message:    mergeSpec.Msg,
+		Date:       mergeSpec.Date,
+		AllowEmpty: mergeSpec.AllowEmpty,
+		Force:      mergeSpec.Force,
+		Name:       mergeSpec.Name,
+		Email:      mergeSpec.Email,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return ws, dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
+}
+
+func sqlMergeSpec(ctx *sql.Context, sess *dsess.Session, dbName string, apr *argparser.ArgParseResults, commitSpecStr string) (*merge.MergeSpec, error) {
+
+	//branchName := apr.Arg(0)
+
+	ddb, ok := sess.GetDoltDB(ctx, dbName)
+
+	dbData, ok := sess.GetDbData(ctx, dbName)
+
+	msg, ok := apr.GetValue(cli.CommitMessageArg)
+
+	//author, email, t, err := parseOptionalMergeArgs(ctx, sess, apr)
+
+	var err error
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		name = sess.Username
+		email = sess.Email
+	}
+
+	t := ctx.QueryTime()
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+		t, err = cli.ParseDate(commitTimeStr)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	roots, ok := sess.GetRoots(ctx, dbName)
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	mergeSpec, _, err := merge.ParseMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
+	if err != nil {
+		return nil, err
+	}
+	return mergeSpec, nil
 }
 
 // TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.
