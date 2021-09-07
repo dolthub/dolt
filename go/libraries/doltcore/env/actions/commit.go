@@ -167,7 +167,12 @@ func GetCommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, 
 
 	// TODO: kill off drw here, return an appropriate error type and make clients build this error as appropriate
 	if len(staged) == 0 && !mergeActive && !props.AllowEmpty {
-		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, drw)
+		docsOnDisk, err := drw.GetDocsOnDisk()
+		if err != nil {
+			return nil, err
+		}
+
+		_, notStagedDocs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
 		if err != nil {
 			return nil, err
 		}
