@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# This script is intended for usage on Unix-based systems.
+# For Windows users, please use the .bat file instead.
+
 LOGLEVEL=1
 
 # Compiles "$1" (golang pkg) with escape-analysis logging
