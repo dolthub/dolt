@@ -144,9 +144,9 @@ func (vs ValueSlice) Equals(other ValueSlice) bool {
 	return true
 }
 
-func (vs ValueSlice) Contains(nbf *NomsBinFormat, v Value) bool {
+func (vs ValueSlice) Contains(nbf *NomsBinFormat, val Value) bool {
 	for _, v := range vs {
-		if v.Equals(v) {
+		if v.Equals(val) {
 			return true
 		}
 	}
