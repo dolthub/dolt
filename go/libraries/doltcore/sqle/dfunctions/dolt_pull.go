@@ -38,7 +38,7 @@ type DoltPullFunc struct {
 	expression.NaryExpression
 }
 
-// NewPullFunc creates a new MergeFunc expression.
+// NewPullFunc creates a new PullFunc expression.
 func NewPullFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
 	return &DoltPullFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
@@ -113,12 +113,13 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 		if remoteTrackRef != nil {
 
+			// todo: can we pass nil for either of the channels?
 			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, pullSpec.Branch, remoteTrackRef, runProgFuncs, stopProgFuncs)
 			if err != nil {
 				return noConflicts, err
 			}
 
-			// TODO: I don't think this is necessary, but cli pull does it
+			// TODO: this could be replaced with a canFF check to test for error
 			err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
 			if err != nil {
 				return noConflicts, fmt.Errorf("fetch failed; %w", err)
@@ -144,15 +145,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			}
 		}
 	}
-	dbData, ok = sess.GetDbData(ctx, dbName)
-	if !ok {
-		return noConflicts, fmt.Errorf("Could not load database %s", dbName)
-	}
 
-	srcDB, err = pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
-	if err != nil {
-		return noConflicts, fmt.Errorf("failed to get remote db; %w", err)
-	}
 	err = actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return noConflicts, err

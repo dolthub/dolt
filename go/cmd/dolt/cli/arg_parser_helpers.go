@@ -141,6 +141,7 @@ func CreateRevertArgParser() *argparser.ArgParser {
 
 	return ap
 }
+
 func CreatePullArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(SquashParam, "", "Merges changes to the working set without updating the commit history")
