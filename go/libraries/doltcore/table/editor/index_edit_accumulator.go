@@ -135,8 +135,8 @@ type indexEditAccumulatorImpl struct {
 	rowData types.Map
 
 	// in memory changes which will be applied to the rowData when the map is materialized
-	committed          *inMemIndexEdits
-	uncommitted        *inMemIndexEdits
+	committed   *inMemIndexEdits
+	uncommitted *inMemIndexEdits
 
 	// accumulatorIdx defines the order in which types.EditAccumulators will be applied
 	accumulatorIdx uint64
@@ -224,7 +224,7 @@ func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partia
 	if iea.flushingUncommitted {
 		iea.uncommittedEA.AddEdit(key, value)
 
-		if iea.uncommitted.ops - iea.lastFlush > flushThreshold {
+		if iea.uncommitted.ops-iea.lastFlush > flushThreshold {
 			iea.flushUncommitted()
 		}
 	} else if iea.uncommitted.ops > indexFlushThreshold {
@@ -246,7 +246,7 @@ func (iea *indexEditAccumulatorImpl) Delete(ctx context.Context, keyHash, partia
 	if iea.flushingUncommitted {
 		iea.uncommittedEA.AddEdit(key, nil)
 
-		if iea.uncommitted.ops - iea.lastFlush > flushThreshold {
+		if iea.uncommitted.ops-iea.lastFlush > flushThreshold {
 			iea.flushUncommitted()
 		}
 	} else if iea.uncommitted.ops > indexFlushThreshold {

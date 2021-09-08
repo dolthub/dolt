@@ -18,8 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"

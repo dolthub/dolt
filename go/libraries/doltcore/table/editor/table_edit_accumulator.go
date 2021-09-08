@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	invalidEaId =  0xFFFFFFFF
+	invalidEaId = 0xFFFFFFFF
 )
 
 type doltKVP struct {
@@ -115,8 +115,8 @@ type tableEditAccumulatorImpl struct {
 	rowData types.Map
 
 	// in memory changes which will be applied to the rowData when the map is materialized
-	committed          *inMemModifications
-	uncommitted        *inMemModifications
+	committed   *inMemModifications
+	uncommitted *inMemModifications
 
 	// accumulatorIdx defines the order in which types.EditAccumulators will be applied
 	accumulatorIdx uint64
@@ -222,7 +222,7 @@ func (tea *tableEditAccumulatorImpl) Delete(keyHash hash.Hash, key types.Tuple) 
 	if tea.flushingUncommitted {
 		tea.uncommittedEA.AddEdit(key, nil)
 
-		if tea.uncommitted.ops - tea.lastFlush > flushThreshold {
+		if tea.uncommitted.ops-tea.lastFlush > flushThreshold {
 			tea.flushUncommitted()
 		}
 	} else if tea.uncommitted.ops > flushThreshold {
@@ -241,7 +241,7 @@ func (tea *tableEditAccumulatorImpl) Insert(keyHash hash.Hash, key types.Tuple, 
 	if tea.flushingUncommitted {
 		tea.uncommittedEA.AddEdit(key, val)
 
-		if tea.uncommitted.ops - tea.lastFlush > flushThreshold {
+		if tea.uncommitted.ops-tea.lastFlush > flushThreshold {
 			tea.flushUncommitted()
 		}
 	} else if tea.uncommitted.ops > flushThreshold {
@@ -409,16 +409,16 @@ func (deaf *dbEaFactory) NewTableEA(ctx context.Context, rowData types.Map) Tabl
 // NewIndexEA creates an IndexEditAccumulator
 func (deaf *dbEaFactory) NewIndexEA(ctx context.Context, rowData types.Map) IndexEditAccumulator {
 	return &indexEditAccumulatorImpl{
-		nbf:                rowData.Format(),
-		rowData:            rowData,
-		committed:          newInMemIndexEdits(),
-		uncommitted:        newInMemIndexEdits(),
-		commitEA:           edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
-		commitEAId:         0,
-		accumulatorIdx:     1,
-		flusher:            edits.NewDiskEditFlusher(ctx, deaf.directory, rowData.Format(), deaf.vrw),
-		committedEaIds:     set.NewUint64Set(nil),
-		uncommittedEaIds:   set.NewUint64Set(nil),
+		nbf:                 rowData.Format(),
+		rowData:             rowData,
+		committed:           newInMemIndexEdits(),
+		uncommitted:         newInMemIndexEdits(),
+		commitEA:            edits.NewAsyncSortedEditsWithDefaults(rowData.Format()),
+		commitEAId:          0,
+		accumulatorIdx:      1,
+		flusher:             edits.NewDiskEditFlusher(ctx, deaf.directory, rowData.Format(), deaf.vrw),
+		committedEaIds:      set.NewUint64Set(nil),
+		uncommittedEaIds:    set.NewUint64Set(nil),
 		flushingUncommitted: false,
 		lastFlush:           0,
 		uncommittedEA:       nil,

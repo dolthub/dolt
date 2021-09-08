@@ -67,6 +67,7 @@ func NewTupleWriter(wr io.Writer) TupleWriteCloser {
 }
 
 var nullBytes [4]byte
+
 func init() {
 	binary.BigEndian.PutUint32(nullBytes[:], 0)
 }
