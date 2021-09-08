@@ -251,3 +251,15 @@ DELIM
     skip "Running this file on repeat produces modifications"
     ! [[ "$output" =~ "Modifications: 2" ]] || falsa 
 }
+
+@test "import-update-tables: importing some columns does not overwrite columns not part of the import" {
+  dolt sql <1pk5col-ints-sch.sql
+  echo -e 'pk,c1\n1,1\n2,6'|dolt table import -u test
+  echo -e 'pk,c2\n1,2\n2,7'|dolt table import -u test
+  echo -e 'pk,c3,c4,c5\n1,3,4,5\n2,8,9,10'|dolt table import -u test
+
+  EXPECTED=$(echo -e "pk,c1,c2,c3,c4,c5\n1,1,2,3,4,5\n2,6,7,8,9,10")
+  run dolt sql -r csv -q 'SELECT * FROM test'
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "$EXPECTED" ]] || false
+}
