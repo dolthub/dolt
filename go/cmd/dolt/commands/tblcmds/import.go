@@ -463,7 +463,7 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	}
 
 	// read tags will be the tags of read rows which come from the imported data.  Being able to distinguish columns coming
-	// from the import data allows us to the data with existing rows
+	// from the import data allows us to merge the data with existing rows
 	rdTags := make([]uint64, 0, len(fieldMapping.SrcToDest))
 	for _, tag := range fieldMapping.SrcToDest {
 		rdTags = append(rdTags, tag)
