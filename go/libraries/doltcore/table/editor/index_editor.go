@@ -228,13 +228,14 @@ func (ie *IndexEditor) StatementStarted(ctx context.Context) {
 
 // StatementFinished is analogous to the TableEditor implementation, but specific to the IndexEditor.
 func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) error {
-	var err error
-	if !errored {
-		err = ie.iea.Commit(ctx, ie.nbf)
-	} else {
-		err = ie.iea.Rollback(ctx)
+	ie.writeMutex.Lock()
+	defer ie.writeMutex.Unlock()
+
+	if errored {
+		return ie.iea.Rollback(ctx)
 	}
-	return err
+
+	return ie.iea.Commit(ctx, ie.nbf)
 }
 
 // Close is a no-op for an IndexEditor.

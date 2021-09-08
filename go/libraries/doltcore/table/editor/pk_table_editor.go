@@ -732,22 +732,27 @@ func (te *pkTableEditor) StatementStarted(ctx context.Context) {
 
 // StatementFinished implements TableEditor.
 func (te *pkTableEditor) StatementFinished(ctx context.Context, errored bool) error {
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
+
 	var err error
-	if !errored {
-		err = te.tea.Commit(ctx, te.nbf)
-	} else {
+	if errored {
 		err = te.tea.Rollback(ctx)
+	} else {
+		err = te.tea.Commit(ctx, te.nbf)
 	}
 
 	for i := 0; i < len(te.indexEds); i++ {
 		iErr := te.indexEds[i].StatementFinished(ctx, errored)
-		if iErr != nil && err == nil {
+		if err == nil {
 			err = iErr
 		}
 	}
+
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 

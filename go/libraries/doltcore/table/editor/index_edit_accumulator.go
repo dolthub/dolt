@@ -162,7 +162,7 @@ type indexEditAccumulatorImpl struct {
 	// uncommittedEA is a types.EditAccumulator that we write to as uncommitted edits come in when the number of uncommitted
 	// edits becomes large
 	uncommittedEA types.EditAccumulator
-	// uncommittedEAId is the id used for ordering the uncommitteudEA with other types.EditAccumulators that will be applied
+	// uncommittedEAId is the id used for ordering the uncommittedEA with other types.EditAccumulators that will be applied
 	// when materializing all changes
 	uncommittedEAId uint64
 }
