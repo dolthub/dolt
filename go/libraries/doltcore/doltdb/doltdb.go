@@ -1068,18 +1068,10 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return err
 	}
 
-	// While we still have places that need user info threaded through, we're lenient on providing the meta
 	var metaSt types.Struct
-	if meta != nil {
-		metaSt, err = meta.toNomsStruct(types.Format_Default)
-		if err != nil {
-			return err
-		}
-	} else {
-		metaSt, err = datas.NewWorkingSetMeta(types.Format_Default, "incomplete", "incomplete", uint64(time.Now().Unix()), "incomplete")
-		if err != nil {
-			return err
-		}
+	metaSt, err = meta.toNomsStruct(ddb.db.Format())
+	if err != nil {
+		return err
 	}
 
 	_, _, err = ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{

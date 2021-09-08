@@ -579,6 +579,7 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 
 			if !success {
 				testSetFailed = true
+				return nil
 			}
 
 			currentDatasets, err := db.Datasets(ctx)
@@ -631,10 +632,8 @@ func (db *database) assertDatasetHash(
 		if h != currHash {
 			return false, err
 		}
-	} else {
-		if !currHash.IsEmpty() {
-			panic("No ref found for workspace " + datasetID)
-		}
+	} else if !currHash.IsEmpty() {
+			return false, nil
 	}
 
 	return true, nil
