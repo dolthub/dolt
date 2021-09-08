@@ -201,7 +201,7 @@ func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstra
 
 		if !col.TypeInfo.IsValid(val) {
 			badCol = &col
-			return true, fmt.Errorf(`"%v" is not valid for "%v"`, val, col.TypeInfo.String())
+			return true, fmt.Errorf(`"%v" is not valid for column "%s" (type "%s")`, val, col.Name, col.TypeInfo.String())
 		}
 
 		if len(col.Constraints) > 0 {
