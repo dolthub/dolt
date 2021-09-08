@@ -457,10 +457,16 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	transforms, err := mvdata.NameMapTransform(ctx, root.VRW(), rd.GetSchema(), wrSch, impOpts.nameMapper)
-
+	transforms, fieldMapping, err := mvdata.NameMapTransform(ctx, root.VRW(), rd.GetSchema(), wrSch, impOpts.nameMapper)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err}
+	}
+
+	// read tags will be the tags of read rows which come from the imported data.  Being able to distinguish columns coming
+	// from the import data allows us to the data with existing rows
+	rdTags := make([]uint64, 0, len(fieldMapping.SrcToDest))
+	for _, tag := range fieldMapping.SrcToDest {
+		rdTags = append(rdTags, tag)
 	}
 
 	var wr table.TableWriteCloser
@@ -470,7 +476,7 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	case ReplaceOp:
 		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB)
 	case UpdateOp:
-		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB)
+		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, rdTags)
 	default:
 		err = errors.New("invalid move operation")
 	}

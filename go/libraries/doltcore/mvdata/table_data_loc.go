@@ -17,6 +17,7 @@ package mvdata
 import (
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -102,7 +103,7 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOp
 
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
-func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, _ schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, wrSch schema.Schema, statsCB noms.StatsCB, rdTags []uint64) (table.TableWriteCloser, error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 	if err != nil {
 		return nil, err
@@ -130,6 +131,11 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 	// keyless tables are updated as append only
 	insertOnly := schema.IsKeyless(tblSch)
 
+	var tagsFromRd *set.Uint64Set
+	if len(rdTags) > 0 && len(rdTags) != len(wrSch.GetAllCols().Tags){
+		tagsFromRd = set.NewUint64Set(rdTags)
+	}
+
 	return &tableEditorWriteCloser{
 		dEnv:        dEnv,
 		insertOnly:  insertOnly,
@@ -138,6 +144,7 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		tableEditor: tableEditor,
 		sess:        sess,
 		tableSch:    tblSch,
+		tagsFromRd:  tagsFromRd,
 	}, nil
 }
 
@@ -188,6 +195,7 @@ type tableEditorWriteCloser struct {
 	initialData types.Map
 	tableSch    schema.Schema
 	insertOnly  bool
+	tagsFromRd  *set.Uint64Set
 
 	statsCB noms.StatsCB
 	stats   types.AppliedEditStats
@@ -214,7 +222,6 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 
 	if te.insertOnly {
 		err := te.tableEditor.InsertRow(ctx, r, nil)
-
 		if err != nil {
 			return err
 		}
@@ -228,11 +235,11 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 		if err != nil {
 			return err
 		}
+
 		val, ok, err := te.initialData.MaybeGet(ctx, pkTuple)
 		if err != nil {
 			return err
-		}
-		if !ok {
+		} else if !ok {
 			err := te.tableEditor.InsertRow(ctx, r, nil)
 
 			if err != nil {
@@ -243,16 +250,25 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			te.stats.Additions++
 			return nil
 		}
+
 		oldRow, err := row.FromNoms(te.tableSch, pkTuple.(types.Tuple), val.(types.Tuple))
 		if err != nil {
 			return err
 		}
+
+		if te.tagsFromRd != nil {
+			r, err = te.mergeRows(te.tagsFromRd, r, oldRow)
+			if err != nil {
+				return err
+			}
+		}
+
 		if row.AreEqual(r, oldRow, te.tableSch) {
 			te.stats.SameVal++
 			return nil
 		}
-		err = te.tableEditor.UpdateRow(ctx, oldRow, r, nil)
 
+		err = te.tableEditor.UpdateRow(ctx, oldRow, r, nil)
 		if err != nil {
 			return err
 		}
@@ -269,4 +285,27 @@ func (te *tableEditorWriteCloser) Close(ctx context.Context) error {
 		te.statsCB(te.stats)
 	}
 	return nil
+}
+
+func (te *tableEditorWriteCloser) mergeRows(newTags *set.Uint64Set, r, oldRow row.Row) (row.Row, error) {
+	tv, err := r.TaggedValues()
+	if err != nil {
+		return nil, err
+	}
+
+	oldTv, err := oldRow.TaggedValues()
+	if err != nil {
+		return nil, err
+	}
+
+	newTags.Iter(func(tag uint64) {
+		v, ok := tv[tag]
+		if ok {
+			oldTv[tag] = v
+		} else {
+			delete(oldTv, tag)
+		}
+	})
+
+	return row.New(oldRow.Format(), te.tableSch, oldTv)
 }

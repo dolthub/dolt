@@ -90,7 +90,7 @@ func (dl StreamDataLocation) NewCreatingWriter(_ context.Context, _ DataMoverOpt
 
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
-func (dl StreamDataLocation) NewUpdatingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl StreamDataLocation) NewUpdatingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB, _ []uint64) (table.TableWriteCloser, error) {
 	panic("Updating is not supported for stdout")
 }
 

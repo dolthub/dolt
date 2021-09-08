@@ -82,3 +82,9 @@ func (us *Uint64Set) AsSlice() []uint64 {
 func (us *Uint64Set) Size() int {
 	return len(us.uints)
 }
+
+func (us *Uint64Set) Iter(fn func(uint64)) {
+	for n := range us.uints {
+		fn(n)
+	}
+}
