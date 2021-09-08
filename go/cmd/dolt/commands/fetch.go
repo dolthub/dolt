@@ -29,10 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-const (
-	ForceFetchFlag = "force"
-)
-
 var fetchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Download objects and refs from another repository",
 	LongDesc: `Fetch refs, along with the objects necessary to complete their histories and update remote-tracking branches.
@@ -72,7 +68,7 @@ func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) 
 
 func (cmd FetchCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(ForceFetchFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
+	ap.SupportsFlag(cli.ForceFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
 	return ap
 }
 
@@ -82,14 +78,13 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	remotes, _ := dEnv.GetRemotes()
-	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
-
-	updateMode := ref.UpdateMode{Force: apr.Contains(ForceFetchFlag)}
-
-	if verr == nil {
-		verr = fetchRefSpecs(ctx, updateMode, dEnv, r, refSpecs)
+	r, refSpecs, err := env.ParseFetchOpts(apr.Args(), dEnv.RepoStateReader())
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
+
+	verr := fetchRefSpecs(ctx, updateMode, dEnv, r, refSpecs)
 
 	return HandleVErrAndExitCode(verr, usage)
 }

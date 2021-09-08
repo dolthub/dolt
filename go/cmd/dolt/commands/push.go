@@ -89,7 +89,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	opts, err := env.ParsePushArgs(ctx, apr, dEnv, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
+	opts, err := env.ParsePushArgs(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
 	if err != nil {
 		var verr errhand.VerboseError
 		switch err {
@@ -111,10 +111,18 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	var verr errhand.VerboseError
-	err = actions.DoPush(ctx, dEnv, opts, runProgFuncs, stopProgFuncs)
+	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, dEnv.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		verr = printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
 	}
+
+	if opts.SetUpstream {
+		err := dEnv.RepoState.Save(dEnv.FS)
+		if err != nil {
+			err = fmt.Errorf("%w; %s", actions.ErrFailedToSaveRepoState, err.Error())
+		}
+	}
+
 	return HandleVErrAndExitCode(verr, usage)
 }
 

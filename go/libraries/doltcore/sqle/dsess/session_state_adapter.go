@@ -31,9 +31,10 @@ import (
 // SessionStateAdapter is an adapter for env.RepoStateReader in SQL contexts, getting information about the repo state
 // from the session.
 type SessionStateAdapter struct {
-	session *Session
-	dbName  string
-	remotes map[string]env.Remote
+	session  *Session
+	dbName   string
+	remotes  map[string]env.Remote
+	branches map[string]env.BranchConfig
 }
 
 func (s SessionStateAdapter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
@@ -76,8 +77,8 @@ var _ env.RepoStateReader = SessionStateAdapter{}
 var _ env.RepoStateWriter = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
-func NewSessionStateAdapter(session *Session, dbName string, remotes map[string]env.Remote) SessionStateAdapter {
-	return SessionStateAdapter{session: session, dbName: dbName, remotes: remotes}
+func NewSessionStateAdapter(session *Session, dbName string, remotes map[string]env.Remote, branches map[string]env.BranchConfig) SessionStateAdapter {
+	return SessionStateAdapter{session: session, dbName: dbName, remotes: remotes, branches: branches}
 }
 
 func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
@@ -118,6 +119,15 @@ func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.Ro
 
 func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
 	return s.remotes, nil
+}
+
+func (s SessionStateAdapter) GetBranches() (map[string]env.BranchConfig, error) {
+	return s.branches, nil
+}
+
+func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) error {
+	s.branches[name] = new
+	return nil
 }
 
 func (s SessionStateAdapter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {

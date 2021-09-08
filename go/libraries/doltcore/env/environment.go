@@ -898,6 +898,23 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	return nil
 }
 
+func (dEnv *DoltEnv) GetBranches() (map[string]BranchConfig, error) {
+	if dEnv.RSLoadErr != nil {
+		return nil, dEnv.RSLoadErr
+	}
+
+	return dEnv.RepoState.Branches, nil
+}
+
+func (dEnv *DoltEnv) UpdateBranch(name string, new BranchConfig) error {
+	if dEnv.RSLoadErr != nil {
+		return dEnv.RSLoadErr
+	}
+
+	dEnv.RepoState.Branches[name] = new
+	return nil
+}
+
 var ErrNotACred = errors.New("not a valid credential key id or public key")
 
 func (dEnv *DoltEnv) FindCreds(credsDir, pubKeyOrId string) (string, error) {
