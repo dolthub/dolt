@@ -17,8 +17,9 @@ package mvdata
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"sync/atomic"
+
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -132,7 +133,7 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 	insertOnly := schema.IsKeyless(tblSch)
 
 	var tagsFromRd *set.Uint64Set
-	if len(rdTags) > 0 && len(rdTags) != len(wrSch.GetAllCols().Tags){
+	if len(rdTags) > 0 && len(rdTags) != len(wrSch.GetAllCols().Tags) {
 		tagsFromRd = set.NewUint64Set(rdTags)
 	}
 
