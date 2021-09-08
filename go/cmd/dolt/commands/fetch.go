@@ -121,7 +121,7 @@ func getRefSpecs(args []string, dEnv *env.DoltEnv, remotes map[string]env.Remote
 	if len(args) != 0 {
 		rs, verr = parseRSFromArgs(remName, args)
 	} else {
-		rs, err = dEnv.GetRefSpecs(remName)
+		rs, err = env.GetRefSpecs(dEnv.RepoStateReader(), remName)
 		if err != nil {
 			verr = errhand.VerboseErrorFromError(err)
 		}

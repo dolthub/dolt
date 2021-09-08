@@ -50,11 +50,6 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	//dbData, ok := sess.GetDbData(ctx, dbName)
-
-	//if !ok {
-	//	return noConflicts, fmt.Errorf("Could not load database %s", dbName)
-	//}
 
 	ap := cli.CreateMergeArgParser()
 	args, err := getDoltArgs(ctx, row, d.Children())
@@ -102,16 +97,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	branchName := apr.Arg(0)
-	//
-	//ddb, ok := sess.GetDoltDB(ctx, dbName)
-	//
-	//dbData, ok := sess.GetDbData(ctx, dbName)
-	//
-	//msg, ok := apr.GetValue(cli.CommitMessageArg)
 
-	//author, email, t, err := parseOptionalMergeArgs(ctx, sess, apr)
-
-	//mergeSpec, ok, err := merge.ParseMergeSpec(ctx, dbData.Rsr, ddb, roots, author, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
 	mergeSpec, err := sqlMergeSpec(ctx, sess, dbName, apr, branchName)
 	if err != nil {
 		return noConflicts, err
@@ -133,13 +119,13 @@ func mergeHelper(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roots, ws *
 	if hasConflicts, err := roots.Working.HasConflicts(ctx); err != nil {
 		return ws, noConflicts, err
 	} else if hasConflicts {
-		return ws, noConflicts, doltdb.ErrUnresolvedConflicts
+		return ws, hasConflicts, doltdb.ErrUnresolvedConflicts
 	}
 
 	if hasConstraintViolations, err := roots.Working.HasConstraintViolations(ctx); err != nil {
-		return ws, noConflicts, err
+		return ws, hasConflicts, err
 	} else if hasConstraintViolations {
-		return ws, noConflicts, doltdb.ErrUnresolvedConstraintViolations
+		return ws, hasConflicts, doltdb.ErrUnresolvedConstraintViolations
 	}
 
 	if ws.MergeActive() {
@@ -150,17 +136,6 @@ func mergeHelper(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roots, ws *
 	if err != nil {
 		return ws, noConflicts, err
 	}
-
-	//branchName := apr.Arg(0)
-	//mergeCommit, _, err := getBranchCommit(ctx, spec., ddb)
-	//if err != nil {
-	//	return ws, noConflicts, err
-	//}
-	//
-	//headCommit, err := sess.GetHeadCommit(ctx, dbName)
-	//if err != nil {
-	//	return ws, noConflicts, err
-	//}
 
 	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
 	if err != nil {
@@ -276,9 +251,6 @@ func executeFFMerge(ctx *sql.Context, sess *dsess.Session, squash bool, dbName s
 	}
 
 	return ws.WithWorkingRoot(rv).WithStagedRoot(rv), nil
-
-	//return sess.SetWorkingSet(ctx, dbName, ws, nil)
-
 }
 
 func executeNoFFMerge(

@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -129,55 +128,15 @@ func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) erro
 	return fmt.Errorf("cannot delete remote in an SQL session")
 }
 
-// GetRefSpecs takes an optional remoteName and returns all refspecs associated with that remote.  If "" is passed as
-// the remoteName then the default remote is used.
-func (s SessionStateAdapter) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, error) {
-	var remote env.Remote
-	var err error
-
-	if remoteName == "" {
-		remote = s.remotes["origin"]
-	} else if r, ok := s.remotes[remoteName]; ok {
-		remote = r
-	} else {
-		err = env.ErrUnknownRemote
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	var refSpecs []ref.RemoteRefSpec
-	for _, fs := range remote.FetchSpecs {
-		rs, err := ref.ParseRefSpecForRemote(remote.Name, fs)
-
-		if err != nil {
-			return nil, errhand.BuildDError("error: for '%s', '%s' is not a valid refspec.", remote.Name, fs).Build()
-		}
-
-		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
-			return nil, fmt.Errorf("%w; '%s' is not a valid refspec referring to a remote tracking branch", ref.ErrInvalidRefSpec, remote.Name)
-		} else if rrs.GetRemote() != remote.Name {
-			return nil, env.ErrInvalidRefSpecRemote
-		} else {
-			refSpecs = append(refSpecs, rrs)
-		}
-	}
-
-	return refSpecs, nil
-}
-
 func (s SessionStateAdapter) TempTableFilesDir() string {
-	//todo: dolt dir (abs), temptabledir
+	//todo: save tempfile in dbState on server startup?
 	return mustAbs(dbfactory.DoltDir, "temptf")
 }
 
 func mustAbs(path ...string) string {
 	absPath, err := filesys.LocalFS.Abs(filepath.Join(path...))
-
 	if err != nil {
 		panic(err)
 	}
-
 	return absPath
 }

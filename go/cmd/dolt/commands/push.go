@@ -96,7 +96,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		case env.ErrNoUpstreamForBranch:
 			currentBranch := dEnv.RepoStateReader().CWBHeadRef()
 			remoteName := "<remote>"
-			if defRemote, verr := dEnv.GetDefaultRemote(); verr == nil {
+			if defRemote, verr := env.GetDefaultRemote(dEnv.RepoStateReader()); verr == nil {
 				remoteName = defRemote.Name
 			}
 			verr = errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +

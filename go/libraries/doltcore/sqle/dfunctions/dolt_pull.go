@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -83,7 +84,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	if apr.NArg() > 1 {
-		return nil, actions.ErrInvalidPullArgs
+		return noConflicts, actions.ErrInvalidPullArgs
 	}
 
 	var remoteName string
@@ -93,17 +94,17 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	pullSpec, err := env.ParsePullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
 	if err != nil {
-		return nil, err
+		return noConflicts, err
 	}
 
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
 	if err != nil {
-		return 1, fmt.Errorf("failed to get remote db; %w", err)
+		return noConflicts, fmt.Errorf("failed to get remote db; %w", err)
 	}
 
 	ws, err := sess.WorkingSet(ctx, dbName)
 	if err != nil {
-		return 1, err
+		return noConflicts, err
 	}
 
 	var conflicts interface{}
@@ -114,13 +115,13 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, pullSpec.Branch, remoteTrackRef, runProgFuncs, stopProgFuncs)
 			if err != nil {
-				return 1, err
+				return noConflicts, err
 			}
 
-			// TODO: I don't think this is necessary, but other merges do it
+			// TODO: I don't think this is necessary, but cli pull does it
 			err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
 			if err != nil {
-				return 1, fmt.Errorf("fetch failed; %w", err)
+				return noConflicts, fmt.Errorf("fetch failed; %w", err)
 			}
 
 			roots, ok := sess.GetRoots(ctx, dbName)
@@ -130,80 +131,42 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 			mergeSpec, err := sqlMergeSpec(ctx, sess, dbName, apr, remoteTrackRef.String())
 			if err != nil {
-				return 1, err
+				return noConflicts, err
 			}
 			ws, conflicts, err = mergeHelper(ctx, sess, roots, ws, dbName, mergeSpec)
-			if !errors.Is(datas.ErrDBUpToDate, err) {
+			if !errors.Is(doltdb.ErrUpToDate, err) {
+				return conflicts, err
+			}
+
+			err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+			if err != nil {
 				return conflicts, err
 			}
 		}
 	}
-	err = actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
+	dbData, ok = sess.GetDbData(ctx, dbName)
+	if !ok {
+		return noConflicts, fmt.Errorf("Could not load database %s", dbName)
+	}
 
-	return 0, nil
+	srcDB, err = pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
+	if err != nil {
+		return noConflicts, fmt.Errorf("failed to get remote db; %w", err)
+	}
+	err = actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
+	if err != nil {
+		return noConflicts, err
+	}
+
+	return noConflicts, nil
 }
 
 func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
-	//var pos int
-	var currentTreeLevel int
-	//var percentBuffered float64
-	var tableFilesBuffered int
-	var filesUploaded int
-
-	for evt := range pullerEventCh {
-		switch evt.EventType {
-		case datas.NewLevelTWEvent:
-			if evt.TWEventDetails.TreeLevel != 1 {
-				currentTreeLevel = evt.TWEventDetails.TreeLevel
-				//percentBuffered = 0
-			}
-		case datas.DestDBHasTWEvent:
-			if evt.TWEventDetails.TreeLevel != -1 {
-				currentTreeLevel = evt.TWEventDetails.TreeLevel
-			}
-
-		case datas.LevelUpdateTWEvent:
-			if evt.TWEventDetails.TreeLevel != -1 {
-				currentTreeLevel = evt.TWEventDetails.TreeLevel
-				toBuffer := evt.TWEventDetails.ChunksInLevel - evt.TWEventDetails.ChunksAlreadyHad
-
-				if toBuffer > 0 {
-					//percentBuffered = 100 * float64(evt.TWEventDetails.ChunksBuffered) / float64(toBuffer)
-				}
-			}
-
-		case datas.LevelDoneTWEvent:
-
-		case datas.TableFileClosedEvent:
-			tableFilesBuffered += 1
-
-		case datas.StartUploadTableFileEvent:
-
-		case datas.UploadTableFileUpdateEvent:
-
-		case datas.EndUploadTableFileEvent:
-			filesUploaded += 1
-		}
-
-		if currentTreeLevel == -1 {
-			continue
-		}
-
-		//var msg string
-		//if len(uploadRate) > 0 {
-		//	msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%%, Files Written: %d, Files Uploaded: %d, Current Upload Speed: %s", ts.next(), currentTreeLevel, percentBuffered, tableFilesBuffered, filesUploaded, uploadRate)
-		//} else {
-		//	msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%% Files Written: %d, Files Uploaded: %d", ts.next(), currentTreeLevel, percentBuffered, tableFilesBuffered, filesUploaded)
-		//}
-		//
-		//pos = cli.DeleteAndPrint(pos, msg)
+	for _ = range pullerEventCh {
 	}
 }
 
 func progFunc(progChan chan datas.PullProgress) {
-	//var latest datas.PullProgress
-	//last := time.Now().UnixNano() - 1
-	//lenPrinted := 0
 	done := false
 	for !done {
 		select {
@@ -211,16 +174,10 @@ func progFunc(progChan chan datas.PullProgress) {
 			if !ok {
 				done = true
 			}
-			//latest = progress
-
 		case <-time.After(250 * time.Millisecond):
 			break
 		}
 	}
-
-	//if lenPrinted > 0 {
-	//	cli.Println()
-	//}
 }
 
 func runProgFuncs() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {

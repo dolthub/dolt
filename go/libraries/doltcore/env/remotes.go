@@ -278,7 +278,7 @@ type PullSpec struct {
 func ParsePullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force bool) (*PullSpec, error) {
 	branch := rsr.CWBHeadRef()
 
-	refSpecs, err := rsr.GetRefSpecs(remoteName)
+	refSpecs, err := GetRefSpecs(rsr, remoteName)
 	if err != nil {
 		return nil, err
 	}
