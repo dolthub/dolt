@@ -177,7 +177,8 @@ func TestModifyColumn(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
-			updatedTable, err := ModifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+			updatedTable, err := ModifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order, opts)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
@@ -213,7 +214,7 @@ func TestModifyColumn(t *testing.T) {
 
 			updatedIndexRows, err := updatedTable.GetIndexRowData(context.Background(), index.Name())
 			require.NoError(t, err)
-			expectedIndexRows, err := editor.RebuildIndex(context.Background(), updatedTable, index.Name())
+			expectedIndexRows, err := editor.RebuildIndex(context.Background(), updatedTable, index.Name(), opts)
 			require.NoError(t, err)
 			if uint64(len(foundRows)) != updatedIndexRows.Len() || !updatedIndexRows.Equals(expectedIndexRows) {
 				t.Error("index contents are incorrect")

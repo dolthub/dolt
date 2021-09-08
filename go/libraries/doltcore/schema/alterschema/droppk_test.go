@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -269,7 +270,8 @@ func TestDropPks(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			ctx := context.Background()
 
-			db := sqle.NewDatabase("dolt", dEnv.DbData())
+			opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+			db := sqle.NewDatabase("dolt", dEnv.DbData(), opts)
 			root, _ := dEnv.WorkingRoot(ctx)
 			engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
 			require.NoError(t, err)

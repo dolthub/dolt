@@ -20,6 +20,7 @@ import "github.com/dolthub/dolt/go/store/types"
 // is filled the target buffer is changed for subsequent adds.  New buffers can be added to the builder so that
 // buffers of other KVPCollections can be reused.
 type KVPCollBuilder struct {
+	nbf        *types.NomsBinFormat
 	filled     []types.KVPSlice
 	toFill     []types.KVPSlice
 	currSl     types.KVPSlice
@@ -30,11 +31,11 @@ type KVPCollBuilder struct {
 }
 
 // NewKVPCollBuilder creates a builder which can be used to
-func NewKVPCollBuilder(buffSize int) *KVPCollBuilder {
+func NewKVPCollBuilder(buffSize int, nbf *types.NomsBinFormat) *KVPCollBuilder {
 	buffs := []types.KVPSlice{make(types.KVPSlice, buffSize)}
 	currSl := make(types.KVPSlice, buffSize)
 
-	return &KVPCollBuilder{nil, buffs, currSl, buffSize, 0, 0, buffSize}
+	return &KVPCollBuilder{nbf, nil, buffs, currSl, buffSize, 0, 0, buffSize}
 }
 
 // AddBuffer adds a buffer of KVPs that can be filled.
@@ -105,5 +106,6 @@ func (cb *KVPCollBuilder) Build() *KVPCollection {
 		numSlices: len(cb.filled),
 		totalSize: cb.numItems,
 		slices:    cb.filled,
+		nbf:       cb.nbf,
 	}
 }

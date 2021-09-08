@@ -27,6 +27,8 @@ import (
 type TupleWriter interface {
 	// WriteTuples writes the provided tuples
 	WriteTuples(...Tuple) error
+	// WriteNull write a null to the stream
+	WriteNull() error
 	// CopyFrom reads tuples from a reader and writes them
 	CopyFrom(TupleReader) error
 }
@@ -34,7 +36,7 @@ type TupleWriter interface {
 // TupleReader is an interface for an object that supports reading types.Tuples
 type TupleReader interface {
 	// Read reades the next tuple from the TupleReader
-	Read() (Tuple, error)
+	Read() (*Tuple, error)
 }
 
 // Closer is an interface for a class that can be closed
@@ -62,6 +64,16 @@ type tupleWriterImpl struct {
 // NewTupleWriter returns a TupleWriteCloser that writes tuple data to the supplied io.Writer
 func NewTupleWriter(wr io.Writer) TupleWriteCloser {
 	return &tupleWriterImpl{wr: wr}
+}
+
+var nullBytes [4]byte
+
+func init() {
+	binary.BigEndian.PutUint32(nullBytes[:], 0)
+}
+
+func (twr *tupleWriterImpl) WriteNull() error {
+	return iohelp.WriteAll(twr.wr, nullBytes[:])
 }
 
 func (twr *tupleWriterImpl) write(t Tuple) error {
@@ -101,7 +113,11 @@ func (twr *tupleWriterImpl) CopyFrom(rd TupleReader) error {
 			return err
 		}
 
-		err = twr.write(t)
+		if t != nil {
+			err = twr.write(*t)
+		} else {
+			err = twr.WriteNull()
+		}
 
 		if err != nil {
 			return err
@@ -133,22 +149,27 @@ func NewTupleReader(nbf *NomsBinFormat, vrw ValueReadWriter, rd io.Reader) Tuple
 }
 
 // Read reades the next tuple from the TupleReader
-func (trd *tupleReaderImpl) Read() (Tuple, error) {
+func (trd *tupleReaderImpl) Read() (*Tuple, error) {
 	sizeBytes, err := iohelp.ReadNBytes(trd.rd, 4)
 	if err != nil {
-		return Tuple{}, err
+		return nil, err
 	}
 
+	// Nulls are encoded as 0 sized
 	size := binary.BigEndian.Uint32(sizeBytes)
+	if size == 0 {
+		return nil, nil
+	}
+
 	data, err := iohelp.ReadNBytes(trd.rd, int(size))
 	if err != nil {
 		if err == io.EOF {
-			return Tuple{}, errors.New("corrupt tuple stream")
+			return nil, errors.New("corrupt tuple stream")
 		}
-		return Tuple{}, err
+		return nil, err
 	}
 
-	return Tuple{valueImpl{trd.vrw, trd.nbf, data, nil}}, nil
+	return &Tuple{valueImpl{trd.vrw, trd.nbf, data, nil}}, nil
 }
 
 // Close should release any underlying resources
@@ -156,6 +177,55 @@ func (trd *tupleReaderImpl) Close(context.Context) error {
 	closer, ok := trd.rd.(io.Closer)
 	if ok {
 		return closer.Close()
+	}
+
+	return nil
+}
+
+type TupleReadingEditProvider struct {
+	rd         TupleReader
+	reachedEOF bool
+}
+
+func TupleReaderAsEditProvider(rd TupleReader) EditProvider {
+	return &TupleReadingEditProvider{rd: rd}
+}
+
+func (t TupleReadingEditProvider) Next() (*KVP, error) {
+	k, err := t.rd.Read()
+
+	if err == io.EOF {
+		t.reachedEOF = true
+		return nil, io.EOF
+	} else if err != nil {
+		return nil, err
+	}
+
+	v, err := t.rd.Read()
+
+	if err == io.EOF {
+		return nil, errors.New("corrupt tuple stream")
+	} else if err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return &KVP{Key: k}, nil
+	}
+
+	return &KVP{Key: k, Val: *v}, nil
+}
+
+// ReachedEOF returns true once all data is exhausted.  If ReachedEOF returns false that does not mean that there
+// is more data, only that io.EOF has not been returned previously.  If ReachedEOF returns true then all edits have
+// been read
+func (t TupleReadingEditProvider) ReachedEOF() bool {
+	return t.reachedEOF
+}
+
+func (t TupleReadingEditProvider) Close(ctx context.Context) error {
+	if closer, ok := t.rd.(Closer); ok {
+		return closer.Close(ctx)
 	}
 
 	return nil
