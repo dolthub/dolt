@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -38,7 +39,8 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	db := NewDatabase("dolt", dEnv.DbData())
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	db := NewDatabase("dolt", dEnv.DbData(), opts)
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	require.NoError(t, err)
 
@@ -93,8 +95,9 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	}
 
 	mergeableDb := &testMergeableIndexDb{
-		t:   t,
-		tbl: tbl,
+		t:        t,
+		tbl:      tbl,
+		editOpts: opts,
 	}
 	engine = sqle.NewDefault()
 	engine.AddDatabase(mergeableDb)
@@ -119,11 +122,17 @@ type testMergeableIndexDb struct {
 	t           *testing.T
 	tbl         *AlterableDoltTable
 	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
+	editOpts    editor.Options
+}
+
+func (db *testMergeableIndexDb) EditOptions() editor.Options {
+	return db.editOpts
 }
 
 func (db *testMergeableIndexDb) Name() string {
 	return "dolt"
 }
+
 func (db *testMergeableIndexDb) GetTableInsensitive(_ *sql.Context, tblName string) (sql.Table, bool, error) {
 	if strings.ToLower(tblName) == strings.ToLower(db.tbl.tableName) {
 		return &testMergeableIndexTable{

@@ -28,6 +28,7 @@ import (
 // send them in batches to be sorted.  Once all edits have been added the batches of edits can then
 // be merge sorted together.
 type AsyncSortedEdits struct {
+	editsAdded      int
 	sliceSize       int
 	sortConcurrency int
 	closed          bool
@@ -55,6 +56,7 @@ func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, 
 	group, groupCtx := errgroup.WithContext(context.TODO())
 	sortCh := make(chan types.KVPSort, asyncConcurrency*4)
 	return &AsyncSortedEdits{
+		editsAdded:      0,
 		sliceSize:       sliceSize,
 		sortConcurrency: sortConcurrency,
 		accumulating:    nil, // lazy alloc
@@ -67,8 +69,14 @@ func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, 
 	}
 }
 
+// EditsAdded returns the number of edits that have been added to this EditAccumulator
+func (ase *AsyncSortedEdits) EditsAdded() int {
+	return ase.editsAdded
+}
+
 // AddEdit adds an edit. Not thread safe
 func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
+	ase.editsAdded++
 	if ase.accumulating == nil {
 		// TODO: buffer pool
 		ase.accumulating = make([]types.KVP, 0, ase.sliceSize)

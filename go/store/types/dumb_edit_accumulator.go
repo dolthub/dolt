@@ -34,6 +34,11 @@ func NewDumbEditAccumulator(nbf *NomsBinFormat) EditAccumulator {
 	return &DumbEditAccumulator{nbf: nbf}
 }
 
+// EditsAdded returns the number of edits that have been added to this EditAccumulator
+func (dumb *DumbEditAccumulator) EditsAdded() int {
+	return len(dumb.edits)
+}
+
 // AddEdit adds an edit to the list of edits
 func (dumb *DumbEditAccumulator) AddEdit(k LesserValuable, v Valuable) {
 	dumb.edits = append(dumb.edits, KVP{k, v})

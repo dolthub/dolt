@@ -17,18 +17,22 @@ package sqle
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // UserSpaceDatabase in an implementation of sql.Database for root values. Does not expose any of the internal dolt tables.
 type UserSpaceDatabase struct {
 	*doltdb.RootValue
+
+	editOpts editor.Options
 }
 
 var _ SqlDatabase = (*UserSpaceDatabase)(nil)
 
-func NewUserSpaceDatabase(root *doltdb.RootValue) *UserSpaceDatabase {
-	return &UserSpaceDatabase{RootValue: root}
+func NewUserSpaceDatabase(root *doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
+	return &UserSpaceDatabase{RootValue: root, editOpts: editOpts}
 }
 
 func (db *UserSpaceDatabase) Name() string {
@@ -50,7 +54,7 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 	if err != nil {
 		return nil, false, err
 	}
-	dt := NewDoltTable(tableName, sch, table, db, false)
+	dt := NewDoltTable(tableName, sch, table, db, false, db.editOpts)
 	return dt, true, nil
 }
 

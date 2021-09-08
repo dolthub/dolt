@@ -21,11 +21,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
@@ -156,7 +156,8 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMov
 	case JsonFile:
 		return json.OpenJSONWriter(dl.Path, dEnv.FS, outSch)
 	case SqlFile:
-		return sqlexport.OpenSQLExportWriter(ctx, dl.Path, dEnv.FS, root, mvOpts.SrcName(), outSch)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		return sqlexport.OpenSQLExportWriter(ctx, dl.Path, dEnv.FS, root, mvOpts.SrcName(), outSch, opts)
 	}
 
 	panic("Invalid Data Format." + string(dl.Format))

@@ -82,7 +82,8 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, err
 	}
 
-	sess := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{})
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	sess := editor.CreateTableEditSession(updatedRoot, opts)
 	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, outSch)
 	if err != nil {
 		return nil, err
@@ -119,9 +120,9 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, err
 	}
 
-	sess := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
 	bulkTeaf := editor.NewBulkImportTEAFactory(tbl.Format(), dEnv.DoltDB.ValueReadWriter(), dEnv.TempTableFilesDir())
-	tableEditor, err := sess.GetTableEditorWithTEAFactory(ctx, dl.Name, tblSch, bulkTeaf)
+	sess := editor.CreateTableEditSession(root, editor.Options{Deaf: bulkTeaf})
+	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +163,8 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 		return nil, err
 	}
 
-	sess := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{})
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	sess := editor.CreateTableEditSession(updatedRoot, opts)
 	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err

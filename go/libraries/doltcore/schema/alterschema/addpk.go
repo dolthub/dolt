@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName string, nbf *types.NomsBinFormat, columns []sql.IndexColumn) (*doltdb.Table, error) {
+func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName string, nbf *types.NomsBinFormat, columns []sql.IndexColumn, opts editor.Options) (*doltdb.Table, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
 	// Rebuild all of the indexes now that the primary key has been changed
-	return insertKeyedData(ctx, nbf, table, newSchema, tableName)
+	return insertKeyedData(ctx, nbf, table, newSchema, tableName, opts)
 }
 
 func pkInCorrectOrder(sch schema.Schema, cols []sql.IndexColumn) bool {
@@ -101,7 +101,7 @@ func rearrangeSchema(sch schema.Schema, cols []sql.IndexColumn) (schema.Schema, 
 	return schema.SchemaFromCols(newPks.AppendColl(sch.GetNonPKCols()))
 }
 
-func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *doltdb.Table, newSchema schema.Schema, name string) (*doltdb.Table, error) {
+func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *doltdb.Table, newSchema schema.Schema, name string, opts editor.Options) (*doltdb.Table, error) {
 	marshalledSchema, err := encoding.MarshalSchemaAsNomsValue(context.Background(), oldTable.ValueReadWriter(), newSchema)
 	if err != nil {
 		return nil, err
@@ -118,13 +118,13 @@ func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *do
 		return nil, err
 	}
 
-	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
+	newTable, err = editor.RebuildAllIndexes(ctx, newTable, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create the table editor and insert all of the new data into it
-	tableEditor, err := editor.NewTableEditor(ctx, newTable, newSchema, name)
+	tableEditor, err := editor.NewTableEditor(ctx, newTable, newSchema, name, opts)
 	if err != nil {
 		return nil, err
 	}

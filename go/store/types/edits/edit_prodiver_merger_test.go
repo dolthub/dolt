@@ -205,7 +205,7 @@ func TestTupleStreamMerger(t *testing.T) {
 	}
 }
 
-func testMergeOrder(t *testing.T, ctx context.Context, nbf *types.NomsBinFormat, merger *EPMerger) []*types.KVP {
+func testMergeOrder(t *testing.T, ctx context.Context, nbf *types.NomsBinFormat, merger types.EditProvider) []*types.KVP {
 	curr, err := merger.Next()
 	require.NoError(t, err)
 	require.NotNil(t, curr)

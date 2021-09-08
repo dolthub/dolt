@@ -52,6 +52,11 @@ func NewDiskBackedEditAcc(ctx context.Context, nbf *types.NomsBinFormat, vrw typ
 	}
 }
 
+// EditsAdded returns the number of edits that have been added to this EditAccumulator
+func (dbea *DiskBackedEditAcc) EditsAdded() int {
+	return int(dbea.accumulated)
+}
+
 // AddEdit adds an edit. Not thread safe
 func (dbea *DiskBackedEditAcc) AddEdit(key types.LesserValuable, val types.Valuable) {
 	dbea.backing.AddEdit(key, val)

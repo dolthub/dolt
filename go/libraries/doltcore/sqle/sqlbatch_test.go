@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -64,7 +65,8 @@ func TestSqlBatchInserts(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	db := NewDatabase("dolt", dEnv.DbData())
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	db := NewDatabase("dolt", dEnv.DbData(), opts)
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
@@ -153,7 +155,8 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	db := NewDatabase("dolt", dEnv.DbData())
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	db := NewDatabase("dolt", dEnv.DbData(), opts)
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
@@ -192,7 +195,8 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	db := NewDatabase("dolt", dEnv.DbData())
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	db := NewDatabase("dolt", dEnv.DbData(), opts)
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, ctx, db, root)
 	require.NoError(t, err)
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()

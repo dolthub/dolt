@@ -26,10 +26,10 @@ import (
 
 var emptyTpl = types.EmptyTuple(types.Format_Default)
 
-func newTestTEAF() *teaFactoryImpl {
+func newTestTEAF() *dbEaFactory {
 	dir := os.TempDir()
 
-	return &teaFactoryImpl{
+	return &dbEaFactory{
 		directory: dir,
 		vrw:       types.NewMemoryValueStore(),
 	}
@@ -70,7 +70,7 @@ func TestGet(t *testing.T) {
 	teaf := newTestTEAF()
 	m, err := types.NewMap(ctx, teaf.vrw)
 	require.NoError(t, err)
-	tea := teaf.NewTEA(ctx, m).(*tableEditAccumulatorImpl)
+	tea := teaf.NewTableEA(ctx, m).(*tableEditAccumulatorImpl)
 
 	key1 := newTuple(t, types.Int(1))
 	key2 := newTuple(t, types.Int(2))
