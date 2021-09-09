@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"os"
 	"strings"
 	"sync"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 const (
@@ -96,7 +98,19 @@ func (p DoltDatabaseProvider) AllDatabases() (all []sql.Database) {
 }
 
 func (p DoltDatabaseProvider) CreateDatabase(dbName string) {
-	panic("unimplemented")
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	mem, err := env.NewMemoryDbData(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	opts := editor.Options{
+		Deaf: editor.NewDbEaFactory(os.TempDir(), mem.Ddb.ValueReadWriter()),
+	}
+
+	db := NewDatabase(dbName, mem, opts)
+	p.databases[strings.ToLower(db.Name())] = db
 }
 
 func (p DoltDatabaseProvider) DropDatabase(name string) {
