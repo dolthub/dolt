@@ -8,7 +8,7 @@ setup() {
     mkdir remotes-$$
     mkdir remotes-$$/empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
-    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv --http-port 1234 --grpc-port 50051 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     remotesrv_pid=$!
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"

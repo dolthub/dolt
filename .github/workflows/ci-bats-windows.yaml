@@ -5,63 +5,16 @@ on:
     branches: [ master ]
 
 jobs:
-  get-files:
-    name: Get File list
-    runs-on: ubuntu-18.04
-    outputs:
-      files: ${{ steps.get_file_list.outputs.files }}
-    steps:
-      - uses: actions/checkout@v2
-      - name: Get file list
-        id: get_file_list
-        run: |
-          files=$(ls *.bats)
-
-          SAVEIFS=$IFS
-          IFS=$'\n'
-
-          file_arr=($files)
-          echo "::set-output name=files::${file_arr[@]}"
-
-          IFS=$SAVEIFS
-        working-directory: ./integration-tests/bats
-  format-files-output:
-    name: Format files output
-    runs-on: ubuntu-18.04
-    needs: get-files
-    outputs:
-      files: ${{ steps.format_files.outputs.files }}
-    steps:
-      - name: Format
-        id: format_files
-        uses: actions/github-script@v4
-        env:
-          FILES: ${{ needs.get-files.outputs.files }}
-        with:
-          debug: true
-          github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
-          script: |
-            try {
-              const { FILES } = process.env;
-              const fileList = FILES.split(" ");
-              core.setOutput("files", JSON.stringify(fileList));
-              process.exit(0);
-            } catch(err) {
-              console.log("Error:", err);
-              process.exit(1);
-            }
-  test-per-file:
-    name: Test file
-    needs: format-files-output
+  test:
+    name: Bats tests
     defaults:
       run:
         shell: bash
     runs-on: windows-2019
+    strategy:
+      fail-fast: true
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
-    strategy:
-      matrix:
-        file: ${{ fromJson(needs.format-files-output.outputs.files) }}
     steps:
       - name: Conditionally Set ENV VARS for AWS tests
         run: |
@@ -84,7 +37,7 @@ jobs:
       - name: Setup Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.15
+          go-version: ^1.17
         id: go
       - name: Setup Python 3.x
         uses: actions/setup-python@v2
@@ -126,9 +79,9 @@ jobs:
         run: |
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
-      - name: Test file
-        run: bats --tap ${{ matrix.file }}
-        working-directory: ./integration-tests/bats
+      - name: Test all Windows
+        run: go run .
+        working-directory: ./integration-tests/bats/runner
         env:
           IS_WINDOWS: true
           WINDOWS_BASE_DIR: "/d/a"

@@ -39,7 +39,7 @@ jobs:
       - name: Setup Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.15
+          go-version: ^1.17
         id: go
       - name: Setup Python 3.x
         uses: actions/setup-python@v2
@@ -80,5 +80,5 @@ jobs:
         run: expect -v
       - name: Test all Unix
         run: |
-          bats --tap .
-        working-directory: ./integration-tests/bats
+          go run .
+        working-directory: ./integration-tests/bats/runner

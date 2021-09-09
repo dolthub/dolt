@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
-REMOTE=http://localhost:50051/test-org/test-repo
+REMOTE=http://localhost:50052/test-org/test-repo
 
 remotesrv_pid=
 setup() {
@@ -9,7 +9,7 @@ setup() {
     cd $BATS_TMPDIR
     mkdir remotes-$$
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
-    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv --http-port 1235 --grpc-port 50052 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     remotesrv_pid=$!
     cd dolt-repo-$$
     dolt remote add test-remote $REMOTE

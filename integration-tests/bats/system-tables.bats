@@ -9,7 +9,7 @@ setup() {
     mkdir remotes-$$
     mkdir remotes-$$/empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
-    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv --http-port 1237 --grpc-port 50054 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     remotesrv_pid=$!
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
@@ -453,7 +453,7 @@ teardown() {
     skip "This functionality needs to be implemented"
 
     # Create a remote with a test branch
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50054/test-org/test-repo
     run dolt push test-remote master
     dolt checkout -b test-branch
     dolt sql <<SQL
@@ -474,7 +474,7 @@ SQL
 
     # Clone the branch
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:50054/test-org/test-repo
     [ "$status" -eq 0 ]
 
     cd test-repo

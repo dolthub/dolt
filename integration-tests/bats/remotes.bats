@@ -8,7 +8,7 @@ setup() {
     mkdir remotes-$$
     mkdir remotes-$$/empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
-    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv --http-port 1236 --grpc-port 50053 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     remotesrv_pid=$!
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
@@ -25,7 +25,7 @@ teardown() {
 }
 
 @test "remotes: add a remote using dolt remote" {
-    run dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    run dolt remote add test-remote http://localhost:50053/test-org/test-repo
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt remote -v
@@ -37,7 +37,7 @@ teardown() {
 }
 
 @test "remotes: remove a remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     run dolt remote remove test-remote
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -50,7 +50,7 @@ teardown() {
 }
 
 @test "remotes: push and pull an unknown remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     run dolt push poop master
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
@@ -60,7 +60,7 @@ teardown() {
 }
 
 @test "remotes: push with only one argument" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     run dolt push test-remote
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: The current branch master has no upstream branch." ]] || false
@@ -69,7 +69,7 @@ teardown() {
 }
 
 @test "remotes: push and pull master branch from a remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     run dolt push test-remote master
     [ "$status" -eq 0 ]
     [ -d "$BATS_TMPDIR/remotes-$$/test-org/test-repo" ]
@@ -79,7 +79,7 @@ teardown() {
 }
 
 @test "remotes: push and pull non-master branch from remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt checkout -b test-branch
     run dolt push test-remote test-branch
     [ "$status" -eq 0 ]
@@ -89,7 +89,7 @@ teardown() {
 }
 
 @test "remotes: push and pull from non-master branch and use --set-upstream" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt checkout -b test-branch
     run dolt push --set-upstream test-remote test-branch
     [ "$status" -eq 0 ]
@@ -102,14 +102,14 @@ teardown() {
 }
 
 @test "remotes: push and pull with docs from remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     echo "license-text" > LICENSE.md
     echo "readme-text" > README.md
     dolt add .
     dolt commit -m "test doc commit"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:50053/test-org/test-repo
     [ "$status" -eq 0 ]
 
     cd test-repo
@@ -139,7 +139,7 @@ teardown() {
 }
 
 @test "remotes: push and pull tags to/from remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO  test VALUES (1),(2),(3);
@@ -147,7 +147,7 @@ SQL
     dolt add . && dolt commit -m "added table test"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:50053/test-org/test-repo
     [ "$status" -eq 0 ]
 
     cd ../
@@ -163,7 +163,7 @@ SQL
 }
 
 @test "remotes: tags are only pulled if their commit is pulled" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO  test VALUES (1),(2),(3);
@@ -171,7 +171,7 @@ SQL
     dolt add . && dolt commit -m "added table test"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:50053/test-org/test-repo
     [ "$status" -eq 0 ]
 
      cd ../
@@ -201,7 +201,7 @@ SQL
 }
 
 @test "remotes: clone a remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -217,9 +217,9 @@ SQL
     dolt commit -m "test commit"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:50053/test-org/test-repo
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ "$output" =~ "cloning http://localhost:50053/test-org/test-repo" ]] || false
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -236,7 +236,7 @@ SQL
 
 @test "remotes: read tables test" {
     # create table t1 and commit
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE t1 (
   pk BIGINT NOT NULL,
@@ -271,7 +271,7 @@ SQL
     cd "dolt-repo-clones"
 
     # Create a read latest tables and verify we have all the tables
-    dolt read-tables http://localhost:50051/test-org/test-repo master
+    dolt read-tables http://localhost:50053/test-org/test-repo master
     cd test-repo
     run dolt ls
     [ "$status" -eq 0 ]
@@ -281,7 +281,7 @@ SQL
     cd ..
 
     # Read specific table from latest with a specified directory
-    dolt read-tables --dir clone_t1_t2 http://localhost:50051/test-org/test-repo master t1 t2
+    dolt read-tables --dir clone_t1_t2 http://localhost:50053/test-org/test-repo master t1 t2
     cd clone_t1_t2
     run dolt ls
     [ "$status" -eq 0 ]
@@ -291,7 +291,7 @@ SQL
     cd ..
 
     # Read tables from parent of parent of the tip of master. Should only have table t1
-    dolt read-tables --dir clone_t1 http://localhost:50051/test-org/test-repo master~2
+    dolt read-tables --dir clone_t1 http://localhost:50053/test-org/test-repo master~2
     cd clone_t1
     run dolt ls
     [ "$status" -eq 0 ]
@@ -302,16 +302,16 @@ SQL
 }
 
 @test "remotes: clone a remote with docs" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     echo "license-text" > LICENSE.md
     echo "readme-text" > README.md
     dolt add .
     dolt commit -m "test doc commit"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:50053/test-org/test-repo
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ "$output" =~ "cloning http://localhost:50053/test-org/test-repo" ]] || false
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -333,23 +333,23 @@ SQL
 }
 
 @test "remotes: clone an empty remote" {
-    run dolt clone http://localhost:50051/test-org/empty
+    run dolt clone http://localhost:50053/test-org/empty
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: clone failed" ]] || false
     [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
 }
 
 @test "remotes: clone a non-existent remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/foo/bar
+    run dolt clone http://localhost:50053/foo/bar
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: clone failed" ]] || false
     [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
 }
 
 @test "remotes: clone a different branch than master" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt checkout -b test-branch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -366,9 +366,9 @@ SQL
     dolt commit -m "test commit"
     dolt push test-remote test-branch
     cd "dolt-repo-clones"
-    run dolt clone -b test-branch http://localhost:50051/test-org/test-repo
+    run dolt clone -b test-branch http://localhost:50053/test-org/test-repo
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ "$output" =~ "cloning http://localhost:50053/test-org/test-repo" ]] || false
     cd test-repo
     run dolt branch
     [ "$status" -eq 0 ]
@@ -380,7 +380,7 @@ SQL
 }
 
 @test "remotes: call a clone's remote something other than origin" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -396,9 +396,9 @@ SQL
     dolt commit -m "test commit"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    run dolt clone --remote test-remote http://localhost:50051/test-org/test-repo
+    run dolt clone --remote test-remote http://localhost:50053/test-org/test-repo
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ "$output" =~ "cloning http://localhost:50053/test-org/test-repo" ]] || false
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -410,7 +410,7 @@ SQL
 }
 
 @test "remotes: dolt fetch" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt push test-remote master
     run dolt fetch test-remote
     [ "$status" -eq 0 ]
@@ -435,7 +435,7 @@ SQL
     echo "initial-readme" > README.md
     dolt add .
     dolt commit -m "initial doc commit"
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt push test-remote master
     run dolt fetch test-remote
     [ "$status" -eq 0 ]
@@ -449,7 +449,7 @@ SQL
 
     # Clone the initial docs/repo into dolt-repo-clones/test-repo
     cd "dolt-repo-clones"
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:50053/test-org/test-repo
     cd test-repo
     run cat LICENSE.md
     [ "$status" -eq 0 ]
@@ -482,11 +482,11 @@ SQL
 }
 
 @test "remotes: dolt merge with origin/master syntax." {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt push test-remote master
     dolt fetch test-remote
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd ..
     dolt sql <<SQL
 CREATE TABLE test (
@@ -521,10 +521,10 @@ SQL
 }
 
 @test "remotes: dolt fetch and merge with remotes/origin/master syntax" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd ..
     dolt sql <<SQL
 CREATE TABLE test (
@@ -553,10 +553,10 @@ SQL
 }
 
 @test "remotes: try to push a remote that is behind tip" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd ..
     dolt sql <<SQL
 CREATE TABLE test (
@@ -583,10 +583,10 @@ SQL
 }
 
 @test "remotes: generate a merge with no conflict with a remote branch" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd ..
     dolt sql <<SQL
 CREATE TABLE test (
@@ -622,7 +622,7 @@ SQL
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -638,7 +638,7 @@ SQL
     dolt commit -m "created table"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd ..
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
@@ -662,7 +662,7 @@ SQL
 }
 
 @test "remotes: clone sets your current branch appropriately" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -681,7 +681,7 @@ SQL
     dolt push test-remote aaa
     dolt push test-remote zzz
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd test-repo
 
     # master hasn't been pushed so expect zzz to be the current branch and the string master should not be present
@@ -692,7 +692,7 @@ SQL
     cd ../..
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo test-repo2
+    dolt clone http://localhost:50053/test-org/test-repo test-repo2
     cd test-repo2
 
     # master pushed so it should be the current branch.
@@ -702,7 +702,7 @@ SQL
 }
 
 @test "remotes: dolt pull onto a dirty working set fails" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -718,7 +718,7 @@ SQL
     dolt commit -m "created table"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd ..
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
@@ -734,11 +734,11 @@ SQL
 }
 
 @test "remotes: force push to master" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt push test-remote master
 
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd ..
 
     dolt sql <<SQL
@@ -780,11 +780,11 @@ SQL
 
 
 @test "remotes: force fetch from master" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt push test-remote master
 
     cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd ..
 
     dolt sql <<SQL
@@ -829,7 +829,7 @@ SQL
 }
 
 @test "remotes: DOLT_CHECKOUT to checkout to a remote branch." {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50053/test-org/test-repo
     dolt sql <<SQL
     CREATE TABLE test (
       pk BIGINT NOT NULL,
@@ -844,9 +844,9 @@ SQL
     dolt push test-remote test-branch
     cd "dolt-repo-clones"
 
-    run dolt clone http://localhost:50051/test-org/test-repo
+    run dolt clone http://localhost:50053/test-org/test-repo
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    [[ "$output" =~ "cloning http://localhost:50053/test-org/test-repo" ]] || false
     cd test-repo
 
     # Checkout with DOLT_CHECKOUT and confirm the table has the row added in the remote
@@ -860,7 +860,7 @@ SQL
 }
 
 create_master_remote_branch() {
-    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add origin http://localhost:50053/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
     dolt add .
     dolt commit -m 'create test table.'
@@ -884,7 +884,7 @@ create_three_remote_branches() {
 @test "remotes: clone creates remotes refs for all remote branches" {
     create_three_remote_branches
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd test-repo
     run dolt branch -a
     [ "$status" -eq 0 ]
@@ -900,7 +900,7 @@ create_three_remote_branches() {
     create_master_remote_branch
 
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd test-repo
     dolt branch -a
     run dolt branch -a
@@ -925,7 +925,7 @@ setup_ref_test() {
     create_master_remote_branch
 
     cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
+    dolt clone http://localhost:50053/test-org/test-repo
     cd test-repo
 }
 

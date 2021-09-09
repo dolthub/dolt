@@ -81,6 +81,11 @@ func main() {
 }
 
 func GetTestFileNames() ([]string, error) {
+	if false {
+		return []string{
+			"../remotes.bats",
+		}, nil
+	}
 	dir, err := os.Open(*Dir)
 	if err != nil {
 		return nil, err
@@ -106,7 +111,7 @@ func GetTestFileNames() ([]string, error) {
 }
 
 func RunTestFile(ctx context.Context, name string) error {
-	c := exec.CommandContext(ctx, "bats", name)
+	c := exec.CommandContext(ctx, "bats", "--tap", name)
 	o, err := c.CombinedOutput()
 	fmt.Println(name)
 	fmt.Println(string(o))
