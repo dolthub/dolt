@@ -94,7 +94,7 @@ func TestHedgerObeysMaxHedges(t *testing.T) {
 		h := NewHedger(int64(max), NewMinStrategy(1*time.Millisecond, nil))
 		cnt := int32(0)
 		wg := &sync.WaitGroup{}
-		wg.Add(max+4)
+		wg.Add(max + 4)
 		h.after = func(d time.Duration) <-chan time.Time {
 			wg.Done()
 			return time.After(d)
@@ -102,10 +102,10 @@ func TestHedgerObeysMaxHedges(t *testing.T) {
 		i, err := h.Do(context.Background(), Work{
 			Work: func(ctx context.Context, n int) (interface{}, error) {
 				cur := atomic.AddInt32(&cnt, 1)
-				if cur == int32(max) + 1 {
+				if cur == int32(max)+1 {
 					wg.Wait()
 					return 1, nil
-				} else if cur > int32(max) + 1 {
+				} else if cur > int32(max)+1 {
 					panic("should not hedge more than max")
 				} else {
 					<-ctx.Done()
