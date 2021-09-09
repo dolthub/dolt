@@ -158,7 +158,7 @@ teardown() {
     skip "todo: support dolt pull --noff (cli too)"
 }
 
-@test "sql-pull: empty branch does not panic" {
+@test "sql-pull: empty remote name does not panic" {
     cd tmp2
     dolt sql -q "select dolt_pull('')"
 }
