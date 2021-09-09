@@ -1469,12 +1469,12 @@ func newSqlEngine(
 	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, username, email, dbStates...)
 
 	return &sqlEngine{
-		dbs: nameToDB,
-		mrEnv: mrEnv,
-		sess: sess,
+		dbs:            nameToDB,
+		mrEnv:          mrEnv,
+		sess:           sess,
 		contextFactory: newSqlContext(sess, cat),
-		engine: engine,
-		resultFormat: format,
+		engine:         engine,
+		resultFormat:   format,
 	}, nil
 }
 
