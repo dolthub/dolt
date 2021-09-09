@@ -128,9 +128,9 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 
 	dbs := commands.CollectDBs(mrEnv)
-	pro := dsqle.NewDoltDatabaseProvider(dbs...)
-	cat := sql.NewCatalogWithDbProvider(pro)
-	cat.AddDatabase(information_schema.NewInformationSchemaDatabase(cat))
+	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
+	pro := dsqle.NewDoltDatabaseProvider(all...)
+	cat := sql.NewCatalog(pro)
 
 	a := analyzer.NewBuilder(cat).WithParallelism(serverConfig.QueryParallelism()).Build()
 	sqlEngine := sqle.New(cat, a, nil)
@@ -366,4 +366,12 @@ func getDbStateForDEnv(ctx context.Context, db sql.Database, dEnv *env.DoltEnv) 
 		DbData:     dEnv.DbData(),
 		Remotes:    dEnv.RepoState.Remotes,
 	}, nil
+}
+
+func dsqleDBsAsSqlDBs(dbs []dsqle.Database) []sql.Database {
+	sqlDbs := make([]sql.Database, 0, len(dbs))
+	for _, db := range dbs {
+		sqlDbs = append(sqlDbs, db)
+	}
+	return sqlDbs
 }

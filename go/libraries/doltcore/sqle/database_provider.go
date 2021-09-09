@@ -40,7 +40,7 @@ var _ sql.DatabaseProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
 var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
-func NewDoltDatabaseProvider(databases ...Database) DoltDatabaseProvider {
+func NewDoltDatabaseProvider(databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
@@ -95,9 +95,11 @@ func (p DoltDatabaseProvider) AllDatabases() (all []sql.Database) {
 	return
 }
 
-func (p DoltDatabaseProvider) AddDatabase(db sql.Database) {
+func (p DoltDatabaseProvider) CreateDatabase(dbName string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	var db sql.Database = nil
 
 	p.databases[strings.ToLower(db.Name())] = db
 }

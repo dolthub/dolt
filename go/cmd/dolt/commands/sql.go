@@ -1376,8 +1376,12 @@ func newSqlEngine(
 	}
 
 	parallelism := runtime.GOMAXPROCS(0)
-	pro := dsqle.NewDoltDatabaseProvider(dbs...)
-	cat := sql.NewCatalogWithDbProvider(pro)
+
+	infoDB := information_schema.NewInformationSchemaDatabase()
+	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
+
+	pro := dsqle.NewDoltDatabaseProvider(all...)
+	cat := sql.NewCatalog(pro)
 
 	err := cat.Register(dfunctions.DoltFunctions...)
 	if err != nil {
@@ -1385,7 +1389,6 @@ func newSqlEngine(
 	}
 
 	engine := sqle.New(cat, analyzer.NewBuilder(cat).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
-	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -1398,7 +1401,6 @@ func newSqlEngine(
 	var dbStates []dsess.InitialDbState
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
-		engine.AddDatabase(db)
 
 		// TODO: this doesn't consider the roots provided as a param, which may not be the HEAD of the branch
 		//  To fix this, we need to pass a commit here as a separate param, and install a read-only database on it
@@ -1465,6 +1467,14 @@ func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	}
 
 	return dsqlDBs
+}
+
+func dsqleDBsAsSqlDBs(dbs []dsqle.Database) []sql.Database {
+	sqlDbs := make([]sql.Database, 0, len(dbs))
+	for _, db := range dbs {
+		sqlDbs = append(sqlDbs, db)
+	}
+	return sqlDbs
 }
 
 func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) (dsess.InitialDbState, error) {
