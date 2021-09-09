@@ -19,7 +19,7 @@ SQL
     cat <<SQL > 1pk1col-char-sch.sql
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
-  c char(5) COMMENT 'tag:1',
+  c CHAR(5) COMMENT 'tag:1',
   PRIMARY KEY (pk)
 );
 SQL
