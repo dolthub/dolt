@@ -261,6 +261,8 @@ func intTypeConverter(ctx context.Context, src *intType, destTi TypeInfo) (tc Ty
 	switch dest := destTi.(type) {
 	case *bitType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *blobStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *datetimeType:

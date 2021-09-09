@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/opentracing/opentracing-go"
@@ -51,7 +52,7 @@ import (
 )
 
 const (
-	Version = "0.27.2"
+	Version = "0.28.2"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -76,6 +77,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.PullCmd{},
 	commands.FetchCmd{},
 	commands.CloneCmd{},
+	commands.RevertCmd{},
 	credcmds.Commands,
 	commands.LoginCmd{},
 	commands.VersionCmd{VersionStr: Version},
@@ -114,20 +116,7 @@ const traceProf = "trace"
 
 const featureVersionFlag = "--feature-version"
 
-func ResetColorHandler() {
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		cli.CloseOutput()
-		color.Unset()
-		os.Exit(0)
-	}()
-}
-
 func main() {
-	ResetColorHandler()
-
 	os.Exit(runMain())
 }
 
@@ -143,16 +132,16 @@ func runMain() int {
 				switch args[1] {
 				case cpuProf:
 					cli.Println("cpu profiling enabled.")
-					defer profile.Start(profile.CPUProfile).Stop()
+					defer profile.Start(profile.CPUProfile, profile.NoShutdownHook).Stop()
 				case memProf:
 					cli.Println("mem profiling enabled.")
-					defer profile.Start(profile.MemProfile).Stop()
+					defer profile.Start(profile.MemProfile, profile.NoShutdownHook).Stop()
 				case blockingProf:
 					cli.Println("block profiling enabled")
-					defer profile.Start(profile.BlockProfile).Stop()
+					defer profile.Start(profile.BlockProfile, profile.NoShutdownHook).Stop()
 				case traceProf:
 					cli.Println("trace profiling enabled")
-					defer profile.Start(profile.TraceProfile).Stop()
+					defer profile.Start(profile.TraceProfile, profile.NoShutdownHook).Stop()
 				default:
 					panic("Unexpected prof flag: " + args[1])
 				}
@@ -237,7 +226,14 @@ func runMain() int {
 
 	warnIfMaxFilesTooLow()
 
-	ctx := context.Background()
+	ctx, cancelF := context.WithCancel(context.Background())
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		cancelF()
+	}()
+
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
 	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {
@@ -293,10 +289,12 @@ func runMain() int {
 
 	defer tempfiles.MovableTempFileProvider.Clean()
 
+	start := time.Now()
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
+		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
 	}
 
@@ -320,6 +318,7 @@ func commandNeedsMigrationCheck(args []string) bool {
 	for _, cmd := range []cli.Command{
 		commands.ResetCmd{},
 		commands.CommitCmd{},
+		commands.RevertCmd{},
 		commands.SqlCmd{},
 		sqlserver.SqlServerCmd{},
 		sqlserver.SqlClientCmd{},

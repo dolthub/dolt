@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -58,6 +59,17 @@ type Database struct {
 	rsr  env.RepoStateReader
 	rsw  env.RepoStateWriter
 	drw  env.DocsReadWriter
+
+	// todo: needs a major refactor to
+	//   correctly handle persisted sequences
+	//   that must be coordinated across txs
+	gs globalstate.GlobalState
+
+	editOpts editor.Options
+}
+
+func (db Database) EditOptions() editor.Options {
+	return db.editOpts
 }
 
 var _ sql.Database = Database{}
@@ -116,13 +128,15 @@ var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, dbData env.DbData) Database {
+func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Database {
 	return Database{
-		name: name,
-		ddb:  dbData.Ddb,
-		rsr:  dbData.Rsr,
-		rsw:  dbData.Rsw,
-		drw:  dbData.Drw,
+		name:     name,
+		ddb:      dbData.Ddb,
+		rsr:      dbData.Rsr,
+		rsw:      dbData.Rsw,
+		drw:      dbData.Drw,
+		gs:       globalstate.NewGlobalStateStore(),
+		editOpts: editOpts,
 	}
 }
 
@@ -253,12 +267,14 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.BranchesTableName:
 		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
+	case doltdb.RemotesTableName:
+		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
 	case doltdb.CommitsTableName:
 		dt, found = dtables.NewCommitsTable(ctx, db.ddb), true
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name), db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name, map[string]env.Remote{}), db.drw), true
 	}
 	if found {
 		return dt, found, nil
@@ -415,7 +431,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 
 	var table sql.Table
 
-	readonlyTable := NewDoltTable(tableName, sch, tbl, db, temporary)
+	readonlyTable := NewDoltTable(tableName, sch, tbl, db, temporary, db.editOpts)
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {
@@ -553,7 +569,27 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
+	err = db.dropTableFromAiTracker(ctx, tableName)
+	if err != nil {
+		return err
+	}
+
 	return db.SetRoot(ctx, newRoot)
+}
+
+// dropTableFromAiTracker grabs the auto increment tracker and removes the table named tableName from it.
+func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) error {
+	sess := dsess.DSessFromSess(ctx.Session)
+	ws, err := sess.WorkingSet(ctx, db.Name())
+
+	if err != nil {
+		return err
+	}
+
+	ait := db.gs.GetAutoIncrementTracker(ws.Ref())
+	ait.DropTable(tableName)
+
+	return nil
 }
 
 // CreateTable creates a table with the name and schema given.

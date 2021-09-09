@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -53,6 +54,13 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	dbData, ok := sess.GetDbData(ctx, dbName)
 
 	if !ok {
+		return noConflicts, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return noConflicts, err
+	} else if !ok {
 		return noConflicts, fmt.Errorf("Could not load database %s", dbName)
 	}
 
@@ -182,7 +190,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		}
 	}
 
-	ws, err = executeMerge(ctx, apr.Contains(cli.SquashParam), headCommit, mergeCommit, ws)
+	ws, err = executeMerge(ctx, apr.Contains(cli.SquashParam), headCommit, mergeCommit, ws, dbState.EditSession.Opts)
 	if err == doltdb.ErrUnresolvedConflicts {
 		// if there are unresolved conflicts, write the resulting working set back to the session and return an
 		// error message
@@ -222,8 +230,8 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	return workingSet, nil
 }
 
-func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
-	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm)
+func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *doltdb.WorkingSet, opts editor.Options) (*doltdb.WorkingSet, error) {
+	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm, opts)
 
 	if err != nil {
 		switch err {
@@ -232,7 +240,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *do
 		case merge.ErrFastForward:
 			panic("fast forward merge")
 		default:
-			return nil, errors.New("Bad merge")
+			return nil, err
 		}
 	}
 

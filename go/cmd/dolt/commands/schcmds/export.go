@@ -20,14 +20,14 @@ import (
 	"io"
 	"os"
 
-	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -130,7 +130,8 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	}
 
 	for _, tn := range tablesToExport {
-		verr := exportTblSchema(ctx, tn, root, wr)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		verr := exportTblSchema(ctx, tn, root, wr, opts)
 		if verr != nil {
 			return verr
 		}
@@ -139,8 +140,8 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	return nil
 }
 
-func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer) errhand.VerboseError {
-	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root))
+func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer, opts editor.Options) errhand.VerboseError {
+	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
 	stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, tblName)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)

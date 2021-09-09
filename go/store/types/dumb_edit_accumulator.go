@@ -14,18 +14,29 @@
 
 package types
 
+import (
+	"context"
+	"io"
+)
+
 // DumbEditAccumulator is a simple EditAccumulator and EditProvider implementation that allows for more complex
 // implementations to be put into other packages. It is fine for small edits, and tests, but edits.AsyncSortedEdits
 // performs much better for large amounts of data
 type DumbEditAccumulator struct {
-	pos   int
-	edits KVPSlice
-	nbf   *NomsBinFormat
+	pos        int
+	reachedEOF bool
+	edits      KVPSlice
+	nbf        *NomsBinFormat
 }
 
 // NewDumbEditAccumulator is a factory method for creation of DumbEditAccumulators
 func NewDumbEditAccumulator(nbf *NomsBinFormat) EditAccumulator {
-	return &DumbEditAccumulator{0, nil, nbf}
+	return &DumbEditAccumulator{nbf: nbf}
+}
+
+// EditsAdded returns the number of edits that have been added to this EditAccumulator
+func (dumb *DumbEditAccumulator) EditsAdded() int {
+	return len(dumb.edits)
 }
 
 // AddEdit adds an edit to the list of edits
@@ -46,21 +57,27 @@ func (dumb *DumbEditAccumulator) FinishedEditing() (EditProvider, error) {
 }
 
 // Close satisfies the EditAccumulator interface
-func (dumb *DumbEditAccumulator) Close() {}
-
-// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
-// in key sorted order
-func (dumb *DumbEditAccumulator) Next() (*KVP, error) {
-	var curr *KVP
-	if dumb.pos < len(dumb.edits) {
-		curr = &dumb.edits[dumb.pos]
-		dumb.pos++
-	}
-
-	return curr, nil
+func (dumb *DumbEditAccumulator) Close(ctx context.Context) error {
+	return nil
 }
 
-// NumEdits returns the number of KVPs representing the edits that will be provided when calling next
-func (dumb *DumbEditAccumulator) NumEdits() int64 {
-	return int64(len(dumb.edits))
+// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
+// in key sorted order. Once all KVPs have been read io.EOF will be returned.
+func (dumb *DumbEditAccumulator) Next() (*KVP, error) {
+	if dumb.pos < len(dumb.edits) {
+		curr := &dumb.edits[dumb.pos]
+		dumb.pos++
+
+		return curr, nil
+	}
+
+	dumb.reachedEOF = true
+	return nil, io.EOF
+}
+
+// ReachedEOF returns true once all data is exhausted.  If ReachedEOF returns false that does not mean that there
+// is more data, only that io.EOF has not been returned previously.  If ReachedEOF returns true then all edits have
+// been read
+func (dumb *DumbEditAccumulator) ReachedEOF() bool {
+	return dumb.reachedEOF
 }

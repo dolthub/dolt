@@ -26,7 +26,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
@@ -172,7 +172,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 		delete(addedIndexesSet, strings.ToLower(index.Name()))
 	}
 	for _, addedIndex := range addedIndexesSet {
-		newIndexData, err := editor.RebuildIndex(ctx, updatedTbl, addedIndex)
+		newIndexData, err := editor.RebuildIndex(ctx, updatedTbl, addedIndex, sess.Opts)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -828,7 +828,7 @@ func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *dol
 	return resultTbl.SetAutoIncrementValue(autoVal)
 }
 
-func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
+func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*doltdb.RootValue, map[string]*MergeStats, error) {
 	ancCommit, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
 	if err != nil {
 		return nil, nil, err
@@ -849,10 +849,10 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit) (*dol
 		return nil, nil, err
 	}
 
-	return MergeRoots(ctx, ourRoot, theirRoot, ancRoot)
+	return MergeRoots(ctx, ourRoot, theirRoot, ancRoot, opts)
 }
 
-func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootValue) (*doltdb.RootValue, map[string]*MergeStats, error) {
+func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootValue, opts editor.Options) (*doltdb.RootValue, map[string]*MergeStats, error) {
 	tblNames, err := doltdb.UnionTableNames(ctx, ourRoot, theirRoot)
 
 	if err != nil {
@@ -862,9 +862,11 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	tblToStats := make(map[string]*MergeStats)
 
 	newRoot := ourRoot
-	tableEditSession := editor.CreateTableEditSession(ourRoot, editor.TableEditSessionProps{
-		ForeignKeyChecksDisabled: true,
-	})
+
+	optsWithFKChecks := opts
+	optsWithFKChecks.ForeignKeyChecksDisabled = true
+
+	tableEditSession := editor.CreateTableEditSession(ourRoot, optsWithFKChecks)
 
 	// Merge tables one at a time. This is done based on name, so will work badly for things like table renames.
 	// TODO: merge based on a more durable table identity that persists across renames
@@ -1033,12 +1035,7 @@ func GetTablesWithConstraintViolations(ctx context.Context, roots doltdb.Roots) 
 	return workingViolations, stagedViolations, headViolations, err
 }
 
-func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
-	docs, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return nil, err
-	}
-
+func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, docs doltdocs.Docs) (*diff.DocDiffs, error) {
 	return diff.NewDocDiffs(ctx, workingRoot, nil, docs)
 }
 

@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -206,6 +207,7 @@ func getDbState(db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
 		HeadCommit: headCommit,
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
 	}
 }
 
@@ -360,7 +362,8 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 }
 
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
-	db := dsql.NewDatabase("dolt", dEnv.DbData())
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	db := dsql.NewDatabase("dolt", dEnv.DbData(), opts)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 

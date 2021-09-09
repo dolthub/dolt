@@ -30,12 +30,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
-	db := NewDatabase("dolt", dEnv.DbData())
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	db := NewDatabase("dolt", dEnv.DbData(), opts)
 
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
@@ -112,16 +114,18 @@ func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Data
 
 	sqlCtx := NewTestSQLCtx(ctx)
 
-	_ = dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
-	sqlCtx.SetCurrentDatabase(db.Name())
-	err := db.SetRoot(sqlCtx, root)
+	err := dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
+	if err != nil {
+		return nil, nil, err
+	}
 
+	sqlCtx.SetCurrentDatabase(db.Name())
+	err = db.SetRoot(sqlCtx, root)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	err = RegisterSchemaFragments(sqlCtx, db, root)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,6 +148,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) dsess.InitialD
 		HeadCommit: headCommit,
 		WorkingSet: ws,
 		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
 	}
 }
 
@@ -157,7 +162,8 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 		Drw: dEnv.DocsReadWriter(),
 	}
 
-	db := NewDatabase("dolt", dbData)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	db := NewDatabase("dolt", dbData, opts)
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	if err != nil {
 		return nil, err

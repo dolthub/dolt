@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -32,14 +33,31 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
+
+const DoltDefaultBranchKey = "dolt_default_branch"
+
+func init() {
+	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+		{
+			Name:              DoltDefaultBranchKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(DoltDefaultBranchKey),
+			Default:           "",
+		},
+	})
+
+}
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(ctx context.Context, version string, serverConfig ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
@@ -78,13 +96,14 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 		logrus.SetLevel(level)
 	}
+	logrus.SetFormatter(LogFormat{})
 
 	permissions := auth.AllPermissions
 	if serverConfig.ReadOnly() {
 		permissions = auth.ReadPerm
 	}
 
-	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions), auth.NewAuditLog(logrus.StandardLogger()))
+	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
 	var username string
 	var email string
@@ -130,14 +149,22 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
+
+	tlsConfig, err := LoadTLSConfig(serverConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	mySQLServer, startError = server.NewServer(
 		server.Config{
-			Protocol:         "tcp",
-			Address:          hostPort,
-			Auth:             userAuth,
-			ConnReadTimeout:  readTimeout,
-			ConnWriteTimeout: writeTimeout,
-			MaxConnections:   serverConfig.MaxConnections(),
+			Protocol:               "tcp",
+			Address:                hostPort,
+			Auth:                   userAuth,
+			ConnReadTimeout:        readTimeout,
+			ConnWriteTimeout:       writeTimeout,
+			MaxConnections:         serverConfig.MaxConnections(),
+			TLSConfig:              tlsConfig,
+			RequireSecureTransport: serverConfig.RequireSecureTransport(),
 			// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
 			// to the value of mysql that we support.
 		},
@@ -187,7 +214,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username string, email string, pr
 		}
 
 		err = doltSess.SetSessionVariable(tmpSqlCtx, sql.AutoCommitSessionVar, autocommit)
-
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -247,40 +273,97 @@ func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Databa
 			return false, nil
 		})
 
+		var dbState *dsess.InitialDbState
+		var err error
 		if dEnv == nil {
 			init, err := pro.RevisionDbState(ctx, db.Name())
 			if err != nil {
 				return nil, err
 			}
-
-			dbStates = append(dbStates, init)
-			continue
+			dbState = &init
+		} else if _, val, ok := sql.SystemVariables.GetGlobal(DoltDefaultBranchKey); ok && val != "" {
+			dbState, err = getDbStateForDefaultBranch(ctx, val, db, dEnv)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			dbState, err = getDbStateForDEnv(ctx, db, dEnv)
+			if err != nil {
+				return nil, err
+			}
 		}
 
-		if dEnv == nil {
-			return nil, fmt.Errorf("couldn't find environment for database %s", db.Name())
+		if dbState == nil {
+			return nil, errors.New("unexpected error initializing dbState")
 		}
-
-		head := dEnv.RepoStateReader().CWBHeadSpec()
-		headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-		if err != nil {
-			return nil, err
-		}
-
-		ws, err := dEnv.WorkingSet(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		dbStates = append(dbStates, dsess.InitialDbState{
-			Db:         db,
-			HeadCommit: headCommit,
-			WorkingSet: ws,
-			DbData:     dEnv.DbData(),
-			// TODO: The placement of this may change when multiple Dolt Databases can be represented in one commit log.
-			GlobalState: globalstate.NewGlobalStateStore(),
-		})
+		dbStates = append(dbStates, *dbState)
 	}
 
 	return dbStates, nil
+}
+
+func getDbStateForDefaultBranch(ctx context.Context, branch interface{}, db sql.Database, dEnv *env.DoltEnv) (*dsess.InitialDbState, error) {
+	branchRef, ok := branch.(string)
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("invalid type for @@GLOBAL.dolt_default_branch. got: %s, want: string", branch))
+	}
+
+	if !ref.IsRef(branchRef) {
+		branchRef = fmt.Sprintf("refs/heads/%s", branchRef)
+		if !ref.IsRef(branchRef) {
+			return nil, errors.New("@@GLOBAL.dolt_default_branch set as invalid ref")
+		}
+	}
+
+	headRef, err := ref.Parse(branchRef)
+	if err != nil {
+		return nil, err
+	}
+
+	head, _ := doltdb.NewCommitSpec("HEAD")
+
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, headRef)
+	if err != nil {
+		return nil, err
+	}
+
+	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
+	if err != nil {
+		return nil, err
+	}
+
+	ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
+	}, nil
+}
+
+func getDbStateForDEnv(ctx context.Context, db sql.Database, dEnv *env.DoltEnv) (*dsess.InitialDbState, error) {
+	head, _ := doltdb.NewCommitSpec("HEAD")
+
+	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
+	}, nil
 }

@@ -17,16 +17,15 @@ package dsess
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -39,11 +38,13 @@ const (
 )
 
 const (
-	EnableTransactionsEnvKey      = "DOLT_ENABLE_TRANSACTIONS"
+	TransactionMergeStompEnvKey   = "DOLT_TRANSACTION_MERGE_STOMP"
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
 )
+
+var transactionMergeStomp = false
 
 type batchMode int8
 
@@ -95,6 +96,11 @@ func init() {
 			Default:           int8(0),
 		},
 	})
+
+	_, ok := os.LookupEnv(TransactionMergeStompEnvKey)
+	if ok {
+		transactionMergeStomp = true
+	}
 }
 
 func IsHeadKey(key string) (bool, string) {
@@ -143,7 +149,6 @@ type DatabaseSessionState struct {
 	dirty                bool
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
-	GlobalState          globalstate.GlobalState
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
@@ -182,7 +187,7 @@ type InitialDbState struct {
 	ReadOnly     bool
 	WorkingSet   *doltdb.WorkingSet
 	DbData       env.DbData
-	GlobalState  globalstate.GlobalState
+	Remotes      map[string]env.Remote
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -294,7 +299,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (sql.Tran
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData), nil
+	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -597,26 +602,6 @@ func (sess *Session) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB,
 	return dbState.dbData.Ddb, true
 }
 
-func (sess *Session) GetDoltDbAutoIncrementTracker(ctx *sql.Context, dbName string) (globalstate.AutoIncrementTracker, bool) {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return nil, false
-	}
-	if !ok {
-		return nil, false
-	}
-
-	wsref := dbState.WorkingSet.Ref()
-
-	if dbState.GlobalState == nil {
-		return nil, false
-	}
-
-	tracker := dbState.GlobalState.GetAutoIncrementTracker(wsref)
-
-	return tracker, true
-}
-
 func (sess *Session) GetDbData(ctx *sql.Context, dbName string) (env.DbData, bool) {
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -841,7 +826,7 @@ func (sess *Session) SwitchWorkingSet(
 	sessionState.dirty = false
 
 	// the current transaction, if there is one, needs to be restarted
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData))
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts))
 
 	return nil
 }
@@ -958,11 +943,11 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 	}
 	if intVal == 0 {
 		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Props.ForeignKeyChecksDisabled = true
+			dbState.EditSession.Opts.ForeignKeyChecksDisabled = true
 		}
 	} else if intVal == 1 {
 		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Props.ForeignKeyChecksDisabled = false
+			dbState.EditSession.Opts.ForeignKeyChecksDisabled = false
 		}
 	} else {
 		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
@@ -1055,19 +1040,19 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
-	adapter := NewSessionStateAdapter(sess, db.Name())
+	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
-	sessionState.GlobalState = dbState.GlobalState
 	sessionState.readOnly, sessionState.detachedHead = dbState.ReadOnly, dbState.DetachedHead
 
-	sessionState.EditSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
+	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
+	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
 		workingRoot := dbState.WorkingSet.WorkingRoot()
-		logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
+		// logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
 
 		err := sess.setRoot(ctx, db.Name(), workingRoot)
 		if err != nil {
@@ -1105,7 +1090,7 @@ func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, 
 	if err != nil {
 		return err
 	}
-	dbState.TempTableEditSession = editor.CreateTableEditSession(newRoot, editor.TableEditSessionProps{})
+	dbState.TempTableEditSession = editor.CreateTableEditSession(newRoot, dbState.EditSession.Opts)
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }

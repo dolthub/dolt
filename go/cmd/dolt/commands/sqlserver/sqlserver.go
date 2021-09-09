@@ -47,15 +47,14 @@ const (
 
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
-	LongDesc: `By default, starts a MySQL-compatible server which allows only one user connection at a time to the dolt repository in the current directory. Any edits made through this server will be automatically reflected in the working set.  This behavior can be modified using a yaml configuration file passed to the server via {{.EmphasisLeft}}--config <file>{{.EmphasisRight}}, or by using the supported switches and flags to configure the server directly on the command line (If {{.EmphasisLeft}}--config <file>{{.EmphasisRight}} is provided all other command line arguments are ignored). This is an example yaml configuration file showing all supported items and their default values:
-<div class="gatsby-highlight" data-language="text">
-	<pre class="By default, starts a MySQL-compatible server whilanguage-text">
-		<code class="language-text">
-			` + serverConfigAsYAMLConfig(DefaultServerConfig()).String() + `
-  		</code>
-	</pre>
-</div>
-		
+	LongDesc: "By default, starts a MySQL-compatible server on the dolt database in the current directory. " +
+		"Databases are named after the directories they appear in, with all non-alphanumeric characters replaced by the _ character. " +
+		"Parameters can be specified using a yaml configuration file passed to the server via " +
+		"{{.EmphasisLeft}}--config <file>{{.EmphasisRight}}, or by using the supported switches and flags to configure " +
+		"the server directly on the command line. If {{.EmphasisLeft}}--config <file>{{.EmphasisRight}} is provided all" +
+		" other command line arguments are ignored.\n\nThis is an example yaml configuration file showing all supported" +
+		" items and their default values:\n\n" +
+		serverConfigAsYAMLConfig(DefaultServerConfig()).String() + "\n\n" + `
 SUPPORTED CONFIG FILE FIELDS:
 
 		{{.EmphasisLeft}}vlog_level{{.EmphasisRight}} - Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
@@ -147,7 +146,14 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 
 // Exec executes the command
 func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return startServer(ctx, cmd.VersionStr, commandStr, args, dEnv, nil)
+	controller := CreateServerController()
+	newCtx, cancelF := context.WithCancel(context.Background())
+	go func() {
+		<-ctx.Done()
+		controller.StopServer()
+		cancelF()
+	}()
+	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 }
 
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
@@ -155,7 +161,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	serverConfig, err := GetServerConfig(dEnv, apr)
+	serverConfig, err := GetServerConfig(dEnv, apr, true)
 
 	if err != nil {
 		if serverController != nil {
@@ -183,17 +189,17 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	return 0
 }
 
-func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
+func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requiresRepo bool) (ServerConfig, error) {
 	cfgFile, ok := apr.GetValue(configFileFlag)
 
 	if ok {
 		return getYAMLServerConfig(dEnv.FS, cfgFile)
 	}
 
-	return getCommandLineServerConfig(dEnv, apr)
+	return getCommandLineServerConfig(dEnv, apr, requiresRepo)
 }
 
-func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
+func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requiresRepo bool) (ServerConfig, error) {
 	serverConfig := DefaultServerConfig()
 
 	if host, ok := apr.GetValue(hostFlag); ok {
@@ -231,7 +237,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		}
 
 		serverConfig.withDBNamesAndPaths(dbNamesAndPaths)
-	} else {
+	} else if requiresRepo {
 		if !cli.CheckEnvIsValid(dEnv) {
 			return nil, errors.New("not a valid dolt directory")
 		}

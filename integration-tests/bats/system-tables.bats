@@ -31,6 +31,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_query_catalog" ]] || false
     [[ "$output" =~ "dolt_status" ]] || false
     [[ ! "$output" =~ " test" ]] || false  # spaces are impt!
@@ -41,6 +42,7 @@ teardown() {
     [[ "$output" =~ "dolt_commit_ancestors" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_query_catalog" ]] || false
     [[ "$output" =~ "dolt_status" ]] || false
     [[ "$output" =~ "test" ]] || false
@@ -70,6 +72,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_remotes" ]] || false
     [[ ! "$output" =~ "dolt_history_test" ]] || false
     [[ ! "$output" =~ "dolt_diff_test" ]] || false
     [[ ! "$output" =~ "dolt_commit_diff_test" ]] || false
@@ -78,6 +81,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_history_test" ]] || false
     [[ "$output" =~ "dolt_commit_diff_test" ]] || false
 }
@@ -93,6 +97,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_remotes" ]] || false
     [[ ! "$output" =~ "dolt_history_test" ]] || false
     [[ ! "$output" =~ "dolt_diff_test" ]] || false
     [[ ! "$output" =~ "dolt_commit_diff_test" ]] || false
@@ -101,6 +106,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_history_test" ]] || false
     [[ "$output" =~ "dolt_diff_test" ]] || false
     [[ "$output" =~ "dolt_commit_diff_test" ]] || false
@@ -135,6 +141,89 @@ teardown() {
     [ $status -eq 0 ]
     [[ ! "$output" =~ "master" ]] || false
     [[ "$output" =~ "create-table-branch" ]] || false
+}
+
+@test "system-tables: query dolt_remotes system table" {
+    run dolt sql -q "select count(*) from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ 0 ]] || false
+
+    mkdir remote
+    dolt remote add origin file://remote/
+
+    run dolt sql -q "select count(*) from dolt_remotes"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 1 ]] || false
+
+    regex='file://.*/remote'
+    run dolt sql -q "select * from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
+    [[ "${lines[1]}" =~ origin,$regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+}
+
+@test "system-tables: check unsupported dolt_remote behavior" {
+    run dolt sql -q "insert into dolt_remotes (name, url) values ('origin1', 'file://remote')"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "cannot insert remote in an SQL session" ]] || false
+
+    mkdir remote
+    dolt remote add origin file://remote/
+    run dolt sql -q "delete from dolt_remotes where name = 'origin'"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "cannot delete remote in an SQL session" ]] || false
+}
+
+@test "system-tables: insert into dolt_remotes system table" {
+    skip "Remotes table not yet mutable in SQL session"
+    run dolt sql -q "insert into dolt_remotes (name, url) values ('origin', 'file://remote')"
+    [ $status -ne 0 ]
+    [[ ! "$output" =~ panic ]] || false
+
+    mkdir remote
+    dolt sql -q "insert into dolt_remotes (name, url) values ('origin1', 'file://remote')"
+    dolt sql -q "insert into dolt_remotes (name, url) values ('origin2', 'aws://[dynamo_db_table:s3_bucket]/repo_name')"
+
+    run dolt sql -q "select count(*) from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ 2 ]] || false
+
+    file_regex='file://.*/remote'
+    aws_regex='aws://.*/repo_name'
+    run dolt sql -q "select * from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
+    [[ "${lines[1]}" =~ origin1,$file_regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+    [[ "${lines[2]}" =~ origin2,$aws_regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+
+}
+
+@test "system-tables: delete from dolt_remotes system table" {
+    skip "Remotes table not yet mutable in SQL session"
+    mkdir remote
+    dolt remote add origin file://remote/
+
+    run dolt sql -q "select count(*) from dolt_remotes"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 1 ]] || false
+
+    regex='file://.*/remote'
+    run dolt sql -q "select * from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
+    [[ "${lines[1]}" =~ origin,$regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+
+    dolt sql -q "delete from dolt_remotes where name = 'origin1'"
+
+    run dolt sql -q "select count(*) from dolt_remotes"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 1 ]] || false
+
+    dolt sql -q "delete from dolt_remotes where name = 'origin'"
+
+    run dolt sql -q "select count(*) from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ 0 ]] || false
 }
 
 @test "system-tables: query dolt_diff_ system table" {
@@ -409,4 +498,18 @@ SQL
 @test "system-tables: cannot delete last branch in dolt_branches" {
     run dolt sql -q "DELETE FROM dolt_branches"
     [ "$status" -ne 0 ]
+}
+
+@test "system-tables: dolt diff includes changes from initial commit" {
+    dolt sql -q "CREATE TABLE test(pk int primary key, val int)"
+    dolt sql -q "INSERT INTO test VALUES (1,1)"
+    dolt commit -am "cm1"
+
+    dolt sql -q "INSERT INTO test VALUES (2,2)"
+    dolt commit -am "cm2"
+
+    run dolt sql -q "SELECT to_val,to_pk FROM dolt_diff_test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
 }

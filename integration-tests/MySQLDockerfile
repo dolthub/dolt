@@ -19,14 +19,22 @@ RUN apt install -y \
 	ant \
 	ca-certificates-java \
 	bats \
-        perl \
+    perl \
 	cpanminus \
 	cmake \
 	g++ \
 	libmysqlcppconn-dev \
 	git \
 	ruby\
-	gem
+	gem \
+    libc6 \
+    libgcc1 \
+    libgssapi-krb5-2 \
+    libicu60 \
+    libssl1.1 \
+    libstdc++6 \
+    zlib1g \
+    r-base
 
 # install go
 WORKDIR /root
@@ -45,12 +53,9 @@ RUN go version
 RUN go get -u github.com/go-sql-driver/mysql
 
 # install dotnet
-RUN wget https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-RUN dpkg -i packages-microsoft-prod.deb
-RUN apt-get update; \
-      apt-get install -y apt-transport-https && \
-      apt-get update && \
-      apt-get install -y dotnet-sdk-5.0
+RUN curl -LO https://download.visualstudio.microsoft.com/download/pr/13b9d84c-a35b-4ffe-8f62-447a01403d64/1f9ae31daa0f7d98513e7551246899f2/dotnet-sdk-5.0.400-linux-x64.tar.gz
+RUN tar -C /usr/local/bin -xzf dotnet-sdk-5.0.400-linux-x64.tar.gz
+RUN dotnet --version
 
 # install node
 RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
@@ -92,6 +97,13 @@ RUN wget https://packages.erlang-solutions.com/erlang-solutions_2.0_all.deb && d
 RUN apt-get update && apt-get -y upgrade
 RUN apt-get install -y esl-erlang
 RUN apt-get install -y elixir
+
+# install R
+RUN apt-get update && apt-get -y upgrade
+RUN apt-get install -y r-base
+RUN Rscript -e 'install.packages("RMariaDB")'
+RUN Rscript -e 'install.packages("RMySQL")'
+RUN Rscript -e 'install.packages("DBI")'
 
 # install postgres and psql
 RUN apt-get install -y postgresql postgresql-contrib libpq-dev postgresql-server-dev-all

@@ -20,14 +20,21 @@ import (
 	"fmt"
 
 	"github.com/fatih/color"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 const (
@@ -179,7 +186,7 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 			src := refSpec.SrcRef(branch)
 			dest := refSpec.DestRef(src)
 
-			remoteRef, err := getTrackingRef(dest, remote)
+			remoteRef, err := env.GetTrackingRef(dest, remote)
 
 			if err != nil {
 				return err
@@ -193,10 +200,31 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 
 			cli.Println(color.BlueString(fmt.Sprintf("Pushing migrated branch %s to %s", branch.String(), remoteName)))
 			mode := ref.UpdateMode{Force: true}
-			err = pushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
+			err = actions.PushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote, runProgFuncs, stopProgFuncs)
 
 			if err != nil {
-				return err
+				if err == doltdb.ErrUpToDate {
+					cli.Println("Everything up-to-date")
+				} else if err == doltdb.ErrIsAhead || err == actions.ErrCantFF || err == datas.ErrMergeNeeded {
+					cli.Printf("To %s\n", remote.Url)
+					cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", dest.String(), remoteRef.String())
+					cli.Printf("error: failed to push some refs to '%s'\n", remote.Url)
+					cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
+					cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
+					cli.Println("hint: 'dolt pull ...') before pushing again.")
+					return errhand.BuildDError("").Build()
+				} else {
+					status, ok := status.FromError(err)
+					if ok && status.Code() == codes.PermissionDenied {
+						cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
+						cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
+					}
+					if rpcErr, ok := err.(*remotestorage.RpcError); ok {
+						return errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
+					} else {
+						return errhand.BuildDError("error: push failed").AddCause(err).Build()
+					}
+				}
 			}
 			cli.Println()
 		}

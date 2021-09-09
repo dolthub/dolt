@@ -280,3 +280,8 @@ func (rs BranchToTrackingBranchRefSpec) DestRef(branchRef DoltRef) DoltRef {
 func (rs BranchToTrackingBranchRefSpec) GetRemote() string {
 	return rs.remote
 }
+
+// GetRemRefToLocal returns the local tracking branch.
+func (rs BranchToTrackingBranchRefSpec) GetRemRefToLocal() branchMapper {
+	return rs.remRefToLocal
+}

@@ -92,7 +92,11 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return &StatusItr{}, err
 	}
 
-	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, drw)
+	docsOnDisk, err := drw.GetDocsOnDisk()
+	if err != nil {
+		return &StatusItr{}, err
+	}
+	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
 	if err != nil {
 		return &StatusItr{}, err
 	}
@@ -102,7 +106,11 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return &StatusItr{}, err
 	}
 
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, roots.Working, drw)
+	docs, err := drw.GetDocsOnDisk()
+	if err != nil {
+		return nil, err
+	}
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, roots.Working, docs)
 	if err != nil {
 		return &StatusItr{}, err
 	}

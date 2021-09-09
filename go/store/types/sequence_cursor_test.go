@@ -112,6 +112,10 @@ func (ts testSequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, err
 	panic("not reached")
 }
 
+func (ts testSequence) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+	panic("not reached")
+}
+
 func (ts testSequence) Hash(*NomsBinFormat) (hash.Hash, error) {
 	panic("not reached")
 }

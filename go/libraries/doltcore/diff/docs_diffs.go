@@ -16,12 +16,107 @@ package diff
 
 import (
 	"context"
+	"sort"
 	"strconv"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 )
+
+type TableDiffType int
+
+const (
+	AddedTable TableDiffType = iota
+	ModifiedTable
+	RenamedTable
+	RemovedTable
+)
+
+type DocDiffType int
+
+const (
+	AddedDoc DocDiffType = iota
+	ModifiedDoc
+	RemovedDoc
+)
+
+type DocDiffs struct {
+	NumAdded    int
+	NumModified int
+	NumRemoved  int
+	DocToType   map[string]DocDiffType
+	Docs        []string
+}
+
+// NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
+func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docs doltdocs.Docs) (*DocDiffs, error) {
+	var added []string
+	var modified []string
+	var removed []string
+	if older != nil {
+		if newer == nil {
+			a, m, r, err := DocsDiff(ctx, older, nil, docs)
+			if err != nil {
+				return nil, err
+			}
+			added = a
+			modified = m
+			removed = r
+		} else {
+			a, m, r, err := DocsDiff(ctx, older, newer, docs)
+			if err != nil {
+				return nil, err
+			}
+			added = a
+			modified = m
+			removed = r
+		}
+	}
+	var docNames []string
+	docNames = append(docNames, added...)
+	docNames = append(docNames, modified...)
+	docNames = append(docNames, removed...)
+	sort.Strings(docNames)
+
+	docsToType := make(map[string]DocDiffType)
+	for _, nt := range added {
+		docsToType[nt] = AddedDoc
+	}
+
+	for _, nt := range modified {
+		docsToType[nt] = ModifiedDoc
+	}
+
+	for _, nt := range removed {
+		docsToType[nt] = RemovedDoc
+	}
+
+	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docNames}, nil
+}
+
+// Len returns the number of docs in a DocDiffs
+func (nd *DocDiffs) Len() int {
+	return len(nd.Docs)
+}
+
+// GetDocDiffs retrieves staged and unstaged DocDiffs.
+func GetDocDiffs(
+	ctx context.Context,
+	roots doltdb.Roots,
+	docsOnDisk doltdocs.Docs,
+) (*DocDiffs, *DocDiffs, error) {
+	notStagedDocDiffs, err := NewDocDiffs(ctx, roots.Working, nil, docsOnDisk)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	stagedDocDiffs, err := NewDocDiffs(ctx, roots.Head, roots.Staged, docsOnDisk)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return stagedDocDiffs, notStagedDocDiffs, nil
+}
 
 type docComparison struct {
 	DocName     string

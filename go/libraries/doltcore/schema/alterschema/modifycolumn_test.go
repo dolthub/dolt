@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,7 +39,7 @@ func TestModifyColumn(t *testing.T) {
 		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 	)
-	ti, err := typeinfo.FromSqlType(sql.TinyText)
+	ti, err := typeinfo.FromSqlType(sql.MustCreateStringWithDefaults(sqltypes.VarChar, 599))
 	require.NoError(t, err)
 	newNameColSameTag, err := schema.NewColumnWithTypeInfo("name", dtestutils.NameTag, ti, false, "", false, "", schema.NotNullConstraint{})
 	require.NoError(t, err)
@@ -176,7 +177,8 @@ func TestModifyColumn(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
-			updatedTable, err := ModifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+			updatedTable, err := ModifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order, opts)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
@@ -212,7 +214,7 @@ func TestModifyColumn(t *testing.T) {
 
 			updatedIndexRows, err := updatedTable.GetIndexRowData(context.Background(), index.Name())
 			require.NoError(t, err)
-			expectedIndexRows, err := editor.RebuildIndex(context.Background(), updatedTable, index.Name())
+			expectedIndexRows, err := editor.RebuildIndex(context.Background(), updatedTable, index.Name(), opts)
 			require.NoError(t, err)
 			if uint64(len(foundRows)) != updatedIndexRows.Len() || !updatedIndexRows.Equals(expectedIndexRows) {
 				t.Error("index contents are incorrect")

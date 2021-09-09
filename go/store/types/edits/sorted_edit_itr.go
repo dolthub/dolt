@@ -14,13 +14,19 @@
 
 package edits
 
-import "github.com/dolthub/dolt/go/store/types"
+import (
+	"context"
+	"io"
+
+	"github.com/dolthub/dolt/go/store/types"
+)
 
 // SortedEditItr is a KVPIterator implementation that takes two KVPCollItr and merges them as it iterates
 type SortedEditItr struct {
 	leftItr  *KVPCollItr
 	rightItr *KVPCollItr
 	done     bool
+	read     int64
 }
 
 // NewSortedEditItr creates an iterator from two KVPCollection references.  As the iterator iterates it
@@ -29,13 +35,14 @@ func NewSortedEditItr(nbf *types.NomsBinFormat, left, right *KVPCollection) *Sor
 	leftItr := NewItr(nbf, left)
 	rightItr := NewItr(nbf, right)
 
-	return &SortedEditItr{leftItr, rightItr, false}
+	return &SortedEditItr{leftItr: leftItr, rightItr: rightItr}
 }
 
-// Next returns the next KVP
+// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
+// in key sorted order.  Once all KVPs have been read io.EOF will be returned.
 func (itr *SortedEditItr) Next() (*types.KVP, error) {
 	if itr.done {
-		return nil, nil
+		return nil, io.EOF
 	}
 
 	lesser := itr.rightItr
@@ -56,11 +63,21 @@ func (itr *SortedEditItr) Next() (*types.KVP, error) {
 	}
 
 	itr.done = kvp == nil
+
+	if itr.done {
+		return nil, io.EOF
+	}
+
+	itr.read++
+
 	return kvp, nil
 }
 
-func (itr *SortedEditItr) NumEdits() int64 {
-	return itr.leftItr.NumEdits() + itr.rightItr.NumEdits()
+// ReachedEOF returns true once all data is exhausted.  If ReachedEOF returns false that does not mean that there
+// is more data, only that io.EOF has not been returned previously.  If ReachedEOF returns true then all edits have
+// been read
+func (itr *SortedEditItr) ReachedEOF() bool {
+	return itr.leftItr.ReachedEOF() && itr.rightItr.ReachedEOF()
 }
 
 // Peek returns the next KVP without advancing
@@ -86,4 +103,8 @@ func (itr *SortedEditItr) Peek() (*types.KVP, error) {
 // Size returns the total number of elements this iterator will iterate over.
 func (itr *SortedEditItr) Size() int64 {
 	return itr.leftItr.coll.totalSize + itr.rightItr.coll.totalSize
+}
+
+func (itr *SortedEditItr) Close(ctx context.Context) error {
+	return nil
 }

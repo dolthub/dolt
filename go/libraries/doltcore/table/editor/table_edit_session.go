@@ -17,6 +17,7 @@ package editor
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -28,24 +29,35 @@ import (
 // TableEditSession handles all edit operations on a table that may also update other tables. Serves as coordination
 // for SessionedTableEditors.
 type TableEditSession struct {
-	Props TableEditSessionProps
+	Opts Options
 
 	root       *doltdb.RootValue
 	tables     map[string]*sessionedTableEditor
 	writeMutex *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
 }
 
-// TableEditSessionProps are properties that define different functionality for the TableEditSession.
-type TableEditSessionProps struct {
+// Options are properties that define different functionality for the TableEditSession.
+type Options struct {
 	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
+	Deaf                     DbEaFactory
+}
+
+func TestEditorOptions(vrw types.ValueReadWriter) Options {
+	return Options{
+		ForeignKeyChecksDisabled: false,
+		Deaf: &dbEaFactory{
+			directory: os.TempDir(),
+			vrw:       vrw,
+		},
+	}
 }
 
 // CreateTableEditSession creates and returns a TableEditSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
-func CreateTableEditSession(root *doltdb.RootValue, props TableEditSessionProps) *TableEditSession {
+func CreateTableEditSession(root *doltdb.RootValue, opts Options) *TableEditSession {
 	return &TableEditSession{
-		Props:      props,
+		Opts:       opts,
 		root:       root,
 		tables:     make(map[string]*sessionedTableEditor),
 		writeMutex: &sync.RWMutex{},
@@ -110,13 +122,13 @@ func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
 		return err
 	}
 
-	if tes.Props.ForeignKeyChecksDisabled {
+	if tes.Opts.ForeignKeyChecksDisabled {
 		// When fk checks are disabled, we don't load any foreign key data. Although we could load them here now, we can
 		// take a bit of a performance hit and create an internal edit session that loads all of the foreign keys.
 		// Otherwise, to preserve this edit session would create a much larger (and more difficult to understand) block
 		// of code. The primary perf hit comes from foreign keys that reference tables that declare foreign keys of
 		// their own, which is not common, so the average perf hit is relatively minimal.
-		validationTes := CreateTableEditSession(tes.root, TableEditSessionProps{})
+		validationTes := CreateTableEditSession(tes.root, Options{})
 		for tableName, _ := range tes.tables {
 			_, err = validationTes.getTableEditor(ctx, tableName, nil)
 			if err != nil {
@@ -169,6 +181,11 @@ func (tes *TableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 	var tableErr error
 	var rootErr error
 	for tableName, ste := range tes.tables {
+		if !ste.hasEdits() {
+			wg.Done()
+			continue
+		}
+
 		// we can run all of the Table calls concurrently as long as we guard updating the root
 		go func(tableName string, ste *sessionedTableEditor) {
 			defer wg.Done()
@@ -242,12 +259,14 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		}
 	}
 
-	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName)
+	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName, tes.Opts)
 	if err != nil {
 		return nil, err
 	}
+
 	localTableEditor.tableEditor = tableEditor
-	if tes.Props.ForeignKeyChecksDisabled {
+
+	if tes.Opts.ForeignKeyChecksDisabled {
 		return localTableEditor, nil
 	}
 
@@ -301,7 +320,7 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 			return err
 		}
 		if !ok { // table was removed in newer root
-			if err := localTableEditor.tableEditor.Close(); err != nil {
+			if err := localTableEditor.tableEditor.Close(ctx); err != nil {
 				return err
 			}
 			delete(tes.tables, tableName)
@@ -311,11 +330,11 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		if err != nil {
 			return err
 		}
-		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName)
+		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName, tes.Opts)
 		if err != nil {
 			return err
 		}
-		if err := localTableEditor.tableEditor.Close(); err != nil {
+		if err := localTableEditor.tableEditor.Close(ctx); err != nil {
 			return err
 		}
 		localTableEditor.tableEditor = newTableEditor

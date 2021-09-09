@@ -71,8 +71,6 @@ func verifyTypeInfoArrays(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]type
 	// delete any types that should not be tested
 	delete(seenTypeInfos, UnknownTypeIdentifier)
 	delete(seenTypeInfos, TupleTypeIdentifier)
-	//TODO: determine the storage format for VarBinaryType
-	delete(seenTypeInfos, VarBinaryTypeIdentifier)
 	for _, tiArray := range tiArrays {
 		// no row should be empty
 		require.True(t, len(tiArray) > 0, `length of array "%v" should be greater than zero`, len(tiArray))
@@ -114,7 +112,7 @@ func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays 
 				atLeastOneValid := false
 				t.Run(ti.String(), func(t *testing.T) {
 					for _, val := range vaArrays[rowIndex] {
-						t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), val.HumanReadableString()), func(t *testing.T) {
+						t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), humanReadableString(val)), func(t *testing.T) {
 							vInterface, err := ti.ConvertNomsValueToValue(val)
 							if ti.IsValid(val) {
 								atLeastOneValid = true
@@ -202,7 +200,7 @@ func testTypeInfoForeignKindHandling(t *testing.T, tiArrays [][]TypeInfo, vaArra
 				t.Run(ti.String(), func(t *testing.T) {
 					for _, vaArray := range vaArrays {
 						for _, val := range vaArray {
-							t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), val.HumanReadableString()), func(t *testing.T) {
+							t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), humanReadableString(val)), func(t *testing.T) {
 								if ti.NomsKind() != val.Kind() {
 									_, err := ti.ConvertNomsValueToValue(val)
 									assert.Error(t, err)
@@ -226,7 +224,7 @@ func testTypeInfoFormatParseRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArr
 				atLeastOneValid := false
 				t.Run(ti.String(), func(t *testing.T) {
 					for _, val := range vaArrays[rowIndex] {
-						t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), val.HumanReadableString()), func(t *testing.T) {
+						t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), humanReadableString(val)), func(t *testing.T) {
 							str, err := ti.FormatValue(val)
 							if ti.IsValid(val) {
 								atLeastOneValid = true
@@ -345,6 +343,8 @@ func testTypeInfoToSqlType(t *testing.T, tiArrays [][]TypeInfo) {
 func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 	return [][]TypeInfo{
 			generateBitTypes(t, 16),
+			{&blobStringType{sql.TinyText}, &blobStringType{sql.Text},
+				&blobStringType{sql.MediumText}, &blobStringType{sql.LongText}},
 			{BoolType},
 			{DateType, DatetimeType, TimestampType},
 			generateDecimalTypes(t, 16),
@@ -357,9 +357,8 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{TimeType},
 			{Uint8Type, Uint16Type, Uint24Type, Uint32Type, Uint64Type},
 			{UuidType},
-			//append(generateVarBinaryTypes(t, 12),
-			//	&varBinaryType{sql.TinyBlob}, &varBinaryType{sql.Blob},
-			//	&varBinaryType{sql.MediumBlob}, &varBinaryType{sql.LongBlob}),
+			{&varBinaryType{sql.TinyBlob}, &varBinaryType{sql.Blob},
+				&varBinaryType{sql.MediumBlob}, &varBinaryType{sql.LongBlob}},
 			append(generateVarStringTypes(t, 12),
 				&varStringType{sql.CreateTinyText(sql.Collation_Default)}, &varStringType{sql.CreateText(sql.Collation_Default)},
 				&varStringType{sql.CreateMediumText(sql.Collation_Default)}, &varStringType{sql.CreateLongText(sql.Collation_Default)}),
@@ -367,6 +366,8 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 		},
 		[][]types.Value{
 			{types.Uint(1), types.Uint(207), types.Uint(79147), types.Uint(34845728), types.Uint(9274618927)}, //Bit
+			{mustBlobString(t, ""), mustBlobString(t, "a"), mustBlobString(t, "abc"), //BlobString
+				mustBlobString(t, "abcdefghijklmnopqrstuvwxyz"), mustBlobString(t, "هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر")},
 			{types.Bool(false), types.Bool(true)}, //Bool
 			{types.Timestamp(time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC)), //Datetime
 				types.Timestamp(time.Date(1970, 1, 1, 0, 0, 1, 0, time.UTC)),
@@ -388,10 +389,17 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{types.Int(0), types.Int(1000000 /*"00:00:01"*/), types.Int(113000000 /*"00:01:53"*/), types.Int(247019000000 /*"68:36:59"*/), types.Int(458830485214 /*"127:27:10.485214"*/)}, //Time
 			{types.Uint(20), types.Uint(275), types.Uint(328395), types.Uint(630257298), types.Uint(93897259874)},                                                                          //Uint
 			{types.UUID{3}, types.UUID{3, 13}, types.UUID{128, 238, 82, 12}, types.UUID{31, 54, 23, 13, 63, 43}, types.UUID{83, 64, 21, 14, 42, 6, 35, 7, 54, 234, 6, 32, 1, 4, 2, 4}},     //Uuid
-			//{types.String([]byte{1}), types.String([]byte{42, 52}), types.String([]byte{84, 32, 13, 63, 12, 86}), //VarBinary
-			//	types.String([]byte{1, 32, 235, 64, 32, 23, 45, 76}), types.String([]byte{123, 234, 34, 223, 76, 35, 32, 12, 84, 26, 15, 34, 65, 86, 45, 23, 43, 12, 76, 154, 234, 76, 34})},
+			{mustBlobBytes(t, []byte{1}), mustBlobBytes(t, []byte{42, 52}), mustBlobBytes(t, []byte{84, 32, 13, 63, 12, 86}), //VarBinary
+				mustBlobBytes(t, []byte{1, 32, 235, 64, 32, 23, 45, 76}), mustBlobBytes(t, []byte{123, 234, 34, 223, 76, 35, 32, 12, 84, 26, 15, 34, 65, 86, 45, 23, 43, 12, 76, 154, 234, 76, 34})},
 			{types.String(""), types.String("a"), types.String("abc"), //VarString
 				types.String("abcdefghijklmnopqrstuvwxyz"), types.String("هذا هو بعض نماذج النص التي أستخدمها لاختبار عناصر")},
 			{types.Int(1901), types.Int(1950), types.Int(2000), types.Int(2080), types.Int(2155)}, //Year
 		}
+}
+
+func humanReadableString(val types.Value) string {
+	defer func() {
+		_ = recover() // HumanReadableString panics for some types so we ignore the panic
+	}()
+	return val.HumanReadableString()
 }

@@ -117,15 +117,6 @@ type GenerationalCS interface {
 	OldGen() ChunkStoreGarbageCollector
 }
 
-// ChunkStoreVersionGetter is a ChunkStore that supports getting the manifest's
-// storage version
-type ChunkStoreVersionGetter interface {
-	ChunkStore
-
-	// GetManifestStorageVersion returns the storage version of the Chunkstore's manifest
-	GetManifestStorageVersion(ctx context.Context) (string, error)
-}
-
 var ErrUnsupportedOperation = errors.New("operation not supported")
 
 var ErrGCGenerationExpired = errors.New("garbage collection generation expired")

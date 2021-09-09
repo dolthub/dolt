@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -70,9 +71,20 @@ type DiffTable struct {
 	rowFilters       []sql.Expression
 }
 
-func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
-	diffTblName := doltdb.DoltDiffTablePrefix + tblName
+var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s due to primary key set change"
 
+const PrimaryKeyChanceWarningCode int = 1105 // Since this our own custom warning we'll use 1105, the code for an unknown error
+
+func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
+	tblName, ok, err := root.ResolveTableName(ctx, tblName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, sql.ErrTableNotFound.New(doltdb.DoltDiffTablePrefix + tblName)
+	}
+
+	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 	ss, err := calcSuperSchema(ctx, root, tblName)
 	if err != nil {
 		return nil, err
@@ -82,7 +94,6 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 	_ = ss.AddColumn(schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
 
 	sch, err := ss.GenerateSchema()
-
 	if err != nil {
 		return nil, err
 	}
@@ -97,13 +108,11 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 			diff.To:   toNamer,
 			diff.From: fromNamer,
 		})
-
 	if err != nil {
 		return nil, err
 	}
 
 	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, j.GetSchema())
-
 	if err != nil {
 		return nil, err
 	}
@@ -383,6 +392,27 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 	}, nil
 }
 
+// isDiffablePartition checks if the commit pair for this partition is "diffable".
+// If the primary key sets changed between the two commits, it may not be
+// possible to diff them.
+func (dp *diffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
+	if dp.from == nil {
+		return true, nil
+	}
+
+	fromSch, err := dp.from.GetSchema(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	toSch, err := dp.to.GetSchema(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return schema.ArePrimaryKeySetsDiffable(fromSch, toSch), nil
+}
+
 type partitionSelectFunc func(*sql.Context, diffPartition) (bool, error)
 
 func selectFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (partitionSelectFunc, error) {
@@ -426,7 +456,7 @@ func selectFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (p
 
 var _ sql.PartitionIter = &diffPartitions{}
 
-// collection of paratitions. Implements PartitionItr
+// collection of partitions. Implements PartitionItr
 type diffPartitions struct {
 	// TODO change the sql.PartitionIterator interface so that Next receives the context rather than caching it.
 	ctx             *sql.Context
@@ -551,6 +581,17 @@ func (dp *diffPartitions) Next() (sql.Partition, error) {
 		}
 
 		if next != nil {
+			// If we can't diff this commit with its parent, don't traverse any lower
+			canDiff, err := next.isDiffablePartition(dp.ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			if !canDiff {
+				dp.ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
+				return nil, io.EOF
+			}
+
 			return *next, nil
 		}
 	}

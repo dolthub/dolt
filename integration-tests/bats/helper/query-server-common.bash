@@ -139,7 +139,9 @@ start_multi_db_server() {
 }
 
 stop_sql_server() {
-    kill $SERVER_PID
+    if [ ! -z "$SERVER_PID" ]; then
+      kill $SERVER_PID
+    fi
 }
 
 # server_query connects to a running mysql server, executes a query and compares the results against what is expected.

@@ -261,6 +261,22 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1000-01-01 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-02');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-02 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-3');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-03 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-04');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-04 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-5');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-05 00:00:00 +0000 UTC " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '9999-01-01 23:59:59.999999');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -290,6 +306,22 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1000-01-01 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-02');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-02 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-3');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-03 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-04');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-04 00:00:00 +0000 UTC " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-1-5');"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1000-01-05 00:00:00 +0000 UTC " ]] || false
     dolt sql -q "REPLACE INTO test VALUES (1, '9999-01-01 23:59:59.999999');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -666,11 +698,12 @@ SQL
 }
 
 @test "types: LONGTEXT" {
-    dolt sql <<SQL
+    dolt sql <<"SQL"
 CREATE TABLE test (
   pk BIGINT NOT NULL,
   v LONGTEXT,
-  PRIMARY KEY (pk)
+  PRIMARY KEY (pk),
+  INDEX (v)
 );
 SQL
     run dolt schema show
@@ -684,6 +717,29 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
+
+    dolt sql <<"SQL"
+DELETE FROM test;
+INSERT INTO test VALUES (1, '1'), (2, '11'), (3, '1'), (4, '12'), (5, '01'), (6, '0');
+SQL
+    run dolt sql -q "SELECT * FROM test WHERE v > '0'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v" ]] || false
+    [[ "$output" =~ "5,01" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "3,1" ]] || false
+    [[ "$output" =~ "2,11" ]] || false
+    [[ "$output" =~ "4,12" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+    run dolt sql -q "SELECT * FROM test WHERE v <= '11'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v" ]] || false
+    [[ "$output" =~ "2,11" ]] || false
+    [[ "$output" =~ "3,1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "5,01" ]] || false
+    [[ "$output" =~ "6,0" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
 }
 
 @test "types: MEDIUMBLOB" {

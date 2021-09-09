@@ -14,7 +14,12 @@
 
 package edits
 
-import "github.com/dolthub/dolt/go/store/types"
+import (
+	"context"
+	"io"
+
+	"github.com/dolthub/dolt/go/store/types"
+)
 
 // KVPCollItr is a KVPIterator implementation for iterating over a KVPCollection
 type KVPCollItr struct {
@@ -26,6 +31,8 @@ type KVPCollItr struct {
 	currSlSize int
 	currKey    types.LesserValuable
 	nbf        *types.NomsBinFormat
+
+	read int64
 }
 
 // NewItr creates a new KVPCollItr from a KVPCollection
@@ -34,7 +41,7 @@ func NewItr(nbf *types.NomsBinFormat, coll *KVPCollection) *KVPCollItr {
 	firstKey := firstSl[0].Key
 	slSize := len(firstSl)
 
-	return &KVPCollItr{coll, false, 0, 0, firstSl, slSize, firstKey, nbf}
+	return &KVPCollItr{coll: coll, currSl: firstSl, currSlSize: slSize, currKey: firstKey, nbf: nbf}
 }
 
 // Less returns whether the current key this iterator is less than the current key for another iterator
@@ -83,15 +90,29 @@ func (itr *KVPCollItr) nextForDestructiveMerge() (nextKVP *types.KVP, sliceIfExh
 	return kvp, nil, false
 }
 
-// Next returns the next KVP
+// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
+// in key sorted order.  Once all KVPs have been read io.EOF will be returned.
 func (itr *KVPCollItr) Next() (*types.KVP, error) {
 	kvp, _, _ := itr.nextForDestructiveMerge()
+
+	if kvp == nil {
+		return nil, io.EOF
+	}
+
+	itr.read++
+
 	return kvp, nil
 }
 
-// NumEdits returns the number of KVPs representing the edits that this will iterate over
-func (itr *KVPCollItr) NumEdits() int64 {
-	return itr.coll.Size()
+func (itr *KVPCollItr) Close(ctx context.Context) error {
+	return nil
+}
+
+// ReachedEOF returns true once all data is exhausted.  If ReachedEOF returns false that does not mean that there
+// is more data, only that io.EOF has not been returned previously.  If ReachedEOF returns true then all edits have
+// been read
+func (itr *KVPCollItr) ReachedEOF() bool {
+	return (itr.coll.Size() - itr.read) == 0
 }
 
 // Peek returns the next KVP without advancing

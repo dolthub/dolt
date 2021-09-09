@@ -16,6 +16,7 @@ package merge_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type testCommand struct {
@@ -71,6 +73,7 @@ type mergeSchemaConflictTest struct {
 	name        string
 	setup       []testCommand
 	expConflict merge.SchemaConflict
+	expectedErr error
 }
 
 type mergeForeignKeyTest struct {
@@ -280,13 +283,13 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			ColConflicts: []merge.ColConflict{
 				{
 					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("c4", uint64(3), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c4", uint64(2), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("c4", uint64(4696), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c4", uint64(8539), typeinfo.Int32Type, false),
 				},
 				{
 					Kind:   merge.NameCollision,
-					Ours:   newColTypeInfo("C6", uint64(13), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c6", uint64(19), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("C6", uint64(13258), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c6", uint64(13258), typeinfo.Int32Type, false),
 				},
 			},
 		},
@@ -367,6 +370,17 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 				},
 			},
 		},
+	},
+	{
+		name: "primary key conflicts",
+		setup: []testCommand{
+			{commands.CheckoutCmd{}, []string{"other"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test drop primary key;"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
+			{commands.CheckoutCmd{}, []string{"master"}},
+		},
+		expectedErr: merge.ErrMergeWithDifferentPkSets,
 	},
 }
 
@@ -521,6 +535,11 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	otherSch := getSchema(t, dEnv)
 
 	_, actConflicts, err := merge.SchemaMerge(masterSch, otherSch, ancSch, "test")
+	if test.expectedErr != nil {
+		assert.True(t, errors.Is(err, test.expectedErr))
+		return
+	}
+
 	require.NoError(t, err)
 	assert.Equal(t, actConflicts.TableName, "test")
 
@@ -532,10 +551,10 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 		assert.True(t, test.expConflict.IdxConflicts[i].Theirs.Equals(acc.Theirs))
 	}
 
-	require.Equal(t, len(test.expConflict.IdxConflicts), len(actConflicts.IdxConflicts))
-	for i, icc := range actConflicts.IdxConflicts {
-		assert.True(t, test.expConflict.IdxConflicts[i].Ours.Equals(icc.Ours))
-		assert.True(t, test.expConflict.IdxConflicts[i].Theirs.Equals(icc.Theirs))
+	require.Equal(t, len(test.expConflict.ColConflicts), len(actConflicts.ColConflicts))
+	for i, icc := range actConflicts.ColConflicts {
+		assert.True(t, test.expConflict.ColConflicts[i].Ours.Equals(icc.Ours))
+		assert.True(t, test.expConflict.ColConflicts[i].Theirs.Equals(icc.Theirs))
 	}
 }
 
@@ -566,7 +585,8 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	otherRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
-	mergedRoot, _, err := merge.MergeRoots(ctx, masterRoot, otherRoot, ancRoot)
+	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
+	mergedRoot, _, err := merge.MergeRoots(ctx, masterRoot, otherRoot, ancRoot, opts)
 	assert.NoError(t, err)
 
 	fkc, err := mergedRoot.GetForeignKeyCollection(ctx)

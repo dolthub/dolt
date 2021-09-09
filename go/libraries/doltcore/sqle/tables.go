@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,9 +84,11 @@ type DoltTable struct {
 
 	projectedCols []string
 	temporary     bool
+
+	opts editor.Options
 }
 
-func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool) *DoltTable {
+func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool, opts editor.Options) *DoltTable {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
@@ -103,6 +106,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		autoIncCol:    autoCol,
 		projectedCols: nil,
 		temporary:     isTemporary,
+		opts:          opts,
 	}
 }
 
@@ -361,10 +365,6 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		numPartitions = maxPartitions
 	}
 
-	if schema.IsKeyless(t.sch) {
-		numPartitions = 1
-	}
-
 	partitions := make([]doltTablePartition, numPartitions)
 	itemsPerPartition := numElements / numPartitions
 	for i := uint64(0); i < numPartitions-1; i++ {
@@ -568,7 +568,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
+	newTable, err = editor.RebuildAllIndexes(ctx, newTable, t.opts)
 	if err != nil {
 		return 0, err
 	}
@@ -811,6 +811,7 @@ var _ sql.IndexAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyTable = (*AlterableDoltTable)(nil)
 var _ sql.CheckAlterableTable = (*AlterableDoltTable)(nil)
+var _ sql.PrimaryKeyAlterableTable = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
@@ -990,7 +991,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, orderToOrder(order))
+	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, orderToOrder(order), t.opts)
 	if err != nil {
 		return err
 	}
@@ -1018,7 +1019,7 @@ func (t *AlterableDoltTable) CreateIndex(
 		return err
 	}
 
-	ret, err := createIndexForTable(ctx, table, indexName, using, constraint, columns, true, comment)
+	ret, err := createIndexForTable(ctx, table, indexName, using, constraint, columns, true, comment, t.opts)
 	if err != nil {
 		return err
 	}
@@ -1248,7 +1249,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	tableIndex, ok := t.sch.Indexes().GetIndexByTags(colTags...)
 	if !ok {
 		// if child index doesn't exist, create it
-		ret, err := createIndexForTable(ctx, table, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, false, "")
+		ret, err := createIndexForTable(ctx, table, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, false, "", t.opts)
 		if err != nil {
 			return err
 		}
@@ -1275,7 +1276,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 				c, _ := refSch.GetAllCols().GetByTag(t)
 				colNames = append(colNames, sql.IndexColumn{Name: c.Name})
 			}
-			ret, err := createIndexForTable(ctx, refTbl, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, false, "")
+			ret, err := createIndexForTable(ctx, refTbl, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, false, "", t.opts)
 			if err != nil {
 				return err
 			}
@@ -1450,6 +1451,7 @@ func createIndexForTable(
 	columns []sql.IndexColumn,
 	isUserDefined bool,
 	comment string,
+	opts editor.Options,
 ) (*createIndexReturn, error) {
 	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
 		return nil, fmt.Errorf("not yet supported")
@@ -1526,7 +1528,7 @@ func createIndexForTable(
 			return nil, err
 		}
 	} else { // set the index row data and get a new root with the updated table
-		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name())
+		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
 		if err != nil {
 			return nil, err
 		}
@@ -1719,4 +1721,182 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 	}
 
 	return false, nil
+}
+
+func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.IndexColumn) error {
+	table, err := t.doltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	table, err = alterschema.AddPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns, t.opts)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Update the root with the new table
+	newRoot, err := root.PutTable(ctx, t.tableName, table)
+	if err != nil {
+		return err
+	}
+
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
+	// Ensure that no auto increment requirements exist on this table
+	if t.autoIncCol.AutoIncrement {
+		return sql.ErrWrongAutoKey.New()
+	}
+
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	fkcUpdates, err := t.backupFkcIndexesForPkDrop(ctx, root)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := t.updateFkcIndex(ctx, root, fkcUpdates)
+	if err != nil {
+		return err
+	}
+
+	table, err := t.doltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	table, err = alterschema.DropPrimaryKeyFromTable(ctx, table, t.nbf, t.opts)
+	if err != nil {
+		return err
+	}
+
+	// Update the root with then new table
+	newRoot, err = newRoot.PutTable(ctx, t.tableName, table)
+	if err != nil {
+		return err
+	}
+
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+type fkIndexUpdate struct {
+	fkName  string
+	fromIdx string
+	toIdx   string
+}
+
+// updateFkcIndex applies a list of fkIndexUpdates to a ForeignKeyCollection and returns a new root value
+func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootValue, updates []fkIndexUpdate) (*doltdb.RootValue, error) {
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, u := range updates {
+		fk, ok := fkc.GetByNameCaseInsensitive(u.fkName)
+		if !ok {
+			return nil, errors.New("foreign key not found")
+		}
+		fkc.RemoveKeys(fk)
+		fk.ReferencedTableIndex = u.toIdx
+		fkc.AddKeys(fk)
+		err := fk.ValidateReferencedTableSchema(t.sch)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return nil, err
+	}
+	return root, nil
+}
+
+// backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
+// key drop. If multiple indexes are valid, we sort by unique and select the first.
+// This will not work with a non-pk index drop without an additional index filter argument.
+func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *doltdb.RootValue) ([]fkIndexUpdate, error) {
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	indexes := t.sch.Indexes().AllIndexes()
+	if err != nil {
+		return nil, err
+	}
+
+	// pkBackups is a mapping from the table's PK tags to potentially compensating indexes
+	pkBackups := make(map[uint64][]schema.Index, len(t.sch.GetPKCols().TagToIdx))
+	for tag, _ := range t.sch.GetPKCols().TagToIdx {
+		pkBackups[tag] = nil
+	}
+
+	// prefer unique key backups
+	sort.Slice(indexes[:], func(i, j int) bool {
+		return indexes[i].IsUnique() && !indexes[j].IsUnique()
+	})
+
+	for _, idx := range indexes {
+		if !idx.IsUserDefined() {
+			continue
+		}
+
+		for _, tag := range idx.AllTags() {
+			if _, ok := pkBackups[tag]; ok {
+				pkBackups[tag] = append(pkBackups[tag], idx)
+			}
+		}
+	}
+
+	fkUpdates := make([]fkIndexUpdate, 0)
+	for _, fk := range fkc.AllKeys() {
+		// check if this FK references a parent PK tag we are trying to change
+		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
+			covered := false
+			for _, idx := range backups {
+				idxTags := idx.AllTags()
+				if len(fk.TableColumns) > len(idxTags) {
+					continue
+				}
+				failed := false
+				for i := 0; i < len(fk.ReferencedTableColumns); i++ {
+					if idxTags[i] != fk.ReferencedTableColumns[i] {
+						failed = true
+						break
+					}
+				}
+				if failed {
+					continue
+				}
+				fkUpdates = append(fkUpdates, fkIndexUpdate{fk.Name, fk.ReferencedTableIndex, idx.Name()})
+				covered = true
+				break
+			}
+			if !covered {
+				return nil, sql.ErrCantDropIndex.New("PRIMARY")
+			}
+		}
+	}
+	return fkUpdates, nil
 }

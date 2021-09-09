@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type DoltHarness struct {
@@ -169,7 +170,8 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
 	d.databaseGlobalStates = nil
 	for _, name := range names {
-		db := sqle.NewDatabase(name, dEnv.DbData())
+		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		db := sqle.NewDatabase(name, dEnv.DbData(), opts)
 		globalState := globalstate.NewGlobalStateStore()
 		dbState := getDbState(d.t, db, dEnv, globalState)
 		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), dbState))
@@ -199,11 +201,11 @@ func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState g
 	require.NoError(t, err)
 
 	return dsess.InitialDbState{
-		Db:          db,
-		HeadCommit:  headCommit,
-		WorkingSet:  ws,
-		DbData:      dEnv.DbData(),
-		GlobalState: globalState,
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
 	}
 }
 

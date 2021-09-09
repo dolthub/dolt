@@ -76,7 +76,7 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootVal
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl StreamDataLocation) NewCreatingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, outSch schema.Schema, _ noms.StatsCB, _ bool) (table.TableWriteCloser, error) {
+func (dl StreamDataLocation) NewCreatingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, outSch schema.Schema, _ noms.StatsCB) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case CsvFile:
 		return csv.NewCSVWriter(iohelp.NopWrCloser(dl.Writer), outSch, csv.NewCSVInfo())
@@ -90,12 +90,12 @@ func (dl StreamDataLocation) NewCreatingWriter(_ context.Context, _ DataMoverOpt
 
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
-func (dl StreamDataLocation) NewUpdatingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB, _ bool) (table.TableWriteCloser, error) {
+func (dl StreamDataLocation) NewUpdatingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Updating is not supported for stdout")
 }
 
 // NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
 // preserving schema
-func (dl StreamDataLocation) NewReplacingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB, _ bool) (table.TableWriteCloser, error) {
+func (dl StreamDataLocation) NewReplacingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Replacing is not supported for stdout")
 }

@@ -73,6 +73,12 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
+      - name: Get pull number
+        uses: actions/github-script@v3
+        id: get_pull_number
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
       - name: Run benchmarks
         id: run-benchmarks
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
@@ -82,32 +88,8 @@ jobs:
           TO_SERVER: 'dolt'
           TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
           MODE: 'pullRequest'
+          ISSUE_NUMBER: ${{ steps.get_pull_number.outputs.pull_number }}
           ACTOR: ${{ github.actor }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"
-      - name: Get benchmark results
-        id: get-results
-        run: |
-          echo "Get benchmark results here: $KEY"
-          aws s3api get-object --bucket=performance-benchmarking-github-actions-results --key="$KEY" results.log
-        env:
-          KEY: ${{ steps.run-benchmarks.outputs.object-key }}
-      - name: Post results to PR
-        uses: actions/github-script@v3
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            fs = require('fs');
-            fs.readFile(`${process.env.GITHUB_WORKSPACE}/results.log`, 'utf8', function (err,data) {
-              if (err) {
-                return console.log(err);
-              }
-              return github.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: `@${process.env.ACTOR}\n ${data}`
-              });
-            });
-        env:
-          ACTOR: ${{ github.actor }}

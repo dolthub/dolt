@@ -36,6 +36,7 @@ func ModifyColumn(
 	existingCol schema.Column,
 	newCol schema.Column,
 	order *ColumnOrder,
+	opts editor.Options,
 ) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -69,7 +70,7 @@ func ModifyColumn(
 		return nil, err
 	}
 
-	updatedTable, err := updateTableWithModifiedColumn(ctx, tbl, sch, newSchema, existingCol, newCol)
+	updatedTable, err := updateTableWithModifiedColumn(ctx, tbl, sch, newSchema, existingCol, newCol, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +106,7 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 
 // updateTableWithModifiedColumn updates the existing table with the new schema. If the column type has changed, then
 // the data is updated.
-func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSch, newSch schema.Schema, oldCol, modifiedCol schema.Column) (*doltdb.Table, error) {
+func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSch, newSch schema.Schema, oldCol, modifiedCol schema.Column, opts editor.Options) (*doltdb.Table, error) {
 	vrw := tbl.ValueReadWriter()
 	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSch)
 	if err != nil {
@@ -165,7 +166,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		// touched ones.
 		if modifiedCol.IsPartOfPK {
 			for _, index := range newSch.Indexes().AllIndexes() {
-				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name())
+				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name(), opts)
 				if err != nil {
 					return nil, err
 				}
@@ -176,7 +177,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 			}
 		} else {
 			for _, index := range newSch.Indexes().IndexesWithTag(modifiedCol.Tag) {
-				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name())
+				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name(), opts)
 				if err != nil {
 					return nil, err
 				}

@@ -208,6 +208,8 @@ func bitTypeConverter(ctx context.Context, src *bitType, destTi TypeInfo) (tc Ty
 		} else {
 			return wrapIsValid(dest.IsValid, src, dest)
 		}
+	case *blobStringType:
+		return bitTypeConverterInterpretAsString(ctx, src, destTi)
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *datetimeType:

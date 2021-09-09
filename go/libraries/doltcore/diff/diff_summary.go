@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -67,6 +68,15 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Ma
 }
 
 func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td TableDelta) error {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+	}
+
+	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+		return errhand.BuildDError("diff summary will not compute due to primary key set change with table %s", td.CurName()).Build()
+	}
+
 	keyless, err := td.IsKeyless(ctx)
 	if err != nil {
 		return err

@@ -51,7 +51,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -443,7 +443,10 @@ func execMultiStatements(
 }
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
-	return dsqle.NewDatabase(name, dEnv.DbData())
+	opts := editor.Options{
+		Deaf: dEnv.DbEaFactory(),
+	}
+	return dsqle.NewDatabase(name, dEnv.DbData(), opts)
 }
 
 func execQuery(
@@ -542,7 +545,7 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 		return verrBuilder.Build()
 	} else {
 		if len(message) > 0 {
-			err = fmt.Errorf("%s: %+v", message, err)
+			err = fmt.Errorf("%s: %v", message, err)
 		}
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1490,11 +1493,11 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	}
 
 	return dsess.InitialDbState{
-		Db:          db,
-		HeadCommit:  headCommit,
-		WorkingSet:  ws,
-		DbData:      dEnv.DbData(),
-		GlobalState: globalstate.NewGlobalStateStore(),
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     dEnv.DbData(),
+		Remotes:    dEnv.RepoState.Remotes,
 	}, nil
 }
 
