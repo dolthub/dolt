@@ -16,6 +16,14 @@ CREATE TABLE test (
 );
 SQL
 
+    cat <<SQL > 1pk1col-char-sch.sql
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c char(5) COMMENT 'tag:1',
+  PRIMARY KEY (pk)
+);
+SQL
+
     cat <<DELIM > 1pk5col-ints.csv
 pk,c1,c2,c3,c4,c5
 0,1,2,3,4,5
@@ -184,6 +192,20 @@ SQL
     [[ "${lines[4]}" =~ "title" ]]      || false
     [[ "${lines[5]}" =~ "start date" ]] || false
     [[ "${lines[6]}" =~ "end date" ]]   || false
+}
+
+@test "import-update-tables: update table with incorrect length char throws bad row error" {
+    cat <<DELIM > 1pk1col-rpt-chars.csv
+pk,c
+1,"123456"
+DELIM
+
+    dolt sql < 1pk1col-char-sch.sql
+    run dolt table import -u test 1pk1col-rpt-chars.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "Bad Row:" ]] || false
+    [[ "$output" =~ '"123456" is not valid for column "c" (type "CHAR(5)")' ]] || false
 }
 
 @test "import-update-tables: update table with repeat pk in csv throws error" {
