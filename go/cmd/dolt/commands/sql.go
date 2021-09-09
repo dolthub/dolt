@@ -777,7 +777,6 @@ func runShell(ctx context.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initia
 	currentDB := sqlCtx.Session.GetCurrentDatabase()
 	currEnv := mrEnv[currentDB]
 
-	// start the doltsql shell
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
 	initialMultilinePrompt := fmt.Sprintf(fmt.Sprintf("%%%ds", len(initialPrompt)), "-> ")
@@ -840,52 +839,48 @@ func runShell(ctx context.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initia
 			shell.Println(color.RedString(err.Error()))
 		}
 
-		shouldProcessQuery := true
 		//TODO: Handle comments and enforce the current line terminator
 		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 3 {
 			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
 			shell.SetLineTerminator(matches[1])
-			shouldProcessQuery = false
+			return
 		}
 
 		var nextPrompt string
-		if shouldProcessQuery {
-			var sqlSch sql.Schema
-			var rowIter sql.RowIter
-			var err error
+		var sqlSch sql.Schema
+		var rowIter sql.RowIter
 
-			// The SQL parser does not understand any other terminator besides semicolon, so we remove it.
-			if shell.LineTerminator() != ";" && strings.HasSuffix(query, shell.LineTerminator()) {
-				query = query[:len(query)-len(shell.LineTerminator())]
+		// The SQL parser does not understand any other terminator besides semicolon, so we remove it.
+		if shell.LineTerminator() != ";" && strings.HasSuffix(query, shell.LineTerminator()) {
+			query = query[:len(query)-len(shell.LineTerminator())]
+		}
+
+		cont := func() bool {
+			subCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			sqlCtx, err = se.newContext(subCtx)
+			if err != nil {
+				shell.Println(color.RedString(err.Error()))
+				return false
 			}
 
-			cont := func() bool {
-				subCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-				defer stop()
-
-				sqlCtx, err = se.newContext(subCtx)
+			if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
+				verr := formatQueryError("", err)
+				shell.Println(verr.Verbose())
+			} else if rowIter != nil {
+				err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
-					return false
 				}
-
-				if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
-					verr := formatQueryError("", err)
-					shell.Println(verr.Verbose())
-				} else if rowIter != nil {
-					err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
-					if err != nil {
-						shell.Println(color.RedString(err.Error()))
-					}
-				}
-
-				nextPrompt = fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
-				return true
-			}()
-
-			if !cont {
-				return
 			}
+
+			nextPrompt = fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
+			return true
+		}()
+
+		if !cont {
+			return
 		}
 
 		shell.SetPrompt(nextPrompt)
