@@ -233,7 +233,7 @@ func progFunc(ctx context.Context, progChan chan datas.PullProgress) {
 	last := time.Now().UnixNano() - 1
 	lenPrinted := 0
 	done := false
-	for  !done {
+	for !done {
 		select {
 		case progress, ok := <-progChan:
 			if !ok {

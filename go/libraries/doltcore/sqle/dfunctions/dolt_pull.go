@@ -18,10 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"strings"
 	"sync"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -73,7 +74,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ap := cli.CreateMergeArgParser()
+	ap := cli.CreatePullArgParser()
 	args, err := getDoltArgs(ctx, row, d.Children())
 
 	apr, err := ap.Parse(args)
@@ -155,12 +156,14 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
 	for {
 		select {
-		case <- ctx.Done(): return
+		case <-ctx.Done():
+			return
 		default:
 		}
 		select {
-		case <- ctx.Done(): return
-		case <- pullerEventCh:
+		case <-ctx.Done():
+			return
+		case <-pullerEventCh:
 		default:
 		}
 	}
@@ -169,12 +172,14 @@ func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent)
 func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
 	for {
 		select {
-		case <- ctx.Done(): return
+		case <-ctx.Done():
+			return
 		default:
 		}
 		select {
-		case <- ctx.Done(): return
-		case <- progChan:
+		case <-ctx.Done():
+			return
+		case <-progChan:
 		default:
 		}
 	}

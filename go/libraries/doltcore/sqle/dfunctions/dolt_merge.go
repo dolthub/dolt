@@ -41,8 +41,7 @@ const DoltConflictWarningCode int = 1105 // Since this our own custom warning we
 
 const (
 	hasConflicts int = 0
-	noConflicts int = 1
-
+	noConflicts  int = 1
 )
 
 func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
