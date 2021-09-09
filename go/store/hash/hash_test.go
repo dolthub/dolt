@@ -128,19 +128,19 @@ func TestLess(t *testing.T) {
 	assert.False(r2.Less(r0))
 }
 
-func TestGreater(t *testing.T) {
+func TestCompareGreater(t *testing.T) {
 	assert := assert.New(t)
 
 	r1 := Parse("00000000000000000000000000000001")
 	r2 := Parse("00000000000000000000000000000002")
 
-	assert.False(r1.Greater(r1))
-	assert.False(r1.Greater(r2))
-	assert.True(r2.Greater(r1))
-	assert.False(r2.Greater(r2))
+	assert.False(r1.Compare(r1) > 0)
+	assert.False(r1.Compare(r2) > 0)
+	assert.True(r2.Compare(r1) > 0)
+	assert.False(r2.Compare(r2) > 0)
 
 	r0 := Hash{}
-	assert.False(r0.Greater(r0))
-	assert.False(r0.Greater(r2))
-	assert.True(r2.Greater(r0))
+	assert.False(r0.Compare(r0) > 0)
+	assert.False(r0.Compare(r2) > 0)
+	assert.True(r2.Compare(r0) > 0)
 }

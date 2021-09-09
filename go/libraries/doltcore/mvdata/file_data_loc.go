@@ -21,11 +21,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
@@ -145,7 +145,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, outSch schema.Schema, _ noms.StatsCB, _ bool) (table.TableWriteCloser, error) {
+func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, outSch schema.Schema, _ noms.StatsCB) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case CsvFile:
 		return csv.OpenCSVWriter(dl.Path, dEnv.FS, outSch, csv.NewCSVInfo())
@@ -156,7 +156,8 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMov
 	case JsonFile:
 		return json.OpenJSONWriter(dl.Path, dEnv.FS, outSch)
 	case SqlFile:
-		return sqlexport.OpenSQLExportWriter(ctx, dl.Path, dEnv.FS, root, mvOpts.SrcName(), outSch)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		return sqlexport.OpenSQLExportWriter(ctx, dl.Path, dEnv.FS, root, mvOpts.SrcName(), outSch, opts)
 	}
 
 	panic("Invalid Data Format." + string(dl.Format))
@@ -164,12 +165,12 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMov
 
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
-func (dl FileDataLocation) NewUpdatingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB, _ bool) (table.TableWriteCloser, error) {
+func (dl FileDataLocation) NewUpdatingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Updating of files is not supported")
 }
 
 // NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
 // preserving schema
-func (dl FileDataLocation) NewReplacingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB, _ bool) (table.TableWriteCloser, error) {
+func (dl FileDataLocation) NewReplacingWriter(_ context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Replacing files is not supported")
 }

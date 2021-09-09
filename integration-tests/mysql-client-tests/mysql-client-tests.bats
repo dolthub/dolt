@@ -32,7 +32,7 @@ setup() {
 teardown() {
     cd ..
     kill $SERVER_PID
-    rm -rf $REPO_NAME    
+    rm -rf $REPO_NAME
 }
 
 @test "go go-sql-drive/mysql test" {
@@ -68,13 +68,13 @@ teardown() {
 @test "cpp mysql connector" {
     if [ -d $BATS_TEST_DIRNAME/cpp/_build ]
     then
-	rm -rf $BATS_TEST_DIRNAME/cpp/_build/*
+        rm -rf $BATS_TEST_DIRNAME/cpp/_build/*
     else
-	mkdir $BATS_TEST_DIRNAME/cpp/_build
+        mkdir $BATS_TEST_DIRNAME/cpp/_build
     fi
     cd $BATS_TEST_DIRNAME/cpp/_build
     if [[ `uname` = "Darwin" ]]; then
-	PATH=/usr/local/Cellar/mysql-client/8.0.21/bin/:"$PATH" cmake .. -DWITH_SSL=/usr/local/Cellar/openssl@1.1/1.1.1g/ -DWITH_JDBC=yes;
+        PATH=/usr/local/Cellar/mysql-client/8.0.21/bin/:"$PATH" cmake .. -DWITH_SSL=/usr/local/Cellar/openssl@1.1/1.1.1g/ -DWITH_JDBC=yes;
     else
         cmake ..
     fi
@@ -127,22 +127,22 @@ CREATE EXTENSION mysql_fdw;
 
 -- create server object
 CREATE SERVER mysql_server
-	FOREIGN DATA WRAPPER mysql_fdw
-	OPTIONS (host '0.0.0.0', port '$PORT');
+        FOREIGN DATA WRAPPER mysql_fdw
+        OPTIONS (host '0.0.0.0', port '$PORT');
 
 -- create user mapping
 CREATE USER MAPPING FOR postgres
-	SERVER mysql_server
-	OPTIONS (username '$USER', password '');
+        SERVER mysql_server
+        OPTIONS (username '$USER', password '');
 
 -- create foreign table
 CREATE FOREIGN TABLE warehouse
-	(
-		warehouse_id int,
-		warehouse_name text
-	)
-	SERVER mysql_server
-	OPTIONS (dbname '$REPO_NAME', table_name 'warehouse');
+        (
+                warehouse_id int,
+                warehouse_name text
+        )
+        SERVER mysql_server
+        OPTIONS (dbname '$REPO_NAME', table_name 'warehouse');
 
 SELECT * FROM warehouse;
 EOF" -m "postgres"
@@ -150,4 +150,12 @@ EOF" -m "postgres"
     [[ "$output" =~ "TV" ]] || false
     [[ "$output" =~ "Table" ]] || false
     service postgresql stop
+}
+
+@test "R RMySQL client" {
+    Rscript $BATS_TEST_DIRNAME/r/rmysql-test.r $USER $PORT $REPO_NAME
+}
+
+@test "R RMariaDB client" {
+    Rscript $BATS_TEST_DIRNAME/r/rmariadb-test.r $USER $PORT $REPO_NAME
 }

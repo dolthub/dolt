@@ -55,7 +55,6 @@ const (
 	primaryKeyParam  = "pk"
 	fileTypeParam    = "file-type"
 	delimParam       = "delim"
-	noGCParam        = "no-gc"
 )
 
 var importDocs = cli.CommandDocumentationContent{
@@ -100,7 +99,6 @@ type importOptions struct {
 	tableName   string
 	contOnErr   bool
 	force       bool
-	disableGC   bool
 	schFile     string
 	primaryKeys []string
 	nameMapper  rowconv.NameMapper
@@ -239,7 +237,6 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		tableName:   tableName,
 		contOnErr:   contOnErr,
 		force:       force,
-		disableGC:   apr.Contains(noGCParam),
 		schFile:     schemaFile,
 		nameMapper:  colMapper,
 		primaryKeys: pks,
@@ -403,7 +400,6 @@ func createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
-	ap.SupportsFlag(noGCParam, "", "Don't run garbage collection automatically as part of the import.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
 	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
@@ -470,11 +466,11 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	var wr table.TableWriteCloser
 	switch impOpts.operation {
 	case CreateOp:
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, !impOpts.disableGC)
+		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB)
 	case ReplaceOp:
-		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, !impOpts.disableGC)
+		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB)
 	case UpdateOp:
-		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, !impOpts.disableGC)
+		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB)
 	default:
 		err = errors.New("invalid move operation")
 	}
