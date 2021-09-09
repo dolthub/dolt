@@ -275,7 +275,7 @@ type PullSpec struct {
 	Branch     ref.DoltRef
 }
 
-func ParsePullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force bool) (*PullSpec, error) {
+func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force bool) (*PullSpec, error) {
 	branch := rsr.CWBHeadRef()
 
 	refSpecs, err := GetRefSpecs(rsr, remoteName)

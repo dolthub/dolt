@@ -13,23 +13,6 @@ teardown() {
     teardown_common
 }
 
-@test "sql-remotes-fs: Add a file system based remote" {
-    skip "todo dolt_remote function?"
-    mkdir remote
-    dolt remote add origin file://remote/
-    run dolt remote -v
-    [ $status -eq 0 ]
-    regex='file://.*/remote'
-    [[ "$output" =~ $regex ]] || false 
-}
-
-@test "sql-remotes-fs: Add a file system remote with a bad path" {
-    skip "todo dolt_remote function?"
-    run dolt remote add origin file:///poop/
-    [ $status -ne 0 ]
-    [[ "$output" =~ "'file:///poop/' is not valid" ]] || false
-}
-
 @test "sql-remotes-fs: push, pull, and clone file based remotes" {
     # seed with some data
     dolt sql <<SQL

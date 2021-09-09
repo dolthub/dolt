@@ -166,7 +166,7 @@ func (ts *TextSpinner) next() string {
 	return string([]rune{spinnerSeq[ts.seqPos]})
 }
 
-func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
+func pullerProgFunc(ctx context.Context, pullerEventCh chan datas.PullerEvent) {
 	var pos int
 	var currentTreeLevel int
 	var percentBuffered float64
@@ -228,19 +228,18 @@ func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
 	}
 }
 
-func progFunc(progChan chan datas.PullProgress) {
+func progFunc(ctx context.Context, progChan chan datas.PullProgress) {
 	var latest datas.PullProgress
 	last := time.Now().UnixNano() - 1
 	lenPrinted := 0
 	done := false
-	for !done {
+	for  !done {
 		select {
 		case progress, ok := <-progChan:
 			if !ok {
 				done = true
 			}
 			latest = progress
-
 		case <-time.After(250 * time.Millisecond):
 			break
 		}
@@ -262,7 +261,7 @@ func progFunc(progChan chan datas.PullProgress) {
 	}
 }
 
-func runProgFuncs() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
+func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
 	pullerEventCh := make(chan datas.PullerEvent, 128)
 	progChan := make(chan datas.PullProgress, 128)
 	wg := &sync.WaitGroup{}
@@ -270,19 +269,20 @@ func runProgFuncs() (*sync.WaitGroup, chan datas.PullProgress, chan datas.Puller
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		progFunc(progChan)
+		progFunc(ctx, progChan)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pullerProgFunc(pullerEventCh)
+		pullerProgFunc(ctx, pullerEventCh)
 	}()
 
 	return wg, progChan, pullerEventCh
 }
 
-func stopProgFuncs(wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+	cancel()
 	close(progChan)
 	close(pullerEventCh)
 	wg.Wait()
