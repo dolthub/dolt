@@ -79,6 +79,6 @@ jobs:
       - name: Check expect
         run: expect -v
       - name: Test all Unix
-        run: |
-          go run .
         working-directory: ./integration-tests/bats/runner
+        run: |
+          go run -mod=readonly .
