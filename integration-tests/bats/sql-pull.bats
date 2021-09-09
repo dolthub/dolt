@@ -4,24 +4,22 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
     TMPDIRS=$(pwd)/tmpdirs
-    mkdir $TMPDIRS
-    cd $TMPDIRS
-    mkdir rem1 tmp1
+    mkdir -p $TMPDIRS/{rem1,tmp1}
 
     # tmp1 -> rem1 -> tmp2
-    cd tmp1
+    cd $TMPDIRS/tmp1
     dolt init
     dolt branch feature
-    dolt remote add origin file:///${TMPDIRS}/rem1
-    dolt remote add test-remote file:///${TMPDIRS}/rem1
+    dolt remote add origin file://../rem1
+    dolt remote add test-remote file://../rem1
     dolt push origin master
 
     cd $TMPDIRS
-    dolt clone file:///${TMPDIRS}/rem1 tmp2
+    dolt clone file://rem1 tmp2
     cd $TMPDIRS/tmp2
     dolt log
     dolt branch feature
-    dolt remote add test-remote file:///${TMPDIRS}/rem1
+    dolt remote add test-remote file://../rem1
 
     cd $TMPDIRS/tmp1
     dolt sql -q "create table t1 (a int primary key, b int)"
