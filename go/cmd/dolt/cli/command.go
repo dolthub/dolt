@@ -16,7 +16,10 @@ package cli
 
 import (
 	"context"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/fatih/color"
 
@@ -54,7 +57,7 @@ func hasHelpFlag(args []string) bool {
 
 // Command is the interface which defines a Dolt cli command
 type Command interface {
-	// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+	// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 	Name() string
 	// Description returns a description of the command
 	Description() string
@@ -62,6 +65,15 @@ type Command interface {
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
 	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
+}
+
+// SignalCommand is an extension of Command that allows commands to install their own signal handlers, rather than use
+// the global one (which cancels the global context).
+type SignalCommand interface {
+	Command
+
+	// InstallsSignalHandlers returns whether this command manages its own signal handlers for interruption / termination.
+	InstallsSignalHandlers() bool
 }
 
 // This type is to store the content of a documented command, elsewhere we can transform this struct into
@@ -153,14 +165,17 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	if len(args) > 0 {
 		subCommandStr = strings.ToLower(strings.TrimSpace(args[0]))
 	}
+
+	ctx, cancelF := context.WithCancel(ctx)
+
 	for _, cmd := range hc.Subcommands {
 		lwrName := strings.ToLower(cmd.Name())
 		if lwrName == subCommandStr {
-			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv)
+			return hc.handleCommand(ctx, cancelF, commandStr+" "+subCommandStr, cmd, args[1:], dEnv)
 		}
 	}
 	if hc.Unspecified != nil {
-		return hc.handleCommand(ctx, commandStr, hc.Unspecified, args, dEnv)
+		return hc.handleCommand(ctx, cancelF, commandStr, hc.Unspecified, args, dEnv)
 	}
 
 	if !isHelp(subCommandStr) {
@@ -171,7 +186,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	return 1
 }
 
-func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
+func (hc SubCommandHandler) handleCommand(ctx context.Context, cancelF context.CancelFunc, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
 	cmdRequiresRepo := true
 	if rnrCmd, ok := cmd.(RepoNotRequiredCommand); ok {
 		cmdRequiresRepo = rnrCmd.RequiresRepo()
@@ -190,6 +205,10 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		ctx = events.NewContextForEvent(ctx, evt)
 	}
 
+	if signalCmd, ok := cmd.(SignalCommand); !ok || !signalCmd.InstallsSignalHandlers() {
+		installSignalHandler(cancelF)
+	}
+
 	ret := cmd.Exec(ctx, commandStr, args, dEnv)
 
 	if evt != nil {
@@ -197,6 +216,15 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 	}
 
 	return ret
+}
+
+func installSignalHandler(cancelF context.CancelFunc) {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		cancelF()
+	}()
 }
 
 // CheckEnvIsValid validates that a DoltEnv has been initialized properly and no errors occur during load, and prints

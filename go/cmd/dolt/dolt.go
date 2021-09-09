@@ -21,10 +21,8 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/fatih/color"
 	"github.com/opentracing/opentracing-go"
@@ -225,14 +223,7 @@ func runMain() int {
 
 	warnIfMaxFilesTooLow()
 
-	ctx, cancelF := context.WithCancel(context.Background())
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		cancelF()
-	}()
-
+	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
 	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {

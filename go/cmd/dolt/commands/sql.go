@@ -122,6 +122,13 @@ type SqlCmd struct {
 	VersionStr string
 }
 
+// The SQL shell installs its own signal handlers so that you can cancel a running query without and still run a new one.
+func (cmd SqlCmd) InstallsSignalHandlers() bool {
+	return true
+}
+
+var _ cli.SignalCommand = SqlCmd{}
+
 // Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd SqlCmd) Name() string {
 	return "sql"
