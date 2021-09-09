@@ -14,7 +14,7 @@ import (
 )
 
 var NumRunners = flag.Int("n", 8, "num runners")
-var Dir = flag.String("d", "../", "directory to find .bats files in")
+var Dir = flag.String("d", "..", "directory to find .bats files in")
 
 func main() {
 	flag.Parse()
