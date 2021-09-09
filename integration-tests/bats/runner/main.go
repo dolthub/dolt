@@ -86,16 +86,16 @@ func GetTestFileNames() ([]string, error) {
 			"../remotes.bats",
 		}, nil
 	}
-	dir, err := os.Open(*Dir)
+	err := os.Chdir(*Dir)
+	if err != nil {
+		return nil, err
+	}
+	dir, err := os.Open(".")
 	if err != nil {
 		return nil, err
 	}
 	defer dir.Close()
 	fis, err := dir.Readdir(0)
-	if err != nil {
-		return nil, err
-	}
-	err = dir.Chdir()
 	if err != nil {
 		return nil, err
 	}
