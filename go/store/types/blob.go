@@ -56,6 +56,15 @@ func NewEmptyBlob(vrw ValueReadWriter) (Blob, error) {
 
 // Less implements the LesserValuable interface.
 func (b Blob) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	res, err := b.Compare(nbf, other)
+	if err != nil {
+		return false, err
+	}
+
+	return res < 0, nil
+}
+
+func (b Blob) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
 	if b2, ok := other.(Blob); ok {
 		// Blobs can have an arbitrary length, so we compare in chunks rather than loading it entirely
 		ctx := context.Background()
@@ -78,23 +87,37 @@ func (b Blob) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 			b2Data := b2Array[:length]
 			n1, err := b1Reader.Read(b1Data)
 			if err != nil && err != io.EOF {
-				return false, err
+				return 0, err
 			}
 			n2, err := b2Reader.Read(b2Data)
 			if err != nil && err != io.EOF {
-				return false, err
+				return 0, err
 			}
 			if n1 != n2 || uint64(n1) != length {
-				return false, errors.New("incorrect length read from blob")
+				return 0, errors.New("incorrect length read from blob")
 			}
-			cmp := bytes.Compare(b1Data, b2Data)
-			if cmp != 0 {
-				return cmp < 0, nil
+			res := bytes.Compare(b1Data, b2Data)
+
+			if res != 0 {
+				return res, nil
 			}
 		}
-		return b1Length < b2Length, nil
+
+		if b1Length < b2Length {
+			return -1, nil
+		} else if b1Length == b2Length {
+			return 0, nil
+		} else {
+			return 1, nil
+		}
 	}
-	return BlobKind < other.Kind(), nil
+
+	// we already know they are not the same kind
+	if BlobKind < other.Kind() {
+		return -1, nil
+	}
+
+	return 1, nil
 }
 
 // ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
@@ -539,4 +562,22 @@ func (b Blob) String() string {
 
 func (b Blob) HumanReadableString() string {
 	return "BLOB"
+}
+
+func (b Blob) DebugText() string {
+	ctx := context.Background()
+	bLen := b.Len()
+	bRd := b.Reader(ctx)
+	if bLen > 128 {
+		bLen = 128
+	}
+
+	data := make([]byte, bLen)
+	n, err := bRd.Read(data)
+
+	if err != nil && err != io.EOF {
+		return err.Error()
+	}
+
+	return string(data[:n])
 }

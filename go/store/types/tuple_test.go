@@ -32,13 +32,18 @@ const (
 )
 
 func TestTupleEquality(t *testing.T) {
+	nbf := Format_Default
 	values := []Value{String("aoeu"), Int(-1234), Uint(1234)}
-	tpl, err := NewTuple(Format_7_18, values...)
+	tpl, err := NewTuple(nbf, values...)
 	require.NoError(t, err)
 
 	if !tpl.Equals(tpl) {
 		t.Error("Tuple not equal to itself")
 	}
+
+	res, err := tpl.Compare(nbf, tpl)
+	require.NoError(t, err)
+	require.Equal(t, 0, res)
 
 	id := UUID(uuid.MustParse(ZeroUUID))
 	tpl2, err := tpl.Append(id)
@@ -48,6 +53,10 @@ func TestTupleEquality(t *testing.T) {
 	if tpl.Equals(tpl2) {
 		t.Error("Tuples should not be equal")
 	}
+
+	res, err = tpl.Compare(nbf, tpl2)
+	require.NoError(t, err)
+	require.NotEqual(t, 0, res)
 
 	temp, err := tpl2.Set(idIdx, id)
 	require.NoError(t, err)
@@ -59,40 +68,56 @@ func TestTupleEquality(t *testing.T) {
 	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
-		t.Error("")
+		t.Error("tuples should be equal")
 	}
+
+	res, err = tpl2.Compare(nbf, tpl3)
+	require.NoError(t, err)
+	require.Equal(t, 0, res)
 
 	tpl3, err = tpl2.Set(0, String("aoeu"))
 	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
-		t.Error("")
+		t.Error("tuples should be equal")
 	}
+
+	res, err = tpl2.Compare(nbf, tpl3)
+	require.NoError(t, err)
+	require.Equal(t, 0, res)
 
 	tpl3, err = tpl2.Set(1, Int(-1234))
 	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
-		t.Error("")
+		t.Error("should be equal")
 	}
+
+	res, err = tpl2.Compare(nbf, tpl3)
+	require.NoError(t, err)
+	require.Equal(t, 0, res)
 
 	tpl3, err = tpl2.Set(2, Uint(1234))
 	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
-		t.Error("")
+		t.Error("should be equal")
 	}
+
+	res, err = tpl2.Compare(nbf, tpl3)
+	require.NoError(t, err)
+	require.Equal(t, 0, res)
 
 	tpl3, err = tpl2.Set(idIdx, id)
 	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
-		t.Error("")
+		t.Error("should be equal")
 	}
 
-	if !tpl2.Equals(tpl3) {
-		t.Error("")
-	}
+	res, err = tpl2.Compare(nbf, tpl3)
+	require.NoError(t, err)
+	require.Equal(t, 0, res)
 
 	idVal, err := tpl3.Get(idIdx)
 	require.NoError(t, err)
@@ -163,20 +188,29 @@ func TestTupleLess(t *testing.T) {
 		},
 	}
 
+	isLTZero := func(n int) bool {
+		return n < 0
+	}
+
+	nbf := Format_Default
 	for _, test := range tests {
-		tpl1, err := NewTuple(Format_7_18, test.vals1...)
+		tpl1, err := NewTuple(nbf, test.vals1...)
 
 		require.NoError(t, err)
 
-		tpl2, err := NewTuple(Format_7_18, test.vals2...)
+		tpl2, err := NewTuple(nbf, test.vals2...)
 		require.NoError(t, err)
 
-		actual, err := tpl1.Less(Format_7_18, tpl2)
+		actual, err := tpl1.Less(nbf, tpl2)
 		require.NoError(t, err)
 
 		if actual != test.expected {
 			t.Error("tpl1:", mustString(EncodedValue(context.Background(), tpl1)), "tpl2:", mustString(EncodedValue(context.Background(), tpl2)), "expected", test.expected, "actual:", actual)
 		}
+
+		res, err := tpl1.Compare(nbf, tpl2)
+		require.NoError(t, err)
+		require.Equal(t, actual, isLTZero(res))
 	}
 }
 
@@ -273,11 +307,12 @@ func TestTupleStartsWith(t *testing.T) {
 		},
 	}
 
+	nbf := Format_Default
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v|%v", test.full, test.prefix), func(t *testing.T) {
-			tpl1, err := NewTuple(Format_7_18, test.full...)
+			tpl1, err := NewTuple(nbf, test.full...)
 			require.NoError(t, err)
-			tpl2, err := NewTuple(Format_7_18, test.prefix...)
+			tpl2, err := NewTuple(nbf, test.prefix...)
 			require.NoError(t, err)
 			if test.expected {
 				assert.True(t, tpl1.StartsWith(tpl2))

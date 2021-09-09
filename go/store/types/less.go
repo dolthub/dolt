@@ -30,27 +30,27 @@ type kindAndHash interface {
 	Hash(*NomsBinFormat) (hash.Hash, error)
 }
 
-func valueLess(nbf *NomsBinFormat, v1, v2 kindAndHash) (bool, error) {
+func valueCompare(nbf *NomsBinFormat, v1, v2 kindAndHash) (int, error) {
 	switch v2.Kind() {
 	case UnknownKind:
-		return false, ErrUnknownType
+		return 0, ErrUnknownType
 
 	case BoolKind, FloatKind, StringKind:
-		return false, nil
+		return 1, nil
 
 	default:
 		h1, err := v1.Hash(nbf)
 
 		if err != nil {
-			return false, err
+			return 0, err
 		}
 
 		h2, err := v2.Hash(nbf)
 
 		if err != nil {
-			return false, err
+			return 0, err
 		}
 
-		return h1.Less(h2), nil
+		return h1.Compare(h2), nil
 	}
 }

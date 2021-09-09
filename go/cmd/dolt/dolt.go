@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/opentracing/opentracing-go"
@@ -279,10 +280,12 @@ func runMain() int {
 
 	defer tempfiles.MovableTempFileProvider.Clean()
 
+	start := time.Now()
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
+		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
 	}
 

@@ -199,7 +199,7 @@ func TestCreateRdWr(t *testing.T) {
 
 		loc := test.dl
 
-		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil, true)
+		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer.", err)

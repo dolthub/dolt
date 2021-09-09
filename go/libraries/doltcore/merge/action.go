@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -256,7 +258,8 @@ func ExecuteFFMerge(
 }
 
 func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec) (map[string]*MergeStats, error) {
-	mergedRoot, tblToStats, err := MergeCommits(ctx, mergeSpec.Cm1, mergeSpec.Cm2)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	mergedRoot, tblToStats, err := MergeCommits(ctx, mergeSpec.Cm1, mergeSpec.Cm2, opts)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:

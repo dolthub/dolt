@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -41,10 +43,11 @@ type SqlExportWriter struct {
 	wr              io.WriteCloser
 	root            *doltdb.RootValue
 	writtenFirstRow bool
+	editOpts        editor.Options
 }
 
 // OpenSQLExportWriter returns a new SqlWriter for the table given writing to a file with the path given.
-func OpenSQLExportWriter(ctx context.Context, path string, fs filesys.WritableFS, root *doltdb.RootValue, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
+func OpenSQLExportWriter(ctx context.Context, path string, fs filesys.WritableFS, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
 	err := fs.MkDirs(filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -74,15 +77,11 @@ func OpenSQLExportWriter(ctx context.Context, path string, fs filesys.WritableFS
 		foreignKeys: foreignKeys,
 		root:        root,
 		wr:          wr,
+		editOpts:    editOpts,
 	}, nil
 }
 
-func NewSQLDiffWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
-	// set writtenFirstRow = true to prevent table drop statement from being written
-	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr, writtenFirstRow: true}, nil
-}
-
-// Returns the schema of this TableWriter.
+// GetSchema returns the schema of this TableWriter.
 func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
 }
@@ -107,7 +106,7 @@ func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
-		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root))
+		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
 		createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)
 		if err != nil {
 			return err

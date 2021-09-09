@@ -116,7 +116,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
 	require.NoError(t, err)
-	tbl, err = editor.RebuildAllIndexes(ctx, tbl)
+	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
 	sch, err = tbl.GetSchema(ctx)
