@@ -115,7 +115,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	srcDB, srcRoot, verr := getRemoteDBAtCommit(ctx, remoteUrl, remoteUrlParams, commitStr)
+	srcDB, srcRoot, verr := getRemoteDBAtCommit(ctx, remoteUrl, remoteUrlParams, commitStr, dEnv)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
@@ -194,8 +194,8 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 	return destRoot, nil
 }
 
-func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string) (*doltdb.DoltDB, *doltdb.RootValue, errhand.VerboseError) {
-	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams)
+func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string, dEnv *env.DoltEnv) (*doltdb.DoltDB, *doltdb.RootValue, errhand.VerboseError) {
+	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv)
 
 	if verr != nil {
 		return nil, nil, verr
