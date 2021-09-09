@@ -144,10 +144,8 @@ github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZm
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/dolthub/fslock v0.0.3 h1:iLMpUIvJKMKm92+N1fmHVdxJP5NdyDK5bK7z7Ba2s2U=
 github.com/dolthub/fslock v0.0.3/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
-github.com/dolthub/go-mysql-server v0.10.1-0.20210902175808-c05838e8d173 h1:gM1YsiCfQMVcaSQrj9ZZMvJStGi0/TZc7zwsf9KbweI=
-github.com/dolthub/go-mysql-server v0.10.1-0.20210902175808-c05838e8d173/go.mod h1:cPg39xeFH8/+McnJxncb79SgUuREeIqR+eTvxE6OmXc=
-github.com/dolthub/go-mysql-server v0.10.1-0.20210903190613-4c25c32c3883 h1:IfpwAn8PtCr1roskOckNiNxj2Iqly0yTtWeWkgla0YM=
-github.com/dolthub/go-mysql-server v0.10.1-0.20210903190613-4c25c32c3883/go.mod h1:cPg39xeFH8/+McnJxncb79SgUuREeIqR+eTvxE6OmXc=
+github.com/dolthub/go-mysql-server v0.10.1-0.20210909201022-b172dcfc97c2 h1:soViwKEObAQthQG4K2o5w+LPNYWw8SlV69mjWnGdFR8=
+github.com/dolthub/go-mysql-server v0.10.1-0.20210909201022-b172dcfc97c2/go.mod h1:cPg39xeFH8/+McnJxncb79SgUuREeIqR+eTvxE6OmXc=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446 h1:0ol5pj+QlKUKAtqs1LiPM3ZJKs+rHPgLSsMXmhTrCAM=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446/go.mod h1:dhGBqcCEfK5kuFmeO5+WOx3hqc1k3M29c1oS/R7N4ms=
 github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66 h1:WRPDbpJWEnPxPmiuOTndT+lUWUeGjx6eoNOK9O4tQQQ=
