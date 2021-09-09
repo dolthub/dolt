@@ -80,7 +80,7 @@ jobs:
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
       - name: Test all Windows
-        run: go run . -d "$(dirname $(pwd))"
+        run: go run . -d "$(wslpath -w $(dirname $(pwd)))"
         working-directory: ./integration-tests/bats/runner
         env:
           IS_WINDOWS: true
