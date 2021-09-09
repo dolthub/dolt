@@ -78,6 +78,9 @@ var _ env.RepoStateWriter = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
 func NewSessionStateAdapter(session *Session, dbName string, remotes map[string]env.Remote, branches map[string]env.BranchConfig) SessionStateAdapter {
+	if branches == nil {
+		branches = make(map[string]env.BranchConfig)
+	}
 	return SessionStateAdapter{session: session, dbName: dbName, remotes: remotes, branches: branches}
 }
 

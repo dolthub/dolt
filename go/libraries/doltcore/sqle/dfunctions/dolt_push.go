@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 const DoltPushFuncName = "dolt_push"
@@ -79,7 +80,14 @@ func (d DoltPushFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	apr, err := ap.Parse(args)
 
 	opts, err := env.ParsePushArgs(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
+	if err != nil {
+		return 1, err
+	}
 	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, dbData.Rsw.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
-
-	return 1, nil
+	switch err {
+	case datas.ErrMergeNeeded:
+		return 1, fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err)
+	default:
+		return 1, err
+	}
 }
