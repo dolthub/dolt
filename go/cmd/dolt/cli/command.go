@@ -165,16 +165,14 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 		subCommandStr = strings.ToLower(strings.TrimSpace(args[0]))
 	}
 
-	ctx, cancelF := context.WithCancel(ctx)
-
 	for _, cmd := range hc.Subcommands {
 		lwrName := strings.ToLower(cmd.Name())
 		if lwrName == subCommandStr {
-			return hc.handleCommand(ctx, cancelF, commandStr+" "+subCommandStr, cmd, args[1:], dEnv)
+			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv)
 		}
 	}
 	if hc.Unspecified != nil {
-		return hc.handleCommand(ctx, cancelF, commandStr, hc.Unspecified, args, dEnv)
+		return hc.handleCommand(ctx, commandStr, hc.Unspecified, args, dEnv)
 	}
 
 	if !isHelp(subCommandStr) {
@@ -185,7 +183,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	return 1
 }
 
-func (hc SubCommandHandler) handleCommand(ctx context.Context, cancelF context.CancelFunc, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
+func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
 	cmdRequiresRepo := true
 	if rnrCmd, ok := cmd.(RepoNotRequiredCommand); ok {
 		cmdRequiresRepo = rnrCmd.RequiresRepo()
