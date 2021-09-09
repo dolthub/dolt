@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
@@ -451,11 +452,6 @@ func execMultiStatements(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
 	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
 	if err != nil {
 		// If we encounter an error, attempt to flush what we have so far to disk before exiting
@@ -488,11 +484,6 @@ func execQuery(
 	}
 
 	sqlCtx, err := se.newContext(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -822,6 +813,8 @@ func runShell(ctx context.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initia
 		c.Stop()
 	})
 
+	// The shell's interrupt handler handles an interrupt that occurs when it's accepting input. We also install our own
+	// that handles interrupts during query execution or result printing, see below.
 	shell.Interrupt(func(c *ishell.Context, count int, input string) {
 		if count > 1 {
 			c.Stop()
@@ -830,7 +823,6 @@ func runShell(ctx context.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initia
 		}
 	})
 
-	var returnedVerr errhand.VerboseError = nil // Verr that cannot be just printed but needs to be returned.
 	shell.Uninterpreted(func(c *ishell.Context) {
 		query := c.Args[0]
 		if len(strings.TrimSpace(query)) == 0 {
@@ -856,6 +848,7 @@ func runShell(ctx context.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initia
 			shouldProcessQuery = false
 		}
 
+		var nextPrompt string
 		if shouldProcessQuery {
 			var sqlSch sql.Schema
 			var rowIter sql.RowIter
@@ -866,14 +859,14 @@ func runShell(ctx context.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initia
 				query = query[:len(query)-len(shell.LineTerminator())]
 			}
 
-			func() {
-				subCtx, stop := signal.NotifyContext(ctx, os.Interrupt)
+			cont := func() bool {
+				subCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 				defer stop()
 
 				sqlCtx, err = se.newContext(subCtx)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
-					return
+					return false
 				}
 
 				if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
@@ -885,18 +878,24 @@ func runShell(ctx context.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initia
 						shell.Println(color.RedString(err.Error()))
 					}
 				}
+
+				nextPrompt = fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
+				return true
 			}()
+
+			if !cont {
+				return
+			}
 		}
 
-		currPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
-		shell.SetPrompt(currPrompt)
-		shell.SetMultiPrompt(fmt.Sprintf(fmt.Sprintf("%%%ds", len(currPrompt)), "-> "))
+		shell.SetPrompt(nextPrompt)
+		shell.SetMultiPrompt(fmt.Sprintf(fmt.Sprintf("%%%ds", len(nextPrompt)), "-> "))
 	})
 
 	shell.Run()
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
-	return returnedVerr
+	return nil
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
@@ -1468,6 +1467,12 @@ func newSqlEngine(
 	email := *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, username, email, dbStates...)
 
+	// TODO: this should just be the session default like it is with MySQL
+	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)
+	if err != nil {
+		return nil, err
+	}
+
 	return &sqlEngine{
 		dbs:            nameToDB,
 		mrEnv:          mrEnv,
@@ -1602,17 +1607,7 @@ func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue
 }
 
 func (se *sqlEngine) newContext(ctx context.Context) (*sql.Context, error) {
-	sqlCtx, err := se.contextFactory(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
-	if err != nil {
-		return nil, err
-	}
-
-	return sqlCtx, nil
+	return se.contextFactory(ctx)
 }
 
 // Execute a SQL statement and return values for printing.

@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/fatih/color"
 
@@ -206,7 +207,7 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 	// their own interrupt semantics.
 	if signalCmd, ok := cmd.(SignalCommand); !ok || !signalCmd.InstallsSignalHandlers() {
 		var stop context.CancelFunc
-		ctx, stop = signal.NotifyContext(ctx, os.Interrupt)
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
 	}
 
