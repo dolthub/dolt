@@ -24,7 +24,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"syscall"
 
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
@@ -867,29 +866,26 @@ func runShell(ctx context.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initia
 				query = query[:len(query)-len(shell.LineTerminator())]
 			}
 
-			subCtx, cancelF := context.WithCancel(ctx)
-			sqlCtx, err = se.newContext(subCtx)
-			if err != nil {
-				shell.Println(color.RedString(err.Error()))
-				return
-			}
+			func() {
+				subCtx, stop := signal.NotifyContext(ctx, os.Interrupt)
+				defer stop()
 
-			c := make(chan os.Signal)
-			signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-			go func() {
-				<-c
-				cancelF()
-			}()
-
-			if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
-				verr := formatQueryError("", err)
-				shell.Println(verr.Verbose())
-			} else if rowIter != nil {
-				err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				sqlCtx, err = se.newContext(subCtx)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
+					return
 				}
-			}
+
+				if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
+					verr := formatQueryError("", err)
+					shell.Println(verr.Verbose())
+				} else if rowIter != nil {
+					err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
+					if err != nil {
+						shell.Println(color.RedString(err.Error()))
+					}
+				}
+			}()
 		}
 
 		currPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())

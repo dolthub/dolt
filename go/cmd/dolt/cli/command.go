@@ -19,7 +19,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/fatih/color"
 
@@ -205,8 +204,12 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, cancelF context.C
 		ctx = events.NewContextForEvent(ctx, evt)
 	}
 
+	// Certain commands cannot tolerate a top-level signal handler (which cancels the root context) but need to manage
+	// their own interrupt semantics.
 	if signalCmd, ok := cmd.(SignalCommand); !ok || !signalCmd.InstallsSignalHandlers() {
-		installSignalHandler(cancelF)
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt)
+		defer stop()
 	}
 
 	ret := cmd.Exec(ctx, commandStr, args, dEnv)
@@ -216,15 +219,6 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, cancelF context.C
 	}
 
 	return ret
-}
-
-func installSignalHandler(cancelF context.CancelFunc) {
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		cancelF()
-	}()
 }
 
 // CheckEnvIsValid validates that a DoltEnv has been initialized properly and no errors occur during load, and prints
