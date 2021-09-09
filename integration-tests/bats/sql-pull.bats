@@ -3,36 +3,39 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    cd $BATS_TMPDIR
-    TMPDIRS=$BATS_TMPDIR/tmpdirs
-
+    TMPDIRS=$(pwd)/tmpdirs
     mkdir $TMPDIRS
     cd $TMPDIRS
-    mkdir rem1 tmp1 tmp2
+    mkdir rem1 tmp1
 
+    # tmp1 -> rem1 -> tmp2
     cd tmp1
     dolt init
     dolt branch feature
     dolt remote add origin file:///${TMPDIRS}/rem1
     dolt remote add test-remote file:///${TMPDIRS}/rem1
+    dolt push origin master
+
+    cd $TMPDIRS
+    dolt clone file:///${TMPDIRS}/rem1 tmp2
+    cd $TMPDIRS/tmp2
+    dolt log
+    dolt branch feature
+    dolt remote add test-remote file:///${TMPDIRS}/rem1
+
+    cd $TMPDIRS/tmp1
     dolt sql -q "create table t1 (a int primary key, b int)"
     dolt commit -am "First commit"
     dolt sql -q "insert into t1 values (0,0)"
     dolt commit -am "Second commit"
     dolt push origin master
-
-    cd ..
-    dolt clone file:///${TMPDIRS}/rem1 tmp2
-    cd tmp2
-    dolt branch feature
-    dolt remote add test-remote file:///${TMPDIRS}/rem1
-    cd ..
+    cd $TMPDIRS
 }
 
 teardown() {
     teardown_common
-    cd $BATS_TMPDIR
     rm -rf $TMPDIRS
+    cd $BATS_TMPDIR
 }
 
 @test "sql-pull: dolt_pull master" {
@@ -152,10 +155,29 @@ teardown() {
 
 @test "sql-pull: dolt_pull squash" {
     skip "todo: support dolt pull --squash (cli too)"
+    cd tmp2
+    dolt sql -q "select dolt_pull('--squash', 'origin')"
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-pull: dolt_pull noff" {
-    skip "todo: support dolt pull --noff (cli too)"
+@test "sql-pull: dolt_pull --noff flag" {
+    cd tmp2
+    dolt sql -q "select dolt_pull('--no-ff', 'origin')"
+    dolt status
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    # TODO change the default message name
+    [[ "$output" =~ "automatic SQL merge" ]] || false
+
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
 }
 
 @test "sql-pull: empty remote name does not panic" {
@@ -165,7 +187,7 @@ teardown() {
 
 @test "sql-pull: dolt_pull dirty working set fails" {
     cd tmp2
-    dolt sql -q "insert into t1 values (2,1)"
+    dolt sql -q "create table t2 (a int)"
     run dolt sql -q "select dolt_pull('origin')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false

@@ -70,8 +70,9 @@ func TestIndexEditorConcurrency(t *testing.T) {
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
 
+	opts := TestEditorOptions(db)
 	for i := 0; i < indexEditorConcurrencyIterations; i++ {
-		indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
+		indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch, opts)
 		wg := &sync.WaitGroup{}
 
 		for j := 0; j < indexEditorConcurrencyFinalCount*2; j++ {
@@ -166,7 +167,8 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
 
-	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
+	opts := TestEditorOptions(db)
+	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch, opts)
 	for i := 0; i < indexEditorConcurrencyFinalCount*2; i++ {
 		dRow, err := row.New(format, indexSch, row.TaggedValues{
 			0: types.Int(i),
@@ -181,7 +183,7 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < indexEditorConcurrencyIterations; i++ {
-		indexEditor := NewIndexEditor(context.Background(), index, indexData, tableSch)
+		indexEditor := NewIndexEditor(context.Background(), index, indexData, tableSch, opts)
 		wg := &sync.WaitGroup{}
 
 		for j := 0; j < indexEditorConcurrencyFinalCount; j++ {
@@ -258,7 +260,8 @@ func TestIndexEditorUniqueMultipleNil(t *testing.T) {
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
 
-	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
+	opts := TestEditorOptions(db)
+	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch, opts)
 	for i := 0; i < 3; i++ {
 		dRow, err := row.New(format, indexSch, row.TaggedValues{
 			0: types.NullValue,
@@ -303,7 +306,8 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
 
-	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
+	opts := TestEditorOptions(db)
+	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch, opts)
 	require.NoError(t, err)
 
 	for i := 0; i < 20; i++ {
@@ -369,7 +373,8 @@ func TestIndexEditorUniqueErrorDoesntPersist(t *testing.T) {
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
 
-	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch)
+	opts := TestEditorOptions(db)
+	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch, opts)
 	dRow, err := row.New(format, indexSch, row.TaggedValues{
 		0: types.Int(1),
 		1: types.Int(1),
@@ -410,12 +415,13 @@ func TestIndexRebuildingWithZeroIndexes(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schemaVal, rowData)
 	require.NoError(t, err)
 
-	rebuildAllTable, err := RebuildAllIndexes(context.Background(), originalTable)
+	opts := TestEditorOptions(db)
+	rebuildAllTable, err := RebuildAllIndexes(context.Background(), originalTable, opts)
 	require.NoError(t, err)
 	_, err = rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
 	require.Error(t, err)
 
-	_, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName)
+	_, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName, opts)
 	require.Error(t, err)
 }
 
@@ -448,7 +454,8 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 
 	var indexRows []row.Row
 
-	rebuildAllTable, err := RebuildAllIndexes(context.Background(), originalTable)
+	opts := TestEditorOptions(db)
+	rebuildAllTable, err := RebuildAllIndexes(context.Background(), originalTable, opts)
 	require.NoError(t, err)
 	indexRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
 	require.NoError(t, err)
@@ -461,7 +468,7 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 	assert.ElementsMatch(t, indexExpectedRows, indexRows)
 
 	indexRows = nil
-	indexRowData, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName)
+	indexRowData, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName, opts)
 	require.NoError(t, err)
 	_ = indexRowData.IterAll(context.Background(), func(key, value types.Value) error {
 		indexRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
@@ -492,12 +499,13 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schemaVal, rowData)
 	require.NoError(t, err)
 
+	opts := TestEditorOptions(db)
 	rebuildAllTable := originalTable
 	var indexRows []row.Row
 
 	// do two runs, data should not be different regardless of how many times it's ran
 	for i := 0; i < 2; i++ {
-		rebuildAllTable, err = RebuildAllIndexes(context.Background(), rebuildAllTable)
+		rebuildAllTable, err = RebuildAllIndexes(context.Background(), rebuildAllTable, opts)
 		require.NoError(t, err)
 
 		indexNameRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
@@ -522,7 +530,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 		assert.ElementsMatch(t, indexAgeExpectedRows, indexRows)
 		indexRows = nil
 
-		indexNameRowData, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName)
+		indexNameRowData, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName, opts)
 		require.NoError(t, err)
 		_ = indexNameRowData.IterAll(context.Background(), func(key, value types.Value) error {
 			indexRow, err := row.FromNoms(indexNameSch, key.(types.Tuple), value.(types.Tuple))
@@ -533,7 +541,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 		assert.ElementsMatch(t, indexNameExpectedRows, indexRows)
 		indexRows = nil
 
-		indexAgeRowData, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexAge)
+		indexAgeRowData, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexAge, opts)
 		require.NoError(t, err)
 		_ = indexAgeRowData.IterAll(context.Background(), func(key, value types.Value) error {
 			indexRow, err := row.FromNoms(indexAgeSch, key.(types.Tuple), value.(types.Tuple))
@@ -550,7 +558,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	indexNameExpectedRows, indexAgeExpectedRows = rowsToIndexRows(t, rows, indexName, indexAge)
 	updatedTable, err := rebuildAllTable.UpdateRows(context.Background(), rowData)
 	require.NoError(t, err)
-	rebuildAllTable, err = RebuildAllIndexes(context.Background(), updatedTable)
+	rebuildAllTable, err = RebuildAllIndexes(context.Background(), updatedTable, opts)
 	require.NoError(t, err)
 
 	indexNameRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
@@ -575,7 +583,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	assert.ElementsMatch(t, indexAgeExpectedRows, indexRows)
 	indexRows = nil
 
-	indexNameRowData, err = RebuildIndex(context.Background(), updatedTable, testSchemaIndexName)
+	indexNameRowData, err = RebuildIndex(context.Background(), updatedTable, testSchemaIndexName, opts)
 	require.NoError(t, err)
 	_ = indexNameRowData.IterAll(context.Background(), func(key, value types.Value) error {
 		indexRow, err := row.FromNoms(indexNameSch, key.(types.Tuple), value.(types.Tuple))
@@ -586,7 +594,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	assert.ElementsMatch(t, indexNameExpectedRows, indexRows)
 	indexRows = nil
 
-	indexAgeRowData, err = RebuildIndex(context.Background(), updatedTable, testSchemaIndexAge)
+	indexAgeRowData, err = RebuildIndex(context.Background(), updatedTable, testSchemaIndexAge, opts)
 	require.NoError(t, err)
 	_ = indexAgeRowData.IterAll(context.Background(), func(key, value types.Value) error {
 		indexRow, err := row.FromNoms(indexAgeSch, key.(types.Tuple), value.(types.Tuple))
@@ -621,10 +629,11 @@ func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
 
-	_, err = RebuildAllIndexes(context.Background(), updatedTable)
+	opts := TestEditorOptions(db)
+	_, err = RebuildAllIndexes(context.Background(), updatedTable, opts)
 	require.NoError(t, err)
 
-	_, err = RebuildIndex(context.Background(), updatedTable, index.Name())
+	_, err = RebuildIndex(context.Background(), updatedTable, index.Name(), opts)
 	require.NoError(t, err)
 }
 
@@ -652,10 +661,11 @@ func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
 
-	_, err = RebuildAllIndexes(context.Background(), updatedTable)
+	opts := TestEditorOptions(db)
+	_, err = RebuildAllIndexes(context.Background(), updatedTable, opts)
 	require.NoError(t, err)
 
-	_, err = RebuildIndex(context.Background(), updatedTable, index.Name())
+	_, err = RebuildIndex(context.Background(), updatedTable, index.Name(), opts)
 	require.NoError(t, err)
 }
 
@@ -683,10 +693,11 @@ func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
 
-	_, err = RebuildAllIndexes(context.Background(), updatedTable)
+	opts := TestEditorOptions(db)
+	_, err = RebuildAllIndexes(context.Background(), updatedTable, opts)
 	require.Error(t, err)
 
-	_, err = RebuildIndex(context.Background(), updatedTable, index.Name())
+	_, err = RebuildIndex(context.Background(), updatedTable, index.Name(), opts)
 	require.Error(t, err)
 }
 
@@ -715,10 +726,12 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
 
-	_, err = RebuildAllIndexes(context.Background(), updatedTable)
+	opts := TestEditorOptions(db)
+	_, err = RebuildAllIndexes(context.Background(), updatedTable, opts)
+
 	require.Error(t, err)
 
-	_, err = RebuildIndex(context.Background(), updatedTable, index.Name())
+	_, err = RebuildIndex(context.Background(), updatedTable, index.Name(), opts)
 	require.Error(t, err)
 }
 

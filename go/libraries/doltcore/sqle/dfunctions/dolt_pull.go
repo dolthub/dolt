@@ -134,7 +134,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 				return noConflicts, err
 			}
 			ws, conflicts, err = mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
-			if !errors.Is(doltdb.ErrUpToDate, err) {
+			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, err
 			}
 

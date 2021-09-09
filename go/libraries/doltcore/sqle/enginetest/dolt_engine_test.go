@@ -184,6 +184,14 @@ func TestScripts(t *testing.T) {
 		// These rely on keyless tables which orders its rows by hash rather than contents, meaning changing types causes different ordering
 		"SELECT group_concat(attribute) FROM t where o_id=2",
 		"SELECT group_concat(o_id) FROM t WHERE attribute='color'",
+
+		// TODO(aaron): go-mysql-server GroupBy with grouping
+		// expressions currently has a bug where it does not insert
+		// necessary Sort nodes.  These queries used to work by
+		// accident based on the return order from the storage layer,
+		// but they no longer do.
+		"SELECT pk, SUM(DISTINCT v1), MAX(v1) FROM mytable GROUP BY pk ORDER BY pk",
+		"SELECT pk, MIN(DISTINCT v1), MAX(DISTINCT v1) FROM mytable GROUP BY pk ORDER BY pk",
 	}
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }

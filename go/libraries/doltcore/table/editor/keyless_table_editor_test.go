@@ -48,8 +48,9 @@ func TestKeylessTableEditorConcurrency(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
+	opts := TestEditorOptions(db)
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName)
+		tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -157,7 +158,8 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
-	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName)
+	opts := TestEditorOptions(db)
+	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
 	require.NoError(t, err)
 	for i := 0; i < tableEditorConcurrencyFinalCount*2; i++ {
 		dRow, err := row.New(format, tableSch, row.TaggedValues{
@@ -172,7 +174,7 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName)
+		tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -265,7 +267,8 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
-	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName)
+	opts := TestEditorOptions(db)
+	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
 	require.NoError(t, err)
 
 	for i := 0; i < 20; i++ {
@@ -347,7 +350,8 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
-	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName)
+	opts := TestEditorOptions(db)
+	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -425,6 +429,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
 	require.NoError(t, err)
+	opts := TestEditorOptions(db)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("v0", 0, types.IntKind, false),
 		schema.NewColumn("v1", 1, types.IntKind, false),
@@ -445,9 +450,9 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	table, err := doltdb.NewTable(ctx, db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
-	table, err = RebuildAllIndexes(ctx, table)
+	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)
-	tableEditor, err := newKeylessTableEditor(ctx, table, tableSch, tableName)
+	tableEditor, err := newKeylessTableEditor(ctx, table, tableSch, tableName, opts)
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -583,6 +588,7 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
 	require.NoError(t, err)
+	opts := TestEditorOptions(db)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("v0", 0, types.IntKind, false),
 		schema.NewColumn("v1", 1, types.IntKind, false),
@@ -603,9 +609,9 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 	require.NoError(t, err)
 	table, err := doltdb.NewTable(ctx, db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
-	table, err = RebuildAllIndexes(ctx, table)
+	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)
-	tableEditor, err := newKeylessTableEditor(ctx, table, tableSch, tableName)
+	tableEditor, err := newKeylessTableEditor(ctx, table, tableSch, tableName, opts)
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {

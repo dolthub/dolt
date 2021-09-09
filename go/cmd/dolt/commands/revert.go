@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -105,7 +107,8 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		commits[i] = commit
 	}
 
-	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, commits)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, commits, opts)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

@@ -28,8 +28,12 @@ type EditProvider interface {
 	// in key sorted order.  Once all KVPs have been read io.EOF will be returned.
 	Next() (*KVP, error)
 
-	// NumEdits returns the number of KVPs representing the edits that will be provided when calling next
-	NumEdits() int64
+	// ReachedEOF returns true once all data is exhausted.  If ReachedEOF returns false that does not mean that there
+	// is more data, only that io.EOF has not been returned previously.  If ReachedEOF returns true then all edits have
+	// been read
+	ReachedEOF() bool
+
+	Close(ctx context.Context) error
 }
 
 // EmptyEditProvider is an EditProvider implementation that has no edits
@@ -40,9 +44,15 @@ func (eep EmptyEditProvider) Next() (*KVP, error) {
 	return nil, io.EOF
 }
 
-// NumEdits will always return 0
-func (eep EmptyEditProvider) NumEdits() int64 {
-	return 0
+// ReachedEOF returns true once all data is exhausted.  If ReachedEOF returns false that does not mean that there
+// is more data, only that io.EOF has not been returned previously.  If ReachedEOF returns true then all edits have
+// been read
+func (eep EmptyEditProvider) ReachedEOF() bool {
+	return true
+}
+
+func (eep EmptyEditProvider) Close(ctx context.Context) error {
+	return nil
 }
 
 // Before edits can be applied th cursor position for each edit must be found.  mapWork represents a piece of work to be
@@ -60,7 +70,7 @@ type mapWorkResult struct {
 }
 
 const (
-	maxWorkerCount = 7
+	workerCount = 7
 
 	// batch sizes start small in order to get the sequenceChunker work to do quickly.  Batches will grow to a maximum
 	// size at a given multiplier
@@ -103,32 +113,30 @@ func (stats AppliedEditStats) Add(other AppliedEditStats) AppliedEditStats {
 // ApplyEdits applies all the edits to a given Map and returns the resulting map, and some statistics about the edits
 // that were applied.
 func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEditStats, error) {
+	return ApplyNEdits(ctx, edits, m, -1)
+}
+
+func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64) (Map, AppliedEditStats, error) {
 	var stats AppliedEditStats
 
-	if edits.NumEdits() == 0 {
+	if edits.ReachedEOF() {
 		return m, stats, nil // no edits
 	}
 
 	var seq sequence = m.orderedSequence
 	vrw := seq.valueReadWriter()
 
-	numWorkers := int(edits.NumEdits()/batchSizeStart) + 1
-
-	if numWorkers > maxWorkerCount {
-		numWorkers = maxWorkerCount
-	}
-
 	ae := atomicerr.New()
 	rc := make(chan chan mapWorkResult, 128)
 	wc := make(chan mapWork, 128)
 
 	// start worker threads
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < workerCount; i++ {
 		go prepWorker(ctx, ae, seq.(orderedSequence), wc)
 	}
 
 	// asynchronously add mapWork to be done by the workers
-	go buildBatches(m.Format(), ae, rc, wc, edits)
+	go buildBatches(m.Format(), ae, rc, wc, edits, numEdits)
 
 	// wait for workers to return results and then process them
 	var ch *sequenceChunker
@@ -325,7 +333,7 @@ func doWork(ctx context.Context, seq orderedSequence, work mapWork) (mapWorkResu
 }
 
 // buildBatches iterates over the sorted edits building batches of work to be completed by the worker threads.
-func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider) {
+func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider, numEdits int64) {
 	defer close(rc)
 	defer close(wc)
 
@@ -338,6 +346,7 @@ func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan ma
 		return
 	}
 
+	var editsRead int64
 	for {
 		batch := make([]*KVP, 0, batchSize)
 
@@ -367,6 +376,11 @@ func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan ma
 			}
 
 			batch = append(batch, edit)
+			editsRead++
+
+			if editsRead == numEdits {
+				break
+			}
 		}
 
 		if len(batch) > 0 {

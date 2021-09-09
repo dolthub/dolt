@@ -565,6 +565,10 @@ func (mes mapEntrySequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool
 	panic("not implemented")
 }
 
+func (mes mapEntrySequence) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error) {
+	panic("not implemented")
+}
+
 func (mes mapEntrySequence) Hash(format *NomsBinFormat) (hash.Hash, error) {
 	panic("not implemented")
 }

@@ -89,7 +89,12 @@ func (t *Type) Equals(other Value) (res bool) {
 }
 
 func (t *Type) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	return valueLess(nbf, t, other.(Value))
+	res, err := valueCompare(nbf, t, other.(Value))
+	if err != nil {
+		return false, err
+	}
+
+	return res < 0, nil
 }
 
 func (t *Type) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
