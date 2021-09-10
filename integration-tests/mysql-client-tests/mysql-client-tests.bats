@@ -36,7 +36,8 @@ teardown() {
 }
 
 @test "go go-sql-drive/mysql test" {
-    go run $BATS_TEST_DIRNAME/go/go-sql-driver-mysql-test.go $USER $PORT $REPO_NAME
+    (cd $BATS_TEST_DIRNAME/go; go build .)
+    $BATS_TEST_DIRNAME/go/go $USER $PORT $REPO_NAME
 }
 
 @test "python mysql.connector client" {
