@@ -178,7 +178,8 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan datas.PullerEvent) {
 
 	for evt := range pullerEventCh {
 		select {
-		case <-ctx.Done(): return
+		case <-ctx.Done():
+			return
 		default:
 		}
 		switch evt.EventType {
@@ -239,7 +240,8 @@ func progFunc(ctx context.Context, progChan chan datas.PullProgress) {
 	done := false
 	for !done {
 		select {
-		case <-ctx.Done(): return
+		case <-ctx.Done():
+			return
 		default:
 		}
 		select {
