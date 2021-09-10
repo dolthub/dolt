@@ -107,6 +107,14 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 		urlStr:      urlStr,
 		hdp:         hdp,
 	}
+	if dEnv.RepoState != nil {
+		remotes := make(map[string]Remote, len(dEnv.RepoState.Remotes))
+		for n, r := range dEnv.RepoState.Remotes {
+			r.dialer = dEnv
+			remotes[n] = r
+		}
+		dEnv.RepoState.Remotes = remotes
+	}
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
 		if !dEnv.HasDoltTempTableDir() {
@@ -130,8 +138,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			}()
 		}
 	}
-
-	dbfactory.InitializeFactories(dEnv)
 
 	if rsErr == nil && dbLoadErr == nil {
 		// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
@@ -857,7 +863,7 @@ func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, par
 		return fmt.Errorf("%w; %s", ErrInvalidRemoteURL, err.Error())
 	}
 
-	r := Remote{name, absRemoteUrl, fetchSpecs, params}
+	r := Remote{name, absRemoteUrl, fetchSpecs, params, dEnv}
 	dEnv.RepoState.AddRemote(r)
 	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
