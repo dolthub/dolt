@@ -227,7 +227,6 @@ func ParseFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRef
 	}
 
 	if len(remotes) == 0 {
-		//return NoRemote, nil, errhand.BuildDError("error: no remotes set").AddDetails("to add a remote run: dolt remote add <remote> <url>").Build()
 		return NoRemote, nil, ErrNoRemote
 	}
 
@@ -244,11 +243,7 @@ func ParseFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRef
 	}
 	if !remoteOK {
 		msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
-		//if rb, ok := rs.(ref.BranchToTrackingBranchRefSpec); ok {
-		//	return NoRemote, nil, fmt.Errorf("%w: '%s' %s", ErrUnknownRemote, remName, msg)
-		//}
 		return NoRemote, nil, fmt.Errorf("%w: %s %s", ErrUnknownRemote, remName, msg)
-		//return NoRemote, nil, ErrUnknownRemote
 	}
 
 	var rs []ref.RemoteRefSpec

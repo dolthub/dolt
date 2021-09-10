@@ -255,9 +255,6 @@ func fetchMigratedRemoteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *ar
 		return fmt.Errorf("Remote %s has not been migrated\nRun 'dolt migrate --push %s' to push migration", remoteName, remoteName)
 	}
 
-	// force fetch all branches
-	//remotes, _ := dEnv.GetRemotes()
-	//r, refSpecs, err := getRefSpecs(apr.Args(), dEnv, remotes)
 	r, refSpecs, err := env.ParseFetchOpts(apr.Args(), dEnv.RepoStateReader())
 
 	if err == nil {
