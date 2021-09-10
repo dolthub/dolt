@@ -550,19 +550,15 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 }
 
 type repoStateReader struct {
-	dEnv *DoltEnv
+	*DoltEnv
 }
 
 func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
-	return r.dEnv.RepoState.CWBHeadRef()
+	return r.RepoState.CWBHeadRef()
 }
 
 func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
-	return r.dEnv.RepoState.CWBHeadSpec()
-}
-
-func (r *repoStateReader) GetRemotes() (map[string]Remote, error) {
-	return r.dEnv.GetRemotes()
+	return r.RepoState.CWBHeadSpec()
 }
 
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
@@ -971,13 +967,17 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 
 // GetRefSpecs takes an optional remoteName and returns all refspecs associated with that remote.  If "" is passed as
 // the remoteName then the default remote is used.
-func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, error) {
+func GetRefSpecs(rsr RepoStateReader, remoteName string) ([]ref.RemoteRefSpec, error) {
 	var remote Remote
 	var err error
 
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
 	if remoteName == "" {
-		remote, err = dEnv.GetDefaultRemote()
-	} else if r, ok := dEnv.RepoState.Remotes[remoteName]; ok {
+		remote, err = GetDefaultRemote(rsr)
+	} else if r, ok := remotes[remoteName]; ok {
 		remote = r
 	} else {
 		err = ErrUnknownRemote
@@ -1014,8 +1014,11 @@ var ErrCantDetermineDefault = errors.New("unable to determine the default remote
 
 // GetDefaultRemote gets the default remote for the environment.  Not fully implemented yet.  Needs to support multiple
 // repos and a configurable default.
-func (dEnv *DoltEnv) GetDefaultRemote() (Remote, error) {
-	remotes := dEnv.RepoState.Remotes
+func GetDefaultRemote(rsr RepoStateReader) (Remote, error) {
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return NoRemote, err
+	}
 
 	if len(remotes) == 0 {
 		return NoRemote, ErrNoRemote
@@ -1025,7 +1028,7 @@ func (dEnv *DoltEnv) GetDefaultRemote() (Remote, error) {
 		}
 	}
 
-	if remote, ok := dEnv.RepoState.Remotes["origin"]; ok {
+	if remote, ok := remotes["origin"]; ok {
 		return remote, nil
 	}
 

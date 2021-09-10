@@ -286,10 +286,10 @@ type PullSpec struct {
 	Branch     ref.DoltRef
 }
 
-func ParsePullSpec(ctx context.Context, dEnv *DoltEnv, remoteName string, squash, noff, force bool) (*PullSpec, error) {
-	branch := dEnv.RepoStateReader().CWBHeadRef()
+func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force bool) (*PullSpec, error) {
+	branch := rsr.CWBHeadRef()
 
-	refSpecs, err := dEnv.GetRefSpecs(remoteName)
+	refSpecs, err := GetRefSpecs(rsr, remoteName)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,11 @@ func ParsePullSpec(ctx context.Context, dEnv *DoltEnv, remoteName string, squash
 		return nil, ErrNoRefSpecForRemote
 	}
 
-	remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+	remote := remotes[refSpecs[0].GetRemote()]
 
 	return &PullSpec{
 		Squash:     squash,
