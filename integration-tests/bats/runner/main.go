@@ -16,6 +16,7 @@ import (
 
 var NumRunners = flag.Int("n", 8, "num runners")
 var Dir = flag.String("d", "..", "directory to find .bats files in")
+var Bats = flag.String("b", "bats", "path to bats")
 
 func main() {
 	flag.Parse()
@@ -116,7 +117,7 @@ func GetTestFileNames() ([]string, error) {
 }
 
 func RunTestFile(ctx context.Context, name string) error {
-	c := exec.CommandContext(ctx, "bats", "--tap", name)
+	c := exec.CommandContext(ctx, *Bats, "--tap", name)
 	o, err := c.CombinedOutput()
 	fmt.Println(name)
 	fmt.Println(string(o))
