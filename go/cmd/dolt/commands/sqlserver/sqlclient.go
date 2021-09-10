@@ -140,11 +140,11 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}()
 
-	_ = iohelp.WriteLine(cli.CliOut, `# Welcome to the Dolt SQL client.
+	_ = iohelp.WriteLine(cli.CliOut, `# Welcome to the Dolt MySQL client.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`)
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
-	prompt := "doltsql> "
+	prompt := "mysql> "
 	multilinePrompt := fmt.Sprintf(fmt.Sprintf("%%%ds", len(prompt)), "-> ")
 
 	rlConf := readline.Config{

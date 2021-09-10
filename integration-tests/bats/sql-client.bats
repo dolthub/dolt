@@ -42,6 +42,7 @@ teardown() {
 }
 
 @test "sql-client: test sql-client shows tables" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
     cd repo1
     start_sql_server repo1
     cd ../
@@ -50,14 +51,14 @@ teardown() {
     show_tables
     run show_tables
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = '# Welcome to the Dolt SQL client.' ]
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
 
     create_test_table
     run show_tables
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = '# Welcome to the Dolt SQL client.' ]
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
     [ "${lines[3]}" = '+-------+' ]
