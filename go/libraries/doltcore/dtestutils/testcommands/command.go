@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type Command interface {
@@ -185,7 +186,8 @@ func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query) 
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	sqlDb := dsqle.NewDatabase("dolt", dEnv.DbData())
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	sqlDb := dsqle.NewDatabase("dolt", dEnv.DbData(), opts)
 	engine, sqlCtx, err := dsqle.NewTestEngine(t, dEnv, context.Background(), sqlDb, root)
 	require.NoError(t, err)
 
@@ -300,7 +302,8 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		assert.NoError(t, err)
 
 	} else {
-		mergedRoot, tblToStats, err := merge.MergeCommits(context.Background(), cm1, cm2)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		mergedRoot, tblToStats, err := merge.MergeCommits(context.Background(), cm1, cm2, opts)
 		require.NoError(t, err)
 		for _, stats := range tblToStats {
 			require.True(t, stats.Conflicts == 0)

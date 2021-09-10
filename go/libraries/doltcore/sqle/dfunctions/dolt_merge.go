@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -182,7 +183,14 @@ func mergeHelper(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roots, ws *
 		}
 	}
 
-	ws, err = executeMerge(ctx, spec.Squash, spec.HeadC, spec.MergeC, ws)
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return ws, noConflicts, err
+	} else if !ok {
+		return ws, noConflicts, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	ws, err = executeMerge(ctx, spec.Squash, spec.HeadC, spec.MergeC, ws, dbState.EditSession.Opts)
 	if err == doltdb.ErrUnresolvedConflicts {
 		// if there are unresolved conflicts, write the resulting working set back to the session and return an
 		// error message
@@ -216,8 +224,8 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	return workingSet, nil
 }
 
-func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
-	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm)
+func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *doltdb.WorkingSet, opts editor.Options) (*doltdb.WorkingSet, error) {
+	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm, opts)
 
 	if err != nil {
 		switch err {

@@ -64,6 +64,7 @@ type DoltTransaction struct {
 	workingSetRef ref.WorkingSetRef
 	dbData        env.DbData
 	savepoints    []savepoint
+	mergeEditOpts editor.Options
 }
 
 type savepoint struct {
@@ -71,11 +72,12 @@ type savepoint struct {
 	root *doltdb.RootValue
 }
 
-func NewDoltTransaction(startState *doltdb.WorkingSet, workingSet ref.WorkingSetRef, dbData env.DbData) *DoltTransaction {
+func NewDoltTransaction(startState *doltdb.WorkingSet, workingSet ref.WorkingSetRef, dbData env.DbData, mergeEditOpts editor.Options) *DoltTransaction {
 	return &DoltTransaction{
 		startState:    startState,
 		workingSetRef: workingSet,
 		dbData:        dbData,
+		mergeEditOpts: mergeEditOpts,
 	}
 }
 
@@ -156,7 +158,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 			}
 
 			start := time.Now()
-			mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot())
+			mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot(), tx.mergeEditOpts)
 			if err != nil {
 				return nil, err
 			}
@@ -209,7 +211,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 // updated root value
 func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.RootValue, tablesWithConflicts []string) (*doltdb.RootValue, error) {
 	start := time.Now()
-	tableEditSession := editor.CreateTableEditSession(mergedRoot, editor.TableEditSessionProps{})
+	tableEditSession := editor.CreateTableEditSession(mergedRoot, tx.mergeEditOpts)
 
 	for _, tblName := range tablesWithConflicts {
 		tbl, _, err := mergedRoot.GetTable(ctx, tblName)

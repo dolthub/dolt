@@ -118,7 +118,14 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		}
 	}
 
-	mergeRoot, _, err := merge.MergeCommits(ctx, head, cm)
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	mergeRoot, _, err := merge.MergeCommits(ctx, head, cm, dbState.EditSession.Opts)
 
 	if err != nil {
 		return nil, err

@@ -300,7 +300,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (sql.Tran
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData), nil
+	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -827,7 +827,7 @@ func (sess *Session) SwitchWorkingSet(
 	sessionState.dirty = false
 
 	// the current transaction, if there is one, needs to be restarted
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData))
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts))
 
 	return nil
 }
@@ -944,11 +944,11 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 	}
 	if intVal == 0 {
 		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Props.ForeignKeyChecksDisabled = true
+			dbState.EditSession.Opts.ForeignKeyChecksDisabled = true
 		}
 	} else if intVal == 1 {
 		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Props.ForeignKeyChecksDisabled = false
+			dbState.EditSession.Opts.ForeignKeyChecksDisabled = false
 		}
 	} else {
 		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
@@ -1046,7 +1046,8 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.dbData.Rsw = adapter
 	sessionState.readOnly, sessionState.detachedHead = dbState.ReadOnly, dbState.DetachedHead
 
-	sessionState.EditSession = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
+	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
+	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.WorkingSet != nil {
@@ -1090,7 +1091,7 @@ func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, 
 	if err != nil {
 		return err
 	}
-	dbState.TempTableEditSession = editor.CreateTableEditSession(newRoot, editor.TableEditSessionProps{})
+	dbState.TempTableEditSession = editor.CreateTableEditSession(newRoot, dbState.EditSession.Opts)
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }

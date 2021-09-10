@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -1110,4 +1111,8 @@ func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
 	}
 
 	return keepers, nil
+}
+
+func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
+	return editor.NewDbEaFactory(dEnv.TempTableFilesDir(), dEnv.DoltDB.ValueReadWriter())
 }
