@@ -44,7 +44,10 @@ type Work struct {
 type Hedger struct {
 	sema  *semaphore.Weighted
 	strat Strategy
+	after afterFunc
 }
+
+type afterFunc func(time.Duration) <-chan time.Time
 
 // NewHedger returns a new Hedger. |maxOutstanding| is the most hedged requests
 // that can be outstanding. If a request would be hedged, but there are already
@@ -53,6 +56,7 @@ func NewHedger(maxOutstanding int64, strat Strategy) *Hedger {
 	return &Hedger{
 		semaphore.NewWeighted(maxOutstanding),
 		strat,
+		time.After,
 	}
 }
 
@@ -196,7 +200,7 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 			}
 			h.strat.Observe(w.Size, r.n, r.d, r.e)
 			return r.v, r.e
-		case <-time.After(nextTry):
+		case <-h.after(nextTry):
 			try()
 		case <-ctx.Done():
 			return nil, ctx.Err()
