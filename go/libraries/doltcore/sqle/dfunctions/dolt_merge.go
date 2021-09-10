@@ -40,8 +40,10 @@ type DoltMergeFunc struct {
 
 const DoltConflictWarningCode int = 1105 // Since this our own custom warning we'll use 1105, the code for an unknown error
 
-const hasConflicts = 0
-const noConflicts = 1
+const (
+	hasConflicts int = 0
+	noConflicts  int = 1
+)
 
 func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
@@ -97,11 +99,11 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	branchName := apr.Arg(0)
 
-	mergeSpec, err := sqlMergeSpec(ctx, sess, dbName, apr, branchName)
+	mergeSpec, err := createMergeSpec(ctx, sess, dbName, apr, branchName)
 	if err != nil {
 		return noConflicts, err
 	}
-	ws, conflicts, err := mergeHelper(ctx, sess, roots, ws, dbName, mergeSpec)
+	ws, conflicts, err := mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
 	if err != nil {
 		return conflicts, err
 	}
@@ -114,10 +116,13 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	return conflicts, nil
 }
 
-func mergeHelper(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec) (*doltdb.WorkingSet, interface{}, error) {
-	if hasConflicts, err := roots.Working.HasConflicts(ctx); err != nil {
+// mergeIntoWorkingSet encapsulates server merge logic, switching between fast-forward, no fast-forward, merge commit,
+// and merging into working set. Returns a new WorkingSet and whether there were merge conflicts. This currently
+// persists merge commits in the database, but expects the caller to update the working set.
+func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec) (*doltdb.WorkingSet, int, error) {
+	if conflicts, err := roots.Working.HasConflicts(ctx); err != nil {
 		return ws, noConflicts, err
-	} else if hasConflicts {
+	} else if conflicts {
 		return ws, hasConflicts, doltdb.ErrUnresolvedConflicts
 	}
 
@@ -311,12 +316,16 @@ func executeNoFFMerge(
 	return ws, dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
 }
 
-func sqlMergeSpec(ctx *sql.Context, sess *dsess.Session, dbName string, apr *argparser.ArgParseResults, commitSpecStr string) (*merge.MergeSpec, error) {
+func createMergeSpec(ctx *sql.Context, sess *dsess.Session, dbName string, apr *argparser.ArgParseResults, commitSpecStr string) (*merge.MergeSpec, error) {
 	ddb, ok := sess.GetDoltDB(ctx, dbName)
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
 
 	msg, ok := apr.GetValue(cli.CommitMessageArg)
+	if !ok {
+		// TODO probably change, but we can't open editor so it'll have to be automated
+		msg = "automatic SQL merge"
+	}
 
 	var err error
 	var name, email string
@@ -343,7 +352,7 @@ func sqlMergeSpec(ctx *sql.Context, sess *dsess.Session, dbName string, apr *arg
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	mergeSpec, _, err := merge.ParseMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
+	mergeSpec, _, err := merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
 	if err != nil {
 		return nil, err
 	}

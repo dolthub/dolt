@@ -51,7 +51,7 @@ type MergeSpec struct {
 	Date         time.Time
 }
 
-func ParseMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.DoltDB, roots doltdb.Roots, name, email, msg string, commitSpecStr string, squash bool, noff bool, force bool, date time.Time) (*MergeSpec, bool, error) {
+func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.DoltDB, roots doltdb.Roots, name, email, msg string, commitSpecStr string, squash bool, noff bool, force bool, date time.Time) (*MergeSpec, bool, error) {
 	cs1, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
 		return nil, false, err

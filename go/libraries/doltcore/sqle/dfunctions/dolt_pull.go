@@ -15,11 +15,11 @@
 package dfunctions
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -70,12 +70,11 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(ctx, dbName)
-
 	if !ok {
-		return noConflicts, fmt.Errorf("Could not load database %s", dbName)
+		return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ap := cli.CreateMergeArgParser()
+	ap := cli.CreatePullArgParser()
 	args, err := getDoltArgs(ctx, row, d.Children())
 
 	apr, err := ap.Parse(args)
@@ -92,7 +91,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		remoteName = apr.Arg(0)
 	}
 
-	pullSpec, err := env.ParsePullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
+	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
 	if err != nil {
 		return noConflicts, err
 	}
@@ -130,12 +129,12 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 				return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
 			}
 
-			mergeSpec, err := sqlMergeSpec(ctx, sess, dbName, apr, remoteTrackRef.String())
+			mergeSpec, err := createMergeSpec(ctx, sess, dbName, apr, remoteTrackRef.String())
 			if err != nil {
 				return noConflicts, err
 			}
-			ws, conflicts, err = mergeHelper(ctx, sess, roots, ws, dbName, mergeSpec)
-			if !errors.Is(doltdb.ErrUpToDate, err) {
+			ws, conflicts, err = mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
+			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, err
 			}
 
@@ -154,46 +153,60 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return noConflicts, nil
 }
 
-func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
-	for _ = range pullerEventCh {
-	}
-}
-
-func progFunc(progChan chan datas.PullProgress) {
-	done := false
-	for !done {
+func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
+	for {
 		select {
-		case _, ok := <-progChan:
-			if !ok {
-				done = true
-			}
-		case <-time.After(250 * time.Millisecond):
-			break
+		case <-ctx.Done():
+			return
+		default:
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-pullerEventCh:
+		default:
 		}
 	}
 }
 
-func runProgFuncs() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
-	pullerEventCh := make(chan datas.PullerEvent, 128)
-	progChan := make(chan datas.PullProgress, 128)
+func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-progChan:
+		default:
+		}
+	}
+}
+
+func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
+	pullerEventCh := make(chan datas.PullerEvent)
+	progChan := make(chan datas.PullProgress)
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		progFunc(progChan)
+		progFunc(ctx, progChan)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pullerProgFunc(pullerEventCh)
+		pullerProgFunc(ctx, pullerEventCh)
 	}()
 
 	return wg, progChan, pullerEventCh
 }
 
-func stopProgFuncs(wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+	cancel()
 	close(progChan)
 	close(pullerEventCh)
 	wg.Wait()

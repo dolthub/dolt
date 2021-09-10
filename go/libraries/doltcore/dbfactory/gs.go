@@ -32,7 +32,7 @@ type GSFactory struct {
 }
 
 // CreateDB creates an GCS backed database
-func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error) {
 	var db datas.Database
 	gcs, err := storage.NewClient(ctx)
 
@@ -57,7 +57,7 @@ type LocalBSFactory struct {
 }
 
 // CreateDB creates a local filesystem blobstore backed database
-func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error) {
 	var db datas.Database
 	absPath, err := filepath.Abs(filepath.Join(urlObj.Host, urlObj.Path))
 

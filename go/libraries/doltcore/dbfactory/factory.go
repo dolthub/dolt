@@ -53,7 +53,7 @@ const (
 
 // DBFactory is an interface for creating concrete datas.Database instances which may have different backing stores.
 type DBFactory interface {
-	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error)
+	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error)
 }
 
 // DBFactories is a map from url scheme name to DBFactory.  Additional factories can be added to the DBFactories map
@@ -64,17 +64,13 @@ var DBFactories = map[string]DBFactory{
 	FileScheme:    FileFactory{},
 	MemScheme:     MemFactory{},
 	LocalBSScheme: LocalBSFactory{},
-}
-
-// InitializeFactories initializes any factories that rely on a GRPCConnectionProvider (Namely http and https)
-func InitializeFactories(dp GRPCDialProvider) {
-	DBFactories[HTTPScheme] = NewDoltRemoteFactory(dp, true)
-	DBFactories[HTTPSScheme] = NewDoltRemoteFactory(dp, false)
+	HTTPScheme:    NewDoltRemoteFactory(true),
+	HTTPSScheme:   NewDoltRemoteFactory(false),
 }
 
 // CreateDB creates a database based on the supplied urlStr, and creation params.  The DBFactory used for creation is
 // determined by the scheme of the url.  Naked urls will use https by default.
-func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]string) (datas.Database, error) {
+func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) (datas.Database, error) {
 	urlObj, err := earl.Parse(urlStr)
 
 	if err != nil {

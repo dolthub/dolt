@@ -39,8 +39,8 @@ var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToGetRemoteDb = errors.New("failed to get remote db")
 var ErrUnknownPushErr = errors.New("unknown push error")
 
-type ProgStarter func() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent)
-type ProgStopper func(wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)
+type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent)
+type ProgStopper func(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent)
 
 // Push will update a destination branch, in a given destination database if it can be done as a fast forward merge.
 // This is accomplished first by verifying that the remote tracking reference for the source database can be updated to
@@ -183,9 +183,10 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
 	}
 
-	wg, progChan, pullerEventCh := progStarter()
+	newCtx, cancelFunc := context.WithCancel(ctx)
+	wg, progChan, pullerEventCh := progStarter(newCtx)
 	err = Push(ctx, tempTableDir, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
-	progStopper(wg, progChan, pullerEventCh)
+	progStopper(cancelFunc, wg, progChan, pullerEventCh)
 
 	if err != nil {
 		switch err {
@@ -206,11 +207,10 @@ func pushTagToRemote(ctx context.Context, tempTableDir string, srcRef, destRef r
 		return err
 	}
 
-	wg, progChan, pullerEventCh := progStarter()
-
+	newCtx, cancelFunc := context.WithCancel(ctx)
+	wg, progChan, pullerEventCh := progStarter(newCtx)
 	err = PushTag(ctx, tempTableDir, destRef.(ref.TagRef), localDB, remoteDB, tg, progChan, pullerEventCh)
-
-	progStopper(wg, progChan, pullerEventCh)
+	progStopper(cancelFunc, wg, progChan, pullerEventCh)
 
 	if err != nil {
 		return err
@@ -307,9 +307,10 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 			return false, nil
 		}
 
-		wg, progChan, pullerEventCh := progStarter()
+		newCtx, cancelFunc := context.WithCancel(ctx)
+		wg, progChan, pullerEventCh := progStarter(newCtx)
 		err = FetchTag(ctx, tempTableDir, srcDB, destDB, tag, progChan, pullerEventCh)
-		progStopper(wg, progChan, pullerEventCh)
+		progStopper(cancelFunc, wg, progChan, pullerEventCh)
 
 		if err != nil {
 			return true, err
@@ -345,9 +346,10 @@ func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote
 		return nil, fmt.Errorf("unable to find '%s' on '%s'; %w", srcRef.GetPath(), rem.Name, err)
 	}
 
-	wg, progChan, pullerEventCh := progStarter()
+	newCtx, cancelFunc := context.WithCancel(ctx)
+	wg, progChan, pullerEventCh := progStarter(newCtx)
 	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
-	progStopper(wg, progChan, pullerEventCh)
+	progStopper(cancelFunc, wg, progChan, pullerEventCh)
 
 	if err != nil {
 		return nil, err

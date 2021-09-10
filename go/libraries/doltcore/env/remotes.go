@@ -54,10 +54,11 @@ type Remote struct {
 	Url        string            `json:"url"`
 	FetchSpecs []string          `json:"fetch_specs"`
 	Params     map[string]string `json:"params"`
+	dialer     dbfactory.GRPCDialProvider
 }
 
-func NewRemote(name, url string, params map[string]string) Remote {
-	return Remote{name, url, []string{"refs/heads/*:refs/remotes/" + name + "/*"}, params}
+func NewRemote(name, url string, params map[string]string, dialer dbfactory.GRPCDialProvider) Remote {
+	return Remote{name, url, []string{"refs/heads/*:refs/remotes/" + name + "/*"}, params, dialer}
 }
 
 func (r *Remote) GetParam(pName string) (string, bool) {
@@ -76,15 +77,25 @@ func (r *Remote) GetParamOrDefault(pName, defVal string) string {
 }
 
 func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat) (*doltdb.DoltDB, error) {
-	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, r.Params)
+	params := make(map[string]interface{})
+	for k, v := range r.Params {
+		params[k] = v
+	}
+	if r.dialer != nil {
+		params[dbfactory.GRPCDialProviderParam] = r.dialer
+	}
+	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
 func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsBinFormat) (*doltdb.DoltDB, error) {
-	params := make(map[string]string)
+	params := make(map[string]interface{})
 	for k, v := range r.Params {
 		params[k] = v
 	}
 	params[dbfactory.NoCachingParameter] = "true"
+	if r.dialer != nil {
+		params[dbfactory.GRPCDialProviderParam] = r.dialer
+	}
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
@@ -350,7 +361,7 @@ type PullSpec struct {
 	Branch     ref.DoltRef
 }
 
-func ParsePullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force bool) (*PullSpec, error) {
+func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force bool) (*PullSpec, error) {
 	branch := rsr.CWBHeadRef()
 
 	refSpecs, err := GetRefSpecs(rsr, remoteName)

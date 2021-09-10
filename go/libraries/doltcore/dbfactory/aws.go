@@ -105,7 +105,7 @@ type AWSFactory struct {
 }
 
 // CreateDB creates an AWS backed database
-func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error) {
 	var db datas.Database
 	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 
@@ -118,7 +118,7 @@ func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 	return db, nil
 }
 
-func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {
+func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (chunks.ChunkStore, error) {
 	parts := strings.SplitN(urlObj.Hostname(), ":", 2) // [table]:[bucket]
 	if len(parts) != 2 {
 		return nil, errors.New("aws url has an invalid format")
@@ -160,15 +160,15 @@ func validatePath(path string) (string, error) {
 	return path, nil
 }
 
-func awsConfigFromParams(params map[string]string) (session.Options, error) {
+func awsConfigFromParams(params map[string]interface{}) (session.Options, error) {
 	awsConfig := aws.NewConfig()
 	if val, ok := params[AWSRegionParam]; ok {
-		awsConfig = awsConfig.WithRegion(val)
+		awsConfig = awsConfig.WithRegion(val.(string))
 	}
 
 	awsCredsSource := RoleCS
 	if val, ok := params[AWSCredsTypeParam]; ok {
-		awsCredsSource = AWSCredentialSourceFromStr(val)
+		awsCredsSource = AWSCredentialSourceFromStr(val.(string))
 		if awsCredsSource == InvalidCS {
 			return session.Options{}, errors.New("invalid value for aws-creds-source")
 		}
@@ -178,8 +178,8 @@ func awsConfigFromParams(params map[string]string) (session.Options, error) {
 
 	profile := ""
 	if val, ok := params[AWSCredsProfile]; ok {
-		profile = val
-		opts.Profile = val
+		profile = val.(string)
+		opts.Profile = val.(string)
 	}
 
 	switch awsCredsSource {
@@ -189,7 +189,7 @@ func awsConfigFromParams(params map[string]string) (session.Options, error) {
 		if filePath, ok := params[AWSCredsFileParam]; !ok {
 			return opts, os.ErrNotExist
 		} else {
-			creds := credentials.NewSharedCredentials(filePath, profile)
+			creds := credentials.NewSharedCredentials(filePath.(string), profile)
 			awsConfig = awsConfig.WithCredentials(creds)
 		}
 	case AutoCS:
@@ -200,8 +200,8 @@ func awsConfigFromParams(params map[string]string) (session.Options, error) {
 		} else {
 			// if env credentials don't exist try looking for a credentials file
 			if filePath, ok := params[AWSCredsFileParam]; ok {
-				if _, err := os.Stat(filePath); err == nil {
-					creds := credentials.NewSharedCredentials(filePath, profile)
+				if _, err := os.Stat(filePath.(string)); err == nil {
+					creds := credentials.NewSharedCredentials(filePath.(string), profile)
 					awsConfig = awsConfig.WithCredentials(creds)
 				}
 			}
