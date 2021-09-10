@@ -152,18 +152,8 @@ func fetchRefSpecs(ctx *sql.Context, srcDB *doltdb.DoltDB, dbData env.DbData, re
 			}
 		}
 		if !rsSeen {
-			//if rb, ok := rs.(ref.BranchToTrackingBranchRefSpec); ok {
 			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, rs.GetRemRefToLocal())
-			//}
-			//return fmt.Errorf("%w; %s %s", "remote", msg)
 		}
-		//if !rsSeen {
-		//	msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
-		//	if rb, ok := rs.(ref.BranchToTrackingBranchRefSpec); ok {
-		//		return fmt.Errorf("'%s' %s", rs, msg)
-		//	}
-		//	return fmt.Errorf("%w; %s %s", "remote", msg)
-		//}
 	}
 
 	err := actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
