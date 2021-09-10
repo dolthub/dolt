@@ -16,6 +16,11 @@ package env
 
 import (
 	"context"
+	"fmt"
+	"time"
+
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
@@ -28,7 +33,7 @@ func NewMemoryDbData(ctx context.Context) (DbData, error) {
 		return DbData{}, err
 	}
 
-	rs, err := NewMemoryRepoState(ctx)
+	rs, err := NewMemoryRepoState(ctx, ddb)
 	if err != nil {
 		return DbData{}, err
 	}
@@ -42,15 +47,33 @@ func NewMemoryDbData(ctx context.Context) (DbData, error) {
 }
 
 func NewMemoryDoltDB(ctx context.Context) (*doltdb.DoltDB, error) {
-	return nil, nil
+	ts := &chunks.TestStorage{}
+	cs := ts.NewViewWithDefaultFormat()
+	ddb := doltdb.DoltDBFromCS(cs)
+
+	err := ddb.WriteEmptyRepo(ctx, "memory", "memory")
+	if err != nil {
+		return nil, err
+	}
+
+	return ddb, nil
 }
 
-func NewMemoryRepoState(ctx context.Context) (MemoryRepoState, error) {
-	return MemoryRepoState{}, nil
+func NewMemoryRepoState(ctx context.Context, ddb *doltdb.DoltDB) (MemoryRepoState, error) {
+	bb, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return MemoryRepoState{}, err
+	}
+
+	return MemoryRepoState{
+		DoltDB: ddb,
+		Head:   bb[0],
+	}, nil
 }
 
 type MemoryRepoState struct {
-	byte
+	DoltDB *doltdb.DoltDB
+	Head   ref.DoltRef
 }
 
 var _ RepoStateReader = MemoryRepoState{}
@@ -58,41 +81,111 @@ var _ RepoStateWriter = MemoryRepoState{}
 var _ DocsReadWriter = MemoryRepoState{}
 
 func (m MemoryRepoState) CWBHeadRef() ref.DoltRef {
-	panic("unimplemented")
+	return m.Head
 }
 
 func (m MemoryRepoState) CWBHeadSpec() *doltdb.CommitSpec {
-	panic("unimplemented")
-}
-
-func (m MemoryRepoState) GetRemotes() (map[string]Remote, error) {
-	panic("unimplemented")
+	spec, err := doltdb.NewCommitSpec(m.CWBHeadRef().GetPath())
+	if err != nil {
+		panic(err)
+	}
+	return spec
 }
 
 func (m MemoryRepoState) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	panic("unimplemented")
+	var h hash.Hash
+	var wsRef ref.WorkingSetRef
+
+	ws, err := m.WorkingSet(ctx)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// first time updating root
+		wsRef, err = ref.WorkingSetRefForHead(m.CWBHeadRef())
+		if err != nil {
+			return err
+		}
+		ws = doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(newRoot).WithStagedRoot(newRoot)
+	} else if err != nil {
+		return err
+	} else {
+		h, err = ws.HashOf()
+		if err != nil {
+			return err
+		}
+
+		wsRef = ws.Ref()
+	}
+
+	return m.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, m.workingSetMeta())
 }
 
 func (m MemoryRepoState) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
-	panic("unimplemented")
+	var h hash.Hash
+	var wsRef ref.WorkingSetRef
+
+	ws, err := m.WorkingSet(ctx)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// first time updating root
+		wsRef, err = ref.WorkingSetRefForHead(m.CWBHeadRef())
+		if err != nil {
+			return err
+		}
+		ws = doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(newRoot).WithStagedRoot(newRoot)
+	} else if err != nil {
+		return err
+	} else {
+		h, err = ws.HashOf()
+		if err != nil {
+			return err
+		}
+
+		wsRef = ws.Ref()
+	}
+
+	return m.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, m.workingSetMeta())
 }
 
-func (m MemoryRepoState) SetCWBHeadRef(context.Context, ref.MarshalableRef) error {
-	panic("unimplemented")
+func (m MemoryRepoState) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
+	workingSetRef, err := ref.WorkingSetRefForHead(m.CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+
+	workingSet, err := m.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return workingSet, nil
+}
+
+func (m MemoryRepoState) workingSetMeta() *doltdb.WorkingSetMeta {
+	return &doltdb.WorkingSetMeta{
+		Timestamp:   uint64(time.Now().Unix()),
+		Description: "updated from dolt environment",
+	}
+}
+
+func (m MemoryRepoState) SetCWBHeadRef(_ context.Context, r ref.MarshalableRef) (err error) {
+	m.Head = r.Ref
+	return
+}
+
+func (m MemoryRepoState) GetRemotes() (map[string]Remote, error) {
+	return make(map[string]Remote), nil
 }
 
 func (m MemoryRepoState) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
-	panic("unimplemented")
+	return fmt.Errorf("cannot insert a remote in a memory database")
 }
 
 func (m MemoryRepoState) RemoveRemote(ctx context.Context, name string) error {
-	panic("unimplemented")
+	return fmt.Errorf("cannot delete a remote from a memory database")
 }
 
 func (m MemoryRepoState) GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error) {
-	panic("unimplemented")
+	return nil, fmt.Errorf("cannot get docs from a memory database")
 }
 
 func (m MemoryRepoState) WriteDocsToDisk(docs doltdocs.Docs) error {
-	panic("unimplemented")
+	return fmt.Errorf("cannot write docs to a memory database")
 }

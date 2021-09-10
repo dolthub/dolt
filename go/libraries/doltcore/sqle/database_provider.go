@@ -97,27 +97,30 @@ func (p DoltDatabaseProvider) AllDatabases() (all []sql.Database) {
 	return
 }
 
-func (p DoltDatabaseProvider) CreateDatabase(dbName string) {
+func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	mem, err := env.NewMemoryDbData(context.Background())
+	mem, err := env.NewMemoryDbData(ctx)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	opts := editor.Options{
 		Deaf: editor.NewDbEaFactory(os.TempDir(), mem.Ddb.ValueReadWriter()),
 	}
 
-	db := NewDatabase(dbName, mem, opts)
+	db := NewDatabase(name, mem, opts)
 	p.databases[strings.ToLower(db.Name())] = db
+
+	return nil
 }
 
-func (p DoltDatabaseProvider) DropDatabase(name string) {
+func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	delete(p.databases, strings.ToLower(name))
+	return nil
 }
 
 func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
