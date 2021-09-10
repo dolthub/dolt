@@ -16,7 +16,10 @@ package cli
 
 import (
 	"context"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/fatih/color"
 
@@ -54,7 +57,7 @@ func hasHelpFlag(args []string) bool {
 
 // Command is the interface which defines a Dolt cli command
 type Command interface {
-	// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+	// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 	Name() string
 	// Description returns a description of the command
 	Description() string
@@ -62,6 +65,15 @@ type Command interface {
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
 	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
+}
+
+// SignalCommand is an extension of Command that allows commands to install their own signal handlers, rather than use
+// the global one (which cancels the global context).
+type SignalCommand interface {
+	Command
+
+	// InstallsSignalHandlers returns whether this command manages its own signal handlers for interruption / termination.
+	InstallsSignalHandlers() bool
 }
 
 // This type is to store the content of a documented command, elsewhere we can transform this struct into
@@ -153,6 +165,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	if len(args) > 0 {
 		subCommandStr = strings.ToLower(strings.TrimSpace(args[0]))
 	}
+
 	for _, cmd := range hc.Subcommands {
 		lwrName := strings.ToLower(cmd.Name())
 		if lwrName == subCommandStr {
@@ -188,6 +201,14 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 	if evtCmd, ok := cmd.(EventMonitoredCommand); ok {
 		evt = events.NewEvent(evtCmd.EventType())
 		ctx = events.NewContextForEvent(ctx, evt)
+	}
+
+	// Certain commands cannot tolerate a top-level signal handler (which cancels the root context) but need to manage
+	// their own interrupt semantics.
+	if signalCmd, ok := cmd.(SignalCommand); !ok || !signalCmd.InstallsSignalHandlers() {
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
 	}
 
 	ret := cmd.Exec(ctx, commandStr, args, dEnv)
