@@ -83,7 +83,7 @@ func (cmd SqlClientCmd) RequiresRepo() bool {
 }
 
 func (cmd SqlClientCmd) Hidden() bool {
-	return true
+	return false
 }
 
 func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -140,11 +140,11 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}()
 
-	_ = iohelp.WriteLine(cli.CliOut, `# Welcome to the Dolt MySQL client.
+	_ = iohelp.WriteLine(cli.CliOut, `# Welcome to the Dolt SQL client.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`)
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
-	prompt := "mysql> "
+	prompt := "doltsql> "
 	multilinePrompt := fmt.Sprintf(fmt.Sprintf("%%%ds", len(prompt)), "-> ")
 
 	rlConf := readline.Config{
