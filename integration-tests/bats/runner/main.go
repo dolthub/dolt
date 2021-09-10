@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -44,6 +45,10 @@ func main() {
 						mu.Lock()
 						failedfiles = append(failedfiles, testname)
 						mu.Unlock()
+						var ee *exec.ExitError
+						if !errors.As(err, &ee) {
+							fmt.Fprintf(os.Stderr, "unexpected error running bats test: %s\n", err.Error())
+						}
 					}
 				case <-ctx.Done():
 					return nil
