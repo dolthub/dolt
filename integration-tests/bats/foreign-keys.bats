@@ -1651,3 +1651,37 @@ SQL
     dolt add .
     dolt commit -m 'this should not break'
 }
+
+@test "foreign-keys: dolt table import with null in nullable FK field should work (issue #2108)" {
+    dolt sql <<SQL
+CREATE TABLE naics (
+  naics_2017 char(6) NOT NULL,
+  PRIMARY KEY (naics_2017)
+);
+CREATE TABLE businesses (
+  name varchar(180) NOT NULL,
+  naics_2017 char(6),
+  PRIMARY KEY (name),
+  KEY naics_2017 (naics_2017),
+  CONSTRAINT naics FOREIGN KEY (naics_2017) REFERENCES naics (naics_2017)
+);
+INSERT INTO naics VALUES ("100");
+SQL
+
+    echo $'name,naics_2017\n"test",\n"test2","100"' > fk_test.csv
+
+    run dolt table import -u businesses fk_test.csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
+
+    # Ensure this fails when the field is NOT NULL
+    dolt sql <<SQL
+TRUNCATE businesses;
+ALTER TABLE businesses MODIFY naics_2017 char(6) NOT NULL;
+SQL
+
+    run dolt table import -u businesses fk_test.csv
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Bad Row:" ]] || false
+    [[ "$output" =~ "naics_2017" ]] || false
+}
