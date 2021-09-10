@@ -234,7 +234,6 @@ func ParseFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRef
 	remName := "origin"
 	remote, remoteOK := remotes[remName]
 
-	//args := apr.Args()
 	if len(args) != 0 {
 		if val, ok := remotes[args[0]]; ok {
 			remName = args[0]
@@ -244,7 +243,12 @@ func ParseFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRef
 		}
 	}
 	if !remoteOK {
-		return NoRemote, nil, ErrUnknownRemote
+		msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
+		//if rb, ok := rs.(ref.BranchToTrackingBranchRefSpec); ok {
+		//	return NoRemote, nil, fmt.Errorf("%w: '%s' %s", ErrUnknownRemote, remName, msg)
+		//}
+		return NoRemote, nil, fmt.Errorf("%w: %s %s", ErrUnknownRemote, remName, msg)
+		//return NoRemote, nil, ErrUnknownRemote
 	}
 
 	var rs []ref.RemoteRefSpec

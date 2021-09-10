@@ -31,6 +31,11 @@ import (
 
 const DoltFetchFuncName = "dolt_fetch"
 
+const (
+	cmdFailure = 0
+	cmdSuccess = 1
+)
+
 type DoltFetchFunc struct {
 	expression.NaryExpression
 }
@@ -62,39 +67,50 @@ func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
-		return noConflicts, fmt.Errorf("empty database name.")
+		return cmdFailure, fmt.Errorf("empty database name")
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(ctx, dbName)
-
 	if !ok {
-		return noConflicts, fmt.Errorf("Could not load database %s", dbName)
+		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	ap := cli.CreateMergeArgParser()
+	ap := cli.CreateFetchArgParser()
 	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return cmdFailure, err
+	}
 
 	apr, err := ap.Parse(args)
 	if err != nil {
-		return noConflicts, err
+		return cmdFailure, err
 	}
 
 	remote, refSpecs, err := env.ParseFetchOpts(apr.Args(), dbData.Rsr)
-
-	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
+	if err != nil {
+		return cmdFailure, err
+	}
 
 	srcDB, err := remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
 	if err != nil {
-		return noConflicts, fmt.Errorf("failed to get remote db; %w", err)
+		return cmdFailure, fmt.Errorf("failed to get remote db; %w", err)
 	}
 
+	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
+
+	err = fetchRefSpecs(ctx, srcDB, dbData, refSpecs, remote, updateMode)
+	if err != nil {
+		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
+	}
+	return cmdSuccess, nil
+}
+
+func fetchRefSpecs(ctx *sql.Context, srcDB *doltdb.DoltDB, dbData env.DbData, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode) error {
 	for _, rs := range refSpecs {
-
 		branchRefs, err := srcDB.GetHeadRefs(ctx)
-
 		if err != nil {
-			return nil, env.ErrFailedToReadDb
+			return env.ErrFailedToReadDb
 		}
 
 		rsSeen := false
@@ -104,49 +120,56 @@ func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 			if remoteTrackRef != nil {
 				rsSeen = true
-				// todo: can we pass nil for either of the channels?
 				srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), remote, srcDB, dbData.Ddb, branchRef, remoteTrackRef, runProgFuncs, stopProgFuncs)
 				if err != nil {
-					return noConflicts, err
+					return err
 				}
 
-				switch updateMode {
+				switch mode {
 				case ref.ForceUpdate:
 					err := dbData.Ddb.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
 					if err != nil {
-						//return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-						return nil, err
+						return err
 					}
 				case ref.FastForwardOnly:
 					ok, err := dbData.Ddb.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
+					if err != nil {
+						return fmt.Errorf("%w: %s", actions.ErrCantFF, err.Error())
+					}
 					if !ok {
-						return nil, fmt.Errorf("%w: %s", actions.ErrCantFF, err.Error())
+						return actions.ErrCantFF
 					}
 
 					if err == nil || err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 						err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
 						if err != nil {
-							return nil, fmt.Errorf("%w: %s", actions.ErrCantFF, err.Error())
+							return fmt.Errorf("%w: %s", actions.ErrCantFF, err.Error())
 						}
 					} else if err != nil {
-						return nil, fmt.Errorf("%w: %s", actions.ErrCantFF, err.Error())
+						return fmt.Errorf("%w: %s", actions.ErrCantFF, err.Error())
 					}
 				}
 			}
-			if !rsSeen {
-				msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
-				if rb, ok := rs.(ref.BranchToTrackingBranchRefSpec); ok {
-					return nil, fmt.Errorf("%w; '%s' %s", err, rb, msg)
-				}
-				return nil, fmt.Errorf("%w; %s %s", err, "remote", msg)
-			}
 		}
+		if !rsSeen {
+			//if rb, ok := rs.(ref.BranchToTrackingBranchRefSpec); ok {
+			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, rs.GetRemRefToLocal())
+			//}
+			//return fmt.Errorf("%w; %s %s", "remote", msg)
+		}
+		//if !rsSeen {
+		//	msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
+		//	if rb, ok := rs.(ref.BranchToTrackingBranchRefSpec); ok {
+		//		return fmt.Errorf("'%s' %s", rs, msg)
+		//	}
+		//	return fmt.Errorf("%w; %s %s", "remote", msg)
+		//}
 	}
 
-	err = actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
+	err := actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
 	if err != nil {
-		return noConflicts, err
+		return err
 	}
 
-	return noConflicts, nil
+	return nil
 }

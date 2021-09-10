@@ -174,7 +174,7 @@ func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*do
 		return nil, hash.Hash{}, errors.New("branch name is not a string")
 	}
 
-	branchRef, err := getBranchInsensitive(ctx, paramStr, ddb)
+	branchRef, err := getRefInsensitive(ctx, paramStr, ddb)
 
 	if err != nil {
 		return nil, hash.Hash{}, err
