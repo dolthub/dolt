@@ -324,3 +324,40 @@ func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map
 		emptyTuple:  types.EmptyTuple(b.nbf),
 	}
 }
+
+var _ DbEaFactory = (*InMemDEAF)(nil)
+
+type InMemDEAF struct {
+	nbf *types.NomsBinFormat
+}
+
+func NewInMemDeaf(nbf *types.NomsBinFormat) DbEaFactory {
+	return &InMemDEAF{
+		nbf: nbf,
+	}
+}
+
+func (i *InMemDEAF) NewTableEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
+	ea := edits.NewAsyncSortedEditsWithDefaults(i.nbf)
+	return &BulkImportTEA{
+		teaf:       i,
+		rowData:    rowData,
+		ea:         ea,
+		adds:       make(map[hash.Hash]bool),
+		deletes:    make(map[hash.Hash]bool),
+		emptyTuple: types.EmptyTuple(i.nbf),
+	}
+}
+
+func (i *InMemDEAF) NewIndexEA(ctx context.Context, rowData types.Map) IndexEditAccumulator {
+	ea := edits.NewAsyncSortedEditsWithDefaults(i.nbf)
+	return &BulkImportIEA{
+		teaf:        i,
+		rowData:     rowData,
+		ea:          ea,
+		adds:        make(map[hash.Hash]bool),
+		deletes:     make(map[hash.Hash]bool),
+		partialAdds: make(map[hash.Hash]map[hash.Hash]types.Tuple),
+		emptyTuple:  types.EmptyTuple(i.nbf),
+	}
+}
