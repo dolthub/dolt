@@ -61,33 +61,36 @@ func (d DoltPushFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
-		return 0, fmt.Errorf("empty database name")
+		return cmdFailure, fmt.Errorf("empty database name")
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(ctx, dbName)
 
 	if !ok {
-		return 0, fmt.Errorf("could not load database %s", dbName)
+		return cmdFailure, fmt.Errorf("could not load database %s", dbName)
 	}
 
 	ap := cli.CreatePushArgParser()
 	args, err := getDoltArgs(ctx, row, d.Children())
 	if err != nil {
-		return 0, err
+		return cmdFailure, err
 	}
 
 	apr, err := ap.Parse(args)
 
 	opts, err := env.ParsePushArgs(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
 	if err != nil {
-		return 1, err
+		return cmdFailure, err
 	}
 	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, dbData.Rsw.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
-	switch err {
-	case datas.ErrMergeNeeded:
-		return 1, fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err)
-	default:
-		return 1, err
+	if err != nil {
+		switch err {
+		case datas.ErrMergeNeeded:
+			return cmdFailure, fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err)
+		default:
+			return cmdFailure, err
+		}
 	}
+	return cmdSuccess, nil
 }
