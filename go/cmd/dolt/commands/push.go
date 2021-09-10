@@ -177,6 +177,10 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan datas.PullerEvent) {
 	uploadRate := ""
 
 	for evt := range pullerEventCh {
+		select {
+		case <-ctx.Done(): return
+		default:
+		}
 		switch evt.EventType {
 		case datas.NewLevelTWEvent:
 			if evt.TWEventDetails.TreeLevel != 1 {
@@ -235,6 +239,12 @@ func progFunc(ctx context.Context, progChan chan datas.PullProgress) {
 	done := false
 	for !done {
 		select {
+		case <-ctx.Done(): return
+		default:
+		}
+		select {
+		case <-ctx.Done():
+			return
 		case progress, ok := <-progChan:
 			if !ok {
 				done = true
