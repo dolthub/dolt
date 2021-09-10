@@ -36,7 +36,7 @@ teardown() {
     cd $BATS_TMPDIR
 }
 
-@test "sql-fetch: dolt_fetch origin" {
+@test "sql-fetch: dolt_fetch default" {
     cd tmp2
     dolt sql -q "select dolt_fetch()"
 
@@ -53,7 +53,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch origin" {
     cd tmp2
-    dolt sql -q "select dolt_fetch()"
+    dolt sql -q "select dolt_fetch('origin')"
 
     run dolt diff master origin/master
     [ "$status" -eq 0 ]
