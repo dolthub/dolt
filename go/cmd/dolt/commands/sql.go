@@ -1405,7 +1405,7 @@ func newSqlEngine(
 		// TODO: this doesn't consider the roots provided as a param, which may not be the HEAD of the branch
 		//  To fix this, we need to pass a commit here as a separate param, and install a read-only database on it
 		//  since it isn't a current HEAD.
-		dbState, err := getDbState(ctx, db, mrEnv)
+		dbState, err := dsqle.GetInitialDBState(ctx, db)
 		if err != nil {
 			return nil, nil, err
 		}

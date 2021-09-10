@@ -140,6 +140,34 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 	}
 }
 
+func GetInitialDBState(ctx context.Context, db Database) (dsess.InitialDbState, error) {
+	rsr := db.DbData().Rsr
+	ddb := db.DbData().Ddb
+
+	headCommit, err := ddb.Resolve(ctx, rsr.CWBHeadSpec(), rsr.CWBHeadRef())
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	ws, err := env.WorkingSet(ctx, ddb, rsr)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	return dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     db.DbData(),
+		Remotes:    remotes,
+	}, nil
+}
+
 // Name returns the name of this database, set at creation time.
 func (db Database) Name() string {
 	return db.name
