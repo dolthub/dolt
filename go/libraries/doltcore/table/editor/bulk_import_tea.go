@@ -16,6 +16,7 @@ package editor
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -91,12 +92,12 @@ func (tea *BulkImportTEA) Get(ctx context.Context, keyHash hash.Hash, key types.
 
 // Commit operation not supported on BulkImportTEA
 func (tea *BulkImportTEA) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
-	panic("Not Supported")
+	return nil
 }
 
 // Rollback operation not supported on BulkImportTEA
 func (tea *BulkImportTEA) Rollback(ctx context.Context) error {
-	panic("Not Supported")
+	return errors.New("not supported")
 }
 
 // MaterializeEdits applies the in memory edits to the row data and returns types.Map
