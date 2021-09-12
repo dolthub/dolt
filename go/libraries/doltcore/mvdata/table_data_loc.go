@@ -76,13 +76,12 @@ func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValu
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error) {
 	updatedRoot, err := root.CreateEmptyTable(ctx, dl.Name, outSch)
 	if err != nil {
 		return nil, err
 	}
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 	sess := editor.CreateTableEditSession(updatedRoot, opts)
 	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, outSch)
 	if err != nil {
@@ -102,7 +101,7 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOp
 
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
-func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, _ schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, _ schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 	if err != nil {
 		return nil, err
@@ -120,8 +119,7 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, err
 	}
 
-	bulkTeaf := editor.NewBulkImportTEAFactory(tbl.Format(), dEnv.DoltDB.ValueReadWriter(), dEnv.TempTableFilesDir())
-	sess := editor.CreateTableEditSession(root, editor.Options{Deaf: bulkTeaf})
+	sess := editor.CreateTableEditSession(root, opts)
 	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
@@ -143,7 +141,7 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 
 // NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
 // preserving schema
-func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, _ schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, _ schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 	if err != nil {
 		return nil, err
@@ -163,7 +161,6 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 		return nil, err
 	}
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 	sess := editor.CreateTableEditSession(updatedRoot, opts)
 	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {

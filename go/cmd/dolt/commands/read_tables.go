@@ -115,7 +115,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	srcDB, srcRoot, verr := getRemoteDBAtCommit(ctx, remoteUrl, remoteUrlParams, commitStr)
+	srcDB, srcRoot, verr := getRemoteDBAtCommit(ctx, remoteUrl, remoteUrlParams, commitStr, dEnv)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
@@ -171,18 +171,13 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 		return nil, errhand.BuildDError("Unable to read from remote database.").AddCause(err).Build()
 	}
 
+	newCtx, cancelFunc := context.WithCancel(ctx)
 	cli.Println("Retrieving", tblName)
-	wg, progChan, pullerEventCh := runProgFuncs()
+	wg, progChan, pullerEventCh := runProgFuncs(newCtx)
 	err = dEnv.DoltDB.PushChunksForRefHash(ctx, dEnv.TempTableFilesDir(), srcDB, tblHash, pullerEventCh)
-
+	stopProgFuncs(cancelFunc, wg, progChan, pullerEventCh)
 	if err != nil {
 		return nil, errhand.BuildDError("Failed reading chunks for remote table '%s' at '%s'", tblName, commitStr).AddCause(err).Build()
-	}
-
-	stopProgFuncs(wg, progChan, pullerEventCh)
-
-	if err != nil {
-		return nil, errhand.BuildDError("Failed to pull chunks.").AddCause(err).Build()
 	}
 
 	destRoot, err = destRoot.SetTableHash(ctx, tblName, tblHash)
@@ -194,8 +189,8 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 	return destRoot, nil
 }
 
-func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string) (*doltdb.DoltDB, *doltdb.RootValue, errhand.VerboseError) {
-	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams)
+func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams map[string]string, commitStr string, dEnv *env.DoltEnv) (*doltdb.DoltDB, *doltdb.RootValue, errhand.VerboseError) {
+	_, srcDB, verr := createRemote(ctx, "temp", remoteUrl, remoteUrlParams, dEnv)
 
 	if verr != nil {
 		return nil, nil, verr

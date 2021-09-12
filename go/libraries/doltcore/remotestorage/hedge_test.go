@@ -16,6 +16,7 @@ package remotestorage
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -92,12 +93,20 @@ func TestHedgerObeysMaxHedges(t *testing.T) {
 	try := func(max int) {
 		h := NewHedger(int64(max), NewMinStrategy(1*time.Millisecond, nil))
 		cnt := int32(0)
+		wg := &sync.WaitGroup{}
+		wg.Add(max + 4)
+		h.after = func(d time.Duration) <-chan time.Time {
+			wg.Done()
+			return time.After(d)
+		}
 		i, err := h.Do(context.Background(), Work{
 			Work: func(ctx context.Context, n int) (interface{}, error) {
 				cur := atomic.AddInt32(&cnt, 1)
-				if cur == int32(max) {
-					time.Sleep(100 * time.Millisecond)
+				if cur == int32(max)+1 {
+					wg.Wait()
 					return 1, nil
+				} else if cur > int32(max)+1 {
+					panic("should not hedge more than max")
 				} else {
 					<-ctx.Done()
 					return 2, nil
@@ -122,14 +131,20 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 	MaxHedgesPerRequest = 0
 	h := NewHedger(int64(32), NewMinStrategy(1*time.Millisecond, nil))
 	cnt := int32(0)
+	wg := &sync.WaitGroup{}
+	wg.Add(4)
+	h.after = func(d time.Duration) <-chan time.Time {
+		wg.Done()
+		return time.After(d)
+	}
 	i, err := h.Do(context.Background(), Work{
 		Work: func(ctx context.Context, n int) (interface{}, error) {
 			cur := atomic.AddInt32(&cnt, 1)
 			if cur == int32(1) {
-				time.Sleep(500 * time.Millisecond)
+				wg.Wait()
 				return 1, nil
 			} else {
-				return 2, nil
+				panic("should not hedge more than MaxHedgesPerRequest")
 			}
 		},
 	})
@@ -138,17 +153,23 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 
 	MaxHedgesPerRequest = 1
 	cnt = int32(0)
+	wg = &sync.WaitGroup{}
+	wg.Add(7)
+	h.after = func(d time.Duration) <-chan time.Time {
+		wg.Done()
+		return time.After(d)
+	}
 	i, err = h.Do(context.Background(), Work{
 		Work: func(ctx context.Context, n int) (interface{}, error) {
 			cur := atomic.AddInt32(&cnt, 1)
 			if cur == int32(1) {
-				time.Sleep(30 * time.Second)
+				<-ctx.Done()
 				return 1, nil
 			} else if cur == int32(2) {
-				time.Sleep(500 * time.Millisecond)
+				wg.Wait()
 				return 2, nil
 			} else {
-				return 3, nil
+				panic("should not hedge more than MaxHedgesPerRequest")
 			}
 		},
 	})

@@ -141,3 +141,12 @@ func CreateRevertArgParser() *argparser.ArgParser {
 
 	return ap
 }
+
+func CreatePullArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(SquashParam, "", "Merges changes to the working set without updating the commit history")
+	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
+
+	return ap
+}

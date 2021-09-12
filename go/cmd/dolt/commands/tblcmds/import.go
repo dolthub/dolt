@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -463,14 +464,16 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err}
 	}
 
+	bulkTeaf := editor.NewBulkImportTEAFactory(root.VRW().Format(), root.VRW(), dEnv.TempTableFilesDir())
+	opts := editor.Options{Deaf: bulkTeaf}
 	var wr table.TableWriteCloser
 	switch impOpts.operation {
 	case CreateOp:
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB)
+		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
 	case ReplaceOp:
-		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB)
+		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
 	case UpdateOp:
-		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB)
+		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
 	default:
 		err = errors.New("invalid move operation")
 	}

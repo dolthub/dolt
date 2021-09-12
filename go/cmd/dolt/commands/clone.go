@@ -123,7 +123,7 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		if verr == nil {
 			var r env.Remote
 			var srcDB *doltdb.DoltDB
-			r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params)
+			r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params, dEnv)
 
 			if verr == nil {
 				dEnv, verr = envForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version)
@@ -227,10 +227,10 @@ func envForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	return dEnv, nil
 }
 
-func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
+func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
 
-	r := env.NewRemote(remoteName, remoteUrl, params)
+	r := env.NewRemote(remoteName, remoteUrl, params, dEnv)
 
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
 

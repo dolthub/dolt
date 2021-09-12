@@ -39,6 +39,7 @@ type RepoStateWriter interface {
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error
 	RemoveRemote(ctx context.Context, name string) error
+	TempTableFilesDir() string
 }
 
 type DocsReadWriter interface {
