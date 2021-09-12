@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"os"
 	"strings"
 	"sync"
 
@@ -106,7 +105,9 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 	opts := editor.Options{
-		Deaf: editor.NewDbEaFactory(os.TempDir(), mem.Ddb.ValueReadWriter()),
+		Deaf: editor.NewDbEaFactory(
+			mem.Rsw.TempTableFilesDir(),
+			mem.Ddb.ValueReadWriter()),
 	}
 
 	db := NewDatabase(name, mem, opts)

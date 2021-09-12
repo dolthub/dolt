@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -205,6 +206,10 @@ func (m MemoryRepoState) AddRemote(name string, url string, fetchSpecs []string,
 
 func (m MemoryRepoState) RemoveRemote(ctx context.Context, name string) error {
 	return fmt.Errorf("cannot delete a remote from a memory database")
+}
+
+func (m MemoryRepoState) TempTableFilesDir() string {
+	return os.TempDir()
 }
 
 func (m MemoryRepoState) GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error) {
