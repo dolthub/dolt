@@ -490,6 +490,7 @@ func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
 func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
 	return WorkingSet(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 }
+
 func WorkingSet(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.WorkingSet, error) {
 	workingSetRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
 	if err != nil {

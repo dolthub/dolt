@@ -51,7 +51,9 @@ func NewMemoryDoltDB(ctx context.Context) (*doltdb.DoltDB, error) {
 	cs := ts.NewViewWithDefaultFormat()
 	ddb := doltdb.DoltDBFromCS(cs)
 
-	err := ddb.WriteEmptyRepo(ctx, "memory", "memory")
+	m := "memory"
+	b := ref.NewBranchRef("main")
+	err := ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, m, m, doltdb.CommitNowFunc(), b)
 	if err != nil {
 		return nil, err
 	}
@@ -60,15 +62,38 @@ func NewMemoryDoltDB(ctx context.Context) (*doltdb.DoltDB, error) {
 }
 
 func NewMemoryRepoState(ctx context.Context, ddb *doltdb.DoltDB) (MemoryRepoState, error) {
-	bb, err := ddb.GetBranches(ctx)
+	branches, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return MemoryRepoState{}, err
+	}
+	head := branches[0]
+
+	rs := MemoryRepoState{
+		DoltDB: ddb,
+		Head:   head,
+	}
+
+	commit, err := ddb.ResolveCommitRef(ctx, head)
 	if err != nil {
 		return MemoryRepoState{}, err
 	}
 
-	return MemoryRepoState{
-		DoltDB: ddb,
-		Head:   bb[0],
-	}, nil
+	root, err := commit.GetRootValue()
+	if err != nil {
+		return MemoryRepoState{}, err
+	}
+
+	err = rs.UpdateWorkingRoot(ctx, root)
+	if err != nil {
+		return MemoryRepoState{}, err
+	}
+
+	err = rs.UpdateStagedRoot(ctx, root)
+	if err != nil {
+		return MemoryRepoState{}, err
+	}
+
+	return rs, nil
 }
 
 type MemoryRepoState struct {
