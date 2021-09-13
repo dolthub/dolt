@@ -113,6 +113,13 @@ func CreateMergeArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreatePushArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
+	ap.SupportsFlag(ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
+	return ap
+}
+
 func CreateAddArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
@@ -130,6 +137,12 @@ func CreateResetArgParser() *argparser.ArgParser {
 func CreateCheckoutArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(CheckoutCoBranch, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
+	return ap
+}
+
+func CreateFetchArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(ForceFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
 	return ap
 }
 

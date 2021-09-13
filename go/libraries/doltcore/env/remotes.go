@@ -108,10 +108,9 @@ type PushOpts struct {
 	SetUpstream bool
 }
 
-func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *DoltEnv, force bool, setUpstream bool) (*PushOpts, error) {
+func NewParseOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force bool, setUpstream bool) (*PushOpts, error) {
 	var err error
-	remotes, err := dEnv.GetRemotes()
-
+	remotes, err := rsr.GetRemotes()
 	if err != nil {
 		return nil, err
 	}
@@ -127,14 +126,18 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 	}
 
 	remote, remoteOK := remotes[remoteName]
-	currentBranch := dEnv.RepoStateReader().CWBHeadRef()
-	upstream, hasUpstream := dEnv.RepoState.Branches[currentBranch.GetPath()]
+	currentBranch := rsr.CWBHeadRef()
+	branches, err := rsr.GetBranches()
+	if err != nil {
+		return nil, err
+	}
+	upstream, hasUpstream := branches[currentBranch.GetPath()]
 
 	var refSpec ref.RefSpec
 	if remoteOK && len(args) == 1 {
 		refSpecStr := args[0]
 
-		refSpecStr, err = disambiguateRefSpecStr(ctx, dEnv.DoltDB, refSpecStr)
+		refSpecStr, err = disambiguateRefSpecStr(ctx, ddb, refSpecStr)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +150,7 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 		remoteName = args[0]
 		refSpecStr := args[1]
 
-		refSpecStr, err = disambiguateRefSpecStr(ctx, dEnv.DoltDB, refSpecStr)
+		refSpecStr, err = disambiguateRefSpecStr(ctx, ddb, refSpecStr)
 		if err != nil {
 			return nil, err
 		}
@@ -184,7 +187,7 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 		return nil, fmt.Errorf("%w: '%s'", ErrUnknownRemote, remoteName)
 	}
 
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, currentBranch)
+	hasRef, err := ddb.HasRef(ctx, currentBranch)
 
 	if err != nil {
 		return nil, ErrFailedToReadDb
@@ -225,6 +228,78 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *Do
 	}
 
 	return opts, nil
+}
+
+func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSpec, error) {
+	var err error
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return NoRemote, nil, err
+	}
+
+	if len(remotes) == 0 {
+		return NoRemote, nil, ErrNoRemote
+	}
+
+	remName := "origin"
+	remote, remoteOK := remotes[remName]
+
+	if len(args) != 0 {
+		if val, ok := remotes[args[0]]; ok {
+			remName = args[0]
+			remote = val
+			remoteOK = true
+			args = args[1:]
+		}
+	}
+	if !remoteOK {
+		msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
+		return NoRemote, nil, fmt.Errorf("%w: %s %s", ErrUnknownRemote, remName, msg)
+	}
+
+	var rs []ref.RemoteRefSpec
+	if len(args) != 0 {
+		rs, err = parseRSFromArgs(remName, args)
+	} else {
+		rs, err = GetRefSpecs(rsr, remName)
+	}
+
+	if err != nil {
+		return NoRemote, nil, err
+	}
+
+	return remote, rs, err
+}
+
+func parseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error) {
+	var refSpecs []ref.RemoteRefSpec
+	for i := 0; i < len(args); i++ {
+		rsStr := args[i]
+		rs, err := ref.ParseRefSpec(rsStr)
+
+		if err != nil {
+			return nil, fmt.Errorf("%w: '%s'", ErrInvalidFetchSpec, rsStr)
+		}
+
+		if _, ok := rs.(ref.BranchToBranchRefSpec); ok {
+			local := "refs/heads/" + rsStr
+			remTracking := "remotes/" + remName + "/" + rsStr
+			rs2, err := ref.ParseRefSpec(local + ":" + remTracking)
+
+			if err == nil {
+				rs = rs2
+			}
+		}
+
+		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
+			return nil, fmt.Errorf("%w: '%s'", ErrInvalidFetchSpec, rsStr)
+
+		} else {
+			refSpecs = append(refSpecs, rrs)
+		}
+	}
+
+	return refSpecs, nil
 }
 
 // if possible, convert refs to full spec names. prefer branches over tags.

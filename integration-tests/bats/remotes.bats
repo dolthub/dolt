@@ -1085,7 +1085,7 @@ setup_ref_test() {
     run dolt fetch remotes/dasdas
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "error: 'remotes/dasdas' is not a valid refspec." ]] || false
+    [[ "$output" =~ "invalid fetch spec: 'remotes/dasdas'" ]] || false
 }
 
 @test "remotes: fetching added invalid remote correctly errors" {

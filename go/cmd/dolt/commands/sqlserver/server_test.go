@@ -265,46 +265,35 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	sess := conn.NewSession(nil)
 
 	tests := []struct {
-		query       func() *dbr.SelectStmt
+		query       *dbr.SelectStmt
 		expectedRes []testBranch
 	}{
 		{
-			query: func() *dbr.SelectStmt {
-				return sess.Select("active_branch() as branch")
-			},
+			query:       sess.Select("active_branch() as branch"),
 			expectedRes: []testBranch{{"master"}},
 		},
 		{
-			query: func() *dbr.SelectStmt {
-				return sess.SelectBySql("set GLOBAL dolt_default_branch = 'refs/heads/new'")
-			},
+			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'refs/heads/new'"),
 			expectedRes: []testBranch{},
 		},
 		{
-			query: func() *dbr.SelectStmt {
-				return sess.Select("active_branch() as branch")
-			},
+			query:       sess.Select("active_branch() as branch"),
 			expectedRes: []testBranch{{"master"}},
 		},
 		{
-			query: func() *dbr.SelectStmt {
-				return sess.Select("dolt_checkout('-b', 'new')")
-			},
+			query:       sess.Select("dolt_checkout('-b', 'new')"),
 			expectedRes: []testBranch{{""}},
 		},
 		{
-			query: func() *dbr.SelectStmt {
-				return sess.Select("dolt_checkout('master')")
-			},
+			query:       sess.Select("dolt_checkout('master')"),
 			expectedRes: []testBranch{{""}},
 		},
 	}
 
 	for _, test := range tests {
-		query := test.query()
-		t.Run(query.Query, func(t *testing.T) {
+		t.Run(test.query.Query, func(t *testing.T) {
 			var branch []testBranch
-			_, err := query.LoadContext(context.Background(), &branch)
+			_, err := test.query.LoadContext(context.Background(), &branch)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, branch, test.expectedRes)
 		})
@@ -318,28 +307,23 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	sess = conn.NewSession(nil)
 
 	tests = []struct {
-		query       func() *dbr.SelectStmt
+		query       *dbr.SelectStmt
 		expectedRes []testBranch
 	}{
 		{
-			query: func() *dbr.SelectStmt {
-				return sess.Select("active_branch() as branch")
-			},
+			query:       sess.Select("active_branch() as branch"),
 			expectedRes: []testBranch{{"new"}},
 		},
 		{
-			query: func() *dbr.SelectStmt {
-				return sess.SelectBySql("set GLOBAL dolt_default_branch = 'new'")
-			},
+			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'new'"),
 			expectedRes: []testBranch{},
 		},
 	}
 
 	for _, test := range tests {
-		query := test.query()
-		t.Run(query.Query, func(t *testing.T) {
+		t.Run(test.query.Query, func(t *testing.T) {
 			var branch []testBranch
-			_, err := query.LoadContext(context.Background(), &branch)
+			_, err := test.query.LoadContext(context.Background(), &branch)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, branch, test.expectedRes)
 		})
@@ -353,22 +337,19 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	sess = conn.NewSession(nil)
 
 	tests = []struct {
-		query       func() *dbr.SelectStmt
+		query       *dbr.SelectStmt
 		expectedRes []testBranch
 	}{
 		{
-			query: func() *dbr.SelectStmt {
-				return sess.Select("active_branch() as branch")
-			},
+			query:       sess.Select("active_branch() as branch"),
 			expectedRes: []testBranch{{"new"}},
 		},
 	}
 
 	for _, test := range tests {
-		query := test.query()
-		t.Run(query.Query, func(t *testing.T) {
+		t.Run(test.query.Query, func(t *testing.T) {
 			var branch []testBranch
-			_, err := query.LoadContext(context.Background(), &branch)
+			_, err := test.query.LoadContext(context.Background(), &branch)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, branch, test.expectedRes)
 		})

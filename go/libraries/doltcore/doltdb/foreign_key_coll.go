@@ -505,6 +505,7 @@ func (fk ForeignKey) ValidateData(
 	childSch schema.Schema,
 	childRowData, childIdxData, parentIdxData types.Map,
 	childDef, parentDef schema.Index,
+	vrw types.ValueReadWriter,
 ) error {
 	if fk.ReferencedTableIndex != parentDef.Name() {
 		return fmt.Errorf("cannot validate data as wrong referenced index was given: expected `%s` but received `%s`",
@@ -522,7 +523,6 @@ func (fk ForeignKey) ValidateData(
 		return err
 	}
 
-	vrw := types.NewMemoryValueStore() // We are checking fks rather than persisting any values, so an internal VRW can be used
 	rc, err := rowconv.NewRowConverter(ctx, vrw, fm)
 	if err != nil {
 		return err
