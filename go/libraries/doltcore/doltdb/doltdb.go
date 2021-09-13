@@ -889,7 +889,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	}
 
 	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, nil)
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta())
 }
 
 // CopyWorkingSet copies a WorkingSetRef from one ref to another. If `force` is
@@ -920,7 +920,7 @@ func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetR
 		}
 	}
 
-	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, nil)
+	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta())
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
@@ -1014,18 +1014,9 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
-	// While we still have places that need user info threaded through, we're lenient on providing the meta
-	var metaSt types.Struct
-	if meta != nil {
-		metaSt, err = meta.toNomsStruct(types.Format_Default)
-		if err != nil {
-			return err
-		}
-	} else {
-		metaSt, err = datas.NewWorkingSetMeta(types.Format_Default, "incomplete", "incomplete", uint64(time.Now().Unix()), "incomplete")
-		if err != nil {
-			return err
-		}
+	metaSt, err := meta.toNomsStruct(types.Format_Default)
+	if err != nil {
+		return err
 	}
 
 	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
