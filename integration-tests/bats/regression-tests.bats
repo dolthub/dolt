@@ -150,3 +150,16 @@ SQL
     [[ "$output" =~ "1" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 }
+
+@test "regression-tests: some rows are not found by WHERE filter" {
+    # caught by fuzzer
+    dolt sql <<"SQL"
+CREATE TABLE `grwzHfTFle` (`oyBEOq` TINYTEXT COLLATE utf8mb4_bin, `hrbo0L` BLOB, `stSIYd` SMALLINT, `qTiF9V` TINYBLOB, `10a9ox` DOUBLE, `T2p7cl` ENUM('lE','K4drH9','s4y2zIBiGwjL4Rc','J0saTK','wPxfdWEVqYaiGS','QrClJ8DJlSQ','BQ_J2QInKTd','3o8GpiOD','C6OzkhR2GCavFB4','KoW_P86ig8Lb','rmYEkq','7xEAI_zTH8tx','esL8ebM1nALu','yvaI1Q','OmMrF6HVewJC','s_vzApJccj0','95mHsEDfQwP28k','G_CWMFqLM5sUkh5','0vNld','St36B4u','bVCCAq0K2WA_S0','qLjfEKNzOOincWaJ','a9FswYo','OdjFO','yDPuq','BxTQ9Mi_9u4ZA2Q','fpCPGA','uVJnla5','F_RlXpYT03TKdIU6','ytFjALpsQywkTV'), `21sKwG` SMALLINT UNSIGNED, PRIMARY KEY (`oyBEOq`(60), `hrbo0L`(60), `stSIYd`, `qTiF9V`(60), `10a9ox`));
+INSERT INTO `grwzHfTFle` VALUES ('!JYs-wbJ$34K3g$Y 4 CVaSukaFAt-!onw!%fPZ^a=8','E2mE%FWZ$Dnqj!@1gdztO4R5t:JS9~YCqHO#+*TabR$Wxa*eEi7xwf8nwS572Nm^9!0I.X!%-gQlpzaozZpb~u#bqHF!r7wsY1W=SL7UyYhB8J1%8y:hRD+7~5LzMcIh-WO5HbviWjo0$2Fd2#5hg#==c+=MjuN-ZCt*@285e5N_K4vsps2eY9$uHH3LCrUrHIek8X$#WXtG^a%hpH2VDm PJx1StxK|cF4NI@PWH*1iC!M%w$:!C9-o~FFq6wQW%9xn661!_tm2oWu:b!aS#0G5YW0x-W2Q!XEP@f3CNY4xQ3IoO9|:4Hbc4iw$PnYT_%pL!byJ*=:.8e~p h Syn- SM aFjDm3d-8U#IiN3:jaB1%szEYPoGIsHAZ*Zd56vY7V#BoE%:FZ =-~YJ8_.5AcMDj.x@jm*9HMQ4_u9x6I5$h0PjLp2$+=Bf%Vj_i!*lM es.oHJ@72Ksjb1|:ntzcsm2n+y4EX+A43L|W4!Ukgt43W3!nDf2s-#JqHR%MUycA95tc.uR*xy07iX-03mk',-28878,'V6=Mhy%_PO-!D:8Lg#l6u|8.+=uwERz6F8gf44$dl6THpGp7|4F!#TveAY vR_h7WrWzJKw~f Q1pRXwMN9IfUd6LC:#cXH+@i.v_0P8h%4mVVLcfV!@!ua57','-0.809039007248521',12,25759);
+DELETE FROM `grwzHfTFle` WHERE `oyBEOq` = '!JYs-wbJ$34K3g$Y 4 CVaSukaFAt-!onw!%fPZ^a=8' AND `hrbo0L` = 'E2mE%FWZ$Dnqj!@1gdztO4R5t:JS9~YCqHO#+*TabR$Wxa*eEi7xwf8nwS572Nm^9!0I.X!%-gQlpzaozZpb~u#bqHF!r7wsY1W=SL7UyYhB8J1%8y:hRD+7~5LzMcIh-WO5HbviWjo0$2Fd2#5hg#==c+=MjuN-ZCt*@285e5N_K4vsps2eY9$uHH3LCrUrHIek8X$#WXtG^a%hpH2VDm PJx1StxK|cF4NI@PWH*1iC!M%w$:!C9-o~FFq6wQW%9xn661!_tm2oWu:b!aS#0G5YW0x-W2Q!XEP@f3CNY4xQ3IoO9|:4Hbc4iw$PnYT_%pL!byJ*=:.8e~p h Syn- SM aFjDm3d-8U#IiN3:jaB1%szEYPoGIsHAZ*Zd56vY7V#BoE%:FZ =-~YJ8_.5AcMDj.x@jm*9HMQ4_u9x6I5$h0PjLp2$+=Bf%Vj_i!*lM es.oHJ@72Ksjb1|:ntzcsm2n+y4EX+A43L|W4!Ukgt43W3!nDf2s-#JqHR%MUycA95tc.uR*xy07iX-03mk' AND `stSIYd` = -28878 AND `qTiF9V` = 'V6=Mhy%_PO-!D:8Lg#l6u|8.+=uwERz6F8gf44$dl6THpGp7|4F!#TveAY vR_h7WrWzJKw~f Q1pRXwMN9IfUd6LC:#cXH+@i.v_0P8h%4mVVLcfV!@!ua57' AND `10a9ox` = '-0.809039007248521';
+SQL
+    run dolt sql -q 'SELECT COUNT(*) FROM grwzHfTFle WHERE oyBEOq LIKE "!JYs%"' -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "0" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}

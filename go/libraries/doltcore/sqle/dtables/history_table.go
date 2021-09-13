@@ -347,9 +347,7 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	vrw := types.NewMemoryValueStore() // We're displaying here, so all values that require a VRW will use an internal one
-
-	toSuperSchConv, err := rowConvForSchema(ctx, vrw, ss, tblSch)
+	toSuperSchConv, err := rowConvForSchema(ctx, tbl.ValueReadWriter(), ss, tblSch)
 
 	if err != nil {
 		return nil, err

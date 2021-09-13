@@ -353,15 +353,13 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 		return nil, err
 	}
 
-	vrw := types.NewMemoryValueStore() // We're displaying here, so all values that require a VRW will use an internal one
-
-	fromConv, err := rowConvForSchema(ctx, vrw, ss, fromSch)
+	fromConv, err := rowConvForSchema(ctx, ddb.ValueReadWriter(), ss, fromSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toConv, err := rowConvForSchema(ctx, vrw, ss, toSch)
+	toConv, err := rowConvForSchema(ctx, ddb.ValueReadWriter(), ss, toSch)
 
 	if err != nil {
 		return nil, err
