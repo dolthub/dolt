@@ -624,17 +624,11 @@ func (db *database) assertDatasetHash(
 		return false, err
 	}
 
-	if ds.HasHead() {
-		head, ok := ds.MaybeHead()
-		if !ok {
-			panic("no head found")
-		}
-
+	if head, ok := ds.MaybeHead(); ok {
 		h, err := head.Hash(db.Format())
 		if err != nil {
 			return false, err
 		}
-
 		if h != currHash {
 			return false, err
 		}
