@@ -376,7 +376,7 @@ func execShell(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -399,7 +399,7 @@ func execBatch(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -441,7 +441,7 @@ func execMultiStatements(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -477,7 +477,7 @@ func execQuery(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1393,7 +1393,6 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 
 type sqlEngine struct {
 	dbs            map[string]dsqle.Database
-	mrEnv          env.MultiRepoEnv
 	sess           *dsess.Session
 	contextFactory func(ctx context.Context) (*sql.Context, error)
 	engine         *sqle.Engine
@@ -1406,7 +1405,6 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 func newSqlEngine(
 	ctx context.Context,
 	dEnv *env.DoltEnv,
-	mrEnv env.MultiRepoEnv,
 	roots map[string]*doltdb.RootValue, // See TODO below
 	readOnly bool,
 	format resultFormat,
@@ -1471,7 +1469,6 @@ func newSqlEngine(
 
 	return &sqlEngine{
 		dbs:            nameToDB,
-		mrEnv:          mrEnv,
 		sess:           sess,
 		contextFactory: newSqlContext(sess, cat),
 		engine:         engine,
@@ -1565,16 +1562,6 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	}, nil
 }
 
-func (se *sqlEngine) getDB(name string) (dsqle.Database, error) {
-	db, ok := se.dbs[name]
-
-	if !ok {
-		return dsqle.Database{}, ErrDBNotFoundKind.New(name)
-	}
-
-	return db, nil
-}
-
 func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool, err error)) error {
 	for name, db := range se.dbs {
 		stop, err := cb(name, db)
@@ -1593,13 +1580,8 @@ func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool,
 
 func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
 	newRoots := make(map[string]*doltdb.RootValue)
-	for name := range se.mrEnv {
-		db, err := se.getDB(name)
-
-		if err != nil {
-			return nil, err
-		}
-
+	for name, db := range se.dbs {
+		var err error
 		newRoots[name], err = db.GetRoot(sqlCtx)
 
 		if err != nil {

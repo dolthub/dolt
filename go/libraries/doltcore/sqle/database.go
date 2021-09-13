@@ -153,6 +153,7 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 	}
 }
 
+// GetInitialDBState returns the InitialDbState for |db|.
 func GetInitialDBState(ctx context.Context, db Database) (dsess.InitialDbState, error) {
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb

@@ -310,7 +310,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	se := &sqlEngine{
 		dbs:    map[string]dsqle.Database{dbName: db},
-		mrEnv:  env.MultiRepoEnv{dbName: dEnv},
 		engine: engine,
 	}
 
