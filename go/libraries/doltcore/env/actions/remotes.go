@@ -191,10 +191,8 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 
 	if err != nil {
 		switch err {
-		case doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
+		case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
 			return err
-		case doltdb.ErrUpToDate:
-			return nil
 		default:
 			return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
 		}
