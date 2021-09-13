@@ -192,7 +192,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 	if err != nil {
 		return ws, noConflicts, err
 	} else if !ok {
-		return ws, noConflicts, fmt.Errorf("could not load database %s", dbName)
+		return ws, noConflicts, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	ws, err = executeMerge(ctx, spec.Squash, spec.HeadC, spec.MergeC, ws, dbState.EditSession.Opts)

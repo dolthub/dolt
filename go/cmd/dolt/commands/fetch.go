@@ -25,12 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-)
-
-const (
-	ForceFetchFlag = "force"
 )
 
 var fetchDocs = cli.CommandDocumentationContent{
@@ -66,30 +61,23 @@ func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cli.CreateFetchArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
-}
-
-func (cmd FetchCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(ForceFetchFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
-	return ap
 }
 
 // Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cli.CreateFetchArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	remotes, _ := dEnv.GetRemotes()
-	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
-
-	updateMode := ref.UpdateMode{Force: apr.Contains(ForceFetchFlag)}
-
-	if verr == nil {
-		verr = fetchRefSpecs(ctx, updateMode, dEnv, r, refSpecs)
+	r, refSpecs, err := env.NewFetchOpts(apr.Args(), dEnv.RepoStateReader())
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
+
+	verr := fetchRefSpecs(ctx, updateMode, dEnv, r, refSpecs)
 
 	return HandleVErrAndExitCode(verr, usage)
 }

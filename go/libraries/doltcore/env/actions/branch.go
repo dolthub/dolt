@@ -160,7 +160,7 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 		}
 
 		isMerged, _ := master.CanFastReverseTo(ctx, cm)
-		if err != nil && errors.Is(err, doltdb.ErrUpToDate) {
+		if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 			return err
 		}
 		if !isMerged {

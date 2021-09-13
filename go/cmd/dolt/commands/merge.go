@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -29,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -153,11 +155,6 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return 1
 			}
 
-			msg := ""
-			if m, ok := apr.GetValue(cli.CommitMessageArg); ok {
-				msg = m
-			}
-
 			roots, err := dEnv.Roots(ctx)
 			if err != nil {
 				return handleCommitErr(ctx, dEnv, err, usage)
@@ -168,6 +165,8 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
 
+			var msg string
+
 			spec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
 			if err != nil {
 				return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
@@ -176,6 +175,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				cli.Println("Everything up-to-date")
 				return handleCommitErr(ctx, dEnv, nil, usage)
 			}
+
+			msg, err = getCommitMessage(ctx, apr, dEnv, spec)
+			if err != nil {
+				return handleCommitErr(ctx, dEnv, err, usage)
+			}
+			spec.Msg = msg
 
 			err = mergePrinting(ctx, dEnv, spec)
 			if err != nil {
@@ -208,6 +213,27 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	return handleCommitErr(ctx, dEnv, verr, usage)
+}
+
+func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, spec *merge.MergeSpec) (string, errhand.VerboseError) {
+	if m, ok := apr.GetValue(cli.CommitMessageArg); ok {
+		return m, nil
+	}
+
+	if !spec.Noff || spec.Msg != "" {
+		return spec.Msg, nil
+	}
+
+	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
+		msg, err := getCommitMessageFromEditor(ctx, dEnv)
+		if err != nil {
+			return "", errhand.VerboseErrorFromError(err)
+		}
+		return msg, nil
+	} else if !errors.Is(err, doltdb.ErrUpToDate) || !errors.Is(err, doltdb.ErrIsAhead) {
+		return "", errhand.VerboseErrorFromError(err)
+	}
+	return "", nil
 }
 
 func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec) errhand.VerboseError {
@@ -244,15 +270,7 @@ func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec
 		if _, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-		if spec.Noff {
-			if spec.Msg == "" {
-				msg, err := getCommitMessageFromEditor(ctx, dEnv)
-				if err != nil {
-					return errhand.VerboseErrorFromError(err)
-				}
-				spec.Msg = msg
-			}
-		} else {
+		if !spec.Noff {
 			cli.Println("Fast-forward")
 		}
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
