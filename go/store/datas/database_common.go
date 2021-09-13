@@ -105,6 +105,7 @@ func (db *database) Flush(ctx context.Context) error {
 	return err
 }
 
+// DatasetsInRoot returns the Map of datasets in the root represented by the |rootHash| given
 func (db *database) DatasetsInRoot(ctx context.Context, rootHash hash.Hash) (types.Map, error) {
 	if rootHash.IsEmpty() {
 		return types.NewMap(ctx, db)
@@ -119,6 +120,9 @@ func (db *database) DatasetsInRoot(ctx context.Context, rootHash hash.Hash) (typ
 	return val.(types.Map), nil
 }
 
+// Datasets returns the Map of Datasets in the current root. If you intend to edit the map and commit changes back,
+// then you should fetch the current root, then call DatasetsInRoot with that hash. Otherwise another writer could
+// change the root value between when you get the root hash and call this method.
 func (db *database) Datasets(ctx context.Context) (types.Map, error) {
 	rootHash, err := db.rt.Root(ctx)
 	if err != nil {
@@ -337,7 +341,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 			return err
 		}
 
-		currentDatasets, err := db.Datasets(ctx)
+		currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
 		if err != nil {
 			return err
 		}
