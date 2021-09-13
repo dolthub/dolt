@@ -4,23 +4,23 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
     TMPDIRS=$(pwd)/tmpdirs
-    mkdir -p $TMPDIRS/{rem1,tmp1}
+    mkdir -p $TMPDIRS/{rem1,repo1}
 
-    # tmp1 -> rem1 -> tmp2
-    cd $TMPDIRS/tmp1
+    # repo1 -> rem1 -> repo2
+    cd $TMPDIRS/repo1
     dolt init
     dolt remote add origin file://../rem1
     dolt remote add test-remote file://../rem1
     dolt push origin master
 
     cd $TMPDIRS
-    dolt clone file://rem1 tmp2
-    cd $TMPDIRS/tmp2
+    dolt clone file://rem1 repo2
+    cd $TMPDIRS/repo2
     dolt branch feature
     dolt remote add test-remote file://../rem1
 
-    # table and comits only present on tmp1, rem1 at start
-    cd $TMPDIRS/tmp1
+    # table and comits only present on repo1, rem1 at start
+    cd $TMPDIRS/repo1
     dolt sql -q "create table t1 (a int primary key, b int)"
     dolt commit -am "First commit"
     dolt sql -q "insert into t1 values (0,0)"
@@ -37,7 +37,7 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch default" {
-    cd tmp2
+    cd repo2
     dolt sql -q "select dolt_fetch()"
 
     run dolt diff master origin/master
@@ -52,7 +52,7 @@ teardown() {
 
 
 @test "sql-fetch: dolt_fetch origin" {
-    cd tmp2
+    cd repo2
     dolt sql -q "select dolt_fetch('origin')"
 
     run dolt diff master origin/master
@@ -66,7 +66,7 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch master" {
-    cd tmp2
+    cd repo2
     dolt sql -q "select dolt_fetch('origin', 'master')"
 
     run dolt diff master origin/master
@@ -80,7 +80,7 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch custom remote" {
-    cd tmp2
+    cd repo2
     dolt sql -q "select dolt_fetch('test-remote')"
 
    run dolt diff master test-remote/master
@@ -94,7 +94,7 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch specific ref" {
-    cd tmp2
+    cd repo2
     dolt sql -q "select dolt_fetch('test-remote', 'refs/heads/master:refs/remotes/test-remote/master')"
 
     run dolt diff master test-remote/master
@@ -108,10 +108,10 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch feature branch" {
-    cd tmp1
+    cd repo1
     dolt push origin feature
 
-    cd ../tmp2
+    cd ../repo2
     dolt sql -q "select dolt_fetch('origin', 'feature')"
 
     run dolt diff master origin/feature
@@ -125,11 +125,11 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch tag" {
-    cd tmp1
+    cd repo1
     dolt tag v1
     dolt push origin v1
 
-    cd ../tmp2
+    cd ../repo2
     dolt sql -q "select dolt_fetch('origin', 'master')"
 
     run dolt diff master v1
@@ -144,11 +144,11 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch only tag" {
     skip "todo tag refspec support, and/or --tags option"
-    cd tmp1
+    cd repo1
     dolt tag v1
     dolt push origin v1
 
-    cd ../tmp2
+    cd ../repo2
     dolt sql -q "select dolt_fetch('origin', 'refs/tags/v1:refs/tags/v1')"
 
     run dolt diff master origin/v1
@@ -162,7 +162,7 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch rename ref" {
-    cd tmp2
+    cd repo2
     dolt sql -q "select dolt_fetch('test-remote', 'refs/heads/master:refs/remotes/test-remote/other')"
 
     run dolt diff master test-remote/other
@@ -177,7 +177,7 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch override local branch" {
     skip "todo more flexible refspec support"
-    cd tmp2
+    cd repo2
     dolt sql -q "select dolt_fetch('origin', 'master:refs/heads/master')"
 
     dolt diff master origin/master
@@ -191,13 +191,13 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch --force" {
-    # reverse information flow for force fetch tmp1->rem1->tmp2
-    cd tmp2
+    # reverse information flow for force fetch repo1->rem1->repo2
+    cd repo2
     dolt sql -q "create table t2 (a int)"
     dolt commit -am "forced commit"
     dolt push --force origin master
 
-    cd ../tmp1
+    cd ../repo1
     run dolt sql -q "select dolt_fetch('origin', 'master')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fetch failed: can't fast forward merge" ]] || false
@@ -215,7 +215,7 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch unknown remote fails" {
-    cd tmp2
+    cd repo2
     dolt remote remove origin
     run dolt sql -q "select dolt_fetch('unknown', 'master')"
     [ "$status" -eq 1 ]
@@ -223,14 +223,14 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch unknown ref fails" {
-    cd tmp2
+    cd repo2
     run dolt sql -q "select dolt_fetch('origin', 'unknown')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid ref spec: 'unknown'" ]] || false
 }
 
 @test "sql-fetch: dolt_fetch empty remote fails" {
-    cd tmp2
+    cd repo2
     dolt remote remove origin
     run dolt sql -q "select dolt_fetch('')"
     [ "$status" -eq 1 ]
@@ -238,7 +238,7 @@ teardown() {
 }
 
 @test "sql-fetch: dolt_fetch empty ref fails" {
-    cd tmp2
+    cd repo2
     run dolt sql -q "select dolt_fetch('origin', '')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid fetch spec: ''" ]] || false

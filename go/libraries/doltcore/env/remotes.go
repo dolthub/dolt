@@ -108,7 +108,7 @@ type PushOpts struct {
 	SetUpstream bool
 }
 
-func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force bool, setUpstream bool) (*PushOpts, error) {
+func NewParseOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force bool, setUpstream bool) (*PushOpts, error) {
 	var err error
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
@@ -230,7 +230,7 @@ func ParsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, rsr Repo
 	return opts, nil
 }
 
-func ParseFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSpec, error) {
+func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSpec, error) {
 	var err error
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
@@ -248,7 +248,7 @@ func ParseFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRef
 		if val, ok := remotes[args[0]]; ok {
 			remName = args[0]
 			remote = val
-			remoteOK = ok
+			remoteOK = true
 			args = args[1:]
 		}
 	}

@@ -996,3 +996,22 @@ while True:
     insert_query repo1 1 "INSERT INTO t1 VALUES (0, 1),(0, 2)"
     server_query repo1 1 "SELECT * FROM t1" "pk,val\n1,1\n2,2"
 }
+
+@test "sql-server: sql-push --set-remote within session" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir rem1
+    cd repo1
+    dolt remote add origin file://../rem1
+    start_sql_server repo1
+
+    dolt status
+    dolt branch
+    dolt push origin master
+    run server_query repo1 1 "select dolt_push() as p" "p\n0"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "the current branch has no upstream branch" ]] || false
+
+    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'master') as p" "p\n1"
+    server_query repo1 1 "select dolt_push() as p" "p\n1"
+}

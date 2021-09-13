@@ -87,7 +87,7 @@ func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmdFailure, err
 	}
 
-	remote, refSpecs, err := env.ParseFetchOpts(apr.Args(), dbData.Rsr)
+	remote, refSpecs, err := env.NewFetchOpts(apr.Args(), dbData.Rsr)
 	if err != nil {
 		return cmdFailure, err
 	}
@@ -106,6 +106,7 @@ func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	return cmdSuccess, nil
 }
 
+// TODO: move to env and fix cli error handling
 func fetchRefSpecs(ctx *sql.Context, srcDB *doltdb.DoltDB, dbData env.DbData, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode) error {
 	for _, rs := range refSpecs {
 		branchRefs, err := srcDB.GetHeadRefs(ctx)

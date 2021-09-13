@@ -101,6 +101,20 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return h.String(), nil
 }
 
+func getBranchInsensitive(ctx context.Context, branchName string, ddb *doltdb.DoltDB) (ref.DoltRef, error) {
+	branchRefs, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, branchRef := range branchRefs {
+		if strings.ToLower(branchRef.GetPath()) == strings.ToLower(branchName) {
+			return branchRef, nil
+		}
+	}
+
+	return nil, ref.ErrInvalidRefSpec
+}
+
 func getRefInsensitive(ctx context.Context, refName string, ddb *doltdb.DoltDB) (ref.DoltRef, error) {
 	branchRefs, err := ddb.GetBranches(ctx)
 	if err != nil {

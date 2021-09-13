@@ -170,7 +170,8 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 
 	u, err := earl.Parse(remote.Url)
 
-	if err == nil {
+	// TODO: why is evt nil sometimes?
+	if err == nil && evt != nil {
 		if u.Scheme != "" {
 			evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
 		}
@@ -190,8 +191,10 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 
 	if err != nil {
 		switch err {
-		case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
+		case doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
 			return err
+		case doltdb.ErrUpToDate:
+			return nil
 		default:
 			return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
 		}

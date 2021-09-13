@@ -78,8 +78,11 @@ func (d DoltPushFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	apr, err := ap.Parse(args)
+	if err != nil {
+		return cmdFailure, err
+	}
 
-	opts, err := env.ParsePushArgs(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
+	opts, err := env.NewParseOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))
 	if err != nil {
 		return cmdFailure, err
 	}
