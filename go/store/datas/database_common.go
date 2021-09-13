@@ -358,17 +358,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
-				head, err := r.(types.Ref).TargetValue(ctx, db)
-				if err != nil {
-					return err
-				}
-
-				currentHeadRef, err := types.NewRef(head, db.Format())
-				if err != nil {
-					return err
-				}
-
-				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
+				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, r.(types.Ref), db, db)
 				if err != nil {
 					return err
 				}
@@ -377,12 +367,12 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 					return ErrMergeNeeded
 				}
 
-				if mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
+				if mergeNeeded(r.(types.Ref), ancestorRef, commitRef) {
 					if mergePolicy == nil {
 						return ErrMergeNeeded
 					}
 
-					commitRef, err = db.doMerge(ctx, ancestorRef, currentHeadRef, commit, commitRef, mergePolicy)
+					commitRef, err = db.doMerge(ctx, ancestorRef, r.(types.Ref), commit, commitRef, mergePolicy)
 					if err != nil {
 						return err
 					}
@@ -713,22 +703,12 @@ func (db *database) CommitWithWorkingSet(
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
-				head, err := r.(types.Ref).TargetValue(ctx, db)
+				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, r.(types.Ref), db, db)
 				if err != nil {
 					return err
 				}
 
-				currentHeadRef, err := types.NewRef(head, db.Format())
-				if err != nil {
-					return err
-				}
-
-				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
-				if err != nil {
-					return err
-				}
-
-				if !found || mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
+				if !found || mergeNeeded(r.(types.Ref), ancestorRef, commitRef) {
 					return ErrMergeNeeded
 				}
 			}
@@ -745,12 +725,22 @@ func (db *database) CommitWithWorkingSet(
 		}()
 	}
 
-	commitDS, err = db.GetDataset(ctx, commitDS.ID())
+	currentRootHash, err := db.rt.Root(ctx)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
 
-	workingSetDS, err = db.GetDataset(ctx, workingSetDS.ID())
+	currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+
+	commitDS, err = db.datasetFromMap(ctx, commitDS.ID(), currentDatasets)
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+
+	workingSetDS, err = db.datasetFromMap(ctx, workingSetDS.ID(), currentDatasets)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
