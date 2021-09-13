@@ -460,101 +460,99 @@ func (lvs *ValueStore) Rebase(ctx context.Context) error {
 	return lvs.cs.Rebase(ctx)
 }
 
-// Commit() flushes all bufferedChunks into the ChunkStore, with best-effort
+// Commit flushes all bufferedChunks into the ChunkStore, with best-effort
 // locality, and attempts to Commit, updating the root to |current| (or keeping
 // it the same as Root()). If the root has moved since this ValueStore was
 // opened, or last Rebased(), it will return false and will have internally
 // rebased. Until Commit() succeeds, no work of the ValueStore will be visible
 // to other readers of the underlying ChunkStore.
 func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
-	return func() (bool, error) {
-		lvs.bufferMu.Lock()
-		defer lvs.bufferMu.Unlock()
+	lvs.bufferMu.Lock()
+	defer lvs.bufferMu.Unlock()
 
-		put := func(h hash.Hash, chunk chunks.Chunk) error {
-			err := lvs.cs.Put(ctx, chunk)
+	put := func(h hash.Hash, chunk chunks.Chunk) error {
+		err := lvs.cs.Put(ctx, chunk)
 
-			if err != nil {
-				return err
-			}
-
-			delete(lvs.bufferedChunks, h)
-			delete(lvs.withBufferedChildren, h)
-			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
-			return nil
+		if err != nil {
+			return err
 		}
 
-		for parent := range lvs.withBufferedChildren {
-			if pending, present := lvs.bufferedChunks[parent]; present {
-				err := WalkRefs(pending, lvs.nbf, func(reachable Ref) error {
-					if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
-						return put(reachable.TargetHash(), pending)
-					}
+		delete(lvs.bufferedChunks, h)
+		delete(lvs.withBufferedChildren, h)
+		lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
+		return nil
+	}
 
-					return nil
-				})
-
-				if err != nil {
-					return false, err
+	for parent := range lvs.withBufferedChildren {
+		if pending, present := lvs.bufferedChunks[parent]; present {
+			err := WalkRefs(pending, lvs.nbf, func(reachable Ref) error {
+				if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
+					return put(reachable.TargetHash(), pending)
 				}
 
-				err = put(parent, pending)
-
-				if err != nil {
-					return false, err
-				}
-			}
-		}
-		for _, c := range lvs.bufferedChunks {
-			// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-			err := lvs.cs.Put(ctx, c)
+				return nil
+			})
 
 			if err != nil {
 				return false, err
 			}
 
-			lvs.bufferedChunkSize -= uint64(len(c.Data()))
-		}
-
-		d.PanicIfFalse(lvs.bufferedChunkSize == 0)
-		lvs.withBufferedChildren = map[hash.Hash]uint64{}
-		lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
-
-		if lvs.enforceCompleteness {
-			root, err := lvs.Root(ctx)
+			err = put(parent, pending)
 
 			if err != nil {
 				return false, err
 			}
-
-			if (current != hash.Hash{} && current != root) {
-				if _, ok := lvs.bufferedChunks[current]; !ok {
-					// If the client is attempting to move the root and the referenced
-					// value isn't still buffered, we need to ensure that it is contained
-					// in the ChunkStore.
-					lvs.unresolvedRefs.Insert(current)
-				}
-			}
-
-			PanicIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
 		}
-
-		success, err := lvs.cs.Commit(ctx, current, last)
+	}
+	for _, c := range lvs.bufferedChunks {
+		// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
+		err := lvs.cs.Put(ctx, c)
 
 		if err != nil {
 			return false, err
 		}
 
-		if !success {
-			return false, nil
+		lvs.bufferedChunkSize -= uint64(len(c.Data()))
+	}
+
+	d.PanicIfFalse(lvs.bufferedChunkSize == 0)
+	lvs.withBufferedChildren = map[hash.Hash]uint64{}
+	lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
+
+	if lvs.enforceCompleteness {
+		root, err := lvs.Root(ctx)
+
+		if err != nil {
+			return false, err
 		}
 
-		if lvs.enforceCompleteness {
-			lvs.unresolvedRefs = hash.HashSet{}
+		if (current != hash.Hash{} && current != root) {
+			if _, ok := lvs.bufferedChunks[current]; !ok {
+				// If the client is attempting to move the root and the referenced
+				// value isn't still buffered, we need to ensure that it is contained
+				// in the ChunkStore.
+				lvs.unresolvedRefs.Insert(current)
+			}
 		}
 
-		return true, nil
-	}()
+		PanicIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
+	}
+
+	success, err := lvs.cs.Commit(ctx, current, last)
+
+	if err != nil {
+		return false, err
+	}
+
+	if !success {
+		return false, nil
+	}
+
+	if lvs.enforceCompleteness {
+		lvs.unresolvedRefs = hash.HashSet{}
+	}
+
+	return true, nil
 }
 
 func makeBatches(hss []hash.HashSet, count int) [][]hash.Hash {

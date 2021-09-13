@@ -696,11 +696,15 @@ func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
 }
 
 func (dEnv *DoltEnv) workingSetMeta() *doltdb.WorkingSetMeta {
+	return dEnv.NewWorkingSetMeta("updated from dolt environment")
+}
+
+func (dEnv *DoltEnv) NewWorkingSetMeta(message string) *doltdb.WorkingSetMeta {
 	return &doltdb.WorkingSetMeta{
 		User:        *dEnv.Config.GetStringOrDefault(UserNameKey, ""),
 		Email:       *dEnv.Config.GetStringOrDefault(UserEmailKey, ""),
 		Timestamp:   uint64(time.Now().Unix()),
-		Description: "updated from dolt environment",
+		Description: message,
 	}
 }
 

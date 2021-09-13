@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -36,6 +37,17 @@ type WorkingSetMeta struct {
 	Timestamp   uint64
 	Description string
 	Version     string
+}
+
+// TodoWorkingSetMeta returns an incomplete WorkingSetMeta, suitable for methods that don't have the means to construct
+// a real one. These should be considered temporary and cleaned up when possible, similar to Context.TODO
+func TodoWorkingSetMeta() *WorkingSetMeta {
+	return &WorkingSetMeta{
+		User:        "TODO",
+		Email:       "TODO",
+		Timestamp:   uint64(time.Now().Unix()),
+		Description: "TODO",
+	}
 }
 
 func (wsm *WorkingSetMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {

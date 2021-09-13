@@ -127,12 +127,17 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage)
 	}
 
+	prevHash, err := ws.HashOf()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't get working set").AddCause(err).Build(), usage)
+	}
+
 	var mergeParentCommits []*doltdb.Commit
 	if ws.MergeActive() {
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -140,14 +145,21 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		Name:       name,
 		Email:      email,
 	})
-
 	if err != nil {
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	err = dEnv.ClearMerge(ctx)
+	err = dEnv.DoltDB.CommitWithWorkingSet(
+		ctx,
+		dEnv.RepoStateReader().CWBHeadRef(),
+		ws.Ref(),
+		pendingCommit,
+		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
+		prevHash,
+		dEnv.NewWorkingSetMeta(fmt.Sprintf("Updated by %s %s", commandStr, strings.Join(args, " "))),
+	)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't update working set").AddCause(err).Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage)
 	}
 
 	// if the commit was successful, print it out using the log command

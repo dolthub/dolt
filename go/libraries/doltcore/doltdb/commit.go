@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -306,4 +307,85 @@ func (c *Commit) DebugString(ctx context.Context) string {
 		panic(err)
 	}
 	return buf.String()
+}
+
+// PendingCommit represents a commit that hasn't yet been written to storage. It contains a root value and options to
+// use when committing it. Use a PendingCommit when it's important to update the working set and HEAD together
+// atomically, via doltdb.CommitWithWorkingSet
+type PendingCommit struct {
+	Roots         Roots
+	Val           types.Value
+	CommitOptions datas.CommitOptions
+}
+
+// NewPendingCommit returns a new PendingCommit object to be written with doltdb.CommitWithWorkingSet.
+// |roots| are the current roots to include in the PendingCommit. roots.Staged is used as the new root to package in the
+// commit, once written.
+// |headRef| is the ref of the HEAD the commit will update
+// |parentCommits| are any additional merge parents for this commit. The current HEAD commit is always considered a
+// parent.
+// |cm| is the metadata for the commit
+func (ddb *DoltDB) NewPendingCommit(
+	ctx context.Context,
+	roots Roots,
+	headRef ref.DoltRef,
+	parentCommits []*Commit,
+	cm *CommitMeta,
+) (*PendingCommit, error) {
+	val, err := ddb.writeRootValue(ctx, roots.Staged)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: is this flush necessary?
+	err = ddb.db.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ds, err := ddb.db.GetDataset(ctx, headRef.String())
+	if err != nil {
+		return nil, err
+	}
+
+	nomsHeadRef, hasHead, err := ds.MaybeHeadRef()
+	if err != nil {
+		return nil, err
+	}
+
+	parents, err := types.NewList(ctx, ddb.db)
+	if err != nil {
+		return nil, err
+	}
+
+	parentEditor := parents.Edit()
+	if hasHead {
+		parentEditor = parentEditor.Append(nomsHeadRef)
+	}
+
+	for _, pc := range parentCommits {
+		rf, err := types.NewRef(pc.commitSt, ddb.db.Format())
+		if err != nil {
+			return nil, err
+		}
+
+		parentEditor = parentEditor.Append(rf)
+	}
+
+	parents, err = parentEditor.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	st, err := cm.toNomsStruct(ddb.db.Format())
+	if err != nil {
+		return nil, err
+	}
+
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
+	return &PendingCommit{
+		Roots:         roots,
+		Val:           val,
+		CommitOptions: commitOpts,
+	}, nil
 }
