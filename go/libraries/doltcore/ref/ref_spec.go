@@ -59,45 +59,9 @@ func ParseRefSpec(refSpecStr string) (RefSpec, error) {
 // ParseRefSpecForRemote takes the name of a remote and a refspec, and parses that refspec, verifying that it refers
 // to the appropriate remote
 func ParseRefSpecForRemote(remote, refSpecStr string) (RefSpec, error) {
-	var fromRef DoltRef
-	var toRef DoltRef
-	var err error
-	if len(refSpecStr) == 0 {
-		return nil, ErrInvalidRefSpec
-	} else if refSpecStr[0] == ':' {
-		fromRef = EmptyBranchRef
-		toRef, err = Parse(refSpecStr[1:])
-
-		if err != nil {
-			return nil, ErrInvalidRefSpec
-		}
-	} else {
-		tokens := strings.Split(refSpecStr, ":")
-
-		if len(tokens) == 0 {
-			return nil, ErrInvalidRefSpec
-		}
-
-		srcStr := tokens[0]
-		destStr := tokens[0]
-
-		if len(tokens) > 2 {
-			return nil, ErrInvalidRefSpec
-		} else if len(tokens) == 2 {
-			destStr = tokens[1]
-		}
-
-		fromRef, err = Parse(srcStr)
-
-		if err != nil {
-			return nil, ErrInvalidRefSpec
-		}
-
-		toRef, err = Parse(destStr)
-
-		if err != nil {
-			return nil, ErrInvalidRefSpec
-		}
+	fromRef, toRef, err := parseRefSpecForRemote(remote, refSpecStr)
+	if err != nil {
+		return nil, err
 	}
 
 	if fromRef.GetType() == BranchRefType && toRef.GetType() == RemoteRefType {
@@ -109,6 +73,64 @@ func ParseRefSpecForRemote(remote, refSpecStr string) (RefSpec, error) {
 	}
 
 	return nil, ErrUnsupportedMapping
+}
+
+func RemoteBranchFromRefSpec(remote, refSpecStr string) (DoltRef, bool) {
+	_, toRef, err := parseRefSpecForRemote(remote, refSpecStr)
+	if err != nil {
+		return nil, false
+	}
+	if toRef == nil || toRef == EmptyBranchRef {
+		return nil, false
+	}
+
+	return toRef, true
+}
+
+func parseRefSpecForRemote(remote, refSpecStr string) (DoltRef, DoltRef, error) {
+	var fromRef DoltRef
+	var toRef DoltRef
+
+	var err error
+	if len(refSpecStr) == 0 {
+		return nil, nil, ErrInvalidRefSpec
+	} else if refSpecStr[0] == ':' {
+		fromRef = EmptyBranchRef
+		toRef, err = Parse(refSpecStr[1:])
+
+		if err != nil {
+			return nil, nil, ErrInvalidRefSpec
+		}
+	} else {
+		tokens := strings.Split(refSpecStr, ":")
+
+		if len(tokens) == 0 {
+			return nil, nil, ErrInvalidRefSpec
+		}
+
+		srcStr := tokens[0]
+		destStr := tokens[0]
+
+		if len(tokens) > 2 {
+			return nil, nil, ErrInvalidRefSpec
+		} else if len(tokens) == 2 {
+			destStr = tokens[1]
+		}
+
+		fromRef, err = Parse(srcStr)
+
+		if err != nil {
+			return nil, nil, ErrInvalidRefSpec
+		}
+
+		toRef, err = Parse(destStr)
+
+		if err != nil {
+			return nil, nil, ErrInvalidRefSpec
+		}
+	}
+
+	return fromRef, toRef, nil
 }
 
 type branchMapper interface {
