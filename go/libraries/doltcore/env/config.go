@@ -38,7 +38,7 @@ const (
 
 	DoltEditor = "core.editor"
 
-	InitBranchName = "init.default_branch"
+	InitBranchName = "init.defaultBranch"
 
 	RemotesApiHostKey     = "remotes.default_host"
 	RemotesApiHostPortKey = "remotes.default_port"
