@@ -358,7 +358,20 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
-				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, r.(types.Ref), db, db)
+				// TODO: We have to do a round-trip here (target the ref, then take a ref of it) because the type of the entry
+				//  stored in the dataset is a ValueType, rather than Struct (commit). See types.ToRefOfValue
+				//  We should rip this out along with much other type info
+				head, err := r.(types.Ref).TargetValue(ctx, db)
+				if err != nil {
+					return err
+				}
+
+				currentHeadRef, err := types.NewRef(head, db.Format())
+				if err != nil {
+					return err
+				}
+
+				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
 				if err != nil {
 					return err
 				}
@@ -367,12 +380,12 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 					return ErrMergeNeeded
 				}
 
-				if mergeNeeded(r.(types.Ref), ancestorRef, commitRef) {
+				if mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
 					if mergePolicy == nil {
 						return ErrMergeNeeded
 					}
 
-					commitRef, err = db.doMerge(ctx, ancestorRef, r.(types.Ref), commit, commitRef, mergePolicy)
+					commitRef, err = db.doMerge(ctx, ancestorRef, currentHeadRef, commit, commitRef, mergePolicy)
 					if err != nil {
 						return err
 					}
@@ -703,12 +716,25 @@ func (db *database) CommitWithWorkingSet(
 
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
-				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, r.(types.Ref), db, db)
+				// TODO: We have to do a round-trip here (target the ref, then take a ref of it) because the type of the entry
+				//  stored in the dataset is a ValueType, rather than Struct (commit). See types.ToRefOfValue
+				//  We should rip this out along with much other type info
+				head, err := r.(types.Ref).TargetValue(ctx, db)
 				if err != nil {
 					return err
 				}
 
-				if !found || mergeNeeded(r.(types.Ref), ancestorRef, commitRef) {
+				currentHeadRef, err := types.NewRef(head, db.Format())
+				if err != nil {
+					return err
+				}
+
+				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
+				if err != nil {
+					return err
+				}
+
+				if !found || mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
 					return ErrMergeNeeded
 				}
 			}
