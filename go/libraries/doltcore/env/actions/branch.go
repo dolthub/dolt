@@ -126,10 +126,11 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, opts De
 		}
 	}
 
-	return DeleteBranchOnDB(ctx, dEnv.DoltDB, dref, opts)
+	return DeleteBranchOnDB(ctx, dEnv, dref, opts)
 }
 
-func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef, opts DeleteOptions) error {
+func DeleteBranchOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef, opts DeleteOptions) error {
+	ddb := dEnv.DoltDB
 	hasRef, err := ddb.HasRef(ctx, dref)
 
 	if err != nil {
@@ -139,12 +140,12 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 	}
 
 	if !opts.Force && !opts.Remote {
-		ms, err := doltdb.NewCommitSpec("master")
+		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(dEnv))
 		if err != nil {
 			return err
 		}
 
-		master, err := ddb.Resolve(ctx, ms, nil)
+		init, err := ddb.Resolve(ctx, ms, nil)
 		if err != nil {
 			return err
 		}
@@ -159,7 +160,7 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 			return err
 		}
 
-		isMerged, _ := master.CanFastReverseTo(ctx, cm)
+		isMerged, _ := init.CanFastReverseTo(ctx, cm)
 		if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 			return err
 		}

@@ -146,6 +146,7 @@ func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
 	rs := &RepoState{Head: ref.MarshalableRef{
+		// todo(andy) parse ref spec to get populate |Ref|
 		Ref: ref.NewBranchRef("master")},
 		staged:   hashStr,
 		working:  hashStr,
