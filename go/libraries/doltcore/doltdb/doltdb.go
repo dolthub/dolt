@@ -38,8 +38,8 @@ func init() {
 }
 
 const (
-	creationBranch   = "create"
-	MasterBranch     = "master"
+	creationBranch = "create"
+
 	CommitStructName = "Commit"
 
 	defaultChunksPerTF = 256 * 1024
@@ -108,11 +108,11 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
-func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error {
-	return ddb.WriteEmptyRepoWithCommitTime(ctx, name, email, CommitNowFunc())
+func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
+	return ddb.WriteEmptyRepoWithCommitTime(ctx, initBranch, name, email, CommitNowFunc())
 }
 
-func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email string, t time.Time) error {
+func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch, name, email string, t time.Time) error {
 	// precondition checks
 	name = strings.TrimSpace(name)
 	email = strings.TrimSpace(email)
@@ -171,7 +171,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 		return err
 	}
 
-	dref = ref.NewBranchRef(MasterBranch)
+	dref = ref.NewBranchRef(initBranch)
 	ds, err = ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {

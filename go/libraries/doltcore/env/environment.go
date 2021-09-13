@@ -42,12 +42,17 @@ import (
 )
 
 const (
-	DefaultLoginUrl       = "https://dolthub.com/settings/credentials"
-	DefaultMetricsHost    = "eventsapi.dolthub.com"
-	DefaultMetricsPort    = "443"
+	defaultInitBranch = "master"
+
+	DefaultLoginUrl = "https://dolthub.com/settings/credentials"
+
+	DefaultMetricsHost = "eventsapi.dolthub.com"
+	DefaultMetricsPort = "443"
+
 	DefaultRemotesApiHost = "doltremoteapi.dolthub.com"
 	DefaultRemotesApiPort = "443"
-	tempTablesDir         = "temptf"
+
+	tempTablesDir = "temptf"
 )
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -153,6 +158,11 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 	}
 
 	return dEnv
+}
+
+func GetDefaultInitBranch(dEnv *DoltEnv) string {
+	s := dEnv.Config.GetStringOrDefault(InitBranchName, defaultInitBranch)
+	return *s
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
@@ -397,12 +407,11 @@ func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinF
 func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error {
 	var err error
 	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
-
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, name, email, t)
+	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, GetDefaultInitBranch(dEnv), name, email, t)
 	if err != nil {
 		return doltdb.ErrNomsIO
 	}
@@ -412,8 +421,8 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 
 // InitializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
 func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
-	cs, _ := doltdb.NewCommitSpec(doltdb.MasterBranch)
-	commit, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	init := GetDefaultInitBranch(dEnv)
+	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, ref.NewBranchRef(init))
 	if err != nil {
 		return err
 	}
@@ -423,7 +432,7 @@ func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
 		return err
 	}
 
-	dEnv.RepoState, err = CreateRepoState(dEnv.FS, doltdb.MasterBranch)
+	dEnv.RepoState, err = CreateRepoState(dEnv.FS, init)
 	if err != nil {
 		return ErrStateUpdate
 	}

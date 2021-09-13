@@ -267,7 +267,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
 	vrw := ddb.ValueReadWriter()
 
-	err := ddb.WriteEmptyRepo(context.Background(), name, email)
+	err := ddb.WriteEmptyRepo(context.Background(), "master", name, email)
 	require.NoError(t, err)
 
 	masterHeadSpec, _ := doltdb.NewCommitSpec("master")
