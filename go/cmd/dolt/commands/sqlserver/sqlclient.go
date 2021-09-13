@@ -83,7 +83,7 @@ func (cmd SqlClientCmd) RequiresRepo() bool {
 }
 
 func (cmd SqlClientCmd) Hidden() bool {
-	return true
+	return false
 }
 
 func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
