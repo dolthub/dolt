@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -38,7 +37,6 @@ import (
 type database struct {
 	*types.ValueStore
 	rt rootTracker
-	mu sync.Mutex
 }
 
 var (
