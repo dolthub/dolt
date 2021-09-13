@@ -29,7 +29,6 @@ import (
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
-	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -1633,18 +1632,6 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 		// Should not be allowed to delete repo name and information schema
 		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
 			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", information_schema.InformationSchemaDatabaseName)
-		} else if dbddl.DBName == ctx.GetCurrentDatabase() {
-			db, err := se.engine.Catalog.Database(ctx.GetCurrentDatabase())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// Check if it's an in memory database. Those are the only databases that are allowed to be dropped.
-			switch interface{}(db).(type) {
-			case *memory.Database:
-			default:
-				return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", db.Name())
-			}
 		}
 	}
 

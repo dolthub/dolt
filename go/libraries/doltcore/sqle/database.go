@@ -90,7 +90,7 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 	dsession := dsess.DSessFromSess(ctx.Session)
 
-	if !dsession.HasDB(db.Name()) {
+	if !dsession.HasDB(ctx, db.Name()) {
 		init, err := GetInitialDBState(ctx, db)
 		if err != nil {
 			return nil, err

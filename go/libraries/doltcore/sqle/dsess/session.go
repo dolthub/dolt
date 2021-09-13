@@ -1029,9 +1029,9 @@ func (sess *Session) SetSessionVarDirectly(ctx *sql.Context, key string, value i
 }
 
 // HasDB returns true if |sess| is tracking state for this database.
-func (sess *Session) HasDB(dbName string) (ok bool) {
-	_, ok = sess.dbStates[strings.ToLower(dbName)]
-	return ok
+func (sess *Session) HasDB(ctx *sql.Context, dbName string) bool {
+	_, ok, err := sess.LookupDbState(ctx, dbName)
+	return ok && err == nil
 }
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
