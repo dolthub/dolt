@@ -204,6 +204,14 @@ func (m MemoryRepoState) AddRemote(name string, url string, fetchSpecs []string,
 	return fmt.Errorf("cannot insert a remote in a memory database")
 }
 
+func (m MemoryRepoState) GetBranches() (map[string]BranchConfig, error) {
+	return make(map[string]BranchConfig), nil
+}
+
+func (m MemoryRepoState) UpdateBranch(name string, new BranchConfig) error {
+	return nil
+}
+
 func (m MemoryRepoState) RemoveRemote(ctx context.Context, name string) error {
 	return fmt.Errorf("cannot delete a remote from a memory database")
 }

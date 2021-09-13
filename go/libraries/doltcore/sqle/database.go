@@ -173,12 +173,18 @@ func GetInitialDBState(ctx context.Context, db Database) (dsess.InitialDbState, 
 		return dsess.InitialDbState{}, err
 	}
 
+	branches, err := rsr.GetBranches()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
 	return dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,
 		DbData:     db.DbData(),
 		Remotes:    remotes,
+		Branches:   branches,
 	}, nil
 }
 
