@@ -215,14 +215,21 @@ func (kd *keylessDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pr
 				return diffs[:idx], more, nil
 			}
 
-			df, copiesLeft, err := convertDiff(d)
-			if err != nil {
-				return nil, false, err
+			ok := false
+			for !ok {
+				kd.df, kd.copiesLeft, err = convertDiff(d)
+				if err != nil {
+					return nil, false, err
+				}
+
+				ok = pred(&kd.df)
+
+				if !ok {
+					if d, more = <-kd.diffChan; !more {
+						return diffs[:idx], more, nil
+					}
+				}
 			}
-			if pred(&df) {
-				kd.df = df
-			}
-			kd.copiesLeft = copiesLeft
 		}
 	}
 }
