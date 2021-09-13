@@ -615,10 +615,10 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 // expect not to exist.
 // Typically this is called using optimistic locking by the caller in order to implement atomic test-and-set semantics.
 func (db *database) assertDatasetHash(
-		ctx context.Context,
-		datasets types.Map,
-		datasetID string,
-		currHash hash.Hash,
+	ctx context.Context,
+	datasets types.Map,
+	datasetID string,
+	currHash hash.Hash,
 ) (bool, error) {
 
 	ds, err := db.datasetFromMap(ctx, datasetID, datasets)
