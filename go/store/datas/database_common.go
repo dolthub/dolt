@@ -105,13 +105,7 @@ func (db *database) Flush(ctx context.Context) error {
 	return err
 }
 
-func (db *database) Datasets(ctx context.Context) (types.Map, error) {
-	rootHash, err := db.rt.Root(ctx)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
+func (db *database) DatasetsInRoot(ctx context.Context, rootHash hash.Hash) (types.Map, error) {
 	if rootHash.IsEmpty() {
 		return types.NewMap(ctx, db)
 	}
@@ -125,6 +119,15 @@ func (db *database) Datasets(ctx context.Context) (types.Map, error) {
 	return val.(types.Map), nil
 }
 
+func (db *database) Datasets(ctx context.Context) (types.Map, error) {
+	rootHash, err := db.rt.Root(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	return db.DatasetsInRoot(ctx, rootHash)
+}
+
 func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, error) {
 	// precondition checks
 	if !DatasetFullRe.MatchString(datasetID) {
@@ -132,11 +135,14 @@ func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, 
 	}
 
 	datasets, err := db.Datasets(ctx)
-
 	if err != nil {
 		return Dataset{}, err
 	}
 
+	return db.datasetFromMap(ctx, datasetID, datasets)
+}
+
+func (db *database) datasetFromMap(ctx context.Context, datasetID string, datasets types.Map) (Dataset, error) {
 	var head types.Value
 	if r, ok, err := datasets.MaybeGet(ctx, types.String(datasetID)); err != nil {
 		return Dataset{}, err
@@ -569,10 +575,17 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 	testSetFailed := false
 	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
 		tryCommitErr = func() error {
-			db.mu.Lock()
-			defer db.mu.Unlock()
+			currentRootHash, err := db.rt.Root(ctx)
+			if err != nil {
+				return err
+			}
 
-			success, err := db.assertDatasetHash(ctx, datasetID, currHash)
+			currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
+			if err != nil {
+				return err
+			}
+
+			success, err := db.assertDatasetHash(ctx, currentDatasets, datasetID, currHash)
 			if err != nil {
 				return err
 			}
@@ -582,17 +595,7 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 				return nil
 			}
 
-			currentDatasets, err := db.Datasets(ctx)
-			if err != nil {
-				return err
-			}
-
 			currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), wsValRef).Map(ctx)
-			if err != nil {
-				return err
-			}
-
-			currentRootHash, err := db.rt.Root(ctx)
 			if err != nil {
 				return err
 			}
@@ -606,14 +609,15 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 
 // assertDatasetHash returns true if the hash of the dataset matches the one given. Use an empty hash for a dataset you
 // expect not to exist.
-// Typically this is called using pessimistic locking by the caller in order to implement atomic test-and-set semantics.
+// Typically this is called using optimistic locking by the caller in order to implement atomic test-and-set semantics.
 func (db *database) assertDatasetHash(
-	ctx context.Context,
-	datasetID string,
-	currHash hash.Hash,
+		ctx context.Context,
+		datasets types.Map,
+		datasetID string,
+		currHash hash.Hash,
 ) (bool, error) {
 
-	ds, err := db.GetDataset(ctx, datasetID)
+	ds, err := db.datasetFromMap(ctx, datasetID, datasets)
 	if err != nil {
 		return false, err
 	}
@@ -633,7 +637,7 @@ func (db *database) assertDatasetHash(
 			return false, err
 		}
 	} else if !currHash.IsEmpty() {
-			return false, nil
+		return false, nil
 	}
 
 	return true, nil
@@ -686,26 +690,24 @@ func (db *database) CommitWithWorkingSet(
 	testSetFailed := false
 	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
 		tryCommitErr = func() error {
-			db.mu.Lock()
-			defer db.mu.Unlock()
+			currentRootHash, err := db.rt.Root(ctx)
+			if err != nil {
+				return err
+			}
 
-			success, err := db.assertDatasetHash(ctx, workingSetDS.ID(), prevWsHash)
+			currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
+			if err != nil {
+				return err
+			}
+
+			success, err := db.assertDatasetHash(ctx, currentDatasets, workingSetDS.ID(), prevWsHash)
 			if err != nil {
 				return err
 			}
 
 			if !success {
 				testSetFailed = true
-			}
-
-			currentDatasets, err := db.Datasets(ctx)
-			if err != nil {
-				return err
-			}
-
-			currentRootHash, err := db.rt.Root(ctx)
-			if err != nil {
-				return err
+				return nil
 			}
 
 			r, hasHead, err := currentDatasets.MaybeGet(ctx, types.String(commitDS.ID()))
@@ -731,7 +733,6 @@ func (db *database) CommitWithWorkingSet(
 				}
 
 				if !found || mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
-					// TODO: consider merge policy (currently always nil)
 					return ErrMergeNeeded
 				}
 			}
