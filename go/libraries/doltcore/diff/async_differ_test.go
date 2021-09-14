@@ -22,7 +22,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dtu "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -240,6 +243,52 @@ func TestAsyncDiffer(t *testing.T) {
 		err = ad.Close()
 		assert.NoError(t, err)
 	})
+
+	k1Row1Vals := []types.Value{c1Tag, types.Uint(3), c2Tag, types.String("d")}
+	k1Vals, err := getKeylessRow(ctx, db, k1Row1Vals)
+	assert.NoError(t, err)
+	k1, err := types.NewMap(ctx, db, k1Vals...)
+	assert.NoError(t, err)
+
+	// Delete one row, add two rows
+	k2Row1Vals := []types.Value{c1Tag, types.Uint(4), c2Tag, types.String("d")}
+	k2Vals1, err := getKeylessRow(ctx, db, k2Row1Vals)
+	assert.NoError(t, err)
+	k2Row2Vals := []types.Value{c1Tag, types.Uint(1), c2Tag, types.String("e")}
+	k2Vals2, err := getKeylessRow(ctx, db, k2Row2Vals)
+	assert.NoError(t, err)
+	k2Vals := append(k2Vals1, k2Vals2...)
+	k2, err := types.NewMap(ctx, db, k2Vals...)
+	require.NoError(t, err)
+
+	t.Run("can diff and filter keyless tables", func(t *testing.T) {
+		kd := &keylessDiffer{AsyncDiffer: NewAsyncDiffer(20)}
+		kd.Start(ctx, k1, k2)
+		res, more, err := kd.GetDiffs(10, 20*time.Second)
+		require.NoError(t, err)
+		assert.False(t, more)
+		assert.Len(t, res, 3)
+		err = kd.Close()
+		assert.NoError(t, err)
+
+		kd = &keylessDiffer{AsyncDiffer: NewAsyncDiffer(20)}
+		kd.Start(ctx, k1, k2)
+		res, more, err = kd.GetDiffsWithFilter(10, 20*time.Second, types.DiffChangeModified)
+		require.NoError(t, err)
+		assert.False(t, more)
+		assert.Len(t, res, 0)
+		err = kd.Close()
+		assert.NoError(t, err)
+
+		kd = &keylessDiffer{AsyncDiffer: NewAsyncDiffer(20)}
+		kd.Start(ctx, k1, k2)
+		res, more, err = kd.GetDiffsWithFilter(6, -1, types.DiffChangeAdded)
+		require.NoError(t, err)
+		assert.False(t, more)
+		assert.Len(t, res, 2)
+		err = kd.Close()
+		assert.NoError(t, err)
+	})
 }
 
 func readAll(ad *AsyncDiffer) error {
@@ -256,4 +305,32 @@ func readAll(ad *AsyncDiffer) error {
 	}
 
 	return nil
+}
+
+var c1Tag = types.Uint(1)
+var c2Tag = types.Uint(2)
+var cardTag = types.Uint(schema.KeylessRowCardinalityTag)
+var rowIdTag = types.Uint(schema.KeylessRowIdTag)
+
+func getKeylessRow(ctx context.Context, db datas.Database, vals []types.Value) ([]types.Value, error) {
+	nbf, err := types.GetFormatForVersionString(constants.FormatDefaultString)
+	if err != nil {
+		return []types.Value{}, err
+	}
+
+	id1, err := types.UUIDHashedFromValues(nbf, vals...)
+	if err != nil {
+		return []types.Value{}, err
+	}
+
+	prefix := []types.Value{
+		cardTag,
+		types.Uint(1),
+	}
+	vals = append(prefix, vals...)
+
+	return []types.Value{
+		dtu.MustTuple(rowIdTag, id1),
+		dtu.MustTuple(vals...),
+	}, nil
 }
