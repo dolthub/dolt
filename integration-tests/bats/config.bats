@@ -200,10 +200,10 @@ teardown() {
     dolt init
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "on branch main" ]]
+    [[ "$output" =~ "On branch main" ]]
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "*main" ]]
+    [[ "$output" =~ "* main" ]]
 
     # cleanup
     dolt config --global --unset init.default_branch
