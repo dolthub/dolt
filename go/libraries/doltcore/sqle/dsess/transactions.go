@@ -73,7 +73,12 @@ type savepoint struct {
 	root *doltdb.RootValue
 }
 
-func NewDoltTransaction(startState *doltdb.WorkingSet, workingSet ref.WorkingSetRef, dbData env.DbData, mergeEditOpts editor.Options) *DoltTransaction {
+func NewDoltTransaction(
+		startState *doltdb.WorkingSet,
+		workingSet ref.WorkingSetRef,
+		dbData env.DbData,
+		mergeEditOpts editor.Options,
+) *DoltTransaction {
 	return &DoltTransaction{
 		startState:    startState,
 		workingSetRef: workingSet,
@@ -139,7 +144,7 @@ func (tx *DoltTransaction) DoltCommit(ctx *sql.Context, workingSet *doltdb.Worki
 	return tx.doCommit(ctx, workingSet, commit, doltCommit)
 }
 
-// doCommit commits this transaction provided with the write function provided. It takes the same params as DoltCommit
+// doCommit commits this transaction with the write function provided. It takes the same params as DoltCommit
 func (tx *DoltTransaction) doCommit(
 		ctx *sql.Context,
 		workingSet *doltdb.WorkingSet,
@@ -186,16 +191,15 @@ func (tx *DoltTransaction) doCommit(
 				return nil, err
 			}
 
-			existingWorkingRoot := ws.WorkingRoot()
-
-			hash, err := ws.HashOf()
+			wsHash, err := ws.HashOf()
 			if err != nil {
 				return nil, err
 			}
 
+			existingWorkingRoot := ws.WorkingRoot()
 			if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
 				// ff merge
-				err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
+				err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, wsHash, tx.getWorkingSetMeta(ctx))
 				if err == datas.ErrOptimisticLockFailed {
 					// this is effectively a `continue` in the loop
 					return nil, nil
@@ -234,7 +238,7 @@ func (tx *DoltTransaction) doCommit(
 			}
 
 			mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
-			err = writeFn(ctx, tx, commit, mergedWorkingSet, hash)
+			err = writeFn(ctx, tx, commit, mergedWorkingSet, wsHash)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop
 				return nil, nil
