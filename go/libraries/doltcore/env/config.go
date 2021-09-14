@@ -38,7 +38,9 @@ const (
 
 	DoltEditor = "core.editor"
 
-	InitBranchName = "init.defaultBranch"
+	// todo: analogous Git param is "init.defaultBranch", but
+	//   Dolt config params are case-insensitive
+	InitBranchName = "init.default_branch"
 
 	RemotesApiHostKey     = "remotes.default_host"
 	RemotesApiHostPortKey = "remotes.default_port"
