@@ -76,15 +76,16 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
 
-	var verr errhand.VerboseError
-
 	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), refSpecs, r, updateMode, runProgFuncs, stopProgFuncs)
 	switch err {
 	case doltdb.ErrUpToDate:
+		return HandleVErrAndExitCode(nil, usage)
 	case actions.ErrCantFF:
-		verr = errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").AddCause(err).Build()
-	default:
-		verr = errhand.VerboseErrorFromError(err)
+		verr := errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usage)
 	}
-	return HandleVErrAndExitCode(verr, usage)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	return HandleVErrAndExitCode(nil, usage)
 }

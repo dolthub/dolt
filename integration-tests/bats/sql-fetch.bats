@@ -222,6 +222,14 @@ teardown() {
     [[ "$output" =~ "unknown remote" ]] || false
 }
 
+@test "sql-fetch: dolt_fetch unknown remote with fetchspec fails" {
+    cd repo2
+    dolt remote remove origin
+    run dolt sql -q "select dolt_fetch('unknown', 'master')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "unknown remote" ]] || false
+}
+
 @test "sql-fetch: dolt_fetch unknown ref fails" {
     cd repo2
     run dolt sql -q "select dolt_fetch('origin', 'unknown')"

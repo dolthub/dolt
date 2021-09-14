@@ -359,6 +359,7 @@ func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote
 	return srcDBCommit, nil
 }
 
+// FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
 func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
 	srcDB, err := remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
 	if err != nil {
@@ -385,6 +386,7 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 
 				switch mode {
 				case ref.ForceUpdate:
+					// TODO: can't be used safely in a SQL context
 					err := dbData.Ddb.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
 					if err != nil {
 						return err
@@ -401,6 +403,7 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 					switch err {
 					case doltdb.ErrUpToDate:
 					case doltdb.ErrIsAhead, nil:
+						// TODO: can't be used safely in a SQL context
 						err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
 						if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 							return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
