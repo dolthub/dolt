@@ -35,6 +35,9 @@ type RowDiffer interface {
 	// GetDiffs returns the requested number of diff.Differences, or times out.
 	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error)
 
+	// GetDiffsWithFilter returns the requested number of filtered diff.Differences, or times out.
+	GetDiffsWithFilter(numDiffs int, timeout time.Duration, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error)
+
 	// Close closes the RowDiffer.
 	Close() error
 }
@@ -183,8 +186,7 @@ type keylessDiffer struct {
 
 var _ RowDiffer = &keylessDiffer{}
 
-func (kd *keylessDiffer) GetDiffs(numDiffs int, timeout time.Duration) (diffs []*diff.Difference, more bool, err error) {
-	timeoutChan := time.After(timeout)
+func (kd *keylessDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pred diffPredicate) (diffs []*diff.Difference, more bool, err error) {
 	diffs = make([]*diff.Difference, numDiffs)
 	idx := 0
 
@@ -192,7 +194,6 @@ func (kd *keylessDiffer) GetDiffs(numDiffs int, timeout time.Duration) (diffs []
 		// first populate |diffs| with copies of |kd.df|
 		for (idx < numDiffs) && (kd.copiesLeft > 0) {
 			diffs[idx] = &kd.df
-
 			idx++
 			kd.copiesLeft--
 		}
@@ -214,13 +215,37 @@ func (kd *keylessDiffer) GetDiffs(numDiffs int, timeout time.Duration) (diffs []
 				return diffs[:idx], more, nil
 			}
 
-			kd.df, kd.copiesLeft, err = convertDiff(d)
-			if err != nil {
-				return nil, false, err
+			ok := false
+			for !ok {
+				kd.df, kd.copiesLeft, err = convertDiff(d)
+				if err != nil {
+					return nil, false, err
+				}
+
+				ok = pred(&kd.df)
+
+				if !ok {
+					if d, more = <-kd.diffChan; !more {
+						return diffs[:idx], more, nil
+					}
+				}
 			}
 		}
 	}
+}
 
+func (kd *keylessDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
+	if timeout < 0 {
+		return kd.getDiffs(numDiffs, forever, alwaysTruePredicate)
+	}
+	return kd.getDiffs(numDiffs, time.After(timeout), alwaysTruePredicate)
+}
+
+func (kd *keylessDiffer) GetDiffsWithFilter(numDiffs int, timeout time.Duration, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error) {
+	if timeout < 0 {
+		return kd.getDiffs(numDiffs, forever, hasChangeTypePredicate(filterByChangeType))
+	}
+	return kd.getDiffs(numDiffs, time.After(timeout), hasChangeTypePredicate(filterByChangeType))
 }
 
 // convertDiff reports the cardinality of a change,
@@ -278,6 +303,10 @@ func (e EmptyRowDiffer) Start(ctx context.Context, from, to types.Map) {
 }
 
 func (e EmptyRowDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
+	return nil, false, nil
+}
+
+func (e EmptyRowDiffer) GetDiffsWithFilter(numDiffs int, timeout time.Duration, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error) {
 	return nil, false, nil
 }
 
