@@ -30,6 +30,7 @@ const DoltCommitFuncName = "dolt_commit"
 
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
+// DoltCommitFunc runs a `dolt commit` in the SQL context, committing staged changes to head.
 type DoltCommitFunc struct {
 	children []sql.Expression
 }
@@ -39,7 +40,6 @@ func NewDoltCommitFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression
 	return &DoltCommitFunc{children: args}, nil
 }
 
-// Runs DOLT_COMMIT in the sql engine which models the behavior of `dolt commit`. Commits staged staged changes to head.
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()

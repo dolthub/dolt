@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 
@@ -88,15 +89,63 @@ func (tx DoltTransaction) String() string {
 
 var txLock sync.Mutex
 
-// Commit attempts to merge newRoot into the working set
+// Commit attempts to merge the working set given into the current working set.
 // Uses the same algorithm as merge.Merger:
-// |ws.root| is the root
-// |newRoot| is the mergeRoot
+// |current working set working root| is the root
+// |workingSet.workingRoot| is the mergeRoot
 // |tx.startRoot| is ancRoot
-// if working set == ancRoot, attempt a fast-forward merge
+// if workingSet.workingRoot == ancRoot, attempt a fast-forward merge
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
 //  strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
+	return tx.doCommit(ctx, workingSet, nil, txCommit)
+}
+
+// transactionWrite is the logic to write an updated working set (and optionally a commit) to the database
+type transactionWrite func(ctx *sql.Context,
+	  tx *DoltTransaction, // the transaction being written
+		commit *doltdb.PendingCommit, // optional
+		workingSet *doltdb.WorkingSet, // must be provided
+		hash hash.Hash, // hash of the current working set to be written
+) error
+
+// doltCommit is a transactionWrite function that updates the working set and commits a pending commit atomically
+func doltCommit(ctx *sql.Context,
+		tx *DoltTransaction,
+		commit *doltdb.PendingCommit,
+		workingSet *doltdb.WorkingSet,
+		hash hash.Hash,
+) error {
+	headRef, err := workingSet.Ref().ToHeadRef()
+	if err != nil {
+		return err
+	}
+
+	return tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, hash, tx.getWorkingSetMeta(ctx))
+}
+
+// txCommit is a transactionWrite function that updates the working set
+func txCommit(ctx *sql.Context,
+		tx *DoltTransaction,
+		_ *doltdb.PendingCommit,
+		workingSet *doltdb.WorkingSet,
+		hash hash.Hash,
+) error {
+	return tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
+}
+
+// DoltCommit commits the working set and creates a new DoltCommit as specified, in one atomic write
+func (tx *DoltTransaction) DoltCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, commit *doltdb.PendingCommit) (*doltdb.WorkingSet, error) {
+	return tx.doCommit(ctx, workingSet, commit, doltCommit)
+}
+
+// doCommit commits this transaction provided with the write function provided. It takes the same params as DoltCommit
+func (tx *DoltTransaction) doCommit(
+		ctx *sql.Context,
+		workingSet *doltdb.WorkingSet,
+		commit *doltdb.PendingCommit,
+		writeFn transactionWrite,
+) (*doltdb.WorkingSet, error) {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
 		return nil, err
@@ -185,7 +234,7 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 			}
 
 			mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
-			err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, mergedWorkingSet, hash, tx.getWorkingSetMeta(ctx))
+			err = writeFn(ctx, tx, commit, mergedWorkingSet, hash)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop
 				return nil, nil
