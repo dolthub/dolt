@@ -142,7 +142,14 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 
 // GetCommitStaged adds a new commit to HEAD with the given props, returning it as a PendingCommit that can be
 // committed with doltdb.CommitWithWorkingSet
-func GetCommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mergeParents []*doltdb.Commit, dbData env.DbData, props CommitStagedProps) (*doltdb.PendingCommit, error) {
+func GetCommitStaged(
+		ctx context.Context,
+		roots doltdb.Roots,
+		mergeActive bool,
+		mergeParents []*doltdb.Commit,
+		dbData env.DbData,
+		props CommitStagedProps,
+) (*doltdb.PendingCommit, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	drw := dbData.Drw

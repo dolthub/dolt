@@ -371,19 +371,34 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 	// TODO: actual logging
 	// logrus.Errorf("working root to commit is %s", dbstate.workingSet.WorkingRoot().DebugString(ctx, true))
 
-	mergedWorkingSet, err := dtx.Commit(ctx, dbState.WorkingSet)
-	if err != nil {
-		return err
-	}
+	var mergedWorkingSet *doltdb.WorkingSet
 
 	// logrus.Errorf("committed merged working root %s", dbstate.workingSet.WorkingRoot().DebugString(ctx, true))
 
-	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet, nil)
+	performDoltCommit, err := sess.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
 	if err != nil {
 		return err
 	}
 
-	err = sess.CreateDoltCommit(ctx, dbName)
+	// Depending on session settings, either commit just the working set, or a new dolt commit along with it
+	if performDoltCommit.(int8) != 1 {
+		mergedWorkingSet, err = dtx.Commit(ctx, dbState.WorkingSet)
+		if err != nil {
+			return err
+		}
+	} else {
+		pendingCommit, err := sess.GetPendingCommit(ctx, dbName)
+		if err != nil {
+			return err
+		}
+
+		mergedWorkingSet, err = dtx.DoltCommit(ctx, dbState.WorkingSet, pendingCommit)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet, nil)
 	if err != nil {
 		return err
 	}
@@ -392,87 +407,42 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 	return nil
 }
 
-func (sess *Session) CommitToDolt(
-	ctx *sql.Context,
-	roots doltdb.Roots,
-	mergeParentCommits []*doltdb.Commit,
-	dbName string,
-	props actions.CommitStagedProps,
-) (*doltdb.Commit, error) {
+func (sess *Session) CreatePendingCommit(
+		ctx *sql.Context,
+		roots doltdb.Roots,
+		mergeParentCommits []*doltdb.Commit,
+		dbName string,
+		props actions.CommitStagedProps,
+) (*doltdb.PendingCommit, error) {
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
-	dbData := sessionState.dbData
 
 	ws, err := sess.WorkingSet(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: this does several session state updates, and it really needs to just do one
-	//  It's also not atomic with the above commit. We need a way to set both new HEAD and update the working
-	//  set together, atomically. We can't easily do this in noms right now, because the the data set is the unit of
-	//  atomic update at the API layer. There's a root value which is the unit of atomic updates at the storage layer,
-	//  just no API which allows one to update more than one dataset in the same atomic transaction. We need to write
-	//  one.
-	//  Meanwhile, this is all kinds of thread-unsafe
-	commit, err := actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dbData, props)
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, sessionState.dbData, props)
 	if err != nil {
 		return nil, err
 	}
 
-	// Now we have to do *another* SQL transaction, because CommitStaged currently modifies the super schema of the root
-	// value before committing what it's given. We need that exact same root in our working set to stay consistent. It
-	// doesn't happen automatically like outside the SQL context because CommitStaged is writing to a session-based
-	// repo state writer, so we're never persisting the new working set to disk like in a command line context.
-	// TODO: fix this mess
-
-	ws, err = sess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-	// StartTransaction sets the working set for the session, and we want the one we previous had, not the one on disk
-	// Updating the working set like this also updates the head commit and root info for the session
-	tx, err := sess.StartTransaction(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	err = sess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	err = sess.CommitTransaction(ctx, dbName, tx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
-	ctx.SetTransaction(nil)
-	return commit, err
+	return pendingCommit, err
 }
 
-// CreateDoltCommit stages the working set and then immediately commits the staged changes. This is a Dolt commit
-// rather than a transaction commit. If there are no changes to be staged, then no commit is created.
-func (sess *Session) CreateDoltCommit(ctx *sql.Context, dbName string) error {
-	commitBool, err := sess.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
-	if err != nil {
-		return err
-	} else if commitBool.(int8) != 1 {
-		return nil
-	}
-
+// GetPendingCommit returns a pending commit with all tables staged.
+func (sess *Session) GetPendingCommit(ctx *sql.Context, dbName string) (*doltdb.PendingCommit, error) {
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	roots := sessionState.GetRoots()
 
 	roots, err = actions.StageAllTablesNoDocs(ctx, roots)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var mergeParentCommits []*doltdb.Commit
@@ -480,7 +450,7 @@ func (sess *Session) CreateDoltCommit(ctx *sql.Context, dbName string) error {
 		mergeParentCommits = []*doltdb.Commit{sessionState.WorkingSet.MergeState().Commit()}
 	}
 
-	_, err = sess.CommitToDolt(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
+	pendingCommit, err := sess.CreatePendingCommit(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
 		Message:    fmt.Sprintf("Transaction commit at %s", ctx.QueryTime().UTC().Format("2006-01-02T15:04:05Z")),
 		Date:       ctx.QueryTime(),
 		AllowEmpty: false,
@@ -489,10 +459,10 @@ func (sess *Session) CreateDoltCommit(ctx *sql.Context, dbName string) error {
 		Email:      sess.Email,
 	})
 	if _, ok := err.(actions.NothingStaged); err != nil && !ok {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return pendingCommit, nil
 }
 
 // RollbackTransaction rolls the given transaction back

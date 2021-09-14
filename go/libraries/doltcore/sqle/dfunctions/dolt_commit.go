@@ -127,7 +127,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	// Now do a Dolt commit
-	commit, err := dSess.CommitToDolt(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
+	commit, err := dSess.CreatePendingCommit(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
