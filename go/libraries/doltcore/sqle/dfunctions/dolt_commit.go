@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -69,82 +68,40 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		name = dSess.Username
-		email = dSess.Email
-	}
+	// TODO: collect these params and pass them to commit method below
+	// var name, email string
+	// if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+	// 	name, email, err = cli.ParseAuthor(authorStr)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// } else {
+	// 	name = dSess.Username
+	// 	email = dSess.Email
+	// }
 
 	// Get the commit message.
-	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
-	if !msgOk {
-		return nil, fmt.Errorf("Must provide commit message.")
-	}
+	// msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+	// if !msgOk {
+	// 	return nil, fmt.Errorf("Must provide commit message.")
+	// }
+	//
+	// t := ctx.QueryTime()
+	// if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+	// 	var err error
+	// 	t, err = cli.ParseDate(commitTimeStr)
+	//
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf(err.Error())
+	// 	}
+	// }
 
-	t := ctx.QueryTime()
-	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		var err error
-		t, err = cli.ParseDate(commitTimeStr)
-
-		if err != nil {
-			return nil, fmt.Errorf(err.Error())
-		}
-	}
-
-	// Commit any pending transaction before a dolt_commit
-	tx := ctx.Session.GetTransaction()
-	_, ok = tx.(*dsess.DoltTransaction)
-	if !ok {
-		return nil, fmt.Errorf("expected a DoltTransaction, got %T", tx)
-	}
-
-	err = dSess.SetRoots(ctx, dbName, roots)
+	err = dSess.CommitDoltTransaction(ctx, dbName, dSess.GetTransaction(), true)
 	if err != nil {
 		return nil, err
 	}
 
-	err = dSess.CommitTransaction(ctx, dbName, tx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
-	ctx.SetTransaction(nil)
-
-	var mergeParentCommits []*doltdb.Commit
-	ws, err := dSess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	if ws.MergeActive() {
-		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
-	}
-
-	// Now do a Dolt commit
-	commit, err := dSess.CreatePendingCommit(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
-		Message:    msg,
-		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
-		Force:      apr.Contains(cli.ForceFlag),
-		Name:       name,
-		Email:      email,
-	})
-	if err != nil {
-		return 1, err
-	}
-
-	cmHash, err := commit.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	return cmHash.String(), nil
+	return "TODO commit hash", nil
 }
 
 func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {

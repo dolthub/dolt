@@ -145,6 +145,7 @@ func (tx *DoltTransaction) DoltCommit(ctx *sql.Context, workingSet *doltdb.Worki
 }
 
 // doCommit commits this transaction with the write function provided. It takes the same params as DoltCommit
+// TODO: this needs to return the commit as well
 func (tx *DoltTransaction) doCommit(
 		ctx *sql.Context,
 		workingSet *doltdb.WorkingSet,

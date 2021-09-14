@@ -334,16 +334,7 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 		}
 	}
 
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
 	if TransactionsDisabled(ctx) {
-		return nil
-	}
-
-	if !dbState.dirty {
 		return nil
 	}
 
@@ -353,35 +344,46 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 		return nil
 	}
 
-	// It's possible that this returns false if the user has created an in-Memory database. Moreover,
-	// the analyzer will check for us whether a db exists or not.
-	// TODO: fix this
+	performDoltCommitVar, err := sess.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
+	if err != nil {
+		return err
+	}
+
+	peformDoltCommitInt, ok := performDoltCommitVar.(int8)
 	if !ok {
+		return fmt.Errorf(fmt.Sprintf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommit, performDoltCommitVar))
+	}
+	performDoltCommit := peformDoltCommitInt == 1
+
+	return sess.CommitDoltTransaction(ctx, dbName, tx, performDoltCommit)
+}
+
+// CommitDoltTransaction does the same thing as CommitTransaction, but optionally commits a dolt transaction at the
+// same time. The function returns a Commit object in this case.
+func (sess *Session) CommitDoltTransaction(ctx *sql.Context, dbName string, tx sql.Transaction, performDoltCommit bool) error {
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	} else if !ok {
+		// It's possible that we don't have dbstate if the user has created an in-Memory database. Moreover,
+		// the analyzer will check for us whether a db exists or not.
+		// TODO: fix this
 		return nil
 	}
 
-	// Newer commit path does a concurrent merge of the current root with the one other clients are editing, then
-	// updates the session with this new root.
+	if !dbState.dirty {
+		return nil
+	}
+
 	// TODO: validate that the transaction belongs to the DB named
 	dtx, ok := tx.(*DoltTransaction)
 	if !ok {
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	// TODO: actual logging
-	// logrus.Errorf("working root to commit is %s", dbstate.workingSet.WorkingRoot().DebugString(ctx, true))
-
-	var mergedWorkingSet *doltdb.WorkingSet
-
-	// logrus.Errorf("committed merged working root %s", dbstate.workingSet.WorkingRoot().DebugString(ctx, true))
-
-	performDoltCommit, err := sess.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommit)
-	if err != nil {
-		return err
-	}
-
 	// Depending on session settings, either commit just the working set, or a new dolt commit along with it
-	if performDoltCommit.(int8) != 1 {
+	var mergedWorkingSet *doltdb.WorkingSet
+	if performDoltCommit {
 		mergedWorkingSet, err = dtx.Commit(ctx, dbState.WorkingSet)
 		if err != nil {
 			return err
