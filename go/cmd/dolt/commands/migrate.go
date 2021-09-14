@@ -258,7 +258,7 @@ func fetchMigratedRemoteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *ar
 	r, refSpecs, err := env.NewFetchOpts(apr.Args(), dEnv.RepoStateReader())
 
 	if err == nil {
-		err = fetchRefSpecs(ctx, ref.UpdateMode{Force: true}, dEnv, r, refSpecs)
+		err = actions.FetchRefSpecs(ctx, dEnv.DbData(), refSpecs, r, ref.UpdateMode{Force: true}, runProgFuncs, stopProgFuncs)
 	}
 
 	return err

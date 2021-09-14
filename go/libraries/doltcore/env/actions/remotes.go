@@ -358,3 +358,68 @@ func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote
 
 	return srcDBCommit, nil
 }
+
+func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
+	srcDB, err := remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
+	if err != nil {
+		return err
+	}
+
+	branchRefs, err := srcDB.GetHeadRefs(ctx)
+	if err != nil {
+		return env.ErrFailedToReadDb
+	}
+
+	for _, rs := range refSpecs {
+		rsSeen := false
+
+		for _, branchRef := range branchRefs {
+			remoteTrackRef := rs.DestRef(branchRef)
+
+			if remoteTrackRef != nil {
+				rsSeen = true
+				srcDBCommit, err := FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), remote, srcDB, dbData.Ddb, branchRef, remoteTrackRef, progStarter, progStopper)
+				if err != nil {
+					return err
+				}
+
+				switch mode {
+				case ref.ForceUpdate:
+					err := dbData.Ddb.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
+					if err != nil {
+						return err
+					}
+				case ref.FastForwardOnly:
+					ok, err := dbData.Ddb.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
+					if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+						return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+					}
+					if !ok {
+						return ErrCantFF
+					}
+
+					switch err {
+					case doltdb.ErrUpToDate:
+					case doltdb.ErrIsAhead, nil:
+						err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
+						if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+							return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+						}
+					default:
+						return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+					}
+				}
+			}
+		}
+		if !rsSeen {
+			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, rs.GetRemRefToLocal())
+		}
+	}
+
+	err = FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, progStarter, progStopper)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

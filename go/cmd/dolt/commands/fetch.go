@@ -17,13 +17,12 @@ package commands
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -77,164 +76,15 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
 
-	verr := fetchRefSpecs(ctx, updateMode, dEnv, r, refSpecs)
-
-	return HandleVErrAndExitCode(verr, usage)
-}
-
-func getRefSpecs(args []string, dEnv *env.DoltEnv, remotes map[string]env.Remote) (env.Remote, []ref.RemoteRefSpec, errhand.VerboseError) {
-	if len(remotes) == 0 {
-		return env.NoRemote, nil, errhand.BuildDError("error: no remotes set").AddDetails("to add a remote run: dolt remote add <remote> <url>").Build()
-	}
-
-	remName := "origin"
-	remote, remoteOK := remotes[remName]
-
-	if len(args) != 0 {
-		if val, ok := remotes[args[0]]; ok {
-			remName = args[0]
-			remote = val
-			remoteOK = ok
-			args = args[1:]
-		}
-	}
-
-	if !remoteOK {
-		return env.NoRemote, nil, errhand.BuildDError("error: unknown remote").SetPrintUsage().Build()
-	}
-
-	var rs []ref.RemoteRefSpec
 	var verr errhand.VerboseError
-	var err error
-	if len(args) != 0 {
-		rs, verr = parseRSFromArgs(remName, args)
-	} else {
-		rs, err = env.GetRefSpecs(dEnv.RepoStateReader(), remName)
-		if err != nil {
-			verr = errhand.VerboseErrorFromError(err)
-		}
+
+	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), refSpecs, r, updateMode, runProgFuncs, stopProgFuncs)
+	switch err {
+	case doltdb.ErrUpToDate:
+	case actions.ErrCantFF:
+		verr = errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").AddCause(err).Build()
+	default:
+		verr = errhand.VerboseErrorFromError(err)
 	}
-
-	if verr != nil {
-		return env.NoRemote, nil, verr
-	}
-
-	return remote, rs, verr
-}
-
-func parseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, errhand.VerboseError) {
-	var refSpecs []ref.RemoteRefSpec
-	for i := 0; i < len(args); i++ {
-		rsStr := args[i]
-		rs, err := ref.ParseRefSpec(rsStr)
-
-		if err != nil {
-			return nil, errhand.BuildDError("error: '%s' is not a valid refspec.", rsStr).SetPrintUsage().Build()
-		}
-
-		if _, ok := rs.(ref.BranchToBranchRefSpec); ok {
-			local := "refs/heads/" + rsStr
-			remTracking := "remotes/" + remName + "/" + rsStr
-			rs2, err := ref.ParseRefSpec(local + ":" + remTracking)
-
-			if err == nil {
-				rs = rs2
-			}
-		}
-
-		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
-			return nil, errhand.BuildDError("error: '%s' is not a valid refspec referring to a remote tracking branch", rsStr).Build()
-		} else {
-			refSpecs = append(refSpecs, rrs)
-		}
-	}
-
-	return refSpecs, nil
-}
-
-func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[ref.RemoteRefSpec]env.Remote, errhand.VerboseError) {
-	nameToRemote := dEnv.RepoState.Remotes
-
-	rsToRem := make(map[ref.RemoteRefSpec]env.Remote)
-	for _, rrs := range refSpecs {
-		remName := rrs.GetRemote()
-
-		if rem, ok := nameToRemote[remName]; !ok {
-			return nil, errhand.BuildDError("error: unknown remote '%s'", remName).Build()
-		} else {
-			rsToRem[rrs] = rem
-		}
-	}
-
-	return rsToRem, nil
-}
-
-func fetchRefSpecs(ctx context.Context, mode ref.UpdateMode, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
-	srcDB, err := rem.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-	}
-
-	for _, rs := range refSpecs {
-
-		branchRefs, err := srcDB.GetHeadRefs(ctx)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to read from ").AddCause(err).Build()
-		}
-
-		rsSeen := false
-
-		for _, branchRef := range branchRefs {
-			remoteTrackRef := rs.DestRef(branchRef)
-
-			if remoteTrackRef != nil {
-				rsSeen = true
-				srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv.TempTableFilesDir(), rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef, runProgFuncs, stopProgFuncs)
-
-				if err != nil {
-					return errhand.VerboseErrorFromError(err)
-				}
-
-				switch mode {
-				case ref.ForceUpdate:
-					err := dEnv.DoltDB.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
-					if err != nil {
-						return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-					}
-				case ref.FastForwardOnly:
-					ok, err := dEnv.DoltDB.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
-					if !ok {
-						return errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").Build()
-					}
-
-					if err == nil || err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
-						err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
-						if err != nil {
-							return errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").AddCause(err).Build()
-						}
-					} else if err != nil {
-						return errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").AddCause(err).Build()
-					}
-				}
-			}
-		}
-
-		if !rsSeen {
-			if rb, ok := rs.(ref.BranchToTrackingBranchRefSpec); ok {
-				return errhand.BuildDError("error: %s does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists", rb.GetRemRefToLocal()).Build()
-			}
-
-			return errhand.BuildDError("error: remote does not appear to be a dolt database. could not read from the remote database. lease make sure you have the correct access rights and the database exists").Build()
-		}
-	}
-
-	err = actions.FetchFollowTags(ctx, dEnv.TempTableFilesDir(), srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
-
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	return nil
+	return HandleVErrAndExitCode(verr, usage)
 }
