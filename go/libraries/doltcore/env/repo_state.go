@@ -17,8 +17,6 @@ package env
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -144,62 +142,22 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 }
 
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
-	initRef, err := initRefFromRemote(r)
-	if err != nil {
-		return nil, err
-	}
-
+	init := ref.NewBranchRef(defaultInitBranch) // best effort
 	hashStr := hash.Hash{}.String()
 	rs := &RepoState{
-		Head:     ref.MarshalableRef{Ref: initRef},
+		Head:     ref.MarshalableRef{Ref: init},
 		staged:   hashStr,
 		working:  hashStr,
 		Remotes:  map[string]Remote{r.Name: r},
 		Branches: make(map[string]BranchConfig),
 	}
 
-	err = rs.Save(fs)
+	err := rs.Save(fs)
 	if err != nil {
 		return nil, err
 	}
 
 	return rs, nil
-}
-
-//
-func initRefFromRemote(remote Remote) (ref.DoltRef, error) {
-	var match ref.DoltRef = ref.EmptyBranchRef
-	all := make(map[string]ref.DoltRef)
-
-	for _, spec := range remote.FetchSpecs {
-		r, ok := ref.RemoteBranchFromRefSpec(remote.Name, spec)
-		if ok {
-			all[r.GetPath()] = r
-		}
-
-		// save an arbitrary match in case we can't
-		// find what we're looking for
-		match = r
-	}
-
-	for _, name := range []string{
-		"master",
-		"main",
-		"trunk",
-	} {
-		r, ok := all[name]
-		if ok {
-			match = r
-			break
-		}
-	}
-
-	if match == ref.EmptyBranchRef {
-		// none of |remote.FetchSpecs| were useful
-		return nil, fmt.Errorf("could not determine init branch for repo")
-	}
-
-	return match, nil
 }
 
 func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
