@@ -68,35 +68,40 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-	// TODO: collect these params and pass them to commit method below
-	// var name, email string
-	// if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-	// 	name, email, err = cli.ParseAuthor(authorStr)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// } else {
-	// 	name = dSess.Username
-	// 	email = dSess.Email
-	// }
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		name = dSess.Username
+		email = dSess.Email
+	}
 
-	// Get the commit message.
-	// msg, msgOk := apr.GetValue(cli.CommitMessageArg)
-	// if !msgOk {
-	// 	return nil, fmt.Errorf("Must provide commit message.")
-	// }
-	//
-	// t := ctx.QueryTime()
-	// if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-	// 	var err error
-	// 	t, err = cli.ParseDate(commitTimeStr)
-	//
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf(err.Error())
-	// 	}
-	// }
+	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
+	if !msgOk {
+		return nil, fmt.Errorf("Must provide commit message.")
+	}
 
-	err = dSess.CommitDoltCommit(ctx, dbName, dSess.GetTransaction(), true)
+	t := ctx.QueryTime()
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
+		var err error
+		t, err = cli.ParseDate(commitTimeStr)
+
+		if err != nil {
+			return nil, fmt.Errorf(err.Error())
+		}
+	}
+
+	err = dSess.CommitDoltCommit(ctx, dbName, dSess.GetTransaction(), actions.CommitStagedProps{
+		Message:    msg,
+		Date:       t,
+		AllowEmpty: false,
+		Force:      false,
+		Name:       name,
+		Email:      email,
+	})
 	if err != nil {
 		return nil, err
 	}
