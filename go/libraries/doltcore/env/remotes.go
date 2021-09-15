@@ -241,20 +241,18 @@ func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSp
 		return NoRemote, nil, ErrNoRemote
 	}
 
-	remName := "origin"
-	remote, remoteOK := remotes[remName]
-
-	if len(args) != 0 {
-		if val, ok := remotes[args[0]]; ok {
-			remName = args[0]
-			remote = val
-			remoteOK = true
-			args = args[1:]
-		}
+	var remName string
+	if len(args) == 0 {
+		remName = "origin"
+	} else {
+		remName = args[0]
+		args = args[1:]
 	}
-	if !remoteOK {
+
+	remote, ok := remotes[remName]
+	if !ok {
 		msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
-		return NoRemote, nil, fmt.Errorf("%w: %s %s", ErrUnknownRemote, remName, msg)
+		return NoRemote, nil, fmt.Errorf("%w; '%s' %s", ErrUnknownRemote, remName, msg)
 	}
 
 	var rs []ref.RemoteRefSpec
