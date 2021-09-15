@@ -144,7 +144,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	require.NoError(t, err)
 	cm, err := commit.GetCommitMeta()
 	require.NoError(t, err)
-	require.Contains(t, cm.Description, "Transaction commit at")
+	require.Contains(t, cm.Description, "Transaction commit")
 
 	as, err := doltdb.NewAncestorSpec("~1")
 	require.NoError(t, err)
@@ -261,7 +261,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	require.NoError(t, err)
 	cm2, err := commit2.GetCommitMeta()
 	require.NoError(t, err)
-	require.Contains(t, cm2.Description, "Transaction commit at")
+	require.Contains(t, cm2.Description, "Transaction commit")
 
 	as, err := doltdb.NewAncestorSpec("~1")
 	require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	require.NoError(t, err)
 	cm1, err := commit1.GetCommitMeta()
 	require.NoError(t, err)
-	require.Contains(t, cm1.Description, "Transaction commit at")
+	require.Contains(t, cm1.Description, "Transaction commit")
 
 	commit0, err := commit1.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
@@ -324,7 +324,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	cm2, err := commit2.GetCommitMeta()
 	require.NoError(t, err)
-	require.Contains(t, cm2.Description, "Transaction commit at")
+	require.Contains(t, cm2.Description, "Transaction commit")
 
 	as, err := doltdb.NewAncestorSpec("~1")
 	require.NoError(t, err)
@@ -332,7 +332,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	cm1, err := commit1.GetCommitMeta()
 	require.NoError(t, err)
-	require.Contains(t, cm1.Description, "Transaction commit at")
+	require.Contains(t, cm1.Description, "Transaction commit")
 
 	commit0, err := commit1.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
