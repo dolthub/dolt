@@ -96,7 +96,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// 	}
 	// }
 
-	err = dSess.CommitDoltTransaction(ctx, dbName, dSess.GetTransaction(), true)
+	err = dSess.CommitDoltCommit(ctx, dbName, dSess.GetTransaction(), true)
 	if err != nil {
 		return nil, err
 	}

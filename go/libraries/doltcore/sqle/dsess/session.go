@@ -353,14 +353,23 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 	if !ok {
 		return fmt.Errorf(fmt.Sprintf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommit, performDoltCommitVar))
 	}
-	performDoltCommit := peformDoltCommitInt == 1
 
-	return sess.CommitDoltTransaction(ctx, dbName, tx, performDoltCommit)
+	if peformDoltCommitInt == 1 {
+		return sess.CommitDoltCommit(ctx, dbName, tx, actions.CommitStagedProps{
+			Message:    "Transaction commit",
+			Date:       ctx.QueryTime(),
+			AllowEmpty: false,
+			Force:      false,
+			Name:       sess.Username,
+			Email:      sess.Email,
+		})
+	} else {
+		return sess.CommitWorkingSet(ctx, dbName, tx)
+	}
 }
 
-// CommitDoltTransaction does the same thing as CommitTransaction, but optionally commits a dolt transaction at the
-// same time. The function returns a Commit object in this case.
-func (sess *Session) CommitDoltTransaction(ctx *sql.Context, dbName string, tx sql.Transaction, performDoltCommit bool) error {
+// CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit
+func (sess *Session) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -381,23 +390,9 @@ func (sess *Session) CommitDoltTransaction(ctx *sql.Context, dbName string, tx s
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	// Depending on session settings, either commit just the working set, or a new dolt commit along with it
-	var mergedWorkingSet *doltdb.WorkingSet
-	if performDoltCommit {
-		mergedWorkingSet, err = dtx.Commit(ctx, dbState.WorkingSet)
-		if err != nil {
-			return err
-		}
-	} else {
-		pendingCommit, err := sess.GetPendingCommit(ctx, dbName)
-		if err != nil {
-			return err
-		}
-
-		mergedWorkingSet, err = dtx.DoltCommit(ctx, dbState.WorkingSet, pendingCommit)
-		if err != nil {
-			return err
-		}
+	mergedWorkingSet, err := dtx.Commit(ctx, dbState.WorkingSet)
+	if err != nil {
+		return err
 	}
 
 	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet, nil)
@@ -409,33 +404,50 @@ func (sess *Session) CommitDoltTransaction(ctx *sql.Context, dbName string, tx s
 	return nil
 }
 
-func (sess *Session) CreatePendingCommit(
-		ctx *sql.Context,
-		roots doltdb.Roots,
-		mergeParentCommits []*doltdb.Commit,
-		dbName string,
-		props actions.CommitStagedProps,
-) (*doltdb.PendingCommit, error) {
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+// CommitDoltCommit does the same thing as CommitTransaction, but also commits a dolt transaction at the
+// same time
+func (sess *Session) CommitDoltCommit(ctx *sql.Context, dbName string, tx sql.Transaction, props actions.CommitStagedProps) error {
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
-		return nil, err
+		return err
+	} else if !ok {
+		// It's possible that we don't have dbstate if the user has created an in-Memory database. Moreover,
+		// the analyzer will check for us whether a db exists or not.
+		// TODO: fix this
+		return nil
 	}
 
-	ws, err := sess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return nil, err
+	if !dbState.dirty {
+		return nil
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, sessionState.dbData, props)
-	if err != nil {
-		return nil, err
+	// TODO: validate that the transaction belongs to the DB named
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	return pendingCommit, err
+	pendingCommit, err := sess.GetPendingCommit(ctx, dbName, props)
+	if err != nil {
+		return err
+	}
+
+	mergedWorkingSet, err := dtx.DoltCommit(ctx, dbState.WorkingSet, pendingCommit)
+	if err != nil {
+		return err
+	}
+
+	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet, nil)
+	if err != nil {
+		return err
+	}
+
+	dbState.dirty = false
+	return nil
 }
 
-// GetPendingCommit returns a pending commit with all tables staged.
-func (sess *Session) GetPendingCommit(ctx *sql.Context, dbName string) (*doltdb.PendingCommit, error) {
+// GetPendingCommit returns a pending commit with all tables staged. Pending commit will be nil if nothing is staged.
+func (sess *Session) GetPendingCommit(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
@@ -452,14 +464,7 @@ func (sess *Session) GetPendingCommit(ctx *sql.Context, dbName string) (*doltdb.
 		mergeParentCommits = []*doltdb.Commit{sessionState.WorkingSet.MergeState().Commit()}
 	}
 
-	pendingCommit, err := sess.CreatePendingCommit(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
-		Message:    fmt.Sprintf("Transaction commit at %s", ctx.QueryTime().UTC().Format("2006-01-02T15:04:05Z")),
-		Date:       ctx.QueryTime(),
-		AllowEmpty: false,
-		Force:      false,
-		Name:       sess.Username,
-		Email:      sess.Email,
-	})
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, sessionState.WorkingSet.MergeActive(), mergeParentCommits, sessionState.dbData, props)
 	if _, ok := err.(actions.NothingStaged); err != nil && !ok {
 		return nil, err
 	}
