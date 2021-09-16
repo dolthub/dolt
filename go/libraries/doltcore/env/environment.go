@@ -503,12 +503,16 @@ func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
 }
 
 func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
-	workingSetRef, err := ref.WorkingSetRefForHead(dEnv.RepoState.CWBHeadRef())
+	return WorkingSet(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
+}
+
+func WorkingSet(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.WorkingSet, error) {
+	workingSetRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
 	if err != nil {
 		return nil, err
 	}
 
-	workingSet, err := dEnv.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
+	workingSet, err := ddb.ResolveWorkingSet(ctx, workingSetRef)
 	if err != nil {
 		return nil, err
 	}

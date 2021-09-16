@@ -113,6 +113,15 @@ func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email s
 }
 
 func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch, name, email string, t time.Time) error {
+	return ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, name, email, t, ref.NewBranchRef(initBranch))
+}
+
+func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
+	ctx context.Context,
+	name, email string,
+	t time.Time,
+	init ref.BranchRef,
+) error {
 	// precondition checks
 	name = strings.TrimSpace(name)
 	email = strings.TrimSpace(email)
@@ -158,8 +167,8 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch,
 
 	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: meta, Policy: nil}
 
-	dref := ref.NewInternalRef(creationBranch)
-	ds, err = ddb.db.GetDataset(ctx, dref.String())
+	cb := ref.NewInternalRef(creationBranch)
+	ds, err = ddb.db.GetDataset(ctx, cb.String())
 
 	if err != nil {
 		return err
@@ -171,8 +180,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch,
 		return err
 	}
 
-	dref = ref.NewBranchRef(initBranch)
-	ds, err = ddb.db.GetDataset(ctx, dref.String())
+	ds, err = ddb.db.GetDataset(ctx, init.String())
 
 	if err != nil {
 		return err

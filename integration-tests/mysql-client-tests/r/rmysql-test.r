@@ -13,7 +13,7 @@ conn = dbConnect(RMySQL::MySQL(), host="127.0.0.1", port = port,
 # check standard queries
 queries = list("create table test (pk int, value int, primary key(pk))",
                "describe test",
-               "insert into test (pk, value) values (0,0)",
+               "insert into test (pk, `value`) values (0,0)",
                "select * from test")
 
 responses = list(NULL,

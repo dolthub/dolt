@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -92,75 +91,11 @@ func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmdFailure, err
 	}
 
-	srcDB, err := remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
-	if err != nil {
-		return cmdFailure, fmt.Errorf("failed to get remote db; %w", err)
-	}
-
 	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
 
-	err = fetchRefSpecs(ctx, srcDB, dbData, refSpecs, remote, updateMode)
+	err = actions.FetchRefSpecs(ctx, dbData, refSpecs, remote, updateMode, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
 	}
 	return cmdSuccess, nil
-}
-
-// TODO: move to env and fix cli error handling
-func fetchRefSpecs(ctx *sql.Context, srcDB *doltdb.DoltDB, dbData env.DbData, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode) error {
-	for _, rs := range refSpecs {
-		branchRefs, err := srcDB.GetHeadRefs(ctx)
-		if err != nil {
-			return env.ErrFailedToReadDb
-		}
-
-		rsSeen := false
-
-		for _, branchRef := range branchRefs {
-			remoteTrackRef := rs.DestRef(branchRef)
-
-			if remoteTrackRef != nil {
-				rsSeen = true
-				srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), remote, srcDB, dbData.Ddb, branchRef, remoteTrackRef, runProgFuncs, stopProgFuncs)
-				if err != nil {
-					return err
-				}
-
-				switch mode {
-				case ref.ForceUpdate:
-					err := dbData.Ddb.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
-					if err != nil {
-						return err
-					}
-				case ref.FastForwardOnly:
-					ok, err := dbData.Ddb.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
-					if err != nil {
-						return fmt.Errorf("%w: %s", actions.ErrCantFF, err.Error())
-					}
-					if !ok {
-						return actions.ErrCantFF
-					}
-
-					if err == nil || err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
-						err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
-						if err != nil {
-							return fmt.Errorf("%w: %s", actions.ErrCantFF, err.Error())
-						}
-					} else if err != nil {
-						return fmt.Errorf("%w: %s", actions.ErrCantFF, err.Error())
-					}
-				}
-			}
-		}
-		if !rsSeen {
-			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, rs.GetRemRefToLocal())
-		}
-	}
-
-	err := actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

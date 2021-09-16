@@ -29,7 +29,6 @@ import (
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
-	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -377,7 +376,7 @@ func execShell(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -400,7 +399,7 @@ func execBatch(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -442,7 +441,7 @@ func execMultiStatements(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -478,7 +477,7 @@ func execQuery(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1394,7 +1393,6 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 
 type sqlEngine struct {
 	dbs            map[string]dsqle.Database
-	mrEnv          env.MultiRepoEnv
 	sess           *dsess.Session
 	contextFactory func(ctx context.Context) (*sql.Context, error)
 	engine         *sqle.Engine
@@ -1407,7 +1405,6 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 func newSqlEngine(
 	ctx context.Context,
 	dEnv *env.DoltEnv,
-	mrEnv env.MultiRepoEnv,
 	roots map[string]*doltdb.RootValue, // See TODO below
 	readOnly bool,
 	format resultFormat,
@@ -1422,8 +1419,12 @@ func newSqlEngine(
 	}
 
 	parallelism := runtime.GOMAXPROCS(0)
-	pro := dsqle.NewDoltDatabaseProvider(dbs...)
-	cat := sql.NewCatalogWithDbProvider(pro)
+
+	infoDB := information_schema.NewInformationSchemaDatabase()
+	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
+
+	pro := dsqle.NewDoltDatabaseProvider(all...)
+	cat := sql.NewCatalog(pro)
 
 	err := cat.Register(dfunctions.DoltFunctions...)
 	if err != nil {
@@ -1431,7 +1432,6 @@ func newSqlEngine(
 	}
 
 	engine := sqle.New(cat, analyzer.NewBuilder(cat).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
-	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -1444,12 +1444,11 @@ func newSqlEngine(
 	var dbStates []dsess.InitialDbState
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
-		engine.AddDatabase(db)
 
 		// TODO: this doesn't consider the roots provided as a param, which may not be the HEAD of the branch
 		//  To fix this, we need to pass a commit here as a separate param, and install a read-only database on it
 		//  since it isn't a current HEAD.
-		dbState, err := getDbState(ctx, db, mrEnv)
+		dbState, err := dsqle.GetInitialDBState(ctx, db)
 		if err != nil {
 			return nil, err
 		}
@@ -1470,7 +1469,6 @@ func newSqlEngine(
 
 	return &sqlEngine{
 		dbs:            nameToDB,
-		mrEnv:          mrEnv,
 		sess:           sess,
 		contextFactory: newSqlContext(sess, cat),
 		engine:         engine,
@@ -1522,6 +1520,14 @@ func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	return dsqlDBs
 }
 
+func dsqleDBsAsSqlDBs(dbs []dsqle.Database) []sql.Database {
+	sqlDbs := make([]sql.Database, 0, len(dbs))
+	for _, db := range dbs {
+		sqlDbs = append(sqlDbs, db)
+	}
+	return sqlDbs
+}
+
 func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) (dsess.InitialDbState, error) {
 	var dEnv *env.DoltEnv
 	mrEnv.Iter(func(name string, de *env.DoltEnv) (stop bool, err error) {
@@ -1556,16 +1562,6 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	}, nil
 }
 
-func (se *sqlEngine) getDB(name string) (dsqle.Database, error) {
-	db, ok := se.dbs[name]
-
-	if !ok {
-		return dsqle.Database{}, ErrDBNotFoundKind.New(name)
-	}
-
-	return db, nil
-}
-
 func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool, err error)) error {
 	for name, db := range se.dbs {
 		stop, err := cb(name, db)
@@ -1584,13 +1580,8 @@ func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool,
 
 func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
 	newRoots := make(map[string]*doltdb.RootValue)
-	for name := range se.mrEnv {
-		db, err := se.getDB(name)
-
-		if err != nil {
-			return nil, err
-		}
-
+	for name, db := range se.dbs {
+		var err error
 		newRoots[name], err = db.GetRoot(sqlCtx)
 
 		if err != nil {
@@ -1623,18 +1614,6 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 		// Should not be allowed to delete repo name and information schema
 		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
 			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", information_schema.InformationSchemaDatabaseName)
-		} else if dbddl.DBName == ctx.GetCurrentDatabase() {
-			db, err := se.engine.Catalog.Database(ctx.GetCurrentDatabase())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// Check if it's an in memory database. Those are the only databases that are allowed to be dropped.
-			switch interface{}(db).(type) {
-			case *memory.Database:
-			default:
-				return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", db.Name())
-			}
 		}
 	}
 

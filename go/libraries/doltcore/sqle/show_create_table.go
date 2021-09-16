@@ -34,8 +34,9 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Conte
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
-	engine := sqle.NewDefault()
-	engine.AddDatabase(sqlDb)
+
+	pro := NewDoltDatabaseProvider(sqlDb)
+	engine := sqle.NewDefault(pro)
 	sqlCtx.SetCurrentDatabase(sqlDb.Name())
 	return sqlCtx, engine, sess
 }

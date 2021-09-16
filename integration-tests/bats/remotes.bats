@@ -1085,7 +1085,7 @@ setup_ref_test() {
     run dolt fetch remotes/dasdas
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "invalid fetch spec: 'remotes/dasdas'" ]] || false
+    [[ "$output" =~ "'remotes/dasdas' does not appear to be a dolt database" ]] || false
 }
 
 @test "remotes: fetching added invalid remote correctly errors" {
@@ -1104,10 +1104,8 @@ setup_ref_test() {
    setup_ref_test
    cd ../../
    cd dolt-repo-clones/test-repo
-   # Add a dummy remove to allow for fetching
-   dolt remote add myremote dolthub/fake
 
-   run dolt fetch dadasdfasdfa
+   run dolt fetch origin dadasdfasdfa
    [ "$status" -eq 1 ]
-   [[ "$output" =~ "error: dadasdfasdfa does not appear to be a dolt database" ]] || false
+   [[ "$output" =~ "invalid ref spec: 'dadasdfasdfa'" ]] || false
 }

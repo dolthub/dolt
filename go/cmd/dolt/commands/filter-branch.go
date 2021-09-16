@@ -255,7 +255,8 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 	db := dsqle.NewDatabase(dbName, dEnv.DbData(), opts)
 
-	cat := sql.NewCatalog()
+	pro := dsqle.NewDoltDatabaseProvider(db)
+	cat := sql.NewCatalog(pro)
 	err = cat.Register(dfunctions.DoltFunctions...)
 	if err != nil {
 		return nil, nil, err
@@ -265,7 +266,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	azr := analyzer.NewBuilder(cat).WithParallelism(parallelism).Build()
 
 	engine := sqle.New(cat, azr, &sqle.Config{Auth: new(auth.None)})
-	engine.AddDatabase(db)
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
@@ -310,7 +310,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	se := &sqlEngine{
 		dbs:    map[string]dsqle.Database{dbName: db},
-		mrEnv:  env.MultiRepoEnv{dbName: dEnv},
 		engine: engine,
 	}
 

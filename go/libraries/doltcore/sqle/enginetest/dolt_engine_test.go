@@ -224,6 +224,14 @@ func TestDropColumn(t *testing.T) {
 	enginetest.TestDropColumn(t, newDoltHarness(t))
 }
 
+func TestCreateDatabase(t *testing.T) {
+	enginetest.TestCreateDatabase(t, newDoltHarness(t))
+}
+
+func TestDropDatabase(t *testing.T) {
+	enginetest.TestDropDatabase(t, newDoltHarness(t))
+}
+
 func TestCreateForeignKeys(t *testing.T) {
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }

@@ -99,8 +99,8 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 		tbl:      tbl,
 		editOpts: opts,
 	}
-	engine = sqle.NewDefault()
-	engine.AddDatabase(mergeableDb)
+	pro := NewDoltDatabaseProvider(mergeableDb)
+	engine = sqle.NewDefault(pro)
 
 	// Get an updated root to use for the rest of the test
 	ctx := sql.NewEmptyContext()
