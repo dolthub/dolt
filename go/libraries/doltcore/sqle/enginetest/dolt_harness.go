@@ -57,7 +57,8 @@ var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
 var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
-	pro := sqle.NewDoltDatabaseProvider()
+	dEnv := dtestutils.CreateTestEnv()
+	pro := sqle.NewDoltDatabaseProvider(dEnv.Config)
 	session, err := dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, "test", "email@test.com")
 	require.NoError(t, err)
 	return &DoltHarness{
@@ -193,7 +194,7 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 }
 
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
-	return sqle.NewDoltDatabaseProvider(dbs...)
+	return sqle.NewDoltDatabaseProvider(d.env.Config, dbs...)
 }
 
 func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState globalstate.GlobalState) dsess.InitialDbState {

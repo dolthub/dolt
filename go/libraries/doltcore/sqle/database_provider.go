@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 const (
@@ -35,19 +36,25 @@ const (
 type DoltDatabaseProvider struct {
 	databases map[string]sql.Database
 	mu        *sync.RWMutex
+
+	cfg config.ReadableConfig
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
 var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
-func NewDoltDatabaseProvider(databases ...sql.Database) DoltDatabaseProvider {
+func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
 	}
 
-	return DoltDatabaseProvider{databases: dbs, mu: &sync.RWMutex{}}
+	return DoltDatabaseProvider{
+		databases: dbs,
+		mu:        &sync.RWMutex{},
+		cfg:       config,
+	}
 }
 
 func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error) {
@@ -100,7 +107,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	mem, err := env.NewMemoryDbData(ctx)
+	mem, err := env.NewMemoryDbData(ctx, p.cfg)
 	if err != nil {
 		return err
 	}

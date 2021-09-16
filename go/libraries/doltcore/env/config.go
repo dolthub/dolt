@@ -38,6 +38,8 @@ const (
 
 	DoltEditor = "core.editor"
 
+	InitBranchName = "init.defaultbranch"
+
 	RemotesApiHostKey     = "remotes.default_host"
 	RemotesApiHostPortKey = "remotes.default_port"
 
@@ -158,13 +160,7 @@ func (dcc *DoltCliConfig) GetConfig(element DoltConfigElement) (config.ReadWrite
 // GetStringOrDefault retrieves a string from the config hierarchy and returns it if available.  Otherwise it returns
 // the default string value
 func (dcc *DoltCliConfig) GetStringOrDefault(key, defStr string) *string {
-	val, err := dcc.ch.GetString(key)
-
-	if err != nil {
-		return &defStr
-	}
-
-	return &val
+	return GetStringOrDefault(dcc.ch, key, defStr)
 }
 
 // IfEmptyUseConfig looks at a strings value and if it is an empty string will try to return a value from the config
@@ -182,6 +178,16 @@ func (dcc *DoltCliConfig) IfEmptyUseConfig(val, key string) string {
 	}
 
 	return cfgVal
+}
+
+func GetStringOrDefault(cfg config.ReadableConfig, key, defStr string) *string {
+	val, err := cfg.GetString(key)
+
+	if err != nil {
+		return &defStr
+	}
+
+	return &val
 }
 
 // GetNameAndEmail returns the name and email from the supplied config
