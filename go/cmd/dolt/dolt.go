@@ -71,6 +71,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.TagCmd{},
 	commands.CheckoutCmd{},
 	commands.RemoteCmd{},
+	commands.BackupCmd{},
 	commands.PushCmd{},
 	commands.PullCmd{},
 	commands.FetchCmd{},
@@ -292,7 +293,7 @@ func runMain() int {
 	return res
 }
 
-// These subcommands will cannot be performed if a migration is needed
+// These subcommands cannot be performed if a migration is needed
 func commandNeedsMigrationCheck(args []string) bool {
 	if len(args) == 0 {
 		return false
@@ -318,6 +319,7 @@ func commandNeedsMigrationCheck(args []string) bool {
 		commands.BranchCmd{},
 		commands.CheckoutCmd{},
 		commands.RemoteCmd{},
+		commands.BackupCmd{},
 		commands.PushCmd{},
 		commands.PullCmd{},
 		commands.FetchCmd{},

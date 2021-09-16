@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/types"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
@@ -37,6 +38,8 @@ var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrFailedToSaveRepoState = errors.New("failed to save repo state")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToGetRemoteDb = errors.New("failed to get remote db")
+var ErrFailedToDeleteBackup = errors.New("failed to delete backup")
+var ErrFailedToGetBackupDb = errors.New("failed to get backup db")
 var ErrUnknownPushErr = errors.New("unknown push error")
 
 type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent)
@@ -424,5 +427,60 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 		return err
 	}
 
+	return nil
+}
+
+func Backup(ctx context.Context, rsr env.RepoStateReader, srcDB *doltdb.DoltDB, tempTableDir string, backup env.Remote, progStarter ProgStarter, progStopper ProgStopper) error {
+	destDB, err := backup.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format())
+	if err != nil {
+		return err
+	}
+
+	headRefs, err := srcDB.GetHeadRefs(ctx)
+	if err != nil {
+		return err
+	}
+
+	var stRef types.Ref
+	for _, headRef := range headRefs {
+		switch rf := headRef.(type) {
+		case ref.TagRef:
+			tag, err := srcDB.ResolveTag(ctx, rf)
+			stRef, err = tag.GetStRef()
+			if err != nil {
+				return err
+			}
+		case ref.InternalRef:
+		case ref.BranchRef, ref.RemoteRef, ref.WorkspaceRef:
+		//default:
+			cs, err := doltdb.NewCommitSpec(rf.GetPath())
+			if err != nil {
+				return err
+			}
+
+			commit, err := srcDB.Resolve(ctx, cs, rsr.CWBHeadRef())
+			if err != nil {
+				return err
+			}
+
+			stRef, err = commit.GetStRef()
+			if err != nil {
+				return err
+			}
+		}
+
+		newCtx, cancelFunc := context.WithCancel(ctx)
+		wg, progChan, pullerEventCh := progStarter(newCtx)
+		err = destDB.PushChunks(ctx, tempTableDir, srcDB, stRef, progChan, pullerEventCh)
+		progStopper(cancelFunc, wg, progChan, pullerEventCh)
+		if err != nil {
+			return err
+		}
+
+		err = destDB.SetHead(ctx, headRef, stRef)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

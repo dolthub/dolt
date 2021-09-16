@@ -60,6 +60,11 @@ var ErrRemoteAlreadyExists = errors.New("remote already exists")
 var ErrInvalidRemoteURL = errors.New("remote URL invalid")
 var ErrRemoteNotFound = errors.New("remote not found")
 var ErrInvalidRemoteName = errors.New("remote name invalid")
+var ErrBackupAlreadyExists = errors.New("backup already exists")
+var ErrInvalidBackupURL = errors.New("backup URL invalid")
+var ErrBackupNotFound = errors.New("backup not found")
+var ErrInvalidBackupName = errors.New("backup name invalid")
+var ErrFailedToDeleteBackup = errors.New("failed to delete backup")
 var ErrFailedToReadFromDb = errors.New("failed to read from db")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToWriteRepoState = errors.New("failed to write repo state")
@@ -114,6 +119,14 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			remotes[n] = r
 		}
 		dEnv.RepoState.Remotes = remotes
+
+		backups := make(map[string]Remote, len(dEnv.RepoState.Backups))
+		for n, r := range dEnv.RepoState.Backups {
+			r.dialer = dEnv
+			backups[n] = r
+		}
+		dEnv.RepoState.Backups = backups
+
 	}
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
@@ -584,8 +597,16 @@ func (r *repoStateWriter) AddRemote(name string, url string, fetchSpecs []string
 	return r.DoltEnv.AddRemote(name, url, fetchSpecs, params)
 }
 
+func (r *repoStateWriter) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
+	return r.DoltEnv.AddBackup(name, url, fetchSpecs, params)
+}
+
 func (r *repoStateWriter) RemoveRemote(ctx context.Context, name string) error {
 	return r.DoltEnv.RemoveRemote(ctx, name)
+}
+
+func (r *repoStateWriter) RemoveBackup(ctx context.Context, name string) error {
+	return r.DoltEnv.RemoveBackup(ctx, name)
 }
 
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
@@ -876,6 +897,37 @@ func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, par
 	return nil
 }
 
+func (dEnv *DoltEnv) GetBackups() (map[string]Remote, error) {
+	if dEnv.RSLoadErr != nil {
+		return nil, dEnv.RSLoadErr
+	}
+
+	return dEnv.RepoState.Backups, nil
+}
+
+func (dEnv *DoltEnv) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
+	if _, ok := dEnv.RepoState.Backups[name]; ok {
+		return ErrBackupAlreadyExists
+	}
+
+	if strings.IndexAny(name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
+		return ErrInvalidBackupName
+	}
+
+	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
+	if err != nil {
+		return fmt.Errorf("%w; %s", ErrInvalidBackupURL, err.Error())
+	}
+
+	r := Remote{name, absRemoteUrl, fetchSpecs, params, dEnv}
+	dEnv.RepoState.AddBackup(r)
+	err = dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	remote, ok := dEnv.RepoState.Remotes[name]
 	if !ok {
@@ -901,6 +953,40 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	}
 
 	dEnv.RepoState.RemoveRemote(remote)
+	err = dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return ErrFailedToWriteRepoState
+	}
+
+	return nil
+}
+
+
+func (dEnv *DoltEnv) RemoveBackup(ctx context.Context, name string) error {
+	backup, ok := dEnv.RepoState.Backups[name]
+	if !ok {
+		return ErrBackupNotFound
+	}
+
+	ddb := dEnv.DoltDB
+	refs, err := ddb.GetRemoteRefs(ctx)
+	if err != nil {
+		return ErrFailedToReadFromDb
+	}
+
+	for _, r := range refs {
+		rr := r.(ref.RemoteRef)
+
+		if rr.GetRemote() == backup.Name {
+			err = ddb.DeleteBranch(ctx, rr)
+
+			if err != nil {
+				return fmt.Errorf("%w; failed to delete backup tracking ref '%s'; %s", ErrFailedToDeleteBackup, rr.String(), err.Error())
+			}
+		}
+	}
+
+	dEnv.RepoState.RemoveBackup(backup)
 	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
 		return ErrFailedToWriteRepoState
