@@ -385,10 +385,10 @@ func (sess *Session) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Tr
 // DoltCommit commits the working set and a new dolt commit with the properties given.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (sess *Session) DoltCommit(
-		ctx *sql.Context,
-		dbName string,
-		tx sql.Transaction,
-		props actions.CommitStagedProps,
+	ctx *sql.Context,
+	dbName string,
+	tx sql.Transaction,
+	props actions.CommitStagedProps,
 ) (*doltdb.Commit, error) {
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 		pendingCommit, err := sess.GetPendingCommit(ctx, dbName, props)

@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
@@ -74,10 +74,10 @@ type savepoint struct {
 }
 
 func NewDoltTransaction(
-		startState *doltdb.WorkingSet,
-		workingSet ref.WorkingSetRef,
-		dbData env.DbData,
-		mergeEditOpts editor.Options,
+	startState *doltdb.WorkingSet,
+	workingSet ref.WorkingSetRef,
+	dbData env.DbData,
+	mergeEditOpts editor.Options,
 ) *DoltTransaction {
 	return &DoltTransaction{
 		startState:    startState,
@@ -109,18 +109,18 @@ func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSe
 
 // transactionWrite is the logic to write an updated working set (and optionally a commit) to the database
 type transactionWrite func(ctx *sql.Context,
-	  tx *DoltTransaction, // the transaction being written
-		commit *doltdb.PendingCommit, // optional
-		workingSet *doltdb.WorkingSet, // must be provided
-		hash hash.Hash, // hash of the current working set to be written
+	tx *DoltTransaction, // the transaction being written
+	commit *doltdb.PendingCommit, // optional
+	workingSet *doltdb.WorkingSet, // must be provided
+	hash hash.Hash, // hash of the current working set to be written
 ) (*doltdb.Commit, error)
 
 // doltCommit is a transactionWrite function that updates the working set and commits a pending commit atomically
 func doltCommit(ctx *sql.Context,
-		tx *DoltTransaction,
-		commit *doltdb.PendingCommit,
-		workingSet *doltdb.WorkingSet,
-		hash hash.Hash,
+	tx *DoltTransaction,
+	commit *doltdb.PendingCommit,
+	workingSet *doltdb.WorkingSet,
+	hash hash.Hash,
 ) (*doltdb.Commit, error) {
 	headRef, err := workingSet.Ref().ToHeadRef()
 	if err != nil {
@@ -132,10 +132,10 @@ func doltCommit(ctx *sql.Context,
 
 // txCommit is a transactionWrite function that updates the working set
 func txCommit(ctx *sql.Context,
-		tx *DoltTransaction,
-		_ *doltdb.PendingCommit,
-		workingSet *doltdb.WorkingSet,
-		hash hash.Hash,
+	tx *DoltTransaction,
+	_ *doltdb.PendingCommit,
+	workingSet *doltdb.WorkingSet,
+	hash hash.Hash,
 ) (*doltdb.Commit, error) {
 	return nil, tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
 }
@@ -147,10 +147,10 @@ func (tx *DoltTransaction) DoltCommit(ctx *sql.Context, workingSet *doltdb.Worki
 
 // doCommit commits this transaction with the write function provided. It takes the same params as DoltCommit
 func (tx *DoltTransaction) doCommit(
-		ctx *sql.Context,
-		workingSet *doltdb.WorkingSet,
-		commit *doltdb.PendingCommit,
-		writeFn transactionWrite,
+	ctx *sql.Context,
+	workingSet *doltdb.WorkingSet,
+	commit *doltdb.PendingCommit,
+	writeFn transactionWrite,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
