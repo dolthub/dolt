@@ -20,14 +20,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const (
@@ -224,6 +223,8 @@ func DSessFromSess(sess sql.Session) *Session {
 	return sess.(*Session)
 }
 
+// LookupDbState returns the session state for the database named
+// TODO(zachmu) get rid of bool return param, use a not found error or similar
 func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
 	dbState, ok := sess.dbStates[dbName]
 	if ok {
@@ -356,7 +357,7 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 	}
 
 	if peformDoltCommitInt == 1 {
-		_, err = sess.DoltCommit(ctx, dbName, tx, actions.CommitStagedProps{
+		pendingCommit, err := sess.PendingCommitAllStaged(ctx, dbName, actions.CommitStagedProps{
 			Message:    "Transaction commit",
 			Date:       ctx.QueryTime(),
 			AllowEmpty: false,
@@ -364,6 +365,11 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 			Name:       sess.Username,
 			Email:      sess.Email,
 		})
+		if err != nil {
+			return err
+		}
+
+		_, err = sess.DoltCommit(ctx, dbName, tx, pendingCommit)
 		return err
 	} else {
 		return sess.CommitWorkingSet(ctx, dbName, tx)
@@ -397,14 +403,18 @@ func (sess *Session) DoltCommit(
 	ctx *sql.Context,
 	dbName string,
 	tx sql.Transaction,
-	props actions.CommitStagedProps,
+	commit *doltdb.PendingCommit,
 ) (*doltdb.Commit, error) {
+	// Nothing staged, so defer to CommitWorkingSet logic instead
+	if commit == nil {
+		return nil, sess.CommitWorkingSet(ctx, dbName, tx)
+	}
+
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		pendingCommit, err := sess.GetPendingCommit(ctx, dbName, props)
-		if err != nil {
-			return nil, nil, err
-		}
-		return dtx.DoltCommit(ctx, workingSet, pendingCommit)
+		return dtx.DoltCommit(
+			ctx,
+			workingSet.WithWorkingRoot(commit.Roots.Working).WithStagedRoot(commit.Roots.Staged),
+			commit)
 	}
 
 	return sess.doCommit(ctx, dbName, tx, commitFunc)
@@ -446,15 +456,27 @@ func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transactio
 	return newCommit, nil
 }
 
-// GetPendingCommit returns a pending commit with all tables staged. Pending commit will be nil if nothing is staged.
-func (sess *Session) GetPendingCommit(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+// PendingCommitAllStaged returns a pending commit with all tables staged.
+func (sess *Session) PendingCommitAllStaged(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+	roots, ok := sess.GetRoots(ctx, dbName)
+	if !ok {
+		return nil, fmt.Errorf("Couldn't get info for database %s", dbName)
+	}
+
+	var err error
+	roots, err = actions.StageAllTablesNoDocs(ctx, roots)
 	if err != nil {
 		return nil, err
 	}
-	roots := sessionState.GetRoots()
 
-	roots, err = actions.StageAllTablesNoDocs(ctx, roots)
+	return sess.NewPendingCommit(ctx, dbName, roots, props)
+}
+
+// NewPendingCommit returns a new |doltdb.PendingCommit| for the database named, using the roots given, adding any
+// merge parent from an in progress merge as appropriate. The session working set is not updated with these new roots,
+// but they are set in the returned |doltdb.PendingCommit|. If there are no changes staged, this method returns nil.
+func (sess *Session) NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}

@@ -94,7 +94,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), actions.CommitStagedProps{
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -104,6 +104,16 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Nothing to commit, and we didn't pass --allowEmpty (still updates the working set so we don't treat it as an error)
+	if newCommit == nil {
+		return nil, nil
 	}
 
 	h, err := newCommit.HashOf()

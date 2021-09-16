@@ -25,12 +25,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
+// TODO: we need tests for manual DOLT_COMMIT as well, but that's difficult with the way that functions are resolved
+//  in the engine.
 func TestDoltTransactionCommitOneClient(t *testing.T) {
 	// In this test, we're setting only one client to match transaction commits to dolt commits.
 	// Autocommit is disabled for the enabled client, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
 	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
-		Name: "dolt commit after transaction commit one client",
+		Name: "dolt commit on transaction commit one client",
 		SetUpScript: []string{
 			"CREATE TABLE x (y BIGINT PRIMARY KEY, z BIGINT);",
 			"INSERT INTO x VALUES (1,1);",
@@ -39,6 +41,15 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
 				Expected: []sql.Row{{}},
+			},
+			// start transaction implicitly commits the current transaction, so we have to do so before we turn on dolt commits
+			{
+				Query:    "/* client a */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
@@ -51,14 +62,6 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 			{
 				Query:    "/* client b */ SET @initial_head=@@mydb_head;",
 				Expected: []sql.Row{{}},
-			},
-			{
-				Query:    "/* client a */ START TRANSACTION;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ START TRANSACTION;",
-				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
@@ -131,6 +134,10 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 			{
 				Query:    "/* client b */ SELECT @@mydb_head like @initial_head;",
 				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
 	})
@@ -160,7 +167,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	// Autocommit is disabled, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
 	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
-		Name: "dolt commit after transaction commit two clients",
+		Name: "dolt commit on transaction commit two clients",
 		SetUpScript: []string{
 			"CREATE TABLE x (y BIGINT PRIMARY KEY, z BIGINT);",
 			"INSERT INTO x VALUES (1,1);",
@@ -173,6 +180,15 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			{
 				Query:    "/* client b */ SET @@autocommit=0;",
 				Expected: []sql.Row{{}},
+			},
+			// start transaction implicitly commits the current transaction, so we have to do so before we turn on dolt commits
+			{
+				Query:    "/* client a */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
@@ -189,14 +205,6 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			{
 				Query:    "/* client b */ SET @initial_head=@@mydb_head;",
 				Expected: []sql.Row{{}},
-			},
-			{
-				Query:    "/* client a */ START TRANSACTION;",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ START TRANSACTION;",
-				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
@@ -248,6 +256,10 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ SELECT * FROM x ORDER BY y;",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+			{
+				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
@@ -283,12 +295,13 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	// Not the recommended way to use the feature, but it's permitted.
 	harness := newDoltHarness(t)
 	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
-		Name: "dolt commit after transaction commit autocommit",
+		Name: "dolt commit with autocommit",
 		SetUpScript: []string{
 			"CREATE TABLE x (y BIGINT PRIMARY KEY, z BIGINT);",
 			"INSERT INTO x VALUES (1,1);",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
+			// these SET statements currently commit a transaction (since autocommit is on)
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
 				Expected: []sql.Row{{}},
@@ -313,6 +326,10 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 				Query:    "/* client b */ SELECT * FROM x ORDER BY y;",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 			},
+			{
+				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
 		},
 	})
 	db := harness.databases[0].GetDoltDB()
@@ -320,19 +337,25 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	headRefs, err := db.GetHeadRefs(context.Background())
 	require.NoError(t, err)
-	commit2, err := db.Resolve(context.Background(), cs, headRefs[0])
+	commit3, err := db.Resolve(context.Background(), cs, headRefs[0])
+	require.NoError(t, err)
+	cm3, err := commit3.GetCommitMeta()
+	require.NoError(t, err)
+	require.Contains(t, cm3.Description, "Transaction commit")
+
+	as, err := doltdb.NewAncestorSpec("~1")
+	require.NoError(t, err)
+	commit2, err := commit3.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
 	cm2, err := commit2.GetCommitMeta()
 	require.NoError(t, err)
 	require.Contains(t, cm2.Description, "Transaction commit")
 
-	as, err := doltdb.NewAncestorSpec("~1")
-	require.NoError(t, err)
 	commit1, err := commit2.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
 	cm1, err := commit1.GetCommitMeta()
 	require.NoError(t, err)
-	require.Contains(t, cm1.Description, "Transaction commit")
+	require.Equal(t, "Transaction commit", cm1.Description)
 
 	commit0, err := commit1.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
