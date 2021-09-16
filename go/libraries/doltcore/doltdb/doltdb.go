@@ -1050,8 +1050,6 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return err
 	}
 
-	// logrus.Tracef("Updating working set with root %s", workingSet.RootValue().DebugString(ctx, true))
-
 	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb)
 	if err != nil {
 		return err

@@ -200,7 +200,7 @@ func (tx *DoltTransaction) doCommit(
 			existingWorkingRoot := ws.WorkingRoot()
 			if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
 				// ff merge
-				err = tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, wsHash, tx.getWorkingSetMeta(ctx))
+				err = writeFn(ctx, tx, commit, workingSet, wsHash)
 				if err == datas.ErrOptimisticLockFailed {
 					// this is effectively a `continue` in the loop
 					return nil, nil
