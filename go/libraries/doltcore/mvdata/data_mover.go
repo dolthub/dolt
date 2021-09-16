@@ -263,17 +263,17 @@ func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts D
 }
 
 // NameMapTransform creates a pipeline transform that converts rows from inSch to outSch based on a name mapping.
-func NameMapTransform(ctx context.Context, vrw types.ValueReadWriter, inSch schema.Schema, outSch schema.Schema, mapper rowconv.NameMapper) (*pipeline.TransformCollection, error) {
+func NameMapTransform(ctx context.Context, vrw types.ValueReadWriter, inSch schema.Schema, outSch schema.Schema, mapper rowconv.NameMapper) (*pipeline.TransformCollection, *rowconv.FieldMapping, error) {
 	mapping, err := rowconv.NameMapping(inSch, outSch, mapper)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	rconv, err := rowconv.NewImportRowConverter(ctx, vrw, mapping)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	transforms := pipeline.NewTransformCollection()
@@ -282,7 +282,7 @@ func NameMapTransform(ctx context.Context, vrw types.ValueReadWriter, inSch sche
 		transforms.AppendTransforms(nt)
 	}
 
-	return transforms, nil
+	return transforms, mapping, nil
 }
 
 // SchAndTableNameFromFile reads a SQL schema file and creates a Dolt schema from it.
