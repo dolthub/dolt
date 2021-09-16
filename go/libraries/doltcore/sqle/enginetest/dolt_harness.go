@@ -33,6 +33,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
+const (
+	user  = "test"
+	email = "email@test.com"
+)
+
 type DoltHarness struct {
 	t                    *testing.T
 	env                  *env.DoltEnv
@@ -119,22 +124,25 @@ func (d *DoltHarness) NewContext() *sql.Context {
 		sql.WithSession(d.session))
 }
 
-func (d DoltHarness) NewSession() *sql.Context {
-	pro := sqle.NewDoltDatabaseProvider()
-	session, err := dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, "test", "email@test.com")
+func (d *DoltHarness) NewSession() *sql.Context {
+	states := make([]dsess.InitialDbState, len(d.databases))
+	for i, db := range d.databases {
+		states[i] = getDbState(d.t, db, d.env, d.databaseGlobalStates[i])
+	}
+	dbs := dsqleDBsAsSqlDBs(d.databases)
+	pro := d.NewDatabaseProvider(dbs...)
+
+	var err error
+	d.session, err = dsess.NewSession(
+		enginetest.NewContext(d),
+		enginetest.NewBaseSession(),
+		pro.(dsess.RevisionDatabaseProvider),
+		user, email,
+		states...,
+	)
 	require.NoError(d.t, err)
 
-	ctx := sql.NewContext(
-		context.Background(),
-		sql.WithSession(session))
-
-	for i, db := range d.databases {
-		dbState := getDbState(d.t, db, d.env, d.databaseGlobalStates[i])
-		err := session.AddDB(ctx, dbState)
-		require.NoError(d.t, err)
-	}
-
-	return ctx
+	return d.NewContext()
 }
 
 func (d *DoltHarness) SupportsNativeIndexCreation() bool {
@@ -157,30 +165,24 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	dEnv := dtestutils.CreateTestEnv()
 	d.env = dEnv
 
-	// TODO: it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
-	//  have a database that only ever receives read queries, and then you re-use its session for a new database with
-	//  the same name, the first write query will panic on dangling references in the noms layer. Not sure why this is
-	//  happening, but it only happens as a result of this test setup.
-	var err error
-	pro := sqle.NewDoltDatabaseProvider()
-	d.session, err = dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, "test", "email@test.com")
-	require.NoError(d.t, err)
-
-	var dbs []sql.Database
 	d.databases = nil
 	d.databaseGlobalStates = nil
 	for _, name := range names {
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 		db := sqle.NewDatabase(name, dEnv.DbData(), opts)
-		globalState := globalstate.NewGlobalStateStore()
-		dbState := getDbState(d.t, db, dEnv, globalState)
-		require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), dbState))
-		dbs = append(dbs, db)
 		d.databases = append(d.databases, db)
+
+		globalState := globalstate.NewGlobalStateStore()
 		d.databaseGlobalStates = append(d.databaseGlobalStates, globalState)
 	}
 
-	return dbs
+	// TODO(zachmu): it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
+	//  have a database that only ever receives read queries, and then you re-use its session for a new database with
+	//  the same name, the first write query will panic on dangling references in the noms layer. Not sure why this is
+	//  happening, but it only happens as a result of this test setup.
+	_ = d.NewSession()
+
+	return dsqleDBsAsSqlDBs(d.databases)
 }
 
 func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyDatabase) {
@@ -188,6 +190,10 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 		dbs = append(dbs, sqle.ReadOnlyDatabase{Database: db.(sqle.Database)})
 	}
 	return
+}
+
+func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
+	return sqle.NewDoltDatabaseProvider(dbs...)
 }
 
 func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState globalstate.GlobalState) dsess.InitialDbState {
@@ -287,4 +293,12 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	require.NoError(d.t, err)
 
 	return nil
+}
+
+func dsqleDBsAsSqlDBs(dbs []sqle.Database) []sql.Database {
+	sqlDbs := make([]sql.Database, 0, len(dbs))
+	for _, db := range dbs {
+		sqlDbs = append(sqlDbs, db)
+	}
+	return sqlDbs
 }

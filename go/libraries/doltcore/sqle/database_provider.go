@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 const (
@@ -40,7 +41,7 @@ var _ sql.DatabaseProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
 var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
-func NewDoltDatabaseProvider(databases ...Database) DoltDatabaseProvider {
+func NewDoltDatabaseProvider(databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
@@ -95,18 +96,32 @@ func (p DoltDatabaseProvider) AllDatabases() (all []sql.Database) {
 	return
 }
 
-func (p DoltDatabaseProvider) AddDatabase(db sql.Database) {
+func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	mem, err := env.NewMemoryDbData(ctx)
+	if err != nil {
+		return err
+	}
+	opts := editor.Options{
+		Deaf: editor.NewDbEaFactory(
+			mem.Rsw.TempTableFilesDir(),
+			mem.Ddb.ValueReadWriter()),
+	}
+
+	db := NewDatabase(name, mem, opts)
 	p.databases[strings.ToLower(db.Name())] = db
+
+	return nil
 }
 
-func (p DoltDatabaseProvider) DropDatabase(name string) {
+func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	delete(p.databases, strings.ToLower(name))
+	return nil
 }
 
 func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {

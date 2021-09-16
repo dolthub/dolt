@@ -236,9 +236,9 @@ func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSe
 	}
 
 	// TODO: this could potentially add a |sess.dbStates| entry
-	// for every commit in the history, leaking memory.
-	// We need a size-limited data structure for read-only
-	// revision databases reading from Commits.
+	// 	for every commit in the history, leaking memory.
+	// 	We need a size-limited data structure for read-only
+	// 	revision databases reading from Commits.
 	if err = sess.AddDB(ctx, init); err != nil {
 		return nil, ok, err
 	}
@@ -1027,6 +1027,12 @@ func (sess *Session) setHeadSessionVar(ctx *sql.Context, value interface{}, dbNa
 // the working and head session variable may be updated at different times.
 func (sess *Session) SetSessionVarDirectly(ctx *sql.Context, key string, value interface{}) error {
 	return sess.Session.SetSessionVariable(ctx, key, value)
+}
+
+// HasDB returns true if |sess| is tracking state for this database.
+func (sess *Session) HasDB(ctx *sql.Context, dbName string) bool {
+	_, ok, err := sess.LookupDbState(ctx, dbName)
+	return ok && err == nil
 }
 
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as

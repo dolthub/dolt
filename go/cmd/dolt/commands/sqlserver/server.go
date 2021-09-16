@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -33,7 +32,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -128,9 +126,9 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 
 	dbs := commands.CollectDBs(mrEnv)
-	pro := dsqle.NewDoltDatabaseProvider(dbs...)
-	cat := sql.NewCatalogWithDbProvider(pro)
-	cat.AddDatabase(information_schema.NewInformationSchemaDatabase(cat))
+	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
+	pro := dsqle.NewDoltDatabaseProvider(all...)
+	cat := sql.NewCatalog(pro)
 
 	a := analyzer.NewBuilder(cat).WithParallelism(serverConfig.QueryParallelism()).Build()
 	sqlEngine := sqle.New(cat, a, nil)
@@ -203,7 +201,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username string, email string, pr
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
 		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
 		doltDbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
-		dbStates, err := getDbStates(ctx, mrEnv, doltDbs, pro)
+		dbStates, err := getDbStates(ctx, doltDbs)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -260,112 +258,62 @@ func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	return dsqlDBs
 }
 
-func getDbStates(ctx context.Context, mrEnv env.MultiRepoEnv, dbs []dsqle.Database, pro dsess.RevisionDatabaseProvider) ([]dsess.InitialDbState, error) {
-	var dbStates []dsess.InitialDbState
-
-	for _, db := range dbs {
-		var dEnv *env.DoltEnv
-		_ = mrEnv.Iter(func(name string, de *env.DoltEnv) (stop bool, err error) {
-			if name == db.Name() {
-				dEnv = de
-				return true, nil
-			}
-			return false, nil
-		})
-
-		var dbState *dsess.InitialDbState
+func getDbStates(ctx context.Context, dbs []dsqle.Database) ([]dsess.InitialDbState, error) {
+	dbStates := make([]dsess.InitialDbState, len(dbs))
+	for i, db := range dbs {
+		var init dsess.InitialDbState
 		var err error
-		if dEnv == nil {
-			init, err := pro.RevisionDbState(ctx, db.Name())
-			if err != nil {
-				return nil, err
-			}
-			dbState = &init
-		} else if _, val, ok := sql.SystemVariables.GetGlobal(DoltDefaultBranchKey); ok && val != "" {
-			dbState, err = getDbStateForDefaultBranch(ctx, val, db, dEnv)
-			if err != nil {
-				return nil, err
-			}
+
+		_, val, ok := sql.SystemVariables.GetGlobal(DoltDefaultBranchKey)
+		if ok && val != "" {
+			init, err = GetInitialDBStateWithDefaultBranch(ctx, db, val.(string))
 		} else {
-			dbState, err = getDbStateForDEnv(ctx, db, dEnv)
-			if err != nil {
-				return nil, err
-			}
+			init, err = dsqle.GetInitialDBState(ctx, db)
+		}
+		if err != nil {
+			return nil, err
 		}
 
-		if dbState == nil {
-			return nil, errors.New("unexpected error initializing dbState")
-		}
-		dbStates = append(dbStates, *dbState)
+		dbStates[i] = init
 	}
 
 	return dbStates, nil
 }
 
-func getDbStateForDefaultBranch(ctx context.Context, branch interface{}, db sql.Database, dEnv *env.DoltEnv) (*dsess.InitialDbState, error) {
-	branchRef, ok := branch.(string)
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("invalid type for @@GLOBAL.dolt_default_branch. got: %s, want: string", branch))
-	}
-
-	if !ref.IsRef(branchRef) {
-		branchRef = fmt.Sprintf("refs/heads/%s", branchRef)
-		if !ref.IsRef(branchRef) {
-			return nil, errors.New("@@GLOBAL.dolt_default_branch set as invalid ref")
-		}
-	}
-
-	headRef, err := ref.Parse(branchRef)
+func GetInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.Database, branch string) (dsess.InitialDbState, error) {
+	init, err := dsqle.GetInitialDBState(ctx, db)
 	if err != nil {
-		return nil, err
+		return dsess.InitialDbState{}, err
 	}
 
-	head, _ := doltdb.NewCommitSpec("HEAD")
+	ddb := init.DbData.Ddb
+	r := ref.NewBranchRef(branch)
 
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, headRef)
+	head, err := ddb.ResolveCommitRef(ctx, r)
 	if err != nil {
-		return nil, err
+		err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
+		return dsess.InitialDbState{}, err
 	}
+	init.HeadCommit = head
 
-	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
+	workingSetRef, err := ref.WorkingSetRefForHead(r)
 	if err != nil {
-		return nil, err
+		return dsess.InitialDbState{}, err
 	}
 
-	ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
+	ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
 	if err != nil {
-		return nil, err
+		return dsess.InitialDbState{}, err
 	}
+	init.WorkingSet = ws
 
-	return &dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		Remotes:    dEnv.RepoState.Remotes,
-		Branches:   dEnv.RepoState.Branches,
-	}, nil
+	return init, nil
 }
 
-func getDbStateForDEnv(ctx context.Context, db sql.Database, dEnv *env.DoltEnv) (*dsess.InitialDbState, error) {
-	head, _ := doltdb.NewCommitSpec("HEAD")
-
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-	if err != nil {
-		return nil, err
+func dsqleDBsAsSqlDBs(dbs []dsqle.Database) []sql.Database {
+	sqlDbs := make([]sql.Database, 0, len(dbs))
+	for _, db := range dbs {
+		sqlDbs = append(sqlDbs, db)
 	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		Remotes:    dEnv.RepoState.Remotes,
-		Branches:   dEnv.RepoState.Branches,
-	}, nil
+	return sqlDbs
 }
