@@ -373,12 +373,21 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (sess *Session) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
+	dbState, _, err := sess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	if !dbState.dirty {
+		return nil
+	}
+
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 		ws, err := dtx.Commit(ctx, workingSet)
 		return ws, nil, err
 	}
 
-	_, err := sess.doCommit(ctx, dbName, tx, commitFunc)
+	_, err = sess.doCommit(ctx, dbName, tx, commitFunc)
 	return err
 }
 
@@ -401,6 +410,10 @@ func (sess *Session) DoltCommit(
 	return sess.doCommit(ctx, dbName, tx, commitFunc)
 }
 
+// doCommitFunc is a function to write to the database, which involves updating the working set and potentially
+// updating HEAD with a new commit
+type doCommitFunc func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error)
+
 // doCommit exercise the business logic for a particular doCommitFunc
 func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transaction, commitFunc doCommitFunc) (*doltdb.Commit, error) {
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
@@ -410,10 +423,6 @@ func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transactio
 		// It's possible that we don't have dbstate if the user has created an in-Memory database. Moreover,
 		// the analyzer will check for us whether a db exists or not.
 		// TODO: fix this
-		return nil, nil
-	}
-
-	if !dbState.dirty {
 		return nil, nil
 	}
 
@@ -436,8 +445,6 @@ func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transactio
 	dbState.dirty = false
 	return newCommit, nil
 }
-
-type doCommitFunc func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error)
 
 // GetPendingCommit returns a pending commit with all tables staged. Pending commit will be nil if nothing is staged.
 func (sess *Session) GetPendingCommit(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
