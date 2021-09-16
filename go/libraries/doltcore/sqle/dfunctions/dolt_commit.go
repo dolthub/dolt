@@ -97,8 +97,8 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
-		AllowEmpty: false,
-		Force:      false,
+		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
+		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
 	})
