@@ -188,6 +188,7 @@ type InitialDbState struct {
 	WorkingSet   *doltdb.WorkingSet
 	DbData       env.DbData
 	Remotes      map[string]env.Remote
+	Branches     map[string]env.BranchConfig
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -235,9 +236,9 @@ func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSe
 	}
 
 	// TODO: this could potentially add a |sess.dbStates| entry
-	// for every commit in the history, leaking memory.
-	// We need a size-limited data structure for read-only
-	// revision databases reading from Commits.
+	// 	for every commit in the history, leaking memory.
+	// 	We need a size-limited data structure for read-only
+	// 	revision databases reading from Commits.
 	if err = sess.AddDB(ctx, init); err != nil {
 		return nil, ok, err
 	}
@@ -1028,6 +1029,12 @@ func (sess *Session) SetSessionVarDirectly(ctx *sql.Context, key string, value i
 	return sess.Session.SetSessionVariable(ctx, key, value)
 }
 
+// HasDB returns true if |sess| is tracking state for this database.
+func (sess *Session) HasDB(ctx *sql.Context, dbName string) bool {
+	_, ok, err := sess.LookupDbState(ctx, dbName)
+	return ok && err == nil
+}
+
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
@@ -1040,7 +1047,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
-	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes)
+	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
 	sessionState.readOnly, sessionState.detachedHead = dbState.ReadOnly, dbState.DetachedHead

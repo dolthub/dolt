@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -58,7 +59,7 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
 	fs.WriteFile(testSchemaFileName, []byte(testSchema))
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys.LocalFS)
-	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
+	ddb.WriteEmptyRepo(context.Background(), "master", "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := doltdb.NewCommitSpec("master")
 	commit, _ := ddb.Resolve(context.Background(), cs, nil)
@@ -199,7 +200,8 @@ func TestCreateRdWr(t *testing.T) {
 
 		loc := test.dl
 
-		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil, opts)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer.", err)

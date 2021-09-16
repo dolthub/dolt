@@ -187,3 +187,25 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Aborting commit due to empty committer email. Is your config set" ]] || false
 }
+
+@test "config: Set default init branch" {
+    dolt config --global --add user.name "bats tester"
+    dolt config --global --add user.email "joshn@doe.com"
+
+    dolt config --global --add init.defaultBranch "main"
+    dolt config --list
+    run dolt config --list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "init.defaultbranch = main" ]]
+
+    dolt init
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]]
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* main" ]]
+
+    # cleanup
+    dolt config --global --unset init.defaultBranch
+}

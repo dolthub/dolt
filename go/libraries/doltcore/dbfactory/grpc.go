@@ -16,6 +16,7 @@ package dbfactory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -30,6 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var GRPCDialProviderParam = "__DOLT__grpc_dial_provider"
+
 // GRPCDialProvider is an interface for getting a *grpc.ClientConn.
 type GRPCDialProvider interface {
 	GetGRPCDialParams(grpcendpoint.Config) (string, []grpc.DialOption, error)
@@ -38,21 +41,29 @@ type GRPCDialProvider interface {
 // DoldRemoteFactory is a DBFactory implementation for creating databases backed by a remote server that implements the
 // GRPC rpcs defined by remoteapis.ChunkStoreServiceClient
 type DoltRemoteFactory struct {
-	dp       GRPCDialProvider
 	insecure bool
 }
 
 // NewDoltRemoteFactory creates a DoltRemoteFactory instance using the given GRPCConnectionProvider, and insecure setting
-func NewDoltRemoteFactory(dp GRPCDialProvider, insecure bool) DoltRemoteFactory {
-	return DoltRemoteFactory{dp, insecure}
+func NewDoltRemoteFactory(insecure bool) DoltRemoteFactory {
+	return DoltRemoteFactory{insecure}
 }
 
 // CreateDB creates a database backed by a remote server that implements the GRPC rpcs defined by
 // remoteapis.ChunkStoreServiceClient
-func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error) {
 	var db datas.Database
 
-	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params)
+	dpi, ok := params[GRPCDialProviderParam]
+	if dpi == nil || !ok {
+		return nil, errors.New("DoltRemoteFactory.CreateDB must provide a GRPCDialProvider param through GRPCDialProviderParam")
+	}
+	dp, ok := dpi.(GRPCDialProvider)
+	if !ok {
+		return nil, errors.New("DoltRemoteFactory.CreateDB must provide a GRPCDialProvider param through GRPCDialProviderParam")
+	}
+
+	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params, dp)
 
 	if err != nil {
 		return nil, err
@@ -65,8 +76,8 @@ func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFo
 
 var NoCachingParameter = "__dolt__NO_CACHING"
 
-func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {
-	endpoint, opts, err := fact.dp.GetGRPCDialParams(grpcendpoint.Config{
+func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}, dp GRPCDialProvider) (chunks.ChunkStore, error) {
+	endpoint, opts, err := dp.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint:     urlObj.Host,
 		Insecure:     fact.insecure,
 		WithEnvCreds: true,

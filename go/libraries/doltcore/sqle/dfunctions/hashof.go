@@ -77,7 +77,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return nil, err
 		}
 	} else {
-		branchRef, err := getBranchInsensitive(ctx, name, ddb)
+		branchRef, err := getRefInsensitive(ctx, name, ddb)
 		if err != nil {
 			return nil, err
 		}
@@ -101,20 +101,52 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return h.String(), nil
 }
 
-func getBranchInsensitive(ctx context.Context, branchName string, ddb *doltdb.DoltDB) (br ref.DoltRef, err error) {
+func getBranchInsensitive(ctx context.Context, branchName string, ddb *doltdb.DoltDB) (ref.DoltRef, error) {
 	branchRefs, err := ddb.GetBranches(ctx)
-
 	if err != nil {
-		return br, err
+		return nil, err
 	}
-
 	for _, branchRef := range branchRefs {
 		if strings.ToLower(branchRef.GetPath()) == strings.ToLower(branchName) {
 			return branchRef, nil
 		}
 	}
 
-	return br, doltdb.ErrBranchNotFound
+	return nil, ref.ErrInvalidRefSpec
+}
+
+func getRefInsensitive(ctx context.Context, refName string, ddb *doltdb.DoltDB) (ref.DoltRef, error) {
+	branchRefs, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, branchRef := range branchRefs {
+		if strings.ToLower(branchRef.GetPath()) == strings.ToLower(refName) {
+			return branchRef, nil
+		}
+	}
+
+	headRefs, err := ddb.GetHeadRefs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, headRef := range headRefs {
+		if strings.ToLower(headRef.GetPath()) == strings.ToLower(refName) {
+			return headRef, nil
+		}
+	}
+
+	tagRefs, err := ddb.GetTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, tagRef := range tagRefs {
+		if strings.ToLower(tagRef.GetPath()) == strings.ToLower(refName) {
+			return tagRef, nil
+		}
+	}
+
+	return nil, ref.ErrInvalidRefSpec
 }
 
 // String implements the Stringer interface.

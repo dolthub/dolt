@@ -113,6 +113,13 @@ func CreateMergeArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreatePushArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
+	ap.SupportsFlag(ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
+	return ap
+}
+
 func CreateAddArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
@@ -133,11 +140,26 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateFetchArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(ForceFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
+	return ap
+}
+
 func CreateRevertArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"revision",
 		"The commit revisions. If multiple revisions are given, they're applied in the order given."})
+
+	return ap
+}
+
+func CreatePullArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(SquashParam, "", "Merges changes to the working set without updating the commit history")
+	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
 
 	return ap
 }

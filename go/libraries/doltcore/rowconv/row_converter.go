@@ -153,6 +153,10 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 				return false, err
 			}
 
+			if types.IsNull(outVal) {
+				return false, nil
+			}
+
 			outTaggedVals[outTag] = outVal
 		}
 

@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var catDocs = cli.CommandDocumentationContent{
@@ -165,8 +164,7 @@ func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []stri
 
 			defer cnfRd.Close()
 
-			vrw := types.NewMemoryValueStore() // Some types require a vrw but we're just displaying, so we use an internal store
-			splitter, err := merge.NewConflictSplitter(ctx, vrw, cnfRd.GetJoiner())
+			splitter, err := merge.NewConflictSplitter(ctx, tbl.ValueReadWriter(), cnfRd.GetJoiner())
 
 			if err != nil {
 				return errhand.BuildDError("error: unable to handle schemas").AddCause(err).Build()

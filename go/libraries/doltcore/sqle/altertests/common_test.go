@@ -48,6 +48,7 @@ func RunModifyTypeTests(t *testing.T, tests []ModifyTypeTest) {
 			name = name[:200]
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
 			root, err := dEnv.WorkingRoot(ctx)

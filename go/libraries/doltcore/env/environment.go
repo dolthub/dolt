@@ -36,18 +36,24 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
-	DefaultLoginUrl       = "https://dolthub.com/settings/credentials"
-	DefaultMetricsHost    = "eventsapi.dolthub.com"
-	DefaultMetricsPort    = "443"
+	defaultInitBranch = "master"
+
+	DefaultLoginUrl = "https://dolthub.com/settings/credentials"
+
+	DefaultMetricsHost = "eventsapi.dolthub.com"
+	DefaultMetricsPort = "443"
+
 	DefaultRemotesApiHost = "doltremoteapi.dolthub.com"
 	DefaultRemotesApiPort = "443"
-	tempTablesDir         = "temptf"
+
+	tempTablesDir = "temptf"
 )
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -107,6 +113,14 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 		urlStr:      urlStr,
 		hdp:         hdp,
 	}
+	if dEnv.RepoState != nil {
+		remotes := make(map[string]Remote, len(dEnv.RepoState.Remotes))
+		for n, r := range dEnv.RepoState.Remotes {
+			r.dialer = dEnv
+			remotes[n] = r
+		}
+		dEnv.RepoState.Remotes = remotes
+	}
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
 		if !dEnv.HasDoltTempTableDir() {
@@ -131,8 +145,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 		}
 	}
 
-	dbfactory.InitializeFactories(dEnv)
-
 	if rsErr == nil && dbLoadErr == nil {
 		// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
 		_, err := dEnv.WorkingSet(ctx)
@@ -147,6 +159,11 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 	}
 
 	return dEnv
+}
+
+func GetDefaultInitBranch(cfg config.ReadableConfig) string {
+	s := GetStringOrDefault(cfg, InitBranchName, defaultInitBranch)
+	return *s
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
@@ -391,12 +408,11 @@ func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinF
 func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error {
 	var err error
 	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
-
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, name, email, t)
+	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, GetDefaultInitBranch(dEnv.Config), name, email, t)
 	if err != nil {
 		return doltdb.ErrNomsIO
 	}
@@ -406,8 +422,8 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 
 // InitializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
 func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
-	cs, _ := doltdb.NewCommitSpec(doltdb.MasterBranch)
-	commit, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	branchName := GetDefaultInitBranch(dEnv.Config)
+	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
 	}
@@ -417,7 +433,7 @@ func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
 		return err
 	}
 
-	dEnv.RepoState, err = CreateRepoState(dEnv.FS, doltdb.MasterBranch)
+	dEnv.RepoState, err = CreateRepoState(dEnv.FS, branchName)
 	if err != nil {
 		return ErrStateUpdate
 	}
@@ -488,12 +504,16 @@ func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
 }
 
 func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
-	workingSetRef, err := ref.WorkingSetRefForHead(dEnv.RepoState.CWBHeadRef())
+	return WorkingSet(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
+}
+
+func WorkingSet(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.WorkingSet, error) {
+	workingSetRef, err := ref.WorkingSetRefForHead(rsr.CWBHeadRef())
 	if err != nil {
 		return nil, err
 	}
 
-	workingSet, err := dEnv.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
+	workingSet, err := ddb.ResolveWorkingSet(ctx, workingSetRef)
 	if err != nil {
 		return nil, err
 	}
@@ -544,19 +564,15 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 }
 
 type repoStateReader struct {
-	dEnv *DoltEnv
+	*DoltEnv
 }
 
 func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
-	return r.dEnv.RepoState.CWBHeadRef()
+	return r.RepoState.CWBHeadRef()
 }
 
 func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
-	return r.dEnv.RepoState.CWBHeadSpec()
-}
-
-func (r *repoStateReader) GetRemotes() (map[string]Remote, error) {
-	return r.dEnv.GetRemotes()
+	return r.RepoState.CWBHeadSpec()
 }
 
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
@@ -694,11 +710,15 @@ func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
 }
 
 func (dEnv *DoltEnv) workingSetMeta() *doltdb.WorkingSetMeta {
+	return dEnv.NewWorkingSetMeta("updated from dolt environment")
+}
+
+func (dEnv *DoltEnv) NewWorkingSetMeta(message string) *doltdb.WorkingSetMeta {
 	return &doltdb.WorkingSetMeta{
 		User:        *dEnv.Config.GetStringOrDefault(UserNameKey, ""),
 		Email:       *dEnv.Config.GetStringOrDefault(UserEmailKey, ""),
 		Timestamp:   uint64(time.Now().Unix()),
-		Description: "updated from dolt environment",
+		Description: message,
 	}
 }
 
@@ -861,7 +881,7 @@ func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, par
 		return fmt.Errorf("%w; %s", ErrInvalidRemoteURL, err.Error())
 	}
 
-	r := Remote{name, absRemoteUrl, fetchSpecs, params}
+	r := Remote{name, absRemoteUrl, fetchSpecs, params, dEnv}
 	dEnv.RepoState.AddRemote(r)
 	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
@@ -900,6 +920,23 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 		return ErrFailedToWriteRepoState
 	}
 
+	return nil
+}
+
+func (dEnv *DoltEnv) GetBranches() (map[string]BranchConfig, error) {
+	if dEnv.RSLoadErr != nil {
+		return nil, dEnv.RSLoadErr
+	}
+
+	return dEnv.RepoState.Branches, nil
+}
+
+func (dEnv *DoltEnv) UpdateBranch(name string, new BranchConfig) error {
+	if dEnv.RSLoadErr != nil {
+		return dEnv.RSLoadErr
+	}
+
+	dEnv.RepoState.Branches[name] = new
 	return nil
 }
 
@@ -965,13 +1002,17 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 
 // GetRefSpecs takes an optional remoteName and returns all refspecs associated with that remote.  If "" is passed as
 // the remoteName then the default remote is used.
-func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, error) {
+func GetRefSpecs(rsr RepoStateReader, remoteName string) ([]ref.RemoteRefSpec, error) {
 	var remote Remote
 	var err error
 
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
 	if remoteName == "" {
-		remote, err = dEnv.GetDefaultRemote()
-	} else if r, ok := dEnv.RepoState.Remotes[remoteName]; ok {
+		remote, err = GetDefaultRemote(rsr)
+	} else if r, ok := remotes[remoteName]; ok {
 		remote = r
 	} else {
 		err = ErrUnknownRemote
@@ -1008,8 +1049,11 @@ var ErrCantDetermineDefault = errors.New("unable to determine the default remote
 
 // GetDefaultRemote gets the default remote for the environment.  Not fully implemented yet.  Needs to support multiple
 // repos and a configurable default.
-func (dEnv *DoltEnv) GetDefaultRemote() (Remote, error) {
-	remotes := dEnv.RepoState.Remotes
+func GetDefaultRemote(rsr RepoStateReader) (Remote, error) {
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return NoRemote, err
+	}
 
 	if len(remotes) == 0 {
 		return NoRemote, ErrNoRemote
@@ -1019,7 +1063,7 @@ func (dEnv *DoltEnv) GetDefaultRemote() (Remote, error) {
 		}
 	}
 
-	if remote, ok := dEnv.RepoState.Remotes["origin"]; ok {
+	if remote, ok := remotes["origin"]; ok {
 		return remote, nil
 	}
 

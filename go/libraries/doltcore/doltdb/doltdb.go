@@ -38,8 +38,8 @@ func init() {
 }
 
 const (
-	creationBranch   = "create"
-	MasterBranch     = "master"
+	creationBranch = "create"
+
 	CommitStructName = "Commit"
 
 	defaultChunksPerTF = 256 * 1024
@@ -75,7 +75,7 @@ func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs
 	return LoadDoltDBWithParams(ctx, nbf, urlStr, fs, nil)
 }
 
-func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]string) (*DoltDB, error) {
+func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (*DoltDB, error) {
 	if urlStr == LocalDirDoltDB {
 		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
 
@@ -108,11 +108,20 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
-func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error {
-	return ddb.WriteEmptyRepoWithCommitTime(ctx, name, email, CommitNowFunc())
+func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
+	return ddb.WriteEmptyRepoWithCommitTime(ctx, initBranch, name, email, CommitNowFunc())
 }
 
-func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email string, t time.Time) error {
+func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, initBranch, name, email string, t time.Time) error {
+	return ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, name, email, t, ref.NewBranchRef(initBranch))
+}
+
+func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
+	ctx context.Context,
+	name, email string,
+	t time.Time,
+	init ref.BranchRef,
+) error {
 	// precondition checks
 	name = strings.TrimSpace(name)
 	email = strings.TrimSpace(email)
@@ -158,8 +167,8 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 
 	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: meta, Policy: nil}
 
-	dref := ref.NewInternalRef(creationBranch)
-	ds, err = ddb.db.GetDataset(ctx, dref.String())
+	cb := ref.NewInternalRef(creationBranch)
+	ds, err = ddb.db.GetDataset(ctx, cb.String())
 
 	if err != nil {
 		return err
@@ -171,8 +180,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 		return err
 	}
 
-	dref = ref.NewBranchRef(MasterBranch)
-	ds, err = ddb.db.GetDataset(ctx, dref.String())
+	ds, err = ddb.db.GetDataset(ctx, init.String())
 
 	if err != nil {
 		return err
@@ -566,7 +574,6 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 }
 
 func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
-	var commitSt types.Struct
 	val, err := ddb.db.ReadValue(ctx, valHash)
 
 	if err != nil {
@@ -636,8 +643,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, err
 	}
 
-	var ok bool
-	commitSt, ok = ds.MaybeHead()
+	commitSt, ok := ds.MaybeHead()
 	if !ok {
 		return nil, errors.New("commit has no head but commit succeeded (How?!?!?)")
 	}
@@ -891,7 +897,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	}
 
 	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, nil)
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta())
 }
 
 // CopyWorkingSet copies a WorkingSetRef from one ref to another. If `force` is
@@ -922,7 +928,7 @@ func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetR
 		}
 	}
 
-	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, nil)
+	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta())
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
@@ -1016,18 +1022,9 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
-	// While we still have places that need user info threaded through, we're lenient on providing the meta
-	var metaSt types.Struct
-	if meta != nil {
-		metaSt, err = meta.toNomsStruct(types.Format_Default)
-		if err != nil {
-			return err
-		}
-	} else {
-		metaSt, err = datas.NewWorkingSetMeta(types.Format_Default, "incomplete", "incomplete", uint64(time.Now().Unix()), "incomplete")
-		if err != nil {
-			return err
-		}
+	metaSt, err := meta.toNomsStruct(types.Format_Default)
+	if err != nil {
+		return err
 	}
 
 	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
@@ -1036,6 +1033,50 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,
 	}, prevHash)
+
+	return err
+}
+
+// CommitWithWorkingSet combines the functionality of CommitWithParents with UpdateWorking set, and takes a combination
+// of their parameters. It's a way to update the working set and current HEAD in the same atomic transaction. It commits
+// to disk a pending commit value previously created with NewPendingCommit, asserting that the working set hash given
+// is still current for that HEAD.
+func (ddb *DoltDB) CommitWithWorkingSet(
+	ctx context.Context,
+	headRef ref.DoltRef, workingSetRef ref.WorkingSetRef,
+	commit *PendingCommit, workingSet *WorkingSet,
+	prevHash hash.Hash,
+	meta *WorkingSetMeta,
+) error {
+	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
+	if err != nil {
+		return err
+	}
+
+	headDs, err := ddb.db.GetDataset(ctx, headRef.String())
+	if err != nil {
+		return err
+	}
+
+	// logrus.Tracef("Updating working set with root %s", workingSet.RootValue().DebugString(ctx, true))
+
+	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb)
+	if err != nil {
+		return err
+	}
+
+	var metaSt types.Struct
+	metaSt, err = meta.toNomsStruct(ddb.db.Format())
+	if err != nil {
+		return err
+	}
+
+	_, _, err = ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{
+		Meta:        datas.WorkingSetMeta{Meta: metaSt},
+		WorkingRoot: workingRootRef,
+		StagedRoot:  stagedRef,
+		MergeState:  mergeStateRef,
+	}, prevHash, commit.CommitOptions)
 
 	return err
 }

@@ -17,20 +17,24 @@ package dsess
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // SessionStateAdapter is an adapter for env.RepoStateReader in SQL contexts, getting information about the repo state
 // from the session.
 type SessionStateAdapter struct {
-	session *Session
-	dbName  string
-	remotes map[string]env.Remote
+	session  *Session
+	dbName   string
+	remotes  map[string]env.Remote
+	branches map[string]env.BranchConfig
 }
 
 func (s SessionStateAdapter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
@@ -73,8 +77,11 @@ var _ env.RepoStateReader = SessionStateAdapter{}
 var _ env.RepoStateWriter = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
-func NewSessionStateAdapter(session *Session, dbName string, remotes map[string]env.Remote) SessionStateAdapter {
-	return SessionStateAdapter{session: session, dbName: dbName, remotes: remotes}
+func NewSessionStateAdapter(session *Session, dbName string, remotes map[string]env.Remote, branches map[string]env.BranchConfig) SessionStateAdapter {
+	if branches == nil {
+		branches = make(map[string]env.BranchConfig)
+	}
+	return SessionStateAdapter{session: session, dbName: dbName, remotes: remotes, branches: branches}
 }
 
 func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
@@ -117,10 +124,32 @@ func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
 	return s.remotes, nil
 }
 
+func (s SessionStateAdapter) GetBranches() (map[string]env.BranchConfig, error) {
+	return s.branches, nil
+}
+
+func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) error {
+	s.branches[name] = new
+	return nil
+}
+
 func (s SessionStateAdapter) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
 	return fmt.Errorf("cannot insert remote in an SQL session")
 }
 
 func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) error {
 	return fmt.Errorf("cannot delete remote in an SQL session")
+}
+
+func (s SessionStateAdapter) TempTableFilesDir() string {
+	//todo: save tempfile in dbState on server startup?
+	return mustAbs(dbfactory.DoltDir, "temptf")
+}
+
+func mustAbs(path ...string) string {
+	absPath, err := filesys.LocalFS.Abs(filepath.Join(path...))
+	if err != nil {
+		panic(err)
+	}
+	return absPath
 }

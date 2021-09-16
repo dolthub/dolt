@@ -48,6 +48,7 @@ type RefSpec interface {
 type RemoteRefSpec interface {
 	RefSpec
 	GetRemote() string
+	GetRemRefToLocal() branchMapper
 }
 
 // ParseRefSpec parses a RefSpec from a string.
@@ -250,7 +251,7 @@ func newLocalToRemoteTrackingRef(remote string, srcRef BranchRef, destRef Remote
 	}
 }
 
-// SrcRef will return the current working branchh reference that is passed in as long as the cwbRef matches
+// SrcRef will return the current working branch reference that is passed in as long as the cwbRef matches
 // the source portion of the ref spec
 func (rs BranchToTrackingBranchRefSpec) SrcRef(cwbRef DoltRef) DoltRef {
 	if cwbRef.GetType() == BranchRefType {

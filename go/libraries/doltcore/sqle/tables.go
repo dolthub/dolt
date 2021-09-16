@@ -1328,7 +1328,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
-	err = foreignKey.ValidateData(ctx, t.sch, tableData, tableIndexData, refTableIndexData, tableIndex, refTableIndex)
+	err = foreignKey.ValidateData(ctx, t.sch, tableData, tableIndexData, refTableIndexData, tableIndex, refTableIndex, table.ValueReadWriter())
 	if err != nil {
 		return err
 	}

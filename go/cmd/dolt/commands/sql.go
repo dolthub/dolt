@@ -19,15 +19,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
-	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -120,6 +121,13 @@ func init() {
 type SqlCmd struct {
 	VersionStr string
 }
+
+// The SQL shell installs its own signal handlers so that you can cancel a running query without and still run a new one.
+func (cmd SqlCmd) InstallsSignalHandlers() bool {
+	return true
+}
+
+var _ cli.SignalCommand = SqlCmd{}
 
 // Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd SqlCmd) Name() string {
@@ -368,12 +376,12 @@ func execShell(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, sqlCtx, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = runShell(sqlCtx, se, mrEnv, roots)
+	err = runShell(ctx, se, mrEnv, roots)
 	if err != nil {
 		return errhand.BuildDError(err.Error()).Build()
 	}
@@ -391,7 +399,12 @@ func execBatch(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, sqlCtx, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	sqlCtx, err := se.newContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -428,7 +441,12 @@ func execMultiStatements(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, sqlCtx, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	sqlCtx, err := se.newContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -459,7 +477,12 @@ func execQuery(
 	format resultFormat,
 ) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv)
-	se, sqlCtx, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	sqlCtx, err := se.newContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -742,14 +765,19 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader, continueOnEr
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRoots map[string]*doltdb.RootValue) error {
+func runShell(ctx context.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRoots map[string]*doltdb.RootValue) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
-	currentDB := ctx.Session.GetCurrentDatabase()
+
+	sqlCtx, err := se.newContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	currentDB := sqlCtx.Session.GetCurrentDatabase()
 	currEnv := mrEnv[currentDB]
 
-	// start the doltsql shell
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
-	initialPrompt := fmt.Sprintf("%s> ", ctx.GetCurrentDatabase())
+	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
 	initialMultilinePrompt := fmt.Sprintf(fmt.Sprintf("%%%ds", len(initialPrompt)), "-> ")
 
 	rlConf := readline.Config{
@@ -783,6 +811,8 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 		c.Stop()
 	})
 
+	// The shell's interrupt handler handles an interrupt that occurs when it's accepting input. We also install our own
+	// that handles interrupts during query execution or result printing, see below.
 	shell.Interrupt(func(c *ishell.Context, count int, input string) {
 		if count > 1 {
 			c.Stop()
@@ -791,7 +821,6 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 		}
 	})
 
-	var returnedVerr errhand.VerboseError = nil // Verr that cannot be just printed but needs to be returned.
 	shell.Uninterpreted(func(c *ishell.Context) {
 		query := c.Args[0]
 		if len(strings.TrimSpace(query)) == 0 {
@@ -809,44 +838,58 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 			shell.Println(color.RedString(err.Error()))
 		}
 
-		shouldProcessQuery := true
 		//TODO: Handle comments and enforce the current line terminator
 		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 3 {
 			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
 			shell.SetLineTerminator(matches[1])
-			shouldProcessQuery = false
+			return
 		}
 
-		if shouldProcessQuery {
-			var sqlSch sql.Schema
-			var rowIter sql.RowIter
-			var err error
+		var nextPrompt string
+		var sqlSch sql.Schema
+		var rowIter sql.RowIter
 
-			// The SQL parser does not understand any other terminator besides semicolon, so we remove it.
-			if shell.LineTerminator() != ";" && strings.HasSuffix(query, shell.LineTerminator()) {
-				query = query[:len(query)-len(shell.LineTerminator())]
+		// The SQL parser does not understand any other terminator besides semicolon, so we remove it.
+		if shell.LineTerminator() != ";" && strings.HasSuffix(query, shell.LineTerminator()) {
+			query = query[:len(query)-len(shell.LineTerminator())]
+		}
+
+		cont := func() bool {
+			subCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			sqlCtx, err = se.newContext(subCtx)
+			if err != nil {
+				shell.Println(color.RedString(err.Error()))
+				return false
 			}
 
-			if sqlSch, rowIter, err = processQuery(ctx, query, se); err != nil {
+			if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
 			}
+
+			nextPrompt = fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
+			return true
+		}()
+
+		if !cont {
+			return
 		}
 
-		currPrompt := fmt.Sprintf("%s> ", ctx.GetCurrentDatabase())
-		shell.SetPrompt(currPrompt)
-		shell.SetMultiPrompt(fmt.Sprintf(fmt.Sprintf("%%%ds", len(currPrompt)), "-> "))
+		shell.SetPrompt(nextPrompt)
+		shell.SetMultiPrompt(fmt.Sprintf(fmt.Sprintf("%%%ds", len(nextPrompt)), "-> "))
 	})
 
 	shell.Run()
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
-	return returnedVerr
+	return nil
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
@@ -1349,10 +1392,11 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 }
 
 type sqlEngine struct {
-	dbs          map[string]dsqle.Database
-	mrEnv        env.MultiRepoEnv
-	engine       *sqle.Engine
-	resultFormat resultFormat
+	dbs            map[string]dsqle.Database
+	sess           *dsess.Session
+	contextFactory func(ctx context.Context) (*sql.Context, error)
+	engine         *sqle.Engine
+	resultFormat   resultFormat
 }
 
 var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
@@ -1361,12 +1405,11 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 func newSqlEngine(
 	ctx context.Context,
 	dEnv *env.DoltEnv,
-	mrEnv env.MultiRepoEnv,
 	roots map[string]*doltdb.RootValue, // See TODO below
 	readOnly bool,
 	format resultFormat,
 	dbs ...dsqle.Database,
-) (*sqlEngine, *sql.Context, error) {
+) (*sqlEngine, error) {
 	var au auth.Auth
 
 	if readOnly {
@@ -1376,16 +1419,19 @@ func newSqlEngine(
 	}
 
 	parallelism := runtime.GOMAXPROCS(0)
-	pro := dsqle.NewDoltDatabaseProvider(dbs...)
-	cat := sql.NewCatalogWithDbProvider(pro)
+
+	infoDB := information_schema.NewInformationSchemaDatabase()
+	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
+
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
+	cat := sql.NewCatalog(pro)
 
 	err := cat.Register(dfunctions.DoltFunctions...)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	engine := sqle.New(cat, analyzer.NewBuilder(cat).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
-	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -1398,14 +1444,13 @@ func newSqlEngine(
 	var dbStates []dsess.InitialDbState
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
-		engine.AddDatabase(db)
 
 		// TODO: this doesn't consider the roots provided as a param, which may not be the HEAD of the branch
 		//  To fix this, we need to pass a commit here as a separate param, and install a read-only database on it
 		//  since it isn't a current HEAD.
-		dbState, err := getDbState(ctx, db, mrEnv)
+		dbState, err := dsqle.GetInitialDBState(ctx, db)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		dbStates = append(dbStates, dbState)
@@ -1416,41 +1461,49 @@ func newSqlEngine(
 	email := *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, username, email, dbStates...)
 
-	sqlCtx := sql.NewContext(ctx,
-		sql.WithSession(sess),
-		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()),
-		sql.WithTracer(tracing.Tracer(ctx)))
-
-	for _, db := range dbsAsDSQLDBs(cat.AllDatabases()) {
-		root, err := db.GetRoot(sqlCtx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, true)
+	// TODO: this should just be the session default like it is with MySQL
+	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+	return &sqlEngine{
+		dbs:            nameToDB,
+		sess:           sess,
+		contextFactory: newSqlContext(sess, cat),
+		engine:         engine,
+		resultFormat:   format,
+	}, nil
+}
 
-	if len(initialRoots) == 1 {
-		for name := range initialRoots {
-			sqlCtx.SetCurrentDatabase(name)
+func newSqlContext(sess *dsess.Session, cat *sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
+	return func(ctx context.Context) (*sql.Context, error) {
+		sqlCtx := sql.NewContext(ctx,
+			sql.WithSession(sess),
+			sql.WithIndexRegistry(sql.NewIndexRegistry()),
+			sql.WithViewRegistry(sql.NewViewRegistry()),
+			sql.WithTracer(tracing.Tracer(ctx)))
+
+		seenOne := false
+		for _, db := range dbsAsDSQLDBs(cat.AllDatabases()) {
+			root, err := db.GetRoot(sqlCtx)
+			if err != nil {
+				return nil, err
+			}
+
+			err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
+			if err != nil {
+				return nil, err
+			}
+
+			if !seenOne {
+				sqlCtx.SetCurrentDatabase(db.Name())
+				seenOne = true
+			}
 		}
-	}
 
-	return &sqlEngine{nameToDB, mrEnv, engine, format}, sqlCtx, nil
+		return sqlCtx, nil
+	}
 }
 
 func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
@@ -1465,6 +1518,14 @@ func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	}
 
 	return dsqlDBs
+}
+
+func dsqleDBsAsSqlDBs(dbs []dsqle.Database) []sql.Database {
+	sqlDbs := make([]sql.Database, 0, len(dbs))
+	for _, db := range dbs {
+		sqlDbs = append(sqlDbs, db)
+	}
+	return sqlDbs
 }
 
 func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) (dsess.InitialDbState, error) {
@@ -1501,16 +1562,6 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	}, nil
 }
 
-func (se *sqlEngine) getDB(name string) (dsqle.Database, error) {
-	db, ok := se.dbs[name]
-
-	if !ok {
-		return dsqle.Database{}, ErrDBNotFoundKind.New(name)
-	}
-
-	return db, nil
-}
-
 func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool, err error)) error {
 	for name, db := range se.dbs {
 		stop, err := cb(name, db)
@@ -1529,13 +1580,8 @@ func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool,
 
 func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
 	newRoots := make(map[string]*doltdb.RootValue)
-	for name := range se.mrEnv {
-		db, err := se.getDB(name)
-
-		if err != nil {
-			return nil, err
-		}
-
+	for name, db := range se.dbs {
+		var err error
 		newRoots[name], err = db.GetRoot(sqlCtx)
 
 		if err != nil {
@@ -1544,6 +1590,10 @@ func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue
 	}
 
 	return newRoots, nil
+}
+
+func (se *sqlEngine) newContext(ctx context.Context) (*sql.Context, error) {
+	return se.contextFactory(ctx)
 }
 
 // Execute a SQL statement and return values for printing.
@@ -1564,18 +1614,6 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 		// Should not be allowed to delete repo name and information schema
 		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
 			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", information_schema.InformationSchemaDatabaseName)
-		} else if dbddl.DBName == ctx.GetCurrentDatabase() {
-			db, err := se.engine.Catalog.Database(ctx.GetCurrentDatabase())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// Check if it's an in memory database. Those are the only databases that are allowed to be dropped.
-			switch interface{}(db).(type) {
-			case *memory.Database:
-			default:
-				return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", db.Name())
-			}
 		}
 	}
 

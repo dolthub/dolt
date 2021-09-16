@@ -200,7 +200,7 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 
 			cli.Println(color.BlueString(fmt.Sprintf("Pushing migrated branch %s to %s", branch.String(), remoteName)))
 			mode := ref.UpdateMode{Force: true}
-			err = actions.PushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote, runProgFuncs, stopProgFuncs)
+			err = actions.PushToRemoteBranch(ctx, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote, runProgFuncs, stopProgFuncs)
 
 			if err != nil {
 				if err == doltdb.ErrUpToDate {
@@ -255,12 +255,10 @@ func fetchMigratedRemoteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *ar
 		return fmt.Errorf("Remote %s has not been migrated\nRun 'dolt migrate --push %s' to push migration", remoteName, remoteName)
 	}
 
-	// force fetch all branches
-	remotes, _ := dEnv.GetRemotes()
-	r, refSpecs, err := getRefSpecs(apr.Args(), dEnv, remotes)
+	r, refSpecs, err := env.NewFetchOpts(apr.Args(), dEnv.RepoStateReader())
 
 	if err == nil {
-		err = fetchRefSpecs(ctx, ref.UpdateMode{Force: true}, dEnv, r, refSpecs)
+		err = actions.FetchRefSpecs(ctx, dEnv.DbData(), refSpecs, r, ref.UpdateMode{Force: true}, runProgFuncs, stopProgFuncs)
 	}
 
 	return err

@@ -21,10 +21,8 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/fatih/color"
@@ -52,7 +50,7 @@ import (
 )
 
 const (
-	Version = "0.28.2"
+	Version = "0.28.3"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -226,14 +224,7 @@ func runMain() int {
 
 	warnIfMaxFilesTooLow()
 
-	ctx, cancelF := context.WithCancel(context.Background())
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		cancelF()
-	}()
-
+	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
 	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {

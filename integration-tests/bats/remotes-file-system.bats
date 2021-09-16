@@ -110,7 +110,7 @@ SQL
     dolt fetch
 
     # fetch master into some garbage tracking branches
-    dolt fetch refs/heads/notmaster:refs/remotes/anything/master
+    dolt fetch origin refs/heads/notmaster:refs/remotes/anything/master
     dolt fetch remote2 refs/heads/master:refs/remotes/something/master
 
     run dolt branch -a

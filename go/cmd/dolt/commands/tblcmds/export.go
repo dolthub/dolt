@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -264,7 +265,8 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	inSch := rd.GetSchema()
 	outSch := inSch
 
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, opts)
 
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()

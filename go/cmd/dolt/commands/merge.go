@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -29,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -153,12 +155,19 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return 1
 			}
 
-			msg := ""
-			if m, ok := apr.GetValue(cli.CommitMessageArg); ok {
-				msg = m
+			roots, err := dEnv.Roots(ctx)
+			if err != nil {
+				return handleCommitErr(ctx, dEnv, err, usage)
 			}
 
-			mergeSpec, ok, err := merge.ParseMergeSpec(ctx, dEnv, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
+			name, email, err := env.GetNameAndEmail(dEnv.Config)
+			if err != nil {
+				return handleCommitErr(ctx, dEnv, err, usage)
+			}
+
+			var msg string
+
+			spec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), t)
 			if err != nil {
 				return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
 			}
@@ -167,12 +176,18 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return handleCommitErr(ctx, dEnv, nil, usage)
 			}
 
-			err = mergePrinting(ctx, dEnv, mergeSpec)
+			msg, err = getCommitMessage(ctx, apr, dEnv, spec)
+			if err != nil {
+				return handleCommitErr(ctx, dEnv, err, usage)
+			}
+			spec.Msg = msg
+
+			err = mergePrinting(ctx, dEnv, spec)
 			if err != nil {
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
 
-			tblToStats, err := merge.MergeCommitSpec(ctx, dEnv, mergeSpec)
+			tblToStats, err := merge.MergeCommitSpec(ctx, dEnv, spec)
 			hasConflicts, hasConstraintViolations := printSuccessStats(tblToStats)
 			if hasConflicts && hasConstraintViolations {
 				cli.Println("Automatic merge failed; fix conflicts and constraint violations and then commit the result.")
@@ -200,49 +215,62 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return handleCommitErr(ctx, dEnv, verr, usage)
 }
 
-func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *merge.MergeSpec) errhand.VerboseError {
-	if mergeSpec.H1 == mergeSpec.H2 {
+func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, spec *merge.MergeSpec) (string, errhand.VerboseError) {
+	if m, ok := apr.GetValue(cli.CommitMessageArg); ok {
+		return m, nil
+	}
+
+	if !spec.Noff || spec.Msg != "" {
+		return spec.Msg, nil
+	}
+
+	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
+		msg, err := getCommitMessageFromEditor(ctx, dEnv)
+		if err != nil {
+			return "", errhand.VerboseErrorFromError(err)
+		}
+		return msg, nil
+	} else if !errors.Is(err, doltdb.ErrUpToDate) || !errors.Is(err, doltdb.ErrIsAhead) {
+		return "", errhand.VerboseErrorFromError(err)
+	}
+	return "", nil
+}
+
+func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec) errhand.VerboseError {
+	if spec.HeadH == spec.MergeH {
 		//TODO - why is this different for merge/pull?
 		// cli.Println("Already up to date.")
 		cli.Println("Everything up-to-date.")
 		return nil
 
 	}
-	cli.Println("Updating", mergeSpec.H1.String()+".."+mergeSpec.H2.String())
+	cli.Println("Updating", spec.HeadH.String()+".."+spec.MergeH.String())
 
-	if mergeSpec.Squash {
+	if spec.Squash {
 		cli.Println("Squash commit -- not updating HEAD")
 	}
-	if len(mergeSpec.TblNames) != 0 {
+	if len(spec.TblNames) != 0 {
 		bldr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by merge:")
-		for _, tName := range mergeSpec.TblNames {
+		for _, tName := range spec.TblNames {
 			bldr.AddDetails(tName)
 		}
 		bldr.AddDetails("Please commit your changes before you merge.")
 		return bldr.Build()
 	}
 
-	if ok, err := mergeSpec.Cm1.CanFastForwardTo(ctx, mergeSpec.Cm2); ok {
-		ancRoot, err := mergeSpec.Cm1.GetRootValue()
+	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
+		ancRoot, err := spec.HeadC.GetRootValue()
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-		mergedRoot, err := mergeSpec.Cm2.GetRootValue()
+		mergedRoot, err := spec.MergeC.GetRootValue()
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 		if _, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-		if mergeSpec.Noff {
-			if mergeSpec.Msg == "" {
-				msg, err := getCommitMessageFromEditor(ctx, dEnv)
-				if err != nil {
-					return errhand.VerboseErrorFromError(err)
-				}
-				mergeSpec.Msg = msg
-			}
-		} else {
+		if !spec.Noff {
 			cli.Println("Fast-forward")
 		}
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {

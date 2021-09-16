@@ -35,10 +35,10 @@ var ErrMergeFailedToUpdateRepoState = errors.New("unable to execute repo state u
 var ErrFailedToDetermineMergeability = errors.New("failed to determine mergeability")
 
 type MergeSpec struct {
-	H1           hash.Hash
-	H2           hash.Hash
-	Cm1          *doltdb.Commit
-	Cm2          *doltdb.Commit
+	HeadH        hash.Hash
+	MergeH       hash.Hash
+	HeadC        *doltdb.Commit
+	MergeC       *doltdb.Commit
 	TblNames     []string
 	WorkingDiffs map[string]hash.Hash
 	Squash       bool
@@ -51,13 +51,13 @@ type MergeSpec struct {
 	Date         time.Time
 }
 
-func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSpecStr string, squash bool, noff bool, force bool, date time.Time) (*MergeSpec, bool, error) {
+func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.DoltDB, roots doltdb.Roots, name, email, msg string, commitSpecStr string, squash bool, noff bool, force bool, date time.Time) (*MergeSpec, bool, error) {
 	cs1, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
 		return nil, false, err
 	}
 
-	cm1, err := dEnv.DoltDB.Resolve(context.TODO(), cs1, dEnv.RepoStateReader().CWBHeadRef())
+	cm1, err := ddb.Resolve(context.TODO(), cs1, rsr.CWBHeadRef())
 	if err != nil {
 		return nil, false, err
 	}
@@ -67,7 +67,7 @@ func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSp
 		return nil, false, err
 	}
 
-	cm2, err := dEnv.DoltDB.Resolve(context.TODO(), cs2, dEnv.RepoStateReader().CWBHeadRef())
+	cm2, err := ddb.Resolve(context.TODO(), cs2, rsr.CWBHeadRef())
 	if err != nil {
 		return nil, false, err
 	}
@@ -83,26 +83,16 @@ func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSp
 
 	}
 
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
 	tblNames, workingDiffs, err := MergeWouldStompChanges(ctx, roots, cm2)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w; %s", ErrFailedToDetermineMergeability, err.Error())
 	}
 
-	name, email, err := env.GetNameAndEmail(dEnv.Config)
-	if err != nil {
-		return nil, false, err
-	}
-
 	return &MergeSpec{
-		H1:           h1,
-		H2:           h2,
-		Cm1:          cm1,
-		Cm2:          cm2,
+		HeadH:        h1,
+		MergeH:       h2,
+		HeadC:        cm1,
+		MergeC:       cm2,
 		TblNames:     tblNames,
 		WorkingDiffs: workingDiffs,
 		Squash:       squash,
@@ -115,42 +105,42 @@ func ParseMergeSpec(ctx context.Context, dEnv *env.DoltEnv, msg string, commitSp
 	}, true, nil
 }
 
-func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec) (map[string]*MergeStats, error) {
-	if ok, err := mergeSpec.Cm1.CanFastForwardTo(ctx, mergeSpec.Cm2); ok {
-		ancRoot, err := mergeSpec.Cm1.GetRootValue()
+func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
+	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
+		ancRoot, err := spec.HeadC.GetRootValue()
 		if err != nil {
 			return nil, err
 		}
-		mergedRoot, err := mergeSpec.Cm2.GetRootValue()
+		mergedRoot, err := spec.MergeC.GetRootValue()
 		if err != nil {
 			return nil, err
 		}
 		if cvPossible, err := MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
 			return nil, err
 		} else if cvPossible {
-			return ExecuteMerge(ctx, dEnv, mergeSpec)
+			return ExecuteMerge(ctx, dEnv, spec)
 		}
-		if mergeSpec.Noff {
-			return ExecNoFFMerge(ctx, dEnv, mergeSpec)
+		if spec.Noff {
+			return ExecNoFFMerge(ctx, dEnv, spec)
 		} else {
-			return nil, ExecuteFFMerge(ctx, dEnv, mergeSpec)
+			return nil, ExecuteFFMerge(ctx, dEnv, spec)
 		}
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		return nil, err
 	} else {
-		return ExecuteMerge(ctx, dEnv, mergeSpec)
+		return ExecuteMerge(ctx, dEnv, spec)
 	}
 }
 
-func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec) (map[string]*MergeStats, error) {
-	mergedRoot, err := mergeSpec.Cm2.GetRootValue()
+func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
+	mergedRoot, err := spec.MergeC.GetRootValue()
 
 	if err != nil {
 		return nil, ErrFailedToReadDatabase
 	}
 
 	tblToStats := make(map[string]*MergeStats)
-	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, mergeSpec.WorkingDiffs, mergeSpec.Cm2, tblToStats)
+	err = mergedRootToWorking(ctx, false, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, tblToStats)
 
 	if err != nil {
 		return tblToStats, err
@@ -173,12 +163,12 @@ func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec)
 	}
 
 	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
-		Message:    mergeSpec.Msg,
-		Date:       mergeSpec.Date,
-		AllowEmpty: mergeSpec.AllowEmpty,
-		Force:      mergeSpec.Force,
-		Name:       mergeSpec.Name,
-		Email:      mergeSpec.Email,
+		Message:    spec.Msg,
+		Date:       spec.Date,
+		AllowEmpty: spec.AllowEmpty,
+		Force:      spec.Force,
+		Name:       spec.Name,
+		Email:      spec.Email,
 	})
 
 	if err != nil {
@@ -209,16 +199,16 @@ func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[
 func ExecuteFFMerge(
 	ctx context.Context,
 	dEnv *env.DoltEnv,
-	mergeSpec *MergeSpec,
+	spec *MergeSpec,
 ) error {
-	stagedRoot, err := mergeSpec.Cm2.GetRootValue()
+	stagedRoot, err := spec.MergeC.GetRootValue()
 	if err != nil {
 		return err
 	}
 
 	workingRoot := stagedRoot
-	if len(mergeSpec.WorkingDiffs) > 0 {
-		workingRoot, err = applyChanges(ctx, stagedRoot, mergeSpec.WorkingDiffs)
+	if len(spec.WorkingDiffs) > 0 {
+		workingRoot, err = applyChanges(ctx, stagedRoot, spec.WorkingDiffs)
 
 		if err != nil {
 			//return errhand.BuildDError("Failed to re-apply working changes.").AddCause(err).Build()
@@ -231,8 +221,8 @@ func ExecuteFFMerge(
 		return err
 	}
 
-	if !mergeSpec.Squash {
-		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoStateReader().CWBHeadRef(), mergeSpec.Cm2)
+	if !spec.Squash {
+		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoStateReader().CWBHeadRef(), spec.MergeC)
 
 		if err != nil {
 			return err
@@ -257,9 +247,9 @@ func ExecuteFFMerge(
 	return nil
 }
 
-func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec) (map[string]*MergeStats, error) {
+func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	mergedRoot, tblToStats, err := MergeCommits(ctx, mergeSpec.Cm1, mergeSpec.Cm2, opts)
+	mergedRoot, tblToStats, err := MergeCommits(ctx, spec.HeadC, spec.MergeC, opts)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
@@ -270,7 +260,7 @@ func ExecuteMerge(ctx context.Context, dEnv *env.DoltEnv, mergeSpec *MergeSpec) 
 		return tblToStats, err
 	}
 
-	return tblToStats, mergedRootToWorking(ctx, mergeSpec.Squash, dEnv, mergedRoot, mergeSpec.WorkingDiffs, mergeSpec.Cm2, tblToStats)
+	return tblToStats, mergedRootToWorking(ctx, spec.Squash, dEnv, mergedRoot, spec.WorkingDiffs, spec.MergeC, tblToStats)
 }
 
 // TODO: change this to be functional and not write to repo state

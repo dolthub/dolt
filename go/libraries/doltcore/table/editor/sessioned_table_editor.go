@@ -299,7 +299,7 @@ func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context
 				}
 			}
 		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
-			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
+			indexKeyStr, _ := formatKey(ctx, indexKey)
 			return sql.ErrForeignKeyChildViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
 		default:
 			return fmt.Errorf("unknown ON DELETE reference option on `%s`: `%s`", foreignKey.Name, foreignKey.OnDelete.String())
@@ -416,7 +416,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 				}
 			}
 		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
-			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
+			indexKeyStr, _ := formatKey(ctx, indexKey)
 			return sql.ErrForeignKeyParentViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
 		default:
 			return fmt.Errorf("unknown ON UPDATE reference option on `%s`: `%s`", foreignKey.Name, foreignKey.OnUpdate.String())
@@ -469,7 +469,7 @@ func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, o
 	keyVals := make([]types.Value, len(originalTags)*2)
 	for i, colTag := range originalTags {
 		val, ok := taggedVals[colTag]
-		if !ok {
+		if !ok || val == types.NullValue {
 			return types.EmptyTuple(nbf), true, nil
 		}
 		newTag := newTags[i]
@@ -554,7 +554,7 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVa
 					continue
 				}
 			}
-			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
+			indexKeyStr, _ := formatKey(ctx, indexKey)
 			return sql.ErrForeignKeyChildViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
 		}
 	}

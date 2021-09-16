@@ -54,7 +54,7 @@ func (cmd PullCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd PullCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cli.CreatePullArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 }
 
@@ -72,7 +72,7 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 
-	ap := cmd.createArgParser()
+	ap := cli.CreatePullArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -87,7 +87,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		remoteName = apr.Arg(0)
 	}
 
-	pullSpec, err := env.ParsePullSpec(ctx, dEnv, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
+	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -111,7 +111,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 
 		if remoteTrackRef != nil {
 
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv, pullSpec.Remote, srcDB, dEnv.DoltDB, pullSpec.Branch, remoteTrackRef, runProgFuncs, stopProgFuncs)
+			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv.TempTableFilesDir(), pullSpec.Remote, srcDB, dEnv.DoltDB, pullSpec.Branch, remoteTrackRef, runProgFuncs, stopProgFuncs)
 			if err != nil {
 				return err
 			}
@@ -122,7 +122,18 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			}
 
 			t := doltdb.CommitNowFunc()
-			mergeSpec, ok, err := merge.ParseMergeSpec(ctx, dEnv, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
+
+			roots, err := dEnv.Roots(ctx)
+			if err != nil {
+				return err
+			}
+
+			name, email, err := env.GetNameAndEmail(dEnv.Config)
+			if err != nil {
+				return err
+			}
+
+			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
 			if err != nil {
 				return err
 			}
@@ -142,12 +153,10 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 		}
 	}
 
-	srcDB, err = pullSpec.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-
 	if err != nil {
 		return err
 	}
-	err = actions.FetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
+	err = actions.FetchFollowTags(ctx, dEnv.TempTableFilesDir(), srcDB, dEnv.DoltDB, runProgFuncs, stopProgFuncs)
 
 	if err != nil {
 		return err
