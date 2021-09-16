@@ -94,7 +94,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-	err = dSess.CommitDoltCommit(ctx, dbName, dSess.GetTransaction(), actions.CommitStagedProps{
+	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: false,
@@ -106,7 +106,12 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, err
 	}
 
-	return "TODO commit hash", nil
+	h, err := newCommit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	return h.String(), nil
 }
 
 func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {

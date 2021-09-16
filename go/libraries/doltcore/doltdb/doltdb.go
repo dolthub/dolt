@@ -637,7 +637,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 
 	commitSt, ok := ds.MaybeHead()
 	if !ok {
-		return nil, errors.New("commit has no head but commit succeeded (How?!?!?)")
+		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
 	}
 
 	return NewCommit(ddb.db, commitSt), nil
@@ -1039,36 +1039,45 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	commit *PendingCommit, workingSet *WorkingSet,
 	prevHash hash.Hash,
 	meta *WorkingSetMeta,
-) error {
+) (*Commit, error) {
 	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	headDs, err := ddb.db.GetDataset(ctx, headRef.String())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var metaSt types.Struct
 	metaSt, err = meta.toNomsStruct(ddb.db.Format())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, _, err = ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{
+	commitDataset, _, err := ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{
 		Meta:        datas.WorkingSetMeta{Meta: metaSt},
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,
 	}, prevHash, commit.CommitOptions)
 
-	return err
+	if err != nil {
+		return nil, err
+	}
+
+	commitSt, ok := commitDataset.MaybeHead()
+	if !ok {
+		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
+	}
+
+	return NewCommit(ddb.db, commitSt), nil
 }
 
 // DeleteWorkingSet deletes the working set given
