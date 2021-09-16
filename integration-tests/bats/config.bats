@@ -193,9 +193,10 @@ teardown() {
     dolt config --global --add user.email "joshn@doe.com"
 
     dolt config --global --add init.defaultBranch "main"
+    dolt config --list
     run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "init.defaultBranch = main" ]]
+    [[ "$output" =~ "init.defaultbranch = main" ]]
 
     dolt init
     run dolt status
