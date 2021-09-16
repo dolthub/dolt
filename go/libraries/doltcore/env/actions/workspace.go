@@ -105,7 +105,7 @@ func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRe
 	}
 
 	if !opts.Force && !opts.Remote {
-		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(dEnv))
+		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(dEnv.Config))
 		if err != nil {
 			return err
 		}

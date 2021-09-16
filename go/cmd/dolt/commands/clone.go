@@ -314,7 +314,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	if branch == "" {
 		for _, brnch := range branches {
 			branch = brnch.GetPath()
-			if branch == env.GetDefaultInitBranch(dEnv) {
+			if branch == env.GetDefaultInitBranch(dEnv.Config) {
 				break
 			}
 		}
@@ -329,7 +329,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 			return nil
 		}
 
-		branch = env.GetDefaultInitBranch(dEnv)
+		branch = env.GetDefaultInitBranch(dEnv.Config)
 		performPull = false
 	}
 

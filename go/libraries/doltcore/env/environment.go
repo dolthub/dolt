@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -160,8 +161,8 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 	return dEnv
 }
 
-func GetDefaultInitBranch(dEnv *DoltEnv) string {
-	s := dEnv.Config.GetStringOrDefault(InitBranchName, defaultInitBranch)
+func GetDefaultInitBranch(cfg config.ReadableConfig) string {
+	s := GetStringOrDefault(cfg, InitBranchName, defaultInitBranch)
 	return *s
 }
 
@@ -411,7 +412,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 		return err
 	}
 
-	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, GetDefaultInitBranch(dEnv), name, email, t)
+	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, GetDefaultInitBranch(dEnv.Config), name, email, t)
 	if err != nil {
 		return doltdb.ErrNomsIO
 	}
@@ -421,7 +422,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 
 // InitializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
 func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
-	init := GetDefaultInitBranch(dEnv)
+	init := GetDefaultInitBranch(dEnv.Config)
 	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, ref.NewBranchRef(init))
 	if err != nil {
 		return err
