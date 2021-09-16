@@ -11,7 +11,6 @@ teardown() {
 }
 
 @test "sql-load-data: simple load from file into table" {
-    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > 1pk5col-ints.csv
 pk||c1||c2||c3||c4||c5
 0||1||2||3||4||5
@@ -19,7 +18,6 @@ pk||c1||c2||c3||c4||c5
 DELIM
 
     run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
 LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
 SQL
@@ -35,20 +33,13 @@ SQL
 }
 
 @test "sql-load-data: load into unknown table throws error" {
-    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
-    run dolt sql << SQL
-SET secure_file_priv='./';
-LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
-SQL
-
+    run dolt sql -q "LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;"
     [ "$status" -eq 1 ]
     [[ "$output" =~  "table not found: test" ]] || false
 }
 
 @test "sql-load-data: load with unknown file throws error" {
-    skip "Different error msg on windows."
     run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
 LOAD DATA INFILE 'hello-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
 SQL
@@ -58,7 +49,6 @@ SQL
 }
 
 @test "sql-load-data: works with enclosed terms" {
-    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > 1pk5col-ints.csv
 pk||c1||c2||c3||c4||c5
 "0"||"1"||"2"||"3"||"4"||"5"
@@ -66,7 +56,6 @@ pk||c1||c2||c3||c4||c5
 DELIM
 
     run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
 LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ENCLOSED BY '"'  ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
 SQL
@@ -82,7 +71,6 @@ SQL
 }
 
 @test "sql-load-data: works with prefixed terms" {
-    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > prefixed.txt
 pk
 sssHi
@@ -92,7 +80,6 @@ sssYo
 DELIM
 
     run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk longtext);
 LOAD DATA INFILE 'prefixed.txt' INTO TABLE test CHARACTER SET UTF8MB4 LINES STARTING BY 'sss' IGNORE 1 LINES;
 SQL
@@ -109,7 +96,6 @@ SQL
 }
 
 @test "sql-load-data: works when the number of input columns in the file is less than the number of schema columns" {
-    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > 1pk2col-ints.csv
 pk,c1
 0,1
@@ -117,7 +103,6 @@ pk,c1
 DELIM
 
     run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk int primary key, c1 int, c2 int);
 LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS TERMINATED BY ',' IGNORE 1 LINES;
 SQL
@@ -141,7 +126,6 @@ pk  c1
 DELIM
 
     run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk int primary key, c1 int);
 LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS TERMINATED BY '\t' IGNORE 1 LINES;
 SQL
@@ -157,7 +141,6 @@ SQL
 }
 
 @test "sql-load-data: recognizes certain nulls" {
-    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
     cat <<DELIM > 1pk2col-ints.csv
 pk
 \N
@@ -165,7 +148,6 @@ NULL
 DELIM
 
     run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk longtext);
 LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS IGNORE 1 LINES;
 SQL
@@ -187,7 +169,6 @@ pk,c1
 DELIM
 
     run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk int, c1 longtext);
 LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS ENCLOSED BY '"' TERMINATED BY ',' IGNORE 1 LINES (c1,pk);
 SQL
@@ -212,7 +193,6 @@ SQL
 DELIM
 
      run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk int, c1 longtext, c2 float);
 LOAD DATA INFILE 'complex.csv' INTO TABLE test FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"';
 SQL
@@ -239,9 +219,8 @@ SQL
 DELIM
 
      run dolt sql << SQL
-SET secure_file_priv='./testdata';
 CREATE TABLE loadtable(pk longtext);
-LOAD DATA INFILE 'test5.txt' INTO TABLE loadtable FIELDS ENCLOSED BY '\"';
+LOAD DATA INFILE './testdata/test5.txt' INTO TABLE loadtable FIELDS ENCLOSED BY '\"';
 SQL
 
     [ "$status" -eq 0 ]
@@ -265,7 +244,6 @@ pk||c1||c2||c3||c4||c5
 DELIM
 
     run dolt sql << SQL
-SET secure_file_priv='./';
 CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
 LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
 SQL
