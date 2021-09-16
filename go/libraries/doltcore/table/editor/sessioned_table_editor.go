@@ -469,7 +469,7 @@ func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, o
 	keyVals := make([]types.Value, len(originalTags)*2)
 	for i, colTag := range originalTags {
 		val, ok := taggedVals[colTag]
-		if !ok {
+		if !ok || val == types.NullValue {
 			return types.EmptyTuple(nbf), true, nil
 		}
 		newTag := newTags[i]
