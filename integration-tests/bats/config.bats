@@ -192,10 +192,10 @@ teardown() {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "joshn@doe.com"
 
-    dolt config --global --add init.default_branch "main"
+    dolt config --global --add init.defaultBranch "main"
     run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "init.default_branch = main" ]]
+    [[ "$output" =~ "init.defaultBranch = main" ]]
 
     dolt init
     run dolt status
@@ -206,5 +206,5 @@ teardown() {
     [[ "$output" =~ "* main" ]]
 
     # cleanup
-    dolt config --global --unset init.default_branch
+    dolt config --global --unset init.defaultBranch
 }

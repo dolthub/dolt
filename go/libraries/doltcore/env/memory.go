@@ -29,14 +29,14 @@ import (
 )
 
 func NewMemoryDbData(ctx context.Context, cfg config.ReadableConfig) (DbData, error) {
-	initBranch := GetDefaultInitBranch(cfg)
+	branchName := GetDefaultInitBranch(cfg)
 
-	ddb, err := NewMemoryDoltDB(ctx, initBranch)
+	ddb, err := NewMemoryDoltDB(ctx, branchName)
 	if err != nil {
 		return DbData{}, err
 	}
 
-	rs, err := NewMemoryRepoState(ctx, ddb, initBranch)
+	rs, err := NewMemoryRepoState(ctx, ddb, branchName)
 	if err != nil {
 		return DbData{}, err
 	}
@@ -55,8 +55,8 @@ func NewMemoryDoltDB(ctx context.Context, initBranch string) (*doltdb.DoltDB, er
 	ddb := doltdb.DoltDBFromCS(cs)
 
 	m := "memory"
-	init := ref.NewBranchRef(initBranch)
-	err := ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, m, m, doltdb.CommitNowFunc(), init)
+	branchRef := ref.NewBranchRef(initBranch)
+	err := ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, m, m, doltdb.CommitNowFunc(), branchRef)
 	if err != nil {
 		return nil, err
 	}
