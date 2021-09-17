@@ -742,15 +742,15 @@ func (te *pkTableEditor) StatementFinished(ctx context.Context, errored bool) er
 		err = te.tea.Commit(ctx, te.nbf)
 	}
 
-	for i := 0; i < len(te.indexEds); i++ {
-		iErr := te.indexEds[i].StatementFinished(ctx, errored)
-		if err == nil {
-			err = iErr
-		}
-	}
-
 	if err != nil {
 		return err
+	}
+
+	for i := 0; i < len(te.indexEds); i++ {
+		iErr := te.indexEds[i].StatementFinished(ctx, errored)
+		if iErr != nil {
+			return iErr
+		}
 	}
 
 	return nil
