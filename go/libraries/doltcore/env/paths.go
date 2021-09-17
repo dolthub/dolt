@@ -41,17 +41,23 @@ type HomeDirProvider func() (string, error)
 // state will be stored inside of the .dolt directory.  The environment variable DOLT_ROOT_PATH can be used to
 // provide a different directory where the root .dolt directory should be located and global state will be stored there.
 func GetCurrentUserHomeDir() (string, error) {
+	var home string
 	if doltRootPath, ok := os.LookupEnv(doltRootPathEnvVar); ok && doltRootPath != "" {
-		return doltRootPath, nil
-	}
-	if homeEnvPath, ok := os.LookupEnv(homeEnvVar); ok && homeEnvPath != "" {
-		return homeEnvPath, nil
-	}
-	if usr, err := user.Current(); err != nil {
+		home = doltRootPath
+	} else if homeEnvPath, ok := os.LookupEnv(homeEnvVar); ok && homeEnvPath != "" {
+		home = homeEnvPath
+	} else if usr, err := user.Current(); err != nil {
 		return "", err
 	} else {
-		return usr.HomeDir, nil
+		home = usr.HomeDir
 	}
+
+	_, err := os.Stat(home)
+	if err != nil {
+		return "", err
+	}
+
+	return home, nil
 }
 
 func getCredsDir(hdp HomeDirProvider) (string, error) {

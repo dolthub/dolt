@@ -25,9 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"os"
-
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -47,28 +44,6 @@ var (
 )
 
 type UpdateHook func(ctx context.Context, ds Dataset) error
-
-var postCommitHooks []UpdateHook
-
-const BackupRemoteKey = "DOLT_BACKUP_REMOTE"
-
-func init() {
-	backup := os.Getenv(BackupRemoteKey)
-	if backup != "" {
-		// parse remote
-		ctx := context.Background()
-		r, srcDb, err := actions.CreateRemote(ctx, "backup", backup, nil, nil)
-		if err != nil {
-			return
-		}
-		// build destDB
-
-		postCommitHooks = append(postCommitHooks, func(ctx context.Context, ds Dataset) error {
-			ds.MaybeHead()
-			return actions.Backup(ctx, srcDb, "temp", r, ds, nil, nil)
-		})
-	}
-}
 
 // TODO: fix panics
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
@@ -989,16 +964,8 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {
 	err := updateFunc(ds)
-
 	if err != nil {
 		return Dataset{}, err
-	}
-
-	//ds, err = db.GetDataset(ctx, ds.ID())
-
-	// TODO pipe ds through hooks?
-	for _, hook := range postCommitHooks {
-		err = hook(ctx, ds)
 	}
 
 	return db.GetDataset(ctx, ds.ID())

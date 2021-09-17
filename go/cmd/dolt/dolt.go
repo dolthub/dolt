@@ -234,10 +234,11 @@ func runMain() int {
 	}
 
 	root, err := env.GetCurrentUserHomeDir()
-
 	if err != nil {
 		return 1
 	}
+
+
 
 	emitter := events.NewFileEmitter(root, dbfactory.DoltDir)
 
