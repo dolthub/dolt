@@ -279,5 +279,5 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     run dolt
     [ "$status" -eq 1 ]
     [ ! "${lines[0]}" = "panic" ]
-    [ "${lines[0]}" = "Failed to load the HOME dir: stat /this/is/garbage: no such file or directory" ]
+    [ "${lines[0]}" = "Failed to load the HOME directory: stat /this/is/garbage: no such file or directory" ]
 }

@@ -236,7 +236,7 @@ func runMain() int {
 	root, err := env.GetCurrentUserHomeDir()
 
 	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to load the HOME dir: %v", err))
+		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
 		return 1
 	}
 
