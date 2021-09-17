@@ -369,6 +369,11 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 			return err
 		}
 
+		// Nothing to stage, so fall back to CommitWorkingSet logic instead
+		if pendingCommit == nil {
+			return sess.CommitWorkingSet(ctx, dbName, tx)
+		}
+
 		_, err = sess.DoltCommit(ctx, dbName, tx, pendingCommit)
 		return err
 	} else {
@@ -405,11 +410,6 @@ func (sess *Session) DoltCommit(
 	tx sql.Transaction,
 	commit *doltdb.PendingCommit,
 ) (*doltdb.Commit, error) {
-	// Nothing staged, so defer to CommitWorkingSet logic instead
-	if commit == nil {
-		return nil, sess.CommitWorkingSet(ctx, dbName, tx)
-	}
-
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 		return dtx.DoltCommit(
 			ctx,
@@ -456,7 +456,7 @@ func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transactio
 	return newCommit, nil
 }
 
-// PendingCommitAllStaged returns a pending commit with all tables staged.
+// PendingCommitAllStaged returns a pending commit with all tables staged. Returns nil if there are no changes to stage.
 func (sess *Session) PendingCommitAllStaged(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
 	roots, ok := sess.GetRoots(ctx, dbName)
 	if !ok {

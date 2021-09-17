@@ -15,6 +15,7 @@
 package dfunctions
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -106,14 +107,14 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, err
 	}
 
+	// Nothing to commit, and we didn't pass --allowEmpty
+	if pendingCommit == nil {
+		return nil, errors.New("nothing to commit")
+	}
+
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
 	if err != nil {
 		return nil, err
-	}
-
-	// Nothing to commit, and we didn't pass --allowEmpty (still updates the working set so we don't treat it as an error)
-	if newCommit == nil {
-		return nil, nil
 	}
 
 	h, err := newCommit.HashOf()
