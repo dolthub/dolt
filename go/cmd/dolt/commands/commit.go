@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/datas"
 	"io"
 	"os"
 	"strings"
@@ -54,6 +55,24 @@ var commitDocs = cli.CommandDocumentationContent{
 }
 
 type CommitCmd struct{}
+
+var postCommitHooks []datas.CommitHook
+
+const BackupRemoteKey = "DOLT_BACKUP_REMOTE"
+
+func init() {
+	backupUrl := os.Getenv(BackupRemoteKey)
+	if backupUrl != "" {
+		postCommitHooks = append(postCommitHooks, func(ctx context.Context, ds datas.Dataset, srcDB datas.Database) error {
+			_, destDB, err := env.CreateRemote(ctx, "backup", backupUrl, nil)
+			if err != nil {
+				return err
+			}
+			// TODO: used dEnv or WS tempfile
+			return doltdb.Replicate(ctx, srcDB, destDB, ".dolt/temptf", ds)
+		})
+	}
+}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd CommitCmd) Name() string {
@@ -157,6 +176,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		ws.WithStagedRoot(pendingCommit.Roots.Staged).WithWorkingRoot(pendingCommit.Roots.Working).ClearMerge(),
 		prevHash,
 		dEnv.NewWorkingSetMeta(fmt.Sprintf("Updated by %s %s", commandStr, strings.Join(args, " "))),
+		postCommitHooks,
 	)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("Couldn't commit").AddCause(err).Build(), usage)

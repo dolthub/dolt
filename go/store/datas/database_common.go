@@ -43,7 +43,7 @@ var (
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
 )
 
-type UpdateHook func(ctx context.Context, ds Dataset) error
+type CommitHook func(ctx context.Context, ds Dataset, db Database) error
 
 // TODO: fix panics
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
@@ -650,6 +650,7 @@ func (db *database) CommitWithWorkingSet(
 	commitDS, workingSetDS Dataset,
 	val types.Value, workingSetSpec WorkingSetSpec,
 	prevWsHash hash.Hash, opts CommitOptions,
+	postHooks []CommitHook,
 ) (Dataset, Dataset, error) {
 	workingSet, err := NewWorkingSet(ctx, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
 	if err != nil {
@@ -772,6 +773,13 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
+	for _, hook := range postHooks {
+		// TODO async
+		err := hook(ctx, commitDS, db)
+		if err != nil {
+			// todo log error, don't kill server
+		}
+	}
 	return commitDS, workingSetDS, nil
 }
 

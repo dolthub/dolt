@@ -1047,6 +1047,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	commit *PendingCommit, workingSet *WorkingSet,
 	prevHash hash.Hash,
 	meta *WorkingSetMeta,
+	postHooks []datas.CommitHook,
 ) error {
 	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
@@ -1076,7 +1077,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,
-	}, prevHash, commit.CommitOptions)
+	}, prevHash, commit.CommitOptions, postHooks)
 
 	return err
 }
