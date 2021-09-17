@@ -113,7 +113,7 @@ type transactionWrite func(ctx *sql.Context,
 	commit *doltdb.PendingCommit, // optional
 	workingSet *doltdb.WorkingSet, // must be provided
 	hash hash.Hash, // hash of the current working set to be written
-) (*doltdb.Commit, error)
+) (*doltdb.WorkingSet, *doltdb.Commit, error)
 
 // doltCommit is a transactionWrite function that updates the working set and commits a pending commit atomically
 func doltCommit(ctx *sql.Context,
@@ -121,13 +121,15 @@ func doltCommit(ctx *sql.Context,
 	commit *doltdb.PendingCommit,
 	workingSet *doltdb.WorkingSet,
 	hash hash.Hash,
-) (*doltdb.Commit, error) {
+) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	headRef, err := workingSet.Ref().ToHeadRef()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, hash, tx.getWorkingSetMeta(ctx))
+	workingSet = workingSet.ClearMerge()
+	newCommit, err := tx.dbData.Ddb.CommitWithWorkingSet(ctx, headRef, tx.workingSetRef, commit, workingSet, hash, tx.getWorkingSetMeta(ctx))
+	return workingSet, newCommit, err
 }
 
 // txCommit is a transactionWrite function that updates the working set
@@ -136,8 +138,8 @@ func txCommit(ctx *sql.Context,
 	_ *doltdb.PendingCommit,
 	workingSet *doltdb.WorkingSet,
 	hash hash.Hash,
-) (*doltdb.Commit, error) {
-	return nil, tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
+) (*doltdb.WorkingSet, *doltdb.Commit, error) {
+	return workingSet, nil, tx.dbData.Ddb.UpdateWorkingSet(ctx, tx.workingSetRef, workingSet, hash, tx.getWorkingSetMeta(ctx))
 }
 
 // DoltCommit commits the working set and creates a new DoltCommit as specified, in one atomic write
@@ -200,7 +202,8 @@ func (tx *DoltTransaction) doCommit(
 			existingWorkingRoot := ws.WorkingRoot()
 			if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
 				// ff merge
-				newCommit, err := writeFn(ctx, tx, commit, workingSet, wsHash)
+				var newCommit *doltdb.Commit
+				workingSet, newCommit, err = writeFn(ctx, tx, commit, workingSet, wsHash)
 				if err == datas.ErrOptimisticLockFailed {
 					// this is effectively a `continue` in the loop
 					return nil, nil, nil
@@ -239,7 +242,8 @@ func (tx *DoltTransaction) doCommit(
 			}
 
 			mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
-			newCommit, err := writeFn(ctx, tx, commit, mergedWorkingSet, wsHash)
+			var newCommit *doltdb.Commit
+			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, wsHash)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop
 				return nil, nil, nil
