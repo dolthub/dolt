@@ -14,8 +14,9 @@ teardown() {
 }
 
 @test "no-repo: don't panic if invalid HOME" {
+    DOLT_ROOT_PATH=
     HOME=/this/is/garbage
-    dolt
+    run dolt
     [ "$status" -eq 1 ]
     [ ! "${lines[0]}" = "panic" ]
     [ "${lines[0]}" = "Failed to load the HOME dir: stat /this/is/garbage: no such file or directory" ]
