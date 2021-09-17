@@ -13,15 +13,6 @@ teardown() {
     rm -rf $BATS_TMPDIR/no-dolt-dir-$$
 }
 
-@test "no-repo: don't panic if invalid HOME" {
-    DOLT_ROOT_PATH=
-    HOME=/this/is/garbage
-    run dolt
-    [ "$status" -eq 1 ]
-    [ ! "${lines[0]}" = "panic" ]
-    [ "${lines[0]}" = "Failed to load the HOME dir: stat /this/is/garbage: no such file or directory" ]
-}
-
 @test "no-repo: checking we have a dolt executable available" {
     command -v dolt
 }
@@ -280,4 +271,13 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ ! "$output" =~ "{{.LessThan}}" ]] || false
     run dolt checkout help
     [ "$status" -ne 0 ]
+}
+
+@test "no-repo: don't panic if invalid HOME" {
+    DOLT_ROOT_PATH=
+    HOME=/this/is/garbage
+    run dolt
+    [ "$status" -eq 1 ]
+    [ ! "${lines[0]}" = "panic" ]
+    [ "${lines[0]}" = "Failed to load the HOME dir: stat /this/is/garbage: no such file or directory" ]
 }
