@@ -41,7 +41,6 @@ type HomeDirProvider func() (string, error)
 // state will be stored inside of the .dolt directory.  The environment variable DOLT_ROOT_PATH can be used to
 // provide a different directory where the root .dolt directory should be located and global state will be stored there.
 func GetCurrentUserHomeDir() (string, error) {
-	var home string
 	if doltRootPath, ok := os.LookupEnv(doltRootPathEnvVar); ok && doltRootPath != "" {
 		return doltRootPath, nil
 	}
