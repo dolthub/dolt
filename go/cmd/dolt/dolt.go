@@ -239,8 +239,6 @@ func runMain() int {
 		return 1
 	}
 
-
-
 	emitter := events.NewFileEmitter(root, dbfactory.DoltDir)
 
 	defer func() {
