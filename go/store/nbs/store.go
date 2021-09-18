@@ -81,12 +81,10 @@ func makeGlobalCaches() {
 	makeManifestManager = func(m manifest) manifestManager { return manifestManager{m, manifestCache, manifestLocks} }
 }
 
-
 type NBSCompressedChunkStore interface {
 	chunks.ChunkStore
 	GetManyCompressed(context.Context, hash.HashSet, func(CompressedChunk)) error
 }
-
 
 type NomsBlockStore struct {
 	mm manifestManager

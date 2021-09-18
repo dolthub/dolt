@@ -3,9 +3,10 @@ package doltdb
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
-	"sync"
 )
 
 func Replicate(ctx context.Context, srcDB datas.Database, destDB *DoltDB, tempTableDir string, ds datas.Dataset) error {
@@ -50,7 +51,6 @@ func Replicate(ctx context.Context, srcDB datas.Database, destDB *DoltDB, tempTa
 
 	return nil
 }
-
 
 func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
 	for {
