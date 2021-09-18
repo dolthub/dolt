@@ -243,12 +243,12 @@ func (iea *BulkImportIEA) HasPartial(ctx context.Context, idxSch schema.Schema, 
 
 // Commit operation not supported on BulkImportIEA
 func (iea *BulkImportIEA) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
-	panic("Not Supported")
+	return errors.New("not supported")
 }
 
 // Rollback operation not supported on BulkImportIEA
 func (iea *BulkImportIEA) Rollback(ctx context.Context) error {
-	panic("Not Supported")
+	return errors.New("not supported")
 }
 
 // MaterializeEdits commits and applies the in memory edits to the row data

@@ -89,29 +89,18 @@ func (tt TaggedValues) NomsTupleForNonPKCols(nbf *types.NomsBinFormat, nonPKCols
 }
 
 func (tt TaggedValues) nomsTupleForTags(nbf *types.NomsBinFormat, tags []uint64, encodeNulls bool) TupleVals {
-	numVals := 0
+	vals := make([]types.Value, 0, 2*len(tags))
 	for _, tag := range tags {
 		val := tt[tag]
 
-		if val != nil || encodeNulls {
-			numVals++
-		}
-	}
-
-	i := 0
-	vals := make([]types.Value, 2*numVals)
-	for _, tag := range tags {
-		val := tt[tag]
-
-		if val == nil && encodeNulls {
+		if types.IsNull(val) && !encodeNulls {
+			continue
+		} else if val == nil {
 			val = types.NullValue
 		}
 
-		if val != nil {
-			vals[i*2] = types.Uint(tag)
-			vals[i*2+1] = val
-			i++
-		}
+		vals = append(vals, types.Uint(tag))
+		vals = append(vals, val)
 	}
 
 	return TupleVals{vals, nbf}

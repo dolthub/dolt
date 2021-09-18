@@ -219,6 +219,10 @@ func unsetOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, u
 		return 1
 	}
 
+	for i, a := range args {
+		args[i] = strings.ToLower(a)
+	}
+
 	isGlobal := setCfgTypes.Contains(globalParamName)
 	if cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
 		cli.PrintErrln(color.RedString("Unable to read config."))

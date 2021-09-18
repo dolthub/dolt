@@ -272,3 +272,13 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     run dolt checkout help
     [ "$status" -ne 0 ]
 }
+
+@test "no-repo: don't panic if invalid HOME" {
+    DOLT_ROOT_PATH=
+    HOME=/this/is/garbage
+    run dolt
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]]
+    [[ "$output" =~ "Failed to load the HOME directory" ]]
+}
+
