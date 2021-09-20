@@ -236,7 +236,7 @@ func parseV5Manifest(r io.Reader) (manifestContents, error) {
 	}
 
 	slices := strings.Split(string(manifest), ":")
-	if len(slices) < prefixLen - 1 || len(slices)%2 != 1 {
+	if len(slices) < prefixLen - 1 || len(slices)%2 != 0 {
 		return manifestContents{}, ErrCorruptManifest
 	}
 
@@ -348,7 +348,7 @@ func parseV4Manifest(r io.Reader) (manifestContents, error) {
 	}
 
 	slices := strings.Split(string(manifest), ":")
-	if len(slices) < 3 || len(slices)%2 == 1 {
+	if len(slices) < 3 || len(slices)%2 == 0 {
 		return manifestContents{}, ErrCorruptManifest
 	}
 
