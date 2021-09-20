@@ -36,11 +36,8 @@ type ReplicateHook struct {
 	tmpDir string
 }
 
-func NewReplicateHook(destDB *DoltDB) *ReplicateHook {
-	return &ReplicateHook{
-		destDB: destDB.db,
-		tmpDir: "",
-	}
+func NewReplicateHook(destDB *DoltDB, tmpDir string) *ReplicateHook {
+	return &ReplicateHook{destDB: destDB.db, tmpDir: tmpDir}
 }
 
 // Execute implements datas.CommitHook, replicates head updates to the destDb field
@@ -51,12 +48,6 @@ func (rh *ReplicateHook) Execute(ctx context.Context, ds datas.Dataset, db datas
 // HandleError implements datas.CommitHook
 func (rh *ReplicateHook) HandleError(ctx context.Context, err error, wr io.Writer) error {
 	return nil
-}
-
-// WithTempfile implements datas.CommitHook
-func (rh *ReplicateHook) WithTempfile(t string) datas.CommitHook {
-	rh.tmpDir = t
-	return rh
 }
 
 func replicate(ctx context.Context, srcDB, destDB datas.Database, tempTableDir string, ds datas.Dataset) error {

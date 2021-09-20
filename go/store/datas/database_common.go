@@ -49,7 +49,6 @@ var (
 type CommitHook interface {
 	Execute(ctx context.Context, ds Dataset, db Database) error
 	HandleError(ctx context.Context, err error, wr io.Writer) error
-	WithTempfile(t string) CommitHook
 }
 
 //type CommitHook func(ctx context.Context, ds Dataset, db Database) error
@@ -791,11 +790,9 @@ func (db *database) CommitWithWorkingSet(
 	}
 
 	for _, hook := range db.postCommitHooks {
-		// TODO async
 		err := hook.Execute(ctx, commitDS, db)
 		if err != nil {
 			hook.HandleError(ctx, err, nil)
-			// todo log error, don't kill server
 		}
 	}
 	return commitDS, workingSetDS, nil
