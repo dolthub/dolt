@@ -78,6 +78,33 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 }
 
+@test "sql-server: test command line modification" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    # No tables at the start
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    server_query repo1 1 "CREATE TABLE one_pk (
+        pk BIGINT NOT NULL,
+        c1 BIGINT,
+        c2 BIGINT,
+        PRIMARY KEY (pk)
+    )" ""
+    run dolt ls
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "one_pk" ]] || false
+
+    # Add rows on the command line
+    dolt sql -q "insert into one_pk values (1,1,1)"
+
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1"
+}
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
