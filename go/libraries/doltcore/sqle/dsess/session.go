@@ -283,8 +283,14 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (sql.Tran
 		return DisabledTransaction{}, nil
 	}
 
+	err = sessionState.dbData.Ddb.Rebase(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	wsRef := sessionState.WorkingSet.Ref()
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
+	// TODO: every HEAD needs a working set created when it is. We can get rid of this in a 1.0 release when this is fixed
 	if err == doltdb.ErrWorkingSetNotFound {
 		ws, err = sess.newWorkingSetForHead(ctx, wsRef, dbName)
 		if err != nil {
