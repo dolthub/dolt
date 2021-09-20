@@ -104,6 +104,12 @@ teardown() {
     dolt sql -q "insert into one_pk values (1,1,1)"
 
     server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1"
+
+    # Test import as well (used by doltpy)
+    echo 'pk,c1,c2' > import.csv
+    echo '2,2,2' >> import.csv
+    dolt table import -u one_pk import.csv
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1\n2,2,2"
 }
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
