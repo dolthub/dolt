@@ -44,7 +44,7 @@ func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (st
 	}
 
 	defer reader.Close()
-	contents, err := fileManifestV5{}.parseManifest(reader)
+	contents, err := parseManifest(reader)
 
 	if err != nil {
 		return "", manifestContents{}, err
