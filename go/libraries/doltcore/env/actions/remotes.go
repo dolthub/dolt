@@ -18,19 +18,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/store/types"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
-
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")
@@ -428,7 +427,6 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 
 	return nil
 }
-
 
 func CreateRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (env.Remote, *doltdb.DoltDB, error) {
 	r := env.NewRemote(remoteName, remoteUrl, params, dialer)

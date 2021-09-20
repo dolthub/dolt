@@ -25,6 +25,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -35,7 +37,8 @@ import (
 
 type database struct {
 	*types.ValueStore
-	rt rootTracker
+	rt              rootTracker
+	postCommitHooks []CommitHook
 }
 
 var (
@@ -43,7 +46,13 @@ var (
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
 )
 
-type CommitHook func(ctx context.Context, ds Dataset, db Database) error
+type CommitHook interface {
+	Execute(ctx context.Context, ds Dataset, db Database) error
+	HandleError(ctx context.Context, err error, wr io.Writer) error
+	WithTempfile(t string) CommitHook
+}
+
+//type CommitHook func(ctx context.Context, ds Dataset, db Database) error
 
 // TODO: fix panics
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
@@ -67,6 +76,15 @@ var _ GarbageCollector = &database{}
 
 var _ rootTracker = &types.ValueStore{}
 var _ GarbageCollector = &types.ValueStore{}
+
+func (db *database) WithCommitHooks(postHooks []CommitHook) *database {
+	db.postCommitHooks = postHooks
+	return db
+}
+
+func (db *database) PostCommitHooks() []CommitHook {
+	return db.postCommitHooks
+}
 
 func (db *database) chunkStore() chunks.ChunkStore {
 	return db.ChunkStore()
@@ -650,7 +668,6 @@ func (db *database) CommitWithWorkingSet(
 	commitDS, workingSetDS Dataset,
 	val types.Value, workingSetSpec WorkingSetSpec,
 	prevWsHash hash.Hash, opts CommitOptions,
-	postHooks []CommitHook,
 ) (Dataset, Dataset, error) {
 	workingSet, err := NewWorkingSet(ctx, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
 	if err != nil {
@@ -773,10 +790,11 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	for _, hook := range postHooks {
+	for _, hook := range db.postCommitHooks {
 		// TODO async
-		err := hook(ctx, commitDS, db)
+		err := hook.Execute(ctx, commitDS, db)
 		if err != nil {
+			hook.HandleError(ctx, err, nil)
 			// todo log error, don't kill server
 		}
 	}

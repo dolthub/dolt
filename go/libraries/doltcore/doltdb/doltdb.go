@@ -1047,7 +1047,6 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	commit *PendingCommit, workingSet *WorkingSet,
 	prevHash hash.Hash,
 	meta *WorkingSetMeta,
-	postHooks []datas.CommitHook,
 ) error {
 	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
@@ -1077,7 +1076,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,
-	}, prevHash, commit.CommitOptions, postHooks)
+	}, prevHash, commit.CommitOptions)
 
 	return err
 }
@@ -1266,4 +1265,9 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- datas.TableFileEvent) error {
 	return datas.Clone(ctx, ddb.db, destDB.db, eventCh)
+}
+
+func (ddb *DoltDB) WithCommitHooks(ctx context.Context, postHooks []datas.CommitHook) *DoltDB {
+	ddb.db = ddb.db.WithCommitHooks(postHooks)
+	return ddb
 }

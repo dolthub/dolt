@@ -3,9 +3,10 @@ package doltdb
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/store/datas"
+	"io"
 	"sync"
+
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 //const BackupRemoteKey = "DOLT_BACKUP_REMOTE"
@@ -30,7 +31,35 @@ import (
 //	}
 //}
 
-func Replicate(ctx context.Context, srcDB datas.Database, destDB *DoltDB, tempTableDir string, ds datas.Dataset) error {
+type ReplicateHook struct {
+	destDB datas.Database
+	tmpDir string
+}
+
+func NewReplicateHook(destDB *DoltDB) *ReplicateHook {
+	return &ReplicateHook{
+		destDB: destDB.db,
+		tmpDir: "",
+	}
+}
+
+// Execute implements datas.CommitHook, replicates head updates to the destDb field
+func (rh *ReplicateHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
+	return replicate(ctx, db, rh.destDB, rh.tmpDir, ds)
+}
+
+// HandleError implements datas.CommitHook
+func (rh *ReplicateHook) HandleError(ctx context.Context, err error, wr io.Writer) error {
+	return nil
+}
+
+// WithTempfile implements datas.CommitHook
+func (rh *ReplicateHook) WithTempfile(t string) datas.CommitHook {
+	rh.tmpDir = t
+	return rh
+}
+
+func replicate(ctx context.Context, srcDB, destDB datas.Database, tempTableDir string, ds datas.Dataset) error {
 	stRef, ok, err := ds.MaybeHeadRef()
 	t, _ := stRef.TargetType()
 	fmt.Print(t)
@@ -41,13 +70,13 @@ func Replicate(ctx context.Context, srcDB datas.Database, destDB *DoltDB, tempTa
 		panic("max fix")
 	}
 
-	rf, err := ref.Parse(ds.ID())
-	if err != nil {
-		return err
-	}
+	//rf, err := ref.Parse(ds.ID())
+	//if err != nil {
+	//	return err
+	//}
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := runProgFuncs(newCtx)
-	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB.db, stRef.TargetHash(), pullerEventCh)
+	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB, stRef.TargetHash(), pullerEventCh)
 
 	if err == datas.ErrDBUpToDate {
 		return nil
@@ -65,14 +94,13 @@ func Replicate(ctx context.Context, srcDB datas.Database, destDB *DoltDB, tempTa
 		return err
 	}
 
-	err = destDB.SetHead(ctx, rf, stRef)
+	ds, err = destDB.SetHead(ctx, ds, stRef)
 	if err != nil {
 		return err
 	}
 
 	return nil
 }
-
 
 func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
 	for {

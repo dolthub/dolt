@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -49,6 +51,30 @@ const (
 	DefaultRemotesApiPort = "443"
 	tempTablesDir         = "temptf"
 )
+
+var postCommitHooks []datas.CommitHook
+
+const BackupRemoteKey = "DOLT_BACKUP_REMOTE"
+
+func init() {
+	backupUrl := os.Getenv(BackupRemoteKey)
+	if backupUrl != "" {
+		ctx := context.Background()
+		_, destDB, err := CreateRemote(ctx, "backup", backupUrl, nil)
+		if err != nil {
+			return
+		}
+		replicateHook := doltdb.NewReplicateHook(destDB)
+		postCommitHooks = append(postCommitHooks, replicateHook)
+		//postCommitHooks = append(postCommitHooks, func(ctx context.Context, ds datas.Dataset, srcDB datas.Database) error {
+		//	if err != nil {
+		//		return err
+		//	}
+		//	// TODO: used dEnv or WS tempfile
+		//	return doltdb.Replicate(ctx, srcDB, destDB, ".dolt/temptf", ds)
+		//})
+	}
+}
 
 var zeroHashStr = (hash.Hash{}).String()
 
@@ -92,6 +118,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 
 	docs, docsErr := doltdocs.LoadDocs(fs)
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
+	ddb = ddb.WithCommitHooks(ctx, postCommitHooks)
 
 	dEnv := &DoltEnv{
 		Version:     version,
