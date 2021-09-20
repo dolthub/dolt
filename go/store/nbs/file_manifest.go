@@ -166,9 +166,9 @@ func (fm fileManifest) Name() string {
 // it will be executed while ParseIfExists() holds the manifest file lock.
 // This is to allow for race condition testing.
 func (fm fileManifest) ParseIfExists(
-		ctx context.Context,
-		stats *Stats,
-		readHook func() error,
+	ctx context.Context,
+	stats *Stats,
+	readHook func() error,
 ) (exists bool, contents manifestContents, err error) {
 	t1 := time.Now()
 	defer func() {
