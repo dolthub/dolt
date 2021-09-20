@@ -408,10 +408,10 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 	if fm.contents.lock == lastLock {
 		fm.contents = manifestContents{
 			manifestVers: StorageVersion,
-			nbfVers: newContents.nbfVers,
-			lock: newContents.lock,
-			root: newContents.root,
-			gcGen: addr(hash.Hash{}),
+			nbfVers:      newContents.nbfVers,
+			lock:         newContents.lock,
+			root:         newContents.root,
+			gcGen:        addr(hash.Hash{}),
 		}
 		fm.contents.specs = make([]tableSpec, len(newContents.specs))
 		copy(fm.contents.specs, newContents.specs)
@@ -426,12 +426,12 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs, appendix []tableSpec) {
 	fm.contents = manifestContents{
 		manifestVers: StorageVersion,
-		nbfVers: version,
-		lock: lock,
-		root: root,
-		gcGen: addr(hash.Hash{}),
-		specs: specs,
-		appendix: appendix,
+		nbfVers:      version,
+		lock:         lock,
+		root:         root,
+		gcGen:        addr(hash.Hash{}),
+		specs:        specs,
+		appendix:     appendix,
 	}
 }
 
