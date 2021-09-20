@@ -51,8 +51,6 @@ const (
 
 var ErrUnreadableManifest = errors.New("could not read file manifest")
 
-type manifestParser func(r io.Reader) (manifestContents, error)
-type manifestWriter func(temp io.Writer, contents manifestContents) error
 type manifestChecker func(upstream, contents manifestContents) error
 
 // ParseManifest parses a manifest file from the supplied reader
@@ -69,7 +67,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return false, err
 	}
 
-	_, contents, err := parseIfExistsWithParser(ctx, dir, parseManifest, nil)
+	_, contents, err := parseIfExists(ctx, dir, nil)
 	if err != nil {
 		return false, err
 	}
@@ -88,7 +86,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return nil
 	}
 
-	_, err = updateWithParseWriterAndChecker(ctx, dir, writeManifest, parseManifest, check, contents.lock, contents, nil)
+	_, err = updateWithChecker(ctx, dir, check, contents.lock, contents, nil)
 
 	if err != nil {
 		return false, err
@@ -189,7 +187,7 @@ func (fm5 fileManifestV5) ParseIfExists(ctx context.Context, stats *Stats, readH
 		stats.ReadManifestLatency.SampleTimeSince(t1)
 	}()
 
-	return parseIfExistsWithParser(ctx, fm5.dir, parseManifest, readHook)
+	return parseIfExists(ctx, fm5.dir, readHook)
 }
 
 func (fm5 fileManifestV5) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
@@ -203,7 +201,7 @@ func (fm5 fileManifestV5) Update(ctx context.Context, lastLock addr, newContents
 		return nil
 	}
 
-	return updateWithParseWriterAndChecker(ctx, fm5.dir, writeManifest, parseManifest, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm5.dir, checker, lastLock, newContents, writeHook)
 }
 
 func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
@@ -221,7 +219,7 @@ func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newCon
 		return nil
 	}
 
-	return updateWithParseWriterAndChecker(ctx, fm5.dir, writeManifest, parseManifest, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm5.dir, checker, lastLock, newContents, writeHook)
 }
 
 // parseV5Manifest parses the manifest from the Reader given. Assumes the first field (the manifest version and
@@ -290,7 +288,7 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 	case StorageVersion:
 		return parseV5Manifest(r)
 	default:
-		return manifestContents{}, fmt.Errorf("unknown manifest version: %s", string(version))
+		return manifestContents{}, fmt.Errorf("Unknown manifest version: %s. You may need to update your client", string(version))
 	}
 }
 
@@ -323,7 +321,7 @@ func (fm4 fileManifestV4) ParseIfExists(ctx context.Context, stats *Stats, readH
 		stats.ReadManifestLatency.SampleTimeSince(t1)
 	}()
 
-	return parseIfExistsWithParser(ctx, fm4.dir, parseManifest, readHook)
+	return parseIfExists(ctx, fm4.dir, readHook)
 }
 
 func (fm4 fileManifestV4) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
@@ -334,7 +332,7 @@ func (fm4 fileManifestV4) Update(ctx context.Context, lastLock addr, newContents
 		return nil
 	}
 
-	return updateWithParseWriterAndChecker(ctx, fm4.dir, writeManifest, parseManifest, noop, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm4.dir, noop, lastLock, newContents, writeHook)
 }
 
 // parseV4Manifest parses the manifest from the Reader given. Assumes the first field (the manifest version and
@@ -372,7 +370,7 @@ func parseV4Manifest(r io.Reader) (manifestContents, error) {
 	}, nil
 }
 
-func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser, readHook func() error) (exists bool, contents manifestContents, err error) {
+func parseIfExists(_ context.Context, dir string, readHook func() error) (exists bool, contents manifestContents, err error) {
 	var locked bool
 	locked, err = lockFileExists(dir)
 
@@ -427,7 +425,7 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 
 			exists = true
 
-			contents, err = parse(f)
+			contents, err = parseManifest(f)
 
 			if err != nil {
 				return false, contents, err
@@ -437,7 +435,7 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 	return exists, contents, nil
 }
 
-func updateWithParseWriterAndChecker(_ context.Context, dir string, write manifestWriter, parse manifestParser, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+func updateWithChecker(_ context.Context, dir string, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
@@ -458,7 +456,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 			}
 		}()
 
-		ferr = write(temp, newContents)
+		ferr = writeManifest(temp, newContents)
 
 		if ferr != nil {
 			return "", ferr
@@ -511,7 +509,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 				}
 			}()
 
-			upstream, ferr = parse(f)
+			upstream, ferr = parseManifest(f)
 
 			if ferr != nil {
 				return manifestContents{}, ferr
