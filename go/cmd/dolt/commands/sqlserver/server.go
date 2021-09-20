@@ -127,7 +127,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	dbs := commands.CollectDBs(mrEnv)
 	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
-	pro := dsqle.NewDoltDatabaseProvider(all...)
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
 	cat := sql.NewCatalog(pro)
 
 	a := analyzer.NewBuilder(cat).WithParallelism(serverConfig.QueryParallelism()).Build()

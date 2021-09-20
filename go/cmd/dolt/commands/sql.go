@@ -1423,7 +1423,7 @@ func newSqlEngine(
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
-	pro := dsqle.NewDoltDatabaseProvider(all...)
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
 	cat := sql.NewCatalog(pro)
 
 	err := cat.Register(dfunctions.DoltFunctions...)

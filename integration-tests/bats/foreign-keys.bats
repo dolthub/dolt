@@ -349,7 +349,7 @@ SQL
     [ "$status" -eq "1" ]
     [[ "$output" =~ "SET NULL" ]] || false
     [[ "$output" =~ "v1" ]] || false
-    
+
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON UPDATE SET NULL"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "SET NULL" ]] || false
@@ -525,12 +525,12 @@ CREATE TABLE two (
     REFERENCES one(extra)
 );
 SQL
-    
+
     dolt table cp two two_new
     run dolt schema show two_new
     [ "$status" -eq "0" ]
     ! [[ "$output" =~ "FOREIGN KEY" ]] || false
-    
+
     run dolt schema show two
     [ "$status" -eq "0" ]
     [[ "$output" =~ "FOREIGN KEY" ]] || false
@@ -570,7 +570,7 @@ SQL
     [[ "$output" =~ "v1" ]] || false
     dolt sql -q "ALTER TABLE child DROP FOREIGN KEY fk_name"
     dolt sql -q "ALTER TABLE parent DROP COLUMN v1"
-    
+
     dolt reset --hard
     run dolt sql -q "ALTER TABLE child DROP COLUMN v1"
     [ "$status" -eq "1" ]
@@ -584,7 +584,7 @@ SQL
     run dolt sql -q "ALTER TABLE child CHANGE COLUMN parent_extra parent_extra BIGINT"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "parent_extra" ]] || false
-    
+
     run dolt sql -q "ALTER TABLE child CHANGE COLUMN parent_extra parent_extra BIGINT NULL"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "parent_extra" ]] || false
@@ -677,11 +677,11 @@ INSERT INTO one VALUES (4, 4, 4);
 INSERT INTO two VALUES (4, 4, 4);
 UPDATE one SET v2 = v1 * v2;
 SQL
-    
+
     run dolt schema show two
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`) ON DELETE SET NULL ON UPDATE SET NULL' ]] || false
-    
+
     run dolt sql -q "SELECT * FROM one" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1,v2" ]] || false
@@ -720,11 +720,11 @@ CREATE TABLE two (
 INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 SQL
-    
+
     run dolt schema show two
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`) ON DELETE RESTRICT ON UPDATE RESTRICT' ]] || false
-    
+
     run dolt sql -q "UPDATE one SET v1 = v1 + v2;"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
@@ -752,11 +752,11 @@ CREATE TABLE two (
 INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 SQL
-    
+
     run dolt schema show two
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`)' ]] || false
-    
+
     run dolt sql -q "UPDATE one SET v1 = v1 + v2;"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
@@ -787,17 +787,17 @@ CREATE TABLE two (
 INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 INSERT INTO two VALUES (1, NULL, 1);
 SQL
-    
+
     run dolt sql -q "INSERT INTO two VALUES (2, NULL, 4)"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
     [[ "$output" =~ "fk_name_2" ]] || false
-    
+
     run dolt sql -q "INSERT INTO two VALUES (3, 4, NULL)"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
     [[ "$output" =~ "fk_name_1" ]] || false
-    
+
     dolt sql -q "INSERT INTO two VALUES (4, NULL, NULL)" # sanity check
 }
 
@@ -893,13 +893,13 @@ SQL
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `super_parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
-    
+
     dolt checkout -b last_commit HEAD~1
     dolt reset --hard # See issue https://github.com/dolthub/dolt/issues/752
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
-    
+
     dolt checkout master
     run dolt schema show
     [ "$status" -eq "0" ]
@@ -918,7 +918,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
     dolt checkout -b original
     dolt checkout master
-    
+
     dolt sql <<SQL
 RENAME TABLE parent TO new_parent;
 RENAME TABLE child TO new_child;
@@ -933,7 +933,7 @@ SQL
     run dolt schema show new_child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`vnew`) REFERENCES `new_parent` (`vnew`)' ]] || false
-    
+
     dolt checkout original
     run dolt schema show child
     [ "$status" -eq "0" ]
@@ -952,7 +952,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
     dolt checkout -b original
     dolt checkout master
-    
+
     dolt sql <<SQL
 ALTER TABLE parent ADD INDEX v1v2 (v1,v2);
 ALTER TABLE child DROP FOREIGN KEY fk_name;
@@ -966,7 +966,7 @@ SQL
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`,`v2`) REFERENCES `parent` (`v1`,`v2`)' ]] || false
-    
+
     dolt checkout original
     run dolt schema show child
     [ "$status" -eq "0" ]
@@ -983,7 +983,7 @@ SQL
     [ "$status" -eq "1" ]
     [[ "$output" =~ "parent" ]] || false
     dolt commit --force -m "will succeed"
-    
+
     dolt checkout -b last_commit HEAD~1
     run dolt commit -m "nothing changed, will fail"
     [ "$status" -eq "1" ]
@@ -1004,7 +1004,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
     dolt checkout -b original
     dolt checkout master
-    
+
     dolt sql <<SQL
 ALTER TABLE child DROP FOREIGN KEY fk_name;
 SQL
@@ -1016,7 +1016,7 @@ SQL
     run dolt schema show child
     [ "$status" -eq "0" ]
     ! [[ "$output" =~ "FOREIGN KEY" ]] || false
-    
+
     dolt checkout original
     run dolt schema show child
     [ "$status" -eq "0" ]
@@ -1043,7 +1043,7 @@ SQL
 
     dolt add -A
     dolt commit -m "has fk"
-    
+
     dolt sql <<SQL
 RENAME TABLE parent TO super_parent;
 SQL
@@ -1081,7 +1081,7 @@ SQL
     dolt commit --force -m "updated parent"
     dolt checkout master
     dolt merge other
-    
+
     run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "id,v1" ]] || false
@@ -1157,7 +1157,7 @@ SQL
     dolt commit --force -m "updated child"
     dolt checkout master
     dolt merge other
-    
+
     run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "id,v1" ]] || false
@@ -1234,7 +1234,7 @@ SQL
     dolt commit --force -m "updated both"
     dolt checkout master
     dolt merge other
-    
+
     run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "id,v1" ]] || false
@@ -1565,7 +1565,7 @@ SQL
     # Run a query and assert that no changes were made
     run dolt sql -q "DELETE FROM colors where color='green'"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `(2162,"green")`' ]] || false
+    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `["green"]`' ]] || false
 
     run dolt sql -r csv -q "SELECT * FROM colors"
     [ "$status" -eq "0" ]
@@ -1621,7 +1621,7 @@ SHOW WARNINGS;
 SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ '1452' ]] || false # first ensure the proper code
-    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `(4011,"yellow")`' ]] || false
+    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `["yellow"]`' ]] || false
 }
 
 @test "foreign-keys: updating to null works as expected in commit" {
@@ -1650,4 +1650,38 @@ SQL
     dolt sql -q 'delete from additional_t'
     dolt add .
     dolt commit -m 'this should not break'
+}
+
+@test "foreign-keys: dolt table import with null in nullable FK field should work (issue #2108)" {
+    dolt sql <<SQL
+CREATE TABLE naics (
+  naics_2017 char(6) NOT NULL,
+  PRIMARY KEY (naics_2017)
+);
+CREATE TABLE businesses (
+  name varchar(180) NOT NULL,
+  naics_2017 char(6),
+  PRIMARY KEY (name),
+  KEY naics_2017 (naics_2017),
+  CONSTRAINT naics FOREIGN KEY (naics_2017) REFERENCES naics (naics_2017)
+);
+INSERT INTO naics VALUES ("100");
+SQL
+
+    echo $'name,naics_2017\n"test",\n"test2","100"' > fk_test.csv
+
+    run dolt table import -u businesses fk_test.csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
+
+    # Ensure this fails when the field is NOT NULL
+    dolt sql <<SQL
+TRUNCATE businesses;
+ALTER TABLE businesses MODIFY naics_2017 char(6) NOT NULL;
+SQL
+
+    run dolt table import -u businesses fk_test.csv
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Bad Row:" ]] || false
+    [[ "$output" =~ "naics_2017" ]] || false
 }

@@ -50,7 +50,7 @@ import (
 )
 
 const (
-	Version = "0.28.3"
+	Version = "0.28.4"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -235,6 +235,7 @@ func runMain() int {
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
 		return 1
 	}
 

@@ -183,7 +183,7 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 		t.Fatal("Failed to load db")
 	}
 
-	err = ddb.WriteEmptyRepo(context.Background(), "Bill Billerson", "bigbillieb@fake.horse")
+	err = ddb.WriteEmptyRepo(context.Background(), "master", "Bill Billerson", "bigbillieb@fake.horse")
 
 	if err != nil {
 		t.Fatal("Unexpected error creating empty repo", err)
@@ -252,7 +252,7 @@ func TestLDNoms(t *testing.T) {
 		}
 
 		ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
-		err = ddb.WriteEmptyRepo(context.Background(), committerName, committerEmail)
+		err = ddb.WriteEmptyRepo(context.Background(), "master", committerName, committerEmail)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating empty repo", err)

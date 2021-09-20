@@ -91,10 +91,11 @@ func DeleteWorkspace(ctx context.Context, dEnv *env.DoltEnv, workspaceName strin
 		}
 	}
 
-	return DeleteWorkspaceOnDB(ctx, dEnv.DoltDB, dref, opts)
+	return DeleteWorkspaceOnDB(ctx, dEnv, dref, opts)
 }
 
-func DeleteWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef, opts DeleteOptions) error {
+func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef, opts DeleteOptions) error {
+	ddb := dEnv.DoltDB
 	hasRef, err := ddb.HasRef(ctx, dref)
 
 	if err != nil {
@@ -104,7 +105,7 @@ func DeleteWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltR
 	}
 
 	if !opts.Force && !opts.Remote {
-		ms, err := doltdb.NewCommitSpec("master")
+		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(dEnv.Config))
 		if err != nil {
 			return err
 		}
