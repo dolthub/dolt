@@ -26,6 +26,38 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var _ sql.RowIter = (*keylessRowIter)(nil)
+
+type keylessRowIter struct {
+	keyedIter *DoltMapIter
+
+	cardIdx int
+	nonCardCols int
+
+	lastRead sql.Row
+	lastCard uint64
+}
+
+func (k *keylessRowIter) Next() (sql.Row, error) {
+	if k.lastCard == 0 {
+		r, err := k.keyedIter.Next()
+
+		if err != nil {
+			return nil, err
+		}
+
+		k.lastCard = r[k.cardIdx].(uint64)
+		k.lastRead = r[:k.nonCardCols]
+	}
+
+	k.lastCard--
+	return k.lastRead, nil
+}
+
+func (k keylessRowIter) Close(ctx *sql.Context) error {
+	return k.keyedIter.Close(ctx)
+}
+
 // An iterator over the rows of a table.
 type doltTableRowIter struct {
 	sql.RowIter
@@ -43,48 +75,71 @@ func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, part
 
 	if schema.IsKeyless(sch) {
 		// would be more optimal to project columns into keyless tables also
-		return newKeylessRowIterator(ctx, tbl, partition)
+		return newKeylessRowIterator(ctx, tbl, projCols, partition)
 	} else {
 		return newKeyedRowIter(ctx, tbl, projCols, partition)
 	}
 }
 
-func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, partition *doltTablePartition) (*doltTableRowIter, error) {
-	var iter table.SqlTableReader
-	var err error
-	if partition.end == NoUpperBound {
-		iter, err = table.NewBufferedTableReader(ctx, tbl)
-	} else {
-		iter, err = table.NewBufferedTableReaderForPartition(ctx, tbl, partition.start, partition.end)
-	}
-
+func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
+	mapIter, err := iterForPartition(ctx, partition)
 	if err != nil {
 		return nil, err
 	}
 
-	return &doltTableRowIter{
-		ctx:    ctx,
-		reader: iter,
+	cols, tagToSqlColIdx, err := getTagToResColIdx(ctx, tbl, projectedCols)
+	if err != nil {
+		return nil, err
+	}
+
+	idxOfCardinality := len(cols)
+	tagToSqlColIdx[schema.KeylessRowCardinalityTag] = idxOfCardinality
+
+	colsCopy := make([]schema.Column, len(cols), len(cols)+1)
+	copy(colsCopy, cols)
+	colsCopy = append(colsCopy, schema.NewColumn("__cardinality__", schema.KeylessRowCardinalityTag, types.UintKind, false))
+
+	conv := NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, colsCopy, len(colsCopy))
+	keyedItr, err := NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
+	if err != nil {
+		return nil, err
+	}
+
+	return &keylessRowIter{
+		keyedIter:   keyedItr,
+		cardIdx:     idxOfCardinality,
+		nonCardCols: len(cols),
 	}, nil
 }
 
 func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
-	var err error
-	var mapIter types.MapTupleIterator
+	mapIter, err := iterForPartition(ctx, partition)
+	if err != nil {
+		return nil, err
+	}
+
+	cols, tagToSqlColIdx, err := getTagToResColIdx(ctx, tbl, projectedCols)
+	if err != nil {
+		return nil, err
+	}
+
+	conv := NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, cols, len(cols))
+	return NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
+}
+
+func iterForPartition(ctx context.Context, partition *doltTablePartition) (types.MapTupleIterator, error) {
 	rowData := partition.rowData
 	if partition.end == NoUpperBound {
-		mapIter, err = rowData.RangeIterator(ctx, 0, rowData.Len())
+		return rowData.RangeIterator(ctx, 0, rowData.Len())
 	} else {
-		mapIter, err = partition.IteratorForPartition(ctx, rowData)
+		return partition.IteratorForPartition(ctx, rowData)
 	}
+}
 
-	if err != nil {
-		return nil, err
-	}
-
+func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []string) ([]schema.Column, map[uint64]int, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cols := sch.GetAllCols().GetColumns()
@@ -96,9 +151,7 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []str
 			tagToSqlColIdx[col.Tag] = i
 		}
 	}
-
-	conv := NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, cols, len(cols))
-	return NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
+	return cols, tagToSqlColIdx, nil
 }
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.
