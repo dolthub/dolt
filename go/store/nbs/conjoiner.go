@@ -100,7 +100,7 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		specs = append(specs, keepers...)
 
 		newContents := manifestContents{
-			vers:     upstream.vers,
+			nbfVers:  upstream.nbfVers,
 			root:     upstream.root,
 			lock:     generateLockHash(upstream.root, specs, appendixSpecs),
 			gcGen:    upstream.gcGen,

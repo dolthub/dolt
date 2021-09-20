@@ -105,7 +105,7 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 		}
 
 		exists = true
-		contents.vers = *result.Item[versAttr].S
+		contents.nbfVers = *result.Item[versAttr].S
 		contents.root = hash.New(result.Item[rootAttr].B)
 		copy(contents.lock[:], result.Item[lockAttr].B)
 		if hasSpecs {
@@ -155,7 +155,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 		Item: map[string]*dynamodb.AttributeValue{
 			dbAttr:      {S: aws.String(dm.db)},
 			nbsVersAttr: {S: aws.String(AWSStorageVersion)},
-			versAttr:    {S: aws.String(newContents.vers)},
+			versAttr:    {S: aws.String(newContents.nbfVers)},
 			rootAttr:    {B: newContents.root[:]},
 			lockAttr:    {B: newContents.lock[:]},
 		},
@@ -181,7 +181,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 	putArgs.ConditionExpression = aws.String(expr)
 	putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
 		prevLockExpressionValuesKey: {B: lastLock[:]},
-		versExpressionValuesKey:     {S: aws.String(newContents.vers)},
+		versExpressionValuesKey:     {S: aws.String(newContents.nbfVers)},
 	}
 
 	_, ddberr := dm.ddbsvc.PutItemWithContext(ctx, &putArgs)
@@ -197,7 +197,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 				return manifestContents{}, errors.New("manifest not found")
 			}
 
-			if upstream.vers != newContents.vers {
+			if upstream.nbfVers != newContents.nbfVers {
 				return manifestContents{}, errors.New("version mismatch")
 			}
 

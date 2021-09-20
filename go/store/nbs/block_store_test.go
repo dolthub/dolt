@@ -558,10 +558,10 @@ func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents,
 	fc.canned = fc.canned[1:]
 
 	newContents := manifestContents{
-		vers:  constants.NomsVersion,
-		root:  upstream.root,
-		specs: canned.specs,
-		lock:  generateLockHash(upstream.root, canned.specs, []tableSpec{}),
+		nbfVers: constants.NomsVersion,
+		root:    upstream.root,
+		specs:   canned.specs,
+		lock:    generateLockHash(upstream.root, canned.specs, []tableSpec{}),
 	}
 
 	var err error

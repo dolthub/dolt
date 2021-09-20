@@ -111,11 +111,12 @@ const (
 )
 
 type manifestContents struct {
-	vers  string
-	lock  addr
-	root  hash.Hash
-	gcGen addr
-	specs []tableSpec
+	manifestVers string
+	nbfVers      string
+	lock         addr
+	root         hash.Hash
+	gcGen        addr
+	specs        []tableSpec
 
 	// An appendix is a list of |tableSpecs| that track an auxillary collection of
 	// table files used _only_ for query performance optimizations. These appendix |tableSpecs| can be safely
@@ -125,8 +126,9 @@ type manifestContents struct {
 	appendix []tableSpec
 }
 
+// GetVersion returns the noms binary format of the manifest
 func (mc manifestContents) GetVersion() string {
-	return mc.vers
+	return mc.nbfVers
 }
 
 func (mc manifestContents) GetLock() string {
@@ -182,11 +184,11 @@ func (mc manifestContents) removeAppendixSpecs() (manifestContents, []tableSpec)
 	}
 
 	return manifestContents{
-		vers:  mc.vers,
-		lock:  mc.lock,
-		root:  mc.root,
-		gcGen: mc.gcGen,
-		specs: filtered,
+		nbfVers: mc.nbfVers,
+		lock:    mc.lock,
+		root:    mc.root,
+		gcGen:   mc.gcGen,
+		specs:   filtered,
 	}, removed
 }
 
@@ -207,7 +209,7 @@ func toSpecSet(specs []tableSpec) (ss map[addr]struct{}) {
 }
 
 func (mc manifestContents) size() (size uint64) {
-	size += uint64(len(mc.vers)) + addrSize + hash.ByteLen
+	size += uint64(len(mc.nbfVers)) + addrSize + hash.ByteLen
 	for _, sp := range mc.specs {
 		size += uint64(len(sp.name)) + uint32Size // for sp.chunkCount
 	}

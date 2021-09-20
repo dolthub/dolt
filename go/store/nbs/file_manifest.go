@@ -70,15 +70,14 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 	}
 
 	fm5 := fileManifestV5{dir}
-	_, _, err = parseIfExistsWithParser(ctx, dir, parseV5Manifest, nil)
-	if err == nil {
-		// on v5, no need to migrate
-		return false, nil
-	}
-
-	_, contents, err := parseIfExistsWithParser(ctx, dir, parseV4Manifest, nil)
+	_, contents, err := parseIfExistsWithParser(ctx, dir, parseManifest, nil)
 	if err != nil {
 		return false, err
+	}
+
+	if contents.manifestVers == StorageVersion {
+		// already on v5, no need to migrate
+		return false, nil
 	}
 
 	check := func(_, contents manifestContents) error {
@@ -256,11 +255,12 @@ func parseV5Manifest(r io.Reader) (manifestContents, error) {
 	}
 
 	return manifestContents{
-		vers:  slices[0],
-		lock:  lock,
-		root:  hash.Parse(slices[2]),
-		gcGen: gcGen,
-		specs: specs,
+		manifestVers: StorageVersion,
+		nbfVers:      slices[0],
+		lock:         lock,
+		root:         hash.Parse(slices[2]),
+		gcGen:        gcGen,
+		specs:        specs,
 	}, nil
 }
 
@@ -297,7 +297,7 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 
 func (fm5 fileManifestV5) writeManifest(temp io.Writer, contents manifestContents) error {
 	strs := make([]string, 2*len(contents.specs)+prefixLen)
-	strs[0], strs[1], strs[2], strs[3], strs[4] = StorageVersion, contents.vers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
+	strs[0], strs[1], strs[2], strs[3], strs[4] = StorageVersion, contents.nbfVers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
 	tableInfo := strs[prefixLen:]
 	formatSpecs(contents.specs, tableInfo)
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
@@ -365,16 +365,17 @@ func parseV4Manifest(r io.Reader) (manifestContents, error) {
 	}
 
 	return manifestContents{
-		vers:  slices[0],
-		lock:  ad,
-		root:  hash.Parse(slices[2]),
-		specs: specs,
+		manifestVers: storageVersion4,
+		nbfVers:      slices[0],
+		lock:         ad,
+		root:         hash.Parse(slices[2]),
+		specs:        specs,
 	}, nil
 }
 
 func (fm4 fileManifestV4) writeManifest(temp io.Writer, contents manifestContents) error {
 	strs := make([]string, 2*len(contents.specs)+4)
-	strs[0], strs[1], strs[2], strs[3] = storageVersion4, contents.vers, contents.lock.String(), contents.root.String()
+	strs[0], strs[1], strs[2], strs[3] = storageVersion4, contents.nbfVers, contents.lock.String(), contents.root.String()
 	tableInfo := strs[4:]
 	formatSpecs(contents.specs, tableInfo)
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
@@ -527,7 +528,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 				return manifestContents{}, ferr
 			}
 
-			if newContents.vers != upstream.vers {
+			if newContents.nbfVers != upstream.nbfVers {
 				return manifestContents{}, errors.New("Update cannot change manifest version")
 			}
 
