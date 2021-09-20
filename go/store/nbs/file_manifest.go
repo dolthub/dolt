@@ -102,38 +102,22 @@ func getFileManifest(ctx context.Context, dir string) (manifest, error) {
 		return nil, err
 	}
 	if f == nil {
-		// initialize empty repos with v4
-		return fileManifestV4{dir}, nil
+		return fileManifest{dir}, nil
 	}
 	defer func() {
 		err = f.Close()
 	}()
 
-	fm5 := fileManifestV5{dir}
-	ok, _, err := fm5.ParseIfExists(ctx, &Stats{}, nil)
+	fm := fileManifest{dir}
+	ok, _, err := fm.ParseIfExists(ctx, &Stats{}, nil)
 	if ok && err == nil {
-		return fm5, nil
-	}
-
-	fm4 := fileManifestV4{dir}
-	ok, _, err = fm4.ParseIfExists(ctx, &Stats{}, nil)
-	if ok && err == nil {
-		return fm4, nil
+		return fm, nil
 	}
 
 	return nil, ErrUnreadableManifest
 }
 
-// fileManifestV5 provides access to a NomsBlockStore manifest stored on disk in |dir|. The format
-// is currently human readable. The prefix contains 5 strings, followed by pairs of table file
-// hashes and their counts:
-//
-// |-- String --|-- String --|-------- String --------|-------- String --------|-------- String -----------------|
-// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:Base32-encoded GC generation hash
-//
-// |-- String --|- String --|...|-- String --|- String --|
-// :table 1 hash:table 1 cnt:...:table N hash:table N cnt|
-type fileManifestV5 struct {
+type fileManifest struct {
 	dir string
 }
 
@@ -171,8 +155,8 @@ func openIfExists(path string) (*os.File, error) {
 	return f, err
 }
 
-func (fm5 fileManifestV5) Name() string {
-	return fm5.dir
+func (fm fileManifest) Name() string {
+	return fm.dir
 }
 
 // ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
@@ -181,16 +165,20 @@ func (fm5 fileManifestV5) Name() string {
 // that case, the other return values are undefined. If |readHook| is non-nil,
 // it will be executed while ParseIfExists() holds the manifest file lock.
 // This is to allow for race condition testing.
-func (fm5 fileManifestV5) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
+func (fm fileManifest) ParseIfExists(
+		ctx context.Context,
+		stats *Stats,
+		readHook func() error,
+) (exists bool, contents manifestContents, err error) {
 	t1 := time.Now()
 	defer func() {
 		stats.ReadManifestLatency.SampleTimeSince(t1)
 	}()
 
-	return parseIfExists(ctx, fm5.dir, readHook)
+	return parseIfExists(ctx, fm.dir, readHook)
 }
 
-func (fm5 fileManifestV5) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -201,10 +189,10 @@ func (fm5 fileManifestV5) Update(ctx context.Context, lastLock addr, newContents
 		return nil
 	}
 
-	return updateWithChecker(ctx, fm5.dir, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
 }
 
-func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -219,11 +207,17 @@ func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newCon
 		return nil
 	}
 
-	return updateWithChecker(ctx, fm5.dir, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
 }
 
-// parseV5Manifest parses the manifest from the Reader given. Assumes the first field (the manifest version and
+// parseV5Manifest parses the v5 manifest from the Reader given. Assumes the first field (the manifest version and
 // following : character) have already been consumed by the reader.
+//
+// |-- String --|-- String --|-------- String --------|-------- String --------|-------- String -----------------|
+// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:Base32-encoded GC generation hash
+//
+// |-- String --|- String --|...|-- String --|- String --|
+// :table 1 hash:table 1 cnt:...:table N hash:table N cnt|
 func parseV5Manifest(r io.Reader) (manifestContents, error) {
 	manifest, err := ioutil.ReadAll(r)
 
@@ -302,41 +296,11 @@ func writeManifest(temp io.Writer, contents manifestContents) error {
 	return err
 }
 
-// fileManifestV4 is the previous versions of the NomsBlockStore manifest.
-// The format is as follows:
+// parseV4Manifest parses the v4 manifest from the Reader given. Assumes the first field (the manifest version and
+// following : character) have already been consumed by the reader.
 //
 // |-- String --|-- String --|-------- String --------|-------- String --------|-- String --|- String --|...|-- String --|- String --|
 // | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:table 1 hash:table 1 cnt:...:table N hash:table N cnt|
-type fileManifestV4 struct {
-	dir string
-}
-
-func (fm4 fileManifestV4) Name() string {
-	return fm4.dir
-}
-
-func (fm4 fileManifestV4) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
-	t1 := time.Now()
-	defer func() {
-		stats.ReadManifestLatency.SampleTimeSince(t1)
-	}()
-
-	return parseIfExists(ctx, fm4.dir, readHook)
-}
-
-func (fm4 fileManifestV4) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
-	t1 := time.Now()
-	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
-
-	noop := func(_, _ manifestContents) error {
-		return nil
-	}
-
-	return updateWithChecker(ctx, fm4.dir, noop, lastLock, newContents, writeHook)
-}
-
-// parseV4Manifest parses the manifest from the Reader given. Assumes the first field (the manifest version and
-// following : character) have already been consumed by the reader.
 func parseV4Manifest(r io.Reader) (manifestContents, error) {
 	manifest, err := ioutil.ReadAll(r)
 
