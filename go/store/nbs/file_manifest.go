@@ -69,7 +69,6 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return false, err
 	}
 
-	fm5 := fileManifestV5{dir}
 	_, contents, err := parseIfExistsWithParser(ctx, dir, parseManifest, nil)
 	if err != nil {
 		return false, err
@@ -89,7 +88,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return nil
 	}
 
-	_, err = updateWithParseWriterAndChecker(ctx, dir, fm5.writeManifest, parseManifest, check, contents.lock, contents, nil)
+	_, err = updateWithParseWriterAndChecker(ctx, dir, writeManifest, parseManifest, check, contents.lock, contents, nil)
 
 	if err != nil {
 		return false, err
@@ -204,7 +203,7 @@ func (fm5 fileManifestV5) Update(ctx context.Context, lastLock addr, newContents
 		return nil
 	}
 
-	return updateWithParseWriterAndChecker(ctx, fm5.dir, fm5.writeManifest, parseManifest, checker, lastLock, newContents, writeHook)
+	return updateWithParseWriterAndChecker(ctx, fm5.dir, writeManifest, parseManifest, checker, lastLock, newContents, writeHook)
 }
 
 func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
@@ -222,7 +221,7 @@ func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newCon
 		return nil
 	}
 
-	return updateWithParseWriterAndChecker(ctx, fm5.dir, fm5.writeManifest, parseManifest, checker, lastLock, newContents, writeHook)
+	return updateWithParseWriterAndChecker(ctx, fm5.dir, writeManifest, parseManifest, checker, lastLock, newContents, writeHook)
 }
 
 // parseV5Manifest parses the manifest from the Reader given. Assumes the first field (the manifest version and
@@ -295,7 +294,7 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 	}
 }
 
-func (fm5 fileManifestV5) writeManifest(temp io.Writer, contents manifestContents) error {
+func writeManifest(temp io.Writer, contents manifestContents) error {
 	strs := make([]string, 2*len(contents.specs)+prefixLen)
 	strs[0], strs[1], strs[2], strs[3], strs[4] = StorageVersion, contents.nbfVers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
 	tableInfo := strs[prefixLen:]
@@ -335,7 +334,7 @@ func (fm4 fileManifestV4) Update(ctx context.Context, lastLock addr, newContents
 		return nil
 	}
 
-	return updateWithParseWriterAndChecker(ctx, fm4.dir, fm4.writeManifest, parseManifest, noop, lastLock, newContents, writeHook)
+	return updateWithParseWriterAndChecker(ctx, fm4.dir, writeManifest, parseManifest, noop, lastLock, newContents, writeHook)
 }
 
 // parseV4Manifest parses the manifest from the Reader given. Assumes the first field (the manifest version and
@@ -371,16 +370,6 @@ func parseV4Manifest(r io.Reader) (manifestContents, error) {
 		root:         hash.Parse(slices[2]),
 		specs:        specs,
 	}, nil
-}
-
-func (fm4 fileManifestV4) writeManifest(temp io.Writer, contents manifestContents) error {
-	strs := make([]string, 2*len(contents.specs)+4)
-	strs[0], strs[1], strs[2], strs[3] = storageVersion4, contents.nbfVers, contents.lock.String(), contents.root.String()
-	tableInfo := strs[4:]
-	formatSpecs(contents.specs, tableInfo)
-	_, err := io.WriteString(temp, strings.Join(strs, ":"))
-
-	return err
 }
 
 func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser, readHook func() error) (exists bool, contents manifestContents, err error) {

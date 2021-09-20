@@ -86,7 +86,7 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newConte
 
 	if contents.lock == lastLock {
 		buffer := bytes.NewBuffer(make([]byte, 64*1024)[:0])
-		err := fileManifestV5{}.writeManifest(buffer, newContents)
+		err := writeManifest(buffer, newContents)
 
 		if err != nil {
 			return manifestContents{}, err
