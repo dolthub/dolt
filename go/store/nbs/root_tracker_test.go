@@ -406,7 +406,13 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.contents.lock == lastLock {
-		fm.contents = manifestContents{newContents.nbfVers, newContents.lock, newContents.root, addr(hash.Hash{}), nil, nil}
+		fm.contents = manifestContents{
+			manifestVers: StorageVersion,
+			nbfVers: newContents.nbfVers,
+			lock: newContents.lock,
+			root: newContents.root,
+			gcGen: addr(hash.Hash{}),
+		}
 		fm.contents.specs = make([]tableSpec, len(newContents.specs))
 		copy(fm.contents.specs, newContents.specs)
 		if newContents.appendix != nil && len(newContents.appendix) > 0 {
@@ -418,7 +424,15 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 }
 
 func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs, appendix []tableSpec) {
-	fm.contents = manifestContents{version, lock, root, addr(hash.Hash{}), specs, appendix}
+	fm.contents = manifestContents{
+		manifestVers: StorageVersion,
+		nbfVers: version,
+		lock: lock,
+		root: root,
+		gcGen: addr(hash.Hash{}),
+		specs: specs,
+		appendix: appendix,
+	}
 }
 
 func newFakeTableSet() tableSet {
