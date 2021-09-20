@@ -232,7 +232,7 @@ func parseV5Manifest(r io.Reader) (manifestContents, error) {
 	}
 
 	slices := strings.Split(string(manifest), ":")
-	if len(slices) < prefixLen - 1 || len(slices)%2 != 0 {
+	if len(slices) < prefixLen-1 || len(slices)%2 != 0 {
 		return manifestContents{}, ErrCorruptManifest
 	}
 
