@@ -90,7 +90,7 @@ func (tea *BulkImportTEA) Get(ctx context.Context, keyHash hash.Hash, key types.
 	return &doltKVP{k: key, v: v}, true, nil
 }
 
-// Commit operation not supported on BulkImportTEA
+// Commit is the default behavior and does nothing
 func (tea *BulkImportTEA) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
 	return nil
 }
@@ -241,9 +241,9 @@ func (iea *BulkImportIEA) HasPartial(ctx context.Context, idxSch schema.Schema, 
 	return matches, nil
 }
 
-// Commit operation not supported on BulkImportIEA
+// Commit is the default behavior and does nothing
 func (iea *BulkImportIEA) Commit(ctx context.Context, nbf *types.NomsBinFormat) error {
-	return errors.New("not supported")
+	return nil
 }
 
 // Rollback operation not supported on BulkImportIEA
