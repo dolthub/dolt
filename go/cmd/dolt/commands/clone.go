@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -312,12 +313,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	if branch == "" {
-		for _, brnch := range branches {
-			branch = brnch.GetPath()
-			if branch == env.GetDefaultInitBranch(dEnv.Config) {
-				break
-			}
-		}
+		branch = getDefaultMainOrMaster(dEnv, branches[:])
 	}
 
 	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
@@ -416,4 +412,37 @@ func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 	}
 
 	return nil
+}
+
+// getDefaultMainOrMaster prioritizes the branches checked out during clone, returning
+// the configs default config branch first, then init branch main, then the old init branch master,
+// and finally the first lexicographical branch if non of the others are found
+func getDefaultMainOrMaster(dEnv *env.DoltEnv, branches []ref.DoltRef) string {
+	if len(branches) == 0 {
+		return env.DefaultInitBranch
+	}
+
+	sort.Slice(branches, func(i, j int) bool {
+		return branches[i].GetPath() < branches[j].GetPath()
+	})
+
+	branchMap := make(map[string]ref.DoltRef)
+	for _, b := range branches {
+		branchMap[b.GetPath()] = b
+	}
+
+	if _, ok := branchMap[env.DefaultInitBranch]; ok {
+		return env.DefaultInitBranch
+	}
+	if _, ok := branchMap["master"]; ok {
+		return "master"
+	}
+
+	// todo: do we care about this during clone?
+	defaultOrMain := env.GetDefaultInitBranch(dEnv.Config)
+	if _, ok := branchMap[defaultOrMain]; ok {
+		return defaultOrMain
+	}
+
+	return branches[0].GetPath()
 }

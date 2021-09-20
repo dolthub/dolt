@@ -143,7 +143,7 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 }
 
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
-	init := ref.NewBranchRef(defaultInitBranch) // best effort
+	init := ref.NewBranchRef(DefaultInitBranch) // best effort
 	hashStr := hash.Hash{}.String()
 	rs := &RepoState{
 		Head:     ref.MarshalableRef{Ref: init},

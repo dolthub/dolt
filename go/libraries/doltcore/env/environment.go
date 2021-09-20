@@ -45,7 +45,7 @@ import (
 )
 
 const (
-	defaultInitBranch = "master"
+	DefaultInitBranch = "main"
 
 	DefaultLoginUrl = "https://dolthub.com/settings/credentials"
 
@@ -201,7 +201,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 }
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {
-	s := GetStringOrDefault(cfg, InitBranchName, defaultInitBranch)
+	s := GetStringOrDefault(cfg, InitBranchName, DefaultInitBranch)
 	return *s
 }
 
