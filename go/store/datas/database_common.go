@@ -48,7 +48,8 @@ var (
 
 type CommitHook interface {
 	Execute(ctx context.Context, ds Dataset, db Database) error
-	HandleError(ctx context.Context, err error, wr io.Writer) error
+	WithLogger(ctx context.Context, wr io.Writer) error
+	HandleError(ctx context.Context, err error) error
 }
 
 //type CommitHook func(ctx context.Context, ds Dataset, db Database) error
@@ -76,8 +77,15 @@ var _ GarbageCollector = &database{}
 var _ rootTracker = &types.ValueStore{}
 var _ GarbageCollector = &types.ValueStore{}
 
-func (db *database) WithCommitHooks(postHooks []CommitHook) *database {
+func (db *database) WithCommitHooks(ctx context.Context, postHooks []CommitHook) *database {
 	db.postCommitHooks = postHooks
+	return db
+}
+
+func (db *database) WithCommitHookLogger(ctx context.Context, wr io.Writer) *database {
+	for _, h := range db.postCommitHooks {
+		h.WithLogger(ctx, wr)
+	}
 	return db
 }
 
@@ -790,9 +798,9 @@ func (db *database) CommitWithWorkingSet(
 	}
 
 	for _, hook := range db.postCommitHooks {
-		err := hook.Execute(ctx, commitDS, db)
+		err = hook.Execute(ctx, commitDS, db)
 		if err != nil {
-			hook.HandleError(ctx, err, nil)
+			hook.HandleError(ctx, err)
 		}
 	}
 	return commitDS, workingSetDS, nil

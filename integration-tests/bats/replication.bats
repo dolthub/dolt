@@ -6,7 +6,7 @@ setup() {
     TMPDIRS=$(pwd)/tmpdirs
     mkdir -p $TMPDIRS/{bac1,repo1}
 
-    # repo1 -> rem1 -> repo2
+    # repo1 -> bac1 -> repo2
     cd $TMPDIRS/repo1
     dolt init
     dolt branch feature
@@ -28,7 +28,7 @@ teardown() {
 }
 
 @test "replication: push on commit" {
-    DOLT_BACKUP_REMOTE=file://../bac1
+    export DOLT_BACKUP_REMOTE=file://../bac1
     cd repo1
     dolt sql -q "create table t1 (a int primary key)"
     dolt commit -am "cm"
@@ -43,10 +43,9 @@ teardown() {
 }
 
 @test "replication: no tags" {
-    DOLT_BACKUP_REMOTE=file://../bac1
+    export DOLT_BACKUP_REMOTE=file://../bac1
     cd repo1
     dolt tag
 
     [ ! -d "../bac1/.dolt" ] || false
 }
-

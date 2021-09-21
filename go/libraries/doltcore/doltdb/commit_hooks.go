@@ -11,10 +11,9 @@ import (
 )
 
 type ReplicateHook struct {
-	//destDB datas.Database
 	destDB *DoltDB
-	//r env.Remote
 	tmpDir string
+	outf   io.Writer
 }
 
 func NewReplicateHook(destDB *DoltDB, tmpDir string) *ReplicateHook {
@@ -27,7 +26,16 @@ func (rh *ReplicateHook) Execute(ctx context.Context, ds datas.Dataset, db datas
 }
 
 // HandleError implements datas.CommitHook
-func (rh *ReplicateHook) HandleError(ctx context.Context, err error, wr io.Writer) error {
+func (rh *ReplicateHook) HandleError(ctx context.Context, err error) error {
+	if rh.outf != nil {
+		rh.outf.Write([]byte(err.Error()))
+	}
+	return nil
+}
+
+// WithLogger implements datas.CommitHook
+func (rh *ReplicateHook) WithLogger(ctx context.Context, wr io.Writer) error {
+	rh.outf = wr
 	return nil
 }
 

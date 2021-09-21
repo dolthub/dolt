@@ -172,7 +172,11 @@ type Database interface {
 
 	// WithCommitHooks attaches a list of CommitHook that can be executed
 	// after CommitWithWorkingSet
-	WithCommitHooks(postHooks []CommitHook) *database
+	WithCommitHooks(context.Context, []CommitHook) *database
+
+	// WithCommitHookLogger passes an error handler from the user-facing session
+	// to a commit hook executed at the datas layer
+	WithCommitHookLogger(context.Context, io.Writer) *database
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {

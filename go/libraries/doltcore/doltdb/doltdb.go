@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1268,6 +1269,13 @@ func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- dat
 }
 
 func (ddb *DoltDB) WithCommitHooks(ctx context.Context, postHooks []datas.CommitHook) *DoltDB {
-	ddb.db = ddb.db.WithCommitHooks(postHooks)
+	ddb.db = ddb.db.WithCommitHooks(ctx, postHooks)
+	return ddb
+}
+
+func (ddb *DoltDB) WithCommitHookLogger(ctx context.Context, wr io.Writer) *DoltDB {
+	if ddb.db != nil {
+		ddb.db = ddb.db.WithCommitHookLogger(ctx, wr)
+	}
 	return ddb
 }
