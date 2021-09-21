@@ -2,47 +2,28 @@ package doltdb
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-//const BackupRemoteKey = "DOLT_BACKUP_REMOTE"
-//var postCommitHooks []datas.UpdateHook
-//
-//func init() {
-//	backupUrl := os.Getenv(BackupRemoteKey)
-//	if backupUrl != "" {
-//		// parse remote
-//		ctx := context.Background()
-//		r, srcDb, err := env.CreateRemote(ctx, "backup", backupUrl, nil, nil)
-//		if err != nil {
-//			return
-//		}
-//		// build destDB
-//
-//		postCommitHooks = append(postCommitHooks, func(ctx context.Context, ds datas.Dataset) error {
-//			headRef, _, _ := ds.MaybeHeadRef()
-//			//id := ds.ID()
-//			//return backup.Backup(ctx, srcDb, "temp", r, headRef, nil, nil)
-//		})
-//	}
-//}
-
 type ReplicateHook struct {
-	destDB datas.Database
+	//destDB datas.Database
+	destDB *DoltDB
+	//r env.Remote
 	tmpDir string
 }
 
 func NewReplicateHook(destDB *DoltDB, tmpDir string) *ReplicateHook {
-	return &ReplicateHook{destDB: destDB.db, tmpDir: tmpDir}
+	return &ReplicateHook{destDB: destDB, tmpDir: tmpDir}
 }
 
 // Execute implements datas.CommitHook, replicates head updates to the destDb field
 func (rh *ReplicateHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	return replicate(ctx, db, rh.destDB, rh.tmpDir, ds)
+	return replicate(ctx, rh.destDB, db, rh.tmpDir, ds)
 }
 
 // HandleError implements datas.CommitHook
@@ -50,10 +31,8 @@ func (rh *ReplicateHook) HandleError(ctx context.Context, err error, wr io.Write
 	return nil
 }
 
-func replicate(ctx context.Context, srcDB, destDB datas.Database, tempTableDir string, ds datas.Dataset) error {
+func replicate(ctx context.Context, destDB *DoltDB, srcDB datas.Database, tempTableDir string, ds datas.Dataset) error {
 	stRef, ok, err := ds.MaybeHeadRef()
-	t, _ := stRef.TargetType()
-	fmt.Print(t)
 	if err != nil {
 		return err
 	}
@@ -61,13 +40,10 @@ func replicate(ctx context.Context, srcDB, destDB datas.Database, tempTableDir s
 		panic("max fix")
 	}
 
-	//rf, err := ref.Parse(ds.ID())
-	//if err != nil {
-	//	return err
-	//}
+	rf, err := ref.Parse(ds.ID())
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := runProgFuncs(newCtx)
-	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB, stRef.TargetHash(), pullerEventCh)
+	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB.db, stRef.TargetHash(), pullerEventCh)
 
 	if err == datas.ErrDBUpToDate {
 		return nil
@@ -85,7 +61,7 @@ func replicate(ctx context.Context, srcDB, destDB datas.Database, tempTableDir s
 		return err
 	}
 
-	ds, err = destDB.SetHead(ctx, ds, stRef)
+	err = destDB.SetHead(ctx, rf, stRef)
 	if err != nil {
 		return err
 	}

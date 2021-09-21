@@ -58,29 +58,7 @@ const (
 	tempTablesDir = "temptf"
 )
 
-//var postCommitHooks []datas.CommitHook
-
 const BackupRemoteKey = "DOLT_BACKUP_REMOTE"
-
-//func init() {
-//	backupUrl := os.Getenv(BackupRemoteKey)
-//	if backupUrl != "" {
-//		ctx := context.Background()
-//		//_, destDB, err := CreateRemote(ctx, "backup", backupUrl, nil)
-//		if err != nil {
-//			return
-//		}
-//		replicateHook := doltdb.NewReplicateHook(backupUrl)
-//		postCommitHooks = append(postCommitHooks, replicateHook)
-//		//postCommitHooks = append(postCommitHooks, func(ctx context.Context, ds datas.Dataset, srcDB datas.Database) error {
-//		//	if err != nil {
-//		//		return err
-//		//	}
-//		//	// TODO: used dEnv or WS tempfile
-//		//	return doltdb.Replicate(ctx, srcDB, destDB, ".dolt/temptf", ds)
-//		//})
-//	}
-//}
 
 func initializeCommitHooks(ctx context.Context, dEnv *DoltEnv) (postCommitHooks []datas.CommitHook, err error) {
 	backupUrl := os.Getenv(BackupRemoteKey)
@@ -203,7 +181,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 		if dbLoadErr != nil {
 			dEnv.DBLoadError = dbLoadErr
 		} else {
-			ddb = ddb.WithCommitHooks(ctx, postCommitHooks)
+			dEnv.DoltDB = ddb.WithCommitHooks(ctx, postCommitHooks)
 		}
 	}
 

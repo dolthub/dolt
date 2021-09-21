@@ -33,10 +33,13 @@ teardown() {
     dolt sql -q "create table t1 (a int primary key)"
     dolt commit -am "cm"
 
-    run noms ds ../bac1
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt ls
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
-    [[ "$output" =~ "refs/heads/master" ]] || false
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
 }
 
 @test "replication: no tags" {
