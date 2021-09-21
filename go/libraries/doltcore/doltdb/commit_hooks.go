@@ -37,7 +37,8 @@ func replicate(ctx context.Context, destDB *DoltDB, srcDB datas.Database, tempTa
 		return err
 	}
 	if !ok {
-		panic("max fix")
+		// No head ref, return
+		return nil
 	}
 
 	rf, err := ref.Parse(ds.ID())
@@ -71,10 +72,8 @@ func replicate(ctx context.Context, destDB *DoltDB, srcDB datas.Database, tempTa
 
 func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 		select {
 		case <-ctx.Done():
@@ -87,10 +86,8 @@ func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent)
 
 func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 		select {
 		case <-ctx.Done():
