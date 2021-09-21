@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -148,7 +147,27 @@ func runMain() int {
 			case pprofServerFlag:
 				// serve the pprof endpoints setup in the init function run when "net/http/pprof" is imported
 				go func() {
-					log.Println(http.ListenAndServe("localhost:6060", nil))
+					cyanStar := color.CyanString("*")
+					cli.Println(cyanStar, "Starting pprof server on port 6060.")
+					cli.Println(cyanStar, "Go to", color.CyanString("http://localhost:6060/debug/pprof"), "in a browser to see supported endpoints.")
+					cli.Println(cyanStar)
+					cli.Println(cyanStar, "Known endpoints are:")
+					cli.Println(cyanStar, "  /allocs: A sampling of all past memory allocations")
+					cli.Println(cyanStar, "  /block: Stack traces that led to blocking on synchronization primitives")
+					cli.Println(cyanStar, "  /cmdline: The command line invocation of the current program")
+					cli.Println(cyanStar, "  /goroutine: Stack traces of all current goroutines")
+					cli.Println(cyanStar, "  /heap: A sampling of memory allocations of live objects. You can specify the gc GET parameter to run GC before taking the heap sample.")
+					cli.Println(cyanStar, "  /mutex: Stack traces of holders of contended mutexes")
+					cli.Println(cyanStar, "  /profile: CPU profile. You can specify the duration in the seconds GET parameter. After you get the profile file, use the go tool pprof command to investigate the profile.")
+					cli.Println(cyanStar, "  /threadcreate: Stack traces that led to the creation of new OS threads")
+					cli.Println(cyanStar, "  /trace: A trace of execution of the current program. You can specify the duration in the seconds GET parameter. After you get the trace file, use the go tool trace command to investigate the trace.")
+					cli.Println()
+
+					err := http.ListenAndServe("localhost:6060", nil)
+
+					if err != nil {
+						cli.Println(color.YellowString("pprof server exited with error: %v", err))
+					}
 				}()
 				args = args[1:]
 
