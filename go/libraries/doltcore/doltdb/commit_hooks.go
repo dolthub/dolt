@@ -11,13 +11,15 @@ import (
 )
 
 type ReplicateHook struct {
-	destDB *DoltDB
+	destDB datas.Database
 	tmpDir string
 	outf   io.Writer
 }
 
+// NewReplicateHook creates a ReplicateHook from values publicly available
+// in the env package
 func NewReplicateHook(destDB *DoltDB, tmpDir string) *ReplicateHook {
-	return &ReplicateHook{destDB: destDB, tmpDir: tmpDir}
+	return &ReplicateHook{destDB: destDB.db, tmpDir: tmpDir}
 }
 
 // Execute implements datas.CommitHook, replicates head updates to the destDb field
@@ -39,7 +41,8 @@ func (rh *ReplicateHook) WithLogger(ctx context.Context, wr io.Writer) error {
 	return nil
 }
 
-func replicate(ctx context.Context, destDB *DoltDB, srcDB datas.Database, tempTableDir string, ds datas.Dataset) error {
+// replicate pushes a dataset from srcDB to destDB and force sets the destDB ref to the new dataset value
+func replicate(ctx context.Context, destDB, srcDB datas.Database, tempTableDir string, ds datas.Dataset) error {
 	stRef, ok, err := ds.MaybeHeadRef()
 	if err != nil {
 		return err
@@ -52,7 +55,7 @@ func replicate(ctx context.Context, destDB *DoltDB, srcDB datas.Database, tempTa
 	rf, err := ref.Parse(ds.ID())
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := runProgFuncs(newCtx)
-	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB.db, stRef.TargetHash(), pullerEventCh)
+	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB, stRef.TargetHash(), pullerEventCh)
 
 	if err == datas.ErrDBUpToDate {
 		return nil
@@ -70,12 +73,13 @@ func replicate(ctx context.Context, destDB *DoltDB, srcDB datas.Database, tempTa
 		return err
 	}
 
-	err = destDB.SetHead(ctx, rf, stRef)
+	ds, err = destDB.GetDataset(ctx, rf.String())
 	if err != nil {
 		return err
 	}
 
-	return nil
+	_, err = destDB.SetHead(ctx, ds, stRef)
+	return err
 }
 
 func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {

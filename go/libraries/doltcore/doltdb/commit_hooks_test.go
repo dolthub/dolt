@@ -136,7 +136,7 @@ func TestReplicateHook(t *testing.T) {
 		assert.Equal(t, srcHash, destHash)
 	})
 
-	t.Run("replicate error handling", func(t *testing.T) {
+	t.Run("replicate handle error logs to writer", func(t *testing.T) {
 		var buffer = &bytes.Buffer{}
 		err = hook.WithLogger(ctx, buffer)
 		assert.NoError(t, err)
