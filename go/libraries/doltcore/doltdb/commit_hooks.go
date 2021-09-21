@@ -10,6 +10,8 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
+const ReplicateToRemoteKey = "DOLT_REPLICATE_TO_REMOTE"
+
 type ReplicateHook struct {
 	destDB datas.Database
 	tmpDir string
@@ -56,6 +58,7 @@ func replicate(ctx context.Context, destDB, srcDB datas.Database, tempTableDir s
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := runProgFuncs(newCtx)
 	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB, stRef.TargetHash(), pullerEventCh)
+	stopProgFuncs(cancelFunc, wg, progChan, pullerEventCh)
 
 	if err == datas.ErrDBUpToDate {
 		return nil

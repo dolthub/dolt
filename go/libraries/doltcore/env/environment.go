@@ -58,10 +58,8 @@ const (
 	tempTablesDir = "temptf"
 )
 
-const BackupRemoteKey = "DOLT_BACKUP_REMOTE"
-
 func initializeCommitHooks(ctx context.Context, dEnv *DoltEnv) (postCommitHooks []datas.CommitHook, err error) {
-	backupUrl := os.Getenv(BackupRemoteKey)
+	backupUrl := os.Getenv(doltdb.ReplicateToRemoteKey)
 	if backupUrl != "" {
 		var destDB *doltdb.DoltDB
 		_, destDB, err = CreateRemote(ctx, "backup", backupUrl, nil, dEnv)

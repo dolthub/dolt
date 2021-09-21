@@ -28,7 +28,7 @@ teardown() {
 }
 
 @test "replication: push on commit" {
-    export DOLT_BACKUP_REMOTE=file://../bac1
+    export DOLT_REPLICATE_TO_REMOTE=file://../bac1
     cd repo1
     dolt sql -q "create table t1 (a int primary key)"
     dolt commit -am "cm"
@@ -43,7 +43,7 @@ teardown() {
 }
 
 @test "replication: no tags" {
-    export DOLT_BACKUP_REMOTE=file://../bac1
+    export DOLT_REPLICATE_TO_REMOTE=file://../bac1
     cd repo1
     dolt tag
 

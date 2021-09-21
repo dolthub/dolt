@@ -1054,7 +1054,7 @@ while True:
 
     mkdir bac1
     cd repo1
-    export DOLT_BACKUP_REMOTE=file://../bac1
+    export DOLT_REPLICATE_TO_REMOTE=file://../bac1
     start_sql_server repo1
 
     multi_query repo1 1 "
