@@ -52,8 +52,6 @@ type CommitHook interface {
 	HandleError(ctx context.Context, err error) error
 }
 
-//type CommitHook func(ctx context.Context, ds Dataset, db Database) error
-
 // TODO: fix panics
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
 type rootTracker interface {
@@ -76,22 +74,6 @@ var _ GarbageCollector = &database{}
 
 var _ rootTracker = &types.ValueStore{}
 var _ GarbageCollector = &types.ValueStore{}
-
-func (db *database) WithCommitHooks(ctx context.Context, postHooks []CommitHook) *database {
-	db.postCommitHooks = postHooks
-	return db
-}
-
-func (db *database) WithCommitHookLogger(ctx context.Context, wr io.Writer) *database {
-	for _, h := range db.postCommitHooks {
-		h.WithLogger(ctx, wr)
-	}
-	return db
-}
-
-func (db *database) PostCommitHooks() []CommitHook {
-	return db.postCommitHooks
-}
 
 func (db *database) chunkStore() chunks.ChunkStore {
 	return db.ChunkStore()
@@ -797,12 +779,8 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	for _, hook := range db.postCommitHooks {
-		err = hook.Execute(ctx, commitDS, db)
-		if err != nil {
-			hook.HandleError(ctx, err)
-		}
-	}
+	db.callCommitHooks(ctx, commitDS)
+
 	return commitDS, workingSetDS, nil
 }
 
@@ -1000,4 +978,30 @@ func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc fun
 	}
 
 	return db.GetDataset(ctx, ds.ID())
+}
+
+func (db *database) WithCommitHooks(ctx context.Context, postHooks []CommitHook) *database {
+	db.postCommitHooks = postHooks
+	return db
+}
+
+func (db *database) WithCommitHookLogger(ctx context.Context, wr io.Writer) *database {
+	for _, h := range db.postCommitHooks {
+		h.WithLogger(ctx, wr)
+	}
+	return db
+}
+
+func (db *database) PostCommitHooks() []CommitHook {
+	return db.postCommitHooks
+}
+
+func (db *database) callCommitHooks(ctx context.Context, ds Dataset) {
+	var err error
+	for _, hook := range db.postCommitHooks {
+		err = hook.Execute(ctx, ds, db)
+		if err != nil {
+			hook.HandleError(ctx, err)
+		}
+	}
 }

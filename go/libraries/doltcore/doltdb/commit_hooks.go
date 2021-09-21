@@ -1,3 +1,17 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package doltdb
 
 import (
@@ -55,11 +69,14 @@ func replicate(ctx context.Context, destDB, srcDB datas.Database, tempTableDir s
 	}
 
 	rf, err := ref.Parse(ds.ID())
+	if err != nil {
+		return err
+	}
+
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := runProgFuncs(newCtx)
+	defer stopProgFuncs(cancelFunc, wg, progChan, pullerEventCh)
 	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB, stRef.TargetHash(), pullerEventCh)
-	stopProgFuncs(cancelFunc, wg, progChan, pullerEventCh)
-
 	if err == datas.ErrDBUpToDate {
 		return nil
 	} else if err != nil {
@@ -71,7 +88,6 @@ func replicate(ctx context.Context, destDB, srcDB datas.Database, tempTableDir s
 		return err
 	}
 
-	stopProgFuncs(cancelFunc, wg, progChan, pullerEventCh)
 	if err != nil {
 		return err
 	}
