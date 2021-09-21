@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -29,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")
@@ -427,46 +425,3 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 
 	return nil
 }
-
-func CreateRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (env.Remote, *doltdb.DoltDB, error) {
-	r := env.NewRemote(remoteName, remoteUrl, params, dialer)
-	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
-
-	if err != nil {
-		return env.NoRemote, nil, err
-	}
-
-	return r, ddb, nil
-}
-
-//func Backup(ctx context.Context, srcDB *doltdb.DoltDB, tempTableDir string, backup env.Remote, headRef types.Ref, progStarter ProgStarter, progStopper ProgStopper) error {
-//	destDB, err := backup.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format())
-//
-//	var stRef types.Ref
-//	switch rf := headRef.(type) {
-//	case ref.BranchRef:
-//		cs, err := doltdb.NewCommitSpec(rf.GetPath())
-//		if err != nil {
-//			return err
-//		}
-//		commit, err := srcDB.Resolve(ctx, cs, nil)
-//		if err != nil {
-//			return err
-//		}
-//		stRef, err = commit.GetStRef()
-//		if err != nil {
-//			return err
-//		}
-//
-//		newCtx, cancelFunc := context.WithCancel(ctx)
-//		wg, progChan, pullerEventCh := progStarter(newCtx)
-//		err = destDB.PushChunks(ctx, tempTableDir, srcDB, stRef, progChan, pullerEventCh)
-//		progStopper(cancelFunc, wg, progChan, pullerEventCh)
-//		if err != nil {
-//			return err
-//		}
-//
-//		err = destDB.SetHead(ctx, rf, stRef)
-//	}
-//	return nil
-//}
