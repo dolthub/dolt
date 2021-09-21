@@ -27,7 +27,7 @@ echo '
     "namespace": "sql-correctness"
   },
   "spec": {
-    "backoffLimit": 1,
+    "backoffLimit": 3,
     "template": {
       "spec": {
         "serviceAccountName": "sql-correctness",
