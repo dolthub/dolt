@@ -35,7 +35,7 @@ echo '
     "namespace": "performance-benchmarking"
   },
   "spec": {
-    "backoffLimit": 1,
+    "backoffLimit": 3,
     "template": {
       "spec": {
         "serviceAccountName": "performance-benchmarking",

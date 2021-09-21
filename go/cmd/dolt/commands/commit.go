@@ -149,7 +149,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	err = dEnv.DoltDB.CommitWithWorkingSet(
+	_, err = dEnv.DoltDB.CommitWithWorkingSet(
 		ctx,
 		dEnv.RepoStateReader().CWBHeadRef(),
 		ws.Ref(),

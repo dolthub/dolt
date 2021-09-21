@@ -38,10 +38,10 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func makeFileManifestTempDir(t *testing.T) fileManifestV5 {
+func makeFileManifestTempDir(t *testing.T) fileManifest {
 	dir, err := ioutil.TempDir("", "")
 	require.NoError(t, err)
-	return fileManifestV5{dir: dir} //, cache: newManifestCache(defaultManifestCacheSize)}
+	return fileManifest{dir: dir} //, cache: newManifestCache(defaultManifestCacheSize)}
 }
 
 func TestFileManifestLoadIfExists(t *testing.T) {
@@ -67,7 +67,7 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	exists, upstream, err = fm.ParseIfExists(context.Background(), stats, nil)
 	require.NoError(t, err)
 	assert.True(exists)
-	assert.Equal("0", upstream.vers)
+	assert.Equal("0", upstream.nbfVers)
 	assert.Equal(jerk, upstream.lock)
 	assert.Equal(newRoot, upstream.root)
 	if assert.Len(upstream.specs, 1) {
@@ -104,7 +104,7 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(exists)
-	assert.Equal(constants.NomsVersion, upstream.vers)
+	assert.Equal(constants.NomsVersion, upstream.nbfVers)
 	assert.Equal(newRoot, upstream.root)
 	if assert.Len(upstream.specs, 1) {
 		assert.Equal(tableName.String(), upstream.specs[0].name.String())
@@ -134,13 +134,13 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	stats := &Stats{}
 
 	l := computeAddr([]byte{0x01})
-	upstream, err := fm.Update(context.Background(), addr{}, manifestContents{vers: constants.NomsVersion, lock: l}, stats, nil)
+	upstream, err := fm.Update(context.Background(), addr{}, manifestContents{nbfVers: constants.NomsVersion, lock: l}, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(l, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
 
-	fm2 := fileManifestV5{fm.dir} // Open existent, but empty manifest
+	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
 	exists, upstream, err := fm2.ParseIfExists(context.Background(), stats, nil)
 	require.NoError(t, err)
 	assert.True(exists)
@@ -149,7 +149,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.Empty(upstream.specs)
 
 	l2 := computeAddr([]byte{0x02})
-	upstream, err = fm2.Update(context.Background(), l, manifestContents{vers: constants.NomsVersion, lock: l2}, stats, nil)
+	upstream, err = fm2.Update(context.Background(), l, manifestContents{nbfVers: constants.NomsVersion, lock: l2}, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(l2, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
@@ -164,10 +164,10 @@ func TestFileManifestUpdate(t *testing.T) {
 
 	// First, test winning the race against another process.
 	contents := manifestContents{
-		vers:  constants.NomsVersion,
-		lock:  computeAddr([]byte("locker")),
-		root:  hash.Of([]byte("new root")),
-		specs: []tableSpec{{computeAddr([]byte("a")), 3}},
+		nbfVers: constants.NomsVersion,
+		lock:    computeAddr([]byte("locker")),
+		root:    hash.Of([]byte("new root")),
+		specs:   []tableSpec{{computeAddr([]byte("a")), 3}},
 	}
 	upstream, err := fm.Update(context.Background(), addr{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
@@ -185,7 +185,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	assert.Equal(contents.specs, upstream.specs)
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
-	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2")), vers: constants.NomsVersion}
+	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2")), nbfVers: constants.NomsVersion}
 	upstream, err = fm.Update(context.Background(), addr{}, contents2, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
@@ -205,7 +205,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	err = clobberManifest(fm.dir, m)
 	require.NoError(t, err)
 
-	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3")), vers: constants.NomsVersion}
+	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3")), nbfVers: constants.NomsVersion}
 	upstream, err = fm.Update(context.Background(), upstream.lock, contents3, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)

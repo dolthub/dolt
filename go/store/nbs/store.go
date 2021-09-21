@@ -217,7 +217,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		if ferr != nil {
 			return manifestContents{}, ferr
 		} else if !ok {
-			contents = manifestContents{vers: nbs.upstream.vers}
+			contents = manifestContents{nbfVers: nbs.upstream.nbfVers}
 		}
 
 		originalLock := contents.lock
@@ -294,7 +294,7 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		if ferr != nil {
 			return manifestContents{}, ferr
 		} else if !ok {
-			contents = manifestContents{vers: nbs.upstream.vers}
+			contents = manifestContents{nbfVers: nbs.upstream.nbfVers}
 		}
 
 		originalLock := contents.lock
@@ -495,7 +495,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		p:        p,
 		c:        c,
 		tables:   newTableSet(p),
-		upstream: manifestContents{vers: nbfVerStr},
+		upstream: manifestContents{nbfVers: nbfVerStr},
 		mtSize:   memTableSize,
 		stats:    NewStats(),
 	}
@@ -1072,7 +1072,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	newContents := manifestContents{
-		vers:     nbs.upstream.vers,
+		nbfVers:  nbs.upstream.nbfVers,
 		root:     current,
 		lock:     generateLockHash(current, specs, appendixSpecs),
 		gcGen:    nbs.upstream.gcGen,
@@ -1103,7 +1103,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 }
 
 func (nbs *NomsBlockStore) Version() string {
-	return nbs.upstream.vers
+	return nbs.upstream.nbfVers
 }
 
 func (nbs *NomsBlockStore) Close() error {
@@ -1542,11 +1542,11 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 
 	newLock := generateLockHash(nbs.upstream.root, specs, []tableSpec{})
 	newContents := manifestContents{
-		vers:  nbs.upstream.vers,
-		root:  nbs.upstream.root,
-		lock:  newLock,
-		gcGen: newLock,
-		specs: specs,
+		nbfVers: nbs.upstream.nbfVers,
+		root:    nbs.upstream.root,
+		lock:    newLock,
+		gcGen:   newLock,
+		specs:   specs,
 	}
 
 	// nothing has changed.  Bail early
