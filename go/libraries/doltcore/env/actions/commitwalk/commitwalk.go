@@ -156,7 +156,7 @@ func newQueue() *q {
 // concurrent commits --- higher commits appear first. Remaining
 // ties are broken by timestamp; newer commits appear first.
 //
-// Roughly mimics `git log master..feature`.
+// Roughly mimics `git log main..feature`.
 func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, includedHead hash.Hash, excludedDB *doltdb.DoltDB, excludedHead hash.Hash, num int) ([]*doltdb.Commit, error) {
 	commitList := make([]*doltdb.Commit, 0, num)
 	q := newQueue()

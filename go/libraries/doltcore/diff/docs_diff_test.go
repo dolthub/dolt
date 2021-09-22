@@ -32,9 +32,9 @@ import (
 func TestDocDiff(t *testing.T) {
 	ctx := context.Background()
 	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
-	ddb.WriteEmptyRepo(ctx, "master", "billy bob", "bigbillieb@fake.horse")
+	ddb.WriteEmptyRepo(ctx, "main", "billy bob", "bigbillieb@fake.horse")
 
-	cs, _ := doltdb.NewCommitSpec("master")
+	cs, _ := doltdb.NewCommitSpec("main")
 	cm, _ := ddb.Resolve(ctx, cs, nil)
 
 	root, err := cm.GetRootValue()

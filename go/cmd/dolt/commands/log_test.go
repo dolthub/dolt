@@ -25,13 +25,13 @@ import (
 
 func TestLog(t *testing.T) {
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_7_18, "Bill Billerson", "bigbillieb@fake.horse")
+	err := dEnv.InitRepo(context.Background(), types.Format_7_18, "Bill Billerson", "bigbillieb@fake.horse", "")
 
 	if err != nil {
 		t.Error("Failed to init repo")
 	}
 
-	cs, _ := doltdb.NewCommitSpec("master")
+	cs, _ := doltdb.NewCommitSpec("main")
 	commit, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
 
 	cli.Println(commit)

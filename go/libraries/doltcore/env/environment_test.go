@@ -53,8 +53,8 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) (*DoltEnv, *filesys.
 		initialDirs = append(initialDirs, doltDir)
 		initialDirs = append(initialDirs, doltDataDir)
 
-		masterRef := ref.NewBranchRef("master")
-		repoState := &RepoState{Head: ref.MarshalableRef{Ref: masterRef}}
+		mainRef := ref.NewBranchRef("main")
+		repoState := &RepoState{Head: ref.MarshalableRef{Ref: mainRef}}
 		repoStateData, err := json.Marshal(repoState)
 
 		if err != nil {
@@ -150,7 +150,7 @@ func TestRepoDirNoLocal(t *testing.T) {
 
 func TestInitRepo(t *testing.T) {
 	dEnv, _ := createTestEnv(false, false)
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", "")
 	require.NoError(t, err)
 
 	_, err = dEnv.WorkingRoot(context.Background())
@@ -182,7 +182,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 	dEnv := createFileTestEnv(t, working, homeDir)
 	assert.NoError(t, dEnv.CfgLoadErr)
 
-	err = dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
+	err = dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", "")
 	require.NoError(t, err)
 
 	ws, err := dEnv.WorkingSet(context.Background())

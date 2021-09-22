@@ -432,7 +432,7 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 }
 
 // Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
-// Writes new repo state with a master branch and current root hash.
+// Writes new repo state with a main branch and current root hash.
 func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error {
 	err := dEnv.InitDBWithTime(ctx, nbf, name, email, branchName, t)
 	if err != nil {
@@ -464,7 +464,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 	return nil
 }
 
-// InitializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
+// InitializeRepoState writes a default repo state to disk, consisting of a main branch and current root hash value.
 func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context, branchName string) error {
 	initBranch := GetDefaultInitBranch(dEnv.Config)
 	if branchName != "" {

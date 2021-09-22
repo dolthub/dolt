@@ -28,7 +28,7 @@ import (
 
 var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
-var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
+var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into main; use `-f` to force")
 
 func RenameBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)

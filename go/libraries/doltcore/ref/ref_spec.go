@@ -25,7 +25,7 @@ import (
 var ErrInvalidRefSpec = errors.New("invalid ref spec")
 
 // ErrInvalidMapping is the error returned when a refspec tries to do an invalid mapping, such as mapping
-// refs/heads/master to refs/remotes/origin/*
+// refs/heads/main to refs/remotes/origin/*
 var ErrInvalidMapping = errors.New("invalid ref spec mapping")
 
 // ErrUnsupportedMapping is returned when trying to do anything other than map local branches (refs/heads/*) to

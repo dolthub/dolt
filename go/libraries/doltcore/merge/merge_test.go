@@ -267,11 +267,11 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
 	vrw := ddb.ValueReadWriter()
 
-	err := ddb.WriteEmptyRepo(context.Background(), "master", name, email)
+	err := ddb.WriteEmptyRepo(context.Background(), "main", name, email)
 	require.NoError(t, err)
 
-	masterHeadSpec, _ := doltdb.NewCommitSpec("master")
-	masterHead, err := ddb.Resolve(context.Background(), masterHeadSpec, nil)
+	mainHeadSpec, _ := doltdb.NewCommitSpec("main")
+	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
 
 	initialRows, err := types.NewMap(context.Background(), vrw,
@@ -367,7 +367,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	mRoot, err := masterHead.GetRootValue()
+	mRoot, err := mainHead.GetRootValue()
 	require.NoError(t, err)
 
 	mRoot, err = mRoot.PutTable(context.Background(), tableName, tbl)
@@ -379,7 +379,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
 	require.NoError(t, err)
 
-	masterHash, err := ddb.WriteRootValue(context.Background(), mRoot)
+	mainHash, err := ddb.WriteRootValue(context.Background(), mRoot)
 	require.NoError(t, err)
 	hash, err := ddb.WriteRootValue(context.Background(), updatedRoot)
 	require.NoError(t, err)
@@ -388,9 +388,9 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 
 	meta, err := doltdb.NewCommitMeta(name, email, "fake")
 	require.NoError(t, err)
-	initialCommit, err := ddb.Commit(context.Background(), masterHash, ref.NewBranchRef("master"), meta)
+	initialCommit, err := ddb.Commit(context.Background(), mainHash, ref.NewBranchRef("main"), meta)
 	require.NoError(t, err)
-	commit, err := ddb.Commit(context.Background(), hash, ref.NewBranchRef("master"), meta)
+	commit, err := ddb.Commit(context.Background(), hash, ref.NewBranchRef("main"), meta)
 	require.NoError(t, err)
 
 	err = ddb.NewBranchAtCommit(context.Background(), ref.NewBranchRef("to-merge"), initialCommit)

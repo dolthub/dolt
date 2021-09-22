@@ -71,7 +71,7 @@ var gcTests = []gcTest{
 					return h
 				},
 				commands: []testCommand{
-					{commands.CheckoutCmd{}, []string{"master"}},
+					{commands.CheckoutCmd{}, []string{"main"}},
 					{commands.BranchCmd{}, []string{"-D", "temp"}},
 					{commands.SqlCmd{}, []string{"-q", "INSERT INTO test VALUES (4),(5),(6);"}},
 				},

@@ -32,7 +32,7 @@ import (
 func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	ctx := context.Background()
 	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
-	ddb.WriteEmptyRepo(ctx, "master", "billy bob", "bigbillieb@fake.horse")
+	ddb.WriteEmptyRepo(ctx, "main", "billy bob", "bigbillieb@fake.horse")
 
 	// If no tbl/schema is provided, doc Text and Value should be nil.
 	doc1 := Doc{DocPk: LicenseDoc}
@@ -86,7 +86,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	ctx := context.Background()
 	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
-	ddb.WriteEmptyRepo(ctx, "master", "billy bob", "bigbillieb@fake.horse")
+	ddb.WriteEmptyRepo(ctx, "main", "billy bob", "bigbillieb@fake.horse")
 
 	sch := createTestDocsSchema()
 

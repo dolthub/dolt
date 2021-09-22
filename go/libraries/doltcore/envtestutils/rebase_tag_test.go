@@ -273,7 +273,7 @@ var RebaseTagTests = []RebaseTagTest{
 	},
 	// https://github.com/dolthub/dolt/issues/773
 	/*{
-		Name: "create new column on master, insert to table on other branch, merge",
+		Name: "create new column on main, insert to table on other branch, merge",
 		Commands: []tc.Command{
 			tc.Query{Query: createPeopleTable},
 			tc.CommitAll{Message: "made changes"},
@@ -284,7 +284,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Checkout{BranchName: "newBranch"},
 			tc.Query{Query: `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Checkout{BranchName: "master"},
+			tc.Checkout{BranchName: "main"},
 			tc.Merge{BranchName: "newBranch"},
 			tc.CommitAll{Message: "made changes"},
 		},
@@ -298,7 +298,7 @@ var RebaseTagTests = []RebaseTagTest{
 		},
 	},
 	{
-		Name: "create new column on master; insert, update, delete on both branches; merge",
+		Name: "create new column on main; insert, update, delete on both branches; merge",
 		Commands: []tc.Command{
 			tc.Query{Query: createPeopleTable},
 			tc.Query{Query: `insert into people (id, name, age) values
@@ -318,7 +318,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Query{Query: `delete from people where id=8;`},
 			tc.Query{Query: `update people set age=40 where id=9;`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Checkout{BranchName: "master"},
+			tc.Checkout{BranchName: "main"},
 			tc.Merge{BranchName: "newBranch"},
 			tc.CommitAll{Message: "made changes"},
 		},
@@ -334,7 +334,7 @@ var RebaseTagTests = []RebaseTagTest{
 		},
 	},
 	{
-		Name: "create new column on other branch, merge into master",
+		Name: "create new column on other branch, merge into main",
 		Commands: []tc.Command{
 			tc.Query{Query: createPeopleTable},
 			tc.CommitAll{Message: "made changes"},
@@ -343,7 +343,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Checkout{BranchName: "master"},
+			tc.Checkout{BranchName: "main"},
 			tc.Query{Query: `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Merge{BranchName: "newBranch"},
@@ -370,7 +370,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Checkout{BranchName: "newBranch"},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Checkout{BranchName: "master"},
+			tc.Checkout{BranchName: "main"},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (10, "Patty Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Merge{BranchName: "newBranch"},
@@ -430,7 +430,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		require.NoError(t, setupErr)
 	}
 
-	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
+	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // main
 	rebasedCommit, err := rebase.TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, rebase.TagMapping{"people": map[uint64]uint64{test.OldTag: test.NewTag}})
 
 	if test.ExpectedErrStr != "" {
@@ -440,10 +440,10 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		require.NoError(t, err)
 		require.NotNil(t, rebasedCommit)
 
-		mcs, _ := doltdb.NewCommitSpec("master")
-		masterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
+		mcs, _ := doltdb.NewCommitSpec("main")
+		mainCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
 		rch, _ := rebasedCommit.HashOf()
-		mch, _ := masterCm.HashOf()
+		mch, _ := mainCm.HashOf()
 		require.Equal(t, rch, mch)
 
 		rebasedRoot, _ := rebasedCommit.GetRootValue()
@@ -457,10 +457,10 @@ func testRebaseTagHistory(t *testing.T) {
 		tc.Query{Query: createPeopleTable},
 		tc.Query{Query: `insert into people (id, name, age) values 
 			(7, "Maggie Simpson", 1);`},
-		tc.CommitAll{Message: "made changes"}, // common ancestor of (newMaster, oldMaster) and (newMaster, other)
+		tc.CommitAll{Message: "made changes"}, // common ancestor of (newMain, oldMain) and (newMain, other)
 
 		tc.Query{Query: `alter table people add drip double;`},
-		tc.CommitAll{Message: "made changes"}, // common ancestor of (oldMaster, other)
+		tc.CommitAll{Message: "made changes"}, // common ancestor of (oldMain, other)
 
 		tc.Branch{BranchName: "other"},
 		tc.Query{Query: `insert into people (id, name, age, drip) values (10, "Patty Bouvier", 40, 8.5);`},
@@ -473,17 +473,17 @@ func testRebaseTagHistory(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	mcs, _ := doltdb.NewCommitSpec("master")
-	oldMasterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
+	mcs, _ := doltdb.NewCommitSpec("main")
+	oldMainCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
 	ocs, _ := doltdb.NewCommitSpec("other")
 	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs, nil)
 
-	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	newMasterCm, err := rebase.TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, rebase.TagMapping{"people": map[uint64]uint64{DripTag: DripTagRebased}})
+	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // main
+	newMainCm, err := rebase.TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, rebase.TagMapping{"people": map[uint64]uint64{DripTag: DripTagRebased}})
 	require.NoError(t, err)
 
 	expectedSch := schema.MustSchemaFromCols(peopleWithDrip)
-	rebasedRoot, _ := newMasterCm.GetRootValue()
+	rebasedRoot, _ := newMainCm.GetRootValue()
 	checkSchema(t, rebasedRoot, "people", expectedSch)
 	checkRows(t, dEnv, rebasedRoot, "people", expectedSch, "select * from people;", []row.Row{
 		newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1)}, people),
@@ -491,15 +491,15 @@ func testRebaseTagHistory(t *testing.T) {
 	})
 
 	// assert that histories have been forked
-	anc1, err := doltdb.GetCommitAncestor(context.Background(), oldMasterCm, otherCm)
+	anc1, err := doltdb.GetCommitAncestor(context.Background(), oldMainCm, otherCm)
 	require.NoError(t, err)
 	ancHash1, _ := anc1.HashOf()
 
-	anc2, err := doltdb.GetCommitAncestor(context.Background(), newMasterCm, oldMasterCm)
+	anc2, err := doltdb.GetCommitAncestor(context.Background(), newMainCm, oldMainCm)
 	require.NoError(t, err)
 	ancHash2, _ := anc2.HashOf()
 
-	anc3, err := doltdb.GetCommitAncestor(context.Background(), newMasterCm, otherCm)
+	anc3, err := doltdb.GetCommitAncestor(context.Background(), newMainCm, otherCm)
 	require.NoError(t, err)
 	ancHash3, _ := anc3.HashOf()
 

@@ -761,7 +761,7 @@ var BasicSelectTests = []SelectTest{
 		Query: "select * from dolt_branches",
 		ExpectedRows: []sql.Row{
 			{
-				"master",
+				"main",
 				"so275enkvulb96mkckbun1kjo9seg7c9",
 				"billy bob", "bigbillieb@fake.horse",
 				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
@@ -821,14 +821,14 @@ var SelectDiffTests = []SelectTest{
 	// TODO: fix dependencies to hashof function can be registered and used here, also create branches when generating the history so that different from and to commits can be tested.
 	/*{
 		Name:  "select from diff system table with from and to commit and test insensitive name",
-		Query: "select to_id, to_first_name, to_last_name, to_addr, to_age_4, to_age_5, from_id, from_first_name, from_last_name, from_addr, from_age_4, from_age_5, diff_type from dolt_diff_TeSt_TaBlE where from_commit = 'add-age' and to_commit = 'master'",
+		Query: "select to_id, to_first_name, to_last_name, to_addr, to_age_4, to_age_5, from_id, from_first_name, from_last_name, from_addr, from_age_4, from_age_5, diff_type from dolt_diff_TeSt_TaBlE where from_commit = 'add-age' and to_commit = 'main'",
 		ExpectedRows: ToSqlRows(DiffSchema,
-			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{7: types.Int(0), 8: types.String("Aaron"), 9: types.String("Son"), 11: types.Int(35), 0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{7: types.Int(1), 8: types.String("Brian"), 9: types.String("Hendriks"), 11: types.Int(38), 0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{7: types.Int(2), 8: types.String("Tim"), 9: types.String("Sehn"), 11: types.Int(37), 0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{7: types.Int(3), 8: types.String("Zach"), 9: types.String("Musgrave"), 11: types.Int(37), 0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("master"), 14: types.String("added")})),
-			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("master"), 14: types.String("added")})),
+			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{7: types.Int(0), 8: types.String("Aaron"), 9: types.String("Son"), 11: types.Int(35), 0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35), 13: types.String("add-age"), 6: types.String("main"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{7: types.Int(1), 8: types.String("Brian"), 9: types.String("Hendriks"), 11: types.Int(38), 0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38), 13: types.String("add-age"), 6: types.String("main"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{7: types.Int(2), 8: types.String("Tim"), 9: types.String("Sehn"), 11: types.Int(37), 0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("main"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{7: types.Int(3), 8: types.String("Zach"), 9: types.String("Musgrave"), 11: types.Int(37), 0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("main"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("main"), 14: types.String("added")})),
+			mustRow(row.New(types.Format_Default, DiffSchema, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("main"), 14: types.String("added")})),
 		),
 		ExpectedSqlSchema: sqlDiffSchema,
 	},*/
@@ -857,8 +857,8 @@ var AsOfTests = []SelectTest{
 		ExpectedSchema: AddAgeAt4HistSch,
 	},
 	{
-		Name:  "select * from master branch",
-		Query: "select * from test_table as of 'master'",
+		Name:  "select * from main branch",
+		Query: "select * from test_table as of 'main'",
 		ExpectedRows: ToSqlRows(ReaddAgeAt5HistSch,
 			mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35)})),
 			mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38)})),
@@ -894,8 +894,8 @@ var AsOfTests = []SelectTest{
 		ExpectedSchema: AddAddrAt3HistSch,
 	},
 	{
-		Name:  "select * from master^",
-		Query: "select * from test_table as of 'master^'",
+		Name:  "select * from main^",
+		Query: "select * from test_table as of 'main^'",
 		ExpectedRows: ToSqlRows(AddAddrAt3HistSch,
 			mustRow(row.New(types.Format_Default, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
 			mustRow(row.New(types.Format_Default, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
@@ -1611,7 +1611,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	cs, err := doltdb.NewCommitSpec("master")
+	cs, err := doltdb.NewCommitSpec("main")
 	require.NoError(t, err)
 
 	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)

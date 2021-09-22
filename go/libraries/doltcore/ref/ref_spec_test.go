@@ -28,46 +28,46 @@ func TestRefSpec(t *testing.T) {
 			"refs/heads/*:refs/remotes/origin/*",
 			true,
 			map[string]string{
-				"refs/heads/master":          "refs/remotes/origin/master",
+				"refs/heads/main":          "refs/remotes/origin/main",
 				"refs/heads/feature":         "refs/remotes/origin/feature",
-				"refs/remotes/origin/master": "refs/nil/",
+				"refs/remotes/origin/main": "refs/nil/",
 			},
 		}, {
 			"borigin",
-			"refs/heads/master:refs/remotes/borigin/mymaster",
+			"refs/heads/main:refs/remotes/borigin/mymain",
 			true,
 			map[string]string{
-				"refs/heads/master":  "refs/remotes/borigin/mymaster",
+				"refs/heads/main":  "refs/remotes/borigin/mymain",
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
 			"",
-			"refs/heads/*/master:refs/remotes/borigin/*/mymaster",
+			"refs/heads/*/main:refs/remotes/borigin/*/mymain",
 			true,
 			map[string]string{
-				"refs/heads/master":    "refs/nil/",
-				"refs/heads/bh/master": "refs/remotes/borigin/bh/mymaster",
-				"refs/heads/as/master": "refs/remotes/borigin/as/mymaster",
+				"refs/heads/main":    "refs/nil/",
+				"refs/heads/bh/main": "refs/remotes/borigin/bh/mymain",
+				"refs/heads/as/main": "refs/remotes/borigin/as/mymain",
 			},
 		}, {
 			"",
-			"master",
+			"main",
 			true,
 			map[string]string{
-				"refs/heads/master":  "refs/heads/master",
+				"refs/heads/main":  "refs/heads/main",
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
 			"",
-			"master:master",
+			"main:main",
 			true,
 			map[string]string{
-				"refs/heads/master":  "refs/heads/master",
+				"refs/heads/main":  "refs/heads/main",
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
 			"origin",
-			"refs/heads/master:refs/remotes/not_borigin/mymaster",
+			"refs/heads/main:refs/remotes/not_borigin/mymain",
 			false,
 			nil,
 		}, {

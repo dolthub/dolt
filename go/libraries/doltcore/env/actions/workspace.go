@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
-var ErrUnmergedWorkspaceDelete = errors.New("attempted to delete a workspace that is not fully merged into master; use `-f` to force")
+var ErrUnmergedWorkspaceDelete = errors.New("attempted to delete a workspace that is not fully merged into main; use `-f` to force")
 var ErrCOWorkspaceDelete = errors.New("attempted to delete checked out workspace")
 var ErrBranchNameExists = errors.New("workspace name must not be existing branch name")
 
@@ -110,7 +110,7 @@ func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRe
 			return err
 		}
 
-		master, err := ddb.Resolve(ctx, ms, nil)
+		m, err := ddb.Resolve(ctx, ms, nil)
 		if err != nil {
 			return err
 		}
@@ -125,7 +125,7 @@ func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRe
 			return err
 		}
 
-		isMerged, _ := master.CanFastReverseTo(ctx, cm)
+		isMerged, _ := m.CanFastReverseTo(ctx, cm)
 		if err != nil && err != doltdb.ErrUpToDate {
 			return err
 		}

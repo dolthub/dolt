@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"io"
 	"os"
 
@@ -71,7 +72,7 @@ func WriteValueFile(ctx context.Context, filepath string, store *FileValueStore,
 // WriteToWriter writes the values out to the provided writer in the value file format
 func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, values ...types.Value) error {
 	db := datas.NewDatabase(store)
-	ds, err := db.GetDataset(ctx, "master")
+	ds, err := db.GetDataset(ctx, env.DefaultInitBranch) // TODO: DUSTIN
 
 	if err != nil {
 		return err

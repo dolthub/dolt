@@ -264,13 +264,15 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
+	defaultBranch := "main"
+
 	tests := []struct {
 		query       *dbr.SelectStmt
 		expectedRes []testBranch
 	}{
 		{
 			query:       sess.Select("active_branch() as branch"),
-			expectedRes: []testBranch{{"master"}},
+			expectedRes: []testBranch{{defaultBranch}},
 		},
 		{
 			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'refs/heads/new'"),
@@ -278,14 +280,14 @@ func TestServerSetDefaultBranch(t *testing.T) {
 		},
 		{
 			query:       sess.Select("active_branch() as branch"),
-			expectedRes: []testBranch{{"master"}},
+			expectedRes: []testBranch{{defaultBranch}},
 		},
 		{
 			query:       sess.Select("dolt_checkout('-b', 'new')"),
 			expectedRes: []testBranch{{""}},
 		},
 		{
-			query:       sess.Select("dolt_checkout('master')"),
+			query:       sess.Select("dolt_checkout('main')"),
 			expectedRes: []testBranch{{""}},
 		},
 	}

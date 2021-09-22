@@ -120,10 +120,10 @@ func filterBranchTests() []filterBranchTest {
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (4,4),(5,5),(6,6);"}},
 				{cmd.AddCmd{}, args{"-A"}},
 				{cmd.CommitCmd{}, args{"-m", "added more rows on other"}},
-				{cmd.CheckoutCmd{}, args{"master"}},
+				{cmd.CheckoutCmd{}, args{"main"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (7,7),(8,8),(9,9);"}},
 				{cmd.AddCmd{}, args{"-A"}},
-				{cmd.CommitCmd{}, args{"-m", "added more rows on master"}},
+				{cmd.CommitCmd{}, args{"-m", "added more rows on main"}},
 				{cmd.FilterBranchCmd{}, args{"--all", "DELETE FROM test WHERE pk > 4;"}},
 			},
 			asserts: []testAssertion{

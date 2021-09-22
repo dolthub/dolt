@@ -51,7 +51,7 @@ func CreateTestEnv() *env.DoltEnv {
 		env.UserNameKey:  name,
 		env.UserEmailKey: email,
 	})
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email)
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, "")
 
 	if err != nil {
 		panic("Failed to initialize environment:" + err.Error())
