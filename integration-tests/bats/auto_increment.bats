@@ -23,13 +23,13 @@ teardown() {
 
     run dolt sql -q "INSERT INTO test (c0) VALUES (44);"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM test WHERE c0 = 44;" -r csv
+    run dolt sql -q "SELECT * FROM test WHERE c0 = 44 ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "4,44" ]] || false
 
     run dolt sql -q "INSERT INTO test (c0) VALUES (55),(66);"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM test WHERE c0 > 50;" -r csv
+    run dolt sql -q "SELECT * FROM test WHERE c0 > 50 ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "5,55" ]] || false
     [[ "$output" =~ "6,66" ]] || false
@@ -45,7 +45,7 @@ CREATE TABLE ai (
 INSERT INTO ai VALUES (NULL,1),(NULL,2),(NULL,3);
 SQL
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM ai;" -r csv
+    run dolt sql -q "SELECT * FROM ai ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
@@ -55,7 +55,7 @@ SQL
 @test "auto_increment: insert into empty auto_increment table" {
     run dolt sql -q "INSERT INTO test (c0) VALUES (1);"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM test WHERE c0 = 1;" -r csv
+    run dolt sql -q "SELECT * FROM test WHERE c0 = 1 ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
 }
@@ -67,7 +67,7 @@ SQL
     [ "$status" -eq 0 ]
     run dolt sql -q "INSERT INTO test VALUES (2,2);"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM test;" -r csv
+    run dolt sql -q "SELECT * FROM test ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
@@ -80,13 +80,14 @@ SQL
 
     run dolt sql -q "INSERT INTO test (pk,c0) VALUES (NULL,2);"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM test WHERE c0 > 1;" -r csv
+    run dolt sql -q "SELECT * FROM test WHERE c0 > 1 ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2,2" ]] || false
 
     run dolt sql -q "INSERT INTO test VALUES (NULL,3), (10,10), (NULL,11);"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM test WHERE c0 > 2;" -r csv
+    run dolt sql -q "SELECT * FROM test WHERE c0 > 2 ORDER BY pk;" -r csv
+    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3,3" ]] || false
     [[ "$output" =~ "10,10" ]] || false
@@ -98,13 +99,13 @@ SQL
 
     run dolt sql -q "INSERT INTO test (pk,c0) VALUES (0,2);"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM test WHERE c0 > 1;" -r csv
+    run dolt sql -q "SELECT * FROM test WHERE c0 > 1 ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2,2" ]] || false
 
     run dolt sql -q "INSERT INTO test VALUES (0,3), (10,10), (0,11);"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM test WHERE c0 > 2;" -r csv
+    run dolt sql -q "SELECT * FROM test WHERE c0 > 2 ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3,3" ]] || false
     [[ "$output" =~ "10,10" ]] || false
@@ -121,7 +122,7 @@ INSERT INTO test (c0) VALUES (21);
 SQL
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "SELECT * FROM test;" -r csv
+    run dolt sql -q "SELECT * FROM test ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
@@ -143,7 +144,7 @@ INSERT INTO test2 SELECT (pk + 20), c0 FROM test2;
 SQL
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "select * from test2 order by pk" -r csv
+    run dolt sql -q "select * from test2 ORDER BY pk" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
@@ -170,7 +171,7 @@ SQL
     dolt sql -q "INSERT INTO auto_float (pk, c0) VALUES (3.9,4);"
     dolt sql -q "INSERT INTO auto_float (c0) VALUES (5);"
 
-    run dolt sql -q "SELECT * FROM auto_float;" -r csv
+    run dolt sql -q "SELECT * FROM auto_float ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2.1,2" ]] || false
@@ -193,7 +194,7 @@ SQL
         echo "$TYPE"
         run dolt sql -q "INSERT INTO auto_$TYPE (c0) VALUES (2);"
         [ "$status" -eq 0 ]
-        run dolt sql -q "SELECT * FROM auto_$TYPE WHERE c0 > 1;" -r csv
+        run dolt sql -q "SELECT * FROM auto_$TYPE WHERE c0 > 1 ORDER BY pk;" -r csv
         [ "$status" -eq 0 ]
         [[ "$output" =~ "2,2" ]] || false
     done
@@ -211,7 +212,7 @@ SQL
         echo "$TYPE"
         run dolt sql -q "INSERT INTO auto2_$TYPE (c0) VALUES (2);"
         [ "$status" -eq 0 ]
-        run dolt sql -q "SELECT * FROM auto2_$TYPE WHERE c0 > 1;" -r csv
+        run dolt sql -q "SELECT * FROM auto2_$TYPE WHERE c0 > 1 ORDER BY pk;" -r csv
         [ "$status" -eq 0 ]
         [[ "$output" =~ "2,2" ]] || false
     done
@@ -248,7 +249,7 @@ SQL
     dolt merge other
 
     dolt sql -q "INSERT INTO test VALUES (NULL,22);"
-    run dolt sql -q "SELECT pk FROM test WHERE c0 = 22;" -r csv
+    run dolt sql -q "SELECT pk FROM test WHERE c0 = 22 ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "22" ]] || false
 }
@@ -271,7 +272,7 @@ SQL
     dolt checkout master
     dolt merge other
     dolt sql -q "INSERT INTO test VALUES (NULL,22);"
-    run dolt sql -q "SELECT pk FROM test WHERE c0 = 22;" -r csv
+    run dolt sql -q "SELECT pk FROM test WHERE c0 = 22 ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "22" ]] || false
 }
@@ -280,7 +281,7 @@ SQL
     run dolt sql -q "ALTER TABLE test AUTO_INCREMENT = 10;"
     [ "$status" -eq 0 ]
     dolt sql -q "INSERT INTO test VALUES (NULL,10);"
-    run dolt sql -q "SELECT * FROM test;" -r csv
+    run dolt sql -q "SELECT * FROM test ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "10,10" ]] || false
 
@@ -288,7 +289,7 @@ SQL
 ALTER TABLE test AUTO_INCREMENT = 20;
 INSERT INTO test VALUES (NULL,20),(30,30),(NULL,31);
 SQL
-    run dolt sql -q "SELECT * FROM test;" -r csv
+    run dolt sql -q "SELECT * FROM test ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "10,10" ]] || false
     [[ "$output" =~ "20,20" ]] || false
@@ -329,7 +330,7 @@ SQL
 
     dolt sql -q "INSERT INTO test (c0) SELECT pk FROM other;"
 
-    run dolt sql -q "SELECT * FROM test;" -r csv
+    run dolt sql -q "SELECT * FROM test ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
@@ -351,7 +352,7 @@ TRUNCATE t;
 INSERT INTO t (c0) VALUES (1),(2),(3);
 SQL
 
-    run dolt sql -q "SELECT * FROM t;" -r csv
+    run dolt sql -q "SELECT * FROM t ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
@@ -370,7 +371,7 @@ INSERT INTO t (c0) VALUES (1),(2),(3);
 INSERT INTO t (c0) VALUES (4),(5),(6);
 SQL
 
-    run dolt sql -q "SELECT * FROM t;" -r csv
+    run dolt sql -q "SELECT * FROM t ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
@@ -393,7 +394,7 @@ INSERT INTO t VALUES (4, 4);
 INSERT INTO t (c0) VALUES (5),(6),(7);
 SQL
 
-    run dolt sql -q "SELECT * FROM t;" -r csv
+    run dolt sql -q "SELECT * FROM t ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
@@ -419,7 +420,7 @@ INSERT into t VALUES (3, 3);
 INSERT INTO t (c0) VALUES (8);
 SQL
 
-    run dolt sql -q "SELECT * FROM t;" -r csv
+    run dolt sql -q "SELECT * FROM t ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
@@ -451,7 +452,7 @@ SELECT DOLT_MERGE('test');
 INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);
 SQL
 
-    run dolt sql -q "SELECT * FROM t;" -r csv
+    run dolt sql -q "SELECT * FROM t ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
@@ -482,7 +483,7 @@ SELECT DOLT_MERGE('test');
 INSERT INTO t VALUES (10,10),(NULL,11);
 SQL
 
-    run dolt sql -q "SELECT * FROM t;" -r csv
+    run dolt sql -q "SELECT * FROM t ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
@@ -515,7 +516,7 @@ SELECT DOLT_MERGE('test');
 INSERT INTO t VALUES (3,3),(NULL,6);
 SQL
 
-    run dolt sql -q "SELECT * FROM t;" -r csv
+    run dolt sql -q "SELECT * FROM t ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
@@ -548,7 +549,7 @@ SELECT DOLT_MERGE('test');
 INSERT INTO t VALUES (NULL,6);
 SQL
 
-    run dolt sql -q "SELECT * FROM t;" -r csv
+    run dolt sql -q "SELECT * FROM t ORDER BY pk;" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
@@ -564,7 +565,7 @@ SQL
     [ "$status" -eq 0 ]
 
     dolt sql -q "insert into test2 values (0, 'john', 0)"
-    run dolt sql -q "SELECT * from test2" -r csv
+    run dolt sql -q "SELECT * from test2 ORDER BY pk" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "0,john,0" ]] || false
 }
@@ -574,7 +575,7 @@ SQL
     dolt sql -q "ALTER TABLE t CHANGE COLUMN pk pk int NOT NULL AUTO_INCREMENT PRIMARY KEY;"
 
     dolt sql -q 'insert into t values (NULL), (NULL), (NULL)'
-    run dolt sql -q "SELECT * FROM t" -r csv
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
     [[ "${lines[0]}" =~ "pk" ]] || false
     [[ "${lines[1]}" =~ "1" ]] || false
     [[ "${lines[2]}" =~ "2" ]] || false
