@@ -363,7 +363,13 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	numPartitions := (numElements / itemsPerPartition) + 1
 	if numPartitions < uint64(partitionMultiplier*runtime.NumCPU()) {
 		itemsPerPartition = numElements / uint64(partitionMultiplier*runtime.NumCPU())
-		numPartitions = (numElements / itemsPerPartition) + 1
+
+		if itemsPerPartition == 0 {
+			itemsPerPartition = numElements
+			numPartitions = 1
+		} else {
+			numPartitions = (numElements / itemsPerPartition) + 1
+		}
 	}
 
 	partitions := make([]doltTablePartition, numPartitions)
