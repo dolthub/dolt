@@ -238,6 +238,8 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username string, email string, pr
 				cli.PrintErr(err)
 				return nil, nil, nil, err
 			}
+
+			db.GetDoltDB().WithCommitHookLogger(ctx, doltSess.GetLogger().Logger.Out)
 		}
 
 		return doltSess, ir, vr, nil
