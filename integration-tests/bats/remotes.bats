@@ -883,6 +883,95 @@ create_three_remote_branches() {
     create_two_more_remote_branches
 }
 
+create_remote_branch() {
+    local b="$1"
+    dolt push origin main:"$b"
+}
+
+create_five_remote_branches_main_only() {
+  dolt remote add origin http://localhost:50051/test-org/test-repo
+  create_remote_branch "zzz"
+  create_remote_branch "dev"
+  create_remote_branch "prod"
+  create_remote_branch "main"
+  create_remote_branch "aaa"
+}
+
+create_five_remote_branches_master_only() {
+  dolt remote add origin http://localhost:50051/test-org/test-repo
+  create_remote_branch "111"
+  create_remote_branch "dev"
+  create_remote_branch "master"
+  create_remote_branch "prod"
+  create_remote_branch "aaa"
+}
+
+create_five_remote_branches_no_main_no_master() {
+  dolt remote add origin http://localhost:50051/test-org/test-repo
+  create_remote_branch "123"
+  create_remote_branch "dev"
+  create_remote_branch "456"
+  create_remote_branch "prod"
+  create_remote_branch "aaa"
+}
+
+create_five_remote_branches_main_and_master() {
+  dolt remote add origin http://localhost:50051/test-org/test-repo
+  create_remote_branch "master"
+  create_remote_branch "dev"
+  create_remote_branch "456"
+  create_remote_branch "main"
+  create_remote_branch "aaa"
+}
+
+@test "remotes: clone checks out main, if found" {
+    create_five_remote_branches_main_only
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "remotes: clone checks out master, if main not found" {
+    create_five_remote_branches_master_only
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "remotes: clone checks out main, if both main and master found" {
+    create_five_remote_branches_main_and_master
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "remotes: clone checks out first lexicographical branch if neither main nor master found" {
+    create_five_remote_branches_no_main_no_master
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch 123" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
 @test "remotes: clone creates remotes refs for all remote branches" {
     create_three_remote_branches
     cd dolt-repo-clones
