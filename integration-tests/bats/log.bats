@@ -38,7 +38,7 @@ teardown() {
     dolt sql -q "insert into test values (0,0)"
     dolt add test
     dolt commit -m "Commit2"
-    dolt checkout master
+    dolt checkout main
     dolt merge test-branch
     run dolt log
     [ $status -eq 0 ]
@@ -56,7 +56,7 @@ teardown() {
     dolt sql -q "insert into test values (0,0)"
     dolt add test
     dolt commit -m "Commit2"
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Commit3"
@@ -175,7 +175,7 @@ teardown() {
     dolt sql -q "insert into test values (0,0)"
     dolt add test
     dolt commit -m "Commit2"
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Commit3"
@@ -210,7 +210,7 @@ teardown() {
     dolt sql -q "insert into test values (0,0)"
     dolt add test
     dolt commit -m "Commit2"
-    dolt checkout master
+    dolt checkout main
 
     run dolt log test-branch test
     [ $status -eq 0 ]
@@ -249,13 +249,13 @@ teardown() {
     dolt sql -q "insert into test values (0,0)"
     dolt add -A
     dolt commit -m "Inserted 0,0"
-    dolt checkout master
+    dolt checkout main
     dolt checkout -b branch2
     dolt sql -q "insert into test values (1,1)"
     dolt add -A
     dolt commit -m "Inserted 1,1"
 
-    dolt checkout master
+    dolt checkout main
     # Should be fast-forward 
     dolt merge branch1
     # An actual merge

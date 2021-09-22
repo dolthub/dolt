@@ -22,7 +22,7 @@ teardown() {
     dolt status
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     dolt sql <<SQL
@@ -32,7 +32,7 @@ SQL
     dolt add -A && dolt commit -m "new table"
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -50,7 +50,7 @@ SQL
     dolt add t
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
     [[ "$output" =~ "	modified:       t" ]] || false
@@ -73,7 +73,7 @@ SQL
     dolt add t
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
     [[ "$output" =~ "	deleted:        t" ]] || false
@@ -84,9 +84,9 @@ SQL
 }
 
 @test "status: checkout current branch" {
-    run dolt checkout master
+    run dolt checkout main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Already on branch 'master'" ]] || false
+    [[ "$output" =~ "Already on branch 'main'" ]] || false
 }
 
 @test "status: tables in conflict" {
@@ -98,15 +98,15 @@ SQL
     dolt checkout -b other
     dolt sql -q "INSERT INTO t VALUES (2,12);"
     dolt add -A && dolt commit -m "added values on branch other"
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "INSERT INTO t VALUES (2,2);"
-    dolt add -A && dolt commit -m "added values on branch master"
+    dolt add -A && dolt commit -m "added values on branch main"
     run dolt merge other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT (content): Merge conflict in t" ]] || false
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "You have unmerged tables." ]] || false
     [[ "$output" =~ "  (fix conflicts and run \"dolt commit\")" ]] || false
     [[ "$output" =~ "  (use \"dolt merge --abort\" to abort the merge)" ]] || false
@@ -172,7 +172,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     run dolt sql -q "SELECT sum(pk) FROM test" -r csv
@@ -191,7 +191,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     run dolt sql -q "SELECT sum(pk) FROM test" -r csv
@@ -233,7 +233,7 @@ SQL
     # Since this is a hard reset double check the status
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     # Run again with ~2 this time
@@ -251,7 +251,7 @@ SQL
     # Since this is a hard reset double check the status
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -332,7 +332,7 @@ SQL
     dolt reset $cm3
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     # Do a soft reset to commit 2.
@@ -377,8 +377,8 @@ SQL
     dolt sql -q "CREATE TABLE tbl2(pk int);"
     dolt commit -am "test cm1"
 
-    # go back to master and merge
-    dolt checkout master
+    # go back to main and merge
+    dolt checkout main
     dolt merge test
     dolt sql -q "INSERT INTO tbl VALUES (4)"
     dolt commit -am "cm2"

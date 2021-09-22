@@ -13,7 +13,7 @@ setup() {
     remotesrv_pid=$!
     cd dolt-repo-$$
     dolt remote add test-remote $REMOTE
-    dolt push test-remote master
+    dolt push test-remote main
     export DOLT_HEAD_COMMIT=`get_head_commit`
     skiponwindows "git-dolt tests are flaky on Windows"
 }

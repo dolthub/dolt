@@ -68,7 +68,7 @@ SQL
     dolt checkout -b other
     dolt sql -q "INSERT INTO test VALUES (8);"
     dolt add -A && dolt commit -m "inserted some values on branch other"
-    dolt checkout master
+    dolt checkout main
     dolt sql <<SQL
 RENAME TABLE test TO quiz;
 INSERT INTO quiz VALUES (9);

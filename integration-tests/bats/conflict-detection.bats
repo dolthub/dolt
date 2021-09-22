@@ -38,7 +38,7 @@ SQL
     dolt add test
     dolt commit -m "changed pk=1 c5 to 11"
 
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "replace into test values (0, 11, 0, 0, 0, 0)"
 
     run dolt merge other
@@ -81,7 +81,7 @@ SQL
     dolt sql -q "replace into test values (1, 1, 1, 1, 1, 11)"
     dolt add test
     dolt commit -m "changed pk=1 c5 to 11"
-    dolt checkout master
+    dolt checkout main
     run dolt merge change-cell
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -116,7 +116,7 @@ SQL
     dolt sql -q "replace into test values (0, 0, 0, 0, 0, 11)"
     dolt add test
     dolt commit -m "changed pk=0 c5 to 11"
-    dolt checkout master
+    dolt checkout main
     run dolt merge change-cell
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -151,7 +151,7 @@ SQL
     dolt sql -q "replace into test values (0, 11, 11, 11, 11, 11)"
     dolt add test
     dolt commit -m "changed pk=0 all cells to 11"
-    dolt checkout master
+    dolt checkout main
     run dolt merge change-cell
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
@@ -182,7 +182,7 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "added pk=1 row"
-    dolt checkout master
+    dolt checkout main
     run dolt merge add-row
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -213,7 +213,7 @@ SQL
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "added pk=0 row"
-    dolt checkout master
+    dolt checkout main
     run dolt merge add-row
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -252,7 +252,7 @@ CREATE TABLE test2 (
 SQL
     dolt add test2
     dolt commit -m "added new table test2"
-    dolt checkout master
+    dolt checkout main
     run dolt merge add-table
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -283,7 +283,7 @@ SQL
     dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added same column c0"
-    dolt checkout master
+    dolt checkout main
     run dolt merge add-column
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -314,7 +314,7 @@ SQL
     dolt sql -q "alter table test add c6 bigint"
     dolt add test
     dolt commit -m "added column c6"
-    dolt checkout master
+    dolt checkout main
     run dolt merge add-column
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -348,7 +348,7 @@ SQL
     dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added column c0 as int"
-    dolt checkout master
+    dolt checkout main
     skip "This created two c0 columns with different types and tag numbers. Bug I think."
     run dolt merge add-column
     [ $status -eq 0 ]
@@ -377,7 +377,7 @@ SQL
     dolt sql -q "alter table test drop column c5"
     dolt add test
     dolt commit -m "deleted c5 again"
-    dolt checkout master
+    dolt checkout main
     run dolt merge delete-column
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -405,7 +405,7 @@ SQL
     dolt add test
     dolt commit -m "deleted column c5"
 
-    dolt checkout master
+    dolt checkout main
     dolt checkout -b two
     dolt sql -q "alter table test drop column c4"
     dolt add test
@@ -449,7 +449,7 @@ SQL
     dolt sql -q "alter table test rename column c5 to c0"
     dolt add test
     dolt commit -m "renamed c5 to c0 again"
-    dolt checkout master
+    dolt checkout main
     run dolt merge rename-column
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -479,7 +479,7 @@ SQL
     dolt sql -q "alter table test rename column c5 to c6"
     dolt add test
     dolt commit -m "renamed c5 to c6"
-    dolt checkout master
+    dolt checkout main
     run dolt merge rename-column
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
@@ -510,7 +510,7 @@ SQL
     dolt sql -q "alter table test rename column c4 to c0"
     dolt add test
     dolt commit -m "renamed c5 to c6"
-    dolt checkout master
+    dolt checkout main
     run dolt merge rename-column
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false

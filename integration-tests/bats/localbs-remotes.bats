@@ -35,7 +35,7 @@ SQL
     # push to a localbs based remote
     mkdir remotedir
     dolt remote add origin localbs://remotedir
-    dolt push origin master
+    dolt push origin main
 
     # clone from a directory
     cd dolt-repo-clones
@@ -48,15 +48,15 @@ SQL
     dolt commit -m "put row"
 
     # push back to the other directory
-    dolt push origin master
-    run dolt branch --list master -v
-    master_state1=$output
+    dolt push origin main
+    run dolt branch --list main -v
+    main_state1=$output
 
-    # check that the remote master was updated
+    # check that the remote main was updated
     cd ../..
     dolt pull
-    run dolt branch --list master -v
-    [[ "$output" = "$master_state1" ]] || false
+    run dolt branch --list main -v
+    [[ "$output" = "$main_state1" ]] || false
 }
 
 @test "localbs-remotes: clone, fetch, and push from multiple localbs system remotes" {
@@ -81,7 +81,7 @@ SQL
 
     # push to a localbs based remote
     dolt remote add remote2 localbs://remote2
-    dolt push remote2 master
+    dolt push remote2 main
 
     # fetch fail for unspecified remote
     run dolt fetch
@@ -92,18 +92,18 @@ SQL
 
     #add origin push and fetch
     dolt remote add origin localbs://remote1
-    dolt push master:notmaster
+    dolt push main:notmain
 
     #fetch should now work without a specified remote because origin exists
     dolt fetch
 
-    # fetch master into some garbage tracking branches
-    dolt fetch origin refs/heads/notmaster:refs/remotes/anything/master
-    dolt fetch remote2 refs/heads/master:refs/remotes/something/master
+    # fetch main into some garbage tracking branches
+    dolt fetch origin refs/heads/notmain:refs/remotes/anything/main
+    dolt fetch remote2 refs/heads/main:refs/remotes/something/main
 
     run dolt branch -a
-    [[ "$output" =~ "remotes/anything/master" ]] || false
-    [[ "$output" =~ "remotes/something/master" ]] || false
+    [[ "$output" =~ "remotes/anything/main" ]] || false
+    [[ "$output" =~ "remotes/something/main" ]] || false
 }
 
 @test "localbs-remotes: fetch displays and updates branch list" {
@@ -138,8 +138,8 @@ SQL
     dolt remote add origin localbs://remote1
     dolt push origin tester
 
-    dolt checkout master
-    dolt push origin master
+    dolt checkout main
+    dolt push origin main
 
     # clone from a directory
     cd dolt-repo-clones
@@ -148,9 +148,9 @@ SQL
 
     run dolt branch -a
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "* master" ]] || false
+    [[ "$output" =~ "* main" ]] || false
     [[ "$output" =~ "remotes/origin/tester" ]] || false
-    [[ "$output" =~ "remotes/origin/master" ]] || false
+    [[ "$output" =~ "remotes/origin/main" ]] || false
 }
 
 @test "localbs-remotes: clone from a directory that is not a dolt repo" {

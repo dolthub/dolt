@@ -26,7 +26,7 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     dolt sql -q "INSERT INTO test VALUES (1)"
@@ -38,18 +38,18 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     dolt sql -q "INSERT INTO test VALUES (1)"
 
-    # Reset to head results in clean master.
+    # Reset to head results in clean main.
     run dolt sql -q "SELECT DOLT_RESET('--hard', 'head');"
     [ "$status" -eq 0 ]
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -176,7 +176,7 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     run dolt sql -r csv -q "select * from test"
@@ -202,7 +202,7 @@ SQL
     run dolt status
 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 

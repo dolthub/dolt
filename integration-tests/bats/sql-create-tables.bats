@@ -422,7 +422,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -449,7 +449,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -477,7 +477,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -533,7 +533,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -602,7 +602,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -676,7 +676,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -736,7 +736,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 

@@ -74,18 +74,18 @@ def connect(dc):
     dc.connect()
 
 def create_tables(dc):
-    query(dc, 'SET @@repo1_head=HASHOF("master");')
+    query(dc, 'SET @@repo1_head=HASHOF("main");')
     query(dc, """
 CREATE TABLE test (
 pk INT NOT NULL,
 c1 INT,
 c2 INT,
 PRIMARY KEY(pk));""")
-    commit_and_update_branch(dc, "Created tables", ["@@repo1_head"], "master")
+    commit_and_update_branch(dc, "Created tables", ["@@repo1_head"], "main")
     query_and_test_results(dc, "SHOW TABLES;", [{"Table": "test"}])
 
 def duplicate_table_create(dc):
-    query(dc, 'SET @@repo1_head=HASHOF("master");')
+    query(dc, 'SET @@repo1_head=HASHOF("main");')
     query_with_expected_error(dc, "Should have failed creating duplicate table", """
 CREATE TABLE test (
 pk INT NOT NULL,
@@ -94,29 +94,29 @@ c2 INT,
 PRIMARY KEY(pk));""")
 
 
-def seed_master(dc):
-    query(dc, 'SET @@repo1_head=HASHOF("master");')
+def seed_main(dc):
+    query(dc, 'SET @@repo1_head=HASHOF("main");')
     _, row_count = query(dc, 'INSERT INTO test VALUES (0,0,0),(1,1,1),(2,2,2)')
 
     if row_count != 3:
         raise Exception("Failed to update rows")
 
-    commit_and_update_branch(dc, "Seeded initial data", ["@@repo1_head"], "master")
+    commit_and_update_branch(dc, "Seeded initial data", ["@@repo1_head"], "main")
     expected = [row(0,0,0), row(1,1,1), row(2,2,2)]
     query_and_test_results(dc, "SELECT pk, c1, c2 FROM test ORDER BY pk", expected)
 
-def modify_pk0_on_master_and_commit(dc):
-    query(dc, 'SET @@repo1_head=HASHOF("master");')
+def modify_pk0_on_main_and_commit(dc):
+    query(dc, 'SET @@repo1_head=HASHOF("main");')
     query(dc, "UPDATE test SET c1=1 WHERE pk=0;")
-    commit_and_update_branch(dc, "set c1 to 1", ["@@repo1_head"], "master")
+    commit_and_update_branch(dc, "set c1 to 1", ["@@repo1_head"], "main")
 
-def modify_pk0_on_master_no_commit(dc):
-    query(dc, 'SET @@repo1_head=HASHOF("master");')
+def modify_pk0_on_main_no_commit(dc):
+    query(dc, 'SET @@repo1_head=HASHOF("main");')
     query(dc, "UPDATE test SET c1=2 WHERE pk=0")
 
 def fail_to_commit(dc):
     try:
-        commit_and_update_branch(dc, "Created tables", ["@@repo1_head"], "master")
+        commit_and_update_branch(dc, "Created tables", ["@@repo1_head"], "main")
         raise Exception("Failed to fail commit")
     except Exception as e:
         if str(e) != UPDATE_BRANCH_FAIL_MSG:
@@ -127,12 +127,12 @@ def commit_to_feature(dc):
     commit_and_update_branch(dc, "set c1 to 2", ["@@repo1_head"], "feature")
 
 def merge_resolve_commit(dc):
-    query(dc, 'SET @@repo1_head=Merge("master");')
+    query(dc, 'SET @@repo1_head=Merge("main");')
     query_and_test_results(dc, "SELECT * from dolt_conflicts;", [{"table": "test", "num_conflicts": "1"}])
     resolve_theirs(dc)
     expected = [row(0,1,0), row(1,1,1), row(2,2,2)]
     query_and_test_results(dc, "SELECT pk, c1, c2 FROM test ORDER BY pk", expected)
-    commit_and_update_branch(dc, "resolved conflicts", ['HASHOF("HEAD^1")', 'HASHOF("HEAD^2")'], "master")
+    commit_and_update_branch(dc, "resolved conflicts", ['HASHOF("HEAD^1")', 'HASHOF("HEAD^2")'], "main")
 
 
 # test script
@@ -178,8 +178,8 @@ for i in range(MAX_SIMULTANEOUS_CONNECTIONS):
 # each of the work functions for a connection is executed in order.
 work_item_stages = [
     [WorkItem(CONNECTIONS[0], connect, create_tables)],
-    [WorkItem(CONNECTIONS[0], seed_master), WorkItem(CONNECTIONS[1], connect, duplicate_table_create)],
-    [WorkItem(CONNECTIONS[0], modify_pk0_on_master_and_commit), WorkItem(CONNECTIONS[1], modify_pk0_on_master_no_commit)],
+    [WorkItem(CONNECTIONS[0], seed_main), WorkItem(CONNECTIONS[1], connect, duplicate_table_create)],
+    [WorkItem(CONNECTIONS[0], modify_pk0_on_main_and_commit), WorkItem(CONNECTIONS[1], modify_pk0_on_main_no_commit)],
     [WorkItem(CONNECTIONS[1], fail_to_commit, commit_to_feature, merge_resolve_commit)]
 ]
 

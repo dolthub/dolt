@@ -74,7 +74,7 @@ INSERT INTO test VALUES (0),(1),(2);
 SQL
     dolt add test
     dolt commit -m "test commit"
-    dolt push test-remote master
+    dolt push test-remote main
 
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/test-org/test-repo
@@ -89,7 +89,7 @@ INSERT INTO test VALUES (10),(11),(12);
 SQL
     dolt add test
     dolt commit -m "test commit2"
-    dolt push test-remote master
+    dolt push test-remote main
 
     # assert that the clone still works
     cd "dolt-repo-clones/test-repo"
@@ -140,13 +140,13 @@ setup_merge() {
     dolt branch other
 
     dolt sql -q "INSERT INTO test VALUES (0,10),(1,11),(2,12);"
-    dolt commit -am "added rows on master"
+    dolt commit -am "added rows on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO test VALUES (0,20),(1,21),(2,22);"
     dolt commit -am "added rows on other"
 
-    dolt checkout master
+    dolt checkout main
 }
 
 @test "garbage_collection: leave merge commit" {

@@ -342,13 +342,13 @@ teardown() {
     # git checkout test
 }
 
-@test "1pk5col-ints: make a change on a different branch, commit, and merge to master" {
+@test "1pk5col-ints: make a change on a different branch, commit, and merge to main" {
     dolt branch test-branch
     dolt checkout test-branch
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "added test row"
-    dolt checkout master
+    dolt checkout main
     run dolt merge test-branch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Fast-forward" ]] || false
@@ -379,7 +379,7 @@ teardown() {
     run dolt branch -d test-branch
     [ "$status" -ne 0 ]
     [ "$output" = "error: Cannot delete checked out branch 'test-branch'" ]
-    dolt checkout master
+    dolt checkout main
     run dolt branch -d test-branch
     [ "$status" -ne 0 ]
     run dolt branch -d -f test-branch
@@ -398,7 +398,7 @@ teardown() {
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 6)"
     dolt add test
     dolt commit -m "added conflicting test row"
-    dolt checkout master
+    dolt checkout main
     run dolt merge test-branch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT (content)" ]]
@@ -442,7 +442,7 @@ teardown() {
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 6)"
     dolt add test
     dolt commit -m "added conflicting test row"
-    dolt checkout master
+    dolt checkout main
     dolt merge test-branch
     run dolt checkout test
     [ "$status" -eq 0 ]
@@ -473,7 +473,7 @@ teardown() {
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 6)"
     dolt add test
     dolt commit -m "added conflicting test row"
-    dolt checkout master
+    dolt checkout main
     dolt merge test-branch
     run dolt conflicts resolve --theirs test
     [ "$status" -eq 0 ]
@@ -624,7 +624,7 @@ DELIM
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
-    [ "${lines[0]}" = "On branch master" ]
+    [ "${lines[0]}" = "On branch main" ]
     [ "${lines[1]}" = "nothing to commit, working tree clean" ]
 }
 
@@ -659,7 +659,7 @@ DELIM
     dolt checkout -b test-branch
     dolt add test
     dolt commit -m "added test table"
-    dolt checkout master
+    dolt checkout main
     dolt branch test-branch-m
     dolt branch test-branch-alt
     dolt checkout test-branch-m
