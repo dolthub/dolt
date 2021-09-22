@@ -24,7 +24,8 @@ import (
 )
 
 func init() {
-	sqle.MinRowsPerPartition = 2
+	sqle.MinRowsPerPartition = 8
+	sqle.MaxRowsPerPartition = 1024
 }
 
 func TestQueries(t *testing.T) {

@@ -47,6 +47,7 @@ const (
 	partitionMultiplier = 2.0
 )
 
+var MaxRowsPerPartition uint64 = 32*1024
 var MinRowsPerPartition uint64 = 1024
 
 func init() {
@@ -358,15 +359,14 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 0, rowData}), nil
 	}
 
-	maxPartitions := uint64(partitionMultiplier * runtime.NumCPU())
-	numPartitions := (numElements / MinRowsPerPartition) + 1
-
-	if numPartitions > maxPartitions {
-		numPartitions = maxPartitions
+	itemsPerPartition := MaxRowsPerPartition
+	numPartitions := (numElements / itemsPerPartition) + 1
+	if numPartitions < uint64(partitionMultiplier * runtime.NumCPU()) {
+		itemsPerPartition = numElements / uint64(partitionMultiplier * runtime.NumCPU())
+		numPartitions = (numElements / itemsPerPartition) + 1
 	}
 
 	partitions := make([]doltTablePartition, numPartitions)
-	itemsPerPartition := numElements / numPartitions
 	for i := uint64(0); i < numPartitions-1; i++ {
 		partitions[i] = doltTablePartition{i * itemsPerPartition, (i + 1) * itemsPerPartition, rowData}
 	}
