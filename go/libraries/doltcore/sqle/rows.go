@@ -31,7 +31,7 @@ var _ sql.RowIter = (*keylessRowIter)(nil)
 type keylessRowIter struct {
 	keyedIter *DoltMapIter
 
-	cardIdx int
+	cardIdx     int
 	nonCardCols int
 
 	lastRead sql.Row
