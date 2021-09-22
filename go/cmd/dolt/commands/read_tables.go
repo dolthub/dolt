@@ -230,7 +230,7 @@ func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *typ
 		return nil, errhand.BuildDError("Unable to initialize repo.").AddCause(err).Build()
 	}
 
-	err = dEnv.InitializeRepoState(ctx)
+	err = dEnv.InitializeRepoState(ctx, "")
 
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to initialize repo.").AddCause(err).Build()

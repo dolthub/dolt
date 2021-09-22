@@ -406,7 +406,7 @@ func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return errhand.BuildDError("error: could not determine email. run dolt config --global --add %[1]s", env.UserEmailKey).Build()
 	}
 
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, doltdb.CommitNowFunc())
+	err := dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, "", doltdb.CommitNowFunc())
 	if err != nil {
 		return errhand.BuildDError("error: could not initialize repository").AddCause(err).Build()
 	}
