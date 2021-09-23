@@ -57,7 +57,7 @@ type Remote struct {
 	dialer     dbfactory.GRPCDialProvider
 }
 
-func CreateRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (Remote, *doltdb.DoltDB, error) {
+func GetRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (Remote, *doltdb.DoltDB, error) {
 	r := NewRemote(remoteName, remoteUrl, params, dialer)
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
 

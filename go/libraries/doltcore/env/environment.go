@@ -58,18 +58,32 @@ const (
 	tempTablesDir = "temptf"
 )
 
-func initializeCommitHooks(ctx context.Context, dEnv *DoltEnv) (postCommitHooks []datas.CommitHook, err error) {
-	backupUrl := os.Getenv(doltdb.ReplicateToRemoteKey)
-	if backupUrl != "" {
-		var destDB *doltdb.DoltDB
-		_, destDB, err = CreateRemote(ctx, "backup", backupUrl, nil, dEnv)
+func getCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
+	postCommitHooks := make([]datas.CommitHook, 0)
+
+	backupName := os.Getenv(doltdb.BackupToRemoteKey)
+	if backupName != "" {
+		remotes, err := dEnv.GetRemotes()
 		if err != nil {
-			return
+			return nil, err
 		}
-		replicateHook := doltdb.NewReplicateHook(destDB, dEnv.TempTableFilesDir())
+		rem, ok := remotes[backupName]
+		if !ok {
+			return nil, ErrRemoteNotFound
+		}
+		ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
+
+		if err != nil {
+			return nil, err
+		}
+		replicateHook := doltdb.NewReplicateHook(ddb, dEnv.TempTableFilesDir())
+		if err != nil {
+			return nil, err
+		}
 		postCommitHooks = append(postCommitHooks, replicateHook)
 	}
-	return
+
+	return postCommitHooks, nil
 }
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -175,11 +189,11 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 	}
 
 	if dbLoadErr == nil {
-		postCommitHooks, dbLoadErr := initializeCommitHooks(ctx, dEnv)
+		postCommitHooks, dbLoadErr := getCommitHooks(ctx, dEnv)
 		if dbLoadErr != nil {
 			dEnv.DBLoadError = dbLoadErr
 		} else {
-			dEnv.DoltDB = ddb.WithCommitHooks(ctx, postCommitHooks)
+			dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 		}
 	}
 

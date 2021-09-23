@@ -1281,14 +1281,14 @@ func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- dat
 	return datas.Clone(ctx, ddb.db, destDB.db, eventCh)
 }
 
-func (ddb *DoltDB) WithCommitHooks(ctx context.Context, postHooks []datas.CommitHook) *DoltDB {
-	ddb.db = ddb.db.WithCommitHooks(ctx, postHooks)
+func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []datas.CommitHook) *DoltDB {
+	ddb.db = ddb.db.SetCommitHooks(ctx, postHooks)
 	return ddb
 }
 
-func (ddb *DoltDB) WithCommitHookLogger(ctx context.Context, wr io.Writer) *DoltDB {
+func (ddb *DoltDB) SetCommitHookLogger(ctx context.Context, wr io.Writer) *DoltDB {
 	if ddb.db != nil {
-		ddb.db = ddb.db.WithCommitHookLogger(ctx, wr)
+		ddb.db = ddb.db.SetCommitHookLogger(ctx, wr)
 	}
 	return ddb
 }

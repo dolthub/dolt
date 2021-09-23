@@ -46,10 +46,14 @@ var (
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
 )
 
+// CommitHook is an abstraction for executing arbitrary commands after atomic database commits
 type CommitHook interface {
+	// Execute is arbitrary read-only function whose arguments are new Dataset commit into a specific Database
 	Execute(ctx context.Context, ds Dataset, db Database) error
-	WithLogger(ctx context.Context, wr io.Writer) error
+	// HandleError is an bridge function to handle Execute errors
 	HandleError(ctx context.Context, err error) error
+	// SetLogger lets clients specify an output stream for HandleError
+	SetLogger(ctx context.Context, wr io.Writer) error
 }
 
 // TODO: fix panics
@@ -980,14 +984,14 @@ func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc fun
 	return db.GetDataset(ctx, ds.ID())
 }
 
-func (db *database) WithCommitHooks(ctx context.Context, postHooks []CommitHook) *database {
+func (db *database) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *database {
 	db.postCommitHooks = postHooks
 	return db
 }
 
-func (db *database) WithCommitHookLogger(ctx context.Context, wr io.Writer) *database {
+func (db *database) SetCommitHookLogger(ctx context.Context, wr io.Writer) *database {
 	for _, h := range db.postCommitHooks {
-		h.WithLogger(ctx, wr)
+		h.SetLogger(ctx, wr)
 	}
 	return db
 }

@@ -10,6 +10,7 @@ setup() {
     cd $TMPDIRS/repo1
     dolt init
     dolt branch feature
+    dolt remote add backup1 file://../bac1
     cd $TMPDIRS
 }
 
@@ -28,13 +29,15 @@ teardown() {
 }
 
 @test "replication: push on commit" {
-    export DOLT_REPLICATE_TO_REMOTE=file://../bac1
+    export DOLT_BACKUP_TO_REMOTE=backup1
     cd repo1
+    dolt remote -v
     dolt sql -q "create table t1 (a int primary key)"
     dolt commit -am "cm"
 
     cd ..
     dolt clone file://./bac1 repo2
+    export DOLT_BACKUP_TO_REMOTE=
     cd repo2
     run dolt ls
     [ "$status" -eq 0 ]
@@ -43,7 +46,7 @@ teardown() {
 }
 
 @test "replication: no tags" {
-    export DOLT_REPLICATE_TO_REMOTE=file://../bac1
+    export DOLT_BACKUP_TO_REMOTE=backup1
     cd repo1
     dolt tag
 

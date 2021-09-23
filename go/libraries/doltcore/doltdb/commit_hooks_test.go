@@ -120,7 +120,7 @@ func TestReplicateHook(t *testing.T) {
 
 	// setup hook
 	hook := NewReplicateHook(destDB, tmpDir)
-	ddb.WithCommitHooks(ctx, []datas.CommitHook{hook})
+	ddb.SetCommitHooks(ctx, []datas.CommitHook{hook})
 
 	t.Run("replicate to backup remote", func(t *testing.T) {
 		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef("master"), meta)
@@ -138,7 +138,7 @@ func TestReplicateHook(t *testing.T) {
 
 	t.Run("replicate handle error logs to writer", func(t *testing.T) {
 		var buffer = &bytes.Buffer{}
-		err = hook.WithLogger(ctx, buffer)
+		err = hook.SetLogger(ctx, buffer)
 		assert.NoError(t, err)
 
 		msg := "prince charles is a vampire"

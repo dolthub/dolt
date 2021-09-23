@@ -300,7 +300,7 @@ func runMain() int {
 	defer tempfiles.MovableTempFileProvider.Clean()
 
 	if dEnv.DoltDB != nil {
-		dEnv.DoltDB.WithCommitHookLogger(ctx, cli.OutStream)
+		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.OutStream)
 	}
 
 	start := time.Now()

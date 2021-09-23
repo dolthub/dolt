@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-const ReplicateToRemoteKey = "DOLT_REPLICATE_TO_REMOTE"
+const BackupToRemoteKey = "DOLT_BACKUP_TO_REMOTE"
 
 type ReplicateHook struct {
 	destDB datas.Database
@@ -32,8 +32,8 @@ type ReplicateHook struct {
 	outf   io.Writer
 }
 
-// NewReplicateHook creates a ReplicateHook from values publicly available
-// in the env package
+// NewReplicateHook creates a ReplicateHook, parameterizaed by the backup database
+// and a local tempfile for pushing
 func NewReplicateHook(destDB *DoltDB, tmpDir string) *ReplicateHook {
 	return &ReplicateHook{destDB: destDB.db, tmpDir: tmpDir}
 }
@@ -51,8 +51,8 @@ func (rh *ReplicateHook) HandleError(ctx context.Context, err error) error {
 	return nil
 }
 
-// WithLogger implements datas.CommitHook
-func (rh *ReplicateHook) WithLogger(ctx context.Context, wr io.Writer) error {
+// SetLogger implements datas.CommitHook
+func (rh *ReplicateHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	rh.outf = wr
 	return nil
 }
