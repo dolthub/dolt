@@ -311,7 +311,7 @@ ALTER TABLE index_test ADD INDEX (c0);
 INSERT INTO index_test (c0) VALUES (4),(5),(6);
 SQL
 
-    run dolt sql -q "select * from index_test" -r csv
+    run dolt sql -q "select * from index_test ORDER BY pk" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "pk,c0" ]] || false
     [[ "${lines[1]}" =~ "1,1" ]] || false
