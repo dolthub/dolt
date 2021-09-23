@@ -100,7 +100,7 @@ teardown() {
 
 @test "query-catalog: executed saved" {
     Q1="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 order by 1"
-    Q2="select pk from one_pk"
+    Q2="select pk from one_pk order by pk"
     dolt sql -q "$Q1" -s name1
     dolt sql -q "$Q2" -s name2
 
@@ -138,7 +138,7 @@ EOF
     EXPECTED=$(cat <<'EOF'
 id,display_order,name,query,description
 name1,1,name1,"select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 order by 1",""
-name2,2,name2,select pk from one_pk,""
+name2,2,name2,select pk from one_pk order by pk,""
 EOF
 )
 
@@ -154,7 +154,7 @@ EOF
     EXPECTED=$(cat <<'EOF'
 id,display_order,name,query,description
 name1,1,name1,"select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 and pk < 3 order by 1 desc",""
-name2,2,name2,select pk from one_pk,""
+name2,2,name2,select pk from one_pk order by pk,""
 EOF
 )
 

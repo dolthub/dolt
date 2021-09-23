@@ -324,23 +324,23 @@ SQL
 }
 
 @test "sql: basic inner join" {
-    run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1"
+    run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1 order by pk"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
     first_join_output=$output
-    run dolt sql -q "select pk,pk1,pk2 from two_pk join one_pk on one_pk.c1=two_pk.c1"
+    run dolt sql -q "select pk,pk1,pk2 from two_pk join one_pk on one_pk.c1=two_pk.c1 order by pk"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
     [ "$output" = "$first_join_output" ]
-    run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1 where pk=1"
+    run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1 where pk=1 order by pk"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
-    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1"
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1 order by pk"
     [ "$status" -eq 0 ]
     [[ "$output" =~ foo ]] || false
     [[ "$output" =~ bar ]] || false
     [ "${#lines[@]}" -eq 8 ]
-    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1  where one_pk.c1=10"
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1 where one_pk.c1=10 order by pk"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "10" ]] || false
