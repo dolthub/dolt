@@ -19,9 +19,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"io"
 	"os"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/chunks"

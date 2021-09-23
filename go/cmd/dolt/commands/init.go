@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	emailParamName    = "email"
-	usernameParamName = "name"
+	emailParamName      = "email"
+	usernameParamName   = "name"
 	initBranchParamName = "branch"
 )
 

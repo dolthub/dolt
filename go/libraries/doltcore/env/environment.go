@@ -468,7 +468,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context, branchName string) error {
 	initBranch := GetDefaultInitBranch(dEnv.Config)
 	if branchName != "" {
-	 initBranch = branchName
+		initBranch = branchName
 	}
 
 	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, ref.NewBranchRef(initBranch))

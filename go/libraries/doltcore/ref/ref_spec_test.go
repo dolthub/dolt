@@ -29,7 +29,7 @@ func TestRefSpec(t *testing.T) {
 			true,
 			map[string]string{
 				"refs/heads/main":          "refs/remotes/origin/main",
-				"refs/heads/feature":         "refs/remotes/origin/feature",
+				"refs/heads/feature":       "refs/remotes/origin/feature",
 				"refs/remotes/origin/main": "refs/nil/",
 			},
 		}, {
@@ -37,7 +37,7 @@ func TestRefSpec(t *testing.T) {
 			"refs/heads/main:refs/remotes/borigin/mymain",
 			true,
 			map[string]string{
-				"refs/heads/main":  "refs/remotes/borigin/mymain",
+				"refs/heads/main":    "refs/remotes/borigin/mymain",
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
@@ -54,7 +54,7 @@ func TestRefSpec(t *testing.T) {
 			"main",
 			true,
 			map[string]string{
-				"refs/heads/main":  "refs/heads/main",
+				"refs/heads/main":    "refs/heads/main",
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
@@ -62,7 +62,7 @@ func TestRefSpec(t *testing.T) {
 			"main:main",
 			true,
 			map[string]string{
-				"refs/heads/main":  "refs/heads/main",
+				"refs/heads/main":    "refs/heads/main",
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
