@@ -80,5 +80,5 @@ jobs:
         run: expect -v
       - name: Test all Unix
         run: |
-          bats --tap .
+          bats .
         working-directory: ./integration-tests/bats
