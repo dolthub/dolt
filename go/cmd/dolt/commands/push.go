@@ -185,10 +185,8 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan datas.PullerEvent) {
 	uploadRate := ""
 
 	for evt := range pullerEventCh {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 		switch evt.EventType {
 		case datas.NewLevelTWEvent:
@@ -247,10 +245,8 @@ func progFunc(ctx context.Context, progChan chan datas.PullProgress) {
 	lenPrinted := 0
 	done := false
 	for !done {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 		select {
 		case <-ctx.Done():

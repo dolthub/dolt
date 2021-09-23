@@ -253,7 +253,6 @@ func runMain() int {
 	}
 
 	root, err := env.GetCurrentUserHomeDir()
-
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
 		return 1
@@ -299,6 +298,10 @@ func runMain() int {
 	}
 
 	defer tempfiles.MovableTempFileProvider.Clean()
+
+	if dEnv.DoltDB != nil {
+		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.OutStream)
+	}
 
 	start := time.Now()
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)

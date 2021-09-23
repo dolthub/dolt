@@ -1038,8 +1038,6 @@ while True:
     dolt remote add origin file://../rem1
     start_sql_server repo1
 
-    dolt status
-    dolt branch
     dolt push origin master
     run server_query repo1 1 "select dolt_push() as p" "p\n0"
     [ "$status" -eq 1 ]
@@ -1049,4 +1047,33 @@ while True:
 
     skip "In-memory branch doesn't track upstream correctly"
     server_query repo1 1 "select dolt_push() as p" "p\n1"
+}
+
+@test "sql-server: replicate to backup after sql-session commit" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir bac1
+    cd repo1
+    dolt remote add backup1 file://../bac1
+    export DOLT_BACKUP_TO_REMOTE=backup1
+    start_sql_server repo1
+
+    multi_query repo1 1 "
+    CREATE TABLE test (
+      pk int primary key
+    );
+    INSERT INTO test VALUES (0),(1),(2);
+    SELECT DOLT_ADD('.');
+    SELECT DOLT_COMMIT('-m', 'Step 1');"
+
+    cd ..
+    dolt clone file://./bac1 repo3
+    cd repo3
+    export DOLT_BACKUP_TO_REMOTE=
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk" ]]
+    [[ "${lines[1]}" =~ "0" ]]
+    [[ "${lines[2]}" =~ "1" ]]
+    [[ "${lines[3]}" =~ "2" ]]
 }

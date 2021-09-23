@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -38,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -55,6 +57,34 @@ const (
 
 	tempTablesDir = "temptf"
 )
+
+func getCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
+	postCommitHooks := make([]datas.CommitHook, 0)
+
+	backupName := os.Getenv(doltdb.BackupToRemoteKey)
+	if backupName != "" {
+		remotes, err := dEnv.GetRemotes()
+		if err != nil {
+			return nil, err
+		}
+		rem, ok := remotes[backupName]
+		if !ok {
+			return nil, ErrRemoteNotFound
+		}
+		ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
+
+		if err != nil {
+			return nil, err
+		}
+		replicateHook := doltdb.NewReplicateHook(ddb, dEnv.TempTableFilesDir())
+		if err != nil {
+			return nil, err
+		}
+		postCommitHooks = append(postCommitHooks, replicateHook)
+	}
+
+	return postCommitHooks, nil
+}
 
 var zeroHashStr = (hash.Hash{}).String()
 
@@ -155,6 +185,15 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			}
 		} else if err != nil {
 			dEnv.RSLoadErr = err
+		}
+	}
+
+	if dbLoadErr == nil {
+		postCommitHooks, dbLoadErr := getCommitHooks(ctx, dEnv)
+		if dbLoadErr != nil {
+			dEnv.DBLoadError = dbLoadErr
+		} else {
+			dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 		}
 	}
 
