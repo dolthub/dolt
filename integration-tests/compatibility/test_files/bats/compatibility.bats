@@ -21,9 +21,10 @@ teardown() {
 }
 
 @test "dolt status" {
+    expected="On branch $DEFAULT_BRANCH"
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "$expected" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -71,7 +72,7 @@ teardown() {
     [[ "${lines[5]}" =~ "| 2  | asdf | 1.1 | 0 | 0 |" ]] || false
 }
 
-@test "dolt schema show on branch master" {
+@test "dolt schema show on branch $DEFAULT_BRANCH" {
     run dolt schema show abc
     [ "$status" -eq 0 ]
     output=`echo $output | tr '[:upper:]' '[:lower:]'` # lowercase the output
@@ -86,7 +87,7 @@ teardown() {
 }
 
 
-@test "dolt sql 'select * from abc' on branch master" {
+@test "dolt sql 'select * from abc' on branch $DEFAULT_BRANCH" {
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| pk | a    | b   | x | y   |" ]] || false
@@ -122,7 +123,7 @@ teardown() {
     [[ "${lines[4]}" =~ "| 1  | asdf | 1.1 | 0 | 122 |" ]] || false
     [[ "${lines[5]}" =~ "| 4  | data | 1.1 | 0 | 122 |" ]] || false
 
-    dolt checkout master
+    dolt checkout "$DEFAULT_BRANCH"
 }
 
 @test "dolt diff other" {
@@ -177,7 +178,7 @@ teardown() {
     dolt commit -am "inserted, deleted some rows"
 }
 
-@test "dolt merge other into master" {
+@test "dolt merge other into $DEFAULT_BRANCH" {
     # throws a conflict
     dolt merge other
 }
