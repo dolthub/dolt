@@ -683,7 +683,7 @@ SQL
      SELECT DOLT_MERGE('feature-branch');
      "
 
-     server_query repo1 1 "SELECT * FROM test" "pk\n1\n2\n3\n1000"
+     server_query repo1 1 "SELECT * FROM test ORDER BY pk" "pk\n1\n2\n3\n1000"
 
      server_query repo1 1 "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
 }
