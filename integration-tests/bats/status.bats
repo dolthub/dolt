@@ -435,7 +435,7 @@ SQL
 
     run dolt roots
     [ "$status" -eq 0 ]
-    [[ $(echo "$output" | grep -o "refs/heads/main" | xargs) =~ "refs/heads/main" ]]
+    [[ $(echo "$output" | grep -o "refs/heads/main" | xargs) =~ "refs/heads/main" ]] || false
 
     mv .dolt/repo_state.backup .dolt/repo_state.json
     [ "$status" -eq 0 ]
