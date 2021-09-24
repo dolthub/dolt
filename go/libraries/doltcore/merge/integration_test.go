@@ -25,6 +25,7 @@ import (
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	dtu "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
@@ -53,7 +54,7 @@ func TestMerge(t *testing.T) {
 				{cmd.CheckoutCmd{}, args{"-b", "other"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1,1),(2,2);"}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
-				{cmd.CheckoutCmd{}, args{"main"}},
+				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.MergeCmd{}, args{"other"}},
 			},
 			query: "SELECT * FROM test",
@@ -71,7 +72,7 @@ func TestMerge(t *testing.T) {
 				{cmd.CheckoutCmd{}, args{"other"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1,1),(2,2);"}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
-				{cmd.CheckoutCmd{}, args{"main"}},
+				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.MergeCmd{}, args{"other"}},
 			},
 			query: "SELECT * FROM test",
@@ -93,7 +94,7 @@ func TestMerge(t *testing.T) {
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk varchar(120) primary key);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES ('x'),('y'),('z');"}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
-				{cmd.CheckoutCmd{}, args{"main"}},
+				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.MergeCmd{}, args{"other"}},
 			},
 			query: "SELECT * FROM quiz ORDER BY pk",
@@ -153,7 +154,7 @@ func TestMergeConflicts(t *testing.T) {
 				{cmd.CheckoutCmd{}, args{"-b", "other"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1,1),(2,2);"}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
-				{cmd.CheckoutCmd{}, args{"main"}},
+				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1,11),(2,22);"}},
 				{cmd.CommitCmd{}, args{"-am", "added the same rows on main"}},
 				{cmd.MergeCmd{}, args{"other"}},
@@ -169,7 +170,7 @@ func TestMergeConflicts(t *testing.T) {
 				{cmd.CheckoutCmd{}, args{"-b", "other"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1,1),(2,2);"}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
-				{cmd.CheckoutCmd{}, args{"main"}},
+				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1,11),(2,22);"}},
 				{cmd.CommitCmd{}, args{"-am", "added the same rows on main"}},
 				{cmd.MergeCmd{}, args{"other"}},
@@ -188,7 +189,7 @@ func TestMergeConflicts(t *testing.T) {
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES (1,1),(2,2);"}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
-				{cmd.CheckoutCmd{}, args{"main"}},
+				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES (1,11),(2,22);"}},
 				{cmd.CommitCmd{}, args{"-am", "added the same rows on main"}},
@@ -206,7 +207,7 @@ func TestMergeConflicts(t *testing.T) {
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES (1,1),(2,2);"}},
 				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
-				{cmd.CheckoutCmd{}, args{"main"}},
+				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"}},
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES (1,11),(2,22);"}},
 				{cmd.CommitCmd{}, args{"-am", "added the same rows on main"}},

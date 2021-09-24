@@ -19,6 +19,8 @@ import (
 	"testing"
 )
 
+const defaultBranch = "main"
+
 type TestMarshalStruct struct {
 	Test MarshalableRef `json:"test"`
 }
@@ -29,11 +31,11 @@ func TestJsonMarshalAndUnmarshal(t *testing.T) {
 		str string
 	}{
 		{
-			NewBranchRef("main"),
+			NewBranchRef(defaultBranch),
 			`{"test":"refs/heads/main"}`,
 		},
 		{
-			NewRemoteRef("origin", "main"),
+			NewRemoteRef("origin", defaultBranch),
 			`{"test":"refs/remotes/origin/main"}`,
 		},
 		{
@@ -79,7 +81,7 @@ func TestEqualsStr(t *testing.T) {
 		expected bool
 	}{
 		{
-			NewBranchRef("main"),
+			NewBranchRef(defaultBranch),
 			"refs/heads/main",
 			true,
 		},
@@ -89,17 +91,17 @@ func TestEqualsStr(t *testing.T) {
 			true,
 		},
 		{
-			NewBranchRef("main"),
+			NewBranchRef(defaultBranch),
 			"refs/heads/notmain",
 			false,
 		},
 		{
-			NewBranchRef("main"),
+			NewBranchRef(defaultBranch),
 			"refs/remotes/origin/main",
 			false,
 		},
 		{
-			NewRemoteRef("origin", "main"),
+			NewRemoteRef("origin", defaultBranch),
 			"refs/remotes/origin/main",
 			true,
 		},
@@ -114,17 +116,17 @@ func TestEqualsStr(t *testing.T) {
 			true,
 		},
 		{
-			NewRemoteRef("origin", "main"),
+			NewRemoteRef("origin", defaultBranch),
 			"refs/remotes/borigin/main",
 			false,
 		},
 		{
-			NewRemoteRef("origin", "main"),
+			NewRemoteRef("origin", defaultBranch),
 			"refs/remotes/origin/notmain",
 			false,
 		},
 		{
-			NewRemoteRef("origin", "main"),
+			NewRemoteRef("origin", defaultBranch),
 			"refs/notavalidtype/origin/notmain",
 			false,
 		},

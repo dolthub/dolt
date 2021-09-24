@@ -370,7 +370,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Checkout{BranchName: "newBranch"},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Checkout{BranchName: "main"},
+			tc.Checkout{BranchName: env.DefaultInitBranch},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (10, "Patty Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Merge{BranchName: "newBranch"},
@@ -440,7 +440,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		require.NoError(t, err)
 		require.NotNil(t, rebasedCommit)
 
-		mcs, _ := doltdb.NewCommitSpec("main")
+		mcs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 		mainCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
 		rch, _ := rebasedCommit.HashOf()
 		mch, _ := mainCm.HashOf()
@@ -473,7 +473,7 @@ func testRebaseTagHistory(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	mcs, _ := doltdb.NewCommitSpec("main")
+	mcs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	oldMainCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
 	ocs, _ := doltdb.NewCommitSpec("other")
 	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs, nil)

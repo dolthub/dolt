@@ -37,6 +37,7 @@ setup_no_dolt_init() {
     cd $BATS_TMPDIR
     
     # remove directory if exists
+    # reruns recycle pids
     rm -rf "dolt-repo-$$"
 
     # Append the directory name with the pid of the calling process so

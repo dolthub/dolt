@@ -30,6 +30,7 @@ import (
 
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 )
@@ -97,7 +98,7 @@ func TestJsonValues(t *testing.T) {
 				{cmd.CheckoutCmd{}, args{"-b", "other"}},
 				{cmd.SqlCmd{}, args{"-q", `update js set js = '{"b":22}' where pk = 2;`}},
 				{cmd.CommitCmd{}, args{"-am", "update row pk = 2"}},
-				{cmd.CheckoutCmd{}, args{"main"}},
+				{cmd.CheckoutCmd{}, args{env.DefaultInitBranch}},
 				{cmd.SqlCmd{}, args{"-q", `update js set js = '{"a":11}' where pk = 1;`}},
 				{cmd.CommitCmd{}, args{"-am", "update row pk = 1"}},
 				{cmd.MergeCmd{}, args{"other"}},

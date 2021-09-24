@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -267,10 +268,10 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
 	vrw := ddb.ValueReadWriter()
 
-	err := ddb.WriteEmptyRepo(context.Background(), "main", name, email)
+	err := ddb.WriteEmptyRepo(context.Background(), env.DefaultInitBranch, name, email)
 	require.NoError(t, err)
 
-	mainHeadSpec, _ := doltdb.NewCommitSpec("main")
+	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
 
@@ -388,9 +389,9 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 
 	meta, err := doltdb.NewCommitMeta(name, email, "fake")
 	require.NoError(t, err)
-	initialCommit, err := ddb.Commit(context.Background(), mainHash, ref.NewBranchRef("main"), meta)
+	initialCommit, err := ddb.Commit(context.Background(), mainHash, ref.NewBranchRef(env.DefaultInitBranch), meta)
 	require.NoError(t, err)
-	commit, err := ddb.Commit(context.Background(), hash, ref.NewBranchRef("main"), meta)
+	commit, err := ddb.Commit(context.Background(), hash, ref.NewBranchRef(env.DefaultInitBranch), meta)
 	require.NoError(t, err)
 
 	err = ddb.NewBranchAtCommit(context.Background(), ref.NewBranchRef("to-merge"), initialCommit)

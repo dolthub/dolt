@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	tc "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 )
@@ -62,7 +63,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Query{Query: testableDef},
 			tc.CommitAll{Message: "created table testable"},
 		},
-		ExpectedBranch: "main",
+		ExpectedBranch: env.DefaultInitBranch,
 		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
@@ -76,7 +77,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
 		},
-		ExpectedBranch: "main",
+		ExpectedBranch: env.DefaultInitBranch,
 		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
@@ -92,7 +93,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.CommitAll{Message: "created table testable"},
 			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 		},
-		ExpectedBranch: "main",
+		ExpectedBranch: env.DefaultInitBranch,
 		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
@@ -112,7 +113,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Query{Query: "alter table testable drop column c0"},
 			tc.CommitAll{Message: "dropped column c0"},
 		},
-		ExpectedBranch: "main",
+		ExpectedBranch: env.DefaultInitBranch,
 		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
@@ -130,7 +131,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.CommitAll{Message: "created table testable"},
 			tc.Query{Query: "alter table testable drop column c0"},
 		},
-		ExpectedBranch: "main",
+		ExpectedBranch: env.DefaultInitBranch,
 		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
@@ -147,7 +148,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 			tc.Query{Query: "alter table testable drop column c0"},
 		},
-		ExpectedBranch: "main",
+		ExpectedBranch: env.DefaultInitBranch,
 		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
@@ -167,7 +168,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.CommitStaged{Message: "adding staged column c0"},
 			tc.ResetHard{},
 		},
-		ExpectedBranch: "main",
+		ExpectedBranch: env.DefaultInitBranch,
 		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
@@ -188,10 +189,10 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Checkout{BranchName: "other"},
 			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int;")},
 			tc.CommitAll{Message: "added column c11 on branch other"},
-			tc.Checkout{BranchName: "main"},
+			tc.Checkout{BranchName: env.DefaultInitBranch},
 			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int;")},
 		},
-		ExpectedBranch: "main",
+		ExpectedBranch: env.DefaultInitBranch,
 		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
@@ -214,7 +215,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Checkout{BranchName: "other"},
 			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int;")},
 			tc.CommitAll{Message: "added column c11 on branch other"},
-			tc.Checkout{BranchName: "main"},
+			tc.Checkout{BranchName: env.DefaultInitBranch},
 			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int;")},
 			tc.CommitAll{Message: "added column c1 on branch main"},
 			tc.Checkout{BranchName: "other"},
@@ -310,7 +311,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Query{Query: "drop table foo;"},
 			tc.CommitAll{Message: "added column c1 on branch main, created table qux, dropped table foo"},
 		},
-		ExpectedBranch: "main",
+		ExpectedBranch: env.DefaultInitBranch,
 		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),

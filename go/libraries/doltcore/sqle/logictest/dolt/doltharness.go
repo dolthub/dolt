@@ -122,12 +122,12 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 
 func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	if !dEnv.HasDoltDir() {
-		err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, "main", time.Now())
+		err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
 		if err != nil {
 			return err
 		}
 	} else {
-		err := dEnv.InitDBAndRepoState(context.Background(), types.Format_Default, name, email, "main", time.Now())
+		err := dEnv.InitDBAndRepoState(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
 		if err != nil {
 			return err
 		}

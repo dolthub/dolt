@@ -46,7 +46,7 @@ func TestWildcardPattern(t *testing.T) {
 		{
 			"refs/heads/*",
 			[]patternTest{
-				{"refs/heads/main", "main", true},
+				{"refs/heads/main", defaultBranch, true},
 				{"refs/heads/feature", "feature", true},
 				{"refs/heads/bh/my/feature", "bh/my/feature", true},
 			},
