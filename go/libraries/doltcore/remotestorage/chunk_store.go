@@ -40,7 +40,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -66,7 +65,7 @@ var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 var globalHttpFetcher HTTPFetcher = &http.Client{}
 
 var _ nbs.TableFileStore = (*DoltChunkStore)(nil)
-var _ datas.NBSCompressedChunkStore = (*DoltChunkStore)(nil)
+var _ nbs.NBSCompressedChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.ChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.LoggingChunkStore = (*DoltChunkStore)(nil)
 

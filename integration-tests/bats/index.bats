@@ -2025,13 +2025,13 @@ CREATE TABLE test2 (
 INSERT INTO test VALUES (0, NULL), (1, NULL), (2, NULL);
 INSERT INTO test2 VALUES (0, NULL, NULL), (1, NULL, NULL), (2, 1, NULL), (3, 1, NULL), (4, NULL, 1), (5, NULL, 1);
 SQL
-    run dolt sql -q "SELECT * FROM test" -r=json
+    run dolt sql -q "SELECT * FROM test order by pk" -r=json
     [ "$status" -eq "0" ]
     [[ "$output" =~ '{"rows": [{"pk":0},{"pk":1},{"pk":2}]}' ]] || false
-    run dolt sql -q "SELECT * FROM test WHERE v1 IS NULL" -r=json
+    run dolt sql -q "SELECT * FROM test WHERE v1 IS NULL order by pk" -r=json
     [ "$status" -eq "0" ]
     [[ "$output" =~ '{"rows": [{"pk":0},{"pk":1},{"pk":2}]}' ]] || false
-    run dolt sql -q "SELECT * FROM test2" -r=json
+    run dolt sql -q "SELECT * FROM test2 order by pk" -r=json
     [ "$status" -eq "0" ]
     [[ "$output" =~ '{"rows": [{"pk":0},{"pk":1},{"pk":2,"v1":1},{"pk":3,"v1":1},{"pk":4,"v2":1},{"pk":5,"v2":1}]}' ]] || false
 }

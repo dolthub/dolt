@@ -336,7 +336,7 @@ SQL
     dolt checkout master
     run dolt merge other
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM quiz;" -r csv
+    run dolt sql -q "SELECT * FROM quiz ORDER BY pk;" -r csv
     [[ "${lines[0]}" =~ "pk" ]] || false
     [[ "${lines[1]}" =~ "10" ]] || false
     [[ "${lines[2]}" =~ "11" ]] || false

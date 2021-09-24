@@ -59,17 +59,12 @@ type CmpChnkAndRefs struct {
 	refs    map[hash.Hash]int
 }
 
-type NBSCompressedChunkStore interface {
-	chunks.ChunkStore
-	GetManyCompressed(context.Context, hash.HashSet, func(nbs.CompressedChunk)) error
-}
-
 // Puller is used to sync data between to Databases
 type Puller struct {
 	fmt *types.NomsBinFormat
 
 	srcDB         Database
-	srcChunkStore NBSCompressedChunkStore
+	srcChunkStore nbs.NBSCompressedChunkStore
 	sinkDBCS      chunks.ChunkStore
 	rootChunkHash hash.Hash
 	downloaded    hash.HashSet
@@ -158,7 +153,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, fmt.Errorf("cannot pull from src to sink; src version is %v and sink version is %v", srcDB.chunkStore().Version(), sinkDB.chunkStore().Version())
 	}
 
-	srcChunkStore, ok := srcDB.chunkStore().(NBSCompressedChunkStore)
+	srcChunkStore, ok := srcDB.chunkStore().(nbs.NBSCompressedChunkStore)
 	if !ok {
 		return nil, ErrIncompatibleSourceChunkStore
 	}

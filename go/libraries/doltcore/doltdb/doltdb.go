@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1278,4 +1279,16 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- datas.TableFileEvent) error {
 	return datas.Clone(ctx, ddb.db, destDB.db, eventCh)
+}
+
+func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []datas.CommitHook) *DoltDB {
+	ddb.db = ddb.db.SetCommitHooks(ctx, postHooks)
+	return ddb
+}
+
+func (ddb *DoltDB) SetCommitHookLogger(ctx context.Context, wr io.Writer) *DoltDB {
+	if ddb.db != nil {
+		ddb.db = ddb.db.SetCommitHookLogger(ctx, wr)
+	}
+	return ddb
 }
