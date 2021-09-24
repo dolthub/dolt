@@ -35,6 +35,10 @@ current_dolt_user_email() {
 setup_no_dolt_init() {
     export PATH=$PATH:~/go/bin
     cd $BATS_TMPDIR
+    
+    # remove directory if exists
+    rm -rf "dolt-repo-$$"
+
     # Append the directory name with the pid of the calling process so
     # multiple tests can be run in parallel on the same machine
     mkdir "dolt-repo-$$"
