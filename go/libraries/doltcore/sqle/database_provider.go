@@ -47,6 +47,7 @@ var _ sql.FunctionProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
 var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
+// NewDoltDatabaseProvider returns a provider for the databases given
 func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
@@ -64,6 +65,17 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Data
 		mu:        &sync.RWMutex{},
 		cfg:       config,
 	}
+}
+
+// WithFunctions returns a copy of this provider with the functions given. Any previous functions are removed.
+func (p DoltDatabaseProvider) WithFunctions(fns []sql.Function) DoltDatabaseProvider {
+	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
+	for _, fn := range fns {
+		funcs[strings.ToLower(fn.FunctionName())] = fn
+	}
+
+	p.functions = funcs
+	return p
 }
 
 func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error) {
