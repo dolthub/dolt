@@ -10,6 +10,10 @@ teardown() {
     teardown_common
 }
 
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 8-
+}
+
 @test "status: dolt version --feature" {
     # bump this test with feature version bumps
     run dolt version --feature
@@ -420,19 +424,19 @@ SQL
     [[ "$output" =~ "test" ]] || false
 }
 
-get_head_commit() {
-    dolt log -n 1 | grep -m 1 commit | cut -c 8-
-}
-
 @test "status: roots runs even if status fails" {
-  mv .dolt/repo_state.json .dolt/repo_state.backup
+    mv .dolt/repo_state.json .dolt/repo_state.backup
 
-  run dolt status
-  [ "$status" -ne 0 ]
+    run dolt status
+    [ "$status" -ne 0 ]
 
-  run dolt roots
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "refs/heads/master" ]]
+    # Trying to assert against the output of this command
+    # can easily cause bats to fail with bats warning: Executed N instead of expected N tests
 
-  mv .dolt/repo_state.backup .dolt/repo_state.json
+    run dolt roots
+    [ "$status" -eq 0 ]
+    [[ $(echo "$output" | grep -o "refs/heads/main" | xargs) =~ "refs/heads/main" ]]
+
+    mv .dolt/repo_state.backup .dolt/repo_state.json
+    [ "$status" -eq 0 ]
 }
