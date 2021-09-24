@@ -23,7 +23,7 @@ var VersionString = "SET_BY_INIT"
 type Version struct{}
 
 // NewVersion creates a new Version expression.
-func NewVersion(ctx *sql.Context) sql.Expression {
+func NewVersion() sql.Expression {
 	return &Version{}
 }
 
@@ -58,9 +58,9 @@ func (*Version) Type() sql.Type {
 }
 
 // WithChildren implements the Expression interface.
-func (v *Version) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+func (v *Version) WithChildren(children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 0 {
 		return nil, sql.ErrInvalidChildrenNumber.New(v, len(children), 0)
 	}
-	return NewVersion(ctx), nil
+	return NewVersion(), nil
 }
