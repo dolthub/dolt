@@ -32,7 +32,7 @@ import (
 const (
 	emailParamName      = "email"
 	usernameParamName   = "name"
-	initBranchParamName = "branch"
+	initBranchParamName = "initial-branch"
 )
 
 var initDocs = cli.CommandDocumentationContent{
@@ -76,7 +76,7 @@ func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(usernameParamName, "", "name", fmt.Sprintf("The name used in commits to this repo. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserNameKey))
 	ap.SupportsString(emailParamName, "", "email", fmt.Sprintf("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserEmailKey))
 	ap.SupportsString(cli.DateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
-	ap.SupportsString(initBranchParamName, "", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", env.InitBranchName, env.DefaultInitBranch))
+	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", env.InitBranchName, env.DefaultInitBranch))
 	return ap
 }
 
@@ -93,10 +93,12 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	name, _ := apr.GetValue(usernameParamName)
 	email, _ := apr.GetValue(emailParamName)
+	initBranch, _ := apr.GetValue(initBranchParamName)
 	name = dEnv.Config.IfEmptyUseConfig(name, env.UserNameKey)
 	email = dEnv.Config.IfEmptyUseConfig(email, env.UserEmailKey)
-
-	initBranch, _ := apr.GetValue(initBranchParamName)
+	if initBranch == "" {
+		initBranch = env.GetDefaultInitBranch(dEnv.Config)
+	}
 
 	if name == "" {
 		cli.PrintErrln(

@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
-var ErrUnmergedWorkspaceDelete = errors.New("attempted to delete a workspace that is not fully merged into main; use `-f` to force")
+var ErrUnmergedWorkspaceDelete = errors.New("attempted to delete a workspace that is not fully merged into its parent; use `-f` to force")
 var ErrCOWorkspaceDelete = errors.New("attempted to delete checked out workspace")
 var ErrBranchNameExists = errors.New("workspace name must not be existing branch name")
 

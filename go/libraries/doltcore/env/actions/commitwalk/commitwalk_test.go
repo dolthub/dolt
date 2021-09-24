@@ -48,7 +48,7 @@ func createUninitializedEnv() *env.DoltEnv {
 
 func TestGetDotDotRevisions(t *testing.T) {
 	env := createUninitializedEnv()
-	err := env.InitRepo(context.Background(), types.Format_LD_1, "Bill Billerson", "bill@billerson.com", "")
+	err := env.InitRepo(context.Background(), types.Format_LD_1, "Bill Billerson", "bill@billerson.com", "main")
 	require.NoError(t, err)
 
 	cs, err := doltdb.NewCommitSpec("main")
@@ -218,7 +218,7 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 	stref, err := cm.GetStRef()
 	require.NoError(t, err)
 	forkEnv := createUninitializedEnv()
-	err = forkEnv.InitRepo(context.Background(), types.Format_LD_1, "Bill Billerson", "bill@billerson.com", "")
+	err = forkEnv.InitRepo(context.Background(), types.Format_LD_1, "Bill Billerson", "bill@billerson.com", "main")
 	require.NoError(t, err)
 	p1 := make(chan datas.PullProgress)
 	p2 := make(chan datas.PullerEvent)

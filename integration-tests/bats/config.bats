@@ -192,19 +192,19 @@ teardown() {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "joshn@doe.com"
 
-    dolt config --global --add init.defaultBranch "main"
+    dolt config --global --add init.defaultBranch "master"
     dolt config --list
     run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "init.defaultbranch = main" ]]
+    [[ "$output" =~ "init.defaultbranch = master" ]]
 
     dolt init
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch main" ]]
+    [[ "$output" =~ "On branch master" ]]
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "* main" ]]
+    [[ "$output" =~ "* master" ]]
 
     # cleanup
     dolt config --global --unset init.defaultBranch
@@ -227,7 +227,7 @@ teardown() {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "joshn@doe.com"
 
-    dolt init --branch=vegan-btw
+    dolt init -b=vegan-btw
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch vegan-btw" ]]

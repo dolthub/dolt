@@ -451,12 +451,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 		return err
 	}
 
-	initBranch := GetDefaultInitBranch(dEnv.Config)
-	if branchName != "" {
-		initBranch = branchName
-	}
-
-	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, initBranch, name, email, t)
+	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, branchName, name, email, t)
 	if err != nil {
 		return doltdb.ErrNomsIO
 	}
@@ -466,12 +461,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 
 // InitializeRepoState writes a default repo state to disk, consisting of a main branch and current root hash value.
 func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context, branchName string) error {
-	initBranch := GetDefaultInitBranch(dEnv.Config)
-	if branchName != "" {
-		initBranch = branchName
-	}
-
-	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, ref.NewBranchRef(initBranch))
+	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
 	}
@@ -481,7 +471,7 @@ func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context, branchName string)
 		return err
 	}
 
-	dEnv.RepoState, err = CreateRepoState(dEnv.FS, initBranch)
+	dEnv.RepoState, err = CreateRepoState(dEnv.FS, branchName)
 	if err != nil {
 		return ErrStateUpdate
 	}

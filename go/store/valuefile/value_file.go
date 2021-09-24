@@ -73,7 +73,7 @@ func WriteValueFile(ctx context.Context, filepath string, store *FileValueStore,
 // WriteToWriter writes the values out to the provided writer in the value file format
 func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, values ...types.Value) error {
 	db := datas.NewDatabase(store)
-	ds, err := db.GetDataset(ctx, env.DefaultInitBranch) // TODO: DUSTIN
+	ds, err := db.GetDataset(ctx, env.DefaultInitBranch)
 
 	if err != nil {
 		return err

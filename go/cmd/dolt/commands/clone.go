@@ -313,7 +313,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	if branch == "" {
-		branch = getDefaultMainOrMaster(dEnv, branches[:])
+		branch = GetDefaultBranch(dEnv, branches)
 	}
 
 	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
@@ -399,6 +399,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 	name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
 	email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
+	initBranch := env.GetDefaultInitBranch(dEnv.Config)
 
 	if *name == "" {
 		return errhand.BuildDError(fmt.Sprintf("error: could not determine user name. run dolt config --global --add %[1]s", env.UserNameKey)).Build()
@@ -406,7 +407,7 @@ func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return errhand.BuildDError("error: could not determine email. run dolt config --global --add %[1]s", env.UserEmailKey).Build()
 	}
 
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, "", doltdb.CommitNowFunc())
+	err := dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, initBranch, doltdb.CommitNowFunc())
 	if err != nil {
 		return errhand.BuildDError("error: could not initialize repository").AddCause(err).Build()
 	}
@@ -414,10 +415,10 @@ func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 	return nil
 }
 
-// getDefaultMainOrMaster prioritizes the branches checked out during clone, returning
+// GetDefaultBranch returns the default branch from among the branches given, returning
 // the configs default config branch first, then init branch main, then the old init branch master,
-// and finally the first lexicographical branch if non of the others are found
-func getDefaultMainOrMaster(dEnv *env.DoltEnv, branches []ref.DoltRef) string {
+// and finally the first lexicographical branch if none of the others are found
+func GetDefaultBranch(dEnv *env.DoltEnv, branches []ref.DoltRef) string {
 	if len(branches) == 0 {
 		return env.DefaultInitBranch
 	}
