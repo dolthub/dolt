@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
@@ -128,14 +127,9 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	dbs := commands.CollectDBs(mrEnv)
 	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
 	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
-	cat := sql.NewCatalog(pro)
 
-	a := analyzer.NewBuilder(cat).WithParallelism(serverConfig.QueryParallelism()).Build()
-	sqlEngine := sqle.New(cat, a, nil)
-
-	if err := sqlEngine.Catalog.Register(dfunctions.DoltFunctions...); err != nil {
-		return nil, err
-	}
+	a := analyzer.NewBuilder(pro).WithParallelism(serverConfig.QueryParallelism()).Build()
+	sqlEngine := sqle.New(a, nil)
 
 	portAsString := strconv.Itoa(serverConfig.Port())
 	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
@@ -200,7 +194,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username string, email string, pr
 
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
 		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
-		doltDbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
+		doltDbs := dbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, doltDbs)
 		if err != nil {
 			return nil, nil, nil, err
@@ -225,7 +219,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username string, email string, pr
 			sql.WithSession(doltSess),
 			sql.WithTracer(tracing.Tracer(ctx)))
 
-		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
+		dbs := dbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		for _, db := range dbs {
 			root, err := db.GetRoot(sqlCtx)
 			if err != nil {

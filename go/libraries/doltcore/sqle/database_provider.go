@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -35,12 +36,14 @@ const (
 
 type DoltDatabaseProvider struct {
 	databases map[string]sql.Database
+	functions map[string]sql.Function
 	mu        *sync.RWMutex
 
 	cfg config.ReadableConfig
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
+var _ sql.FunctionProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
 var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
@@ -50,8 +53,14 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Data
 		dbs[strings.ToLower(db.Name())] = db
 	}
 
+	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
+	for _, fn := range dfunctions.DoltFunctions {
+		funcs[strings.ToLower(fn.FunctionName())] = fn
+	}
+
 	return DoltDatabaseProvider{
 		databases: dbs,
+		functions: funcs,
 		mu:        &sync.RWMutex{},
 		cfg:       config,
 	}
@@ -179,6 +188,14 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string)
 	}
 
 	return init, nil
+}
+
+func (p DoltDatabaseProvider) Function(name string) (sql.Function, error) {
+	fn, ok := p.functions[strings.ToLower(name)]
+	if !ok {
+		return nil, sql.ErrFunctionNotFound.New(name)
+	}
+	return fn, nil
 }
 
 func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {
