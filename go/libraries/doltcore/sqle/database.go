@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -29,7 +30,9 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
@@ -46,10 +49,31 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names mus
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
+const DoltReadReplicaKey = "DOLT_READ_REPLICA_REMOTE"
+
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool)
+	DbData() env.DbData
+	Name() string
+	StartTransaction(ctx *sql.Context) (sql.Transaction, error)
+	Flush(*sql.Context) error
+	EditOptions() editor.Options
+}
+
+func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
+	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
+	for _, db := range dbs {
+		switch sqlDb := db.(type) {
+		case *ReadReplicaDatabase:
+			dsqlDBs = append(dsqlDBs, sqlDb)
+		case *Database:
+			dsqlDBs = append(dsqlDBs, sqlDb)
+		default:
+		}
+	}
+	return dsqlDBs
 }
 
 // Database implements sql.Database for a dolt DB.
@@ -154,7 +178,7 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 }
 
 // GetInitialDBState returns the InitialDbState for |db|.
-func GetInitialDBState(ctx context.Context, db Database) (dsess.InitialDbState, error) {
+func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
@@ -1150,7 +1174,7 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 // there are I/O issues, but currently silently fails to register some
 // schema fragments if they don't parse, or if registries within the
 // `catalog` return errors.
-func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootValue) error {
+func RegisterSchemaFragments(ctx *sql.Context, db SqlDatabase, root *doltdb.RootValue) error {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return err
@@ -1201,6 +1225,101 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 
 	if len(parseErrors) > 0 {
 		// TODO: Warning for uncreated views...
+	}
+
+	return nil
+}
+
+type ReadReplicaDatabase struct {
+	Database
+	headRef        ref.DoltRef
+	remoteTrackRef ref.DoltRef
+	remote         env.Remote
+	srcDB          *doltdb.DoltDB
+	tmpDir         string
+	mu             *sync.Mutex
+}
+
+var _ SqlDatabase = ReadReplicaDatabase{}
+var _ sql.VersionedDatabase = ReadReplicaDatabase{}
+var _ sql.TableDropper = ReadReplicaDatabase{}
+var _ sql.TableCreator = ReadReplicaDatabase{}
+var _ sql.TemporaryTableCreator = ReadReplicaDatabase{}
+var _ sql.TableRenamer = ReadReplicaDatabase{}
+var _ sql.TriggerDatabase = ReadReplicaDatabase{}
+var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
+var _ sql.TransactionDatabase = ReadReplicaDatabase{}
+
+func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string) (*ReadReplicaDatabase, error) {
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+
+	remote, ok := remotes[remoteName]
+	if !ok {
+		return nil, env.ErrRemoteNotFound
+	}
+
+	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default)
+	if err != nil {
+		return nil, err
+	}
+
+	headRef := rsr.CWBHeadRef()
+	refSpecs, err := env.GetRefSpecs(rsr, remoteName)
+
+	var remoteTrackRef ref.DoltRef
+	var foundRef bool
+	for _, refSpec := range refSpecs {
+		trackRef := refSpec.DestRef(headRef)
+		if trackRef != nil {
+			remoteTrackRef = trackRef
+			foundRef = true
+			break
+		}
+	}
+	if !foundRef {
+		return nil, env.ErrInvalidRefSpecRemote
+	}
+
+	return &ReadReplicaDatabase{
+		Database:       db,
+		headRef:        headRef,
+		remoteTrackRef: remoteTrackRef,
+		remote:         remote,
+		tmpDir:         tmpDir,
+		srcDB:          srcDB,
+	}, nil
+}
+
+func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
+	err := rrd.pullFromReplica(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return rrd.Database.StartTransaction(ctx)
+}
+
+func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
+	ddb := rrd.Database.DbData().Ddb
+	err := rrd.srcDB.Rebase(ctx)
+	if err != nil {
+		return err
+	}
+	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, rrd.headRef, nil, actions.DefaultRunProgFuncs, actions.DefaultStopProgFuncs)
+	if err != nil {
+		return err
+	}
+
+	err = ddb.FastForward(ctx, rrd.remoteTrackRef, srcDBCommit)
+	if err != nil {
+		return err
+	}
+
+	err = ddb.FastForward(ctx, rrd.headRef, srcDBCommit)
+	if err != nil {
+		return err
 	}
 
 	return nil

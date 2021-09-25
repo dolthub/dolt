@@ -375,7 +375,10 @@ func execShell(
 	readOnly bool,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -398,7 +401,10 @@ func execBatch(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -440,7 +446,10 @@ func execMultiStatements(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -476,7 +485,10 @@ func execQuery(
 	query string,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -504,15 +516,28 @@ func execQuery(
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(mrEnv env.MultiRepoEnv) []dsqle.Database {
-	dbs := make([]dsqle.Database, 0, len(mrEnv))
-	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		db := newDatabase(name, dEnv)
+func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
+	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
+	// TODO readreplicaDB
+	var db dsqle.SqlDatabase
+	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+		db = newDatabase(name, dEnv)
+		if remoteName := os.Getenv(dsqle.DoltReadReplicaKey); remoteName != "" {
+			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
+			if err != nil {
+				return true, err
+			}
+		}
+
 		dbs = append(dbs, db)
 		return false, nil
 	})
 
-	return dbs
+	if err != nil {
+		return nil, err
+	}
+
+	return dbs, nil
 }
 
 func formatQueryError(message string, err error) errhand.VerboseError {
@@ -1089,7 +1114,7 @@ func (s *stats) shouldFlush() bool {
 }
 
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
-	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
+	err := se.iterDBs(func(_ string, db dsqle.SqlDatabase) (bool, error) {
 		_, rowIter, err := se.engine.Query(ctx, "COMMIT;")
 		if err != nil {
 			return false, err
@@ -1392,7 +1417,7 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 }
 
 type sqlEngine struct {
-	dbs            map[string]dsqle.Database
+	dbs            map[string]dsqle.SqlDatabase
 	sess           *dsess.Session
 	contextFactory func(ctx context.Context) (*sql.Context, error)
 	engine         *sqle.Engine
@@ -1408,7 +1433,7 @@ func newSqlEngine(
 	roots map[string]*doltdb.RootValue, // See TODO below
 	readOnly bool,
 	format resultFormat,
-	dbs ...dsqle.Database,
+	dbs ...dsqle.SqlDatabase,
 ) (*sqlEngine, error) {
 	var au auth.Auth
 
@@ -1440,7 +1465,7 @@ func newSqlEngine(
 		}
 	}
 
-	nameToDB := make(map[string]dsqle.Database)
+	nameToDB := make(map[string]dsqle.SqlDatabase)
 	var dbStates []dsess.InitialDbState
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
@@ -1520,7 +1545,7 @@ func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	return dsqlDBs
 }
 
-func dsqleDBsAsSqlDBs(dbs []dsqle.Database) []sql.Database {
+func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
 	sqlDbs := make([]sql.Database, 0, len(dbs))
 	for _, db := range dbs {
 		sqlDbs = append(sqlDbs, db)
@@ -1562,7 +1587,7 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	}, nil
 }
 
-func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool, err error)) error {
+func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bool, err error)) error {
 	for name, db := range se.dbs {
 		stop, err := cb(name, db)
 

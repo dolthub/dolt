@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
@@ -26,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 type testPerson struct {
@@ -354,4 +356,49 @@ func TestServerSetDefaultBranch(t *testing.T) {
 			assert.ElementsMatch(t, branch, test.expectedRes)
 		})
 	}
+}
+
+func TestReadReplica(t *testing.T) {
+	var err error
+	multiSetup := dtestutils.CreateTestMultiEnvWithRemote()
+	defer os.RemoveAll(multiSetup.Root)
+
+	readOnlyDbName := multiSetup.DbNames[0]
+	sourceDbName := multiSetup.DbNames[0]
+
+	// start server as read replica
+	sc := CreateServerController()
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15302)
+
+	func() {
+		err = os.Setenv(dsqle.DoltReadReplicaKey, "remote1")
+		os.Chdir(multiSetup.DbPaths[readOnlyDbName])
+		go func() {
+			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readOnlyDbName])
+		}()
+		err = sc.WaitForStart()
+		require.NoError(t, err)
+	}()
+	defer sc.StopServer()
+	defer os.Unsetenv(dsqle.DoltReadReplicaKey)
+
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readOnlyDbName, nil)
+	defer conn.Close()
+
+	require.NoError(t, err)
+	sess := conn.NewSession(nil)
+
+	t.Run("push common new commit", func(t *testing.T) {
+		var res []string
+		replicatedTable := "new_table"
+		multiSetup.CreateTable(t, sourceDbName, replicatedTable)
+		multiSetup.AddAll(t, sourceDbName)
+		_ = multiSetup.CommitWithWorkingSet(sourceDbName)
+		multiSetup.PushToRemote(t, sourceDbName)
+
+		q := sess.SelectBySql("show tables")
+		_, err := q.LoadContext(context.Background(), &res)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, res, []string{replicatedTable})
+	})
 }

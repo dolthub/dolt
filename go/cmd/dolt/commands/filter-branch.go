@@ -309,7 +309,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	sqlCtx.SetCurrentDatabase(dbName)
 
 	se := &sqlEngine{
-		dbs:    map[string]dsqle.Database{dbName: db},
+		dbs:    map[string]dsqle.SqlDatabase{dbName: db},
 		engine: engine,
 	}
 

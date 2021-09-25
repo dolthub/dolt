@@ -147,6 +147,7 @@ type DatabaseSessionState struct {
 	detachedHead         bool
 	readOnly             bool
 	dirty                bool
+	readReplica          *env.Remote
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
 }
@@ -187,6 +188,7 @@ type InitialDbState struct {
 	ReadOnly     bool
 	WorkingSet   *doltdb.WorkingSet
 	DbData       env.DbData
+	ReadReplica  *env.Remote
 	Remotes      map[string]env.Remote
 	Branches     map[string]env.BranchConfig
 }
@@ -282,6 +284,71 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (sql.Tran
 	if sessionState.readOnly && sessionState.detachedHead {
 		return DisabledTransaction{}, nil
 	}
+	//// TODO move all of this to a different class
+	//// TODO setup should only happen once
+	//headRef, err := sess.CWBHeadRef(ctx, dbName)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//srcDB, err := rem.GetRemoteDB(ctx, types.Format_Default)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//refSpecs, err := env.GetRefSpecs(sessionState.dbData.Rsr, rem.Name)
+	//
+	//var remoteTrackRef ref.DoltRef
+	//var foundRef bool
+	//for _, refSpec := range refSpecs {
+	//	trackRef := refSpec.DestRef(headRef)
+	//	if trackRef != nil {
+	//		remoteTrackRef = trackRef
+	//		foundRef = true
+	//		break
+	//	}
+	//}
+	//if !foundRef {
+	//	return nil, env.ErrInvalidRefSpecRemote
+	//}
+	//
+	//tmpDir := sessionState.dbData.Rsw.TempTableFilesDir()
+	//destDB := sessionState.dbData.Ddb
+	//
+	//srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, env.NoRemote, srcDB, destDB, headRef, nil, actions.DefaultRunProgFuncs, actions.DefaultStopProgFuncs)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//err = sessionState.dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//err = sessionState.dbData.Ddb.FastForward(ctx, headRef, srcDBCommit)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	//roots, ok := sess.GetRoots(ctx, dbName)
+	//if !ok {
+	//	return nil, env.ErrFailedToReadDb
+	//}
+	//
+	//mergeSpec, _, err := merge.NewMergeSpec(ctx, sessionState.dbData.Rsr, sessionState.dbData.Ddb, roots, "", "", "", remoteTrackRef.String(), false, false, false, t)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//canFF, err := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if !canFF {
+	//	return nil, actions.ErrCantFF
+	//}
+	//
+	//err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
 
 	err = sessionState.dbData.Ddb.Rebase(ctx)
 	if err != nil {
@@ -1056,8 +1123,9 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
-	sessionState.readOnly, sessionState.detachedHead = dbState.ReadOnly, dbState.DetachedHead
+	sessionState.readOnly, sessionState.detachedHead, sessionState.readReplica = dbState.ReadOnly, dbState.DetachedHead, dbState.ReadReplica
 
+	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
 	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
 
