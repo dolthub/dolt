@@ -36,7 +36,7 @@ type ResetFunc struct {
 }
 
 // NewDoltResetFunc creates a new ResetFunc expression.
-func NewResetFunc(ctx *sql.Context, e sql.Expression) sql.Expression {
+func NewResetFunc(e sql.Expression) sql.Expression {
 	return ResetFunc{expression.UnaryExpression{Child: e}}
 }
 
@@ -94,11 +94,11 @@ func (rf ResetFunc) Children() []sql.Expression {
 }
 
 // WithChildren implements the Expression interface.
-func (rf ResetFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+func (rf ResetFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 1 {
 		return nil, sql.ErrInvalidChildrenNumber.New(rf, len(children), 1)
 	}
-	return NewResetFunc(ctx, children[0]), nil
+	return NewResetFunc(children[0]), nil
 }
 
 // Type implements the Expression interface.

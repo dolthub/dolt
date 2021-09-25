@@ -39,7 +39,7 @@ type DoltPullFunc struct {
 }
 
 // NewPullFunc creates a new PullFunc expression.
-func NewPullFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewPullFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltPullFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
 
@@ -57,8 +57,8 @@ func (d DoltPullFunc) Type() sql.Type {
 	return sql.Boolean
 }
 
-func (d DoltPullFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
-	return NewPullFunc(ctx, children...)
+func (d DoltPullFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	return NewPullFunc(children...)
 }
 
 func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {

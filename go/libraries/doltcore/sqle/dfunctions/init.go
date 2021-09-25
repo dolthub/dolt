@@ -42,4 +42,6 @@ var DoltFunctions = []sql.Function{
 var DolthubApiFunctions = []sql.Function{
 	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},
 	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
+	sql.Function0{Name: ActiveBranchFuncName, Fn: NewActiveBranchFunc},
+	sql.Function2{Name: DoltMergeBaseFuncName, Fn: NewMergeBase},
 }

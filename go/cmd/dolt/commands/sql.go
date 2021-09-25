@@ -49,7 +49,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -1360,7 +1359,7 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *sqlEngine, query string) 
 	plan.Inspect(a, func(n sql.Node) bool {
 		switch n := n.(type) {
 		case *plan.InsertInto:
-			_, err = plan.TransformExpressionsUp(ctx, n.Source, func(exp sql.Expression) (sql.Expression, error) {
+			_, err = plan.TransformExpressionsUp(n.Source, func(exp sql.Expression) (sql.Expression, error) {
 				if _, ok := exp.(*expression.AutoIncrement); ok {
 					isAutoInc = true
 				}
@@ -1449,14 +1448,8 @@ func newSqlEngine(
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
 	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
-	cat := sql.NewCatalog(pro)
 
-	err := cat.Register(dfunctions.DoltFunctions...)
-	if err != nil {
-		return nil, err
-	}
-
-	engine := sqle.New(cat, analyzer.NewBuilder(cat).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
+	engine := sqle.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -1495,13 +1488,13 @@ func newSqlEngine(
 	return &sqlEngine{
 		dbs:            nameToDB,
 		sess:           sess,
-		contextFactory: newSqlContext(sess, cat),
+		contextFactory: newSqlContext(sess, engine.Analyzer.Catalog),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
 }
 
-func newSqlContext(sess *dsess.Session, cat *sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
+func newSqlContext(sess *dsess.Session, cat sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx,
 			sql.WithSession(sess),

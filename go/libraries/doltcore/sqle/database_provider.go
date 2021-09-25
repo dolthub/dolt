@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -35,26 +36,46 @@ const (
 
 type DoltDatabaseProvider struct {
 	databases map[string]sql.Database
+	functions map[string]sql.Function
 	mu        *sync.RWMutex
 
 	cfg config.ReadableConfig
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
+var _ sql.FunctionProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
 var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
+// NewDoltDatabaseProvider returns a provider for the databases given
 func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
 	}
 
+	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
+	for _, fn := range dfunctions.DoltFunctions {
+		funcs[strings.ToLower(fn.FunctionName())] = fn
+	}
+
 	return DoltDatabaseProvider{
 		databases: dbs,
+		functions: funcs,
 		mu:        &sync.RWMutex{},
 		cfg:       config,
 	}
+}
+
+// WithFunctions returns a copy of this provider with the functions given. Any previous functions are removed.
+func (p DoltDatabaseProvider) WithFunctions(fns []sql.Function) DoltDatabaseProvider {
+	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
+	for _, fn := range fns {
+		funcs[strings.ToLower(fn.FunctionName())] = fn
+	}
+
+	p.functions = funcs
+	return p
 }
 
 func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error) {
@@ -179,6 +200,14 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string)
 	}
 
 	return init, nil
+}
+
+func (p DoltDatabaseProvider) Function(name string) (sql.Function, error) {
+	fn, ok := p.functions[strings.ToLower(name)]
+	if !ok {
+		return nil, sql.ErrFunctionNotFound.New(name)
+	}
+	return fn, nil
 }
 
 func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {

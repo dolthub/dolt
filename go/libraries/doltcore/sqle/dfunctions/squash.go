@@ -30,7 +30,7 @@ type SquashFunc struct {
 	expression.UnaryExpression
 }
 
-func NewSquashFunc(ctx *sql.Context, child sql.Expression) sql.Expression {
+func NewSquashFunc(child sql.Expression) sql.Expression {
 	return &SquashFunc{expression.UnaryExpression{Child: child}}
 }
 
@@ -113,10 +113,10 @@ func (s SquashFunc) Children() []sql.Expression {
 	return []sql.Expression{s.Child}
 }
 
-func (s SquashFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+func (s SquashFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 1 {
 		return nil, sql.ErrInvalidChildrenNumber.New(s, len(children), 1)
 	}
 
-	return NewSquashFunc(ctx, children[0]), nil
+	return NewSquashFunc(children[0]), nil
 }

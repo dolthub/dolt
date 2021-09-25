@@ -36,7 +36,7 @@ type DoltPushFunc struct {
 }
 
 // NewPushFunc creates a new PushFunc expression.
-func NewPushFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewPushFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltPushFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
 
@@ -54,8 +54,8 @@ func (d DoltPushFunc) Type() sql.Type {
 	return sql.Boolean
 }
 
-func (d DoltPushFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
-	return NewPushFunc(ctx, children...)
+func (d DoltPushFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	return NewPushFunc(children...)
 }
 
 func (d DoltPushFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {

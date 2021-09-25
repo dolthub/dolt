@@ -150,10 +150,10 @@ func (d DoltResetFunc) Children() []sql.Expression {
 	return d.children
 }
 
-func (d DoltResetFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
-	return NewDoltResetFunc(ctx, children...)
+func (d DoltResetFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	return NewDoltResetFunc(children...)
 }
 
-func NewDoltResetFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewDoltResetFunc(args ...sql.Expression) (sql.Expression, error) {
 	return DoltResetFunc{children: args}, nil
 }
