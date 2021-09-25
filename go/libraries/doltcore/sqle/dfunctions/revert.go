@@ -39,7 +39,7 @@ type RevertFunc struct {
 var _ sql.Expression = (*RevertFunc)(nil)
 
 // NewRevertFunc creates a new RevertFunc expression that reverts commits.
-func NewRevertFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewRevertFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &RevertFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
 
@@ -133,7 +133,7 @@ func (r *RevertFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			expressions = append(expressions, expression.NewLiteral("--author", stringType), expression.NewLiteral(author, stringType))
 		}
 
-		commitFunc, err := NewDoltCommitFunc(ctx, expressions...)
+		commitFunc, err := NewDoltCommitFunc(expressions...)
 		if err != nil {
 			return nil, err
 		}
@@ -179,6 +179,6 @@ func (r *RevertFunc) Children() []sql.Expression {
 }
 
 // WithChildren implements the Expression interface.
-func (r *RevertFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
-	return NewRevertFunc(ctx, children...)
+func (r *RevertFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	return NewRevertFunc(children...)
 }

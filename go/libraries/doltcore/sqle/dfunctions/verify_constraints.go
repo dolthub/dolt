@@ -41,12 +41,12 @@ type ConstraintsVerifyFunc struct {
 var _ sql.Expression = (*ConstraintsVerifyFunc)(nil)
 
 // NewConstraintsVerifyFunc creates a new ConstraintsVerifyFunc expression that verifies the diff.
-func NewConstraintsVerifyFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewConstraintsVerifyFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &ConstraintsVerifyFunc{expression.NaryExpression{ChildExpressions: args}, false}, nil
 }
 
 // NewConstraintsVerifyAllFunc creates a new ConstraintsVerifyFunc expression that verifies all rows.
-func NewConstraintsVerifyAllFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewConstraintsVerifyAllFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &ConstraintsVerifyFunc{expression.NaryExpression{ChildExpressions: args}, true}, nil
 }
 
@@ -149,10 +149,10 @@ func (vc *ConstraintsVerifyFunc) Children() []sql.Expression {
 }
 
 // WithChildren implements the Expression interface.
-func (vc *ConstraintsVerifyFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
+func (vc *ConstraintsVerifyFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
 	if vc.isAll {
-		return NewConstraintsVerifyAllFunc(ctx, children...)
+		return NewConstraintsVerifyAllFunc(children...)
 	} else {
-		return NewConstraintsVerifyFunc(ctx, children...)
+		return NewConstraintsVerifyFunc(children...)
 	}
 }

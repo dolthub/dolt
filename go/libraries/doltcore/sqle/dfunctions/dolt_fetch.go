@@ -40,7 +40,7 @@ type DoltFetchFunc struct {
 }
 
 // NewFetchFunc creates a new FetchFunc expression.
-func NewFetchFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewFetchFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltFetchFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
 
@@ -58,8 +58,8 @@ func (d DoltFetchFunc) Type() sql.Type {
 	return sql.Boolean
 }
 
-func (d DoltFetchFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
-	return NewFetchFunc(ctx, children...)
+func (d DoltFetchFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	return NewFetchFunc(children...)
 }
 
 func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
