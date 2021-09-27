@@ -57,7 +57,6 @@ type SqlDatabase interface {
 	DbData() env.DbData
 	Name() string
 
-
 	StartTransaction(ctx *sql.Context) (sql.Transaction, error)
 	Flush(*sql.Context) error
 	EditOptions() editor.Options
@@ -1242,7 +1241,7 @@ type ReadReplicaDatabase struct {
 	remote         env.Remote
 	srcDB          *doltdb.DoltDB
 	tmpDir         string
-	wsMeta  	   *doltdb.WorkingSetMeta
+	wsMeta         *doltdb.WorkingSetMeta
 }
 
 var _ SqlDatabase = ReadReplicaDatabase{}
@@ -1295,7 +1294,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		remote:         remote,
 		tmpDir:         tmpDir,
 		srcDB:          srcDB,
-		wsMeta: 	    meta,
+		wsMeta:         meta,
 	}, nil
 }
 

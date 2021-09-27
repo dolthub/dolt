@@ -517,7 +517,6 @@ func execQuery(
 // objects.
 func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
 	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
-	// TODO readreplicaDB
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		db = newDatabase(name, dEnv)
