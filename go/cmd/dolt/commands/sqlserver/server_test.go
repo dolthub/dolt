@@ -395,7 +395,8 @@ func TestReadReplica(t *testing.T) {
 
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
-	
+
+	// TODO: why doesn't this throw a "no common ancestor" error?
 	t.Run("push common new commit", func(t *testing.T) {
 		var res []string
 		replicatedTable := "new_table"

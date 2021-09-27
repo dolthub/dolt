@@ -1077,3 +1077,29 @@ while True:
     [[ "${lines[2]}" =~ "1" ]]
     [[ "${lines[3]}" =~ "2" ]]
 }
+
+@test "sql-server: read-replica pulls new commits on read" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir remote1
+    cd repo2
+    dolt remote add remote1 file://../remote1
+    dolt push -u remote1 master
+
+    cd ..
+    rm -rf repo1
+    dolt clone file://./remote1 repo1
+    cd repo1
+    dolt remote add remote1 file://../remote1
+
+    cd ../repo2
+    dolt sql -q "create table test (a int)"
+    dolt commit -am "new commit"
+    dolt push -u remote1 master
+
+    cd ../repo1
+    export DOLT_READ_REPLICA_REMOTE=remote1
+    start_sql_server repo1
+
+    server_query repo1 1 "show tables" "test"
+}

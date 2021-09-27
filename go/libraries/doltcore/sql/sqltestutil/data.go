@@ -17,7 +17,7 @@ package sqltestutil
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testdata"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"reflect"
 	"testing"
 	"time"
@@ -354,16 +354,16 @@ func GetAllRows(root *doltdb.RootValue, tableName string) ([]row.Row, error) {
 
 // Creates a test database with the test data set in it
 func CreateTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
-	testdata.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
-	testdata.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema, AllEpsRows...)
-	testdata.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema, AllAppsRows...)
+	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
+	dtestutils.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema, AllEpsRows...)
+	dtestutils.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema, AllAppsRows...)
 }
 
 // Creates a test database without any data in it
 func CreateEmptyTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
-	testdata.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
-	testdata.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
-	testdata.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
+	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
+	dtestutils.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
+	dtestutils.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
 }
 
 var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true)
@@ -373,7 +373,7 @@ var addrColTag3TypeStr = schema.NewColumn("addr", 3, types.StringKind, false)
 var ageColTag4TypeInt = schema.NewColumn("age", 4, types.IntKind, false)
 var ageColTag5TypeUint = schema.NewColumn("age", 5, types.UintKind, false)
 
-var DiffSchema = testdata.MustSchema(
+var DiffSchema = dtestutils.MustSchema(
 	schema.NewColumn("to_id", 0, types.IntKind, false),
 	schema.NewColumn("to_first_name", 1, types.StringKind, false),
 	schema.NewColumn("to_last_name", 2, types.StringKind, false),
@@ -387,10 +387,10 @@ var DiffSchema = testdata.MustSchema(
 
 const TableWithHistoryName = "test_table"
 
-var InitialHistSch = testdata.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
-var AddAddrAt3HistSch = testdata.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
-var AddAgeAt4HistSch = testdata.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
-var ReaddAgeAt5HistSch = testdata.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag5TypeUint)
+var InitialHistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
+var AddAddrAt3HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
+var AddAgeAt4HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
+var ReaddAgeAt5HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag5TypeUint)
 
 func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envtestutils.HistoryNode {
 	vrw := dEnv.DoltDB.ValueReadWriter()
@@ -402,7 +402,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 			Updates: map[string]envtestutils.TableUpdate{
 				TableWithHistoryName: {
 					NewSch: InitialHistSch,
-					NewRowData: testdata.MustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
+					NewRowData: dtestutils.MustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
 						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
 						{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")},
 						{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")},
@@ -416,7 +416,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					Updates: map[string]envtestutils.TableUpdate{
 						TableWithHistoryName: {
 							NewSch: AddAgeAt4HistSch,
-							NewRowData: testdata.MustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
+							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 4: types.Int(35)},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 4: types.Int(38)},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 4: types.Int(37)},
@@ -432,7 +432,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					Updates: map[string]envtestutils.TableUpdate{
 						TableWithHistoryName: {
 							NewSch: AddAddrAt3HistSch,
-							NewRowData: testdata.MustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
+							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")},
@@ -448,7 +448,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 							Updates: map[string]envtestutils.TableUpdate{
 								TableWithHistoryName: {
 									NewSch: ReaddAgeAt5HistSch,
-									NewRowData: testdata.MustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
+									NewRowData: dtestutils.MustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
 										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35)},
 										{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38)},
 										{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37)},
