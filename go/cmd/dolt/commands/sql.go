@@ -522,7 +522,7 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		db = newDatabase(name, dEnv)
 		if remoteName := os.Getenv(dsqle.DoltReadReplicaKey); remoteName != "" {
-			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
+			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), dEnv.NewWorkingSetMeta("read replica update"))
 			if err != nil {
 				return true, err
 			}
@@ -1503,7 +1503,7 @@ func newSqlContext(sess *dsess.Session, cat sql.Catalog) func(ctx context.Contex
 			sql.WithTracer(tracing.Tracer(ctx)))
 
 		seenOne := false
-		for _, db := range dbsAsDSQLDBs(cat.AllDatabases()) {
+		for _, db := range dsqle.DbsAsDSQLDBs(cat.AllDatabases()) {
 			root, err := db.GetRoot(sqlCtx)
 			if err != nil {
 				return nil, err

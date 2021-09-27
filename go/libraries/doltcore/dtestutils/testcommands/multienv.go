@@ -53,6 +53,7 @@ type MultiRepoTestSetup struct {
 const (
 	name  = "billy bob"
 	email = "bigbillieb@fake.horse"
+	defaultBranch = "main"
 )
 
 func CreateMultiEnvWithRemote() *MultiRepoTestSetup {
@@ -101,6 +102,7 @@ func CreateMultiEnvWithRemote() *MultiRepoTestSetup {
 		dbPaths[dbName] = repo
 		repoPath := fmt.Sprintf("file://%s", repo)
 
+		// TODO sometimes tempfiles scrubber is racy with tempfolder deleter
 		dEnv := env.Load(context.Background(), homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 		if err != nil {
 			panic("Failed to initialize environment:" + err.Error())
@@ -110,7 +112,7 @@ func CreateMultiEnvWithRemote() *MultiRepoTestSetup {
 			env.UserNameKey:  name,
 			env.UserEmailKey: email,
 		})
-		err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email)
+		err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email, defaultBranch)
 		if err != nil {
 			panic("Failed to initialize environment:" + err.Error())
 		}
@@ -237,7 +239,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(t *testing.T, dbName string) {
 	}
 
 	ap := cli.CreatePushArgParser()
-	apr, err := ap.Parse([]string{"remote1", "master"})
+	apr, err := ap.Parse([]string{"remote1", defaultBranch})
 	if err != nil {
 		t.Fatalf("Failed to push remote: %s", err.Error())
 	}

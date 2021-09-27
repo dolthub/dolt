@@ -881,6 +881,10 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	// TODO: find all the places HEAD can change, update working set too. This is only necessary when we don't already
 	//  update the working set when the head changes.
 	commitRoot, err := commit.GetRootValue()
+	if err != nil {
+		return err
+	}
+
 	wsRef, _ := ref.WorkingSetRefForHead(branchRef)
 
 	var ws *WorkingSet

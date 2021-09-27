@@ -1084,7 +1084,7 @@ while True:
     mkdir remote1
     cd repo2
     dolt remote add remote1 file://../remote1
-    dolt push -u remote1 master
+    dolt push -u remote1 main
 
     cd ..
     rm -rf repo1
@@ -1095,11 +1095,11 @@ while True:
     cd ../repo2
     dolt sql -q "create table test (a int)"
     dolt commit -am "new commit"
-    dolt push -u remote1 master
+    dolt push -u remote1 main
 
     cd ../repo1
     export DOLT_READ_REPLICA_REMOTE=remote1
     start_sql_server repo1
 
-    server_query repo1 1 "show tables" "test"
+    server_query repo1 1 "show tables" "Table\ntest"
 }

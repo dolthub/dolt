@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -57,6 +56,8 @@ type SqlDatabase interface {
 	GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool)
 	DbData() env.DbData
 	Name() string
+
+
 	StartTransaction(ctx *sql.Context) (sql.Transaction, error)
 	Flush(*sql.Context) error
 	EditOptions() editor.Options
@@ -65,14 +66,16 @@ type SqlDatabase interface {
 func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
 	for _, db := range dbs {
-		dsqlRDB, ok := db.(ReadReplicaDatabase)
-		if ok {
-			dsqlDBs = append(dsqlDBs, dsqlRDB)
+		sqlDb, ok := db.(SqlDatabase)
+		if !ok {
+			continue
 		}
-
-		dsqlDB, ok := db.(Database)
-		if ok {
-			dsqlDBs = append(dsqlDBs, dsqlDB)
+		switch v := sqlDb.(type) {
+		case ReadReplicaDatabase, *ReadReplicaDatabase:
+			dsqlDBs = append(dsqlDBs, v)
+		case Database, *Database:
+			dsqlDBs = append(dsqlDBs, v)
+		default:
 		}
 	}
 	return dsqlDBs
@@ -1239,7 +1242,7 @@ type ReadReplicaDatabase struct {
 	remote         env.Remote
 	srcDB          *doltdb.DoltDB
 	tmpDir         string
-	mu             *sync.Mutex
+	wsMeta  	   *doltdb.WorkingSetMeta
 }
 
 var _ SqlDatabase = ReadReplicaDatabase{}
@@ -1252,7 +1255,7 @@ var _ sql.TriggerDatabase = ReadReplicaDatabase{}
 var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
 var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
-func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string) (*ReadReplicaDatabase, error) {
+func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string, meta *doltdb.WorkingSetMeta) (*ReadReplicaDatabase, error) {
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
 		return nil, err
@@ -1292,6 +1295,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		remote:         remote,
 		tmpDir:         tmpDir,
 		srcDB:          srcDB,
+		wsMeta: 	    meta,
 	}, nil
 }
 
@@ -1323,6 +1327,29 @@ func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
+
+	wsRef, err := ref.WorkingSetRefForHead(rrd.headRef)
+	if err != nil {
+		return err
+	}
+
+	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return err
+	}
+
+	commitRoot, err := srcDBCommit.GetRootValue()
+	if err != nil {
+		return err
+	}
+
+	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+
+	h, err := ws.HashOf()
+	if err != nil {
+		return err
+	}
+	rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
 
 	return nil
 }
