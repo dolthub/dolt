@@ -80,13 +80,13 @@ teardown() {
     dolt add .
     dolt commit -m 'Changed name to edit_a'
 
-    dolt checkout master
+    dolt checkout main
     dolt checkout -b edit_b
     dolt sql -q "update dolt_query_catalog set name='name_b'"
     dolt add .
     dolt commit -m 'Changed name to edit_b'
 
-    dolt checkout master
+    dolt checkout main
     dolt merge edit_a
     run dolt merge edit_b
     [ "$status" -eq 0 ]

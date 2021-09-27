@@ -25,7 +25,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (4, 3), (9, 9)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
 
     run dolt merge other
     [ "$status" -eq "0" ]
@@ -75,7 +75,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (4, 3), (9, 9)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
 
     run dolt sql <<"SQL"
 SELECT DOLT_MERGE('other');
@@ -108,7 +108,7 @@ SQL
     dolt sql -q "INSERT INTO child VALUES (2, 2)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -155,7 +155,7 @@ SQL
     dolt sql -q "DELETE FROM parent WHERE pk = 20;"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -208,7 +208,7 @@ INSERT INTO child VALUES (2,2), (3, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -261,7 +261,7 @@ SQL
     dolt sql -q "INSERT INTO child VALUES (3, 2)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -317,7 +317,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -368,7 +368,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -417,7 +417,7 @@ SQL
     dolt sql -q "INSERT INTO child VALUES (2, 2)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -464,7 +464,7 @@ SQL
     dolt sql -q "DELETE FROM parent WHERE pk = 20;"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -517,7 +517,7 @@ INSERT INTO child VALUES (2,2), (3, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -570,7 +570,7 @@ SQL
     dolt sql -q "INSERT INTO child VALUES (3, 2)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -626,7 +626,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -677,7 +677,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -726,7 +726,7 @@ SQL
     dolt sql -q "INSERT INTO child VALUES (2, 2)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -773,7 +773,7 @@ SQL
     dolt sql -q "DELETE FROM parent WHERE pk = 20;"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -826,7 +826,7 @@ INSERT INTO child VALUES (2,2), (3, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -879,7 +879,7 @@ SQL
     dolt sql -q "INSERT INTO child VALUES (3, 2)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -935,7 +935,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -986,7 +986,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1035,7 +1035,7 @@ SQL
     dolt sql -q "INSERT INTO child VALUES (2, 2)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1081,7 +1081,7 @@ SQL
     dolt sql -q "DELETE FROM parent WHERE pk = 20;"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1130,7 +1130,7 @@ INSERT INTO child VALUES (2, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1180,7 +1180,7 @@ DELETE FROM parent WHERE pk = 20;
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1234,7 +1234,7 @@ INSERT INTO child VALUES (2,2), (3, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1290,7 +1290,7 @@ INSERT INTO child VALUES (3, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1347,7 +1347,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1399,7 +1399,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1451,7 +1451,7 @@ INSERT INTO child VALUES (2, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1501,7 +1501,7 @@ DELETE FROM parent WHERE pk = 20;
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1555,7 +1555,7 @@ INSERT INTO child VALUES (2,2), (3, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1611,7 +1611,7 @@ INSERT INTO child VALUES (3, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1668,7 +1668,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1720,7 +1720,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1772,7 +1772,7 @@ INSERT INTO child VALUES (2, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1822,7 +1822,7 @@ DELETE FROM parent WHERE pk = 20;
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1876,7 +1876,7 @@ INSERT INTO child VALUES (2,2), (3, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1932,7 +1932,7 @@ INSERT INTO child VALUES (3, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -1989,7 +1989,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2041,7 +2041,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2092,7 +2092,7 @@ ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1)
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2141,7 +2141,7 @@ ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1)
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2190,7 +2190,7 @@ ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1)
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2238,7 +2238,7 @@ INSERT INTO child VALUES (1, 1), (2, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2286,7 +2286,7 @@ INSERT INTO child VALUES (1, 1), (2, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2334,7 +2334,7 @@ INSERT INTO child VALUES (1, 1), (2, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2386,7 +2386,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2437,7 +2437,7 @@ SQL
     dolt sql -q "DELETE FROM parent WHERE pk = 200"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2497,7 +2497,7 @@ INSERT INTO child2 VALUES (1, 1), (2, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2557,7 +2557,7 @@ SQL
     dolt sql -q "UPDATE parent SET v1 = 3 WHERE pk = 200"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2618,7 +2618,7 @@ INSERT INTO child2 VALUES (1, 1), (2, 2);
 SQL
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2672,7 +2672,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit -m "MC1"
-    dolt branch master2
+    dolt branch main2
     dolt branch other
     dolt branch other2
     dolt checkout other
@@ -2691,7 +2691,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 SQL
     dolt add -A
     dolt commit --force -m "OC2"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2722,7 +2722,7 @@ SQL
 
     dolt merge --abort
     dolt reset --hard
-    dolt checkout master2
+    dolt checkout main2
     dolt merge other2
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2767,7 +2767,7 @@ SQL
     dolt sql -q "DELETE FROM test WHERE pk = 3"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2804,7 +2804,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (4, 3)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2842,7 +2842,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (5, 5), (6, 3)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2881,7 +2881,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (3, 3)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
@@ -2917,7 +2917,7 @@ SQL
     dolt sql -q "UPDATE test SET v1 = 3 WHERE pk = 2"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv

@@ -7,6 +7,16 @@ cd "$1"
 
 dolt init
 
+DEFAULT_BRANCH="master"
+
+branches=`dolt branch`
+branches=`echo "$branches" | xargs`
+echo "$branches"
+
+if [ "$branches" == "* main" ]; then
+  DEFAULT_BRANCH="main"
+fi
+
 dolt branch no-data
 
 dolt sql <<SQL
@@ -32,7 +42,6 @@ dolt add .
 dolt commit -m "initialized data"
 dolt branch init
 
-
 dolt branch other
 dolt sql <<SQL
 DELETE FROM abc WHERE pk=1;
@@ -42,7 +51,7 @@ ALTER TABLE abc ADD COLUMN y BIGINT;
 UPDATE abc SET y = 121;
 SQL
 dolt add .
-dolt commit -m "made changes to master"
+dolt commit -m "made changes to $DEFAULT_BRANCH"
 
 dolt checkout other
 dolt sql <<SQL
@@ -55,7 +64,7 @@ SQL
 dolt add .
 dolt commit -m "made changes to other"
 
-dolt checkout master
+dolt checkout "$DEFAULT_BRANCH"
 dolt table export abc abc.csv
 dolt schema export abc abc_schema.json
 
@@ -79,3 +88,6 @@ dolt sql -q 'select * from abc;'
 echo
 echo "dolt_schemas"
 dolt sql -q "select * from dolt_schemas"
+
+# write default branch to use in ../runner.sh and ./bats/compatibility.bats
+echo  "$DEFAULT_BRANCH" > ./default_branch.var

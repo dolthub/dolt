@@ -2,6 +2,9 @@
 
 set -eo pipefail
 
+PLATFORM_TUPLE=""
+DEFAULT_BRANCH=""
+
 function download_release() {
   ver=$1
   dirname=binaries/"$ver"
@@ -39,23 +42,16 @@ get_platform_tuple() {
   echo "$PLATFORM_TUPLE"
 }
 
-PLATFORM_TUPLE=`get_platform_tuple`
-
 function cleanup() {
   rm -rf repos binaries
 }
-mkdir repos binaries
-trap cleanup "EXIT"
 
 function setup_repo() {
   dir=repos/"$1"
+  unset DEFAULT_BRANCH
   ./test_files/setup_repo.sh "$dir"
+  DEFAULT_BRANCH=$(cat "$dir/default_branch.var")
 }
-
-
-#
-#   Backward Compatibility
-#
 
 function list_backward_compatible_versions() {
   grep -v '^ *#' < test_files/backward_compatible_versions.txt
@@ -69,19 +65,8 @@ function test_backward_compatibility() {
   PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
   echo "Run the bats tests with current Dolt version hitting repositories from older Dolt version $ver"
-  REPO_DIR="`pwd`"/repos/"$ver" bats ./test_files/bats
+  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="`pwd`"/repos/"$ver" bats ./test_files/bats
 }
-
-list_backward_compatible_versions | while IFS= read -r ver; do
-  test_backward_compatibility "$ver"
-done
-
-
-#
-#   Forward Compatibility
-#
-
-setup_repo HEAD
 
 function list_forward_compatible_versions() {
   grep -v '^ *#' < test_files/forward_compatible_versions.txt
@@ -101,7 +86,7 @@ function test_forward_compatibility() {
       cd repos/HEAD
       mkdir file-remote
       dolt remote add file-remote file://file-remote
-      dolt push file-remote master
+      dolt push file-remote "$DEFAULT_BRANCH"
       dolt push file-remote init
       dolt push file-remote no-data
       dolt push file-remote other
@@ -137,12 +122,31 @@ function test_forward_compatibility() {
   PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/$ver bats ./test_files/bats
 }
 
-if [ -s "test_files/forward_compatible_versions.txt" ]; then
-    list_forward_compatible_versions | while IFS= read -r ver; do
-      test_forward_compatibility "$ver"
-    done
-fi
+_main() {
+  PLATFORM_TUPLE=`get_platform_tuple`
 
-# sanity check
-echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
-REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
+  # make directories and cleanup when killed
+  mkdir repos binaries
+  trap cleanup "EXIT"
+
+  # test backward compatibility
+  list_backward_compatible_versions | while IFS= read -r ver; do
+    test_backward_compatibility "$ver"
+  done
+
+  # setup repo for current dolt version
+  setup_repo HEAD
+
+  # test forward compatibility
+  if [ -s "test_files/forward_compatible_versions.txt" ]; then
+      list_forward_compatible_versions | while IFS= read -r ver; do
+        test_forward_compatibility "$ver"
+      done
+  fi
+
+  # sanity check: run tests against current version
+  echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
+  DEFAULT_BRANCH="$DEFAULT_BRANCH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
+}
+
+_main

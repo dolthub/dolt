@@ -312,7 +312,7 @@ func parseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error)
 }
 
 // if possible, convert refs to full spec names. prefer branches over tags.
-// eg "master" -> "refs/heads/master", "v1" -> "refs/tags/v1"
+// eg "main" -> "refs/heads/main", "v1" -> "refs/tags/v1"
 func disambiguateRefSpecStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr string) (string, error) {
 	brachRefs, err := ddb.GetBranches(ctx)
 

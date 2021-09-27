@@ -61,7 +61,7 @@ INSERT INTO test VALUES (10),(11),(12);
 SQL
     dolt --feature-version $OLD add .
     dolt --feature-version $OLD commit -m "test table"
-    dolt --feature-version $OLD push origin master
+    dolt --feature-version $OLD push origin main
     popd
 
     # clone repo
@@ -73,8 +73,8 @@ SQL
 
     pushd first_repo
     dolt --feature-version $NEW sql -q "INSERT INTO test VALUES (20);"
-    dolt --feature-version $NEW commit -am "added row with new FeatureVersion on master"
-    dolt --feature-version $NEW push origin master
+    dolt --feature-version $NEW commit -am "added row with new FeatureVersion on main"
+    dolt --feature-version $NEW push origin main
     popd
 
     pushd clone_repo
@@ -115,13 +115,13 @@ SQL
 
     pushd first_repo
     dolt --feature-version $NEW sql -q "INSERT INTO test VALUES (20);"
-    dolt --feature-version $NEW commit -am "added row with new FeatureVersion on master"
-    dolt --feature-version $NEW push origin master
+    dolt --feature-version $NEW commit -am "added row with new FeatureVersion on main"
+    dolt --feature-version $NEW push origin main
     popd
 
     pushd clone_repo
     dolt --feature-version $OLD fetch
-    dolt --feature-version $OLD checkout master
+    dolt --feature-version $OLD checkout main
     run dolt --feature-version $OLD pull
     [ "$status" -ne 0 ]
     [[ "$output" =~ "visit https://github.com/dolthub/dolt/releases/latest/" ]] || false

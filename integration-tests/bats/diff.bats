@@ -334,13 +334,13 @@ SQL
     dolt add .
     dolt commit -m "committed to branch test1"
 
-    dolt checkout master
+    dolt checkout main
     dolt checkout -b test2
     dolt sql -q "insert into test values (5, 55, 0, 0, 0, 0)"
     dolt add .
     dolt commit -m "committed to branch test2"
 
-    dolt checkout master
+    dolt checkout main
     run dolt diff test1 test2
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
@@ -428,7 +428,7 @@ SQL
     run dolt diff $FIRST_COMMIT test-branch
     [ $status -eq 0 ]
     [[ ! $output =~ "panic" ]]
-    run dolt diff master@$FIRST_COMMIT test-branch
+    run dolt diff main@$FIRST_COMMIT test-branch
     [ $status -eq 1 ]
     [[ ! $output =~ "panic" ]]
     run dolt diff ref.with.period test-branch
@@ -456,7 +456,7 @@ CREATE TABLE child (
   CONSTRAINT fk_named FOREIGN KEY (cv1) REFERENCES parent(pv1)
 );
 SQL
-    run dolt diff -s -r=sql master
+    run dolt diff -s -r=sql main
     [ $status -eq 0 ]
     [[ $output =~ "CONSTRAINT \`fk_named\` FOREIGN KEY (\`cv1\`) REFERENCES \`parent\` (\`pv1\`)" ]] || false
 }
@@ -482,7 +482,7 @@ CREATE TABLE a (
 SQL
     dolt add -A
     dolt commit -m "hello"
-    run dolt diff master another-branch
+    run dolt diff main another-branch
     echo $output
     ! [[ "$output" =~ "panic" ]] || false
     [[ "$output" =~ "pv1" ]] || false

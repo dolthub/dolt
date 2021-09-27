@@ -74,7 +74,7 @@ func (br TagRef) GetPath() string {
 	return br.tag
 }
 
-// String returns the fully qualified reference name e.g. refs/heads/master
+// String returns the fully qualified reference name e.g. refs/heads/main
 func (br TagRef) String() string {
 	return String(br)
 }

@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 type testPerson struct {
@@ -247,13 +248,13 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 }
 
 func TestServerSetDefaultBranch(t *testing.T) {
-	env := dtestutils.CreateEnvWithSeedData(t)
+	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15302)
 
 	sc := CreateServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), "", serverConfig, sc, env)
+		_, _ = Serve(context.Background(), "", serverConfig, sc, dEnv)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
@@ -264,13 +265,15 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
+	defaultBranch := env.DefaultInitBranch
+
 	tests := []struct {
 		query       *dbr.SelectStmt
 		expectedRes []testBranch
 	}{
 		{
 			query:       sess.Select("active_branch() as branch"),
-			expectedRes: []testBranch{{"master"}},
+			expectedRes: []testBranch{{defaultBranch}},
 		},
 		{
 			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'refs/heads/new'"),
@@ -278,14 +281,14 @@ func TestServerSetDefaultBranch(t *testing.T) {
 		},
 		{
 			query:       sess.Select("active_branch() as branch"),
-			expectedRes: []testBranch{{"master"}},
+			expectedRes: []testBranch{{defaultBranch}},
 		},
 		{
 			query:       sess.Select("dolt_checkout('-b', 'new')"),
 			expectedRes: []testBranch{{""}},
 		},
 		{
-			query:       sess.Select("dolt_checkout('master')"),
+			query:       sess.Select("dolt_checkout('main')"),
 			expectedRes: []testBranch{{""}},
 		},
 	}

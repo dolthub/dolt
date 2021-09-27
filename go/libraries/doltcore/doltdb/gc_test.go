@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -71,7 +72,7 @@ var gcTests = []gcTest{
 					return h
 				},
 				commands: []testCommand{
-					{commands.CheckoutCmd{}, []string{"master"}},
+					{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 					{commands.BranchCmd{}, []string{"-D", "temp"}},
 					{commands.SqlCmd{}, []string{"-q", "INSERT INTO test VALUES (4),(5),(6);"}},
 				},

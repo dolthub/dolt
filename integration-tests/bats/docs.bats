@@ -18,7 +18,7 @@ teardown() {
     [[ "$output" =~ "README.md" ]] || false
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Untracked files" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
@@ -29,7 +29,7 @@ teardown() {
     touch INVALID.md
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Untracked files" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
@@ -45,7 +45,7 @@ teardown() {
     dolt add .
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
@@ -76,7 +76,7 @@ teardown() {
     dolt add .
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
@@ -101,7 +101,7 @@ SQL
     dolt commit -m "adding license and readme, and test table"
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -111,7 +111,7 @@ SQL
     dolt add LICENSE.md
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ "Untracked files:" ]] || false
@@ -127,7 +127,7 @@ SQL
     dolt add README.md
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     [[ "$output" =~ "Untracked files:" ]] || false
@@ -516,7 +516,7 @@ SQL
      dolt add .
      dolt commit -m "updated license"
 
-     dolt checkout master
+     dolt checkout main
      run cat LICENSE.md
      [[ "$output" =~ "license" ]] || false
      run ls
@@ -547,7 +547,7 @@ SQL
      dolt add README.md
      dolt commit -m "commit of updated-readme"
      echo "another new README!" > README.md
-     dolt checkout master
+     dolt checkout main
      run dolt status
      [[ "$output" =~ "README.md" ]] || false
      run cat README.md
@@ -773,7 +773,7 @@ SQL
     echo test-b branch > README.md
     dolt add .
     dolt commit -m "Changed README.md on test-a branch"
-    dolt checkout master
+    dolt checkout main
 
     # On successful FF merge, docs match the new working root
     run dolt merge test-a
@@ -812,7 +812,7 @@ SQL
     echo test-b-again branch > README.md
     dolt add .
     dolt commit -m "Changed README.md on test-b-again branch"
-    dolt checkout master
+    dolt checkout main
     dolt merge test-a-again
     dolt merge test-b-again
     dolt conflicts resolve dolt_docs --theirs
@@ -827,7 +827,7 @@ SQL
     echo test-b-one-more-time > README.md
     dolt add .
     dolt commit -m "test-b-one-more-time"
-    dolt checkout master
+    dolt checkout main
     dolt merge test-b-again
     run cat README.md
     [[ "$output" =~ "one-more-time" ]] || false

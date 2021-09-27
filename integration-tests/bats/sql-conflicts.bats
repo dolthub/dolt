@@ -35,17 +35,17 @@ teardown() {
 }
 
 @test "sql-conflicts: add conflict" {
-  dolt branch feature_branch master
+  dolt branch feature_branch main
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,0,0)"
   dolt add .
-  dolt commit -m "changed master"
+  dolt commit -m "changed main"
   dolt checkout feature_branch
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1)"
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,1,1)"
   dolt add .
   dolt commit -m "changed feature_branch"
-  dolt checkout master
+  dolt checkout main
   dolt merge feature_branch
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
@@ -98,17 +98,17 @@ SQL
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,0,0)"
   dolt add .
   dolt commit -m "initial values"
-  dolt branch feature_branch master
+  dolt branch feature_branch main
   dolt SQL -q "UPDATE one_pk SET c1=1,c2=1 WHERE pk1=0"
   dolt SQL -q "UPDATE two_pk SET c1=1,c2=1 WHERE pk1=0 and PK2=0"
   dolt add .
-  dolt commit -m "changed master"
+  dolt commit -m "changed main"
   dolt checkout feature_branch
   dolt SQL -q "UPDATE one_pk SET c1=2,c2=2 WHERE pk1=0"
   dolt SQL -q "UPDATE two_pk SET c1=2,c2=2 WHERE pk1=0 and PK2=0"
   dolt add .
   dolt commit -m "changed feature_branch"
-  dolt checkout master
+  dolt checkout main
   dolt merge feature_branch
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
@@ -156,17 +156,17 @@ SQL
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,0,0)"
   dolt add .
   dolt commit -m "initial values"
-  dolt branch feature_branch master
+  dolt branch feature_branch main
   dolt SQL -q "UPDATE one_pk SET c1=1,c2=1 WHERE pk1=0"
   dolt SQL -q "UPDATE two_pk SET c1=1,c2=1 WHERE pk1=0 and PK2=0"
   dolt add .
-  dolt commit -m "changed master"
+  dolt commit -m "changed main"
   dolt checkout feature_branch
   dolt SQL -q "DELETE FROM one_pk WHERE pk1=0"
   dolt SQL -q "DELETE FROM two_pk WHERE pk1=0 and PK2=0"
   dolt add .
   dolt commit -m "changed feature_branch"
-  dolt checkout master
+  dolt checkout main
   dolt merge feature_branch
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
@@ -216,12 +216,12 @@ SQL
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (3,0,0)"
   dolt add .
   dolt commit -m "initial values"
-  dolt branch feature_branch master
+  dolt branch feature_branch main
   dolt SQL -q "UPDATE one_pk SET c1=1,c2=1"
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (4,1,1)"
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (5,3,3)"
   dolt add .
-  dolt commit -m "changed master"
+  dolt commit -m "changed main"
   dolt checkout feature_branch
   dolt SQL -q "UPDATE one_pk SET c1=2,c2=2"
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (4,2,2)"
@@ -229,7 +229,7 @@ SQL
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (5,3,3)"
   dolt add .
   dolt commit -m "changed feature_branch"
-  dolt checkout master
+  dolt checkout main
   dolt merge feature_branch
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,5")

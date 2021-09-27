@@ -113,10 +113,10 @@ SQL
     dolt add -A
     dolt commit -m "Initial Commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10;"
     dolt add -A
-    dolt commit -m "On master"
+    dolt commit -m "On main"
     dolt checkout other
     dolt sql <<SQL
 CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100;
@@ -125,7 +125,7 @@ UPDATE dolt_schemas SET id = id + 1 WHERE name = 'trigger4';
 SQL
     dolt add -A
     dolt commit -m "On other"
-    dolt checkout master
+    dolt checkout main
     run dolt diff other
     [ "$status" -eq "0" ]
     [[ "$output" =~ "CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10" ]] || false

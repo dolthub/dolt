@@ -33,7 +33,7 @@ teardown() {
     dolt add test1
     dolt commit -m "add pk 0 to test1"
 
-    dolt checkout master
+    dolt checkout main
     dolt SQL -q "INSERT INTO test1 values (1,2,3)"
     dolt add test1
     dolt commit -m "add pk 1 to test1"
@@ -68,13 +68,13 @@ teardown() {
     dolt branch other
 
     dolt sql -q "INSERT INTO test1 VALUES (0,10,10),(1,11,11);"
-    dolt commit -am "added rows to test1 on master"
+    dolt commit -am "added rows to test1 on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO test1 VALUES (0,20,20),(1,21,21);"
     dolt commit -am "added rows to test1 on other"
 
-    dolt checkout master
+    dolt checkout main
     # dirty the working set with changes to test2
     dolt sql -q "INSERT INTO test2 VALUES (9,9,9);"
 
@@ -92,13 +92,13 @@ teardown() {
     dolt branch other
 
     dolt sql -q "INSERT INTO test1 VALUES (1,10,10);"
-    dolt commit -am "added rows to test1 on master"
+    dolt commit -am "added rows to test1 on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO test1 VALUES (2,20,20);"
     dolt commit -am "added rows to test1 on other"
 
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt status
     [ "$status" -eq 0 ]
@@ -108,7 +108,7 @@ teardown() {
     dolt merge --abort
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "On branch master" ]] || false
+    [[ "${lines[0]}" =~ "On branch main" ]] || false
     [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -118,7 +118,7 @@ teardown() {
     dolt add test1
     dolt commit -m "add pk 0 to test1"
 
-    dolt checkout master
+    dolt checkout main
     dolt SQL -q "INSERT INTO test1 values (1,2,3)"
     dolt add test1
     dolt commit -m "add pk 1 to test1"
@@ -159,7 +159,7 @@ teardown() {
     dolt add test1
     dolt commit -m "add pk 1 to test1"
 
-    dolt checkout master
+    dolt checkout main
 
     run dolt merge merge_branch~
     [ "$status" -eq 0 ]
@@ -175,7 +175,7 @@ teardown() {
     dolt add test1
     dolt commit -m "add pk 0 = 1,1 to test1"
 
-    dolt checkout master
+    dolt checkout main
     dolt SQL -q "INSERT INTO test1 values (0,2,2)"
     dolt add test1
     dolt commit -m "add pk 0 = 2,2 to test1"
@@ -198,7 +198,7 @@ teardown() {
     dolt add test1
     dolt commit -m "add pk 0 = 1,1 to test1"
 
-    dolt checkout master
+    dolt checkout main
     dolt SQL -q "INSERT INTO test1 values (0,2,2)"
     dolt add test1
     dolt commit -m "add pk 0 = 2,2 to test1"
@@ -219,7 +219,7 @@ teardown() {
     dolt add test1
     dolt commit -m "modify test1"
 
-    dolt checkout master
+    dolt checkout main
     dolt SQL -q "INSERT INTO test2 values (0,1,2)"
     run dolt status
     [ "$status" -eq 0 ]
@@ -242,7 +242,7 @@ teardown() {
     dolt add test1
     dolt commit -m "modify test1"
 
-    dolt checkout master
+    dolt checkout main
     run dolt merge merge_branch --no-ff -m "no-ff merge"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "Fast-forward" ]] || false
@@ -258,7 +258,7 @@ teardown() {
     dolt add test1
     dolt commit -m "modify test1"
 
-    dolt checkout master
+    dolt checkout main
     dolt SQL -q "INSERT INTO test2 values (0,1,2)"
     run dolt status
     [ "$status" -eq 0 ]
@@ -285,7 +285,7 @@ teardown() {
     dolt add test1
     dolt commit -m "add pk 0 to test1"
 
-    dolt checkout master
+    dolt checkout main
     dolt SQL -q "INSERT INTO test2 values (0,1,2)"
     dolt add test2
     dolt commit -m "add pk 0 to test2"
@@ -306,7 +306,7 @@ teardown() {
     dolt add test1
     dolt commit -m "modify test1"
 
-    dolt checkout master
+    dolt checkout main
     dolt ls
     dolt SQL -q "INSERT INTO test1 values (1,2,3)"
     run dolt status
@@ -324,7 +324,7 @@ teardown() {
 CREATE TABLE quiz (pk int PRIMARY KEY);
 INSERT INTO quiz VALUES (10),(11),(12);
 SQL
-    dolt add . && dolt commit -m "added table quiz on master";
+    dolt add . && dolt commit -m "added table quiz on main";
 
     dolt checkout other
     dolt sql <<SQL
@@ -333,7 +333,7 @@ INSERT INTO quiz VALUES (20),(21),(22);
 SQL
     dolt add . && dolt commit -m "added table quiz on other"
 
-    dolt checkout master
+    dolt checkout main
     run dolt merge other
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM quiz ORDER BY pk;" -r csv
@@ -355,7 +355,7 @@ SQL
     dolt sql -q "CREATE VIEW c1c1 AS SELECT c1*c1 FROM test2;"
     dolt add . && dolt commit -m "added view on table test2"
 
-    dolt checkout master
+    dolt checkout main
     run dolt merge other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
@@ -375,7 +375,7 @@ SQL
     dolt sql -q "CREATE VIEW c1c1 AS SELECT c1*c1 FROM test2;"
     dolt add . && dolt commit -m "added view on table test2"
 
-    dolt checkout master
+    dolt checkout main
     run dolt merge other
     skip "key collision in dolt_schemas"
     [ "$status" -eq 0 ]
@@ -400,7 +400,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (2,19);"
     dolt commit -am "added row"
 
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "INSERT INTO test VALUES (1,19);"
     dolt commit -am "added row"
 
@@ -426,7 +426,7 @@ SQL
     dolt sql -q "UPDATE test SET c0 = 1 where c0 = 11"
     dolt commit -am "added row"
 
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "UPDATE test SET c1 = 2 where c1 = 22"
     dolt commit -am "added row"
 
@@ -450,7 +450,7 @@ INSERT INTO test3 VALUES (0), (1);
 SQL
     dolt commit -am "new table test3"
 
-    dolt checkout master
+    dolt checkout main
     
     run dolt merge feature-branch
     [ "$status" -eq 0 ]
@@ -476,7 +476,7 @@ drop table test2;
 SQL
     dolt commit -am "add data to test1, drop test2"
 
-    dolt checkout master
+    dolt checkout main
     run dolt merge feature-branch
     [ "$status" -eq 0 ]
 
@@ -517,7 +517,7 @@ INSERT INTO test1 VALUES (1, 1, 1);
 SQL
     dolt commit -am "add data to test1"
     
-    dolt checkout master
+    dolt checkout main
     run dolt merge feature-branch
     [ "$status" -eq 0 ]
 
@@ -550,7 +550,7 @@ INSERT INTO test2 VALUES (2, 2, 2);
 SQL
     dolt commit -am "add data to test2"
 
-    dolt checkout master
+    dolt checkout main
     run dolt merge feature-branch
 
     [ "$status" -eq 1 ]
@@ -574,7 +574,7 @@ SQL
     dolt sql -q "drop table test2"
     dolt commit -am "drop table test2"
 
-    dolt checkout master
+    dolt checkout main
     run dolt merge feature-branch
 
     [ "$status" -eq 1 ]
@@ -602,7 +602,7 @@ SQL
     dolt sql -q "drop table test2"
     dolt commit -am "drop table test2"
 
-    dolt checkout master
+    dolt checkout main
     run dolt merge feature-branch
     [ "$status" -eq 0 ]
     dolt commit -m "merged feature-branch"

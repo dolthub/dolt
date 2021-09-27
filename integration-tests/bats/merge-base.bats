@@ -19,7 +19,7 @@ setup() {
     dolt checkout two
     dolt sql -q "INSERT INTO test VALUES (2);"
     dolt commit -am "commit D"
-    dolt checkout master
+    dolt checkout main
 
     # # # # # # # # # # # # # # # # # # # # # # #
     #                                           #
@@ -27,7 +27,7 @@ setup() {
     #               /                           #
     #              /       <-- (one)            #
     #             /      /                      #
-    # (init) -- (A) -- (B) -- (C) <-- (master)  #
+    # (init) -- (A) -- (B) -- (C) <-- (main)  #
     #                    \                      #
     #                      -- (D) <-- (two)     #
     #                                           #
@@ -39,11 +39,11 @@ teardown() {
 }
 
 @test "merge-base: cli" {
-    run dolt merge-base master two
+    run dolt merge-base main two
     [ "$status" -eq 0 ]
     MERGE_BASE="$output"
 
-    run dolt merge-base master one
+    run dolt merge-base main one
     [ "$status" -eq 0 ]
     [ "$output" = "$MERGE_BASE" ]
 
@@ -51,7 +51,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "$MERGE_BASE" ]
 
-    dolt checkout master
+    dolt checkout main
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$MERGE_BASE" ]] || false
@@ -68,24 +68,24 @@ teardown() {
 }
 
 @test "merge-base: sql" {
-    run dolt sql -q "SELECT message FROM dolt_log WHERE commit_hash = dolt_merge_base('master', 'zero');" -r csv
+    run dolt sql -q "SELECT message FROM dolt_log WHERE commit_hash = dolt_merge_base('main', 'zero');" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "commit A" ]
 
-    run dolt sql -q "SELECT message FROM dolt_log WHERE commit_hash = dolt_merge_base('master', 'one');" -r csv
+    run dolt sql -q "SELECT message FROM dolt_log WHERE commit_hash = dolt_merge_base('main', 'one');" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "commit B" ]
 
-    run dolt sql -q "SELECT message FROM dolt_log WHERE commit_hash = dolt_merge_base('master', 'two');" -r csv
+    run dolt sql -q "SELECT message FROM dolt_log WHERE commit_hash = dolt_merge_base('main', 'two');" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "commit B" ]
 
-    run dolt sql -q "SELECT message FROM dolt_log WHERE commit_hash = dolt_merge_base('master', 'master');" -r csv
+    run dolt sql -q "SELECT message FROM dolt_log WHERE commit_hash = dolt_merge_base('main', 'main');" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "commit C" ]
 
     # dolt_merge_base() resolves commit hashes
-    run dolt sql -q "SELECT dolt_merge_base('master', hashof('one')) = dolt_merge_base(hashof('master'),'one') FROM dual;" -r csv
+    run dolt sql -q "SELECT dolt_merge_base('main', hashof('one')) = dolt_merge_base(hashof('main'),'one') FROM dual;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "true" ]
 }

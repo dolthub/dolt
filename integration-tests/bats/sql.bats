@@ -132,9 +132,9 @@ SQL
 
 @test "sql: AS OF queries" {
     dolt add .
-    dolt commit -m "Initial master commit" --date "2020-03-01T12:00:00Z"
+    dolt commit -m "Initial main commit" --date "2020-03-01T12:00:00Z"
 
-    master_commit=`dolt log | head -n1 | cut -d' ' -f2`
+    main_commit=`dolt log | head -n1 | cut -d' ' -f2`
     dolt sql -q "update one_pk set c1 = c1 + 1"
     dolt sql -q "drop table two_pk"
     dolt checkout -b new_branch
@@ -149,25 +149,25 @@ SQL
     [[ "$output" =~ "2,21" ]] || false
     [[ "$output" =~ "3,31" ]] || false
     
-    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'master' order by c1"
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'main' order by c1"
     [ $status -eq 0 ]
     [[ "$output" =~ "0,0" ]] || false
     [[ "$output" =~ "1,10" ]] || false
     [[ "$output" =~ "2,20" ]] || false
     [[ "$output" =~ "3,30" ]] || false
 
-    run dolt sql -r csv -q "select pk,c1 from one_pk as of '$master_commit' order by c1"
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of '$main_commit' order by c1"
     [ $status -eq 0 ]
     [[ "$output" =~ "0,0" ]] || false
     [[ "$output" =~ "1,10" ]] || false
     [[ "$output" =~ "2,20" ]] || false
     [[ "$output" =~ "3,30" ]] || false
     
-    run dolt sql -r csv -q "select count(*) from two_pk as of 'master'"
+    run dolt sql -r csv -q "select count(*) from two_pk as of 'main'"
     [ $status -eq 0 ]
     [[ "$output" =~ "4" ]] || false
 
-    run dolt sql -r csv -q "select count(*) from two_pk as of '$master_commit'"
+    run dolt sql -r csv -q "select count(*) from two_pk as of '$main_commit'"
     [ $status -eq 0 ]
     [[ "$output" =~ "4" ]] || false
 
@@ -185,7 +185,7 @@ SQL
     [[ "$output" =~ "2,20" ]] || false
     [[ "$output" =~ "3,30" ]] || false
     
-    dolt checkout master
+    dolt checkout main
     run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch' order by c1"
     [ $status -eq 0 ]
     [[ "$output" =~ "0,1" ]] || false
@@ -533,7 +533,7 @@ SQL
 @test "sql: USE branch" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    dolt checkout master
+    dolt checkout main
     
     dolt sql --disable-batch <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
@@ -557,11 +557,11 @@ SQL
 @test "sql: set head ref session var" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    dolt checkout master
+    dolt checkout main
 
     run dolt sql -q "select @@dolt_repo_$$_head_ref;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'refs/heads/master' ]] || false
+    [[ "$output" =~ 'refs/heads/main' ]] || false
 
     dolt sql --disable-batch <<SQL
 set @@dolt_repo_$$_head_ref = 'feature-branch';
@@ -580,7 +580,7 @@ SQL
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ test ]] || false
 
-    dolt checkout master
+    dolt checkout main
     dolt sql --disable-batch <<SQL
 set @@dolt_repo_$$_head_ref = 'refs/heads/feature-branch';
 insert into test values (1), (2), (3);
@@ -592,7 +592,7 @@ SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
 
-    dolt checkout master
+    dolt checkout main
 
     run dolt sql --disable-batch <<SQL
 set @@dolt_repo_$$_head_ref = 'feature-branch';
@@ -612,7 +612,7 @@ SQL
 @test "sql: branch qualified DB name in select" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    dolt checkout master
+    dolt checkout main
     
     dolt sql --disable-batch <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
@@ -629,7 +629,7 @@ SQL
 @test "sql: branch qualified DB name in insert" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
-    dolt checkout master
+    dolt checkout main
     
     dolt sql --disable-batch <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
@@ -1199,7 +1199,7 @@ SQL
   run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD~2
   [ $status -eq 0 ]
   [[ "$output" = "$EXPECTED" ]] || false
-  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" master
+  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" main
   [ $status -eq 0 ]
   [[ "$output" = "$EXPECTED" ]] || false
 
@@ -1312,7 +1312,7 @@ SQL
     run dolt sql -q 'select active_branch()' -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "active_branch()" ]] || false
-    [[ "$output" =~ "master" ]] || false
+    [[ "$output" =~ "main" ]] || false
 }
 
 @test "sql: active_branch() func on feature branch" {

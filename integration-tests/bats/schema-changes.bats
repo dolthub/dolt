@@ -173,7 +173,7 @@ SQL
     # push to a file based remote, clone a copy to pull to later
     mkdir remotedir
     dolt remote add origin file://remotedir
-    dolt push origin master
+    dolt push origin main
     dolt clone file://remotedir original
     
     dolt sql -q "ALTER TABLE Test2 MODIFY V1 varchar(300) not null"
@@ -208,7 +208,7 @@ SQL
     dolt add .
     dolt commit -m "Created table with one row"
 
-    dolt merge master
+    dolt merge main
 
     run dolt sql -q 'show create table test2'
     [ "$status" -eq 0 ]
@@ -222,12 +222,12 @@ SQL
     [[ "$output" =~ '2,2,abc,def' ]] || false
 
     dolt add .
-    dolt commit -m "merge master"
+    dolt commit -m "merge main"
 
     # push to remote
-    dolt checkout master
+    dolt checkout main
     dolt merge original
-    dolt push origin master
+    dolt push origin main
 
     # pull from the remote and make sure there's no issue
     cd original
