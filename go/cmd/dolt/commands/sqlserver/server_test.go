@@ -366,7 +366,8 @@ func TestReadReplica(t *testing.T) {
 		t.Fatalf("no working directory: %s", err.Error())
 	}
 	defer os.Chdir(cwd)
-	multiSetup := testcommands.CreateTestMultiEnvWithRemote()
+
+	multiSetup := testcommands.CreateMultiEnvWithRemote()
 	defer os.RemoveAll(multiSetup.Root)
 
 	readOnlyDbName := multiSetup.DbNames[0]
@@ -379,6 +380,7 @@ func TestReadReplica(t *testing.T) {
 	func() {
 		err = os.Setenv(dsqle.DoltReadReplicaKey, "remote1")
 		os.Chdir(multiSetup.DbPaths[readOnlyDbName])
+
 		go func() {
 			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readOnlyDbName])
 		}()
@@ -393,7 +395,7 @@ func TestReadReplica(t *testing.T) {
 
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
-
+	
 	t.Run("push common new commit", func(t *testing.T) {
 		var res []string
 		replicatedTable := "new_table"

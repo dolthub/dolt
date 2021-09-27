@@ -65,12 +65,14 @@ type SqlDatabase interface {
 func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
 	for _, db := range dbs {
-		switch sqlDb := db.(type) {
-		case *ReadReplicaDatabase:
-			dsqlDBs = append(dsqlDBs, sqlDb)
-		case *Database:
-			dsqlDBs = append(dsqlDBs, sqlDb)
-		default:
+		dsqlRDB, ok := db.(ReadReplicaDatabase)
+		if ok {
+			dsqlDBs = append(dsqlDBs, dsqlRDB)
+		}
+
+		dsqlDB, ok := db.(Database)
+		if ok {
+			dsqlDBs = append(dsqlDBs, dsqlDB)
 		}
 	}
 	return dsqlDBs

@@ -6,7 +6,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testdata"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -40,8 +40,13 @@ const (
 	email = "bigbillieb@fake.horse"
 )
 
-func CreateTestMultiEnvWithRemote() *MultiRepoTestSetup {
+func CreateMultiEnvWithRemote() *MultiRepoTestSetup {
 	ctx := context.Background()
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.Chdir(cwd)
 
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -179,7 +184,7 @@ func (mr *MultiRepoTestSetup) CreateTable(t *testing.T, dbName, tblName string) 
 		t.Fatalf("Failed to find db: %s", dbName)
 	}
 
-	imt, sch := testdata.CreateTestDataTable(true)
+	imt, sch := dtestutils.CreateTestDataTable(true)
 	rows := make([]row.Row, imt.NumRows())
 	for i := 0; i < imt.NumRows(); i++ {
 		r, err := imt.GetRow(i)
@@ -188,8 +193,7 @@ func (mr *MultiRepoTestSetup) CreateTable(t *testing.T, dbName, tblName string) 
 		}
 		rows[i] = r
 	}
-	//testdata.CreateTestTable(t, dEnv, tblName, testdata.PeopleTestSchema, testdata.AllPeopleRows...)
-	testdata.CreateTestTable(t, dEnv, tblName, sch, rows...)
+	dtestutils.CreateTestTable(t, dEnv, tblName, sch, rows...)
 }
 
 func (mr *MultiRepoTestSetup) AddAll(t *testing.T, dbName string) {
