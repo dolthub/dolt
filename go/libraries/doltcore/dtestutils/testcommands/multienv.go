@@ -51,8 +51,8 @@ type MultiRepoTestSetup struct {
 }
 
 const (
-	name  = "billy bob"
-	email = "bigbillieb@fake.horse"
+	name          = "billy bob"
+	email         = "bigbillieb@fake.horse"
 	defaultBranch = "main"
 )
 
