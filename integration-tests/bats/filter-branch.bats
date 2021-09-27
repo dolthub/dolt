@@ -48,7 +48,7 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (4,4),(5,5),(6,6);"
     dolt add -A && dolt commit -m "added more rows"
 
-    dolt checkout master
+    dolt checkout main
     dolt filter-branch --all "DELETE FROM test WHERE pk > 4;"
 
     run dolt sql -q "SELECT pk,c0 FROM dolt_history_test ORDER BY pk" -r csv

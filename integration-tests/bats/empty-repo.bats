@@ -20,7 +20,7 @@ teardown() {
 @test "empty-repo: dolt status on a new repository" {
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
     [[ ! "$output" =~ "Untracked files:" ]] || false
     [[ ! "$output" =~ "LICENSE.md" ]] || false
@@ -36,9 +36,9 @@ teardown() {
 @test "empty-repo: dolt branch in a new repository" {
     run dolt branch
     [ "$status" -eq 0 ]
-    # I can't seem to get this to match "* master" so I made a regex instead
-    # [ "$output" = "* master" ]
-    [[ "$output" =~ "* master" ]] || false
+    # I can't seem to get this to match "* main" so I made a regex instead
+    # [ "$output" = "* main" ]
+    [[ "$output" =~ "* main" ]] || false
 }
 
 @test "empty-repo: dolt log in a new repository" {
@@ -126,10 +126,10 @@ teardown() {
     [[ "${lines[0]}" =~ "usage" ]] || false
 }
 
-@test "empty-repo: dolt checkout master on master" {
-    run dolt checkout master
+@test "empty-repo: dolt checkout main on main" {
+    run dolt checkout main
     [ "$status" -eq 0 ]
-    [ "$output" = "Already on branch 'master'" ]
+    [ "$output" = "Already on branch 'main'" ]
 }
 
 @test "empty-repo: dolt checkout non-existant branch" {

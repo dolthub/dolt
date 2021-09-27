@@ -232,7 +232,7 @@ SQL
     [[ "$output" =~ "there can be only one auto_increment column and it must be defined as a key" ]] || false
 }
 
-@test "auto_increment: AUTO_INCREMENT merge master branch ahead" {
+@test "auto_increment: AUTO_INCREMENT merge main branch ahead" {
     dolt sql -q "INSERT INTO test (c0) VALUES (0),(1),(2)"
     dolt add -A
     dolt commit -m "made some inserts"
@@ -242,10 +242,10 @@ SQL
     dolt add -A
     dolt commit -m "inserted 10 & 11 on other"
 
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "INSERT INTO test VALUES (20,20),(NULL,21);"
     dolt add -A
-    dolt commit -m "inserted 20 & 21 on master"
+    dolt commit -m "inserted 20 & 21 on main"
     dolt merge other
 
     dolt sql -q "INSERT INTO test VALUES (NULL,22);"
@@ -262,14 +262,14 @@ SQL
     dolt branch other
     dolt sql -q "INSERT INTO test VALUES (10,10),(NULL,11);"
     dolt add -A
-    dolt commit -m "inserted 10 & 11 on master"
+    dolt commit -m "inserted 10 & 11 on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO test VALUES (20,20),(NULL,21);"
     dolt add -A
     dolt commit -m "inserted 20 & 21 on other"
 
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     dolt sql -q "INSERT INTO test VALUES (NULL,22);"
     run dolt sql -q "SELECT pk FROM test WHERE c0 = 22 ORDER BY pk;" -r csv
@@ -446,7 +446,7 @@ SELECT DOLT_CHECKOUT('-b', 'test');
 
 INSERT INTO t (c0) VALUES (3), (4);
 SELECT DOLT_COMMIT('-a', '-m', 'cm2');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 
 SELECT DOLT_MERGE('test');
 INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);
@@ -477,7 +477,7 @@ SELECT DOLT_CHECKOUT('-b', 'test');
 
 INSERT INTO t (c0) VALUES (3), (4);
 SELECT DOLT_COMMIT('-a', '-m', 'cm2');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 
 SELECT DOLT_MERGE('test');
 INSERT INTO t VALUES (10,10),(NULL,11);
@@ -510,7 +510,7 @@ SELECT DOLT_CHECKOUT('-b', 'test');
 
 INSERT INTO t VALUES (4,4), (5,5);
 SELECT DOLT_COMMIT('-a', '-m', 'cm2');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 
 SELECT DOLT_MERGE('test');
 INSERT INTO t VALUES (3,3),(NULL,6);
@@ -543,7 +543,7 @@ SELECT DOLT_CHECKOUT('-b', 'test');
 
 INSERT INTO t VALUES (1,1), (2, 2);
 SELECT DOLT_COMMIT('-a', '-m', 'cm2');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 
 SELECT DOLT_MERGE('test');
 INSERT INTO t VALUES (NULL,6);

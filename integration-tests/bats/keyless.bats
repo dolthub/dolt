@@ -272,7 +272,7 @@ SQL
     dolt checkout -b other
     dolt sql -q "INSERT INTO keyless VALUES (9,9);"
     dolt commit -am "9,9"
-    dolt checkout master
+    dolt checkout main
     run dolt merge other
     [ $status -eq 0 ]
     run dolt sql -q "SELECT * FROM keyless WHERE c0 > 6;" -r csv
@@ -284,14 +284,14 @@ SQL
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
-    dolt commit -am "inserted on master"
+    dolt commit -am "inserted on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "inserted on other"
 
-    dolt diff master
-    run dolt diff master
+    dolt diff main
+    run dolt diff main
     [ $status -eq 0 ]
     [ "$output" = "" ]
 }
@@ -300,13 +300,13 @@ SQL
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
-    dolt commit -am "inserted on master"
+    dolt commit -am "inserted on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "inserted on other"
 
-    run dolt merge master
+    run dolt merge main
     [ $status -eq 0 ]
     run dolt sql -q "SELECT * FROM keyless WHERE c0 > 6 ORDER BY c0;" -r csv
     [ $status -eq 0 ]
@@ -322,7 +322,7 @@ SQL
     dolt sql -q "DELETE FROM keyless WHERE c0 = 0;"
     dolt commit -am "deleted ones on right"
 
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [[ "$output" =~ "|  -  | 0  | 0  |" ]] || false
 
@@ -330,7 +330,7 @@ SQL
     dolt sql -q "DELETE FROM keyless WHERE c0 = 2;"
     dolt commit -am "deleted twos on left"
 
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [[ "$output" =~ "|  -  | 2  | 2  |" ]] || false
 }
@@ -348,7 +348,7 @@ SQL
 
     run dolt merge right
     [ $status -eq 0 ]
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [[ "$output" =~ "|  -  | 0  | 0  |" ]] || false
     [[ "$output" =~ "|  -  | 2  | 2  |" ]] || false
@@ -376,8 +376,8 @@ SQL
     dolt sql -q "DELETE FROM dupe LIMIT 2;"
     dolt commit -am "deleted two rows on right"
 
-    dolt diff master
-    run dolt diff master
+    dolt diff main
+    run dolt diff main
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 9 ] # 2 diffs + 6 header + 1 footer
     [[ "${lines[6]}" =~ "|  -  | 1  | 1  |" ]] || false
@@ -387,7 +387,7 @@ SQL
     dolt sql -q "DELETE FROM dupe LIMIT 4;"
     dolt commit -am "deleted four rows on left"
 
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 11 ] # 4 diffs + 6 header + 1 footer
     [[ "${lines[6]}" = "|  -  | 1  | 1  |" ]] || false
@@ -431,7 +431,7 @@ SQL
     dolt sql -q "UPDATE dupe SET c1 = 2 LIMIT 2;"
     dolt commit -am "updated two rows on right"
 
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 11 ] # 4 diffs + 6 header + 1 footer
 
@@ -439,7 +439,7 @@ SQL
     dolt sql -q "UPDATE dupe SET c1 = 2 LIMIT 4;"
     dolt commit -am "updated four rows on left"
 
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 15 ] # 8 diffs + 6 header + 1 footer
 }
@@ -588,14 +588,14 @@ CSV
     dolt branch other
 
     dolt sql -q "UPDATE keyless SET c1 = c1+10 WHERE c0 > 6"
-    dolt commit -am "updated on master"
+    dolt commit -am "updated on main"
 
     dolt checkout other
     dolt sql -q "UPDATE keyless SET c1 = c1+20 WHERE c0 > 6"
     dolt commit -am "updated on other"
 
-    dolt diff master
-    run dolt diff master
+    dolt diff main
+    run dolt diff main
     [ $status -eq 0 ]
     [[ "$output" =~ "|  -  | 7  | 17 |" ]] || false
     [[ "$output" =~ "|  +  | 7  | 27 |" ]] || false
@@ -611,13 +611,13 @@ CSV
     dolt branch other
 
     dolt sql -q "UPDATE keyless SET c1 = c1+10 WHERE c0 > 6"
-    dolt commit -am "updated on master"
+    dolt commit -am "updated on main"
 
     dolt checkout other
     dolt sql -q "UPDATE keyless SET c1 = c1+20 WHERE c0 > 6"
     dolt commit -am "updated on other"
 
-    run dolt merge master
+    run dolt merge main
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
@@ -643,13 +643,13 @@ CSV
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
-    dolt commit -am "inserted on master"
+    dolt commit -am "inserted on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO keyless VALUES (9,9),(8,8),(7,7);"
     dolt commit -am "inserted on other"
 
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [ "$output" = "" ]
 }
@@ -658,13 +658,13 @@ CSV
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
-    dolt commit -am "inserted on master"
+    dolt commit -am "inserted on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO keyless VALUES (9,9),(8,8),(7,7);"
     dolt commit -am "inserted on other"
 
-    run dolt merge master
+    run dolt merge main
     [ $status -eq 0 ]
      run dolt sql -q "SELECT count(*) FROM keyless WHERE c0 > 6;" -r csv
     [ $status -eq 0 ]
@@ -680,7 +680,7 @@ CSV
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
-    dolt commit -am "inserted on master"
+    dolt commit -am "inserted on main"
 
     dolt checkout other
     dolt sql <<SQL
@@ -690,8 +690,8 @@ UPDATE keyless SET c0 = 9, c1 = 9 WHERE c1 = 17;
 SQL
     dolt commit -am "inserted on other"
 
-    dolt diff master
-    run dolt diff master
+    dolt diff main
+    run dolt diff main
     [ $status -eq 0 ]
     [ "$output" = "" ]
 }
@@ -700,7 +700,7 @@ SQL
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
-    dolt commit -am "inserted on master"
+    dolt commit -am "inserted on main"
 
     dolt checkout other
     dolt sql <<SQL
@@ -710,7 +710,7 @@ UPDATE keyless SET c0 = 9, c1 = 9 WHERE c1 = 17;
 SQL
     dolt commit -am "inserted on other"
 
-    run dolt merge master
+    run dolt merge main
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
@@ -728,13 +728,13 @@ SQL
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
-    dolt commit -am "inserted on master"
+    dolt commit -am "inserted on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(7,7),(8,8),(9,9);"
     dolt commit -am "inserted on other"
 
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 8 ] # 1 diffs + 6 header + 1 footer
     [[ "${lines[6]}" =~ "|  +  | 7  | 7  |" ]] || false
@@ -744,13 +744,13 @@ SQL
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
-    dolt commit -am "inserted on master"
+    dolt commit -am "inserted on main"
 
     dolt checkout other
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(7,7),(8,8),(9,9);"
     dolt commit -am "inserted on other"
 
-    run dolt merge master
+    run dolt merge main
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
@@ -782,7 +782,7 @@ SQL
     dolt sql -q "DELETE FROM keyless WHERE c0 = 2;"
     dolt commit -am "deleted ones on right"
 
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [[ "${lines[6]}" = "|  -  | 2  | 2  |" ]] || false
 
@@ -790,7 +790,7 @@ SQL
     dolt sql -q "INSERT INTO keyless VALUES (2,2);"
     dolt commit -am "deleted twos on left"
 
-    run dolt diff master
+    run dolt diff main
     [ $status -eq 0 ]
     [[ "${lines[6]}" = "|  +  | 2  | 2  |" ]] || false
 }

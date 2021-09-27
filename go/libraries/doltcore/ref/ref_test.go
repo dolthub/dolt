@@ -19,6 +19,8 @@ import (
 	"testing"
 )
 
+const defaultBranch = "main"
+
 type TestMarshalStruct struct {
 	Test MarshalableRef `json:"test"`
 }
@@ -29,12 +31,12 @@ func TestJsonMarshalAndUnmarshal(t *testing.T) {
 		str string
 	}{
 		{
-			NewBranchRef("master"),
-			`{"test":"refs/heads/master"}`,
+			NewBranchRef(defaultBranch),
+			`{"test":"refs/heads/main"}`,
 		},
 		{
-			NewRemoteRef("origin", "master"),
-			`{"test":"refs/remotes/origin/master"}`,
+			NewRemoteRef("origin", defaultBranch),
+			`{"test":"refs/remotes/origin/main"}`,
 		},
 		{
 			NewInternalRef("create"),
@@ -71,61 +73,61 @@ func TestJsonMarshalAndUnmarshal(t *testing.T) {
 }
 
 func TestEqualsStr(t *testing.T) {
-	om, _ := NewRemoteRefFromPathStr("origin/master")
-	rom, _ := NewRemoteRefFromPathStr("refs/remotes/origin/master")
+	om, _ := NewRemoteRefFromPathStr("origin/main")
+	rom, _ := NewRemoteRefFromPathStr("refs/remotes/origin/main")
 	tests := []struct {
 		dr       DoltRef
 		cmp      string
 		expected bool
 	}{
 		{
-			NewBranchRef("master"),
-			"refs/heads/master",
+			NewBranchRef(defaultBranch),
+			"refs/heads/main",
 			true,
 		},
 		{
-			NewBranchRef("refs/heads/master"),
-			"refs/heads/master",
+			NewBranchRef("refs/heads/main"),
+			"refs/heads/main",
 			true,
 		},
 		{
-			NewBranchRef("master"),
-			"refs/heads/notmaster",
+			NewBranchRef(defaultBranch),
+			"refs/heads/notmain",
 			false,
 		},
 		{
-			NewBranchRef("master"),
-			"refs/remotes/origin/master",
+			NewBranchRef(defaultBranch),
+			"refs/remotes/origin/main",
 			false,
 		},
 		{
-			NewRemoteRef("origin", "master"),
-			"refs/remotes/origin/master",
+			NewRemoteRef("origin", defaultBranch),
+			"refs/remotes/origin/main",
 			true,
 		},
 		{
 			om,
-			"refs/remotes/origin/master",
+			"refs/remotes/origin/main",
 			true,
 		},
 		{
 			rom,
-			"refs/remotes/origin/master",
+			"refs/remotes/origin/main",
 			true,
 		},
 		{
-			NewRemoteRef("origin", "master"),
-			"refs/remotes/borigin/master",
+			NewRemoteRef("origin", defaultBranch),
+			"refs/remotes/borigin/main",
 			false,
 		},
 		{
-			NewRemoteRef("origin", "master"),
-			"refs/remotes/origin/notmaster",
+			NewRemoteRef("origin", defaultBranch),
+			"refs/remotes/origin/notmain",
 			false,
 		},
 		{
-			NewRemoteRef("origin", "master"),
-			"refs/notavalidtype/origin/notmaster",
+			NewRemoteRef("origin", defaultBranch),
+			"refs/notavalidtype/origin/notmain",
 			false,
 		},
 		{

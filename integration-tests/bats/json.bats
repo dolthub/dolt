@@ -123,7 +123,7 @@ SQL
     dolt sql <<SQL
     UPDATE js SET js = '{"a":11}' WHERE pk = 1;
 SQL
-    dolt commit -am "made changes on branch master"
+    dolt commit -am "made changes on branch main"
 
     dolt checkout other
     dolt sql <<SQL
@@ -131,13 +131,13 @@ SQL
 SQL
     dolt commit -am "made changes on branch other"
 
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = '1,"{""a"": 11}"' ]
     [ "${lines[2]}" = '2,"{""b"": 22}"' ]
-    dolt commit -am "merged other into master"
+    dolt commit -am "merged other into main"
 
     # test merge conflicts
     dolt checkout another

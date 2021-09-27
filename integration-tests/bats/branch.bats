@@ -17,10 +17,10 @@ teardown() {
     run noms show .dolt/noms::#$root
     [[ "$show_tables" -eq 0 ]] || false
     echo $output
-    [[ "$output" =~ "workingSets/heads/master" ]] || false
+    [[ "$output" =~ "workingSets/heads/main" ]] || false
     [[ "$output" =~ "workingSets/heads/to_delete" ]] || false
 
-    dolt checkout master
+    dolt checkout main
     dolt branch -d -f to_delete
 
     root=$(noms root .dolt/noms)
@@ -31,7 +31,7 @@ teardown() {
 
 @test "branch: moving current working branch takes its working set" {
     dolt sql -q 'create table test (id int primary key);'
-    dolt branch -m master new_master
+    dolt branch -m main new_main
     show_tables=`dolt sql -q 'show tables' | wc -l`
     [[ "$show_tables" -eq 5 ]] || false
 }

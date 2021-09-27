@@ -73,7 +73,7 @@ teardown() {
     dolt sql -q "replace into test values (0, 11, 11, 11, 11, 11)"
     dolt add test
     dolt commit -m "changed pk=0 all cells to 11"
-    dolt checkout master
+    dolt checkout main
     run dolt merge change-cell
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
@@ -100,7 +100,7 @@ teardown() {
      echo test-b branch > README.md
      dolt add .
      dolt commit -m "Changed README.md on test-a branch"
-     dolt checkout master
+     dolt checkout main
 
      # On successful FF merge, docs match the new working root
      run dolt merge test-a

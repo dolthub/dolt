@@ -94,7 +94,7 @@ SQL
     run dolt sql <<< "select active_branch()"
     [ $status -eq 0 ]
     [[ "$output" =~ "active_branch()" ]] || false
-    [[ "$output" =~ "master" ]] || false
+    [[ "$output" =~ "main" ]] || false
     run dolt sql <<< "select dolt_checkout('-b', 'tmp_br') as co; select active_branch()"
     [ $status -eq 0 ]
     [[ "$output" =~ "active_branch()" ]] || false

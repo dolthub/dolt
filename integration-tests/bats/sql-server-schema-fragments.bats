@@ -30,12 +30,12 @@ teardown() {
     dolt sql -q 'INSERT INTO `values` VALUES (1);'
     dolt add .
     dolt commit -m 'add 1 to values'
-    dolt checkout master
+    dolt checkout main
     dolt checkout -b values_has_two
     dolt sql -q 'INSERT INTO `values` VALUES (2);'
     dolt add .
     dolt commit -m 'add 2 to values'
-    dolt checkout master
+    dolt checkout main
     start_sql_server repo1
 
     server_query repo1 0 "SELECT * FROM query_values" ""
@@ -44,7 +44,7 @@ teardown() {
     SELECT * FROM query_values;
     SET @@repo1_head=hashof('values_has_two');
     SELECT * FROM query_values;
-    SET @@repo1_head=hashof('master');
+    SET @@repo1_head=hashof('main');
     SELECT * FROM query_values;
     " ";id\n1;;id\n2;;id"
 }

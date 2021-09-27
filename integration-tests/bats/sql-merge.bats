@@ -32,7 +32,7 @@ SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 UPDATE test SET pk=1000 WHERE pk=0;
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SQL
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 0 ]
@@ -68,7 +68,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SELECT COUNT(*) > 0 FROM test WHERE pk=3;
 SQL
@@ -89,7 +89,7 @@ SQL
     head_hash=$(get_head_commit)
 
     dolt sql << SQL
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SQL
 
@@ -97,7 +97,7 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ $head_hash ]] || false
 
-    dolt checkout master
+    dolt checkout main
     run dolt sql -q "SELECT $head_variable"
     [ $status -eq 0 ]
     [[ "$output" =~ $head_hash ]] || false    
@@ -109,7 +109,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (10000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 10000');
 SELECT DOLT_MERGE('feature-branch');
@@ -163,7 +163,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'update feature-branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff');
 SELECT COUNT(*) = 4 FROM dolt_log
 SQL
@@ -181,7 +181,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'update feature-branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SQL
     head_variable=@@dolt_repo_$$_head
     head_hash=$(get_head_commit)
@@ -211,13 +211,13 @@ CREATE TABLE one_pk (
 );
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
-SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_COMMIT('-a', '-m', 'changed main');
 SELECT DOLT_CHECKOUT('feature-branch');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
@@ -260,13 +260,13 @@ CREATE TABLE one_pk (
 );
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
-SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_COMMIT('-a', '-m', 'changed main');
 SELECT DOLT_CHECKOUT('feature-branch');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
@@ -275,7 +275,7 @@ SQL
     # back on the command line, our session state is clean
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "working tree clean" ]] || false    
     [[ ! "$output" =~ "You have unmerged tables" ]] || false
     [[ ! "$output" =~ ([[:space:]]*both modified:[[:space:]]*one_pk) ]] || false
@@ -325,13 +325,13 @@ CREATE TABLE one_pk (
 );
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
-SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_COMMIT('-a', '-m', 'changed main');
 SELECT DOLT_CHECKOUT('feature-branch');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SELECT DOLT_MERGE('--abort');
 insert into one_pk values (9,9,9);
@@ -365,13 +365,13 @@ CREATE TABLE one_pk (
 );
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
-SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_COMMIT('-a', '-m', 'changed main');
 SELECT DOLT_CHECKOUT('feature-branch');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SELECT DOLT_MERGE('--abort');
 commit;
@@ -380,7 +380,7 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "On branch master" ]] || false
+    [[ "${lines[0]}" =~ "On branch main" ]] || false
     [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
 }
 
@@ -394,13 +394,13 @@ CREATE TABLE one_pk (
 );
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
-SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_COMMIT('-a', '-m', 'changed main');
 SELECT DOLT_CHECKOUT('feature-branch');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
@@ -417,7 +417,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
 SELECT DOLT_MERGE('feature-branch');
@@ -434,7 +434,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch', '--squash');
 SELECT COUNT(*) > 0 FROM test WHERE pk=3;
 SQL
@@ -451,7 +451,7 @@ SQL
 
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 
@@ -469,7 +469,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
 SELECT DOLT_MERGE('feature-branch', '--squash');
@@ -477,7 +477,7 @@ SQL
 
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 
@@ -499,7 +499,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 CREATE TABLE tbl (
     pk int primary key
 );
@@ -519,7 +519,7 @@ INSERT INTO test VALUES (21232);
 DELETE FROM test WHERE pk=4;
 UPDATE test SET pk=21 WHERE pk=21232;
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (500000);
 INSERT INTO test VALUES (500001);
 DELETE FROM test WHERE pk=500001;
@@ -531,7 +531,7 @@ SQL
 
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 
@@ -572,13 +572,13 @@ CREATE TABLE one_pk (
 );
 SELECT DOLT_COMMIT('-a', '-m', 'add tables');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
-SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_COMMIT('-a', '-m', 'changed main');
 SELECT DOLT_CHECKOUT('feature-branch');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
-SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SHOW WARNINGS;
 SELECT COUNT(*) FROM dolt_conflicts where num_conflicts > 0;

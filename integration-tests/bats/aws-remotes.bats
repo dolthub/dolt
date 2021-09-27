@@ -67,9 +67,9 @@ skip_if_no_aws_tests() {
     dolt sql -q 'insert into a_test_table values (1), (2), (47)'
     dolt add .
     dolt commit -m 'creating a test table'
-    dolt push origin master:master
+    dolt push origin main:main
     dolt fetch origin
-    dolt push origin master:another-branch
+    dolt push origin main:another-branch
     dolt fetch origin
     dolt push origin :another-branch
 }

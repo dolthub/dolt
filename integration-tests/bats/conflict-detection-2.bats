@@ -56,7 +56,7 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "changed c1 to type uint again"
-    dolt checkout master
+    dolt checkout main
     run dolt merge change-types
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -109,7 +109,7 @@ SQL
     skip "I think changing a type to two different types should throw a conflict"
     dolt add test
     dolt commit -m "changed c1 to type float"
-    dolt checkout master
+    dolt checkout main
     run dolt merge change-types
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
@@ -162,7 +162,7 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "made c1 a pk again"
-    dolt checkout master
+    dolt checkout main
     run dolt merge add-pk
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -216,7 +216,7 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "added pk pk1 again"
-    dolt checkout master
+    dolt checkout main
     run dolt merge add-pk
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
@@ -270,7 +270,7 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "added pk pk2"
-    dolt checkout master
+    dolt checkout main
     run dolt merge add-pk
     [ $status -eq 0 ]
     skip "This merges fine right now. Should throw conflict."
@@ -309,7 +309,7 @@ CREATE TABLE table2 (
 SQL
     dolt add table2
     dolt commit -m "second table"
-    dolt checkout master
+    dolt checkout main
     run dolt merge table1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Fast-forward" ]] || false
@@ -342,7 +342,7 @@ SQL
     dolt add .
     dolt commit -m "dropped table bar"
 
-    dolt checkout master
+    dolt checkout main
     skip "test currently panics on merge at doltcore/env/actions/merge.go:79"
     run dolt merge other
     [ "$status" -eq 0 ]
@@ -373,7 +373,7 @@ SQL
     dolt add .
     dolt commit -m "renamed table bar to barbar"
 
-    dolt checkout master
+    dolt checkout main
     skip "test currently panics on merge at doltcore/env/actions/merge.go:79"
     run dolt merge other
     [ "$status" -eq 0 ]
@@ -397,7 +397,7 @@ SQL
     dolt add foo
     dolt commit -m 'delete commit.'
 
-    dolt checkout -b modifier master
+    dolt checkout -b modifier main
     dolt sql -q 'update foo set val = val + 1 where pk in (1, 3, 5);'
     dolt add foo
     dolt commit -m 'modify commit.'
@@ -409,7 +409,7 @@ SQL
     dolt merge --abort
 
     # Accept theirs deletes all rows.
-    dolt checkout master
+    dolt checkout main
     dolt branch -d -f merge-into-modified
     dolt checkout -b merge-into-modified modifier
     dolt merge deleter
@@ -427,7 +427,7 @@ SQL
     dolt reset --hard
 
     # Accept ours deletes two rows.
-    dolt checkout master
+    dolt checkout main
     dolt branch -d -f merge-into-modified
     dolt checkout -b merge-into-modified modifier
     dolt merge deleter
@@ -445,7 +445,7 @@ SQL
     dolt merge --abort
 
     # Accept ours deletes all rows.
-    dolt checkout master
+    dolt checkout main
     dolt branch -d -f merge-into-deleter
     dolt checkout -b merge-into-deleter deleter
     dolt merge modifier
@@ -457,7 +457,7 @@ SQL
     dolt reset --hard
 
     # Accept theirs adds modified.
-    dolt checkout master
+    dolt checkout main
     dolt branch -d -f merge-into-deleter
     dolt checkout -b merge-into-deleter deleter
     dolt merge modifier
@@ -484,7 +484,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (3, 4)"
     dolt add -A
     dolt commit -m "OC1"
-    dolt checkout master
+    dolt checkout main
 
     run dolt sql <<"SQL"
 SELECT DOLT_MERGE('other');
@@ -518,7 +518,7 @@ SQL
     dolt sql -q "insert into test values (0,1)"
     dolt add .
     dolt commit -m "inserted 0,1"
-    dolt checkout master
+    dolt checkout main
     dolt merge branch1
     dolt conflicts resolve --ours test
 

@@ -16,6 +16,10 @@ package dtestutils
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -24,8 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 const (
@@ -48,7 +50,7 @@ func CreateTestEnv() *env.DoltEnv {
 		env.UserNameKey:  name,
 		env.UserEmailKey: email,
 	})
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email)
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)
 
 	if err != nil {
 		panic("Failed to initialize environment:" + err.Error())

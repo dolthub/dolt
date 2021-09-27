@@ -60,7 +60,7 @@ type HistoryNode struct {
 // InitializeWithHistory will go through the provided historyNodes and create the intended commit graph
 func InitializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, historyNodes ...HistoryNode) {
 	for _, node := range historyNodes {
-		cs, err := doltdb.NewCommitSpec("master")
+		cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
 		require.NoError(t, err)
 
 		cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)

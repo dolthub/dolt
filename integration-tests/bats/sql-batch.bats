@@ -119,7 +119,7 @@ SQL
 
    dolt sql <<SQL
 SET @@test_head=reset('hard');
-REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'master');
+REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'main');
 SQL
 
     run dolt status
@@ -129,7 +129,7 @@ SQL
     dolt sql <<SQL
 INSERT INTO test VALUES (1,1);
 SET @@test_head = reset('hard');
-REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'master');
+REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'main');
 SQL
 
     run dolt status

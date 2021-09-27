@@ -869,7 +869,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
 
     dolt checkout -b still_has_fk
-    dolt checkout master
+    dolt checkout main
     dolt table rm child
     dolt add -A
     run dolt schema show
@@ -900,7 +900,7 @@ SQL
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
 
-    dolt checkout master
+    dolt checkout main
     run dolt schema show
     [ "$status" -eq "0" ]
     ! [[ "$output" =~ "FOREIGN KEY" ]] || false
@@ -917,7 +917,7 @@ SQL
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
     dolt checkout -b original
-    dolt checkout master
+    dolt checkout main
 
     dolt sql <<SQL
 RENAME TABLE parent TO new_parent;
@@ -951,7 +951,7 @@ SQL
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
     dolt checkout -b original
-    dolt checkout master
+    dolt checkout main
 
     dolt sql <<SQL
 ALTER TABLE parent ADD INDEX v1v2 (v1,v2);
@@ -1003,7 +1003,7 @@ SQL
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
     dolt checkout -b original
-    dolt checkout master
+    dolt checkout main
 
     dolt sql <<SQL
 ALTER TABLE child DROP FOREIGN KEY fk_name;
@@ -1065,7 +1065,7 @@ SQL
     dolt add -A
     dolt commit -m "initial commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql <<SQL
 INSERT INTO parent VALUES (4, 3, 3);
 SQL
@@ -1079,7 +1079,7 @@ UPDATE parent SET v1 = v1 - 1;
 SQL
     dolt add -A
     dolt commit --force -m "updated parent"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
@@ -1109,7 +1109,7 @@ SQL
     dolt add -A
     dolt commit -m "initial commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql <<SQL
 INSERT INTO parent VALUES (4, 4, 4);
 SQL
@@ -1123,7 +1123,7 @@ UPDATE parent SET v1 = v1 - 1;
 SQL
     dolt add -A
     dolt commit --force -m "updated parent"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
@@ -1141,7 +1141,7 @@ SQL
     dolt add -A
     dolt commit -m "initial commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql <<SQL
 INSERT INTO parent VALUES (4, 4, 4);
 SQL
@@ -1155,7 +1155,7 @@ UPDATE child SET v1 = v1 + 1;
 SQL
     dolt add -A
     dolt commit --force -m "updated child"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
@@ -1185,7 +1185,7 @@ SQL
     dolt add -A
     dolt commit -m "initial commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql <<SQL
 INSERT INTO parent VALUES (4, 4, 4);
 SQL
@@ -1199,7 +1199,7 @@ UPDATE child SET v1 = v1 - 1;
 SQL
     dolt add -A
     dolt commit --force -m "updated child"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
@@ -1217,7 +1217,7 @@ SQL
     dolt add -A
     dolt commit -m "initial commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql <<SQL
 INSERT INTO parent VALUES (4, 3, 3), (5, 4, 4);
 SQL
@@ -1232,7 +1232,7 @@ UPDATE child SET v1 = v1 + 1;
 SQL
     dolt add -A
     dolt commit --force -m "updated both"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
 
     run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
@@ -1263,7 +1263,7 @@ SQL
     dolt add -A
     dolt commit -m "initial commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql <<SQL
 INSERT INTO parent VALUES (4, 3, 3);
 SQL
@@ -1278,7 +1278,7 @@ UPDATE child SET v1 = v1 + 1;
 SQL
     dolt add -A
     dolt commit --force -m "updated both"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
@@ -1308,7 +1308,7 @@ INSERT INTO child VALUES (1,2,2);
 SQL
     dolt add -A
     dolt commit -m "added 2s"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt conflicts resolve --theirs parent
     [ "$status" -eq "1" ]
