@@ -268,9 +268,67 @@ func walkTuple(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	return nil
 }
 
+const approxTupleCapacity = 64
+
+type TupleFactory struct {
+	nbf          *NomsBinFormat
+	biggestTuple int
+
+	pos    int
+	buffer []byte
+}
+
+func NewTupleFactory(nbf *NomsBinFormat) *TupleFactory {
+	blockSize := initialBufferSize * approxTupleCapacity
+	return &TupleFactory{
+		nbf:          nbf,
+		buffer:       make([]byte, blockSize),
+		biggestTuple: initialBufferSize,
+	}
+}
+
+func (tf *TupleFactory) newBuffer() {
+	blockSize := tf.biggestTuple * approxTupleCapacity
+	tf.buffer = make([]byte, blockSize)
+	tf.pos = 0
+}
+
+func (tf *TupleFactory) Create(values ...Value) (Tuple, error) {
+	remaining := len(tf.buffer) - tf.pos
+	if remaining < tf.biggestTuple {
+		tf.newBuffer()
+		remaining = len(tf.buffer)
+	}
+
+	w := binaryNomsWriter{buff: tf.buffer[tf.pos:], offset: 0}
+	t, err := newTuple(tf.nbf, w, values...)
+
+	if err != nil {
+		return Tuple{}, err
+	}
+
+	n := len(t.buff)
+	t.buff = t.buff[:n]
+
+	// if n > bytes remaining in the buffer, then a new allocation was used, and we don't move tf.pos
+	if n < remaining {
+		tf.pos += n
+	}
+
+	if n > tf.biggestTuple {
+		tf.biggestTuple = n
+	}
+
+	return t, err
+}
+
 func NewTuple(nbf *NomsBinFormat, values ...Value) (Tuple, error) {
-	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
+	return newTuple(nbf, w, values...)
+}
+
+func newTuple(nbf *NomsBinFormat, w binaryNomsWriter, values ...Value) (Tuple, error) {
+	var vrw ValueReadWriter
 	err := TupleKind.writeTo(&w, nbf)
 
 	if err != nil {

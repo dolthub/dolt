@@ -92,6 +92,7 @@ type pkTableEditor struct {
 	tea      TableEditAccumulator
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
+	indexTF  *types.TupleFactory
 	cvEditor *types.MapEditor
 
 	// Whenever any write operation occurs on the table editor, this is set to true for the lifetime of the editor.
@@ -113,6 +114,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		opts:       opts,
 		nbf:        t.Format(),
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
+		indexTF:    types.NewTupleFactory(t.Format()),
 		writeMutex: &sync.Mutex{},
 	}
 	var err error
@@ -373,7 +375,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal, te.indexTF)
 		if err != nil {
 			return err
 		}
@@ -483,7 +485,7 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal, te.indexTF)
 		if err != nil {
 			return err
 		}
