@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dtestutils
+package testdata
 
 import (
 	"context"
@@ -128,6 +128,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	err = putTableToWorking(ctx, dEnv, sch, rows, indexes, tableName, nil)
 	require.NoError(t, err)
 }
+
 
 func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData types.Map, tableName string, autoVal types.Value) error {
 	root, err := dEnv.WorkingRoot(ctx)

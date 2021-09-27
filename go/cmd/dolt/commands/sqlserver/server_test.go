@@ -15,6 +15,8 @@
 package sqlserver
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"net/http"
 	"os"
 	"strings"
@@ -26,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
@@ -360,7 +361,12 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 func TestReadReplica(t *testing.T) {
 	var err error
-	multiSetup := dtestutils.CreateTestMultiEnvWithRemote()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("no working directory: %s", err.Error())
+	}
+	defer os.Chdir(cwd)
+	multiSetup := testcommands.CreateTestMultiEnvWithRemote()
 	defer os.RemoveAll(multiSetup.Root)
 
 	readOnlyDbName := multiSetup.DbNames[0]
