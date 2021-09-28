@@ -31,6 +31,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const defaultBranch = "main"
+
 func TestReplicateHook(t *testing.T) {
 	ctx := context.Background()
 
@@ -123,12 +125,12 @@ func TestReplicateHook(t *testing.T) {
 	ddb.SetCommitHooks(ctx, []datas.CommitHook{hook})
 
 	t.Run("replicate to backup remote", func(t *testing.T) {
-		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef("master"), meta)
+		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
 		ds, err := ddb.db.GetDataset(ctx, "refs/heads/master")
 		err = hook.Execute(ctx, ds, ddb.db)
 		assert.NoError(t, err)
 
-		cs, _ = NewCommitSpec("master")
+		cs, _ = NewCommitSpec(defaultBranch)
 		destCommit, err := destDB.Resolve(context.Background(), cs, nil)
 
 		srcHash, _ := srcCommit.HashOf()

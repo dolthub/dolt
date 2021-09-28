@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -61,7 +60,9 @@ const (
 func getCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
 
-	backupName := os.Getenv(doltdb.BackupToRemoteKey)
+	//backupName := os.Getenv(doltdb.BackupToRemoteKey)
+
+	backupName := dEnv.Config.GetStringOrDefault(doltdb.BackupToRemoteKey, "")
 	if backupName != "" {
 		remotes, err := dEnv.GetRemotes()
 		if err != nil {
@@ -206,8 +207,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 }
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {
-	s := GetStringOrDefault(cfg, InitBranchName, DefaultInitBranch)
-	return *s
+	return GetStringOrDefault(cfg, InitBranchName, DefaultInitBranch)
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
@@ -758,8 +758,8 @@ func (dEnv *DoltEnv) workingSetMeta() *doltdb.WorkingSetMeta {
 
 func (dEnv *DoltEnv) NewWorkingSetMeta(message string) *doltdb.WorkingSetMeta {
 	return &doltdb.WorkingSetMeta{
-		User:        *dEnv.Config.GetStringOrDefault(UserNameKey, ""),
-		Email:       *dEnv.Config.GetStringOrDefault(UserEmailKey, ""),
+		User:        dEnv.Config.GetStringOrDefault(UserNameKey, ""),
+		Email:       dEnv.Config.GetStringOrDefault(UserEmailKey, ""),
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: message,
 	}

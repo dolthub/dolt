@@ -1055,7 +1055,7 @@ while True:
     mkdir bac1
     cd repo1
     dolt remote add backup1 file://../bac1
-    export DOLT_BACKUP_TO_REMOTE=backup1
+    dolt config --local --add DOLT_BACKUP_TO_REMOTE backup1
     start_sql_server repo1
 
     multi_query repo1 1 "
@@ -1098,7 +1098,7 @@ while True:
     dolt push -u remote1 main
 
     cd ../repo1
-    export DOLT_READ_REPLICA_REMOTE=remote1
+    dolt config --local --add DOLT_READ_REPLICA_REMOTE remote1
     start_sql_server repo1
 
     server_query repo1 1 "show tables" "Table\ntest"

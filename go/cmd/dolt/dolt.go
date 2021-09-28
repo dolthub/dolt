@@ -266,7 +266,7 @@ func runMain() int {
 
 		metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
 
-		disabled, err := strconv.ParseBool(*metricsDisabled)
+		disabled, err := strconv.ParseBool(metricsDisabled)
 		if err != nil {
 			// log.Print(err)
 			return

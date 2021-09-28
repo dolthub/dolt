@@ -133,6 +133,7 @@ type Session struct {
 	BatchMode batchMode
 	Username  string
 	Email     string
+	Config    *env.DoltCliConfig
 	dbStates  map[string]*DatabaseSessionState
 	provider  RevisionDatabaseProvider
 }
@@ -194,11 +195,15 @@ type InitialDbState struct {
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, username, email string, dbs ...InitialDbState) (*Session, error) {
+func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, dConf *env.DoltCliConfig, dbs ...InitialDbState) (*Session, error) {
+	username := dConf.GetStringOrDefault(env.UserNameKey, "")
+	email := dConf.GetStringOrDefault(env.UserEmailKey, "")
+
 	sess := &Session{
 		Session:  sqlSess,
 		Username: username,
 		Email:    email,
+		Config:   dConf,
 		dbStates: make(map[string]*DatabaseSessionState),
 		provider: pro,
 	}

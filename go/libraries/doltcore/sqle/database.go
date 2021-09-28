@@ -48,7 +48,7 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names mus
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
-const DoltReadReplicaKey = "DOLT_READ_REPLICA_REMOTE"
+const DoltReadReplicaKey = "dolt_read_replica_remote"
 
 type SqlDatabase interface {
 	sql.Database

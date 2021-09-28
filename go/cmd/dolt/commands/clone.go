@@ -401,13 +401,13 @@ func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 	email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	initBranch := env.GetDefaultInitBranch(dEnv.Config)
 
-	if *name == "" {
+	if name == "" {
 		return errhand.BuildDError(fmt.Sprintf("error: could not determine user name. run dolt config --global --add %[1]s", env.UserNameKey)).Build()
-	} else if *email == "" {
+	} else if email == "" {
 		return errhand.BuildDError("error: could not determine email. run dolt config --global --add %[1]s", env.UserEmailKey).Build()
 	}
 
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, initBranch, doltdb.CommitNowFunc())
+	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, doltdb.CommitNowFunc())
 	if err != nil {
 		return errhand.BuildDError("error: could not initialize repository").AddCause(err).Build()
 	}

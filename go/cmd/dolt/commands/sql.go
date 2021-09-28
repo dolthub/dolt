@@ -520,8 +520,8 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		db = newDatabase(name, dEnv)
-		if remoteName := os.Getenv(dsqle.DoltReadReplicaKey); remoteName != "" {
-			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), dEnv.NewWorkingSetMeta("read replica update"))
+		if remoteName := dEnv.Config.GetStringOrDefault(dsqle.DoltReadReplicaKey, ""); remoteName != "" {
+			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), doltdb.TodoWorkingSetMeta())
 			if err != nil {
 				return true, err
 			}
@@ -1474,9 +1474,9 @@ func newSqlEngine(
 	}
 
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
-	username := *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
-	email := *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
-	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, username, email, dbStates...)
+	//username := *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
+	//email := *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
+	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
 
 	// TODO: this should just be the session default like it is with MySQL
 	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)

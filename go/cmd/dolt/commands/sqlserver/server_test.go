@@ -363,7 +363,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 }
 
 func TestReadReplica(t *testing.T) {
-	t.Skip("this fails on a query from the previous test suite if run as a file")
+	//t.Skip("this fails on a query from the previous test suite if run as a file")
 
 	var err error
 	cwd, err := os.Getwd()
@@ -377,6 +377,12 @@ func TestReadReplica(t *testing.T) {
 
 	readOnlyDbName := multiSetup.DbNames[0]
 	sourceDbName := multiSetup.DbNames[0]
+
+	localCfg, ok := multiSetup.MrEnv[readOnlyDbName].Config.GetConfig(env.LocalConfig)
+	if !ok {
+		t.Fatal("local config does not exist")
+	}
+	localCfg.SetStrings(map[string]string{dsqle.DoltReadReplicaKey: "remote1"})
 
 	// start server as read replica
 	sc := CreateServerController()
