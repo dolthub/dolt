@@ -270,7 +270,7 @@ func walkTuple(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 
 // TupleFactory provides a more memory efficient mechanism for creating many tuples
 type TupleFactory struct {
-	nbf          *NomsBinFormat
+	nbf            *NomsBinFormat
 	biggestTuple   int
 	approxCapacity int
 
@@ -284,8 +284,8 @@ type TupleFactory struct {
 func NewTupleFactory(approxCapacity int) *TupleFactory {
 	blockSize := initialBufferSize * approxCapacity
 	return &TupleFactory{
-		buffer:       make([]byte, blockSize),
-		biggestTuple: initialBufferSize,
+		buffer:         make([]byte, blockSize),
+		biggestTuple:   initialBufferSize,
 		approxCapacity: approxCapacity,
 	}
 }
