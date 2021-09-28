@@ -127,7 +127,35 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt sql < export.sql
 
     run dolt status
+
     [[ "$output" =~ "working tree clean" ]] || false    
+}
+
+@test "export-tables: SQL with foreign keys" {
+    dolt sql <<SQL
+    create table one (a int primary key, b int);
+    create table two (c int primary key, d int);
+    insert into one values (1,1), (2,2);
+    insert into two values (1,1), (2,2);
+    alter table one add foreign key (b) references two (c);
+    alter table two add foreign key (d) references one (a);
+SQL
+
+    dolt commit -am "Added tables and data"
+    
+    dolt table export one one.sql
+    dolt table export one two.sql
+
+    skip "Disabling foreign key checks don't work for schema changes"
+    
+    dolt sql -b -q "set foreign_key_checks = 0; drop table one"
+    dolt sql -b -q "set_foreign_key_checks = 0; drop table two"
+    
+    dolt sql < one.sql
+    dolt sql < two.sql
+
+    run dolt status
+    [[ "$output" =~ "working tree clean" ]] || false
 }
 
 @test "export-tables: export a table with a string with commas to csv" {
