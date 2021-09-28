@@ -89,22 +89,8 @@ func (m exportOptions) DestName() string {
 	return m.dest.String()
 }
 
-// validateExportArgs validates the input from the arg parser, and returns the tuple:
-// (table name to export, data location of table to export, data location to export to)
-func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (string, mvdata.TableDataLocation, mvdata.DataLocation) {
-	if apr.NArg() == 0 || apr.NArg() > 2 {
-		usage()
-		return "", mvdata.TableDataLocation{}, nil
-	}
-
-	tableName := apr.Arg(0)
-	if !doltdb.IsValidTableName(tableName) {
-		cli.PrintErrln(
-			color.RedString("'%s' is not a valid table name\n", tableName),
-			"table names must match the regular expression:", doltdb.TableNameRegexStr)
-		return "", mvdata.TableDataLocation{}, nil
-	}
-
+// getExportDestination returns an export destination corresponding to the input parameters
+func getExportDestination(apr *argparser.ArgParseResults) mvdata.DataLocation {
 	path := ""
 	if apr.NArg() > 1 {
 		path = apr.Arg(1)
@@ -119,7 +105,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 			cli.PrintErrln(
 				color.RedString("Could not infer type file '%s'\n", path),
 				"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
-			return "", mvdata.TableDataLocation{}, nil
+			return nil
 		}
 
 	case mvdata.StreamDataLocation:
@@ -128,21 +114,38 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 			destLoc = val
 		} else if val.Format != mvdata.CsvFile && val.Format != mvdata.PsvFile {
 			cli.PrintErrln(color.RedString("Cannot export this format to stdout"))
-			return "", mvdata.TableDataLocation{}, nil
+			return nil
 		}
 	}
 
-	tableLoc := mvdata.TableDataLocation{Name: tableName}
-
-	return tableName, tableLoc, destLoc
+	return destLoc
 }
 
 func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (*exportOptions, errhand.VerboseError) {
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
 
-	if fileLoc == nil || len(tableLoc.Name) == 0 {
+	if apr.NArg() == 0 {
+		usage()
+		return nil, errhand.BuildDError("missing required argument").Build()
+	} else if apr.NArg() > 2 {
+		usage()
+		return nil, errhand.BuildDError("too many arguments").Build()
+	}
+
+	tableName := apr.Arg(0)
+	if !doltdb.IsValidTableName(tableName) {
+		usage()
+		cli.PrintErrln(
+			color.RedString("'%s' is not a valid table name\n", tableName),
+			"table names must match the regular expression:", doltdb.TableNameRegexStr)
+		return nil, errhand.BuildDError("invalid table name").Build()
+	}
+
+	tableLoc := mvdata.TableDataLocation{Name: tableName}
+	fileLoc := getExportDestination(apr)
+
+	if fileLoc == nil {
 		return nil, errhand.BuildDError("could not validate table export args").Build()
 	}
 
