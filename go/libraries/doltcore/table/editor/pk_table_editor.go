@@ -32,8 +32,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const tfApproxCapacity = 64
+
 var tupleFactories = &sync.Pool{New: func() interface{} {
-		return types.NewTupleFactory()
+	return types.NewTupleFactory(tfApproxCapacity)
 }}
 
 var (
@@ -787,10 +789,16 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 func (te *pkTableEditor) Close(ctx context.Context) error {
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
+	defer func() {
+		tupleFactories.Put(te.indexTF)
+		te.indexTF = nil
+	}()
+
 	if te.cvEditor != nil {
 		te.cvEditor.Close(ctx)
 		te.cvEditor = nil
 	}
+
 	for _, indexEd := range te.indexEds {
 		err := indexEd.Close()
 		if err != nil {
@@ -798,7 +806,6 @@ func (te *pkTableEditor) Close(ctx context.Context) error {
 		}
 	}
 
-	tupleFactories.Put(te.indexTF)
 	return nil
 }
 

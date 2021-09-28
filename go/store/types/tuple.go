@@ -268,36 +268,45 @@ func walkTuple(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	return nil
 }
 
-const approxTupleCapacity = 64
-
+// TupleFactory provides a more memory efficient mechanism for creating many tuples
 type TupleFactory struct {
 	nbf          *NomsBinFormat
-	biggestTuple int
+	biggestTuple   int
+	approxCapacity int
 
 	pos    int
 	buffer []byte
 }
 
-func NewTupleFactory() *TupleFactory {
-	blockSize := initialBufferSize * approxTupleCapacity
+// NewTupleFactory creates a new tuple factory. The approxCapacity argument is used to calculate how large the buffer allocations
+// should be.  The factory keeps track of the largest tuple it has created, and when allocating it creates a buffer large enough
+// to store <approxCapacity> tuples of that size.
+func NewTupleFactory(approxCapacity int) *TupleFactory {
+	blockSize := initialBufferSize * approxCapacity
 	return &TupleFactory{
 		buffer:       make([]byte, blockSize),
 		biggestTuple: initialBufferSize,
+		approxCapacity: approxCapacity,
 	}
 }
 
+// Reset is called when a TupleFactory is reused in a new context as you might want when pooling these.  Reset does
+// not reuse the buffer as the memory may be in use by tuples that have not been collected and reference the same
+// memory.  It also does not reset biggestTuple.  It's ok for biggestTuple to grow as time goes on.
 func (tf *TupleFactory) Reset(nbf *NomsBinFormat) {
 	tf.nbf = nbf
 }
 
 func (tf *TupleFactory) newBuffer() {
-	blockSize := tf.biggestTuple * approxTupleCapacity
+	blockSize := tf.biggestTuple * tf.approxCapacity
 	tf.buffer = make([]byte, blockSize)
 	tf.pos = 0
 }
 
+// Create creates a new Tuple using the TupleFactory
 func (tf *TupleFactory) Create(values ...Value) (Tuple, error) {
 	remaining := len(tf.buffer) - tf.pos
+	// somewhat wasteful, but it's costly if there isn't enough room to store a tuple in the tf's buffer so make it a rare case
 	if remaining < tf.biggestTuple {
 		tf.newBuffer()
 		remaining = len(tf.buffer)
