@@ -131,8 +131,11 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "$output" =~ "working tree clean" ]] || false
 
     # set columns
-    dolt sql -q "create table sets (a varchar(10) primary key, b set('one','two','three'))"
-    dolt sql -q "insert into sets values ('abc', 'one,two'), ('def', 'two,three')"
+    dolt sql <<SQL
+create table sets (a varchar(10) primary key, b set('one','two','three'));
+insert into sets values ('abc', 'one,two'), ('def', 'two,three');
+SQL
+    
     dolt commit -am "Checkpoint"
 
     dolt table export sets -f export.sql
@@ -150,6 +153,25 @@ SQL
     dolt commit -am "Checkpoint"
 
     dolt table export json_vals -f export.sql
+    dolt sql < export.sql
+
+    run dolt status
+
+    [[ "$output" =~ "working tree clean" ]] || false    
+}
+
+@test "export-tables: broken SQL escaping" {
+    dolt sql <<SQL
+create table sets (a varchar(10) primary key, b set('one','two','three\'s'));
+insert into sets values ('abc', 'one,two'), ('def', 'two,three\'s');
+SQL
+    
+    dolt commit -am "Checkpoint"
+
+    dolt table export sets -f export.sql
+    
+    skip "Export embeds single quote in string without escaping it https://github.com/dolthub/dolt/issues/2197"
+   
     dolt sql < export.sql
 
     run dolt status
