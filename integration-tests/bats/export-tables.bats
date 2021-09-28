@@ -128,6 +128,32 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 
     run dolt status
 
+    [[ "$output" =~ "working tree clean" ]] || false
+
+    # set columns
+    dolt sql -q "create table sets (a varchar(10) primary key, b set('one','two','three'))"
+    dolt sql -q "insert into sets values ('abc', 'one,two'), ('def', 'two,three')"
+    dolt commit -am "Checkpoint"
+
+    dolt table export sets -f export.sql
+    dolt sql < export.sql
+
+    run dolt status
+
+    [[ "$output" =~ "working tree clean" ]] || false
+
+    # json columns
+    dolt sql -q "create table json_vals (a varchar(10) primary key, b json)"
+    dolt sql <<SQL
+    insert into json_vals values ('abc', '{"key": "value"}'), ('def', '[{"a": "b"},{"conjuction": "it\'s"}]');
+SQL
+    dolt commit -am "Checkpoint"
+
+    dolt table export json_vals -f export.sql
+    dolt sql < export.sql
+
+    run dolt status
+
     [[ "$output" =~ "working tree clean" ]] || false    
 }
 
