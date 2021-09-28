@@ -126,7 +126,7 @@ func TestReplicateHook(t *testing.T) {
 
 	t.Run("replicate to backup remote", func(t *testing.T) {
 		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
-		ds, err := ddb.db.GetDataset(ctx, "refs/heads/master")
+		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
 		err = hook.Execute(ctx, ds, ddb.db)
 		assert.NoError(t, err)
 

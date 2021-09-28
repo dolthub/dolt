@@ -42,6 +42,7 @@ const (
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
+	DoltDefaultBranchKey          = "dolt_default_branch"
 )
 
 var transactionMergeStomp = false
@@ -1210,6 +1211,14 @@ func defineSystemVariables(name string) {
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              sql.NewSystemStringType(StagedKey(name)),
+				Default:           "",
+			},
+			{
+				Name:              DoltDefaultBranchKey,
+				Scope:             sql.SystemVariableScope_Global,
+				Dynamic:           true,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(DoltDefaultBranchKey),
 				Default:           "",
 			},
 		})

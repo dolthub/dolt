@@ -40,22 +40,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
-const DoltDefaultBranchKey = "dolt_default_branch"
-
-func init() {
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
-			Name:              DoltDefaultBranchKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(DoltDefaultBranchKey),
-			Default:           "",
-		},
-	})
-
-}
-
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(ctx context.Context, version string, serverConfig ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
 	if serverConfig == nil {
@@ -249,7 +233,7 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 		var init dsess.InitialDbState
 		var err error
 
-		_, val, ok := sql.SystemVariables.GetGlobal(DoltDefaultBranchKey)
+		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DoltDefaultBranchKey)
 		if ok && val != "" {
 			init, err = GetInitialDBStateWithDefaultBranch(ctx, db, val.(string))
 		} else {

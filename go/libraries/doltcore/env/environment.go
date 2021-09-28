@@ -162,7 +162,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			// The process will not wait for this to finish so this may not always complete.
 			go func() {
 				// TODO dEnv.HasDoltTempTableDir() true but dEnv.TempTableFileDir() panics
-				tmpTableDir, err := dEnv.FS.Abs(filepath.Join(dEnv.urlStr, dEnv.GetDoltDir(), tempTablesDir))
+				tmpTableDir, err := dEnv.FS.Abs(filepath.Join(dEnv.urlStr, dbfactory.DoltDir, tempTablesDir))
 				if err != nil {
 					return
 				}
