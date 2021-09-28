@@ -131,7 +131,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	defer p.mu.Unlock()
 
 	// Throw warning to users that this is a temporary database that does not persist after the session exits.
-	ctx.Warn(createDbWC, "CREATE DATABASE creates an inmemory database that does not persist after the server exits.")
+	ctx.Warn(createDbWC, "CREATE DATABASE creates an inmemory database that does not persist after the server exits. Dolt currently only supports a single disk backed database created by `dolt init`")
 
 	mem, err := env.NewMemoryDbData(ctx, p.cfg)
 	if err != nil {
