@@ -32,6 +32,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var tupleFactories = &sync.Pool{New: func() interface{} {
+		return types.NewTupleFactory()
+}}
+
 var (
 	tableEditorMaxOps uint64 = 256 * 1024
 	ErrDuplicateKey          = errors.New("duplicate key error")
@@ -107,6 +111,9 @@ type pkTableEditor struct {
 }
 
 func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, opts Options) (*pkTableEditor, error) {
+	tf := tupleFactories.Get().(*types.TupleFactory)
+	tf.Reset(t.Format())
+
 	te := &pkTableEditor{
 		t:          t,
 		tSch:       tableSch,
@@ -114,7 +121,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		opts:       opts,
 		nbf:        t.Format(),
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
-		indexTF:    types.NewTupleFactory(t.Format()),
+		indexTF:    tf,
 		writeMutex: &sync.Mutex{},
 	}
 	var err error
@@ -790,6 +797,8 @@ func (te *pkTableEditor) Close(ctx context.Context) error {
 			return err
 		}
 	}
+
+	tupleFactories.Put(te.indexTF)
 	return nil
 }
 

@@ -278,13 +278,16 @@ type TupleFactory struct {
 	buffer []byte
 }
 
-func NewTupleFactory(nbf *NomsBinFormat) *TupleFactory {
+func NewTupleFactory() *TupleFactory {
 	blockSize := initialBufferSize * approxTupleCapacity
 	return &TupleFactory{
-		nbf:          nbf,
 		buffer:       make([]byte, blockSize),
 		biggestTuple: initialBufferSize,
 	}
+}
+
+func (tf *TupleFactory) Reset(nbf *NomsBinFormat) {
+	tf.nbf = nbf
 }
 
 func (tf *TupleFactory) newBuffer() {
