@@ -196,9 +196,9 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 			return "TRUE", nil
 		}
 		return "FALSE", nil
-	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier, typeinfo.DatetimeTypeIdentifier, typeinfo.EnumTypeIdentifier:
+	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier, typeinfo.DatetimeTypeIdentifier:
 		return singleQuote + *str + singleQuote, nil
-	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier:
+	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
 		return quoteAndEscapeString(*str), nil
 	case typeinfo.VarStringTypeIdentifier:
 		s, ok := value.(types.String)
