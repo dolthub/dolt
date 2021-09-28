@@ -106,6 +106,17 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f export.sql ]
     diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
+
+    dolt sql -q "create table strings (a varchar(10) primary key, b char(10))"
+    dolt sql -q "insert into strings values ('abc', '123'), ('def', '456')"
+    dolt commit -am "Checkpoint"
+
+    dolt table export strings -f export.sql
+    dolt sql -q "drop table strings"
+    dolt sql < export.sql
+
+    run dolt status
+    [[ "$output" =~ "working tree clean" ]] || false
 }
 
 @test "export-tables: export a table with a string with commas to csv" {

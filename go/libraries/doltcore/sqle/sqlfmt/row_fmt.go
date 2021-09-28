@@ -213,7 +213,7 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 		}
 		return quoteAndEscapeString(string(s)), nil
 	default:
-		return *str, nil
+		return quoteAndEscapeString(*str), nil
 	}
 }
 
