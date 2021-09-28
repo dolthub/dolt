@@ -47,6 +47,8 @@ var _ sql.FunctionProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
 var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
+const createDbWC = 1105 // 1105 represents an unknown error.
+
 // NewDoltDatabaseProvider returns a provider for the databases given
 func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
@@ -129,7 +131,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	defer p.mu.Unlock()
 
 	// Throw warning to users that this is a temporary database that does not persist after the session exits.
-	ctx.Warn(0, "CREATE DATABASE creates an inmemory database that does not persist after the server exits.")
+	ctx.Warn(createDbWC, "CREATE DATABASE creates an inmemory database that does not persist after the server exits.")
 
 	mem, err := env.NewMemoryDbData(ctx, p.cfg)
 	if err != nil {

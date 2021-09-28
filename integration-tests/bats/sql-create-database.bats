@@ -28,7 +28,6 @@ SQL
     [[ "$output" =~ "mydb" ]] || false
     # From COUNT
     [[ "$output" =~ "1" ]] || false
-    echo $output
     # Validate that CREATE DATABASE throws a warning
     [[ "$output" =~ "CREATE DATABASE creates an inmemory database that does not persist after the server exits." ]] || false
 
