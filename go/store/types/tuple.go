@@ -290,8 +290,8 @@ func NewTupleFactory(approxCapacity int) *TupleFactory {
 	}
 }
 
-// Reset is called when a TupleFactory is reused in a new context as you might want when pooling these.  Reset does
-// not reuse the buffer as the memory may be in use by tuples that have not been collected and reference the same
+// Reset is called when a TupleFactory is reused as you might want when pooling these.  Reset does
+// not reset the buffer as the memory may be in use by tuples that have not been collected and reference the same
 // memory.  It also does not reset biggestTuple.  It's ok for biggestTuple to grow as time goes on.
 func (tf *TupleFactory) Reset(nbf *NomsBinFormat) {
 	tf.nbf = nbf
@@ -320,9 +320,8 @@ func (tf *TupleFactory) Create(values ...Value) (Tuple, error) {
 	}
 
 	n := len(t.buff)
-	t.buff = t.buff[:n]
 
-	// if n > bytes remaining in the buffer, then a new allocation was used, and we don't move tf.pos
+	// if n < bytes remaining then we move pos by the number of bytes read.  If not then a new allocation was used, and we don't move tf.pos
 	if n < remaining {
 		tf.pos += n
 	}
