@@ -33,7 +33,7 @@ import (
 )
 
 var tupleFactories = &sync.Pool{New: func() interface{} {
-		return types.NewTupleFactory()
+	return types.NewTupleFactory()
 }}
 
 var (
