@@ -60,8 +60,6 @@ const (
 func getCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
 
-	//backupName := os.Getenv(doltdb.BackupToRemoteKey)
-
 	backupName := dEnv.Config.GetStringOrDefault(doltdb.BackupToRemoteKey, "")
 	if backupName != "" {
 		remotes, err := dEnv.GetRemotes()

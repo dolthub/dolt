@@ -86,8 +86,6 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
-	//var username string
-	//var email string
 	var mrEnv env.MultiRepoEnv
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 	if len(dbNamesAndPaths) == 0 {
@@ -96,9 +94,6 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		if err != nil {
 			return err, nil
 		}
-
-		//username = *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
-		//email = *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	} else {
 		var err error
 		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.FS, version, dbNamesAndPaths...)

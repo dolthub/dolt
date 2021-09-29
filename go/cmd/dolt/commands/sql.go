@@ -1474,8 +1474,6 @@ func newSqlEngine(
 	}
 
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
-	//username := *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
-	//email := *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
 
 	// TODO: this should just be the session default like it is with MySQL
