@@ -138,6 +138,11 @@ func (db *database) DatasetsInRoot(ctx context.Context, rootHash hash.Hash) (typ
 	return val.(types.Map), nil
 }
 
+func getParentsSkipList(ctx context.Context, vrw types.ValueReadWriter, parents types.List) (types.Tuple, error) {
+	// TODO
+	return types.EmptyTuple(vrw.Format()), nil
+}
+
 // Datasets returns the Map of Datasets in the current root. If you intend to edit the map and commit changes back,
 // then you should fetch the current root, then call DatasetsInRoot with that hash. Otherwise another writer could
 // change the root value between when you get the root hash and call this method.
@@ -318,7 +323,12 @@ func (db *database) CommitDangling(ctx context.Context, v types.Value, opts Comm
 		opts.Meta = types.EmptyStruct(db.Format())
 	}
 
-	commitStruct, err := NewCommit(ctx, v, opts.ParentsList, opts.Meta)
+	parentsSkipList, err := getParentsSkipList(ctx, db, opts.ParentsList)
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	commitStruct, err := newCommit(ctx, v, opts.ParentsList, parentsSkipList, opts.Meta)
 	if err != nil {
 		return types.Struct{}, err
 	}
@@ -473,7 +483,12 @@ func (db *database) doMerge(
 		return types.Ref{}, err
 	}
 
-	newCom, err := NewCommit(ctx, merged, parents, types.EmptyStruct(db.Format()))
+	parentsSkipList, err := getParentsSkipList(ctx, db, parents)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	newCom, err := newCommit(ctx, merged, parents, parentsSkipList, types.EmptyStruct(db.Format()))
 	if err != nil {
 		return types.Ref{}, err
 	}
@@ -980,7 +995,13 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 	if meta.IsZeroValue() {
 		meta = types.EmptyStruct(ds.Database().Format())
 	}
-	return NewCommit(ctx, v, parents, meta)
+
+	parentsSkipList, err := getParentsSkipList(ctx, ds.Database(), parents)
+	if err != nil {
+		return types.EmptyStruct(ds.Database().Format()), err
+	}
+
+	return newCommit(ctx, v, parents, parentsSkipList, meta)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

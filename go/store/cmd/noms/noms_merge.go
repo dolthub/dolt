@@ -117,13 +117,9 @@ func runMerge(ctx context.Context, args []string) int {
 	p, err := types.NewList(ctx, db, leftHeadRef, rightHeadRef)
 	d.PanicIfError(err)
 
-	cm, err := datas.NewCommit(ctx, merged, p, types.EmptyStruct(db.Format()))
-	d.PanicIfError(err)
-
-	ref, err := db.WriteValue(ctx, cm)
-	d.PanicIfError(err)
-
-	_, err = db.SetHead(ctx, outDS, ref)
+	_, err = db.Commit(ctx, outDS, merged, datas.CommitOptions{
+		ParentsList: p,
+	})
 	d.PanicIfError(err)
 
 	status.Printf("Done")

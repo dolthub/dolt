@@ -212,6 +212,12 @@ func (p *Parser) parseSingleTypeWithToken(tok rune, tokenText string) (*types.Ty
 		return types.PrimitiveTypeMap[types.TypeKind], nil
 	case "Value":
 		return types.PrimitiveTypeMap[types.ValueKind], nil
+	case "Tuple":
+		f := types.Format_Default
+		if p.vrw != nil {
+			f = p.vrw.Format()
+		}
+		return types.TypeOf(types.EmptyTuple(f))
 	case "Struct":
 		return p.parseStructType()
 	case "Map":
@@ -352,6 +358,7 @@ func (p *Parser) parseMapType() (*types.Type, error) {
 //   Set
 //   Map
 //   Struct
+//   Tuple
 //
 // Bool :
 //   `true`
