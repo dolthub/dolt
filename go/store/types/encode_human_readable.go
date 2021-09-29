@@ -255,7 +255,6 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 			return err
 		}
 
-		w.outdent()
 		w.write(")")
 
 	case MapKind:
