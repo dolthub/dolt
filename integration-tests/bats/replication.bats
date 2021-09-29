@@ -20,6 +20,8 @@ teardown() {
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
+    export DOLT_READ_REPLICA_REMOTE=
+    export DOLT_BACKUP_TO_REMOTE=
 }
 
 @test "replication: default no replication" {
@@ -69,7 +71,6 @@ teardown() {
     [[ ! "$output" =~ "t1" ]] || false
 
     dolt config --local --add DOLT_READ_REPLICA_REMOTE remote1
-    dolt config --list
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

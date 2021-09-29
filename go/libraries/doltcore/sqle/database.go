@@ -29,9 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
@@ -70,9 +68,7 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 			continue
 		}
 		switch v := sqlDb.(type) {
-		case ReadReplicaDatabase, *ReadReplicaDatabase:
-			dsqlDBs = append(dsqlDBs, v)
-		case Database, *Database:
+		case ReadReplicaDatabase, Database:
 			dsqlDBs = append(dsqlDBs, v)
 		default:
 		}
@@ -1230,125 +1226,6 @@ func RegisterSchemaFragments(ctx *sql.Context, db SqlDatabase, root *doltdb.Root
 	if len(parseErrors) > 0 {
 		// TODO: Warning for uncreated views...
 	}
-
-	return nil
-}
-
-type ReadReplicaDatabase struct {
-	Database
-	headRef        ref.DoltRef
-	remoteTrackRef ref.DoltRef
-	remote         env.Remote
-	srcDB          *doltdb.DoltDB
-	tmpDir         string
-	wsMeta         *doltdb.WorkingSetMeta
-}
-
-var _ SqlDatabase = ReadReplicaDatabase{}
-var _ sql.VersionedDatabase = ReadReplicaDatabase{}
-var _ sql.TableDropper = ReadReplicaDatabase{}
-var _ sql.TableCreator = ReadReplicaDatabase{}
-var _ sql.TemporaryTableCreator = ReadReplicaDatabase{}
-var _ sql.TableRenamer = ReadReplicaDatabase{}
-var _ sql.TriggerDatabase = ReadReplicaDatabase{}
-var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
-var _ sql.TransactionDatabase = ReadReplicaDatabase{}
-
-func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string, meta *doltdb.WorkingSetMeta) (*ReadReplicaDatabase, error) {
-	remotes, err := rsr.GetRemotes()
-	if err != nil {
-		return nil, err
-	}
-
-	remote, ok := remotes[remoteName]
-	if !ok {
-		return nil, env.ErrRemoteNotFound
-	}
-
-	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default)
-	if err != nil {
-		return nil, err
-	}
-
-	headRef := rsr.CWBHeadRef()
-	refSpecs, err := env.GetRefSpecs(rsr, remoteName)
-
-	var remoteTrackRef ref.DoltRef
-	var foundRef bool
-	for _, refSpec := range refSpecs {
-		trackRef := refSpec.DestRef(headRef)
-		if trackRef != nil {
-			remoteTrackRef = trackRef
-			foundRef = true
-			break
-		}
-	}
-	if !foundRef {
-		return nil, env.ErrInvalidRefSpecRemote
-	}
-
-	return &ReadReplicaDatabase{
-		Database:       db,
-		headRef:        headRef,
-		remoteTrackRef: remoteTrackRef,
-		remote:         remote,
-		tmpDir:         tmpDir,
-		srcDB:          srcDB,
-		wsMeta:         meta,
-	}, nil
-}
-
-func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
-	err := rrd.pullFromReplica(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return rrd.Database.StartTransaction(ctx)
-}
-
-func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
-	ddb := rrd.Database.DbData().Ddb
-	err := rrd.srcDB.Rebase(ctx)
-	if err != nil {
-		return err
-	}
-	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, rrd.headRef, nil, actions.DefaultRunProgFuncs, actions.DefaultStopProgFuncs)
-	if err != nil {
-		return err
-	}
-
-	err = ddb.FastForward(ctx, rrd.remoteTrackRef, srcDBCommit)
-	if err != nil {
-		return err
-	}
-
-	err = ddb.FastForward(ctx, rrd.headRef, srcDBCommit)
-	if err != nil {
-		return err
-	}
-
-	wsRef, err := ref.WorkingSetRefForHead(rrd.headRef)
-	if err != nil {
-		return err
-	}
-
-	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return err
-	}
-
-	commitRoot, err := srcDBCommit.GetRootValue()
-	if err != nil {
-		return err
-	}
-
-	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-
-	h, err := ws.HashOf()
-	if err != nil {
-		return err
-	}
-	rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
 
 	return nil
 }
