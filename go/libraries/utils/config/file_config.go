@@ -83,7 +83,6 @@ func (fc *FileConfig) GetString(k string) (string, error) {
 	return "", ErrConfigParamNotFound
 }
 
-
 // GetString retrieves a string from the cached config state
 func (fc *FileConfig) GetStringOrDefault(k, defStr string) string {
 	if val, ok := fc.properties[k]; ok {
