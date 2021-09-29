@@ -2,7 +2,7 @@ name: Check Formatting and Committers
 
 on:
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   verify:

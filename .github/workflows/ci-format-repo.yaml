@@ -2,7 +2,7 @@ name: Format PR
 
 on:
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   format:

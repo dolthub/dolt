@@ -2,7 +2,7 @@ name: Check Compatibility
 
 on:
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   test:
