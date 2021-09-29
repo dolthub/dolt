@@ -247,7 +247,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(t *testing.T, dbName string) {
 	if err != nil {
 		t.Fatalf("Failed to push remote: %s", err.Error())
 	}
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, dEnv.TempTableFilesDir(), opts, actions.DefaultRunProgFuncs, actions.DefaultStopProgFuncs)
+	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, dEnv.TempTableFilesDir(), opts, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		t.Fatalf("Failed to push remote: %s", err.Error())
 	}
