@@ -333,7 +333,7 @@ func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote
 
 	u, err := earl.Parse(rem.Url)
 
-	if err == nil {
+	if err == nil && evt != nil {
 		if u.Scheme != "" {
 			evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
 		}

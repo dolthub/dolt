@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
@@ -26,7 +27,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 type testPerson struct {
@@ -357,4 +360,59 @@ func TestServerSetDefaultBranch(t *testing.T) {
 			assert.ElementsMatch(t, branch, test.expectedRes)
 		})
 	}
+}
+
+func TestReadReplica(t *testing.T) {
+	t.Skip("this fails on a query from the previous test suite if run as a file")
+
+	var err error
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("no working directory: %s", err.Error())
+	}
+	defer os.Chdir(cwd)
+
+	multiSetup := testcommands.CreateMultiEnvWithRemote()
+	defer os.RemoveAll(multiSetup.Root)
+
+	readOnlyDbName := multiSetup.DbNames[0]
+	sourceDbName := multiSetup.DbNames[0]
+
+	// start server as read replica
+	sc := CreateServerController()
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
+
+	func() {
+		err = os.Setenv(dsqle.DoltReadReplicaKey, "remote1")
+		os.Chdir(multiSetup.DbPaths[readOnlyDbName])
+
+		go func() {
+			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readOnlyDbName])
+		}()
+		err = sc.WaitForStart()
+		require.NoError(t, err)
+	}()
+	defer sc.StopServer()
+	defer os.Unsetenv(dsqle.DoltReadReplicaKey)
+
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readOnlyDbName, nil)
+	defer conn.Close()
+
+	require.NoError(t, err)
+	sess := conn.NewSession(nil)
+
+	// TODO: why doesn't this throw a "no common ancestor" error?
+	t.Run("push common new commit", func(t *testing.T) {
+		var res []string
+		replicatedTable := "new_table"
+		multiSetup.CreateTable(t, sourceDbName, replicatedTable)
+		multiSetup.AddAll(t, sourceDbName)
+		_ = multiSetup.CommitWithWorkingSet(sourceDbName)
+		multiSetup.PushToRemote(t, sourceDbName)
+
+		q := sess.SelectBySql("show tables")
+		_, err := q.LoadContext(context.Background(), &res)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, res, []string{replicatedTable})
+	})
 }

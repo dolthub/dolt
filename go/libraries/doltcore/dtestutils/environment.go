@@ -22,7 +22,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -99,42 +98,4 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	require.NoError(t, err)
 
 	return dEnv
-}
-
-func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData types.Map, tableName string, autoVal types.Value) error {
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return doltdb.ErrNomsIO
-	}
-
-	vrw := dEnv.DoltDB.ValueReadWriter()
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
-	if err != nil {
-		return env.ErrMarshallingSchema
-	}
-
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, indexData, autoVal)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutTable(ctx, tableName, tbl)
-	if err != nil {
-		return err
-	}
-
-	rootHash, err := root.HashOf()
-	if err != nil {
-		return err
-	}
-
-	newRootHash, err := newRoot.HashOf()
-	if err != nil {
-		return err
-	}
-	if rootHash == newRootHash {
-		return nil
-	}
-
-	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }

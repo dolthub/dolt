@@ -160,7 +160,12 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
 			// The process will not wait for this to finish so this may not always complete.
 			go func() {
-				_ = fs.Iter(dEnv.TempTableFilesDir(), true, func(path string, size int64, isDir bool) (stop bool) {
+				// TODO dEnv.HasDoltTempTableDir() true but dEnv.TempTableFileDir() panics
+				tmpTableDir, err := dEnv.FS.Abs(filepath.Join(dEnv.urlStr, dEnv.GetDoltDir(), tempTablesDir))
+				if err != nil {
+					return
+				}
+				_ = fs.Iter(tmpTableDir, true, func(path string, size int64, isDir bool) (stop bool) {
 					if !isDir {
 						lm, exists := fs.LastModified(path)
 

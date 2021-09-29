@@ -147,6 +147,7 @@ type DatabaseSessionState struct {
 	detachedHead         bool
 	readOnly             bool
 	dirty                bool
+	readReplica          *env.Remote
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
 }
@@ -187,6 +188,7 @@ type InitialDbState struct {
 	ReadOnly     bool
 	WorkingSet   *doltdb.WorkingSet
 	DbData       env.DbData
+	ReadReplica  *env.Remote
 	Remotes      map[string]env.Remote
 	Branches     map[string]env.BranchConfig
 }
@@ -1056,8 +1058,9 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
-	sessionState.readOnly, sessionState.detachedHead = dbState.ReadOnly, dbState.DetachedHead
+	sessionState.readOnly, sessionState.detachedHead, sessionState.readReplica = dbState.ReadOnly, dbState.DetachedHead, dbState.ReadReplica
 
+	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
 	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
 
