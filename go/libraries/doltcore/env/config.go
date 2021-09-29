@@ -86,6 +86,8 @@ type DoltCliConfig struct {
 	fs filesys.ReadWriteFS
 }
 
+var _ config.ReadableConfig = &DoltCliConfig{}
+
 func loadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
 	ch := config.NewConfigHierarchy()
 

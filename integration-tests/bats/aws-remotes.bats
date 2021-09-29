@@ -55,8 +55,8 @@ skip_if_no_aws_tests() {
     random_repo=`openssl rand -hex 32`
     run dolt clone 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$random_repo"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: clone failed" ]] || false
-    [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
+    [[ "$output" =~ "clone failed" ]] || false
+    [[ "$output" =~ "remote at that url contains no Dolt data" ]] || false
 }
 
 @test "aws-remotes: can push to new remote" {
