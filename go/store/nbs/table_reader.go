@@ -919,7 +919,7 @@ func canReadAhead(fRec offsetRec, curStart, curEnd, blockSize uint64) (newEnd ui
 		return curEnd, true
 	}
 
-	if curEnd - curStart >= maxReadSize {
+	if curEnd-curStart >= maxReadSize {
 		return curEnd, false
 	}
 
