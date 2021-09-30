@@ -100,8 +100,6 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 		mr.T.Fatal(err)
 	}
 
-	repoPath := fmt.Sprintf("file://%s", repo)
-
 	// TODO sometimes tempfiles scrubber is racy with tempfolder deleter
 	dEnv := env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 	if err != nil {
@@ -117,7 +115,7 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 		mr.T.Fatal("Failed to initialize environment:" + err.Error())
 	}
 
-	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_Default, filepath.Join(repoPath, dbfactory.DoltDir), filesys.LocalFS)
+	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
 	if err != nil {
 		mr.T.Fatal("Failed to initialize environment:" + err.Error())
 	}

@@ -375,7 +375,6 @@ func TestServerSetDefaultBranch(t *testing.T) {
 }
 
 func TestReadReplica(t *testing.T) {
-
 	var err error
 	cwd, err := os.Getwd()
 	if err != nil {
