@@ -120,3 +120,13 @@ teardown() {
     [[ ! "$output" =~ "origin" ]] || false
 }
 
+@test "backup: backup already up to date" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    dolt backup sync bac1
+    run dolt backup sync bac1
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "backup already up to date" ]] || false
+}
+

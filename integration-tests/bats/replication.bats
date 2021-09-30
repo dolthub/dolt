@@ -74,4 +74,3 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "t1" ]] || false
 }
-

@@ -47,7 +47,7 @@ type PullProgress struct {
 
 const (
 	bytesWrittenSampleRate = .10
-	DefaultBatchSize       = 1 << 12 // 4096 chunks
+	defaultBatchSize       = 1 << 12 // 4096 chunks
 )
 
 var ErrNoData = errors.New("no data")
@@ -260,7 +260,7 @@ func filterAppendicesFromSourceFiles(appendixFiles []nbs.TableFile, sourceFiles 
 
 // Pull objects that descend from sourceRef from srcDB to sinkDB.
 func Pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) error {
-	return pull(ctx, srcDB, sinkDB, sourceRef.TargetHash(), progressCh, DefaultBatchSize)
+	return pull(ctx, srcDB, sinkDB, sourceRef.TargetHash(), progressCh, defaultBatchSize)
 }
 
 func pull(ctx context.Context, srcDB, sinkDB Database, sourceHash hash.Hash, progressCh chan PullProgress, batchSize int) error {
