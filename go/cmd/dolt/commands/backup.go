@@ -17,11 +17,12 @@ package commands
 import (
 	"context"
 	"encoding/json"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/store/datas"
 	"os"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -34,11 +35,10 @@ import (
 
 var backupDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Manage server backups",
-	LongDesc: `With no arguments, shows a list of existing backups. Several subcommands are available to perform operations on the backups.
+	LongDesc: `With no arguments, shows a list of existing backups. Several subcommands are available to perform operations on the backups. A backup can either be used as a point in time or rolling snapshot od branches and working sets.
 
 {{.EmphasisLeft}}add{{.EmphasisRight}}
-Adds a backup named {{.LessThan}}name{{.GreaterThan}} for the repository at {{.LessThan}}url{{.GreaterThan}}. The command dolt fetch {{.LessThan}}name{{.GreaterThan}} can then be used to create and update backup-tracking branches {{.EmphasisLeft}}<name>/<branch>{{.EmphasisRight}}.
-
+Adds a backup named {{.LessThan}}name{{.GreaterThan}} for the repository at {{.LessThan}}url{{.GreaterThan}}.
 The {{.LessThan}}url{{.GreaterThan}} parameter supports url schemes of http, https, aws, gs, and file.  If a url scheme does not prefix the url then https is assumed.  If the {{.LessThan}}url{{.GreaterThan}} paramenter is in the format {{.EmphasisLeft}}<organization>/<repository>{{.EmphasisRight}} then dolt will use the {{.EmphasisLeft}}backups.default_host{{.EmphasisRight}} from your configuration file (Which will be dolthub.com unless changed).
 
 AWS cloud backup urls should be of the form {{.EmphasisLeft}}aws://[dynamo-table:s3-bucket]/database{{.EmphasisRight}}.  You may configure your aws cloud backup using the optional parameters {{.EmphasisLeft}}aws-region{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-type{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-file{{.EmphasisRight}}.
@@ -54,11 +54,14 @@ GCP backup urls should be of the form gs://gcs-bucket/database and will use the 
 The local filesystem can be used as a backup by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_scheme
 
 {{.EmphasisLeft}}remove{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}, 
-Remove the backup named {{.LessThan}}name{{.GreaterThan}}. All backup-tracking branches and configuration settings for the backup are removed.
+Remove the backup named {{.EmphasisLeft}}restore{{.EmphasisRight}}, 
+Restore a Dolt database from a given {{.LessThan}}url{{.GreaterThan}} into a specified directory {{.LessThan}}url{{.GreaterThan}}.. All backup-tracking branches and configuration settings for the backup are removed.
 
-{{.EmphasisLeft}}push{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}, 
-Push heads to the backup, force overwriting existing refs if necessary`,
+{{.EmphasisLeft}}restore{{.EmphasisRight}}, 
+Restore a Dolt database from a given {{.LessThan}}url{{.GreaterThan}} into a specified directory {{.LessThan}}url{{.GreaterThan}}.
 
+{{.EmphasisLeft}}sync{{.EmphasisRight}}, 
+Snapshot the database root and upload to the backup {{.LessThan}}name{{.GreaterThan}}. This includes branches, tags, working sets, and remote tracking refs.`,
 	Synopsis: []string{
 		"[-v | --verbose]",
 		"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
@@ -254,7 +257,8 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 		return errhand.BuildDError("error: unknown backup: '%s' ", backupName).Build()
 	}
 
-	err = actions.Backup(ctx, dEnv.DoltDB, dEnv.TempTableFilesDir(), b, runProgFuncs, stopProgFuncs)
+	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+	err = actions.SyncRoots(ctx, dEnv.DoltDB, destDb, dEnv.TempTableFilesDir(), runProgFuncs, stopProgFuncs)
 
 	switch err {
 	case nil:
@@ -279,26 +283,56 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
 	apr.Args = apr.Args[1:]
-	verr := clone(ctx, apr, dEnv)
-
+	dir, urlStr, verr := parseArgs(apr)
 	if verr != nil {
 		return verr
 	}
 
-	defer func (dir string) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return
+	userDirExists, _ := dEnv.FS.Exists(dir)
+
+	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
+	if err != nil {
+		return errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
+	}
+
+	var params map[string]string
+	params, verr = parseRemoteArgs(apr, scheme, remoteUrl)
+	if verr != nil {
+		return verr
+	}
+
+	r := env.NewRemote("", remoteUrl, params, dEnv)
+	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	// make .dolt dir whith env.NoRemote to avoid origin upstream
+	dEnv, err = actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	// still make empty repo state
+	_, err = env.CreateRepoState(dEnv.FS, env.DefaultInitBranch)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = actions.SyncRoots(ctx, srcDb, dEnv.DoltDB, dEnv.TempTableFilesDir(), runProgFuncs, stopProgFuncs)
+	if err != nil {
+		// If we're cloning into a directory that already exists do not erase it. Otherwise
+		// make best effort to delete the directory we created.
+		if userDirExists {
+			// Set the working dir to the parent of the .dolt folder so we can delete .dolt
+			_ = os.Chdir(dir)
+			_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
+		} else {
+			_ = os.Chdir("../")
+			_ = dEnv.FS.Delete(dir, true)
 		}
-		defer os.Chdir(cwd)
-		os.Chdir(dir)
-
-		dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, dEnv.Version)
-		dEnv.RemoveRemote(ctx, "origin")
-
-	}(apr.Arg(0))
-
-	// TODO pull other branches?
+		return errhand.VerboseErrorFromError(err)
+	}
 
 	return nil
 }

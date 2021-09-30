@@ -428,15 +428,10 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 	return nil
 }
 
-func Backup(ctx context.Context, srcDB *doltdb.DoltDB, tempTableDir string, backup env.Remote, progStarter ProgStarter, progStopper ProgStopper) error {
-	srcRoot, err := srcDB.NomsRoot(ctx)
+func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, progStarter ProgStarter, progStopper ProgStopper) error {
+	srcRoot, err := srcDb.NomsRoot(ctx)
 	if err != nil {
 		return nil
-	}
-
-	destDb, err := backup.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format())
-	if err != nil {
-		return err
 	}
 
 	destRoot, err := destDb.NomsRoot(ctx)
@@ -450,8 +445,9 @@ func Backup(ctx context.Context, srcDB *doltdb.DoltDB, tempTableDir string, back
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := progStarter(newCtx)
-	err = destDb.PushChunksForRefHash(ctx, tempTableDir, srcDB, srcRoot, pullerEventCh)
-	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	defer progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	
+	err = destDb.PushChunksForRefHash(ctx, tempTableDir, srcDb, srcRoot, pullerEventCh)
 	if err != nil {
 		return err
 	}

@@ -9,10 +9,12 @@ setup() {
     # repo1 -> rem1 -> repo2
     cd $TMPDIRS/repo1
     dolt init
-    dolt branch feature
     dolt tag v1
     dolt sql -q "create table t1 (a int)"
     dolt commit -am "cm"
+    dolt branch feature
+    dolt remote add origin file://../rem1
+    dolt push origin main
     cd $TMPDIRS
 }
 
@@ -62,8 +64,6 @@ teardown() {
 }
 
 @test "backup: sync feature to backup" {
-    skip "todo implement custom clone for backup, instead of reusing remote clone"
-
     cd repo1
     dolt backup add bac1 file://../bac1
     dolt backup sync bac1
@@ -71,9 +71,10 @@ teardown() {
     cd ..
     dolt backup restore file://./bac1 repo2
     cd repo2
-    dolt branch
+    run dolt branch
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "* main" ]] || false
     [[ "$output" =~ "feature" ]] || false
 }
 
@@ -89,6 +90,21 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "v1" ]] || false
+}
+
+@test "backup: sync remote ref to backup" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    dolt backup sync bac1
+
+    cd ..
+    dolt backup restore file://./bac1 repo2
+    cd repo2
+    noms ds .dolt/noms
+    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
 }
 
 @test "backup: sync working set to backup" {
@@ -129,4 +145,3 @@ teardown() {
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "backup already up to date" ]] || false
 }
-
