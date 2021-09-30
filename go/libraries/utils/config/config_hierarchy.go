@@ -31,6 +31,10 @@ type ConfigHierarchy struct {
 	nameToConfig map[string]ReadWriteConfig
 }
 
+var _ ReadableConfig = &ConfigHierarchy{}
+var _ WritableConfig = &ConfigHierarchy{}
+var _ ReadWriteConfig = &ConfigHierarchy{}
+
 // NewConfigHierarchy creates an empty ConfigurationHierarchy
 func NewConfigHierarchy() *ConfigHierarchy {
 	return &ConfigHierarchy{[]ReadWriteConfig{}, map[string]ReadWriteConfig{}}
@@ -82,6 +86,13 @@ func (ch *ConfigHierarchy) GetString(k string) (string, error) {
 	}
 
 	return "", ErrConfigParamNotFound
+}
+
+func (ch *ConfigHierarchy) GetStringOrDefault(key, defStr string) string {
+	if val, err := ch.GetString(key); err == nil {
+		return val
+	}
+	return defStr
 }
 
 // SetStrings will set the value of configuration parameters in memory, and persist any changes to the backing file.

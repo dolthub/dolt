@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -42,6 +43,7 @@ const (
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
+	DoltDefaultBranchKey          = "dolt_default_branch"
 )
 
 var transactionMergeStomp = false
@@ -133,6 +135,7 @@ type Session struct {
 	BatchMode batchMode
 	Username  string
 	Email     string
+	Config    config.ReadableConfig
 	dbStates  map[string]*DatabaseSessionState
 	provider  RevisionDatabaseProvider
 }
@@ -194,11 +197,15 @@ type InitialDbState struct {
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, username, email string, dbs ...InitialDbState) (*Session, error) {
+func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, conf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
+	username := conf.GetStringOrDefault(env.UserNameKey, "")
+	email := conf.GetStringOrDefault(env.UserEmailKey, "")
+
 	sess := &Session{
 		Session:  sqlSess,
 		Username: username,
 		Email:    email,
+		Config:   conf,
 		dbStates: make(map[string]*DatabaseSessionState),
 		provider: pro,
 	}
@@ -1205,6 +1212,14 @@ func defineSystemVariables(name string) {
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              sql.NewSystemStringType(StagedKey(name)),
+				Default:           "",
+			},
+			{
+				Name:              DoltDefaultBranchKey,
+				Scope:             sql.SystemVariableScope_Global,
+				Dynamic:           true,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(DoltDefaultBranchKey),
 				Default:           "",
 			},
 		})

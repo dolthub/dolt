@@ -326,6 +326,13 @@ func TestServerSetDefaultBranch(t *testing.T) {
 		},
 	}
 
+	defer func(sess *dbr.Session) {
+		var res []struct {
+			int
+		}
+		sess.SelectBySql("set GLOBAL dolt_default_branch = ''").LoadContext(context.Background(), &res)
+	}(sess)
+
 	for _, test := range tests {
 		t.Run(test.query.Query, func(t *testing.T) {
 			var branch []testBranch
@@ -360,11 +367,14 @@ func TestServerSetDefaultBranch(t *testing.T) {
 			assert.ElementsMatch(t, branch, test.expectedRes)
 		})
 	}
+
+	var res []struct {
+		int
+	}
+	sess.SelectBySql("set GLOBAL dolt_default_branch = ''").LoadContext(context.Background(), &res)
 }
 
 func TestReadReplica(t *testing.T) {
-	t.Skip("this fails on a query from the previous test suite if run as a file")
-
 	var err error
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -372,11 +382,22 @@ func TestReadReplica(t *testing.T) {
 	}
 	defer os.Chdir(cwd)
 
-	multiSetup := testcommands.CreateMultiEnvWithRemote()
+	multiSetup := testcommands.NewMultiRepoTestSetup(t)
 	defer os.RemoveAll(multiSetup.Root)
 
-	readOnlyDbName := multiSetup.DbNames[0]
-	sourceDbName := multiSetup.DbNames[0]
+	multiSetup.NewDB("read_replica")
+	multiSetup.NewRemote("remote1")
+	multiSetup.PushToRemote("read_replica", "remote1")
+	multiSetup.CloneDB("remote1", "source_db")
+
+	readReplicaDbName := multiSetup.DbNames[0]
+	sourceDbName := multiSetup.DbNames[1]
+
+	localCfg, ok := multiSetup.MrEnv[readReplicaDbName].Config.GetConfig(env.LocalConfig)
+	if !ok {
+		t.Fatal("local config does not exist")
+	}
+	localCfg.SetStrings(map[string]string{dsqle.DoltReadReplicaKey: "remote1"})
 
 	// start server as read replica
 	sc := CreateServerController()
@@ -384,10 +405,10 @@ func TestReadReplica(t *testing.T) {
 
 	func() {
 		err = os.Setenv(dsqle.DoltReadReplicaKey, "remote1")
-		os.Chdir(multiSetup.DbPaths[readOnlyDbName])
+		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 
 		go func() {
-			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readOnlyDbName])
+			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readReplicaDbName])
 		}()
 		err = sc.WaitForStart()
 		require.NoError(t, err)
@@ -395,20 +416,19 @@ func TestReadReplica(t *testing.T) {
 	defer sc.StopServer()
 	defer os.Unsetenv(dsqle.DoltReadReplicaKey)
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readOnlyDbName, nil)
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
 	defer conn.Close()
 
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
-	// TODO: why doesn't this throw a "no common ancestor" error?
 	t.Run("push common new commit", func(t *testing.T) {
 		var res []string
 		replicatedTable := "new_table"
-		multiSetup.CreateTable(t, sourceDbName, replicatedTable)
-		multiSetup.AddAll(t, sourceDbName)
+		multiSetup.CreateTable(sourceDbName, replicatedTable)
+		multiSetup.StageAll(sourceDbName)
 		_ = multiSetup.CommitWithWorkingSet(sourceDbName)
-		multiSetup.PushToRemote(t, sourceDbName)
+		multiSetup.PushToRemote(sourceDbName, "remote1")
 
 		q := sess.SelectBySql("show tables")
 		_, err := q.LoadContext(context.Background(), &res)
