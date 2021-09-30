@@ -226,7 +226,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) (string,
 	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
-		commitMsg, _ := editor.OpenCommitEditor(*editorStr, initialMsg)
+		commitMsg, _ := editor.OpenCommitEditor(editorStr, initialMsg)
 		finalMsg = parseCommitMessage(commitMsg)
 	})
 	return finalMsg, nil

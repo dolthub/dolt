@@ -335,8 +335,8 @@ SQL
 @test "remotes: clone an empty remote" {
     run dolt clone http://localhost:50051/test-org/empty
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: clone failed" ]] || false
-    [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
+    [[ "$output" =~ "clone failed" ]] || false
+    [[ "$output" =~ "remote at that url contains no Dolt data" ]] || false
 }
 
 @test "remotes: clone a non-existent remote" {
@@ -344,8 +344,8 @@ SQL
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/foo/bar
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: clone failed" ]] || false
-    [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
+    [[ "$output" =~ "clone failed" ]] || false
+    [[ "$output" =~ "remote at that url contains no Dolt data" ]] || false
 }
 
 @test "remotes: clone a different branch than main" {
@@ -1142,7 +1142,7 @@ setup_ref_test() {
 
     run dolt clone "file://../clone_root" .
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: clone failed" ]] || false
+    [[ "$output" =~ "clone failed" ]] || false
 
     # Validates that the directory exists
     run ls $testdir
@@ -1158,7 +1158,7 @@ setup_ref_test() {
     cd ..
     run dolt clone "file://./clone_root" dest/
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: clone failed" ]] || false
+    [[ "$output" =~ "clone failed" ]] || false
 
     run ls $testdir
     [ "$status" -eq 0 ]

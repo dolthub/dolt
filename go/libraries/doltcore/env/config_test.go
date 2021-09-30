@@ -30,11 +30,11 @@ func TestConfig(t *testing.T) {
 	lCfg.SetStrings(map[string]string{UserEmailKey: email})
 	gCfg.SetStrings(map[string]string{UserNameKey: name})
 
-	if *dEnv.Config.GetStringOrDefault(UserEmailKey, "no") != email {
+	if dEnv.Config.GetStringOrDefault(UserEmailKey, "no") != email {
 		t.Error("Should return", email)
 	}
 
-	if *dEnv.Config.GetStringOrDefault("bad_key", "yes") != "yes" {
+	if dEnv.Config.GetStringOrDefault("bad_key", "yes") != "yes" {
 		t.Error("Should return default value of yes")
 	}
 

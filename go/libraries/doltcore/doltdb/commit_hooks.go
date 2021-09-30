@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-const BackupToRemoteKey = "DOLT_BACKUP_TO_REMOTE"
+const BackupToRemoteKey = "dolt_backup_to_remote"
 
 type ReplicateHook struct {
 	destDB datas.Database
