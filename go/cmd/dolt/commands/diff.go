@@ -602,7 +602,20 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			case diff.SchDiffRemoved:
 				cli.Print(sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
 			case diff.SchDiffModified:
+				// Ignore any primary key set changes here
+				if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
+					continue
+				}
+
 				cli.Print(sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+			}
+		}
+
+		// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
+		if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+			cli.Println(sqlfmt.AlterTableDropPks(td.ToName))
+			if toSch.GetPKCols().Size() > 0 {
+				cli.Println(sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
 			}
 		}
 
