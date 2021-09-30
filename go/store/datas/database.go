@@ -179,6 +179,8 @@ type Database interface {
 	SetCommitHookLogger(context.Context, io.Writer) *database
 
 	NomsRoot(context.Context) (hash.Hash, error)
+
+	CommitRoot(ctx context.Context, current, last hash.Hash) (bool, error)
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {

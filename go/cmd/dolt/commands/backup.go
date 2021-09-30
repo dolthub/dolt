@@ -17,11 +17,7 @@ package commands
 import (
 	"context"
 	"encoding/json"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/events"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"os"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -72,8 +68,8 @@ Push heads to the backup, force overwriting existing refs if necessary`,
 type BackupCmd struct{}
 
 const (
-	syncBackupId = "sync"
-	restoreBackupId = "restore"
+	syncBackupId        = "sync"
+	restoreBackupId     = "restore"
 	addBackupId         = "add"
 	removeBackupId      = "remove"
 	removeBackupShortId = "rm"
@@ -238,7 +234,6 @@ func printBackups(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 	return nil
 }
 
-
 func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
@@ -252,7 +247,7 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 		return errhand.BuildDError("error: unknown backup: '%s' ", backupName).Build()
 	}
 
-	err = actions.Backup(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, dEnv.TempTableFilesDir(), b, runProgFuncs, stopProgFuncs)
+	err = actions.Backup(ctx, dEnv.DoltDB, dEnv.TempTableFilesDir(), b, runProgFuncs, stopProgFuncs)
 
 	switch err {
 	case nil:
@@ -274,102 +269,5 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	if apr.NArg() < 3 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
-
-	remoteName := apr.GetValueOrDefault(remoteParam, "origin")
-	branch := apr.GetValueOrDefault(branchParam, "")
-	dir, urlStr, verr := parseArgs(apr)
-	if verr != nil {
-		return verr
-	}
-	userDirExists, _ := dEnv.FS.Exists(dir)
-
-	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
-	if err != nil {
-		verr = errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
-	}
-
-	var params map[string]string
-	params, verr = parseRemoteArgs(apr, scheme, remoteUrl)
-	if verr != nil {
-		return verr
-	}
-
-	var r env.Remote
-	var srcDB *doltdb.DoltDB
-	r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params, dEnv)
-	if verr != nil {
-		return verr
-	}
-
-	dEnv, verr = envForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version)
-	if verr != nil {
-		return verr
-	}
-
-	verr = cloneRemote(ctx, srcDB, remoteName, branch, dEnv)
-	if verr != nil {
-		// If we're cloning into a directory that already exists do not erase it. Otherwise
-		// make best effort to delete the directory we created.
-		if userDirExists {
-			// Set the working dir to the parent of the .dolt folder so we can delete .dolt
-			_ = os.Chdir(dir)
-			_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
-		} else {
-			_ = os.Chdir("../")
-			_ = dEnv.FS.Delete(dir, true)
-		}
-	}
-
-	evt := events.GetEventFromContext(ctx)
-	u, err := earl.Parse(remoteUrl)
-
-	if err == nil {
-		if u.Scheme != "" {
-			evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
-		}
-	}
-
-	if verr == nil {
-
-
-		if verr == nil {
-			var r env.Remote
-			var srcDB *doltdb.DoltDB
-			r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params, dEnv)
-
-			if verr == nil {
-				dEnv, verr = envForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version)
-
-				if verr == nil {
-					verr = cloneRemote(ctx, srcDB, remoteName, branch, dEnv)
-
-					if verr == nil {
-						evt := events.GetEventFromContext(ctx)
-						u, err := earl.Parse(remoteUrl)
-
-						if err == nil {
-							if u.Scheme != "" {
-								evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
-							}
-						}
-					}
-
-					if verr != nil {
-						// If we're cloning into a directory that already exists do not erase it. Otherwise
-						// make best effort to delete the directory we created.
-						if userDirExists {
-							// Set the working dir to the parent of the .dolt folder so we can delete .dolt
-							_ = os.Chdir(dir)
-							_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
-						} else {
-							_ = os.Chdir("../")
-							_ = dEnv.FS.Delete(dir, true)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return verr
+	return clone(ctx, apr, dEnv)
 }

@@ -179,7 +179,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
 		Head:     ref.MarshalableRef{Ref: headRef},
 		Remotes:  make(map[string]Remote),
 		Branches: make(map[string]BranchConfig),
-		Backups: make(map[string]Remote),
+		Backups:  make(map[string]Remote),
 	}
 
 	err = rs.Save(fs)

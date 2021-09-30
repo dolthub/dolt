@@ -87,6 +87,10 @@ func (db *database) NomsRoot(ctx context.Context) (hash.Hash, error) {
 	return db.ChunkStore().Root(ctx)
 }
 
+func (db *database) CommitRoot(ctx context.Context, current, last hash.Hash) (bool, error) {
+	return db.rt.Commit(ctx, current, last)
+}
+
 func (db *database) Stats() interface{} {
 	return db.ChunkStore().Stats()
 }

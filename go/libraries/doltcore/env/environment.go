@@ -1016,7 +1016,6 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 	return nil
 }
 
-
 func (dEnv *DoltEnv) RemoveBackup(ctx context.Context, name string) error {
 	backup, ok := dEnv.RepoState.Backups[name]
 	if !ok {
