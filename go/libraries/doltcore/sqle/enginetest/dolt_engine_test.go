@@ -24,7 +24,8 @@ import (
 )
 
 func init() {
-	sqle.MinRowsPerPartition = 2
+	sqle.MinRowsPerPartition = 8
+	sqle.MaxRowsPerPartition = 1024
 }
 
 func TestQueries(t *testing.T) {
@@ -222,6 +223,14 @@ func TestModifyColumn(t *testing.T) {
 
 func TestDropColumn(t *testing.T) {
 	enginetest.TestDropColumn(t, newDoltHarness(t))
+}
+
+func TestCreateDatabase(t *testing.T) {
+	enginetest.TestCreateDatabase(t, newDoltHarness(t))
+}
+
+func TestDropDatabase(t *testing.T) {
+	enginetest.TestDropDatabase(t, newDoltHarness(t))
 }
 
 func TestCreateForeignKeys(t *testing.T) {

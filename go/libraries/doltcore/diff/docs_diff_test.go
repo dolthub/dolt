@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -32,9 +33,9 @@ import (
 func TestDocDiff(t *testing.T) {
 	ctx := context.Background()
 	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
-	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
+	ddb.WriteEmptyRepo(ctx, env.DefaultInitBranch, "billy bob", "bigbillieb@fake.horse")
 
-	cs, _ := doltdb.NewCommitSpec("master")
+	cs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	cm, _ := ddb.Resolve(ctx, cs, nil)
 
 	root, err := cm.GetRootValue()

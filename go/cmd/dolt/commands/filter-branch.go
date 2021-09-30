@@ -37,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -255,17 +254,15 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 	db := dsqle.NewDatabase(dbName, dEnv.DbData(), opts)
 
-	cat := sql.NewCatalog()
-	err = cat.Register(dfunctions.DoltFunctions...)
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, db)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	parallelism := runtime.GOMAXPROCS(0)
-	azr := analyzer.NewBuilder(cat).WithParallelism(parallelism).Build()
+	azr := analyzer.NewBuilder(pro).WithParallelism(parallelism).Build()
 
-	engine := sqle.New(cat, azr, &sqle.Config{Auth: new(auth.None)})
-	engine.AddDatabase(db)
+	engine := sqle.New(azr, &sqle.Config{Auth: new(auth.None)})
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
@@ -309,8 +306,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	sqlCtx.SetCurrentDatabase(dbName)
 
 	se := &sqlEngine{
-		dbs:    map[string]dsqle.Database{dbName: db},
-		mrEnv:  env.MultiRepoEnv{dbName: dEnv},
+		dbs:    map[string]dsqle.SqlDatabase{dbName: db},
 		engine: engine,
 	}
 

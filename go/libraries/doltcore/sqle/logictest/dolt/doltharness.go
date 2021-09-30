@@ -97,7 +97,7 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 	defer func() {
 		if r := recover(); r != nil {
 			// Panics leave the engine in a bad state that we have to clean up
-			h.engine.Catalog.ProcessList.Kill(pid)
+			h.engine.ProcessList.Kill(pid)
 			panic(r)
 		}
 	}()
@@ -122,12 +122,12 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 
 func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	if !dEnv.HasDoltDir() {
-		err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, time.Now())
+		err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
 		if err != nil {
 			return err
 		}
 	} else {
-		err := dEnv.InitDBAndRepoState(context.Background(), types.Format_Default, name, email, time.Now())
+		err := dEnv.InitDBAndRepoState(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		sql.WithViewRegistry(h.viewReg),
 		sql.WithSession(h.sess))
 
-	dbs := h.engine.Catalog.AllDatabases()
+	dbs := h.engine.Analyzer.Catalog.AllDatabases()
 	dsqlDBs := make([]dsql.Database, len(dbs))
 	for i, db := range dbs {
 		dsqlDB := db.(dsql.Database)
@@ -364,8 +364,8 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 	db := dsql.NewDatabase("dolt", dEnv.DbData(), opts)
-	engine := sqle.NewDefault()
-	engine.AddDatabase(db)
+	pro := dsql.NewDoltDatabaseProvider(dEnv.Config, db)
+	engine := sqle.NewDefault(pro)
 
 	return engine, nil
 }

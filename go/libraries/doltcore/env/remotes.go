@@ -57,6 +57,17 @@ type Remote struct {
 	dialer     dbfactory.GRPCDialProvider
 }
 
+func GetRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (Remote, *doltdb.DoltDB, error) {
+	r := NewRemote(remoteName, remoteUrl, params, dialer)
+	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
+
+	if err != nil {
+		return NoRemote, nil, err
+	}
+
+	return r, ddb, nil
+}
+
 func NewRemote(name, url string, params map[string]string, dialer dbfactory.GRPCDialProvider) Remote {
 	return Remote{name, url, []string{"refs/heads/*:refs/remotes/" + name + "/*"}, params, dialer}
 }
@@ -301,7 +312,7 @@ func parseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error)
 }
 
 // if possible, convert refs to full spec names. prefer branches over tags.
-// eg "master" -> "refs/heads/master", "v1" -> "refs/tags/v1"
+// eg "main" -> "refs/heads/main", "v1" -> "refs/tags/v1"
 func disambiguateRefSpecStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr string) (string, error) {
 	brachRefs, err := ddb.GetBranches(ctx)
 

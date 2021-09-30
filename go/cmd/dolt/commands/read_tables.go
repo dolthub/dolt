@@ -120,7 +120,12 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	dEnv, verr = initializeShallowCloneRepo(ctx, dEnv, srcDB.Format(), dir)
+	branches, err := srcDB.GetBranches(ctx)
+	if verr != nil {
+		BuildVerrAndExit("Failed to get remote branches", err)
+	}
+
+	dEnv, verr = initializeShallowCloneRepo(ctx, dEnv, srcDB.Format(), dir, GetDefaultBranch(dEnv, branches))
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
@@ -217,7 +222,7 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 	return srcDB, srcRoot, nil
 }
 
-func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *types.NomsBinFormat, dir string) (*env.DoltEnv, errhand.VerboseError) {
+func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *types.NomsBinFormat, dir, branchName string) (*env.DoltEnv, errhand.VerboseError) {
 	var verr errhand.VerboseError
 	dEnv, verr = envForClone(ctx, nbf, env.NoRemote, dir, dEnv.FS, dEnv.Version)
 
@@ -230,7 +235,7 @@ func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *typ
 		return nil, errhand.BuildDError("Unable to initialize repo.").AddCause(err).Build()
 	}
 
-	err = dEnv.InitializeRepoState(ctx)
+	err = dEnv.InitializeRepoState(ctx, branchName)
 
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to initialize repo.").AddCause(err).Build()

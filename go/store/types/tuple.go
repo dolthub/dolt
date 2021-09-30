@@ -268,9 +268,78 @@ func walkTuple(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	return nil
 }
 
+// TupleFactory provides a more memory efficient mechanism for creating many tuples
+type TupleFactory struct {
+	nbf            *NomsBinFormat
+	biggestTuple   int
+	approxCapacity int
+
+	pos    int
+	buffer []byte
+}
+
+// NewTupleFactory creates a new tuple factory. The approxCapacity argument is used to calculate how large the buffer allocations
+// should be.  The factory keeps track of the largest tuple it has created, and when allocating it creates a buffer large enough
+// to store <approxCapacity> tuples of that size.
+func NewTupleFactory(approxCapacity int) *TupleFactory {
+	blockSize := initialBufferSize * approxCapacity
+	return &TupleFactory{
+		buffer:         make([]byte, blockSize),
+		biggestTuple:   initialBufferSize,
+		approxCapacity: approxCapacity,
+	}
+}
+
+// Reset is called when a TupleFactory is reused as you might want when pooling these.  Reset does
+// not reset the buffer as the memory may be in use by tuples that have not been collected and reference the same
+// memory.  It also does not reset biggestTuple.  It's ok for biggestTuple to grow as time goes on.
+func (tf *TupleFactory) Reset(nbf *NomsBinFormat) {
+	tf.nbf = nbf
+}
+
+func (tf *TupleFactory) newBuffer() {
+	blockSize := tf.biggestTuple * tf.approxCapacity
+	tf.buffer = make([]byte, blockSize)
+	tf.pos = 0
+}
+
+// Create creates a new Tuple using the TupleFactory
+func (tf *TupleFactory) Create(values ...Value) (Tuple, error) {
+	remaining := len(tf.buffer) - tf.pos
+	// somewhat wasteful, but it's costly if there isn't enough room to store a tuple in the tf's buffer so make it a rare case
+	if remaining < tf.biggestTuple {
+		tf.newBuffer()
+		remaining = len(tf.buffer)
+	}
+
+	w := binaryNomsWriter{buff: tf.buffer[tf.pos:], offset: 0}
+	t, err := newTuple(tf.nbf, w, values...)
+
+	if err != nil {
+		return Tuple{}, err
+	}
+
+	n := len(t.buff)
+
+	// if n < bytes remaining then we move pos by the number of bytes read.  If not then a new allocation was used, and we don't move tf.pos
+	if n < remaining {
+		tf.pos += n
+	}
+
+	if n > tf.biggestTuple {
+		tf.biggestTuple = n
+	}
+
+	return t, err
+}
+
 func NewTuple(nbf *NomsBinFormat, values ...Value) (Tuple, error) {
-	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
+	return newTuple(nbf, w, values...)
+}
+
+func newTuple(nbf *NomsBinFormat, w binaryNomsWriter, values ...Value) (Tuple, error) {
+	var vrw ValueReadWriter
 	err := TupleKind.writeTo(&w, nbf)
 
 	if err != nil {

@@ -15,21 +15,21 @@ teardown() {
     run dolt branch
     [ $status -eq 0 ]
     [[ "$output" =~ "this-should-work" ]] || false
-    dolt checkout master
+    dolt checkout main
     dolt branch -d this-should-work
 
     dolt checkout -b "this-should-work"
     run dolt branch
     [ $status -eq 0 ]
     [[ "$output" =~ "this-should-work" ]] || false
-    dolt checkout master
+    dolt checkout main
     dolt branch -d "this-should-work"
 
     dolt checkout --b "this-should-work"
     run dolt branch
     [ $status -eq 0 ]
     [[ "$output" =~ "this-should-work" ]] || false
-    dolt checkout master
+    dolt checkout main
     dolt branch --d "this-should-work"
 
     run dolt checkout -bthis-should-work
@@ -37,7 +37,7 @@ teardown() {
     run dolt branch
     [ $status -eq 0 ]
     [[ "$output" =~ "this-should-work" ]] || false
-    dolt checkout master
+    dolt checkout main
     dolt branch -dthis-should-work
 
     cat <<DELIM > ints.csv
@@ -63,11 +63,11 @@ DELIM
 }
 
 @test "arg-parsing: dolt checkout on the same branch does not throw an error" {
-     run dolt checkout master
+     run dolt checkout main
      [ $status -eq 0 ]
-     [[ "$output" =~ "Already on branch 'master'" ]] || false
+     [[ "$output" =~ "Already on branch 'main'" ]] || false
 
-     run dolt checkout master && dolt checkout master
+     run dolt checkout main && dolt checkout main
      [ $status -eq 0 ]
-     [[ "$output" =~ "Already on branch 'master'" ]] || false
+     [[ "$output" =~ "Already on branch 'main'" ]] || false
 }

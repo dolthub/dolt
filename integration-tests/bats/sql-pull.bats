@@ -12,7 +12,7 @@ setup() {
     dolt branch feature
     dolt remote add origin file://../rem1
     dolt remote add test-remote file://../rem1
-    dolt push origin master
+    dolt push origin main
 
     cd $TMPDIRS
     dolt clone file://rem1 repo2
@@ -27,7 +27,7 @@ setup() {
     dolt commit -am "First commit"
     dolt sql -q "insert into t1 values (0,0)"
     dolt commit -am "Second commit"
-    dolt push origin master
+    dolt push origin main
     cd $TMPDIRS
 }
 
@@ -37,7 +37,7 @@ teardown() {
     cd $BATS_TMPDIR
 }
 
-@test "sql-pull: dolt_pull master" {
+@test "sql-pull: dolt_pull main" {
     cd repo2
     dolt sql -q "select dolt_pull('origin')"
     run dolt sql -q "show tables" -r csv
@@ -109,7 +109,7 @@ teardown() {
 @test "sql-pull: dolt_pull feature branch" {
     cd repo1
     dolt checkout feature
-    dolt merge master
+    dolt merge main
     dolt push origin feature
 
     cd ../repo2
@@ -127,13 +127,13 @@ teardown() {
     cd repo2
     dolt sql -q "create table t2 (a int)"
     dolt commit -am "2.0 commit"
-    dolt push origin master
+    dolt push origin main
 
     cd ../repo1
     dolt sql -q "create table t2 (a int primary key)"
     dolt sql -q "create table t3 (a int primary key)"
     dolt commit -am "2.1 commit"
-    dolt push -f origin master
+    dolt push -f origin main
 
     cd ../repo2
     run dolt sql -q "select dolt_pull('origin')"

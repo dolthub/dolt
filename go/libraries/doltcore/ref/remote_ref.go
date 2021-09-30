@@ -32,12 +32,12 @@ func (rr RemoteRef) GetType() RefType {
 	return RemoteRefType
 }
 
-// GetPath returns the remote name separated by the branch e.g. origin/master
+// GetPath returns the remote name separated by the branch e.g. origin/main
 func (rr RemoteRef) GetPath() string {
 	return path.Join(rr.remote, rr.branch)
 }
 
-// String returns the fully qualified reference e.g. refs/remotes/origin/master
+// String returns the fully qualified reference e.g. refs/remotes/origin/main
 func (rr RemoteRef) String() string {
 	return String(rr)
 }
@@ -57,8 +57,8 @@ func NewRemoteRef(remote, branch string) RemoteRef {
 	return RemoteRef{remote, branch}
 }
 
-// NewRemoteRefFromPathString creates a DoltRef from a string in the format origin/master, or remotes/origin/master, or
-// refs/remotes/origin/master
+// NewRemoteRefFromPathString creates a DoltRef from a string in the format origin/main, or remotes/origin/main, or
+// refs/remotes/origin/main
 func NewRemoteRefFromPathStr(remoteAndPath string) (DoltRef, error) {
 	if IsRef(remoteAndPath) {
 		prefix := PrefixForType(RemoteRefType)

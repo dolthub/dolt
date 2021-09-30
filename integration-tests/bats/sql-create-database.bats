@@ -113,11 +113,7 @@ SQL
     [[ "$output" =~ "can't drop database mydb; database doesn't exist" ]] || false
 }
 
-@test "sql-create-database: sql drop database errors for non memory databases" {
-    run dolt sql -q "DROP DATABASE dolt_repo_$$"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "DROP DATABASE isn't supported for database dolt_repo_$$" ]] || false
-
+@test "sql-create-database: sql drop database errors for info schema" {
     run dolt sql -q "DROP DATABASE information_schema"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "DROP DATABASE isn't supported for database information_schema" ]] || false

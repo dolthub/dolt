@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
-var ErrUnmergedWorkspaceDelete = errors.New("attempted to delete a workspace that is not fully merged into master; use `-f` to force")
+var ErrUnmergedWorkspaceDelete = errors.New("attempted to delete a workspace that is not fully merged into its parent; use `-f` to force")
 var ErrCOWorkspaceDelete = errors.New("attempted to delete checked out workspace")
 var ErrBranchNameExists = errors.New("workspace name must not be existing branch name")
 
@@ -91,10 +91,11 @@ func DeleteWorkspace(ctx context.Context, dEnv *env.DoltEnv, workspaceName strin
 		}
 	}
 
-	return DeleteWorkspaceOnDB(ctx, dEnv.DoltDB, dref, opts)
+	return DeleteWorkspaceOnDB(ctx, dEnv, dref, opts)
 }
 
-func DeleteWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef, opts DeleteOptions) error {
+func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef, opts DeleteOptions) error {
+	ddb := dEnv.DoltDB
 	hasRef, err := ddb.HasRef(ctx, dref)
 
 	if err != nil {
@@ -104,12 +105,12 @@ func DeleteWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltR
 	}
 
 	if !opts.Force && !opts.Remote {
-		ms, err := doltdb.NewCommitSpec("master")
+		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(dEnv.Config))
 		if err != nil {
 			return err
 		}
 
-		master, err := ddb.Resolve(ctx, ms, nil)
+		m, err := ddb.Resolve(ctx, ms, nil)
 		if err != nil {
 			return err
 		}
@@ -124,7 +125,7 @@ func DeleteWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltR
 			return err
 		}
 
-		isMerged, _ := master.CanFastReverseTo(ctx, cm)
+		isMerged, _ := m.CanFastReverseTo(ctx, cm)
 		if err != nil && err != doltdb.ErrUpToDate {
 			return err
 		}

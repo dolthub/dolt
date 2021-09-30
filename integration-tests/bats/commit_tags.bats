@@ -115,7 +115,7 @@ teardown() {
     dolt add -A && dolt commit -m "more rows"
 
     dolt remote add origin file://../remote
-    dolt push origin master
+    dolt push origin main
     cd .. && dolt clone file://remote repo_clone && cd repo
 
     run dolt tag v1 HEAD^

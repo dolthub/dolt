@@ -29,7 +29,6 @@ import (
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
-	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -50,7 +49,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -376,8 +374,11 @@ func execShell(
 	readOnly bool,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -399,8 +400,11 @@ func execBatch(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -441,8 +445,11 @@ func execMultiStatements(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -477,8 +484,11 @@ func execQuery(
 	query string,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
-	se, err := newSqlEngine(ctx, dEnv, mrEnv, roots, readOnly, format, dbs...)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -505,15 +515,27 @@ func execQuery(
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(mrEnv env.MultiRepoEnv) []dsqle.Database {
-	dbs := make([]dsqle.Database, 0, len(mrEnv))
-	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		db := newDatabase(name, dEnv)
+func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
+	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
+	var db dsqle.SqlDatabase
+	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+		db = newDatabase(name, dEnv)
+		if remoteName := os.Getenv(dsqle.DoltReadReplicaKey); remoteName != "" {
+			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), dEnv.NewWorkingSetMeta("read replica update"))
+			if err != nil {
+				return true, err
+			}
+		}
+
 		dbs = append(dbs, db)
 		return false, nil
 	})
 
-	return dbs
+	if err != nil {
+		return nil, err
+	}
+
+	return dbs, nil
 }
 
 func formatQueryError(message string, err error) errhand.VerboseError {
@@ -1090,7 +1112,7 @@ func (s *stats) shouldFlush() bool {
 }
 
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
-	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
+	err := se.iterDBs(func(_ string, db dsqle.SqlDatabase) (bool, error) {
 		_, rowIter, err := se.engine.Query(ctx, "COMMIT;")
 		if err != nil {
 			return false, err
@@ -1336,7 +1358,7 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *sqlEngine, query string) 
 	plan.Inspect(a, func(n sql.Node) bool {
 		switch n := n.(type) {
 		case *plan.InsertInto:
-			_, err = plan.TransformExpressionsUp(ctx, n.Source, func(exp sql.Expression) (sql.Expression, error) {
+			_, err = plan.TransformExpressionsUp(n.Source, func(exp sql.Expression) (sql.Expression, error) {
 				if _, ok := exp.(*expression.AutoIncrement); ok {
 					isAutoInc = true
 				}
@@ -1393,8 +1415,7 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 }
 
 type sqlEngine struct {
-	dbs            map[string]dsqle.Database
-	mrEnv          env.MultiRepoEnv
+	dbs            map[string]dsqle.SqlDatabase
 	sess           *dsess.Session
 	contextFactory func(ctx context.Context) (*sql.Context, error)
 	engine         *sqle.Engine
@@ -1407,11 +1428,10 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 func newSqlEngine(
 	ctx context.Context,
 	dEnv *env.DoltEnv,
-	mrEnv env.MultiRepoEnv,
 	roots map[string]*doltdb.RootValue, // See TODO below
 	readOnly bool,
 	format resultFormat,
-	dbs ...dsqle.Database,
+	dbs ...dsqle.SqlDatabase,
 ) (*sqlEngine, error) {
 	var au auth.Auth
 
@@ -1422,16 +1442,13 @@ func newSqlEngine(
 	}
 
 	parallelism := runtime.GOMAXPROCS(0)
-	pro := dsqle.NewDoltDatabaseProvider(dbs...)
-	cat := sql.NewCatalogWithDbProvider(pro)
 
-	err := cat.Register(dfunctions.DoltFunctions...)
-	if err != nil {
-		return nil, err
-	}
+	infoDB := information_schema.NewInformationSchemaDatabase()
+	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
-	engine := sqle.New(cat, analyzer.NewBuilder(cat).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
-	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
+
+	engine := sqle.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -1440,16 +1457,15 @@ func newSqlEngine(
 		}
 	}
 
-	nameToDB := make(map[string]dsqle.Database)
+	nameToDB := make(map[string]dsqle.SqlDatabase)
 	var dbStates []dsess.InitialDbState
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
-		engine.AddDatabase(db)
 
 		// TODO: this doesn't consider the roots provided as a param, which may not be the HEAD of the branch
 		//  To fix this, we need to pass a commit here as a separate param, and install a read-only database on it
 		//  since it isn't a current HEAD.
-		dbState, err := getDbState(ctx, db, mrEnv)
+		dbState, err := dsqle.GetInitialDBState(ctx, db)
 		if err != nil {
 			return nil, err
 		}
@@ -1470,15 +1486,14 @@ func newSqlEngine(
 
 	return &sqlEngine{
 		dbs:            nameToDB,
-		mrEnv:          mrEnv,
 		sess:           sess,
-		contextFactory: newSqlContext(sess, cat),
+		contextFactory: newSqlContext(sess, engine.Analyzer.Catalog),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
 }
 
-func newSqlContext(sess *dsess.Session, cat *sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
+func newSqlContext(sess *dsess.Session, cat sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx,
 			sql.WithSession(sess),
@@ -1487,7 +1502,7 @@ func newSqlContext(sess *dsess.Session, cat *sql.Catalog) func(ctx context.Conte
 			sql.WithTracer(tracing.Tracer(ctx)))
 
 		seenOne := false
-		for _, db := range dbsAsDSQLDBs(cat.AllDatabases()) {
+		for _, db := range dsqle.DbsAsDSQLDBs(cat.AllDatabases()) {
 			root, err := db.GetRoot(sqlCtx)
 			if err != nil {
 				return nil, err
@@ -1520,6 +1535,14 @@ func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	}
 
 	return dsqlDBs
+}
+
+func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
+	sqlDbs := make([]sql.Database, 0, len(dbs))
+	for _, db := range dbs {
+		sqlDbs = append(sqlDbs, db)
+	}
+	return sqlDbs
 }
 
 func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) (dsess.InitialDbState, error) {
@@ -1556,17 +1579,7 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	}, nil
 }
 
-func (se *sqlEngine) getDB(name string) (dsqle.Database, error) {
-	db, ok := se.dbs[name]
-
-	if !ok {
-		return dsqle.Database{}, ErrDBNotFoundKind.New(name)
-	}
-
-	return db, nil
-}
-
-func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool, err error)) error {
+func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bool, err error)) error {
 	for name, db := range se.dbs {
 		stop, err := cb(name, db)
 
@@ -1584,13 +1597,8 @@ func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool,
 
 func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
 	newRoots := make(map[string]*doltdb.RootValue)
-	for name := range se.mrEnv {
-		db, err := se.getDB(name)
-
-		if err != nil {
-			return nil, err
-		}
-
+	for name, db := range se.dbs {
+		var err error
 		newRoots[name], err = db.GetRoot(sqlCtx)
 
 		if err != nil {
@@ -1623,18 +1631,6 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 		// Should not be allowed to delete repo name and information schema
 		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
 			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", information_schema.InformationSchemaDatabaseName)
-		} else if dbddl.DBName == ctx.GetCurrentDatabase() {
-			db, err := se.engine.Catalog.Database(ctx.GetCurrentDatabase())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// Check if it's an in memory database. Those are the only databases that are allowed to be dropped.
-			switch interface{}(db).(type) {
-			case *memory.Database:
-			default:
-				return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", db.Name())
-			}
 		}
 	}
 

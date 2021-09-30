@@ -100,12 +100,12 @@ test_mutation() {
     expected="$3"
     uses_pk="$4"
     dolt sql -q "$dml"
-    run dolt sql -q "select * from $table" -r csv
+    run dolt sql -q "select * from $table ORDER BY pk1" -r csv
     [ "$status" -eq "0" ]
     [ "$output" == "$expected" ] || (echo $output && exit 1)
     dolt reset --hard
     dolt sql --batch -q "$dml ; $dml"
-    run dolt sql -q "select * from $table" -r csv
+    run dolt sql -q "select * from $table ORDER BY pk1" -r csv
     [ "$status" -eq "0" ]
     [ "$output" == "$expected" ] || (echo $output && exit 1)
     run dolt sql -q "explain $dml"

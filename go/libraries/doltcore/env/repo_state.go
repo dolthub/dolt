@@ -149,10 +149,10 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 }
 
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
-	h := hash.Hash{}
-	hashStr := h.String()
-	rs := &RepoState{Head: ref.MarshalableRef{
-		Ref: ref.NewBranchRef("master")},
+	init := ref.NewBranchRef(DefaultInitBranch) // best effort
+	hashStr := hash.Hash{}.String()
+	rs := &RepoState{
+		Head:     ref.MarshalableRef{Ref: init},
 		staged:   hashStr,
 		working:  hashStr,
 		Remotes:  map[string]Remote{r.Name: r},
@@ -161,7 +161,6 @@ func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	}
 
 	err := rs.Save(fs)
-
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -267,11 +268,11 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
 	vrw := ddb.ValueReadWriter()
 
-	err := ddb.WriteEmptyRepo(context.Background(), name, email)
+	err := ddb.WriteEmptyRepo(context.Background(), env.DefaultInitBranch, name, email)
 	require.NoError(t, err)
 
-	masterHeadSpec, _ := doltdb.NewCommitSpec("master")
-	masterHead, err := ddb.Resolve(context.Background(), masterHeadSpec, nil)
+	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
+	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
 
 	initialRows, err := types.NewMap(context.Background(), vrw,
@@ -367,7 +368,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	mRoot, err := masterHead.GetRootValue()
+	mRoot, err := mainHead.GetRootValue()
 	require.NoError(t, err)
 
 	mRoot, err = mRoot.PutTable(context.Background(), tableName, tbl)
@@ -379,7 +380,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
 	require.NoError(t, err)
 
-	masterHash, err := ddb.WriteRootValue(context.Background(), mRoot)
+	mainHash, err := ddb.WriteRootValue(context.Background(), mRoot)
 	require.NoError(t, err)
 	hash, err := ddb.WriteRootValue(context.Background(), updatedRoot)
 	require.NoError(t, err)
@@ -388,9 +389,9 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 
 	meta, err := doltdb.NewCommitMeta(name, email, "fake")
 	require.NoError(t, err)
-	initialCommit, err := ddb.Commit(context.Background(), masterHash, ref.NewBranchRef("master"), meta)
+	initialCommit, err := ddb.Commit(context.Background(), mainHash, ref.NewBranchRef(env.DefaultInitBranch), meta)
 	require.NoError(t, err)
-	commit, err := ddb.Commit(context.Background(), hash, ref.NewBranchRef("master"), meta)
+	commit, err := ddb.Commit(context.Background(), hash, ref.NewBranchRef(env.DefaultInitBranch), meta)
 	require.NoError(t, err)
 
 	err = ddb.NewBranchAtCommit(context.Background(), ref.NewBranchRef("to-merge"), initialCommit)

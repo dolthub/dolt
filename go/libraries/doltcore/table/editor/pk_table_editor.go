@@ -32,6 +32,12 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const tfApproxCapacity = 64
+
+var tupleFactories = &sync.Pool{New: func() interface{} {
+	return types.NewTupleFactory(tfApproxCapacity)
+}}
+
 var (
 	tableEditorMaxOps uint64 = 256 * 1024
 	ErrDuplicateKey          = errors.New("duplicate key error")
@@ -92,6 +98,7 @@ type pkTableEditor struct {
 	tea      TableEditAccumulator
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
+	indexTF  *types.TupleFactory
 	cvEditor *types.MapEditor
 
 	// Whenever any write operation occurs on the table editor, this is set to true for the lifetime of the editor.
@@ -106,6 +113,9 @@ type pkTableEditor struct {
 }
 
 func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, opts Options) (*pkTableEditor, error) {
+	tf := tupleFactories.Get().(*types.TupleFactory)
+	tf.Reset(t.Format())
+
 	te := &pkTableEditor{
 		t:          t,
 		tSch:       tableSch,
@@ -113,6 +123,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		opts:       opts,
 		nbf:        t.Format(),
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
+		indexTF:    tf,
 		writeMutex: &sync.Mutex{},
 	}
 	var err error
@@ -373,7 +384,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal, te.indexTF)
 		if err != nil {
 			return err
 		}
@@ -483,7 +494,7 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal)
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal, te.indexTF)
 		if err != nil {
 			return err
 		}
@@ -778,16 +789,23 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 func (te *pkTableEditor) Close(ctx context.Context) error {
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
+	defer func() {
+		tupleFactories.Put(te.indexTF)
+		te.indexTF = nil
+	}()
+
 	if te.cvEditor != nil {
 		te.cvEditor.Close(ctx)
 		te.cvEditor = nil
 	}
+
 	for _, indexEd := range te.indexEds {
 		err := indexEd.Close()
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 

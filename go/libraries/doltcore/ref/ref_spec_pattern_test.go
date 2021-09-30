@@ -21,10 +21,10 @@ import (
 )
 
 func TestStringPattern(t *testing.T) {
-	sp := strPattern("refs/heads/master")
+	sp := strPattern("refs/heads/main")
 
-	captured, matchesMaster := sp.matches("refs/heads/master")
-	assert.True(t, matchesMaster, "should match master branch ref")
+	captured, matchesMain := sp.matches("refs/heads/main")
+	assert.True(t, matchesMain, "should match main branch ref")
 	assert.True(t, captured == "", "nothing to capture")
 
 	captured, matchesFeature := sp.matches("refs/heads/feature")
@@ -46,7 +46,7 @@ func TestWildcardPattern(t *testing.T) {
 		{
 			"refs/heads/*",
 			[]patternTest{
-				{"refs/heads/master", "master", true},
+				{"refs/heads/main", defaultBranch, true},
 				{"refs/heads/feature", "feature", true},
 				{"refs/heads/bh/my/feature", "bh/my/feature", true},
 			},
@@ -54,16 +54,16 @@ func TestWildcardPattern(t *testing.T) {
 		{
 			"refs/heads/bh/*",
 			[]patternTest{
-				{"refs/heads/master", "", false},
+				{"refs/heads/main", "", false},
 				{"refs/heads/bh/my/feature", "my/feature", true},
 			},
 		},
 		{
-			"refs/heads/*/master",
+			"refs/heads/*/main",
 			[]patternTest{
-				{"refs/heads/master", "", false},
-				{"refs/heads/bh/master", "bh", true},
-				{"refs/heads/as/master", "as", true},
+				{"refs/heads/main", "", false},
+				{"refs/heads/bh/main", "bh", true},
+				{"refs/heads/as/main", "as", true},
 			},
 		},
 	}

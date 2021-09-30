@@ -77,7 +77,7 @@ SQL
     dolt sql -q "alter table test add column c2 bigint"
     dolt add test
     dolt commit	-m "Added column c2 bigint"
-    dolt checkout master
+    dolt checkout main
     dolt merge branch1
     dolt merge branch2
 }
@@ -101,7 +101,7 @@ SQL
     dolt sql -q "alter table test add column c2 longtext"
     dolt add test
     dolt commit -m "Added column c2 longtext"
-    dolt checkout master
+    dolt checkout main
     dolt merge branch1
     run dolt merge branch2
     [ $status -ne 0 ]
@@ -127,7 +127,7 @@ SQL
     dolt sql -q "alter table test rename column c2 to c0"
     dolt add test
     dolt commit -m "Added column c0 bigint"
-    dolt checkout master
+    dolt checkout main
     dolt merge branch1
     run dolt merge branch2
     [ $status -eq 1 ]
@@ -155,7 +155,7 @@ SQL
     dolt sql -q "alter table test add column c3 double"
     dolt add test
     dolt commit -m "Added columns c2 bigint and c3 double to branch2"
-    dolt checkout master
+    dolt checkout main
     dolt merge branch1
     run dolt merge branch2
     [ $status -eq 0 ]
@@ -189,7 +189,7 @@ SQL
     dolt add test
     # pk and c1 will have the same tags on both branches due to deterministic tag generation
     dolt commit -m "Committed test table"
-    dolt checkout master
+    dolt checkout main
     dolt merge branch1
     run dolt merge branch2
     [ $status -eq 0 ]

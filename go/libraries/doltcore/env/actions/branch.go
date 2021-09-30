@@ -28,7 +28,7 @@ import (
 
 var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
-var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
+var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into its parent; use `-f` to force")
 
 func RenameBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
@@ -126,10 +126,11 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, opts De
 		}
 	}
 
-	return DeleteBranchOnDB(ctx, dEnv.DoltDB, dref, opts)
+	return DeleteBranchOnDB(ctx, dEnv, dref, opts)
 }
 
-func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef, opts DeleteOptions) error {
+func DeleteBranchOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef, opts DeleteOptions) error {
+	ddb := dEnv.DoltDB
 	hasRef, err := ddb.HasRef(ctx, dref)
 
 	if err != nil {
@@ -139,12 +140,12 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 	}
 
 	if !opts.Force && !opts.Remote {
-		ms, err := doltdb.NewCommitSpec("master")
+		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(dEnv.Config))
 		if err != nil {
 			return err
 		}
 
-		master, err := ddb.Resolve(ctx, ms, nil)
+		init, err := ddb.Resolve(ctx, ms, nil)
 		if err != nil {
 			return err
 		}
@@ -159,7 +160,7 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 			return err
 		}
 
-		isMerged, _ := master.CanFastReverseTo(ctx, cm)
+		isMerged, _ := init.CanFastReverseTo(ctx, cm)
 		if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 			return err
 		}

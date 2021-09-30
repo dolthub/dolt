@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -312,12 +313,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	if branch == "" {
-		for _, brnch := range branches {
-			branch = brnch.GetPath()
-			if branch == doltdb.MasterBranch {
-				break
-			}
-		}
+		branch = GetDefaultBranch(dEnv, branches)
 	}
 
 	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
@@ -329,7 +325,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 			return nil
 		}
 
-		branch = doltdb.MasterBranch
+		branch = env.GetDefaultInitBranch(dEnv.Config)
 		performPull = false
 	}
 
@@ -403,6 +399,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 	name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
 	email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
+	initBranch := env.GetDefaultInitBranch(dEnv.Config)
 
 	if *name == "" {
 		return errhand.BuildDError(fmt.Sprintf("error: could not determine user name. run dolt config --global --add %[1]s", env.UserNameKey)).Build()
@@ -410,10 +407,43 @@ func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return errhand.BuildDError("error: could not determine email. run dolt config --global --add %[1]s", env.UserEmailKey).Build()
 	}
 
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, doltdb.CommitNowFunc())
+	err := dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, initBranch, doltdb.CommitNowFunc())
 	if err != nil {
 		return errhand.BuildDError("error: could not initialize repository").AddCause(err).Build()
 	}
 
 	return nil
+}
+
+// GetDefaultBranch returns the default branch from among the branches given, returning
+// the configs default config branch first, then init branch main, then the old init branch master,
+// and finally the first lexicographical branch if none of the others are found
+func GetDefaultBranch(dEnv *env.DoltEnv, branches []ref.DoltRef) string {
+	if len(branches) == 0 {
+		return env.DefaultInitBranch
+	}
+
+	sort.Slice(branches, func(i, j int) bool {
+		return branches[i].GetPath() < branches[j].GetPath()
+	})
+
+	branchMap := make(map[string]ref.DoltRef)
+	for _, b := range branches {
+		branchMap[b.GetPath()] = b
+	}
+
+	if _, ok := branchMap[env.DefaultInitBranch]; ok {
+		return env.DefaultInitBranch
+	}
+	if _, ok := branchMap["master"]; ok {
+		return "master"
+	}
+
+	// todo: do we care about this during clone?
+	defaultOrMain := env.GetDefaultInitBranch(dEnv.Config)
+	if _, ok := branchMap[defaultOrMain]; ok {
+		return defaultOrMain
+	}
+
+	return branches[0].GetPath()
 }

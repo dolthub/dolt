@@ -46,10 +46,36 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names mus
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
+const DoltReadReplicaKey = "DOLT_READ_REPLICA_REMOTE"
+
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool)
+	DbData() env.DbData
+	Name() string
+
+	StartTransaction(ctx *sql.Context) (sql.Transaction, error)
+	Flush(*sql.Context) error
+	EditOptions() editor.Options
+}
+
+func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
+	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
+	for _, db := range dbs {
+		sqlDb, ok := db.(SqlDatabase)
+		if !ok {
+			continue
+		}
+		switch v := sqlDb.(type) {
+		//case ReadReplicaDatabase, *ReadReplicaDatabase:
+		//	dsqlDBs = append(dsqlDBs, v)
+		case ReadReplicaDatabase, Database:
+			dsqlDBs = append(dsqlDBs, v)
+		default:
+		}
+	}
+	return dsqlDBs
 }
 
 // Database implements sql.Database for a dolt DB.
@@ -89,6 +115,19 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 
 func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 	dsession := dsess.DSessFromSess(ctx.Session)
+
+	if !dsession.HasDB(ctx, db.Name()) {
+		init, err := GetInitialDBState(ctx, db)
+		if err != nil {
+			return nil, err
+		}
+
+		err = dsession.AddDB(ctx, init)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return dsession.StartTransaction(ctx, db.Name())
 }
 
@@ -138,6 +177,41 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 		gs:       globalstate.NewGlobalStateStore(),
 		editOpts: editOpts,
 	}
+}
+
+// GetInitialDBState returns the InitialDbState for |db|.
+func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
+	rsr := db.DbData().Rsr
+	ddb := db.DbData().Ddb
+
+	headCommit, err := ddb.Resolve(ctx, rsr.CWBHeadSpec(), rsr.CWBHeadRef())
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	ws, err := env.WorkingSet(ctx, ddb, rsr)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	remotes, err := rsr.GetRemotes()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	branches, err := rsr.GetBranches()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	return dsess.InitialDbState{
+		Db:         db,
+		HeadCommit: headCommit,
+		WorkingSet: ws,
+		DbData:     db.DbData(),
+		Remotes:    remotes,
+		Branches:   branches,
+	}, nil
 }
 
 // Name returns the name of this database, set at creation time.
@@ -1102,7 +1176,7 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 // there are I/O issues, but currently silently fails to register some
 // schema fragments if they don't parse, or if registries within the
 // `catalog` return errors.
-func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootValue) error {
+func RegisterSchemaFragments(ctx *sql.Context, db SqlDatabase, root *doltdb.RootValue) error {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return err

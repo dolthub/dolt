@@ -129,6 +129,44 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 }
 
+func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData types.Map, tableName string, autoVal types.Value) error {
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return doltdb.ErrNomsIO
+	}
+
+	vrw := dEnv.DoltDB.ValueReadWriter()
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	if err != nil {
+		return env.ErrMarshallingSchema
+	}
+
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, indexData, autoVal)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutTable(ctx, tableName, tbl)
+	if err != nil {
+		return err
+	}
+
+	rootHash, err := root.HashOf()
+	if err != nil {
+		return err
+	}
+
+	newRootHash, err := newRoot.HashOf()
+	if err != nil {
+		return err
+	}
+	if rootHash == newRootHash {
+		return nil
+	}
+
+	return dEnv.UpdateWorkingRoot(ctx, newRoot)
+}
+
 // MustSchema takes a variable number of columns and returns a schema.
 func MustSchema(cols ...schema.Column) schema.Schema {
 	hasPKCols := false
