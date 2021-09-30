@@ -177,6 +177,8 @@ type Database interface {
 	// WithCommitHookLogger passes an error handler from the user-facing session
 	// to a commit hook executed at the datas layer
 	SetCommitHookLogger(context.Context, io.Writer) *database
+
+	NomsRoot(context.Context) (hash.Hash, error)
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {

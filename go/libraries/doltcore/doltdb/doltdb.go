@@ -103,6 +103,10 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	return &DoltDB{db}, nil
 }
 
+func (ddb *DoltDB) NomsRoot(ctx context.Context) (hash.Hash, error) {
+	return ddb.db.NomsRoot(ctx)
+}
+
 func (ddb *DoltDB) CSMetricsSummary() string {
 	return datas.GetCSStatSummaryForDB(ddb.db)
 }

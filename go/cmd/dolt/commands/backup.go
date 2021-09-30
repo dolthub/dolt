@@ -64,15 +64,19 @@ Push heads to the backup, force overwriting existing refs if necessary`,
 		"[-v | --verbose]",
 		"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
 		"remove {{.LessThan}}name{{.GreaterThan}}",
-		"push {{.LessThan}}name{{.GreaterThan}}",
+		"restore {{.LessThan}}url{{.GreaterThan}}",
+		"sync {{.LessThan}}name{{.GreaterThan}}",
 	},
 }
 
 type BackupCmd struct{}
 
 const (
-	pushBackupId = "push"
-	cloneBackupId = "clone"
+	syncBackupId = "sync"
+	restoreBackupId = "restore"
+	addBackupId         = "add"
+	removeBackupId      = "remove"
+	removeBackupShortId = "rm"
 )
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -120,16 +124,16 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 	switch {
 	case apr.NArg() == 0:
 		verr = printBackups(dEnv, apr)
-	case apr.Arg(0) == addRemoteId:
+	case apr.Arg(0) == addBackupId:
 		verr = addBackup(dEnv, apr)
-	case apr.Arg(0) == removeRemoteId:
+	case apr.Arg(0) == removeBackupId:
 		verr = removeBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == removeRemoteShortId:
+	case apr.Arg(0) == removeBackupShortId:
 		verr = removeBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == pushBackupId:
-		verr = pushBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == cloneBackupId:
-		verr = cloneBackup(ctx, dEnv, apr)
+	case apr.Arg(0) == syncBackupId:
+		verr = syncBackup(ctx, dEnv, apr)
+	case apr.Arg(0) == restoreBackupId:
+		verr = restoreBackup(ctx, dEnv, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -235,7 +239,7 @@ func printBackups(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 }
 
 
-func pushBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -266,7 +270,7 @@ func pushBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	}
 }
 
-func cloneBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() < 3 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}

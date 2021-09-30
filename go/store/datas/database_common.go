@@ -83,6 +83,10 @@ func (db *database) chunkStore() chunks.ChunkStore {
 	return db.ChunkStore()
 }
 
+func (db *database) NomsRoot(ctx context.Context) (hash.Hash, error) {
+	return db.ChunkStore().Root(ctx)
+}
+
 func (db *database) Stats() interface{} {
 	return db.ChunkStore().Stats()
 }

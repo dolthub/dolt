@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/types"
 	"sync"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -430,56 +429,79 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 }
 
 func Backup(ctx context.Context, rsr env.RepoStateReader, srcDB *doltdb.DoltDB, tempTableDir string, backup env.Remote, progStarter ProgStarter, progStopper ProgStopper) error {
-	destDB, err := backup.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format())
+	// get chunkstore root
+	nomsRoot, err := srcDB.NomsRoot(ctx)
+	if err != nil {
+		return nil
+	}
+
+	destDb, err := backup.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format())
 	if err != nil {
 		return err
 	}
 
-	headRefs, err := srcDB.GetHeadRefs(ctx)
+	newCtx, cancelFunc := context.WithCancel(ctx)
+	wg, progChan, pullerEventCh := progStarter(newCtx)
+	err = destDb.PushChunksForRefHash(ctx, tempTableDir, srcDB, nomsRoot, pullerEventCh)
+	progStopper(cancelFunc, wg, progChan, pullerEventCh)
 	if err != nil {
 		return err
 	}
 
-	var stRef types.Ref
-	for _, headRef := range headRefs {
-		switch rf := headRef.(type) {
-		case ref.TagRef:
-			tag, err := srcDB.ResolveTag(ctx, rf)
-			stRef, err = tag.GetStRef()
-			if err != nil {
-				return err
-			}
-		case ref.InternalRef:
-		case ref.BranchRef, ref.RemoteRef, ref.WorkspaceRef:
-		//default:
-			cs, err := doltdb.NewCommitSpec(rf.GetPath())
-			if err != nil {
-				return err
-			}
-
-			commit, err := srcDB.Resolve(ctx, cs, rsr.CWBHeadRef())
-			if err != nil {
-				return err
-			}
-
-			stRef, err = commit.GetStRef()
-			if err != nil {
-				return err
-			}
-		}
-
-		newCtx, cancelFunc := context.WithCancel(ctx)
-		wg, progChan, pullerEventCh := progStarter(newCtx)
-		err = destDB.PushChunks(ctx, tempTableDir, srcDB, stRef, progChan, pullerEventCh)
-		progStopper(cancelFunc, wg, progChan, pullerEventCh)
-		if err != nil {
-			return err
-		}
-
-		err = destDB.SetHead(ctx, headRef, stRef)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
+
+	//func Backup(ctx context.Context, rsr env.RepoStateReader, srcDB *doltdb.DoltDB, tempTableDir string, backup env.Remote, progStarter ProgStarter, progStopper ProgStopper) error {
+//	destDB, err := backup.GetRemoteDB(ctx, srcDB.ValueReadWriter().Format())
+//	if err != nil {
+//		return err
+//	}
+//
+//	headRefs, err := srcDB.GetHeadRefs(ctx)
+//	if err != nil {
+//		return err
+//	}
+//
+//	var stRef types.Ref
+//	for _, headRef := range headRefs {
+//		switch rf := headRef.(type) {
+//		case ref.TagRef:
+//			tag, err := srcDB.ResolveTag(ctx, rf)
+//			stRef, err = tag.GetStRef()
+//			if err != nil {
+//				return err
+//			}
+//		case ref.InternalRef:
+//		case ref.BranchRef, ref.RemoteRef, ref.WorkspaceRef:
+//		//default:
+//			cs, err := doltdb.NewCommitSpec(rf.GetPath())
+//			if err != nil {
+//				return err
+//			}
+//
+//			commit, err := srcDB.Resolve(ctx, cs, rsr.CWBHeadRef())
+//			if err != nil {
+//				return err
+//			}
+//
+//			stRef, err = commit.GetStRef()
+//			if err != nil {
+//				return err
+//			}
+//		}
+//
+//		newCtx, cancelFunc := context.WithCancel(ctx)
+//		wg, progChan, pullerEventCh := progStarter(newCtx)
+//		err = destDB.PushChunks(ctx, tempTableDir, srcDB, stRef, progChan, pullerEventCh)
+//		progStopper(cancelFunc, wg, progChan, pullerEventCh)
+//		if err != nil {
+//			return err
+//		}
+//
+//		err = destDB.SetHead(ctx, headRef, stRef)
+//		if err != nil {
+//			return err
+//		}
+//	}
+//	return nil
+//}
