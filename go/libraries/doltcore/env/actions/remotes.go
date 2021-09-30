@@ -446,7 +446,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := progStarter(newCtx)
 	defer progStopper(cancelFunc, wg, progChan, pullerEventCh)
-	
+
 	err = destDb.PushChunksForRefHash(ctx, tempTableDir, srcDb, srcRoot, pullerEventCh)
 	if err != nil {
 		return err
