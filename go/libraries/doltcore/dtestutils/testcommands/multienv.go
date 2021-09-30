@@ -162,7 +162,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.T.Fatal(err)
 	}
 
-	repoPath := fmt.Sprintf("file://%s", cloneDir)
+	repoPath := fmt.Sprintf("file:///%s", cloneDir)
 	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_Default, filepath.Join(repoPath, dbfactory.DoltDir), filesys.LocalFS)
 	if err != nil {
 		mr.T.Fatal("Failed to initialize environment:" + err.Error())
