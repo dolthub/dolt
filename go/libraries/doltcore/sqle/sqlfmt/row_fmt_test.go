@@ -162,7 +162,7 @@ func TestRowAsUpdateStmt(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
 
-	createColDiffs := func (cols []string) map[string]interface{} {
+	createColDiffs := func(cols []string) map[string]interface{} {
 		ret := make(map[string]interface{})
 		for _, v := range cols {
 			ret[v] = true
@@ -177,7 +177,7 @@ func TestRowAsUpdateStmt(t *testing.T) {
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
 			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=FALSE,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
-			collDiff:        createColDiffs([]string{"name", "age", "is_married", "title"}),
+			collDiff:       createColDiffs([]string{"name", "age", "is_married", "title"}),
 		},
 		{
 			name:           "embedded quotes",
@@ -194,7 +194,7 @@ func TestRowAsUpdateStmt(t *testing.T) {
 			collDiff:       createColDiffs([]string{"name", "age", "is_married", "title"}),
 		},
 		{
-			name: 			"partial update",
+			name:           "partial update",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
 			sch:            dtestutils.TypedSchema,
 			expectedOutput: "UPDATE `people` SET `name`='some guy' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
