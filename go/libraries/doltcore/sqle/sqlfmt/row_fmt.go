@@ -94,9 +94,10 @@ func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 
 	b.WriteString(" WHERE (")
 	seenOne := false
+	isKeyless := tableSch.GetPKCols().Size() == 0
 	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		if col.IsPartOfPK {
+		if col.IsPartOfPK || isKeyless {
 			if seenOne {
 				b.WriteString(" AND ")
 			}

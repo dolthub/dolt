@@ -390,18 +390,6 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
 	for _, td := range tableDeltas {
-		if dArgs.diffOutput == SQLDiffOutput {
-			ok, err := td.IsKeyless(ctx)
-			if err != nil {
-				return errhand.VerboseErrorFromError(err)
-			}
-			if ok {
-				// todo: implement keyless SQL diff
-				// todo: should there be a waring here?
-				continue
-			}
-		}
-
 		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
 			continue
 		}
