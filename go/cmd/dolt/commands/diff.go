@@ -397,7 +397,6 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			}
 			if ok {
 				// todo: implement keyless SQL diff
-				// todo: should there be a waring here?
 				continue
 			}
 		}
