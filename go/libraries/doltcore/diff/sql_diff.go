@@ -101,7 +101,6 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 					colDiffsInter[k] = v
 				}
 
-				// TODO: minimize update statement to modified rows
 				stmt, err := sqlfmt.RowAsUpdateStmt(r, sds.tableName, sds.sch, colDiffsInter)
 
 				if err != nil {
