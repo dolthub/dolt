@@ -28,8 +28,8 @@ type WorkingSetRef struct {
 
 const WorkingSetRefPrefix = "workingSets"
 
-// NewWorkingSetRef creates a working set ref from a name or a working set ref e.g. heads/master, or
-// workingSets/heads/master
+// NewWorkingSetRef creates a working set ref from a name or a working set ref e.g. heads/main, or
+// workingSets/heads/main
 func NewWorkingSetRef(workingSetName string) WorkingSetRef {
 	prefix := WorkingSetRefPrefix + "/"
 	if strings.HasPrefix(workingSetName, prefix) {

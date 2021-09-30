@@ -46,10 +46,34 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names mus
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
+const DoltReadReplicaKey = "dolt_read_replica_remote"
+
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool)
+	DbData() env.DbData
+	Name() string
+
+	StartTransaction(ctx *sql.Context) (sql.Transaction, error)
+	Flush(*sql.Context) error
+	EditOptions() editor.Options
+}
+
+func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
+	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
+	for _, db := range dbs {
+		sqlDb, ok := db.(SqlDatabase)
+		if !ok {
+			continue
+		}
+		switch v := sqlDb.(type) {
+		case ReadReplicaDatabase, Database:
+			dsqlDBs = append(dsqlDBs, v)
+		default:
+		}
+	}
+	return dsqlDBs
 }
 
 // Database implements sql.Database for a dolt DB.
@@ -154,7 +178,7 @@ func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Databa
 }
 
 // GetInitialDBState returns the InitialDbState for |db|.
-func GetInitialDBState(ctx context.Context, db Database) (dsess.InitialDbState, error) {
+func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbState, error) {
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
@@ -1150,7 +1174,7 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 // there are I/O issues, but currently silently fails to register some
 // schema fragments if they don't parse, or if registries within the
 // `catalog` return errors.
-func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootValue) error {
+func RegisterSchemaFragments(ctx *sql.Context, db SqlDatabase, root *doltdb.RootValue) error {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return err

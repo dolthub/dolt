@@ -11,7 +11,7 @@ setup() {
     dolt init
     dolt remote add origin file://../rem1
     dolt remote add test-remote file://../rem1
-    dolt push origin master
+    dolt push origin main
 
     cd $TMPDIRS
     dolt clone file://rem1 repo2
@@ -36,7 +36,7 @@ teardown() {
 
 @test "sql-push: dolt_push origin" {
     cd repo1
-    dolt sql -q "select dolt_push('origin', 'master')"
+    dolt sql -q "select dolt_push('origin', 'main')"
 
     cd ../repo2
     dolt pull origin
@@ -49,7 +49,7 @@ teardown() {
 
 @test "sql-push: dolt_push custom remote" {
     cd repo1
-    dolt sql -q "select dolt_push('test-remote', 'master')"
+    dolt sql -q "select dolt_push('test-remote', 'main')"
 
     cd ../repo2
     dolt pull origin
@@ -91,7 +91,7 @@ teardown() {
 
 @test "sql-push: dolt_push --set-upstream transient outside of session" {
     cd repo1
-    dolt sql -q "select dolt_push('-u', 'origin', 'master')"
+    dolt sql -q "select dolt_push('-u', 'origin', 'main')"
 
     cd ../repo2
     dolt pull origin
@@ -112,20 +112,20 @@ teardown() {
     cd repo2
     dolt sql -q "create table t2 (a int)"
     dolt commit -am "commit to override"
-    dolt push origin master
+    dolt push origin main
 
     cd ../repo1
-    run dolt sql -q "select dolt_push('origin', 'master')"
+    run dolt sql -q "select dolt_push('origin', 'main')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "the tip of your current branch is behind its remote counterpart" ]] || false
 
 
-    dolt sql -q "select dolt_push('--force', 'origin', 'master')"
+    dolt sql -q "select dolt_push('--force', 'origin', 'main')"
 }
 
 @test "sql-push: push to unknown remote" {
     cd repo1
-    run dolt sql -q "select dolt_push('unknown', 'master')"
+    run dolt sql -q "select dolt_push('unknown', 'main')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote: 'unknown'" ]] || false
 }

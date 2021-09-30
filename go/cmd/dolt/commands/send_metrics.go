@@ -79,7 +79,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 
 	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
 
-	disabled, err := strconv.ParseBool(*metricsDisabled)
+	disabled, err := strconv.ParseBool(metricsDisabled)
 	if err != nil {
 		// log.Print(err)
 		return 1
@@ -134,20 +134,20 @@ func getGRPCEmitter(dEnv *env.DoltEnv) *events.GrpcEmitter {
 	portStr := dEnv.Config.GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
 	insecureStr := dEnv.Config.GetStringOrDefault(env.MetricsInsecure, "false")
 
-	port, err := strconv.ParseUint(*portStr, 10, 16)
+	port, err := strconv.ParseUint(portStr, 10, 16)
 
 	if err != nil {
-		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, *portStr))
+		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, portStr))
 		return nil
 	}
 
-	insecure, err := strconv.ParseBool(*insecureStr)
+	insecure, err := strconv.ParseBool(insecureStr)
 
 	if err != nil {
-		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid true/false value", env.MetricsInsecure, *insecureStr))
+		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid true/false value", env.MetricsInsecure, insecureStr))
 	}
 
-	hostAndPort := fmt.Sprintf("%s:%d", *host, port)
+	hostAndPort := fmt.Sprintf("%s:%d", host, port)
 	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
 		Insecure: insecure,

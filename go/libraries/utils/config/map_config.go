@@ -21,6 +21,10 @@ type MapConfig struct {
 	properties map[string]string
 }
 
+var _ ReadableConfig = &MapConfig{}
+var _ WritableConfig = &MapConfig{}
+var _ ReadWriteConfig = &MapConfig{}
+
 // NewMapConfig creates a config from a map.
 func NewMapConfig(properties map[string]string) *MapConfig {
 	return &MapConfig{properties}
@@ -33,6 +37,13 @@ func (mc *MapConfig) GetString(k string) (string, error) {
 	}
 
 	return "", ErrConfigParamNotFound
+}
+
+func (mc *MapConfig) GetStringOrDefault(key, defStr string) string {
+	if val, err := mc.GetString(key); err == nil {
+		return val
+	}
+	return defStr
 }
 
 // SetString sets the values for a map of updates.

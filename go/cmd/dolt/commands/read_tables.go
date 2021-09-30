@@ -18,15 +18,15 @@ import (
 	"context"
 	"path"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var readTablesDocs = cli.CommandDocumentationContent{
@@ -120,7 +120,12 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	dEnv, verr = initializeShallowCloneRepo(ctx, dEnv, srcDB.Format(), dir)
+	branches, err := srcDB.GetBranches(ctx)
+	if verr != nil {
+		BuildVerrAndExit("Failed to get remote branches", err)
+	}
+
+	dEnv, verr = initializeShallowCloneRepo(ctx, dEnv, srcDB.Format(), dir, env.GetDefaultBranch(dEnv, branches))
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
@@ -217,21 +222,20 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 	return srcDB, srcRoot, nil
 }
 
-func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *types.NomsBinFormat, dir string) (*env.DoltEnv, errhand.VerboseError) {
-	var verr errhand.VerboseError
-	dEnv, verr = envForClone(ctx, nbf, env.NoRemote, dir, dEnv.FS, dEnv.Version)
+func initializeShallowCloneRepo(ctx context.Context, dEnv *env.DoltEnv, nbf *types.NomsBinFormat, dir, branchName string) (*env.DoltEnv, errhand.VerboseError) {
+	var err error
+	dEnv, err = actions.EnvForClone(ctx, nbf, env.NoRemote, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 
-	if verr != nil {
-		return nil, verr
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	err := initEmptyClonedRepo(ctx, dEnv)
+	err = actions.InitEmptyClonedRepo(ctx, dEnv)
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to initialize repo.").AddCause(err).Build()
 	}
 
-	err = dEnv.InitializeRepoState(ctx)
-
+	err = dEnv.InitializeRepoState(ctx, branchName)
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to initialize repo.").AddCause(err).Build()
 	}

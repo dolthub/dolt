@@ -15,13 +15,13 @@
 package dfunctions
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -30,16 +30,16 @@ const DoltCommitFuncName = "dolt_commit"
 
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
+// DoltCommitFunc runs a `dolt commit` in the SQL context, committing staged changes to head.
 type DoltCommitFunc struct {
 	children []sql.Expression
 }
 
 // NewDoltCommitFunc creates a new DoltCommitFunc expression whose children represents the args passed in DOLT_COMMIT.
-func NewDoltCommitFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewDoltCommitFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltCommitFunc{children: args}, nil
 }
 
-// Runs DOLT_COMMIT in the sql engine which models the behavior of `dolt commit`. Commits staged staged changes to head.
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
@@ -80,7 +80,6 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		email = dSess.Email
 	}
 
-	// Get the commit message.
 	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
 		return nil, fmt.Errorf("Must provide commit message.")
@@ -96,38 +95,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-	// Commit any pending transaction before a dolt_commit
-	tx := ctx.Session.GetTransaction()
-	_, ok = tx.(*dsess.DoltTransaction)
-	if !ok {
-		return nil, fmt.Errorf("expected a DoltTransaction, got %T", tx)
-	}
-
-	err = dSess.SetRoots(ctx, dbName, roots)
-	if err != nil {
-		return nil, err
-	}
-
-	err = dSess.CommitTransaction(ctx, dbName, tx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Unsetting the transaction here ensures that it won't be re-committed when this statement concludes
-	ctx.SetTransaction(nil)
-
-	var mergeParentCommits []*doltdb.Commit
-	ws, err := dSess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	if ws.MergeActive() {
-		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
-	}
-
-	// Now do a Dolt commit
-	commit, err := dSess.CommitToDolt(ctx, roots, mergeParentCommits, dbName, actions.CommitStagedProps{
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -136,15 +104,25 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		Email:      email,
 	})
 	if err != nil {
-		return 1, err
+		return nil, err
 	}
 
-	cmHash, err := commit.HashOf()
+	// Nothing to commit, and we didn't pass --allowEmpty
+	if pendingCommit == nil {
+		return nil, errors.New("nothing to commit")
+	}
+
+	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
 	if err != nil {
 		return nil, err
 	}
 
-	return cmHash.String(), nil
+	h, err := newCommit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	return h.String(), nil
 }
 
 func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {
@@ -185,8 +163,8 @@ func (d DoltCommitFunc) IsNullable() bool {
 	return false
 }
 
-func (d DoltCommitFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
-	return NewDoltCommitFunc(ctx, children...)
+func (d DoltCommitFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	return NewDoltCommitFunc(children...)
 }
 
 func (d DoltCommitFunc) Resolved() bool {

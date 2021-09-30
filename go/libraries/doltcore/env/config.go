@@ -86,6 +86,8 @@ type DoltCliConfig struct {
 	fs filesys.ReadWriteFS
 }
 
+var _ config.ReadableConfig = &DoltCliConfig{}
+
 func loadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
 	ch := config.NewConfigHierarchy()
 
@@ -159,7 +161,7 @@ func (dcc *DoltCliConfig) GetConfig(element DoltConfigElement) (config.ReadWrite
 
 // GetStringOrDefault retrieves a string from the config hierarchy and returns it if available.  Otherwise it returns
 // the default string value
-func (dcc *DoltCliConfig) GetStringOrDefault(key, defStr string) *string {
+func (dcc *DoltCliConfig) GetStringOrDefault(key, defStr string) string {
 	return GetStringOrDefault(dcc.ch, key, defStr)
 }
 
@@ -180,14 +182,14 @@ func (dcc *DoltCliConfig) IfEmptyUseConfig(val, key string) string {
 	return cfgVal
 }
 
-func GetStringOrDefault(cfg config.ReadableConfig, key, defStr string) *string {
+func GetStringOrDefault(cfg config.ReadableConfig, key, defStr string) string {
 	val, err := cfg.GetString(key)
 
 	if err != nil {
-		return &defStr
+		return defStr
 	}
 
-	return &val
+	return val
 }
 
 // GetNameAndEmail returns the name and email from the supplied config

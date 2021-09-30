@@ -114,13 +114,13 @@ var mergeSchemaTests = []mergeSchemaTest{
 			{commands.SqlCmd{}, []string{"-q", "alter table test drop column c2;"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column c8 int;"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test drop column c3;"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column c9 int;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
@@ -136,12 +136,12 @@ var mergeSchemaTests = []mergeSchemaTest{
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "alter table test modify c1 int null;"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test modify c2 int not null;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
@@ -157,12 +157,12 @@ var mergeSchemaTests = []mergeSchemaTest{
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "create index c3_idx on test(c3);"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test drop index c1_idx;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
@@ -178,12 +178,12 @@ var mergeSchemaTests = []mergeSchemaTest{
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "alter table test rename column c3 to c33;"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test rename column c2 to c22;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
@@ -200,7 +200,7 @@ var mergeSchemaTests = []mergeSchemaTest{
 			{commands.SqlCmd{}, []string{"-q", "alter table test drop index c1_idx;"}},
 			{commands.SqlCmd{}, []string{"-q", "create index c1_index on test(c1);"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
@@ -216,12 +216,12 @@ var mergeSchemaTests = []mergeSchemaTest{
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column c4 int;"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column c4 int;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
@@ -238,12 +238,12 @@ var mergeSchemaTests = []mergeSchemaTest{
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "create index c3_idx on test(c3);"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "create index c3_idx on test(c3);"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
@@ -270,13 +270,13 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.SqlCmd{}, []string{"-q", "alter table test rename column c3 to c4;"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column C6 int;"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test rename column c2 to c4;"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column c6 int;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expConflict: merge.SchemaConflict{
 			TableName: "test",
@@ -299,12 +299,12 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "create index both on test (c1,c2);"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "create index both on test (c2, c3);"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expConflict: merge.SchemaConflict{
 			TableName: "test",
@@ -323,14 +323,14 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column c40 int;"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column c6 bigint;"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column c40 int;"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test rename column c40 to c44;"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test add column c6 tinyint;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expConflict: merge.SchemaConflict{
 			TableName: "test",
@@ -353,12 +353,12 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "create index c3_idx on test(c3);"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "create index c3_index on test(c3);"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expConflict: merge.SchemaConflict{
 			TableName: "test",
@@ -378,7 +378,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.SqlCmd{}, []string{"-q", "alter table test drop primary key;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-			{commands.CheckoutCmd{}, []string{"master"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expectedErr: merge.ErrMergeWithDifferentPkSets,
 	},
@@ -421,12 +421,12 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 	//	setup: []testCommand{
 	//		{commands.SqlCmd{}, []string{"-q", "alter table quiz add constraint q2_fk foreign key (q2) references test(t2);"}},
 	//		{commands.AddCmd{}, []string{"."}},
-	//		{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
+	//		{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 	//		{commands.CheckoutCmd{}, []string{"other"}},
 	//		{commands.SqlCmd{}, []string{"-q", "alter table quiz drop constraint q1_fk;"}},
 	//		{commands.AddCmd{}, []string{"."}},
 	//		{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
-	//		{commands.CheckoutCmd{}, []string{"master"}},
+	//		{commands.CheckoutCmd{}, []string{"main"}},
 	//	},
 	//	fkColl: fkCollection(
 	//		&doltdb.ForeignKey{
@@ -478,8 +478,8 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 		c.exec(t, ctx, dEnv)
 	}
 
-	// assert that we're on master
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"master"}, dEnv)
+	// assert that we're on main
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
 	require.Equal(t, 0, exitCode)
 
 	// merge branches
@@ -523,18 +523,18 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 		c.exec(t, ctx, dEnv)
 	}
 
-	// assert that we're on master
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"master"}, dEnv)
+	// assert that we're on main
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
 	require.Equal(t, 0, exitCode)
 
-	masterSch := getSchema(t, dEnv)
+	mainSch := getSchema(t, dEnv)
 
 	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv)
 	require.Equal(t, 0, exitCode)
 
 	otherSch := getSchema(t, dEnv)
 
-	_, actConflicts, err := merge.SchemaMerge(masterSch, otherSch, ancSch, "test")
+	_, actConflicts, err := merge.SchemaMerge(mainSch, otherSch, ancSch, "test")
 	if test.expectedErr != nil {
 		assert.True(t, errors.Is(err, test.expectedErr))
 		return
@@ -572,11 +572,11 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 		c.exec(t, ctx, dEnv)
 	}
 
-	// assert that we're on master
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"master"}, dEnv)
+	// assert that we're on main
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv)
 	require.Equal(t, 0, exitCode)
 
-	masterRoot, err := dEnv.WorkingRoot(ctx)
+	mainRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
 	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv)
@@ -586,7 +586,7 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	require.NoError(t, err)
 
 	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
-	mergedRoot, _, err := merge.MergeRoots(ctx, masterRoot, otherRoot, ancRoot, opts)
+	mergedRoot, _, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, opts)
 	assert.NoError(t, err)
 
 	fkc, err := mergedRoot.GetForeignKeyCollection(ctx)

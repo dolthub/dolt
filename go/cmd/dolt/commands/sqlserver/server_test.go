@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
@@ -26,6 +27,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 type testPerson struct {
@@ -247,13 +251,13 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 }
 
 func TestServerSetDefaultBranch(t *testing.T) {
-	env := dtestutils.CreateEnvWithSeedData(t)
+	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15302)
 
 	sc := CreateServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), "", serverConfig, sc, env)
+		_, _ = Serve(context.Background(), "", serverConfig, sc, dEnv)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
@@ -264,13 +268,15 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
+	defaultBranch := env.DefaultInitBranch
+
 	tests := []struct {
 		query       *dbr.SelectStmt
 		expectedRes []testBranch
 	}{
 		{
 			query:       sess.Select("active_branch() as branch"),
-			expectedRes: []testBranch{{"master"}},
+			expectedRes: []testBranch{{defaultBranch}},
 		},
 		{
 			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'refs/heads/new'"),
@@ -278,14 +284,14 @@ func TestServerSetDefaultBranch(t *testing.T) {
 		},
 		{
 			query:       sess.Select("active_branch() as branch"),
-			expectedRes: []testBranch{{"master"}},
+			expectedRes: []testBranch{{defaultBranch}},
 		},
 		{
 			query:       sess.Select("dolt_checkout('-b', 'new')"),
 			expectedRes: []testBranch{{""}},
 		},
 		{
-			query:       sess.Select("dolt_checkout('master')"),
+			query:       sess.Select("dolt_checkout('main')"),
 			expectedRes: []testBranch{{""}},
 		},
 	}
@@ -320,6 +326,13 @@ func TestServerSetDefaultBranch(t *testing.T) {
 		},
 	}
 
+	defer func(sess *dbr.Session) {
+		var res []struct {
+			int
+		}
+		sess.SelectBySql("set GLOBAL dolt_default_branch = ''").LoadContext(context.Background(), &res)
+	}(sess)
+
 	for _, test := range tests {
 		t.Run(test.query.Query, func(t *testing.T) {
 			var branch []testBranch
@@ -354,4 +367,72 @@ func TestServerSetDefaultBranch(t *testing.T) {
 			assert.ElementsMatch(t, branch, test.expectedRes)
 		})
 	}
+
+	var res []struct {
+		int
+	}
+	sess.SelectBySql("set GLOBAL dolt_default_branch = ''").LoadContext(context.Background(), &res)
+}
+
+func TestReadReplica(t *testing.T) {
+	var err error
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("no working directory: %s", err.Error())
+	}
+	defer os.Chdir(cwd)
+
+	multiSetup := testcommands.NewMultiRepoTestSetup(t)
+	defer os.RemoveAll(multiSetup.Root)
+
+	multiSetup.NewDB("read_replica")
+	multiSetup.NewRemote("remote1")
+	multiSetup.PushToRemote("read_replica", "remote1")
+	multiSetup.CloneDB("remote1", "source_db")
+
+	readReplicaDbName := multiSetup.DbNames[0]
+	sourceDbName := multiSetup.DbNames[1]
+
+	localCfg, ok := multiSetup.MrEnv[readReplicaDbName].Config.GetConfig(env.LocalConfig)
+	if !ok {
+		t.Fatal("local config does not exist")
+	}
+	localCfg.SetStrings(map[string]string{dsqle.DoltReadReplicaKey: "remote1"})
+
+	// start server as read replica
+	sc := CreateServerController()
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
+
+	func() {
+		err = os.Setenv(dsqle.DoltReadReplicaKey, "remote1")
+		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
+
+		go func() {
+			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readReplicaDbName])
+		}()
+		err = sc.WaitForStart()
+		require.NoError(t, err)
+	}()
+	defer sc.StopServer()
+	defer os.Unsetenv(dsqle.DoltReadReplicaKey)
+
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
+	defer conn.Close()
+
+	require.NoError(t, err)
+	sess := conn.NewSession(nil)
+
+	t.Run("push common new commit", func(t *testing.T) {
+		var res []string
+		replicatedTable := "new_table"
+		multiSetup.CreateTable(sourceDbName, replicatedTable)
+		multiSetup.StageAll(sourceDbName)
+		_ = multiSetup.CommitWithWorkingSet(sourceDbName)
+		multiSetup.PushToRemote(sourceDbName, "remote1")
+
+		q := sess.SelectBySql("show tables")
+		_, err := q.LoadContext(context.Background(), &res)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, res, []string{replicatedTable})
+	})
 }

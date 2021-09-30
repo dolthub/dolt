@@ -31,6 +31,10 @@ type FileConfig struct {
 	properties map[string]string
 }
 
+var _ ReadableConfig = &FileConfig{}
+var _ WritableConfig = &FileConfig{}
+var _ ReadWriteConfig = &FileConfig{}
+
 // NewFileConfig creates a new empty config and writes it to a newly created file.  If a file already exists at this
 // location it will be overwritten. If a directory does not exist where this file should live, it will be created.
 func NewFileConfig(path string, fs filesys.ReadWriteFS, properties map[string]string) (*FileConfig, error) {
@@ -77,6 +81,15 @@ func (fc *FileConfig) GetString(k string) (string, error) {
 	}
 
 	return "", ErrConfigParamNotFound
+}
+
+// GetString retrieves a string from the cached config state
+func (fc *FileConfig) GetStringOrDefault(k, defStr string) string {
+	if val, ok := fc.properties[k]; ok {
+		return val
+	}
+
+	return defStr
 }
 
 // SetStrings will set the value of configuration parameters in memory, and persist any changes to the backing file.

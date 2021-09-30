@@ -104,7 +104,7 @@ func loadEndpoint(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) string {
 
 	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
 	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
-	return fmt.Sprintf("%s:%s", *host, *port)
+	return fmt.Sprintf("%s:%s", host, port)
 }
 
 func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCreds, errhand.VerboseError) {

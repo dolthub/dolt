@@ -2,7 +2,7 @@ name: Test Go
 
 on:
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
     paths:
       - 'go/**'
   workflow_dispatch:

@@ -219,7 +219,7 @@ teardown() {
     dolt sql -q "ALTER TABLE t drop PRIMARY key"
     dolt add .
     dolt commit -am "cm2"
-    dolt checkout master
+    dolt checkout main
 
     run dolt merge test
     [ "$status" -eq 0 ]
@@ -244,7 +244,7 @@ teardown() {
     ! [[ "$output" =~ 'new table' ]] || false
 
     dolt commit -m "cm2"
-    dolt checkout master
+    dolt checkout main
 
     dolt sql -q "INSERT INTO t values (2,2,2)"
     dolt commit -am "cm3"
@@ -270,7 +270,7 @@ teardown() {
     ! [[ "$output" =~ 'new table' ]] || false
 
     dolt commit -m "cm2"
-    dolt checkout master
+    dolt checkout main
 
     dolt sql -q "INSERT INTO t values (2,2,2)"
     dolt commit -am "cm3"
@@ -491,7 +491,7 @@ SQL
     run dolt status
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
-    dolt checkout master
+    dolt checkout main
     run dolt diff test
     [[ "$output" =~ '<    PRIMARY KEY (val, pk)' ]] || false
     [[ "$output" =~ '>    PRIMARY KEY (pk, val)' ]] || false
@@ -522,7 +522,7 @@ SQL
     run dolt status
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
-    dolt checkout master
+    dolt checkout main
     run dolt diff test
     [[ "$output" =~ '<    PRIMARY KEY (val2, pk)' ]] || false
     [[ "$output" =~ '>    PRIMARY KEY (pk, val)' ]] || false

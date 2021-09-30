@@ -30,6 +30,10 @@ type ReadableConfig interface {
 	// ReadableConfig implementation.
 	GetString(key string) (value string, err error)
 
+	// GetStringOrDefault retrieves a string from the config hierarchy and returns it if available. Otherwise it returns
+	// the default string value
+	GetStringOrDefault(key, defStr string) string
+
 	// Iter will perform a callback for each value in a config until all values have been exhausted or until the
 	// callback returns true indicating that it should stop.
 	Iter(func(string, string) (stop bool))

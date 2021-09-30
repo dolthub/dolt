@@ -207,7 +207,7 @@ func getCommitFilterFunc(ctx *sql.Context, filters []sql.Expression) (doltdb.Com
 
 func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Expression {
 	for i := range filters {
-		filters[i], _ = expression.TransformUp(ctx, filters[i], func(e sql.Expression) (sql.Expression, error) {
+		filters[i], _ = expression.TransformUp(filters[i], func(e sql.Expression) (sql.Expression, error) {
 			gf, ok := e.(*expression.GetField)
 			if !ok {
 				return e, nil

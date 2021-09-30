@@ -18,6 +18,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/types"
@@ -25,13 +27,13 @@ import (
 
 func TestLog(t *testing.T) {
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_7_18, "Bill Billerson", "bigbillieb@fake.horse")
+	err := dEnv.InitRepo(context.Background(), types.Format_7_18, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
 
 	if err != nil {
 		t.Error("Failed to init repo")
 	}
 
-	cs, _ := doltdb.NewCommitSpec("master")
+	cs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	commit, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
 
 	cli.Println(commit)

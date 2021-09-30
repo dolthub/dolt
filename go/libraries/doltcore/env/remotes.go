@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -55,6 +56,17 @@ type Remote struct {
 	FetchSpecs []string          `json:"fetch_specs"`
 	Params     map[string]string `json:"params"`
 	dialer     dbfactory.GRPCDialProvider
+}
+
+func GetRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (Remote, *doltdb.DoltDB, error) {
+	r := NewRemote(remoteName, remoteUrl, params, dialer)
+	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
+
+	if err != nil {
+		return NoRemote, nil, err
+	}
+
+	return r, ddb, nil
 }
 
 func NewRemote(name, url string, params map[string]string, dialer dbfactory.GRPCDialProvider) Remote {
@@ -301,7 +313,7 @@ func parseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error)
 }
 
 // if possible, convert refs to full spec names. prefer branches over tags.
-// eg "master" -> "refs/heads/master", "v1" -> "refs/tags/v1"
+// eg "main" -> "refs/heads/main", "v1" -> "refs/tags/v1"
 func disambiguateRefSpecStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr string) (string, error) {
 	brachRefs, err := ddb.GetBranches(ctx)
 
@@ -448,4 +460,37 @@ func getAbsFileRemoteUrl(urlStr string, fs filesys2.Filesys) (string, error) {
 		urlStr = "/" + urlStr
 	}
 	return dbfactory.FileScheme + "://" + urlStr, nil
+}
+
+// GetDefaultBranch returns the default branch from among the branches given, returning
+// the configs default config branch first, then init branch main, then the old init branch master,
+// and finally the first lexicographical branch if none of the others are found
+func GetDefaultBranch(dEnv *DoltEnv, branches []ref.DoltRef) string {
+	if len(branches) == 0 {
+		return DefaultInitBranch
+	}
+
+	sort.Slice(branches, func(i, j int) bool {
+		return branches[i].GetPath() < branches[j].GetPath()
+	})
+
+	branchMap := make(map[string]ref.DoltRef)
+	for _, b := range branches {
+		branchMap[b.GetPath()] = b
+	}
+
+	if _, ok := branchMap[DefaultInitBranch]; ok {
+		return DefaultInitBranch
+	}
+	if _, ok := branchMap["master"]; ok {
+		return "master"
+	}
+
+	// todo: do we care about this during clone?
+	defaultOrMain := GetDefaultInitBranch(dEnv.Config)
+	if _, ok := branchMap[defaultOrMain]; ok {
+		return defaultOrMain
+	}
+
+	return branches[0].GetPath()
 }

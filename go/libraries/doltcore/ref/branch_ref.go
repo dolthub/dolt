@@ -33,7 +33,7 @@ func (br BranchRef) GetPath() string {
 	return br.branch
 }
 
-// String returns the fully qualified reference name e.g. refs/heads/master
+// String returns the fully qualified reference name e.g. refs/heads/main
 func (br BranchRef) String() string {
 	return String(br)
 }
@@ -42,7 +42,7 @@ func (br BranchRef) MarshalJSON() ([]byte, error) {
 	return MarshalJSON(br)
 }
 
-// NewBranchRef creates a reference to a local branch from a branch name or a branch ref e.g. master, or refs/heads/master
+// NewBranchRef creates a reference to a local branch from a branch name or a branch ref e.g. main, or refs/heads/main
 func NewBranchRef(branchName string) BranchRef {
 	if IsRef(branchName) {
 		prefix := PrefixForType(BranchRefType)

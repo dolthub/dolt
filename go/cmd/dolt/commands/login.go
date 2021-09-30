@@ -192,7 +192,7 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 
 func openBrowserForCredsAdd(dEnv *env.DoltEnv, dc creds.DoltCreds) {
 	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
-	url := fmt.Sprintf("%s#%s", *loginUrl, dc.PubKeyBase32Str())
+	url := fmt.Sprintf("%s#%s", loginUrl, dc.PubKeyBase32Str())
 	cli.Printf("Opening a browser to:\n\t%s\nPlease associate your key with your account.\n", url)
 	open.Start(url)
 }
@@ -201,7 +201,7 @@ func getCredentialsClient(dEnv *env.DoltEnv, dc creds.DoltCreds) (remotesapi.Cre
 	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
 	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
 	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
-		Endpoint: fmt.Sprintf("%s:%s", *host, *port),
+		Endpoint: fmt.Sprintf("%s:%s", host, port),
 		Creds:    dc,
 	})
 	if err != nil {

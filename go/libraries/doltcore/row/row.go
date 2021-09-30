@@ -119,7 +119,7 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 
 // ReduceToIndexKeysFromTagMap creates a full key and a partial key from the given map of tags (first tuple being the
 // full key). Please refer to the note in the index editor for more information regarding partial keys.
-func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tagToVal map[uint64]types.Value) (types.Tuple, types.Tuple, error) {
+func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tagToVal map[uint64]types.Value, tf *types.TupleFactory) (types.Tuple, types.Tuple, error) {
 	vals := make([]types.Value, 0, len(idx.AllTags())*2)
 	for _, tag := range idx.AllTags() {
 		val, ok := tagToVal[tag]
@@ -128,15 +128,32 @@ func ReduceToIndexKeysFromTagMap(nbf *types.NomsBinFormat, idx schema.Index, tag
 		}
 		vals = append(vals, types.Uint(tag), val)
 	}
-	fullKey, err := types.NewTuple(nbf, vals...)
-	if err != nil {
-		return types.Tuple{}, types.Tuple{}, err
+
+	if tf == nil {
+		fullKey, err := types.NewTuple(nbf, vals...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, err
+		}
+
+		partialKey, err := types.NewTuple(nbf, vals[:idx.Count()*2]...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, err
+		}
+
+		return fullKey, partialKey, nil
+	} else {
+		fullKey, err := tf.Create(vals...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, err
+		}
+
+		partialKey, err := tf.Create(vals[:idx.Count()*2]...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, err
+		}
+
+		return fullKey, partialKey, nil
 	}
-	partialKey, err := types.NewTuple(nbf, vals[:idx.Count()*2]...)
-	if err != nil {
-		return types.Tuple{}, types.Tuple{}, err
-	}
-	return fullKey, partialKey, nil
 }
 
 // ReduceToIndexPartialKey creates an index record from a primary storage record.

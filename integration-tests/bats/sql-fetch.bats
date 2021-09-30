@@ -11,7 +11,7 @@ setup() {
     dolt init
     dolt remote add origin file://../rem1
     dolt remote add test-remote file://../rem1
-    dolt push origin master
+    dolt push origin main
 
     cd $TMPDIRS
     dolt clone file://rem1 repo2
@@ -26,7 +26,7 @@ setup() {
     dolt sql -q "insert into t1 values (0,0)"
     dolt commit -am "Second commit"
     dolt branch feature
-    dolt push origin master
+    dolt push origin main
     cd $TMPDIRS
 }
 
@@ -40,11 +40,11 @@ teardown() {
     cd repo2
     dolt sql -q "select dolt_fetch()"
 
-    run dolt diff master origin/master
+    run dolt diff main origin/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('origin/master')" -r csv
+    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -55,25 +55,25 @@ teardown() {
     cd repo2
     dolt sql -q "select dolt_fetch('origin')"
 
-    run dolt diff master origin/master
+    run dolt diff main origin/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('origin/master')" -r csv
+    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-fetch: dolt_fetch master" {
+@test "sql-fetch: dolt_fetch main" {
     cd repo2
-    dolt sql -q "select dolt_fetch('origin', 'master')"
+    dolt sql -q "select dolt_fetch('origin', 'main')"
 
-    run dolt diff master origin/master
+    run dolt diff main origin/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('origin/master')" -r csv
+    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -83,11 +83,11 @@ teardown() {
     cd repo2
     dolt sql -q "select dolt_fetch('test-remote')"
 
-   run dolt diff master test-remote/master
+   run dolt diff main test-remote/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('test-remote/master')" -r csv
+    run dolt sql -q "show tables as of hashof('test-remote/main')" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -95,13 +95,13 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch specific ref" {
     cd repo2
-    dolt sql -q "select dolt_fetch('test-remote', 'refs/heads/master:refs/remotes/test-remote/master')"
+    dolt sql -q "select dolt_fetch('test-remote', 'refs/heads/main:refs/remotes/test-remote/main')"
 
-    run dolt diff master test-remote/master
+    run dolt diff main test-remote/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('test-remote/master')" -r csv
+    run dolt sql -q "show tables as of hashof('test-remote/main')" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -114,7 +114,7 @@ teardown() {
     cd ../repo2
     dolt sql -q "select dolt_fetch('origin', 'feature')"
 
-    run dolt diff master origin/feature
+    run dolt diff main origin/feature
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
@@ -130,9 +130,9 @@ teardown() {
     dolt push origin v1
 
     cd ../repo2
-    dolt sql -q "select dolt_fetch('origin', 'master')"
+    dolt sql -q "select dolt_fetch('origin', 'main')"
 
-    run dolt diff master v1
+    run dolt diff main v1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
@@ -151,7 +151,7 @@ teardown() {
     cd ../repo2
     dolt sql -q "select dolt_fetch('origin', 'refs/tags/v1:refs/tags/v1')"
 
-    run dolt diff master origin/v1
+    run dolt diff main origin/v1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
@@ -163,9 +163,9 @@ teardown() {
 
 @test "sql-fetch: dolt_fetch rename ref" {
     cd repo2
-    dolt sql -q "select dolt_fetch('test-remote', 'refs/heads/master:refs/remotes/test-remote/other')"
+    dolt sql -q "select dolt_fetch('test-remote', 'refs/heads/main:refs/remotes/test-remote/other')"
 
-    run dolt diff master test-remote/other
+    run dolt diff main test-remote/other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
@@ -178,13 +178,13 @@ teardown() {
 @test "sql-fetch: dolt_fetch override local branch" {
     skip "todo more flexible refspec support"
     cd repo2
-    dolt sql -q "select dolt_fetch('origin', 'master:refs/heads/master')"
+    dolt sql -q "select dolt_fetch('origin', 'main:refs/heads/main')"
 
-    dolt diff master origin/master
+    dolt diff main origin/main
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "removed table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('master')" -r csv
+    run dolt sql -q "show tables as of hashof('main')" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -195,20 +195,20 @@ teardown() {
     cd repo2
     dolt sql -q "create table t2 (a int)"
     dolt commit -am "forced commit"
-    dolt push --force origin master
+    dolt push --force origin main
 
     cd ../repo1
-    run dolt sql -q "select dolt_fetch('origin', 'master')"
+    run dolt sql -q "select dolt_fetch('origin', 'main')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fetch failed: can't fast forward merge" ]] || false
 
-    dolt sql -q "select dolt_fetch('--force', 'origin', 'master')"
+    dolt sql -q "select dolt_fetch('--force', 'origin', 'main')"
 
-    run dolt diff master origin/master
+    run dolt diff main origin/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "deleted table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('origin/master')" -r csv
+    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t2" ]] || false
@@ -225,7 +225,7 @@ teardown() {
 @test "sql-fetch: dolt_fetch unknown remote with fetchspec fails" {
     cd repo2
     dolt remote remove origin
-    run dolt sql -q "select dolt_fetch('unknown', 'master')"
+    run dolt sql -q "select dolt_fetch('unknown', 'main')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
 }

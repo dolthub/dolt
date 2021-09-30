@@ -669,10 +669,10 @@ SQL
     dolt add .
     dolt commit -m "added tricky rows"
     dolt checkout other
-    dolt diff -r sql other master > patch.sql
+    dolt diff -r sql other main > patch.sql
     run dolt sql < patch.sql
     [ "$status" -eq 0 ]
-    run dolt diff -r sql master
+    run dolt diff -r sql main
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }

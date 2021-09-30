@@ -39,7 +39,7 @@ type DoltPullFunc struct {
 }
 
 // NewPullFunc creates a new PullFunc expression.
-func NewPullFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewPullFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltPullFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
 
@@ -57,8 +57,8 @@ func (d DoltPullFunc) Type() sql.Type {
 	return sql.Boolean
 }
 
-func (d DoltPullFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
-	return NewPullFunc(ctx, children...)
+func (d DoltPullFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	return NewPullFunc(children...)
 }
 
 func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
@@ -155,10 +155,8 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 		select {
 		case <-ctx.Done():
@@ -171,10 +169,8 @@ func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent)
 
 func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 		select {
 		case <-ctx.Done():

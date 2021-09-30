@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -59,7 +58,7 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
 	pro := sqle.NewDoltDatabaseProvider(dEnv.Config)
-	session, err := dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, "test", "email@test.com")
+	session, err := dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, dEnv.Config)
 	require.NoError(t, err)
 	return &DoltHarness{
 		t:              t,
@@ -138,7 +137,7 @@ func (d *DoltHarness) NewSession() *sql.Context {
 		enginetest.NewContext(d),
 		enginetest.NewBaseSession(),
 		pro.(dsess.RevisionDatabaseProvider),
-		user, email,
+		d.env.Config,
 		states...,
 	)
 	require.NoError(d.t, err)
@@ -262,11 +261,6 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	}
 
 	e := enginetest.NewEngineWithDbs(d.t, d, []sql.Database{db}, nil)
-
-	if _, err := e.Catalog.FunctionRegistry.Function(dfunctions.CommitFuncName); sql.ErrFunctionNotFound.Is(err) {
-		require.NoError(d.t,
-			e.Catalog.FunctionRegistry.Register(sql.FunctionN{Name: dfunctions.CommitFuncName, Fn: dfunctions.NewCommitFunc}))
-	}
 
 	asOfString, ok := asOf.(string)
 	require.True(d.t, ok)

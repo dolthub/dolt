@@ -16,12 +16,8 @@ package commands
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 	"path"
-	"path/filepath"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -30,14 +26,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -108,58 +101,59 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	remoteName := apr.GetValueOrDefault(remoteParam, "origin")
 	branch := apr.GetValueOrDefault(branchParam, "")
 	dir, urlStr, verr := parseArgs(apr)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
 	userDirExists, _ := dEnv.FS.Exists(dir)
 
 	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
 
 	if err != nil {
-		verr = errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
+		return HandleVErrAndExitCode(errhand.BuildDError("error: '%s' is not valid.", urlStr).Build(), usage)
+	}
+	var params map[string]string
+	params, verr = parseRemoteArgs(apr, scheme, remoteUrl)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	if verr == nil {
-		var params map[string]string
-		params, verr = parseRemoteArgs(apr, scheme, remoteUrl)
+	var r env.Remote
+	var srcDB *doltdb.DoltDB
+	r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params, dEnv)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
 
-		if verr == nil {
-			var r env.Remote
-			var srcDB *doltdb.DoltDB
-			r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params, dEnv)
+	dEnv, err = actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 
-			if verr == nil {
-				dEnv, verr = envForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version)
+	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, dEnv)
+	if err != nil {
+		// If we're cloning into a directory that already exists do not erase it. Otherwise
+		// make best effort to delete the directory we created.
+		if userDirExists {
+			// Set the working dir to the parent of the .dolt folder so we can delete .dolt
+			_ = os.Chdir(dir)
+			_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
+		} else {
+			_ = os.Chdir("../")
+			_ = dEnv.FS.Delete(dir, true)
+		}
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 
-				if verr == nil {
-					verr = cloneRemote(ctx, srcDB, remoteName, branch, dEnv)
-
-					if verr == nil {
-						evt := events.GetEventFromContext(ctx)
-						u, err := earl.Parse(remoteUrl)
-
-						if err == nil {
-							if u.Scheme != "" {
-								evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
-							}
-						}
-					}
-
-					if verr != nil {
-						// If we're cloning into a directory that already exists do not erase it. Otherwise
-						// make best effort to delete the directory we created.
-						if userDirExists {
-							// Set the working dir to the parent of the .dolt folder so we can delete .dolt
-							_ = os.Chdir(dir)
-							_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
-						} else {
-							_ = os.Chdir("../")
-							_ = dEnv.FS.Delete(dir, true)
-						}
-					}
-				}
-			}
+	evt := events.GetEventFromContext(ctx)
+	u, err := earl.Parse(remoteUrl)
+	if err == nil {
+		if u.Scheme != "" {
+			evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	return 0
 }
 
 func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseError) {
@@ -189,44 +183,6 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	return dir, urlStr, nil
 }
 
-func envForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string) (*env.DoltEnv, errhand.VerboseError) {
-	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
-
-	if exists {
-		return nil, errhand.BuildDError("error: data repository already exists at " + dir).Build()
-	}
-
-	err := fs.MkDirs(dir)
-
-	if err != nil {
-		return nil, errhand.BuildDError("error: unable to create directories: " + dir).Build()
-	}
-
-	err = os.Chdir(dir)
-
-	if err != nil {
-		return nil, errhand.BuildDError("error: unable to access directory " + dir).Build()
-	}
-
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
-	err = dEnv.InitRepoWithNoData(ctx, nbf)
-
-	if err != nil {
-		return nil, errhand.BuildDError("error: unable to initialize repo without data").AddCause(err).Build()
-	}
-
-	dEnv.RSLoadErr = nil
-	if !env.IsEmptyRemote(r) {
-		dEnv.RepoState, err = env.CloneRepoState(dEnv.FS, r)
-
-		if err != nil {
-			return nil, errhand.BuildDError("error: unable to create repo state with remote " + r.Name).AddCause(err).Build()
-		}
-	}
-
-	return dEnv, nil
-}
-
 func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
 
@@ -246,174 +202,4 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 	}
 
 	return r, ddb, nil
-}
-
-func cloneProg(eventCh <-chan datas.TableFileEvent) {
-	var (
-		chunks            int64
-		chunksDownloading int64
-		chunksDownloaded  int64
-		cliPos            int
-	)
-
-	cliPos = cli.DeleteAndPrint(cliPos, "Retrieving remote information.")
-	for tblFEvt := range eventCh {
-		switch tblFEvt.EventType {
-		case datas.Listed:
-			for _, tf := range tblFEvt.TableFiles {
-				chunks += int64(tf.NumChunks())
-			}
-		case datas.DownloadStart:
-			for _, tf := range tblFEvt.TableFiles {
-				chunksDownloading += int64(tf.NumChunks())
-			}
-		case datas.DownloadSuccess:
-			for _, tf := range tblFEvt.TableFiles {
-				chunksDownloading -= int64(tf.NumChunks())
-				chunksDownloaded += int64(tf.NumChunks())
-			}
-		case datas.DownloadFailed:
-			// Ignore for now and output errors on the main thread
-		}
-
-		str := fmt.Sprintf("%s of %s chunks complete. %s chunks being downloaded currently.", strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
-		cliPos = cli.DeleteAndPrint(cliPos, str)
-	}
-
-	cli.Println()
-}
-
-func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) errhand.VerboseError {
-	eventCh := make(chan datas.TableFileEvent, 128)
-
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		cloneProg(eventCh)
-	}()
-
-	err := actions.Clone(ctx, srcDB, dEnv.DoltDB, eventCh)
-	close(eventCh)
-
-	wg.Wait()
-
-	if err != nil {
-		if err == datas.ErrNoData {
-			err = errors.New("remote at that url contains no Dolt data")
-		}
-
-		return errhand.BuildDError("error: clone failed").AddCause(err).Build()
-	}
-
-	branches, err := dEnv.DoltDB.GetBranches(ctx)
-	if err != nil {
-		return errhand.BuildDError("error: failed to list branches").AddCause(err).Build()
-	}
-
-	if branch == "" {
-		for _, brnch := range branches {
-			branch = brnch.GetPath()
-			if branch == env.GetDefaultInitBranch(dEnv.Config) {
-				break
-			}
-		}
-	}
-
-	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
-	// the remote.
-	performPull := true
-	if branch == "" {
-		err = initEmptyClonedRepo(ctx, dEnv)
-		if err != nil {
-			return nil
-		}
-
-		branch = env.GetDefaultInitBranch(dEnv.Config)
-		performPull = false
-	}
-
-	cs, _ := doltdb.NewCommitSpec(branch)
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
-
-	if err != nil {
-		return errhand.BuildDError("error: could not get " + branch).AddCause(err).Build()
-	}
-
-	rootVal, err := cm.GetRootValue()
-	if err != nil {
-		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
-	}
-
-	// After actions.Clone, we have repository with a local branch for
-	// every branch in the remote. What we want is a remote branch ref for
-	// every branch in the remote. We iterate through local branches and
-	// create remote refs corresponding to each of them. We delete all of
-	// the local branches except for the one corresponding to |branch|.
-	for _, brnch := range branches {
-		cs, _ := doltdb.NewCommitSpec(brnch.GetPath())
-		cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
-		if err != nil {
-			return errhand.BuildDError("error: could not resolve branch ref at " + brnch.String()).AddCause(err).Build()
-		}
-
-		remoteRef := ref.NewRemoteRef(remoteName, brnch.GetPath())
-		err = dEnv.DoltDB.SetHeadToCommit(ctx, remoteRef, cm)
-		if err != nil {
-			return errhand.BuildDError("error: could not create remote ref at " + remoteRef.String()).AddCause(err).Build()
-		}
-
-		if brnch.GetPath() != branch {
-			err := dEnv.DoltDB.DeleteBranch(ctx, brnch)
-			if err != nil {
-				return errhand.BuildDError("error: could not delete local branch " + brnch.String() + " after clone.").AddCause(err).Build()
-			}
-		}
-	}
-
-	if performPull {
-		err = actions.SaveDocsFromRoot(ctx, rootVal, dEnv)
-		if err != nil {
-			return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
-		}
-	}
-
-	// TODO: make this interface take a DoltRef and marshal it automatically
-	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: ref.NewBranchRef(branch)})
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branch))
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	ws := doltdb.EmptyWorkingSet(wsRef)
-	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(rootVal).WithStagedRoot(rootVal))
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	return nil
-}
-
-// Inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the storage for a repository
-// when we created it on dolthub. If we do that, this code can be removed.
-func initEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
-	name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
-	email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
-
-	if *name == "" {
-		return errhand.BuildDError(fmt.Sprintf("error: could not determine user name. run dolt config --global --add %[1]s", env.UserNameKey)).Build()
-	} else if *email == "" {
-		return errhand.BuildDError("error: could not determine email. run dolt config --global --add %[1]s", env.UserEmailKey).Build()
-	}
-
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, doltdb.CommitNowFunc())
-	if err != nil {
-		return errhand.BuildDError("error: could not initialize repository").AddCause(err).Build()
-	}
-
-	return nil
 }

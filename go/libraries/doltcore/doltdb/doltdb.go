@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -645,7 +646,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 
 	commitSt, ok := ds.MaybeHead()
 	if !ok {
-		return nil, errors.New("commit has no head but commit succeeded (How?!?!?)")
+		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
 	}
 
 	return NewCommit(ddb.db, commitSt), nil
@@ -880,6 +881,10 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	// TODO: find all the places HEAD can change, update working set too. This is only necessary when we don't already
 	//  update the working set when the head changes.
 	commitRoot, err := commit.GetRootValue()
+	if err != nil {
+		return err
+	}
+
 	wsRef, _ := ref.WorkingSetRefForHead(branchRef)
 
 	var ws *WorkingSet
@@ -1047,38 +1052,45 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	commit *PendingCommit, workingSet *WorkingSet,
 	prevHash hash.Hash,
 	meta *WorkingSetMeta,
-) error {
+) (*Commit, error) {
 	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	headDs, err := ddb.db.GetDataset(ctx, headRef.String())
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	// logrus.Tracef("Updating working set with root %s", workingSet.RootValue().DebugString(ctx, true))
 
 	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var metaSt types.Struct
 	metaSt, err = meta.toNomsStruct(ddb.db.Format())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, _, err = ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{
+	commitDataset, _, err := ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{
 		Meta:        datas.WorkingSetMeta{Meta: metaSt},
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,
 	}, prevHash, commit.CommitOptions)
 
-	return err
+	if err != nil {
+		return nil, err
+	}
+
+	commitSt, ok := commitDataset.MaybeHead()
+	if !ok {
+		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
+	}
+
+	return NewCommit(ddb.db, commitSt), nil
 }
 
 // DeleteWorkingSet deletes the working set given
@@ -1127,6 +1139,12 @@ func (ddb *DoltDB) DeleteWorkspace(ctx context.Context, workRef ref.DoltRef) err
 	}
 
 	return err
+}
+
+// Rebase rebases the underlying db from disk, re-loading the manifest. Useful when another process might have made
+// changes to the database we need to read.
+func (ddb *DoltDB) Rebase(ctx context.Context) error {
+	return ddb.db.Rebase(ctx)
 }
 
 // GC performs garbage collection on this ddb. Values passed in |uncommitedVals| will be temporarily saved during gc.
@@ -1265,4 +1283,16 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- datas.TableFileEvent) error {
 	return datas.Clone(ctx, ddb.db, destDB.db, eventCh)
+}
+
+func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []datas.CommitHook) *DoltDB {
+	ddb.db = ddb.db.SetCommitHooks(ctx, postHooks)
+	return ddb
+}
+
+func (ddb *DoltDB) SetCommitHookLogger(ctx context.Context, wr io.Writer) *DoltDB {
+	if ddb.db != nil {
+		ddb.db = ddb.db.SetCommitHookLogger(ctx, wr)
+	}
+	return ddb
 }

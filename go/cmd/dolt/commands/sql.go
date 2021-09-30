@@ -49,7 +49,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -375,7 +374,10 @@ func execShell(
 	readOnly bool,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -398,7 +400,10 @@ func execBatch(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -440,7 +445,10 @@ func execMultiStatements(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -476,7 +484,10 @@ func execQuery(
 	query string,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs := CollectDBs(mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -504,15 +515,27 @@ func execQuery(
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(mrEnv env.MultiRepoEnv) []dsqle.Database {
-	dbs := make([]dsqle.Database, 0, len(mrEnv))
-	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		db := newDatabase(name, dEnv)
+func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
+	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
+	var db dsqle.SqlDatabase
+	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+		db = newDatabase(name, dEnv)
+		if remoteName := dEnv.Config.GetStringOrDefault(dsqle.DoltReadReplicaKey, ""); remoteName != "" {
+			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), doltdb.TodoWorkingSetMeta())
+			if err != nil {
+				return true, err
+			}
+		}
+
 		dbs = append(dbs, db)
 		return false, nil
 	})
 
-	return dbs
+	if err != nil {
+		return nil, err
+	}
+
+	return dbs, nil
 }
 
 func formatQueryError(message string, err error) errhand.VerboseError {
@@ -1089,7 +1112,7 @@ func (s *stats) shouldFlush() bool {
 }
 
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
-	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
+	err := se.iterDBs(func(_ string, db dsqle.SqlDatabase) (bool, error) {
 		_, rowIter, err := se.engine.Query(ctx, "COMMIT;")
 		if err != nil {
 			return false, err
@@ -1335,7 +1358,7 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *sqlEngine, query string) 
 	plan.Inspect(a, func(n sql.Node) bool {
 		switch n := n.(type) {
 		case *plan.InsertInto:
-			_, err = plan.TransformExpressionsUp(ctx, n.Source, func(exp sql.Expression) (sql.Expression, error) {
+			_, err = plan.TransformExpressionsUp(n.Source, func(exp sql.Expression) (sql.Expression, error) {
 				if _, ok := exp.(*expression.AutoIncrement); ok {
 					isAutoInc = true
 				}
@@ -1392,7 +1415,7 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 }
 
 type sqlEngine struct {
-	dbs            map[string]dsqle.Database
+	dbs            map[string]dsqle.SqlDatabase
 	sess           *dsess.Session
 	contextFactory func(ctx context.Context) (*sql.Context, error)
 	engine         *sqle.Engine
@@ -1408,7 +1431,7 @@ func newSqlEngine(
 	roots map[string]*doltdb.RootValue, // See TODO below
 	readOnly bool,
 	format resultFormat,
-	dbs ...dsqle.Database,
+	dbs ...dsqle.SqlDatabase,
 ) (*sqlEngine, error) {
 	var au auth.Auth
 
@@ -1424,14 +1447,8 @@ func newSqlEngine(
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
 	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
-	cat := sql.NewCatalog(pro)
 
-	err := cat.Register(dfunctions.DoltFunctions...)
-	if err != nil {
-		return nil, err
-	}
-
-	engine := sqle.New(cat, analyzer.NewBuilder(cat).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
+	engine := sqle.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -1440,7 +1457,7 @@ func newSqlEngine(
 		}
 	}
 
-	nameToDB := make(map[string]dsqle.Database)
+	nameToDB := make(map[string]dsqle.SqlDatabase)
 	var dbStates []dsess.InitialDbState
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
@@ -1457,9 +1474,7 @@ func newSqlEngine(
 	}
 
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
-	username := *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
-	email := *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
-	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, username, email, dbStates...)
+	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
 
 	// TODO: this should just be the session default like it is with MySQL
 	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)
@@ -1470,13 +1485,13 @@ func newSqlEngine(
 	return &sqlEngine{
 		dbs:            nameToDB,
 		sess:           sess,
-		contextFactory: newSqlContext(sess, cat),
+		contextFactory: newSqlContext(sess, engine.Analyzer.Catalog),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
 }
 
-func newSqlContext(sess *dsess.Session, cat *sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
+func newSqlContext(sess *dsess.Session, cat sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx,
 			sql.WithSession(sess),
@@ -1485,7 +1500,7 @@ func newSqlContext(sess *dsess.Session, cat *sql.Catalog) func(ctx context.Conte
 			sql.WithTracer(tracing.Tracer(ctx)))
 
 		seenOne := false
-		for _, db := range dbsAsDSQLDBs(cat.AllDatabases()) {
+		for _, db := range dsqle.DbsAsDSQLDBs(cat.AllDatabases()) {
 			root, err := db.GetRoot(sqlCtx)
 			if err != nil {
 				return nil, err
@@ -1520,7 +1535,7 @@ func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
 	return dsqlDBs
 }
 
-func dsqleDBsAsSqlDBs(dbs []dsqle.Database) []sql.Database {
+func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
 	sqlDbs := make([]sql.Database, 0, len(dbs))
 	for _, db := range dbs {
 		sqlDbs = append(sqlDbs, db)
@@ -1562,7 +1577,7 @@ func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) 
 	}, nil
 }
 
-func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool, err error)) error {
+func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bool, err error)) error {
 	for name, db := range se.dbs {
 		stop, err := cb(name, db)
 

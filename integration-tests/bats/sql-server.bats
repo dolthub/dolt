@@ -78,6 +78,39 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 }
 
+@test "sql-server: test command line modification" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    # No tables at the start
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    server_query repo1 1 "CREATE TABLE one_pk (
+        pk BIGINT NOT NULL,
+        c1 BIGINT,
+        c2 BIGINT,
+        PRIMARY KEY (pk)
+    )" ""
+    run dolt ls
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "one_pk" ]] || false
+
+    # Add rows on the command line
+    dolt sql -q "insert into one_pk values (1,1,1)"
+
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1"
+
+    # Test import as well (used by doltpy)
+    echo 'pk,c1,c2' > import.csv
+    echo '2,2,2' >> import.csv
+    dolt table import -u one_pk import.csv
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1\n2,2,2"
+}
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
@@ -188,18 +221,18 @@ teardown() {
     cd repo1
     start_sql_server repo1
 
-    # check that only master branch exists
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmaster,Initialize data repository"
+    # check that only main branch exists
+    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository"
 
-    # check that new connections are set to master by default
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches WHERE hash = @@repo1_head" "name,latest_commit_message\nmaster,Initialize data repository"
+    # check that new connections are set to main by default
+    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches WHERE hash = @@repo1_head" "name,latest_commit_message\nmain,Initialize data repository"
 
-    # check no tables on master
+    # check no tables on main
     server_query repo1 0 "SHOW Tables" ""
 
-    # make some changes to master and commit to branch test_branch
+    # make some changes to main and commit to branch test_branch
     multi_query repo1 0 "
-    SET @@repo1_head=hashof('master');
+    SET @@repo1_head=hashof('main');
     CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
@@ -213,12 +246,12 @@ teardown() {
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     # validate new branch was created
-    server_query repo1 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmaster,Initialize data repository\ntest_branch,test commit message"
+    server_query repo1 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository\ntest_branch,test commit message"
 
     # Check that the author information is correct.
     server_query repo1 0 "SELECT latest_committer,latest_committer_email FROM dolt_branches ORDER BY latest_commit_date DESC LIMIT 1" "latest_committer,latest_committer_email\nJohn Doe,john@example.com"
 
-    # validate no tables on master still
+    # validate no tables on main still
     server_query repo1 0 "SHOW tables" ""
 
     # validate tables and data on test_branch
@@ -232,18 +265,18 @@ teardown() {
     cd repo1
     start_sql_server repo1
 
-    # check that only master branch exists
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmaster,Initialize data repository"
+    # check that only main branch exists
+    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository"
 
-    # check that new connections are set to master by default
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches WHERE hash = @@repo1_head" "name,latest_commit_message\nmaster,Initialize data repository"
+    # check that new connections are set to main by default
+    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches WHERE hash = @@repo1_head" "name,latest_commit_message\nmain,Initialize data repository"
 
-    # check no tables on master
+    # check no tables on main
     server_query repo1 0 "SHOW Tables" ""
 
-    # make some changes to master and commit to branch test_branch
+    # make some changes to main and commit to branch test_branch
     multi_query repo1 0 "
-    SET @@repo1_head=hashof('master');
+    SET @@repo1_head=hashof('main');
     CREATE TABLE one_pk (
         pk BIGINT NOT NULL COMMENT 'tag:0',
         c1 BIGINT COMMENT 'tag:1',
@@ -257,29 +290,29 @@ teardown() {
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     # validate new branch was created
-    server_query repo1 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmaster,Initialize data repository\ntest_branch,test commit message"
+    server_query repo1 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository\ntest_branch,test commit message"
 
-    # validate no tables on master still
+    # validate no tables on main still
     server_query repo1 0 "SHOW tables" ""
 
-    # Merge the test_branch into master. This should a fast forward merge.
+    # Merge the test_branch into main. This should a fast forward merge.
     multi_query repo1 0 "
     SET @@repo1_head = merge('test_branch');
-    INSERT INTO dolt_branches (name, hash) VALUES('master', @@repo1_head);"
+    INSERT INTO dolt_branches (name, hash) VALUES('main', @@repo1_head);"
 
-    # Validate tables and data on master
-    server_query repo1 0 "SET @@repo1_head=hashof('master');SHOW tables" ";Table\none_pk"
-    server_query repo1 0 "SET @@repo1_head=hashof('master');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+    # Validate tables and data on main
+    server_query repo1 0 "SET @@repo1_head=hashof('main');SHOW tables" ";Table\none_pk"
+    server_query repo1 0 "SET @@repo1_head=hashof('main');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
 
-    # Validate the commit master matches that of test_branch (this is a fast forward) by matching commit hashes.
+    # Validate the commit main matches that of test_branch (this is a fast forward) by matching commit hashes.
     server_query repo1 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n2"
 
-    # make some changes to test_branch and commit. Make some changes to master and commit. Merge.
+    # make some changes to test_branch and commit. Make some changes to main and commit. Merge.
     multi_query repo1 0 "
-    SET @@repo1_head=hashof('master');
+    SET @@repo1_head=hashof('main');
     UPDATE one_pk SET c1=10 WHERE pk=2;
     SET @@repo1_head=commit('-m', 'Change c 1 to 10');
-    INSERT INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);
+    INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);
 
     SET @@repo1_head=hashof('test_branch');
     INSERT INTO one_pk (pk,c1,c2) VALUES (4,4,4);
@@ -287,13 +320,13 @@ teardown() {
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     multi_query repo1 0 "
-    SET @@repo1_head=hashof('master');
+    SET @@repo1_head=hashof('main');
     SET @@repo1_head=merge('test_branch');
-    INSERT INTO dolt_branches (name, hash) VALUES('master', @@repo1_head);"
+    INSERT INTO dolt_branches (name, hash) VALUES('main', @@repo1_head);"
 
-    # Validate tables and data on master
-    server_query repo1 0 "SET @@repo1_head=hashof('master');SHOW tables" ";Table\none_pk"
-    server_query repo1 0 "SET @@repo1_head=hashof('master');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4"
+    # Validate tables and data on main
+    server_query repo1 0 "SET @@repo1_head=hashof('main');SHOW tables" ";Table\none_pk"
+    server_query repo1 0 "SET @@repo1_head=hashof('main');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4"
 
     # Validate the a merge commit was written by making sure the hashes of the two branches don't match
     server_query repo1 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n1"
@@ -306,18 +339,18 @@ teardown() {
     cd repo1
     start_sql_server repo1
 
-    # check that only master branch exists
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmaster,Initialize data repository"
+    # check that only main branch exists
+    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository"
 
-    # check that new connections are set to master by default
-    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches WHERE hash = @@repo1_head" "name,latest_commit_message\nmaster,Initialize data repository"
+    # check that new connections are set to main by default
+    server_query repo1 0 "SELECT name, latest_commit_message FROM dolt_branches WHERE hash = @@repo1_head" "name,latest_commit_message\nmain,Initialize data repository"
 
-    # check no tables on master
+    # check no tables on main
     server_query repo1 0 "SHOW Tables" ""
 
-    # make some changes to master and commit to branch test_branch
+    # make some changes to main and commit to branch test_branch
     multi_query repo1 0 "
-    SET @@repo1_head=hashof('master');
+    SET @@repo1_head=hashof('main');
     CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
         c1 BIGINT,
@@ -335,30 +368,30 @@ teardown() {
     "
 
     # validate new branch was created
-    server_query repo1 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmaster,Initialize data repository\ntest_branch,second commit"
+    server_query repo1 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmain,Initialize data repository\ntest_branch,second commit"
 
-    # validate no tables on master still
+    # validate no tables on main still
     server_query repo1 0 "SHOW tables" ""
 
-    # Squash the test_branch into master even though it is a fast-forward merge.
+    # Squash the test_branch into main even though it is a fast-forward merge.
     multi_query repo1 0 "
     SET @@repo1_working = squash('test_branch');
     SET @@repo1_head = COMMIT('-m', 'cm1');
-    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'master';"
+    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'main';"
 
-    # Validate tables and data on master
-    server_query repo1 0 "SET @@repo1_head=hashof('master');SHOW tables" ";Table\none_pk"
-    server_query repo1 0 "SET @@repo1_head=hashof('master');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3\n4,4,4\n5,5,5"
+    # Validate tables and data on main
+    server_query repo1 0 "SET @@repo1_head=hashof('main');SHOW tables" ";Table\none_pk"
+    server_query repo1 0 "SET @@repo1_head=hashof('main');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3\n4,4,4\n5,5,5"
 
-    # Validate that the squash operations resulted in one commit to master than before
-    server_query repo1 0 "SET @@repo1_head=hashof('master');select COUNT(*) from dolt_log" ";COUNT(*)\n2"
+    # Validate that the squash operations resulted in one commit to main than before
+    server_query repo1 0 "SET @@repo1_head=hashof('main');select COUNT(*) from dolt_log" ";COUNT(*)\n2"
 
-    # make some changes to master and commit. Make some changes to test_branch and commit. Squash/Merge.
+    # make some changes to main and commit. Make some changes to test_branch and commit. Squash/Merge.
     multi_query repo1 0 "
-    SET @@repo1_head=hashof('master');
+    SET @@repo1_head=hashof('main');
     UPDATE one_pk SET c1=10 WHERE pk=2;
     SET @@repo1_head=commit('-m', 'Change c 1 to 10');
-    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'master';
+    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'main';
 
     SET @@repo1_head=hashof('test_branch');
     INSERT INTO one_pk (pk,c1,c2) VALUES (6,6,6);
@@ -369,19 +402,19 @@ teardown() {
 
     # Validate that running a squash operation without updating the working variable itself alone does not
     # change the working root value
-    server_query repo1 0 "SET @@repo1_head=hashof('master');SET @junk = squash('test_branch');SELECT * FROM one_pk ORDER by pk" ";;pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4\n5,5,5"
+    server_query repo1 0 "SET @@repo1_head=hashof('main');SET @junk = squash('test_branch');SELECT * FROM one_pk ORDER by pk" ";;pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4\n5,5,5"
 
     multi_query repo1 0 "
-    SET @@repo1_head=hashof('master');
+    SET @@repo1_head=hashof('main');
     SET @@repo1_working = squash('test_branch');
     SET @@repo1_head = COMMIT('-m', 'cm2');
-    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'master';"
+    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'main';"
 
-    # Validate tables and data on master
-    server_query repo1 0 "SET @@repo1_head=hashof('master');SHOW tables" ";Table\none_pk"
-    server_query repo1 0 "SET @@repo1_head=hashof('master');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4\n5,5,5\n6,6,6\n7,7,7"
+    # Validate tables and data on main
+    server_query repo1 0 "SET @@repo1_head=hashof('main');SHOW tables" ";Table\none_pk"
+    server_query repo1 0 "SET @@repo1_head=hashof('main');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4\n5,5,5\n6,6,6\n7,7,7"
 
-    # Validate that the squash operations resulted in one commit to master than before
+    # Validate that the squash operations resulted in one commit to main than before
     server_query repo1 0 "select COUNT(*) from dolt_log" "COUNT(*)\n4"
 
     # Validate the a squash commit was written by making sure the hashes of the two branches don't match
@@ -393,7 +426,7 @@ teardown() {
 
     # TODO: this throws an error on COMMIT because it has conflicts on the root it's trying to commit
     multi_query repo1 0 "
-    SELECT DOLT_CHECKOUT('master');
+    SELECT DOLT_CHECKOUT('main');
     INSERT INTO one_pk values (8,8,8);"
 
     skip "Unclear behavior below here, need a simpler test of these assertions"
@@ -426,7 +459,7 @@ SQL
 
     multi_query repo1 1 "
         SET @@repo1_head = reset('hard');
-        REPLACE INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);"
+        REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -438,7 +471,7 @@ SQL
     multi_query repo1 1 "
         INSERT INTO test VALUES (8,8);
         SET @@repo1_head = reset('hard');
-        REPLACE INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);"
+        REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -646,11 +679,11 @@ SQL
      INSERT INTO test VALUES (3);
      UPDATE test SET pk=1000 WHERE pk=0;
      SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
-     SELECT DOLT_CHECKOUT('master');
+     SELECT DOLT_CHECKOUT('main');
      SELECT DOLT_MERGE('feature-branch');
      "
 
-     server_query repo1 1 "SELECT * FROM test" "pk\n1\n2\n3\n1000"
+     server_query repo1 1 "SELECT * FROM test ORDER BY pk" "pk\n1\n2\n3\n1000"
 
      server_query repo1 1 "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
 }
@@ -739,12 +772,12 @@ SQL
     cd repo1
     start_sql_server repo1
 
-    # check no tables on master
+    # check no tables on main
     server_query repo1 1 "SHOW Tables" ""
 
-    # make some changes to master and commit to branch test_branch
+    # make some changes to main and commit to branch test_branch
     multi_query repo1 1 "
-    SET @@repo1_head=hashof('master');
+    SET @@repo1_head=hashof('main');
     CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
         c1 BIGINT,
@@ -753,7 +786,7 @@ SQL
     );
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
     SET @@repo1_head=commit('-m', 'test commit message', '--author', 'John Doe <john@example.com>');
-    INSERT INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);"
+    INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
     dolt add .
     run dolt ls
@@ -775,7 +808,7 @@ SQL
     cd repo1
     start_sql_server repo1
 
-    # check no tables on master
+    # check no tables on main
     server_query repo1 1 "SHOW Tables" ""
 
     # Create a temporary table with some indexes
@@ -794,7 +827,7 @@ SQL
 
     cd repo1
     dolt checkout -b "feature-branch"
-    dolt checkout master
+    dolt checkout main
     start_sql_server repo1
 
     server_query "repo1/feature-branch" 1 "CREATE TABLE test (
@@ -803,7 +836,7 @@ SQL
         PRIMARY KEY (pk)
     )" ""
 
-    server_query repo1 1 "SHOW tables" "" # no tables on master
+    server_query repo1 1 "SHOW tables" "" # no tables on main
 
     server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
 }
@@ -838,7 +871,7 @@ SQL
 
     cd repo1
     dolt checkout -b "feature-branch"
-    dolt checkout master
+    dolt checkout main
     start_sql_server repo1
 
     multi_query repo1 1 '
@@ -849,7 +882,7 @@ SQL
         PRIMARY KEY (pk)
     )' ""
 
-    server_query repo1 1 "SHOW tables" "" # no tables on master
+    server_query repo1 1 "SHOW tables" "" # no tables on main
 
     server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
 }
@@ -859,7 +892,7 @@ SQL
 
     cd repo1
     dolt checkout -b "new"
-    dolt checkout master
+    dolt checkout main
     start_sql_server repo1
 
     multi_query repo1 1 '
@@ -867,7 +900,7 @@ SQL
     CREATE TABLE t (a int primary key, b int);
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
-    server_query repo1 1 "SHOW tables" "" # no tables on master
+    server_query repo1 1 "SHOW tables" "" # no tables on main
     server_query repo1 1 "set GLOBAL dolt_default_branch = 'refs/heads/new';" ""
     server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
@@ -879,7 +912,7 @@ SQL
 
     cd repo1
     dolt checkout -b "new"
-    dolt checkout master
+    dolt checkout main
     start_sql_server repo1
 
     multi_query repo1 1 '
@@ -887,7 +920,7 @@ SQL
     CREATE TABLE t (a int primary key, b int);
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
-    server_query repo1 1 "SHOW tables" "" # no tables on master
+    server_query repo1 1 "SHOW tables" "" # no tables on main
     server_query repo1 1 "set GLOBAL dolt_default_branch = 'new';" ""
     server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nnew"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
@@ -1005,13 +1038,68 @@ while True:
     dolt remote add origin file://../rem1
     start_sql_server repo1
 
-    dolt status
-    dolt branch
-    dolt push origin master
+    dolt push origin main
     run server_query repo1 1 "select dolt_push() as p" "p\n0"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "the current branch has no upstream branch" ]] || false
 
-    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'master') as p" "p\n1"
+    server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'main') as p" "p\n1"
+
+    skip "In-memory branch doesn't track upstream correctly"
     server_query repo1 1 "select dolt_push() as p" "p\n1"
+}
+
+@test "sql-server: replicate to backup after sql-session commit" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir bac1
+    cd repo1
+    dolt remote add backup1 file://../bac1
+    dolt config --local --add DOLT_BACKUP_TO_REMOTE backup1
+    start_sql_server repo1
+
+    multi_query repo1 1 "
+    CREATE TABLE test (
+      pk int primary key
+    );
+    INSERT INTO test VALUES (0),(1),(2);
+    SELECT DOLT_ADD('.');
+    SELECT DOLT_COMMIT('-m', 'Step 1');"
+
+    cd ..
+    dolt clone file://./bac1 repo3
+    cd repo3
+    export DOLT_BACKUP_TO_REMOTE=
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk" ]]
+    [[ "${lines[1]}" =~ "0" ]]
+    [[ "${lines[2]}" =~ "1" ]]
+    [[ "${lines[3]}" =~ "2" ]]
+}
+
+@test "sql-server: read-replica pulls new commits on read" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir remote1
+    cd repo2
+    dolt remote add remote1 file://../remote1
+    dolt push -u remote1 main
+
+    cd ..
+    rm -rf repo1
+    dolt clone file://./remote1 repo1
+    cd repo1
+    dolt remote add remote1 file://../remote1
+
+    cd ../repo2
+    dolt sql -q "create table test (a int)"
+    dolt commit -am "new commit"
+    dolt push -u remote1 main
+
+    cd ../repo1
+    dolt config --local --add DOLT_READ_REPLICA_REMOTE remote1
+    start_sql_server repo1
+
+    server_query repo1 1 "show tables" "Table\ntest"
 }

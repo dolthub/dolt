@@ -427,7 +427,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					Children: nil,
 				},
 				{
-					Branch:    "master",
+					Branch:    env.DefaultInitBranch,
 					CommitMsg: "Adding string address to users with tag 3",
 					Updates: map[string]envtestutils.TableUpdate{
 						TableWithHistoryName: {
@@ -443,7 +443,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					},
 					Children: []envtestutils.HistoryNode{
 						{
-							Branch:    "master",
+							Branch:    env.DefaultInitBranch,
 							CommitMsg: "Re-add age as a uint with tag 4",
 							Updates: map[string]envtestutils.TableUpdate{
 								TableWithHistoryName: {

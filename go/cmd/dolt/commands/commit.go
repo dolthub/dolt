@@ -149,7 +149,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	err = dEnv.DoltDB.CommitWithWorkingSet(
+	_, err = dEnv.DoltDB.CommitWithWorkingSet(
 		ctx,
 		dEnv.RepoStateReader().CWBHeadRef(),
 		ws.Ref(),
@@ -226,7 +226,7 @@ func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) (string,
 	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
-		commitMsg, _ := editor.OpenCommitEditor(*editorStr, initialMsg)
+		commitMsg, _ := editor.OpenCommitEditor(editorStr, initialMsg)
 		finalMsg = parseCommitMessage(commitMsg)
 	})
 	return finalMsg, nil

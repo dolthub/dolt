@@ -406,10 +406,10 @@ func (d DoltMergeFunc) Type() sql.Type {
 	return sql.Boolean
 }
 
-func (d DoltMergeFunc) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Expression, error) {
-	return NewDoltMergeFunc(ctx, children...)
+func (d DoltMergeFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	return NewDoltMergeFunc(children...)
 }
 
-func NewDoltMergeFunc(ctx *sql.Context, args ...sql.Expression) (sql.Expression, error) {
+func NewDoltMergeFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltMergeFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }

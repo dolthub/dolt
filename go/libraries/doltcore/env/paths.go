@@ -44,14 +44,21 @@ func GetCurrentUserHomeDir() (string, error) {
 	if doltRootPath, ok := os.LookupEnv(doltRootPathEnvVar); ok && doltRootPath != "" {
 		return doltRootPath, nil
 	}
+
+	var home string
 	if homeEnvPath, ok := os.LookupEnv(homeEnvVar); ok && homeEnvPath != "" {
-		return homeEnvPath, nil
-	}
-	if usr, err := user.Current(); err != nil {
+		home = homeEnvPath
+	} else if usr, err := user.Current(); err != nil {
 		return "", err
 	} else {
-		return usr.HomeDir, nil
+		home = usr.HomeDir
 	}
+
+	_, err := os.Stat(home)
+	if err != nil {
+		return "", err
+	}
+	return home, nil
 }
 
 func getCredsDir(hdp HomeDirProvider) (string, error) {

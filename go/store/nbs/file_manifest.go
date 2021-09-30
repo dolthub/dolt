@@ -51,20 +51,11 @@ const (
 
 var ErrUnreadableManifest = errors.New("could not read file manifest")
 
-type manifestParser func(r io.Reader) (manifestContents, error)
-type manifestWriter func(temp io.Writer, contents manifestContents) error
 type manifestChecker func(upstream, contents manifestContents) error
 
-// ParseManifest parses s a manifest file from the supplied reader
-func ParseManifest(version int, r io.Reader) (ManifestInfo, error) {
-	switch version {
-	case 4:
-		return fileManifestV4{}.parseManifest(r)
-	case 5:
-		return fileManifestV5{}.parseManifest(r)
-	default:
-		return nil, fmt.Errorf("unknown manifest version: %d", version)
-	}
+// ParseManifest parses a manifest file from the supplied reader
+func ParseManifest(r io.Reader) (ManifestInfo, error) {
+	return parseManifest(r)
 }
 
 func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
@@ -76,21 +67,14 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return false, err
 	}
 
-	fm5 := fileManifestV5{dir}
-	ok, _, err := fm5.ParseIfExists(ctx, &Stats{}, nil)
-	if ok && err == nil {
-		// on v5, no need to migrate
-		return false, nil
-	}
-
-	fm4 := fileManifestV4{dir}
-	ok, contents, err := fm4.ParseIfExists(ctx, &Stats{}, nil)
+	_, contents, err := parseIfExists(ctx, dir, nil)
 	if err != nil {
 		return false, err
 	}
-	if !ok {
-		// expected v4 or v5
-		return false, ErrUnreadableManifest
+
+	if contents.manifestVers == StorageVersion {
+		// already on v5, no need to migrate
+		return false, nil
 	}
 
 	check := func(_, contents manifestContents) error {
@@ -102,7 +86,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return nil
 	}
 
-	_, err = updateWithParseWriterAndChecker(ctx, dir, fm5.writeManifest, fm4.parseManifest, check, contents.lock, contents, nil)
+	_, err = updateWithChecker(ctx, dir, check, contents.lock, contents, nil)
 
 	if err != nil {
 		return false, err
@@ -118,38 +102,22 @@ func getFileManifest(ctx context.Context, dir string) (manifest, error) {
 		return nil, err
 	}
 	if f == nil {
-		// initialize empty repos with v4
-		return fileManifestV4{dir}, nil
+		return fileManifest{dir}, nil
 	}
 	defer func() {
 		err = f.Close()
 	}()
 
-	fm5 := fileManifestV5{dir}
-	ok, _, err := fm5.ParseIfExists(ctx, &Stats{}, nil)
+	fm := fileManifest{dir}
+	ok, _, err := fm.ParseIfExists(ctx, &Stats{}, nil)
 	if ok && err == nil {
-		return fm5, nil
-	}
-
-	fm4 := fileManifestV4{dir}
-	ok, _, err = fm4.ParseIfExists(ctx, &Stats{}, nil)
-	if ok && err == nil {
-		return fm4, nil
+		return fm, nil
 	}
 
 	return nil, ErrUnreadableManifest
 }
 
-// fileManifestV5 provides access to a NomsBlockStore manifest stored on disk in |dir|. The format
-// is currently human readable. The prefix contains 5 strings, followed by pairs of table file
-// hashes and their counts:
-//
-// |-- String --|-- String --|-------- String --------|-------- String --------|-------- String -----------------|
-// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:Base32-encoded GC generation hash
-//
-// |-- String --|- String --|...|-- String --|- String --|
-// :table 1 hash:table 1 cnt:...:table N hash:table N cnt|
-type fileManifestV5 struct {
+type fileManifest struct {
 	dir string
 }
 
@@ -187,8 +155,8 @@ func openIfExists(path string) (*os.File, error) {
 	return f, err
 }
 
-func (fm5 fileManifestV5) Name() string {
-	return fm5.dir
+func (fm fileManifest) Name() string {
+	return fm.dir
 }
 
 // ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
@@ -197,16 +165,20 @@ func (fm5 fileManifestV5) Name() string {
 // that case, the other return values are undefined. If |readHook| is non-nil,
 // it will be executed while ParseIfExists() holds the manifest file lock.
 // This is to allow for race condition testing.
-func (fm5 fileManifestV5) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
+func (fm fileManifest) ParseIfExists(
+	ctx context.Context,
+	stats *Stats,
+	readHook func() error,
+) (exists bool, contents manifestContents, err error) {
 	t1 := time.Now()
 	defer func() {
 		stats.ReadManifestLatency.SampleTimeSince(t1)
 	}()
 
-	return parseIfExistsWithParser(ctx, fm5.dir, fm5.parseManifest, readHook)
+	return parseIfExists(ctx, fm.dir, readHook)
 }
 
-func (fm5 fileManifestV5) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -217,10 +189,10 @@ func (fm5 fileManifestV5) Update(ctx context.Context, lastLock addr, newContents
 		return nil
 	}
 
-	return updateWithParseWriterAndChecker(ctx, fm5.dir, fm5.writeManifest, fm5.parseManifest, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
 }
 
-func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -235,10 +207,18 @@ func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newCon
 		return nil
 	}
 
-	return updateWithParseWriterAndChecker(ctx, fm5.dir, fm5.writeManifest, fm5.parseManifest, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
 }
 
-func (fm5 fileManifestV5) parseManifest(r io.Reader) (manifestContents, error) {
+// parseV5Manifest parses the v5 manifest from the Reader given. Assumes the first field (the manifest version and
+// following : character) have already been consumed by the reader.
+//
+// |-- String --|-- String --|-------- String --------|-------- String --------|-------- String -----------------|
+// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:Base32-encoded GC generation hash
+//
+// |-- String --|- String --|...|-- String --|- String --|
+// :table 1 hash:table 1 cnt:...:table N hash:table N cnt|
+func parseV5Manifest(r io.Reader) (manifestContents, error) {
 	manifest, err := ioutil.ReadAll(r)
 
 	if err != nil {
@@ -246,41 +226,69 @@ func (fm5 fileManifestV5) parseManifest(r io.Reader) (manifestContents, error) {
 	}
 
 	slices := strings.Split(string(manifest), ":")
-	if len(slices) < prefixLen || len(slices)%2 != 1 {
+	if len(slices) < prefixLen-1 || len(slices)%2 != 0 {
 		return manifestContents{}, ErrCorruptManifest
 	}
 
-	if StorageVersion != string(slices[0]) {
-		return manifestContents{}, errors.New("invalid storage version")
-	}
-
-	specs, err := parseSpecs(slices[prefixLen:])
+	specs, err := parseSpecs(slices[prefixLen-1:])
 	if err != nil {
 		return manifestContents{}, err
 	}
 
-	lock, err := parseAddr(slices[2])
+	lock, err := parseAddr(slices[1])
 	if err != nil {
 		return manifestContents{}, err
 	}
 
-	gcGen, err := parseAddr(slices[4])
+	gcGen, err := parseAddr(slices[3])
 	if err != nil {
 		return manifestContents{}, err
 	}
 
 	return manifestContents{
-		vers:  slices[1],
-		lock:  lock,
-		root:  hash.Parse(slices[3]),
-		gcGen: gcGen,
-		specs: specs,
+		manifestVers: StorageVersion,
+		nbfVers:      slices[0],
+		lock:         lock,
+		root:         hash.Parse(slices[2]),
+		gcGen:        gcGen,
+		specs:        specs,
 	}, nil
 }
 
-func (fm5 fileManifestV5) writeManifest(temp io.Writer, contents manifestContents) error {
+// parseManifest parses the manifest bytes in the reader given and returns the contents. Consumes the first few bytes
+func parseManifest(r io.Reader) (manifestContents, error) {
+	var version []byte
+	buf := make([]byte, 1)
+
+	// Parse the manifest up to the : character
+	chars := 0
+	for ; chars < 8; chars++ {
+		_, err := r.Read(buf)
+		if err != nil {
+			return manifestContents{}, err
+		}
+		if buf[0] == ':' {
+			break
+		}
+		version = append(version, buf[0])
+	}
+	if chars >= 8 {
+		return manifestContents{}, ErrCorruptManifest
+	}
+
+	switch string(version) {
+	case storageVersion4:
+		return parseV4Manifest(r)
+	case StorageVersion:
+		return parseV5Manifest(r)
+	default:
+		return manifestContents{}, fmt.Errorf("Unknown manifest version: %s. You may need to update your client", string(version))
+	}
+}
+
+func writeManifest(temp io.Writer, contents manifestContents) error {
 	strs := make([]string, 2*len(contents.specs)+prefixLen)
-	strs[0], strs[1], strs[2], strs[3], strs[4] = StorageVersion, contents.vers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
+	strs[0], strs[1], strs[2], strs[3], strs[4] = StorageVersion, contents.nbfVers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
 	tableInfo := strs[prefixLen:]
 	formatSpecs(contents.specs, tableInfo)
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
@@ -288,40 +296,12 @@ func (fm5 fileManifestV5) writeManifest(temp io.Writer, contents manifestContent
 	return err
 }
 
-// fileManifestV4 is the previous versions of the NomsBlockStore manifest.
-// The format is as follows:
+// parseV4Manifest parses the v4 manifest from the Reader given. Assumes the first field (the manifest version and
+// following : character) have already been consumed by the reader.
 //
 // |-- String --|-- String --|-------- String --------|-------- String --------|-- String --|- String --|...|-- String --|- String --|
 // | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:table 1 hash:table 1 cnt:...:table N hash:table N cnt|
-type fileManifestV4 struct {
-	dir string
-}
-
-func (fm4 fileManifestV4) Name() string {
-	return fm4.dir
-}
-
-func (fm4 fileManifestV4) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
-	t1 := time.Now()
-	defer func() {
-		stats.ReadManifestLatency.SampleTimeSince(t1)
-	}()
-
-	return parseIfExistsWithParser(ctx, fm4.dir, fm4.parseManifest, readHook)
-}
-
-func (fm4 fileManifestV4) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
-	t1 := time.Now()
-	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
-
-	noop := func(_, _ manifestContents) error {
-		return nil
-	}
-
-	return updateWithParseWriterAndChecker(ctx, fm4.dir, fm4.writeManifest, fm4.parseManifest, noop, lastLock, newContents, writeHook)
-}
-
-func (fm4 fileManifestV4) parseManifest(r io.Reader) (manifestContents, error) {
+func parseV4Manifest(r io.Reader) (manifestContents, error) {
 	manifest, err := ioutil.ReadAll(r)
 
 	if err != nil {
@@ -329,45 +309,32 @@ func (fm4 fileManifestV4) parseManifest(r io.Reader) (manifestContents, error) {
 	}
 
 	slices := strings.Split(string(manifest), ":")
-	if len(slices) < 4 || len(slices)%2 == 1 {
+	if len(slices) < 3 || len(slices)%2 == 0 {
 		return manifestContents{}, ErrCorruptManifest
 	}
 
-	if storageVersion4 != string(slices[0]) {
-		return manifestContents{}, errors.New("invalid storage version")
-	}
-
-	specs, err := parseSpecs(slices[4:])
+	specs, err := parseSpecs(slices[3:])
 
 	if err != nil {
 		return manifestContents{}, err
 	}
 
-	ad, err := parseAddr(slices[2])
+	ad, err := parseAddr(slices[1])
 
 	if err != nil {
 		return manifestContents{}, err
 	}
 
 	return manifestContents{
-		vers:  slices[1],
-		lock:  ad,
-		root:  hash.Parse(slices[3]),
-		specs: specs,
+		manifestVers: storageVersion4,
+		nbfVers:      slices[0],
+		lock:         ad,
+		root:         hash.Parse(slices[2]),
+		specs:        specs,
 	}, nil
 }
 
-func (fm4 fileManifestV4) writeManifest(temp io.Writer, contents manifestContents) error {
-	strs := make([]string, 2*len(contents.specs)+4)
-	strs[0], strs[1], strs[2], strs[3] = storageVersion4, contents.vers, contents.lock.String(), contents.root.String()
-	tableInfo := strs[4:]
-	formatSpecs(contents.specs, tableInfo)
-	_, err := io.WriteString(temp, strings.Join(strs, ":"))
-
-	return err
-}
-
-func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser, readHook func() error) (exists bool, contents manifestContents, err error) {
+func parseIfExists(_ context.Context, dir string, readHook func() error) (exists bool, contents manifestContents, err error) {
 	var locked bool
 	locked, err = lockFileExists(dir)
 
@@ -422,7 +389,7 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 
 			exists = true
 
-			contents, err = parse(f)
+			contents, err = parseManifest(f)
 
 			if err != nil {
 				return false, contents, err
@@ -432,7 +399,7 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 	return exists, contents, nil
 }
 
-func updateWithParseWriterAndChecker(_ context.Context, dir string, write manifestWriter, parse manifestParser, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+func updateWithChecker(_ context.Context, dir string, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
@@ -453,7 +420,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 			}
 		}()
 
-		ferr = write(temp, newContents)
+		ferr = writeManifest(temp, newContents)
 
 		if ferr != nil {
 			return "", ferr
@@ -506,13 +473,13 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 				}
 			}()
 
-			upstream, ferr = parse(f)
+			upstream, ferr = parseManifest(f)
 
 			if ferr != nil {
 				return manifestContents{}, ferr
 			}
 
-			if newContents.vers != upstream.vers {
+			if newContents.nbfVers != upstream.nbfVers {
 				return manifestContents{}, errors.New("Update cannot change manifest version")
 			}
 

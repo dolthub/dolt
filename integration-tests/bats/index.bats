@@ -2025,13 +2025,13 @@ CREATE TABLE test2 (
 INSERT INTO test VALUES (0, NULL), (1, NULL), (2, NULL);
 INSERT INTO test2 VALUES (0, NULL, NULL), (1, NULL, NULL), (2, 1, NULL), (3, 1, NULL), (4, NULL, 1), (5, NULL, 1);
 SQL
-    run dolt sql -q "SELECT * FROM test" -r=json
+    run dolt sql -q "SELECT * FROM test order by pk" -r=json
     [ "$status" -eq "0" ]
     [[ "$output" =~ '{"rows": [{"pk":0},{"pk":1},{"pk":2}]}' ]] || false
-    run dolt sql -q "SELECT * FROM test WHERE v1 IS NULL" -r=json
+    run dolt sql -q "SELECT * FROM test WHERE v1 IS NULL order by pk" -r=json
     [ "$status" -eq "0" ]
     [[ "$output" =~ '{"rows": [{"pk":0},{"pk":1},{"pk":2}]}' ]] || false
-    run dolt sql -q "SELECT * FROM test2" -r=json
+    run dolt sql -q "SELECT * FROM test2 order by pk" -r=json
     [ "$status" -eq "0" ]
     [[ "$output" =~ '{"rows": [{"pk":0},{"pk":1},{"pk":2,"v1":1},{"pk":3,"v1":1},{"pk":4,"v2":1},{"pk":5,"v2":1}]}' ]] || false
 }
@@ -2158,15 +2158,15 @@ SQL
     dolt add -A
     dolt commit -m "baseline commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (4, 44, 404)"
     dolt add -A
-    dolt commit -m "master changes"
+    dolt commit -m "main changes"
     dolt checkout other
     dolt sql -q "INSERT INTO onepk VALUES (5, 55, 505), (6, 66, 606), (7, 77, 707), (8, 88, 808)"
     dolt add -A
     dolt commit -m "other changes"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt index ls onepk
     [ "$status" -eq "0" ]
@@ -2198,15 +2198,15 @@ SQL
     dolt add -A
     dolt commit -m "baseline commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, -33, 33), (4, 44, 404)"
     dolt add -A
-    dolt commit -m "master changes"
+    dolt commit -m "main changes"
     dolt checkout other
     dolt sql -q "INSERT INTO onepk VALUES (1, -11, 11), (2, -22, 22), (3, -33, 33), (4, -44, 44), (5, -55, 55)"
     dolt add -A
     dolt commit -m "other changes"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
@@ -2233,15 +2233,15 @@ SQL
     dolt add -A
     dolt commit -m "baseline commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, -33, 33), (4, 44, 404)"
     dolt add -A
-    dolt commit -m "master changes"
+    dolt commit -m "main changes"
     dolt checkout other
     dolt sql -q "INSERT INTO onepk VALUES (1, -11, 11), (2, -22, 22), (3, -33, 33), (4, -44, 44), (5, -55, 55)"
     dolt add -A
     dolt commit -m "other changes"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     dolt conflicts resolve --ours onepk
     run dolt index cat onepk idx_v1 -r=csv
@@ -2260,15 +2260,15 @@ SQL
     dolt add -A
     dolt commit -m "baseline commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, -33, 33), (4, 44, 404)"
     dolt add -A
-    dolt commit -m "master changes"
+    dolt commit -m "main changes"
     dolt checkout other
     dolt sql -q "INSERT INTO onepk VALUES (1, -11, 11), (2, -22, 22), (3, -33, 33), (4, -44, 44), (5, -55, 55)"
     dolt add -A
     dolt commit -m "other changes"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     dolt conflicts resolve --theirs onepk
     run dolt index cat onepk idx_v1 -r=csv
@@ -2287,15 +2287,15 @@ SQL
     dolt add -A
     dolt commit -m "baseline commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, -33, 33), (4, 44, 404)"
     dolt add -A
-    dolt commit -m "master changes"
+    dolt commit -m "main changes"
     dolt checkout other
     dolt sql -q "INSERT INTO onepk VALUES (1, -11, 11), (2, -22, 22), (3, -33, 33), (4, -44, 44), (5, -55, 55)"
     dolt add -A
     dolt commit -m "other changes"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     dolt conflicts resolve onepk 4
     dolt sql --disable-batch <<SQL
@@ -2321,15 +2321,15 @@ SQL
     dolt add -A
     dolt commit -m "baseline commit"
     dolt checkout -b other
-    dolt checkout master
+    dolt checkout main
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (4, 44, 404)"
     dolt add -A
-    dolt commit -m "master changes"
+    dolt commit -m "main changes"
     dolt checkout other
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (5, 44, 505)"
     dolt add -A
     dolt commit -m "other changes"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
@@ -2356,7 +2356,7 @@ SQL
     dolt sql -q "CREATE INDEX abc ON test (v1)"
     dolt add -A
     dolt commit -m "added index"
-    dolt merge master
+    dolt merge main
     run dolt sql -q "select * from test where v1 = 2" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1,v2" ]] || false
@@ -2389,7 +2389,7 @@ SQL
     dolt sql -q "CREATE INDEX abc ON test (v1)"
     dolt add -A
     dolt commit -m "added index"
-    dolt checkout master
+    dolt checkout main
     dolt merge other
     run dolt sql -q "select * from test where v1 = 2" -r=csv
     [ "$status" -eq "0" ]

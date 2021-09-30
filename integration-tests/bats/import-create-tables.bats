@@ -392,7 +392,7 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    run dolt sql -q "select * from test"
+    run dolt sql -q "select * from test ORDER BY pk"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
@@ -418,7 +418,7 @@ SQL
     [ "$status" -eq 0 ]
 
     # schema argument subsets the data and adds empty column
-    run dolt sql -r csv -q "select * from subset"
+    run dolt sql -r csv -q "select * from subset ORDER BY pk"
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "pk,c1,c3,noData" ]
     [ "${lines[1]}" = "0,1,3," ]
@@ -440,7 +440,7 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "empty_strings_null_values" ]] || false
-    run dolt sql -q "select * from empty_strings_null_values"
+    run dolt sql -q "select * from empty_strings_null_values ORDER BY pk"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
@@ -467,7 +467,7 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    run dolt sql -q "select * from test"
+    run dolt sql -q "select * from test ORDER BY pk"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
