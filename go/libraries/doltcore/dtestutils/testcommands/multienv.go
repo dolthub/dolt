@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -162,8 +161,13 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.T.Fatal(err)
 	}
 
-	repoPath := fmt.Sprintf("file:///%s", cloneDir)
-	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_Default, filepath.Join(repoPath, dbfactory.DoltDir), filesys.LocalFS)
+	wd, err := os.Getwd()
+	if err != nil {
+		mr.T.Fatal(err)
+	}
+	os.Chdir(cloneDir)
+	defer os.Chdir(wd)
+	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
 	if err != nil {
 		mr.T.Fatal("Failed to initialize environment:" + err.Error())
 	}
