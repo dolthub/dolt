@@ -130,7 +130,7 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	autoResolveFunc := autoResolvers[autoResolveFlag]
 
 	var err error
-	tbls := apr.Args()
+	tbls := apr.Args
 	if len(tbls) == 1 && tbls[0] == "." {
 		err = merge.AutoResolveAll(ctx, dEnv, autoResolveFunc)
 	} else {
@@ -150,7 +150,7 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 }
 
 func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
-	args := apr.Args()
+	args := apr.Args
 
 	if len(args) < 2 {
 		return errhand.BuildDError("at least two args are required").SetPrintUsage().Build()

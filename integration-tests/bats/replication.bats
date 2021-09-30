@@ -20,8 +20,6 @@ teardown() {
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
-    export DOLT_READ_REPLICA_REMOTE=
-    export DOLT_BACKUP_TO_REMOTE=
 }
 
 @test "replication: default no replication" {
@@ -34,7 +32,7 @@ teardown() {
 
 @test "replication: push on commit" {
     cd repo1
-    dolt config --local --add DOLT_BACKUP_TO_REMOTE backup1
+    dolt config --local --add DOLT_REPLICATE_TO_REMOTE backup1
     dolt config --list
     dolt remote -v
     dolt sql -q "create table t1 (a int primary key)"
@@ -51,7 +49,7 @@ teardown() {
 
 @test "replication: no tags" {
     cd repo1
-    dolt config --local --add DOLT_BACKUP_TO_REMOTE backup1
+    dolt config --local --add DOLT_REPLICATE_TO_REMOTE backup1
     dolt tag
 
     [ ! -d "../bac1/.dolt" ] || false
@@ -76,3 +74,4 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "t1" ]] || false
 }
+

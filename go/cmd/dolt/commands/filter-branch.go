@@ -101,7 +101,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() < 1 || apr.NArg() > 2 {
-		args := strings.Join(apr.Args(), ", ")
+		args := strings.Join(apr.Args, ", ")
 		verr := errhand.BuildDError("%s takes 1 or 2 args, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
 		return HandleVErrAndExitCode(verr, usage)
 	}

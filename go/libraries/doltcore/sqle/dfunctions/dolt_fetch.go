@@ -86,7 +86,7 @@ func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmdFailure, err
 	}
 
-	remote, refSpecs, err := env.NewFetchOpts(apr.Args(), dbData.Rsr)
+	remote, refSpecs, err := env.NewFetchOpts(apr.Args, dbData.Rsr)
 	if err != nil {
 		return cmdFailure, err
 	}

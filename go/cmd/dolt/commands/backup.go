@@ -17,7 +17,9 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"os"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -60,7 +62,7 @@ Push heads to the backup, force overwriting existing refs if necessary`,
 		"[-v | --verbose]",
 		"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
 		"remove {{.LessThan}}name{{.GreaterThan}}",
-		"restore {{.LessThan}}url{{.GreaterThan}}",
+		"restore {{.LessThan}}url{{.GreaterThan}} {{.LessThan}}name{{.GreaterThan}}",
 		"sync {{.LessThan}}name{{.GreaterThan}}",
 	},
 }
@@ -83,6 +85,10 @@ func (cmd BackupCmd) Name() string {
 // Description returns a description of the command
 func (cmd BackupCmd) Description() string {
 	return "Manage set of tracked repositories."
+}
+
+func (cmd BackupCmd) RequiresRepo() bool {
+	return false
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
@@ -269,5 +275,27 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	if apr.NArg() < 3 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
-	return clone(ctx, apr, dEnv)
+	apr.Args = apr.Args[1:]
+	verr := clone(ctx, apr, dEnv)
+
+	if verr != nil {
+		return verr
+	}
+
+	defer func (dir string) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return
+		}
+		defer os.Chdir(cwd)
+		os.Chdir(dir)
+
+		dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, dEnv.Version)
+		dEnv.RemoveRemote(ctx, "origin")
+
+	}(apr.Arg(0))
+
+	// TODO pull other branches?
+
+	return nil
 }

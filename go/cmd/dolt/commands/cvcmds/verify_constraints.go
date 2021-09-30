@@ -79,7 +79,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)
 	}
-	tableNames := apr.Args()
+	tableNames := apr.Args
 	if len(tableNames) == 0 {
 		tableNames, err = working.GetTableNames(ctx)
 		if err != nil {

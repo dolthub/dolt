@@ -11,7 +11,8 @@ setup() {
     dolt init
     dolt branch feature
     dolt tag v1
-    dolt backup add bac1 file://../bac1
+    dolt sql -q "create table t1 (a int)"
+    dolt commit -am "cm"
     cd $TMPDIRS
 }
 
@@ -21,40 +22,101 @@ teardown() {
     cd $BATS_TMPDIR
 }
 
-@test "backup: push to backup" {
+@test "backup: add named backup" {
     cd repo1
-    dolt remote add origin file://../rem1
-    dolt backup push bac1
-
-    run noms ds ../bac1
+    dolt backup add bac1 file://../bac1
+    run dolt backup -v
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
-    [[ "$output" =~ "v1" ]] || false
-    [[ "$output" =~ "refs/heads/feature" ]] || false
-    [[ "$output" =~ "refs/heads/master" ]] || false
-    [[ "$output" =~ "refs/internal/create" ]] || false
-    [[ "$output" =~ "refs/tags/v1" ]] || false
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "bac1" ]] || false
 }
 
-
-@test "backup: clone from backup" {
+@test "backup: remove named backup" {
     cd repo1
-    dolt remote add origin file://../rem1
-    dolt backup push bac1
+    dolt backup add bac1 file://../bac1
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "bac1" ]] || false
+
+    dolt backup remove bac1
+
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+    [[ ! "$output" =~ "bac1" ]] || false
+}
+
+@test "backup: sync master to backup" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    dolt backup sync bac1
 
     cd ..
-    dolt clone file://./bac1 repo2
+    run dolt backup restore file://./bac1 repo2
     cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+}
 
+@test "backup: sync feature to backup" {
+    skip "todo implement custom clone for backup, instead of reusing remote clone"
+
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    dolt backup sync bac1
+
+    cd ..
+    dolt backup restore file://./bac1 repo2
+    cd repo2
+    dolt branch
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "feature" ]] || false
+}
+
+@test "backup: sync tag to backup" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    dolt backup sync bac1
+
+    cd ..
+    dolt backup restore file://./bac1 repo2
+    cd repo2
     run dolt tag
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "v1" ]] || false
-
-    dolt branch
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "master" ]] || false
-    [[ "$output" =~ "feature" ]] || false
-    [ "$status" -eq 0 ]
 }
+
+@test "backup: sync working set to backup" {
+    cd repo1
+    dolt sql -q "create table t2 (a int)"
+    dolt add t2
+    dolt backup add bac1 file://../bac1
+    dolt backup sync bac1
+
+    cd ..
+    dolt backup restore file://./bac1 repo2
+    cd repo2
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t2" ]] || false
+}
+
+@test "backup: no origin on restore" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    dolt backup sync bac1
+
+    cd ..
+    run dolt backup restore file://./bac1 repo2
+    cd repo2
+    run dolt remote -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+    [[ ! "$output" =~ "origin" ]] || false
+}
+

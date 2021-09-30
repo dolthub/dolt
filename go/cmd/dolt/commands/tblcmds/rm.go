@@ -78,7 +78,7 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return 1
 	}
 
-	for _, tableName := range apr.Args() {
+	for _, tableName := range apr.Args {
 		if doltdb.IsReadOnlySystemTable(tableName) {
 			return commands.HandleVErrAndExitCode(
 				errhand.BuildDError("error removing table %s", tableName).AddCause(doltdb.ErrSystemTableCannotBeModified).Build(), usage)
@@ -86,7 +86,7 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	queryStr := ""
-	for _, tableName := range apr.Args() {
+	for _, tableName := range apr.Args {
 		queryStr = fmt.Sprintf("%sDROP TABLE `%s`;", queryStr, tableName)
 	}
 
