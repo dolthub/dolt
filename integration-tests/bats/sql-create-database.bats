@@ -29,7 +29,7 @@ SQL
     # From COUNT
     [[ "$output" =~ "1" ]] || false
     # Validate that CREATE DATABASE throws a warning
-    [[ "$output" =~ "CREATE DATABASE creates an inmemory database that does not persist after the server exits." ]] || false
+    [[ "$output" =~ 'CREATE DATABASE creates an inmemory database that does not persist after the server exits. Dolt currently only supports a single disk backed database created by `dolt init`' ]] || false
 
     run dolt sql -q "SHOW DATABASES"
     [[ ! "$output" =~ "mydb" ]] || false
@@ -62,7 +62,7 @@ DROP DATABASE mydb;
 USE mydb;
 SQL
     # Validate that CREATE DATABASE throws a warning
-    [[ "$output" =~ "CREATE DATABASE creates an inmemory database that does not persist after the server exits." ]] || false
+    [[ "$output" =~ 'CREATE DATABASE creates an inmemory database that does not persist after the server exits. Dolt currently only supports a single disk backed database created by `dolt init`' ]] || false
 
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database not found: mydb" ]] || false
