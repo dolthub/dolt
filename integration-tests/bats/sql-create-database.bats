@@ -12,6 +12,7 @@ teardown() {
 @test "sql-create-database: create new database" {
     run dolt sql << SQL
 CREATE DATABASE mydb;
+SHOW WARNINGS;
 SHOW DATABASES;
 USE mydb;
 CREATE TABLE test (
@@ -27,6 +28,8 @@ SQL
     [[ "$output" =~ "mydb" ]] || false
     # From COUNT
     [[ "$output" =~ "1" ]] || false
+    # Validate that CREATE DATABASE throws a warning
+    [[ "$output" =~ 'CREATE DATABASE creates an inmemory database that does not persist after the server exits. Dolt currently only supports a single disk backed database created by `dolt init`' ]] || false
 
     run dolt sql -q "SHOW DATABASES"
     [[ ! "$output" =~ "mydb" ]] || false
@@ -40,7 +43,6 @@ SQL
 
     [ "$status" -eq 1 ]
     [[ "$output" =~ "can't create database mydb; database exists" ]] || false
-
 }
 
 @test "sql-create-database: create database IF NOT EXISTS on database that already exists doesn't throw an error" {
@@ -55,9 +57,13 @@ SQL
 @test "sql-create-database: create and drop new database" {
     run dolt sql << SQL
 CREATE DATABASE mydb;
+SHOW WARNINGS;
 DROP DATABASE mydb;
 USE mydb;
 SQL
+    # Validate that CREATE DATABASE throws a warning
+    [[ "$output" =~ 'CREATE DATABASE creates an inmemory database that does not persist after the server exits. Dolt currently only supports a single disk backed database created by `dolt init`' ]] || false
+
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database not found: mydb" ]] || false
 }
@@ -140,7 +146,7 @@ SQL
     [[ ! "$output" =~ "mydb" ]] || false
 }
 
-@test "sql-create-database: use for non existing datbase throws an error" {
+@test "sql-create-database: use for non existing database throws an error" {
     run dolt sql -q "USE test"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database not found: test" ]] || false
