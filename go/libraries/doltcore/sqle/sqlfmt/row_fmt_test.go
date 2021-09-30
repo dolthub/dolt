@@ -42,6 +42,14 @@ type test struct {
 	expectedOutput string
 }
 
+type updateTest struct {
+	name           string
+	row            row.Row
+	sch            schema.Schema
+	expectedOutput string
+	collDiff       map[string]interface{}
+}
+
 func TestTableDropStmt(t *testing.T) {
 	stmt := DropTableStmt("table_name")
 
@@ -154,24 +162,43 @@ func TestRowAsUpdateStmt(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
 
-	tests := []test{
+	createColDiffs := func (cols []string) map[string]interface{} {
+		ret := make(map[string]interface{})
+		for _, v := range cols {
+			ret[v] = true
+		}
+
+		return ret
+	}
+
+	tests := []updateTest{
 		{
 			name:           "simple row",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
 			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=FALSE,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			collDiff:        createColDiffs([]string{"name", "age", "is_married", "title"}),
 		},
 		{
 			name:           "embedded quotes",
 			row:            dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
 			expectedOutput: "UPDATE `people` SET `name`='It\\'s \\\"Mister Perfect\\\" to you',`age`=100,`is_married`=FALSE,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			collDiff:       createColDiffs([]string{"name", "age", "is_married", "title"}),
 		},
 		{
 			name:           "null values",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
 			sch:            dtestutils.TypedSchema,
 			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=FALSE,`title`=NULL WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			collDiff:       createColDiffs([]string{"name", "age", "is_married", "title"}),
+		},
+		{
+			name: 			"partial update",
+			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
+			sch:            dtestutils.TypedSchema,
+			expectedOutput: "UPDATE `people` SET `name`='some guy' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			collDiff:       createColDiffs([]string{"name"}),
 		},
 	}
 
@@ -180,16 +207,17 @@ func TestRowAsUpdateStmt(t *testing.T) {
 		schema.NewColumn("anotherColumn", 1, types.IntKind, true),
 	)
 
-	tests = append(tests, test{
+	tests = append(tests, updateTest{
 		name:           "negative values and columns with spaces",
 		row:            dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42)),
 		sch:            trickySch,
 		expectedOutput: "UPDATE `people` SET `a name with spaces`=-3.14 WHERE (`anotherColumn`=-42);",
+		collDiff:       createColDiffs([]string{"a name with spaces"}),
 	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stmt, err := RowAsUpdateStmt(tt.row, tableName, tt.sch)
+			stmt, err := RowAsUpdateStmt(tt.row, tableName, tt.sch, tt.collDiff)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedOutput, stmt)
 		})

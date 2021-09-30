@@ -489,3 +489,15 @@ SQL
     [[ "$output" =~ "cv1" ]] || false
     [ $status -eq 0 ]
 }
+
+@test "diff: sql update queries only show changed columns" {
+    dolt sql -q "create table t(pk int primary key, val1 int, val2 int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
+
+    dolt commit -am "cm1"
+
+    dolt sql -q "UPDATE t SET val1=2 where pk=1"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = 'UPDATE `t` SET `val1`=2 WHERE (`pk`=1);' ]] || false
+}

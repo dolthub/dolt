@@ -16,14 +16,13 @@ package diff
 
 import (
 	"errors"
-	"io"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
+	"io"
 )
 
 type SQLDiffSink struct {
@@ -95,8 +94,14 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 			case DiffModifiedOld:
 				return nil
 			case DiffModifiedNew:
+				// Update Col Diffs to interface{} to avoid import loop
+				colDiffsInter := make(map[string]interface{}, len(colDiffs))
+				for k, v := range colDiffs {
+					colDiffsInter[k] = v
+				}
+
 				// TODO: minimize update statement to modified rows
-				stmt, err := sqlfmt.RowAsUpdateStmt(r, sds.tableName, sds.sch)
+				stmt, err := sqlfmt.RowAsUpdateStmt(r, sds.tableName, sds.sch, colDiffsInter)
 
 				if err != nil {
 					return err

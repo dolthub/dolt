@@ -120,7 +120,7 @@ func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	return b.String(), nil
 }
 
-func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema) (string, error) {
+func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema, colDiffs map[string]interface{}) (string, error) {
 	var b strings.Builder
 	b.WriteString("UPDATE ")
 	b.WriteString(QuoteIdentifier(tableName))
@@ -130,7 +130,8 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	seenOne := false
 	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		if !col.IsPartOfPK {
+		_, exists := colDiffs[col.Name]
+		if !col.IsPartOfPK && exists {
 			if seenOne {
 				b.WriteRune(',')
 			}
