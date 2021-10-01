@@ -278,7 +278,7 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 }
 
 // CommitTransaction commits the in-progress transaction for the database named
-func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (sql.Transaction, error) {
+func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, readonly bool) (sql.Transaction, error) {
 	if TransactionsDisabled(ctx) {
 		return DisabledTransaction{}, nil
 	}
@@ -289,6 +289,10 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string) (sql.Tran
 	}
 
 	if sessionState.readOnly && sessionState.detachedHead {
+		return DisabledTransaction{}, nil
+	}
+
+	if readonly {
 		return DisabledTransaction{}, nil
 	}
 
