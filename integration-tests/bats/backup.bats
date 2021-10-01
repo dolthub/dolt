@@ -49,6 +49,22 @@ teardown() {
     [[ ! "$output" =~ "bac1" ]] || false
 }
 
+@test "backup: rm named backup" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "bac1" ]] || false
+
+    dolt backup rm bac1
+
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+    [[ ! "$output" =~ "bac1" ]] || false
+}
+
 @test "backup: sync master to backup" {
     cd repo1
     dolt backup add bac1 file://../bac1
@@ -100,7 +116,6 @@ teardown() {
     cd ..
     dolt backup restore file://./bac1 repo2
     cd repo2
-    noms ds .dolt/noms
     run dolt sql -q "show tables as of hashof('origin/main')" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

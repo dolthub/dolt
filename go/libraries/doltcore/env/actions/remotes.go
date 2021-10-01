@@ -428,6 +428,7 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 	return nil
 }
 
+// SyncRoots copies the entire chunkstore state from a src to a dest DoltDB. Used to streamline database backup and restores.
 func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, progStarter ProgStarter, progStopper ProgStopper) error {
 	srcRoot, err := srcDb.NomsRoot(ctx)
 	if err != nil {
