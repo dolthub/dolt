@@ -35,7 +35,7 @@ jobs:
       - name: Create Winget PR
         run: |
           iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          .\wingetcreate.exe update Microsoft.WingetCreate -u $Env:URL -v $Env:VERSION -t $Env:TOKEN --submit
+          .\wingetcreate.exe update DoltHub.Dolt -u $Env:URL -v $Env:VERSION -t $Env:TOKEN --submit
         env:
           TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           VERSION: ${{ github.event.inputs.version }}
