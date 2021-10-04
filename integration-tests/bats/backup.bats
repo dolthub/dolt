@@ -213,20 +213,29 @@ teardown() {
     [[ "$output" =~ "cannot clone backup" ]] || false
 }
 
-@test "backup: add backup fails for remote URL clash" {
+@test "backup: cannot add backup with address of existing remote" {
     cd repo1
     dolt remote add rem1 file://../bac1
     run dolt backup add bac1 file://../bac1
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "backup and remote cannot share a URL address" ]] || false
+    [[ "$output" =~ "address conflict with a remote: 'rem1'" ]] || false
 }
 
-@test "backup: add remote fails for backup URL clash" {
+@test "backup: cannot add backup with address of existing backup" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    run dolt backup add bac2 file://../bac1
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "address conflict with a remote: 'bac1'" ]] || false
+}
+
+@test "backup: cannot add remote with address of existing backup" {
     cd repo1
     dolt backup add bac1 file://../bac1
     run dolt remote add rem1 file://../bac1
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "backup and remote cannot share a URL address" ]] || false
+    [[ "$output" =~ "address conflict with a remote: 'bac1'" ]] || false
 }
