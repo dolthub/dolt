@@ -960,7 +960,6 @@ func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, par
 		return fmt.Errorf("%w; %s", ErrInvalidRemoteURL, err.Error())
 	}
 
-
 	// can have multiple remotes with the same address, but no conflicting backups
 	if r, found := checkRemoteAddressConflict(absRemoteUrl, nil, dEnv.RepoState.Backups); found {
 		return fmt.Errorf("%w: '%s' -> %s", ErrRemoteAddressConflict, r.Name, r.Url)
