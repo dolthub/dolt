@@ -26,7 +26,6 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -59,7 +58,7 @@ type BlockStoreSuite struct {
 
 func (suite *BlockStoreSuite) SetupTest() {
 	var err error
-	suite.dir, err = ioutil.TempDir("", "")
+	suite.dir, err = os.MkdirTemp("", "")
 	suite.NoError(err)
 	suite.store, err = NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
 	suite.NoError(err)

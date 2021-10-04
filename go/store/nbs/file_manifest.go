@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -219,7 +218,7 @@ func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock addr, newConten
 // |-- String --|- String --|...|-- String --|- String --|
 // :table 1 hash:table 1 cnt:...:table N hash:table N cnt|
 func parseV5Manifest(r io.Reader) (manifestContents, error) {
-	manifest, err := ioutil.ReadAll(r)
+	manifest, err := io.ReadAll(r)
 
 	if err != nil {
 		return manifestContents{}, err
@@ -302,7 +301,7 @@ func writeManifest(temp io.Writer, contents manifestContents) error {
 // |-- String --|-- String --|-------- String --------|-------- String --------|-- String --|- String --|...|-- String --|- String --|
 // | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:table 1 hash:table 1 cnt:...:table N hash:table N cnt|
 func parseV4Manifest(r io.Reader) (manifestContents, error) {
-	manifest, err := ioutil.ReadAll(r)
+	manifest, err := io.ReadAll(r)
 
 	if err != nil {
 		return manifestContents{}, err

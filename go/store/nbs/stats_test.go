@@ -23,7 +23,7 @@ package nbs
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,7 +42,7 @@ func TestStats(t *testing.T) {
 		return store.Stats().(Stats)
 	}
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize)
 	require.NoError(t, err)

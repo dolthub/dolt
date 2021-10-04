@@ -24,7 +24,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -68,12 +67,12 @@ func TestWriteChunks(t *testing.T) {
 		t.Error(err)
 	}
 
-	dir, err := ioutil.TempDir("", "write_chunks_test")
+	dir, err := os.MkdirTemp("", "write_chunks_test")
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = ioutil.WriteFile(dir+name, data, os.ModePerm)
+	err = os.WriteFile(dir+name, data, os.ModePerm)
 	if err != nil {
 		t.Error(err)
 	}

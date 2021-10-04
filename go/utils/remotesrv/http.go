@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -86,7 +85,7 @@ func writeTableFile(logger func(string), org, repo, fileId string, request *http
 	}
 
 	logger(fileId + " is valid")
-	data, err := ioutil.ReadAll(request.Body)
+	data, err := io.ReadAll(request.Body)
 
 	if tfd.ContentLength != 0 && tfd.ContentLength != uint64(len(data)) {
 		return http.StatusBadRequest
@@ -116,7 +115,7 @@ func writeTableFile(logger func(string), org, repo, fileId string, request *http
 func writeLocal(logger func(string), org, repo, fileId string, data []byte) error {
 	path := filepath.Join(org, repo, fileId)
 
-	err := ioutil.WriteFile(path, data, os.ModePerm)
+	err := os.WriteFile(path, data, os.ModePerm)
 
 	if err != nil {
 		logger(fmt.Sprintf("failed to write file %s", path))

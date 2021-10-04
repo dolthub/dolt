@@ -17,7 +17,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -227,7 +226,7 @@ func getStdinForSQLBenchmark(fs filesys.Filesys, pathToImportFile string) *os.Fi
 		log.Fatal(err)
 	}
 
-	tmpfile, err := ioutil.TempFile("", "temp")
+	tmpfile, err := os.CreateTemp("", "temp")
 	if err != nil {
 		log.Fatal(err)
 	}

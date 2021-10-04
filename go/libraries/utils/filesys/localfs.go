@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -85,14 +84,19 @@ func (fs *localFS) Iter(path string, recursive bool, cb FSIterCB) error {
 	}
 
 	if !recursive {
-		info, err := ioutil.ReadDir(path)
+		dirEntries, err := os.ReadDir(path)
 
 		if err != nil {
 			return err
 		}
 
-		for _, curr := range info {
-			stop := cb(filepath.Join(path, curr.Name()), curr.Size(), curr.IsDir())
+		for _, entry := range dirEntries {
+			fi, err := entry.Info()
+			if err != nil {
+				return err
+			}
+
+			stop := cb(filepath.Join(path, fi.Name()), fi.Size(), fi.IsDir())
 
 			if stop {
 				return nil
@@ -158,7 +162,7 @@ func (fs *localFS) ReadFile(fp string) ([]byte, error) {
 		return nil, err
 	}
 
-	return ioutil.ReadFile(fp)
+	return os.ReadFile(fp)
 }
 
 // OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
@@ -184,7 +188,7 @@ func (fs *localFS) WriteFile(fp string, data []byte) error {
 		return err
 	}
 
-	return ioutil.WriteFile(fp, data, os.ModePerm)
+	return os.WriteFile(fp, data, os.ModePerm)
 }
 
 // MkDirs creates a folder and all the parent folders that are necessary to create it.

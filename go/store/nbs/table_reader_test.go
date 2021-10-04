@@ -15,7 +15,7 @@
 package nbs
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 
@@ -36,7 +36,7 @@ func TestParseTableIndex(t *testing.T) {
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
 	defer f.Close()
-	bs, err := ioutil.ReadAll(f)
+	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
 	idx, err := parseTableIndex(bs)
 	require.NoError(t, err)
@@ -60,7 +60,7 @@ func TestMMapIndex(t *testing.T) {
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
 	defer f.Close()
-	bs, err := ioutil.ReadAll(f)
+	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
 	idx, err := parseTableIndex(bs)
 	require.NoError(t, err)

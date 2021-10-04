@@ -23,7 +23,6 @@ package suite
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -174,7 +173,7 @@ func runTestSuite(t *testing.T, mem bool) {
 	assert := assert.New(t)
 
 	// Write test results to our own temporary LDB database.
-	ldbDir, err := ioutil.TempDir("", "suite.TestSuite")
+	ldbDir, err := os.MkdirTemp("", "suite.TestSuite")
 	require.NoError(t, err)
 	defer file.RemoveAll(ldbDir)
 
@@ -289,7 +288,7 @@ func TestPrefixFlag(t *testing.T) {
 	assert := assert.New(t)
 
 	// Write test results to a temporary database.
-	ldbDir, err := ioutil.TempDir("", "suite.TestSuite")
+	ldbDir, err := os.MkdirTemp("", "suite.TestSuite")
 	require.NoError(t, err)
 	defer file.RemoveAll(ldbDir)
 
