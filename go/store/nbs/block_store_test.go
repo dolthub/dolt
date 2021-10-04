@@ -224,7 +224,12 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	}
 
 	chunkChan := make(chan *chunks.Chunk, len(hashes))
-	err = suite.store.GetMany(context.Background(), hashes.HashSet(), func(c *chunks.Chunk) { chunkChan <- c })
+	err = suite.store.GetMany(context.Background(), hashes.HashSet(), func(ctx context.Context, c *chunks.Chunk) {
+		select {
+		case chunkChan <- c:
+		case <-ctx.Done():
+		}
+	})
 	suite.NoError(err)
 	close(chunkChan)
 
