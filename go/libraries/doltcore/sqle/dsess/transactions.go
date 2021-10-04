@@ -61,7 +61,7 @@ func (d DisabledTransaction) String() string {
 }
 
 func (d DisabledTransaction) IsReadOnly() bool {
-	return true
+	return false
 }
 
 type DoltTransaction struct {
@@ -70,7 +70,7 @@ type DoltTransaction struct {
 	dbData        env.DbData
 	savepoints    []savepoint
 	mergeEditOpts editor.Options
-	readOnly bool
+	readOnly      bool
 }
 
 type savepoint struct {
@@ -83,7 +83,7 @@ func NewDoltTransaction(
 	workingSet ref.WorkingSetRef,
 	dbData env.DbData,
 	mergeEditOpts editor.Options,
-	readOnly 	  bool,
+	readOnly bool,
 ) *DoltTransaction {
 	return &DoltTransaction{
 		startState:    startState,
