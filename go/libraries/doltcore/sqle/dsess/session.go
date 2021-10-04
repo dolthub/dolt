@@ -292,10 +292,6 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, readonly 
 		return DisabledTransaction{}, nil
 	}
 
-	if readonly {
-		return DisabledTransaction{}, nil
-	}
-
 	err = sessionState.dbData.Ddb.Rebase(ctx)
 	if err != nil {
 		return nil, err
@@ -321,7 +317,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, readonly 
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts), nil
+	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, readonly), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -846,7 +842,7 @@ func (sess *Session) SwitchWorkingSet(
 	sessionState.dirty = false
 
 	// the current transaction, if there is one, needs to be restarted
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts))
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, false)) // TODO: reevaluate this
 
 	return nil
 }
