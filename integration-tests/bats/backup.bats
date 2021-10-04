@@ -49,6 +49,34 @@ teardown() {
     [[ ! "$output" =~ "bac1" ]] || false
 }
 
+@test "backup: rm named backup" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "bac1" ]] || false
+
+    dolt backup rm bac1
+
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+    [[ ! "$output" =~ "bac1" ]] || false
+}
+
+@test "backup: removing a backup with the same name as a remote does not impact remote tracking refs" {
+    cd repo1
+    dolt backup add origin file://../bac1
+    dolt backup remove origin
+
+    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "t1" ]] || false
+}
+
 @test "backup: sync master to backup" {
     cd repo1
     dolt backup add bac1 file://../bac1
@@ -100,7 +128,6 @@ teardown() {
     cd ..
     dolt backup restore file://./bac1 repo2
     cd repo2
-    noms ds .dolt/noms
     run dolt sql -q "show tables as of hashof('origin/main')" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -202,16 +229,4 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "backup and remote cannot share a URL address" ]] || false
-}
-
-@test "backup: deleting a backup with the same name as a remote does not impact remote tracking refs" {
-    cd repo1
-    dolt backup add origin file://../bac1
-    dolt backup remove origin
-
-    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "${lines[0]}" =~ "Table" ]] || false
-    [[ "${lines[1]}" =~ "t1" ]] || false
 }

@@ -428,7 +428,8 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 	return nil
 }
 
-// SyncRoots pushes every chunk in srcDb to destDb, and force overwrites destDb's manifest to mirror srcDb's
+// SyncRoots copies the entire chunkstore from srcDb to destDb and rewrites the remote manifest. Used to
+// streamline database backup and restores.
 // TODO: this should read/write a backup lock file specific to the client who created the backup
 // TODO     to prevent "restoring a remote", "cloning a backup", "syncing a remote" and "pushing
 // TODO     a backup." SyncRoots has more destructive potential than push right now.
