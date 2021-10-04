@@ -178,8 +178,10 @@ type Database interface {
 	// to a commit hook executed at the datas layer
 	SetCommitHookLogger(context.Context, io.Writer) *database
 
+	// NomsRoot returns the hash of the toplevel noms dataset map
 	NomsRoot(context.Context) (hash.Hash, error)
 
+	// CommitRoot executes a chunkStore commit, atomically swapping the root hash of the database manifest
 	CommitRoot(ctx context.Context, current, last hash.Hash) (bool, error)
 }
 

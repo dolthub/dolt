@@ -428,6 +428,10 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 	return nil
 }
 
+// SyncRoots pushes every chunk in srcDb to destDb, and force overwrites destDb's manifest to mirror srcDb's
+// TODO: this should read/write a backup lock file specific to the client who created the backup
+// TODO     to prevent "restoring a remote", "cloning a backup", "syncing a remote" and "pushing
+// TODO     a backup." SyncRoots has more destructive potential than push right now.
 func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, progStarter ProgStarter, progStopper ProgStopper) error {
 	srcRoot, err := srcDb.NomsRoot(ctx)
 	if err != nil {
@@ -446,7 +450,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := progStarter(newCtx)
 	defer progStopper(cancelFunc, wg, progChan, pullerEventCh)
-	
+
 	err = destDb.PushChunksForRefHash(ctx, tempTableDir, srcDb, srcRoot, pullerEventCh)
 	if err != nil {
 		return err

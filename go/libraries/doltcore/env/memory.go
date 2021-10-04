@@ -226,7 +226,7 @@ func (m MemoryRepoState) WriteDocsToDisk(docs doltdocs.Docs) error {
 }
 
 func (m MemoryRepoState) GetBackups() (map[string]Remote, error) {
-	panic("cannot get backups on im memory database")
+	panic("cannot get backups on in memory database")
 }
 
 func (m MemoryRepoState) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
@@ -234,5 +234,5 @@ func (m MemoryRepoState) AddBackup(name string, url string, fetchSpecs []string,
 }
 
 func (m MemoryRepoState) RemoveBackup(ctx context.Context, name string) error {
-	panic("cannot remove backup from im memory database")
+	panic("cannot remove backup from in memory database")
 }

@@ -103,6 +103,7 @@ var ErrFailedToDeleteBackup = errors.New("failed to delete backup")
 var ErrFailedToReadFromDb = errors.New("failed to read from db")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToWriteRepoState = errors.New("failed to write repo state")
+var ErrRemoteAddressConflict = errors.New("backup and remote cannot share a URL address")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -929,6 +930,22 @@ func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 	return dEnv.RepoState.Remotes, nil
 }
 
+// Check whether any backups or remotes share the given URL. Returns the first remote if multiple match.
+// Returns NoRemote and false if none match.
+func checkRemoteAddressConflict(url string, remotes, backups map[string]Remote) (Remote, bool) {
+	for _, r := range remotes {
+		if r.Url == url {
+			return r, true
+		}
+	}
+	for _, r := range backups {
+		if r.Url == url {
+			return r, true
+		}
+	}
+	return NoRemote, false
+}
+
 func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error {
 	if _, ok := dEnv.RepoState.Remotes[name]; ok {
 		return ErrRemoteAlreadyExists
@@ -941,6 +958,10 @@ func (dEnv *DoltEnv) AddRemote(name string, url string, fetchSpecs []string, par
 	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
 	if err != nil {
 		return fmt.Errorf("%w; %s", ErrInvalidRemoteURL, err.Error())
+	}
+
+	if r, found := checkRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
+		return fmt.Errorf("%w: %s", ErrRemoteAddressConflict, r.Name)
 	}
 
 	r := Remote{name, absRemoteUrl, fetchSpecs, params, dEnv}
@@ -972,6 +993,10 @@ func (dEnv *DoltEnv) AddBackup(name string, url string, fetchSpecs []string, par
 	_, absRemoteUrl, err := GetAbsRemoteUrl(dEnv.FS, dEnv.Config, url)
 	if err != nil {
 		return fmt.Errorf("%w; %s", ErrInvalidBackupURL, err.Error())
+	}
+
+	if r, found := checkRemoteAddressConflict(absRemoteUrl, dEnv.RepoState.Remotes, dEnv.RepoState.Backups); found {
+		return fmt.Errorf("%w: %s", ErrRemoteAddressConflict, r.Name)
 	}
 
 	r := Remote{name, absRemoteUrl, fetchSpecs, params, dEnv}
@@ -1022,26 +1047,9 @@ func (dEnv *DoltEnv) RemoveBackup(ctx context.Context, name string) error {
 		return ErrBackupNotFound
 	}
 
-	ddb := dEnv.DoltDB
-	refs, err := ddb.GetRemoteRefs(ctx)
-	if err != nil {
-		return ErrFailedToReadFromDb
-	}
-
-	for _, r := range refs {
-		rr := r.(ref.RemoteRef)
-
-		if rr.GetRemote() == backup.Name {
-			err = ddb.DeleteBranch(ctx, rr)
-
-			if err != nil {
-				return fmt.Errorf("%w; failed to delete backup tracking ref '%s'; %s", ErrFailedToDeleteBackup, rr.String(), err.Error())
-			}
-		}
-	}
-
 	dEnv.RepoState.RemoveBackup(backup)
-	err = dEnv.RepoState.Save(dEnv.FS)
+
+	err := dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
 		return ErrFailedToWriteRepoState
 	}
