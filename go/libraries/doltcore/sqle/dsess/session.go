@@ -842,7 +842,11 @@ func (sess *Session) SwitchWorkingSet(
 	sessionState.dirty = false
 
 	// the current transaction, if there is one, needs to be restarted
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, false)) // TODO: reevaluate this
+	txReadOnly := false
+	if t := ctx.GetTransaction(); t != nil {
+		txReadOnly = t.IsReadOnly()
+	}
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, txReadOnly))
 
 	return nil
 }
