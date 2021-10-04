@@ -1,0 +1,42 @@
+name: Bump Dolt on Winget
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SemVer format release tag, i.e. 0.24.5'
+        required: true
+  repository_dispatch:
+    types: [ bump-winget ]
+
+jobs:
+  winget-bump:
+    name: Bump Dolt Winget
+    runs-on: windows-2019
+    defaults:
+      run:
+        shell: powershell
+    steps:
+#      - name: Create Homebrew PR
+#        uses: mislav/bump-homebrew-formula-action@v1
+#        if: ${{ github.event_name == 'repository_dispatch' }}
+#        with:
+#          formula-name: dolt
+#          homebrew-tap: Homebrew/homebrew-core
+#          base-branch: main
+#          tag-name: ${{format('refs/tags/v{0}', github.event.client_payload.version)}}
+#          download-url: ${{format('https://github.com/dolthub/dolt/archive/v{0}.tar.gz', github.event.client_payload.version)}}
+#          commit-message: |
+#            ${{format('dolt {0}', github.event.client_payload.version)}}
+#
+#            Created by https://github.com/mislav/bump-homebrew-formula-action
+#        env:
+#          COMMITTER_TOKEN: ${{secrets.REPO_ACCESS_TOKEN}}
+      - name: Create Winget PR
+        run: |
+          iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update Microsoft.WingetCreate -u $Env:URL -v $Env:VERSION -t $Env:TOKEN --submit
+        env:
+          TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          VERSION: ${{ github.event.inputs.version }}
+          URL: ${{ format('https://github.com/dolthub/dolt/releases/download/v{0}/dolt-windows-amd64.msi', github.event.inputs.version) }}
