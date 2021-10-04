@@ -40,6 +40,9 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// Do not read more than 128MB at a time.
+const maxReadSize = 128 * 1024 * 1024 * 1024
+
 // CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.
 type CompressedChunk struct {
 	// H is the hash of the chunk
@@ -807,7 +810,7 @@ func toReadBatches(offsets offsetRecSlice, blockSize uint64) []readBatch {
 			continue
 		}
 
-		if _, canRead := canReadAhead(rec, batch.End(), blockSize); canRead {
+		if _, canRead := canReadAhead(rec, batch.Start(), batch.End(), blockSize); canRead {
 			batch = append(batch, rec)
 			i++
 			continue
@@ -906,18 +909,22 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 	return ors, remaining
 }
 
-func canReadAhead(fRec offsetRec, readEnd, blockSize uint64) (newEnd uint64, canRead bool) {
-	if fRec.offset < readEnd {
+func canReadAhead(fRec offsetRec, curStart, curEnd, blockSize uint64) (newEnd uint64, canRead bool) {
+	if fRec.offset < curEnd {
 		// |offsetRecords| will contain an offsetRecord for *every* chunkRecord whose address
 		// prefix matches the prefix of a requested address. If the set of requests contains
 		// addresses which share a common prefix, then it's possible for multiple offsetRecords
 		// to reference the same table offset position. In that case, we'll see sequential
 		// offsetRecords with the same fRec.offset.
-		return readEnd, true
+		return curEnd, true
 	}
 
-	if fRec.offset-readEnd > blockSize {
-		return readEnd, false
+	if curEnd-curStart >= maxReadSize {
+		return curEnd, false
+	}
+
+	if fRec.offset-curEnd > blockSize {
+		return curEnd, false
 	}
 
 	return fRec.offset + uint64(fRec.length), true
@@ -949,7 +956,7 @@ func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, 
 			continue
 		}
 
-		if newReadEnd, canRead := canReadAhead(rec, readEnd, tr.blockSize); canRead {
+		if newReadEnd, canRead := canReadAhead(rec, readStart, readEnd, tr.blockSize); canRead {
 			readEnd = newReadEnd
 			i++
 			continue

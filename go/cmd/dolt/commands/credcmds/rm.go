@@ -73,7 +73,7 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rmDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	args = apr.Args()
+	args = apr.Args
 
 	credsDir, verr := actions.EnsureCredsDir(dEnv)
 

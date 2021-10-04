@@ -129,7 +129,7 @@ func NewParseOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoS
 
 	remoteName := "origin"
 
-	args := apr.Args()
+	args := apr.Args
 	if len(args) == 1 {
 		if _, ok := remotes[args[0]]; ok {
 			remoteName = args[0]

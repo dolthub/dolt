@@ -186,7 +186,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	args = apr.Args()
+	args = apr.Args
 
 	var verr errhand.VerboseError
 	format := FormatTabular
@@ -621,7 +621,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	_, execute := apr.GetValue(executeFlag)
 	_, multiDB := apr.GetValue(multiDBDirFlag)
 
-	if len(apr.Args()) > 0 && !query {
+	if len(apr.Args) > 0 && !query {
 		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
 	}
 

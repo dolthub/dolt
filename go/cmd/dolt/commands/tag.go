@@ -89,7 +89,7 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// list tags
-	if len(apr.Args()) == 0 {
+	if len(apr.Args) == 0 {
 		var verr errhand.VerboseError
 		if apr.Contains(deleteFlag) {
 			verr = errhand.BuildDError("must specify a tag name to delete").Build()
@@ -109,7 +109,7 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		} else if apr.Contains(verboseFlag) {
 			verr = errhand.BuildDError("delete and verbose options are incompatible").Build()
 		} else {
-			err := actions.DeleteTags(ctx, dEnv, apr.Args()...)
+			err := actions.DeleteTags(ctx, dEnv, apr.Args...)
 			if err != nil {
 				verr = errhand.BuildDError("failed to delete tags").AddCause(err).Build()
 			}
@@ -121,7 +121,7 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	var verr errhand.VerboseError
 	if apr.Contains(verboseFlag) {
 		verr = errhand.BuildDError("verbose flag can only be used with tag listing").Build()
-	} else if len(apr.Args()) > 2 {
+	} else if len(apr.Args) > 2 {
 		verr = errhand.BuildDError("create tag takes at most two args").Build()
 	} else {
 		props, err := getTagProps(dEnv, apr)
@@ -131,7 +131,7 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 		tagName := apr.Arg(0)
 		startPoint := "head"
-		if len(apr.Args()) > 1 {
+		if len(apr.Args) > 1 {
 			startPoint = apr.Arg(1)
 		}
 		err = actions.CreateTag(ctx, dEnv, tagName, startPoint, props)

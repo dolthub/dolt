@@ -71,7 +71,7 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return nil, err
 		}
 	} else {
-		roots, err = actions.StageTablesNoDocs(ctx, roots, apr.Args())
+		roots, err = actions.StageTablesNoDocs(ctx, roots, apr.Args)
 		if err != nil {
 			return 1, err
 		}

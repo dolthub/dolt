@@ -137,7 +137,7 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 }
 
 func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.UsagePrinter) int {
-	branchSet := set.NewStrSet(apr.Args())
+	branchSet := set.NewStrSet(apr.Args)
 
 	verbose := apr.Contains(verboseFlag)
 	printRemote := apr.Contains(remoteParam)
