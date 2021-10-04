@@ -90,7 +90,7 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 	mergeBase, err := merge.MergeBase(ctx, left, right)
 	if err != nil {
-		verr = errhand.BuildDError("could not find merge-base for args %s", apr.Args()).AddCause(err).Build()
+		verr = errhand.BuildDError("could not find merge-base for args %s", apr.Args).AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usage)
 	}
 

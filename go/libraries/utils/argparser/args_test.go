@@ -269,7 +269,7 @@ func TestValidation(t *testing.T) {
 
 	expectedArgs := []string{"a", "b", "c"}
 
-	if apr.NArg() != 3 || apr.Arg(0) != "a" || !reflect.DeepEqual(apr.args, expectedArgs) {
+	if apr.NArg() != 3 || apr.Arg(0) != "a" || !reflect.DeepEqual(apr.Args, expectedArgs) {
 		t.Error("Arg list issues")
 	}
 }

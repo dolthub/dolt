@@ -68,7 +68,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblTagsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	tables := apr.Args()
+	tables := apr.Args
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 	if verr != nil {

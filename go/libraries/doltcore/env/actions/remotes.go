@@ -36,6 +36,8 @@ var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrFailedToSaveRepoState = errors.New("failed to save repo state")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToGetRemoteDb = errors.New("failed to get remote db")
+var ErrFailedToDeleteBackup = errors.New("failed to delete backup")
+var ErrFailedToGetBackupDb = errors.New("failed to get backup db")
 var ErrUnknownPushErr = errors.New("unknown push error")
 
 type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent)
@@ -422,6 +424,45 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+// SyncRoots copies the entire chunkstore from srcDb to destDb and rewrites the remote manifest. Used to
+// streamline database backup and restores.
+// TODO: this should read/write a backup lock file specific to the client who created the backup
+// TODO     to prevent "restoring a remote", "cloning a backup", "syncing a remote" and "pushing
+// TODO     a backup." SyncRoots has more destructive potential than push right now.
+func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir string, progStarter ProgStarter, progStopper ProgStopper) error {
+	srcRoot, err := srcDb.NomsRoot(ctx)
+	if err != nil {
+		return nil
+	}
+
+	destRoot, err := destDb.NomsRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	if srcRoot == destRoot {
+		return datas.ErrDBUpToDate
+	}
+
+	newCtx, cancelFunc := context.WithCancel(ctx)
+	wg, progChan, pullerEventCh := progStarter(newCtx)
+	defer progStopper(cancelFunc, wg, progChan, pullerEventCh)
+
+	err = destDb.PushChunksForRefHash(ctx, tempTableDir, srcDb, srcRoot, pullerEventCh)
+	if err != nil {
+		return err
+	}
+
+	err = destDb.Rebase(ctx)
+	if err != nil {
+		return err
+	}
+
+	destDb.CommitRoot(ctx, srcRoot, destRoot)
 
 	return nil
 }
