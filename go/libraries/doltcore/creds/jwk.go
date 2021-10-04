@@ -18,7 +18,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"path/filepath"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -98,7 +97,7 @@ func JWKCredsWrite(wr io.Writer, dc DoltCreds) error {
 }
 
 func JWKCredsRead(rd io.Reader) (DoltCreds, error) {
-	data, err := ioutil.ReadAll(rd)
+	data, err := io.ReadAll(rd)
 
 	if err != nil {
 		return DoltCreds{}, err

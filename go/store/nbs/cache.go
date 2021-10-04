@@ -24,7 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
-	"io/ioutil"
+	"os"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -37,7 +37,7 @@ const (
 )
 
 func NewCache(ctx context.Context) (*NomsBlockCache, error) {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 
 	if err != nil {
 		return nil, err

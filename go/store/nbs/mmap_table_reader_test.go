@@ -22,7 +22,7 @@
 package nbs
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -34,7 +34,7 @@ import (
 
 func TestMmapTableReader(t *testing.T) {
 	assert := assert.New(t)
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	defer file.RemoveAll(dir)
 
@@ -49,7 +49,7 @@ func TestMmapTableReader(t *testing.T) {
 
 	tableData, h, err := buildTable(chunks)
 	require.NoError(t, err)
-	err = ioutil.WriteFile(filepath.Join(dir, h.String()), tableData, 0666)
+	err = os.WriteFile(filepath.Join(dir, h.String()), tableData, 0666)
 	require.NoError(t, err)
 
 	trc, err := newMmapTableReader(dir, h, uint32(len(chunks)), nil, fc)

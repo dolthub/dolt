@@ -17,7 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -173,10 +173,10 @@ func TestMigrateWorkingSet(t *testing.T) {
 
 	// TODO: t.TempDir breaks on windows because of automatic cleanup (files still in use)
 	// dir := t.TempDir()
-	working, err := ioutil.TempDir("", "TestMigrateWorkingSet*")
+	working, err := os.MkdirTemp("", "TestMigrateWorkingSet*")
 	require.NoError(t, err)
 
-	homeDir, err := ioutil.TempDir("", "TestMigrateWorkingSet*")
+	homeDir, err := os.MkdirTemp("", "TestMigrateWorkingSet*")
 	require.NoError(t, err)
 
 	dEnv := createFileTestEnv(t, working, homeDir)

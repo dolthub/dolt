@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -62,12 +61,12 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootVal
 			}
 		}
 
-		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim(delim))
+		rd, err := csv.NewCSVReader(root.VRW().Format(), io.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim(delim))
 
 		return rd, false, err
 
 	case PsvFile:
-		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim("|"))
+		rd, err := csv.NewCSVReader(root.VRW().Format(), io.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim("|"))
 		return rd, false, err
 	}
 

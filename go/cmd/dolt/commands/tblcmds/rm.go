@@ -17,7 +17,7 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -90,7 +90,7 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		queryStr = fmt.Sprintf("%sDROP TABLE `%s`;", queryStr, tableName)
 	}
 
-	cli.CliOut = ioutil.Discard // display nothing on success
+	cli.CliOut = io.Discard // display nothing on success
 	return commands.SqlCmd{}.Exec(ctx, "", []string{
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),

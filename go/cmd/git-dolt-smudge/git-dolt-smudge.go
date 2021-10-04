@@ -17,7 +17,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 
@@ -30,7 +30,7 @@ func main() {
 	// Because this is a git smudge filter, the pointer file contents
 	// are read through stdin.
 	r := bufio.NewReader(os.Stdin)
-	bs, err := ioutil.ReadAll(r)
+	bs, err := io.ReadAll(r)
 	if err != nil {
 		log.Fatal(err)
 	}

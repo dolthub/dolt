@@ -25,7 +25,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1206,7 +1205,7 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 				return nil, err
 			}
 
-			return ioutil.NopCloser(r), nil
+			return io.NopCloser(r), nil
 		},
 	}
 }

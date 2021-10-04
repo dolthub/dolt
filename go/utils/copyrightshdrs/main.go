@@ -16,7 +16,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -388,7 +388,7 @@ func CheckGo() bool {
 				panic(err)
 			}
 			defer f.Close()
-			bs, err := ioutil.ReadAll(f)
+			bs, err := io.ReadAll(f)
 			if err != nil {
 				panic(err)
 			}
@@ -422,7 +422,7 @@ func CheckProto() bool {
 				panic(err)
 			}
 			defer f.Close()
-			bs, err := ioutil.ReadAll(f)
+			bs, err := io.ReadAll(f)
 			if err != nil {
 				panic(err)
 			}
