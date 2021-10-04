@@ -500,6 +500,28 @@ SQL
     run dolt diff -r sql
     [ $status -eq 0 ]
     [[ "$output" = 'UPDATE `t` SET `val1`=2 WHERE (`pk`=1);' ]] || false
+
+    dolt commit -am "cm2"
+
+    dolt sql -q "UPDATE t SET val1=3, val2=4 where pk = 1"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = 'UPDATE `t` SET `val1`=3,`val2`=4 WHERE (`pk`=1);' ]] || false
+
+    dolt commit -am "cm3"
+
+    dolt sql -q "UPDATE t SET val1=3 where (pk=1);"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = '' ]] || false
+
+    dolt sql -q "alter table t add val3 int"
+    dolt commit -am "cm4"
+
+    dolt sql -q "update t set val1=30,val3=4 where pk=1"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE (`pk`=1);' ]] || false
 }
 
 @test "diff: run through some keyless sql diffs" {
