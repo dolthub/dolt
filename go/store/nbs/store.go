@@ -82,7 +82,7 @@ func makeGlobalCaches() {
 
 type NBSCompressedChunkStore interface {
 	chunks.ChunkStore
-	GetManyCompressed(context.Context, hash.HashSet, func(CompressedChunk)) error
+	GetManyCompressed(context.Context, hash.HashSet, func(context.Context, CompressedChunk)) error
 }
 
 type NomsBlockStore struct {
@@ -625,7 +625,7 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 	return chunks.EmptyChunk, nil
 }
 
-func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
+func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	span, ctx := tracing.StartSpan(ctx, "nbs.GetMany")
 	span.LogKV("num_hashes", len(hashes))
 	defer func() {
@@ -636,7 +636,7 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	})
 }
 
-func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
+func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
 	span, ctx := tracing.StartSpan(ctx, "nbs.GetManyCompressed")
 	span.LogKV("num_hashes", len(hashes))
 	defer func() {
@@ -1486,7 +1486,7 @@ LOOP:
 			var addErr error
 			mu := new(sync.Mutex)
 			hashset := hash.NewHashSet(hs...)
-			err := nbs.GetManyCompressed(ctx, hashset, func(c CompressedChunk) {
+			err := nbs.GetManyCompressed(ctx, hashset, func(ctx context.Context, c CompressedChunk) {
 				mu.Lock()
 				defer mu.Unlock()
 				if addErr != nil {

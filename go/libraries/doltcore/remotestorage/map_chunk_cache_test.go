@@ -83,9 +83,8 @@ func TestMapChunkCache(t *testing.T) {
 
 	assert.True(t, reflect.DeepEqual(absent, moreHashes), "unexpected absent hashset (seed %d)", seed)
 
-	assert.False(t, mapChunkCache.PutChunk(chks[0]), "existing chunk should return false (seed %d)", seed)
-
-	assert.True(t, mapChunkCache.PutChunk(moreChks[0]), "new chunk should return true (seed %d)", seed)
+	mapChunkCache.PutChunk(chks[0])
+	mapChunkCache.PutChunk(moreChks[0])
 
 	toFlush = mapChunkCache.GetAndClearChunksToFlush()
 

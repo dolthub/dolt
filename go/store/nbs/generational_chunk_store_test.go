@@ -63,7 +63,7 @@ func hashesForChunks(chunks []chunks.Chunk, indexes map[int]bool) hash.HashSet {
 
 type foundHashes hash.HashSet
 
-func (fh foundHashes) found(chk *chunks.Chunk) {
+func (fh foundHashes) found(ctx context.Context, chk *chunks.Chunk) {
 	fh[chk.Hash()] = struct{}{}
 }
 
