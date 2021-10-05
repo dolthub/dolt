@@ -267,7 +267,7 @@ func (nr nomsRow) NomsMapKeyTuple(sch schema.Schema, tf *types.TupleFactory) (ty
 }
 
 func (nr nomsRow) NomsMapValueTuple(sch schema.Schema, tf *types.TupleFactory) (types.Tuple, error) {
-	tv := nr.key.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
+	tv := nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
 
 	if tf != nil {
 		return tf.Create(tv.vs...)
