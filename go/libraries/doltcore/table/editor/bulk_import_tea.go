@@ -386,9 +386,9 @@ type InMemDEAF struct {
 func NewInMemDeafWithMaxCapacity(nbf *types.NomsBinFormat, maxCapacity int64) DbEaFactory {
 	var capMon capacityMonitor
 	if maxCapacity > 0 {
-		capMon = uncapped{}
-	} else {
 		capMon = &fixedCapacity{capacity: maxCapacity}
+	} else {
+		capMon = uncapped{}
 	}
 
 	return &InMemDEAF{nbf: nbf, capMon: capMon}
