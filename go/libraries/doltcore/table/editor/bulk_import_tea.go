@@ -33,7 +33,7 @@ type capacityMonitor interface {
 	capacityExceeded(size int) bool
 }
 
-type uncapped struct {}
+type uncapped struct{}
 
 func (cap uncapped) capacityExceeded(size int) bool {
 	return false
@@ -197,7 +197,7 @@ func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash ha
 func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey types.Tuple, val types.Tuple) error {
 	// key and val are stored in the iea.ea, keyHash is stored in iea.adds, and iea.partialAdds. partialKeyHash is stored in iea.partialAdds[keyHash].
 	// Capacity is just an estimate and gets off if a key is added and/or deleted more than once.
-	size := key.Size() + val.Size() + (3*hash.ByteLen)
+	size := key.Size() + val.Size() + (3 * hash.ByteLen)
 	if iea.capMon.capacityExceeded(size) {
 		return errors.New("capacity exceeded")
 	}
@@ -379,7 +379,7 @@ func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map
 var _ DbEaFactory = (*InMemDEAF)(nil)
 
 type InMemDEAF struct {
-	nbf *types.NomsBinFormat
+	nbf    *types.NomsBinFormat
 	capMon capacityMonitor
 }
 
