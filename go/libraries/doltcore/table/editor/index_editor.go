@@ -317,7 +317,7 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 			return err
 		}
 
-		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index)
+		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index, nil)
 		if err != nil {
 			return err
 		}
