@@ -753,7 +753,9 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 // Get(), GetMany(), Has() and HasMany().
 func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
 	cc := nbs.ChunkToCompressedChunk(c)
-	dcs.cache.Put([]nbs.CompressedChunk{cc})
+	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
+		return errors.New("too much data")
+	}
 	return nil
 }
 
