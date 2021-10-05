@@ -29,12 +29,33 @@ import (
 	"github.com/dolthub/dolt/go/store/types/edits"
 )
 
+type capacityMonitor interface {
+	capacityExceeded(size int) bool
+}
+
+type uncapped struct {}
+
+func (cap uncapped) capacityExceeded(size int) bool {
+	return false
+}
+
+type fixedCapacity struct {
+	capacity int64
+	currSize int64
+}
+
+func (cap *fixedCapacity) capacityExceeded(size int) bool {
+	cap.currSize += int64(size)
+	return cap.currSize > cap.capacity
+}
+
 var _ TableEditAccumulator = (*BulkImportTEA)(nil)
 
 // BulkImportTEA is a TableEditAccumulator implementation used to improve the perf of bulk edits.  It does not implement
 // commit and rollback
 type BulkImportTEA struct {
 	teaf       DbEaFactory
+	capMon     capacityMonitor
 	emptyTuple types.Tuple
 
 	ea      types.EditAccumulator
@@ -48,6 +69,13 @@ type BulkImportTEA struct {
 
 // Delete adds a row to be deleted when these edits are eventually applied. Updates are modeled as a delete and an insert
 func (tea *BulkImportTEA) Delete(keyHash hash.Hash, key types.Tuple) error {
+	// key is stored in the tea.ea, hash is stored in tea.deletes. Capacity is just an estimate and gets off if a
+	//	// key is added and/or deleted more than once.
+	size := key.Size() + hash.ByteLen
+	if tea.capMon.capacityExceeded(size) {
+		return errors.New("capacity exceeded")
+	}
+
 	tea.opCount++
 	tea.ea.AddEdit(key, nil)
 
@@ -58,6 +86,13 @@ func (tea *BulkImportTEA) Delete(keyHash hash.Hash, key types.Tuple) error {
 
 // Insert adds a row to be inserted when these edits are eventually applied. Updates are modeled as a delete and an insert.
 func (tea *BulkImportTEA) Insert(keyHash hash.Hash, key types.Tuple, val types.Tuple) error {
+	// key and val are stored in the tea.ea, hash is stored in tea.adds. Capacity is just an estimate and gets off if a
+	// key is added and/or deleted more than once.
+	size := key.Size() + val.Size() + hash.ByteLen
+	if tea.capMon.capacityExceeded(size) {
+		return errors.New("capacity exceeded")
+	}
+
 	tea.opCount++
 	tea.ea.AddEdit(key, val)
 
@@ -128,6 +163,7 @@ var _ IndexEditAccumulator = (*BulkImportIEA)(nil)
 // commit and rollback
 type BulkImportIEA struct {
 	teaf       DbEaFactory
+	capMon     capacityMonitor
 	emptyTuple types.Tuple
 
 	ea      types.EditAccumulator
@@ -142,6 +178,11 @@ type BulkImportIEA struct {
 
 // Delete adds a row to be deleted when these edits are eventually applied.
 func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey, value types.Tuple) error {
+	// key is stored in iea.ea, keyHash is stored in iea.deletes.  Capacity is just an estimate and gets off if a key is added and/or deleted more than once.
+	if iea.capMon.capacityExceeded(key.Size()) {
+		return errors.New("capacity exceeded")
+	}
+
 	iea.opCount++
 	iea.ea.AddEdit(key, nil)
 
@@ -154,6 +195,13 @@ func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash ha
 
 // Insert adds a row to be inserted when these edits are eventually applied.
 func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey types.Tuple, val types.Tuple) error {
+	// key and val are stored in the iea.ea, keyHash is stored in iea.adds, and iea.partialAdds. partialKeyHash is stored in iea.partialAdds[keyHash].
+	// Capacity is just an estimate and gets off if a key is added and/or deleted more than once.
+	size := key.Size() + val.Size() + (3*hash.ByteLen)
+	if iea.capMon.capacityExceeded(size) {
+		return errors.New("capacity exceeded")
+	}
+
 	iea.opCount++
 	iea.ea.AddEdit(key, val)
 
@@ -299,6 +347,7 @@ func (b *BulkImportTEAFactory) NewTableEA(ctx context.Context, rowData types.Map
 	ea := edits.NewDiskBackedEditAcc(ctx, b.nbf, b.vrw, flushInterval, b.directory, createMapEA)
 	return &BulkImportTEA{
 		teaf:       b,
+		capMon:     uncapped{},
 		rowData:    rowData,
 		ea:         ea,
 		adds:       make(map[hash.Hash]bool),
@@ -317,6 +366,7 @@ func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map
 	ea := edits.NewDiskBackedEditAcc(ctx, b.nbf, b.vrw, flushInterval, b.directory, createMapEA)
 	return &BulkImportIEA{
 		teaf:        b,
+		capMon:      uncapped{},
 		rowData:     rowData,
 		ea:          ea,
 		adds:        make(map[hash.Hash]bool),
@@ -330,18 +380,29 @@ var _ DbEaFactory = (*InMemDEAF)(nil)
 
 type InMemDEAF struct {
 	nbf *types.NomsBinFormat
+	capMon capacityMonitor
+}
+
+func NewInMemDeafWithMaxCapacity(nbf *types.NomsBinFormat, maxCapacity int64) DbEaFactory {
+	var capMon capacityMonitor
+	if maxCapacity > 0 {
+		capMon = uncapped{}
+	} else {
+		capMon = &fixedCapacity{capacity: maxCapacity}
+	}
+
+	return &InMemDEAF{nbf: nbf, capMon: capMon}
 }
 
 func NewInMemDeaf(nbf *types.NomsBinFormat) DbEaFactory {
-	return &InMemDEAF{
-		nbf: nbf,
-	}
+	return NewInMemDeafWithMaxCapacity(nbf, -1)
 }
 
 func (i *InMemDEAF) NewTableEA(ctx context.Context, rowData types.Map) TableEditAccumulator {
 	ea := edits.NewAsyncSortedEditsWithDefaults(i.nbf)
 	return &BulkImportTEA{
 		teaf:       i,
+		capMon:     i.capMon,
 		rowData:    rowData,
 		ea:         ea,
 		adds:       make(map[hash.Hash]bool),
@@ -354,6 +415,7 @@ func (i *InMemDEAF) NewIndexEA(ctx context.Context, rowData types.Map) IndexEdit
 	ea := edits.NewAsyncSortedEditsWithDefaults(i.nbf)
 	return &BulkImportIEA{
 		teaf:        i,
+		capMon:      i.capMon,
 		rowData:     rowData,
 		ea:          ea,
 		adds:        make(map[hash.Hash]bool),
