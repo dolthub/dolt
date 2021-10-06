@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqltestutil
+package sqle
 
 import (
 	"context"
@@ -22,13 +22,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/envtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/types"
@@ -145,7 +147,7 @@ func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 	return r
 }
 
-func newEpsRow(id int, name string, airdate string, rating float64) row.Row {
+func newEpsRow2(id int, name string, airdate string, rating float64) row.Row {
 	vals := row.TaggedValues{
 		EpisodeIdTag: types.Int(id),
 		EpNameTag:    types.String(name),
@@ -170,7 +172,7 @@ func DatetimeStrToTimestamp(datetime string) time.Time {
 	return time
 }
 
-func newAppsRow(charId, epId int, comment string) row.Row {
+func newAppsRow2(charId, epId int, comment string) row.Row {
 	vals := row.TaggedValues{
 		AppCharacterTag: types.Int(charId),
 		AppEpTag:        types.Int(epId),
@@ -218,23 +220,23 @@ var Barney = NewPeopleRowWithOptionalFields(BarneyId, "Barney", "Gumble", false,
 var AllPeopleRows = Rs(Homer, Marge, Bart, Lisa, Moe, Barney)
 
 // Actually the first 4 episodes of the show
-var Ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", "1989-12-18 03:00:00", 8.0)
-var Ep2 = newEpsRow(2, "Bart the Genius", "1990-01-15 03:00:00", 9.0)
-var Ep3 = newEpsRow(3, "Homer's Odyssey", "1990-01-22 03:00:00", 7.0)
-var Ep4 = newEpsRow(4, "There's No Disgrace Like Home", "1990-01-29 03:00:00", 8.5)
+var Ep1 = newEpsRow2(1, "Simpsons Roasting On an Open Fire", "1989-12-18 03:00:00", 8.0)
+var Ep2 = newEpsRow2(2, "Bart the Genius", "1990-01-15 03:00:00", 9.0)
+var Ep3 = newEpsRow2(3, "Homer's Odyssey", "1990-01-22 03:00:00", 7.0)
+var Ep4 = newEpsRow2(4, "There's No Disgrace Like Home", "1990-01-29 03:00:00", 8.5)
 var AllEpsRows = Rs(Ep1, Ep2, Ep3, Ep4)
 
 // These are made up, not the actual show data
-var app1 = newAppsRow(HomerId, 1, "Homer is great in this one")
-var app2 = newAppsRow(MargeId, 1, "Marge is here too")
-var app3 = newAppsRow(HomerId, 2, "Homer is great in this one too")
-var app4 = newAppsRow(BartId, 2, "This episode is named after Bart")
-var app5 = newAppsRow(LisaId, 2, "Lisa is here too")
-var app6 = newAppsRow(MoeId, 2, "I think there's a prank call scene")
-var app7 = newAppsRow(HomerId, 3, "Homer is in every episode")
-var app8 = newAppsRow(MargeId, 3, "Marge shows up a lot too")
-var app9 = newAppsRow(LisaId, 3, "Lisa is the best Simpson")
-var app10 = newAppsRow(BarneyId, 3, "I'm making this all up")
+var app1 = newAppsRow2(HomerId, 1, "Homer is great in this one")
+var app2 = newAppsRow2(MargeId, 1, "Marge is here too")
+var app3 = newAppsRow2(HomerId, 2, "Homer is great in this one too")
+var app4 = newAppsRow2(BartId, 2, "This episode is named after Bart")
+var app5 = newAppsRow2(LisaId, 2, "Lisa is here too")
+var app6 = newAppsRow2(MoeId, 2, "I think there's a prank call scene")
+var app7 = newAppsRow2(HomerId, 3, "Homer is in every episode")
+var app8 = newAppsRow2(MargeId, 3, "Marge shows up a lot too")
+var app9 = newAppsRow2(LisaId, 3, "Lisa is the best Simpson")
+var app10 = newAppsRow2(BarneyId, 3, "I'm making this all up")
 
 // nobody in episode 4, that one was terrible
 // Unlike the other tables, you can't count on the order of these rows matching the insertion order.
@@ -392,14 +394,42 @@ var AddAddrAt3HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1Typ
 var AddAgeAt4HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
 var ReaddAgeAt5HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag5TypeUint)
 
-func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envtestutils.HistoryNode {
+// TableUpdate defines a list of modifications that should be made to a table
+type TableUpdate struct {
+	// NewSch is an updated schema for this table. It overwrites the existing value.  If not provided the existing value
+	// will not change
+	NewSch schema.Schema
+
+	// NewRowData if provided overwrites the entirety of the row data in the table.
+	NewRowData *types.Map
+
+	// RowUpdates are new values for rows that should be set in the map.  They can be updates or inserts.
+	RowUpdates []row.Row
+}
+
+// HistoryNode represents a commit to be made
+type HistoryNode struct {
+	// Branch the branch that the commit should be on
+	Branch string
+
+	// CommitMessag is the commit message that should be applied
+	CommitMsg string
+
+	// Updates are the changes that should be made to the table's states before committing
+	Updates map[string]TableUpdate
+
+	// Children are the child commits of this commit
+	Children []HistoryNode
+}
+
+func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []HistoryNode {
 	vrw := dEnv.DoltDB.ValueReadWriter()
 
-	return []envtestutils.HistoryNode{
+	return []HistoryNode{
 		{
 			Branch:    "seed",
 			CommitMsg: "Seeding with initial user data",
-			Updates: map[string]envtestutils.TableUpdate{
+			Updates: map[string]TableUpdate{
 				TableWithHistoryName: {
 					NewSch: InitialHistSch,
 					NewRowData: dtestutils.MustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
@@ -409,11 +439,11 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					}),
 				},
 			},
-			Children: []envtestutils.HistoryNode{
+			Children: []HistoryNode{
 				{
 					Branch:    "add-age",
 					CommitMsg: "Adding int age to users with tag 3",
-					Updates: map[string]envtestutils.TableUpdate{
+					Updates: map[string]TableUpdate{
 						TableWithHistoryName: {
 							NewSch: AddAgeAt4HistSch,
 							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
@@ -429,7 +459,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 				{
 					Branch:    env.DefaultInitBranch,
 					CommitMsg: "Adding string address to users with tag 3",
-					Updates: map[string]envtestutils.TableUpdate{
+					Updates: map[string]TableUpdate{
 						TableWithHistoryName: {
 							NewSch: AddAddrAt3HistSch,
 							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
@@ -441,11 +471,11 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 							}),
 						},
 					},
-					Children: []envtestutils.HistoryNode{
+					Children: []HistoryNode{
 						{
 							Branch:    env.DefaultInitBranch,
 							CommitMsg: "Re-add age as a uint with tag 4",
-							Updates: map[string]envtestutils.TableUpdate{
+							Updates: map[string]TableUpdate{
 								TableWithHistoryName: {
 									NewSch: ReaddAgeAt5HistSch,
 									NewRowData: dtestutils.MustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
@@ -464,5 +494,108 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 				},
 			},
 		},
+	}
+}
+
+func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tblUpdates map[string]TableUpdate) *doltdb.RootValue {
+	for tblName, updates := range tblUpdates {
+		tbl, ok, err := root.GetTable(ctx, tblName)
+		require.NoError(t, err)
+
+		var sch schema.Schema
+		if updates.NewSch != nil {
+			sch = updates.NewSch
+		} else {
+			sch, err = tbl.GetSchema(ctx)
+			require.NoError(t, err)
+		}
+
+		var rowData types.Map
+		if updates.NewRowData == nil {
+			if ok {
+				rowData, err = tbl.GetRowData(ctx)
+				require.NoError(t, err)
+			} else {
+				rowData, err = types.NewMap(ctx, root.VRW())
+				require.NoError(t, err)
+			}
+		} else {
+			rowData = *updates.NewRowData
+		}
+
+		if updates.RowUpdates != nil {
+			me := rowData.Edit()
+
+			for _, r := range updates.RowUpdates {
+				me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
+			}
+
+			rowData, err = me.Map(ctx)
+			require.NoError(t, err)
+		}
+
+		schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), sch)
+		require.NoError(t, err)
+
+		indexData, err := types.NewMap(ctx, root.VRW())
+		require.NoError(t, err)
+		if tbl != nil {
+			indexData, err = tbl.GetIndexData(ctx)
+			require.NoError(t, err)
+		}
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, rowData, indexData, nil)
+		require.NoError(t, err)
+
+		root, err = root.PutTable(ctx, tblName, tbl)
+		require.NoError(t, err)
+	}
+
+	return root
+}
+
+// InitializeWithHistory will go through the provided historyNodes and create the intended commit graph
+func InitializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, historyNodes ...HistoryNode) {
+	for _, node := range historyNodes {
+		cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
+		require.NoError(t, err)
+
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+		require.NoError(t, err)
+
+		processNode(t, ctx, dEnv, node, cm)
+	}
+}
+
+func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node HistoryNode, parent *doltdb.Commit) {
+	branchRef := ref.NewBranchRef(node.Branch)
+	ok, err := dEnv.DoltDB.HasRef(ctx, branchRef)
+	require.NoError(t, err)
+
+	if !ok {
+		err = dEnv.DoltDB.NewBranchAtCommit(ctx, branchRef, parent)
+		require.NoError(t, err)
+	}
+
+	cs, err := doltdb.NewCommitSpec(branchRef.String())
+	require.NoError(t, err)
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	require.NoError(t, err)
+
+	root, err := cm.GetRootValue()
+	require.NoError(t, err)
+
+	root = UpdateTables(t, ctx, root, node.Updates)
+	h, err := dEnv.DoltDB.WriteRootValue(ctx, root)
+	require.NoError(t, err)
+
+	meta, err := doltdb.NewCommitMeta("Ash Ketchum", "ash@poke.mon", node.CommitMsg)
+	require.NoError(t, err)
+
+	cm, err = dEnv.DoltDB.Commit(ctx, h, branchRef, meta)
+	require.NoError(t, err)
+
+	for _, child := range node.Children {
+		processNode(t, ctx, dEnv, child, cm)
 	}
 }
