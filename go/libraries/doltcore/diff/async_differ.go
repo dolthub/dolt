@@ -193,7 +193,8 @@ func (kd *keylessDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pr
 	for {
 		// first populate |diffs| with copies of |kd.df|
 		for (idx < numDiffs) && (kd.copiesLeft > 0) {
-			diffs[idx] = &kd.df
+			d := kd.df
+			diffs[idx] = &d
 			idx++
 			kd.copiesLeft--
 		}
