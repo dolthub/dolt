@@ -733,7 +733,7 @@ var BasicSelectTests = []SelectTest{
 		Query: "select * from dolt_log",
 		ExpectedRows: []sql.Row{
 			{
-				"oqd9k78tffc3hji0vbo88v6ffr6cp6td",
+				"c0orbjooqt8123vgcf78tipl2krvb1v8",
 				"billy bob",
 				"bigbillieb@fake.horse",
 				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
@@ -763,7 +763,7 @@ var BasicSelectTests = []SelectTest{
 		ExpectedRows: []sql.Row{
 			{
 				env.DefaultInitBranch,
-				"oqd9k78tffc3hji0vbo88v6ffr6cp6td",
+				"c0orbjooqt8123vgcf78tipl2krvb1v8",
 				"billy bob", "bigbillieb@fake.horse",
 				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 				"Initialize data repository",

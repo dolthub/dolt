@@ -44,11 +44,38 @@ type nomsShowTestSuite struct {
 }
 
 const (
-	res1 = "Commit{meta Struct,parents Set,parents_list List,parents_skip_list Union,value Ref} - struct Commit {\n  meta: struct {},\n  parents: set {},\n  parents_list: [],\n  parents_skip_list: (),\n  value: #nl181uu1ioc2j6t7mt9paidjlhlcjtgj,\n}"
+	res1 = "Commit{meta Struct,parents Set,parents_closure Map,parents_list List,value Ref} - struct Commit {\n  meta: struct {},\n  parents: set {},\n  parents_closure: map {},\n  parents_list: [],\n  value: #nl181uu1ioc2j6t7mt9paidjlhlcjtgj,\n}"
 	res2 = "String - \"test string\""
-	res3 = "Commit{meta Struct,parents Set,parents_list List,parents_skip_list Union,value Ref} - struct Commit {\n  meta: struct {},\n  parents: set {\n    #nbd25rh0hqop4alrckbvakgm7snnfpcu,\n  },\n  parents_list: [\n    #nbd25rh0hqop4alrckbvakgm7snnfpcu,\n  ],\n  parents_skip_list: (),\n  value: #82adk7hfcudg8fktittm672to66t6qeu,\n}"
+	res3 = `Commit{meta Struct,parents Set,parents_closure Map,parents_list List,value Ref} - struct Commit {
+  meta: struct {},
+  parents: set {
+    #c81ivodsn84pbnafmiabj2p18qei833h,
+  },
+  parents_closure: map {
+    (2,62032FE1BCBA0995DD4FB494B98B21469D240C71): [],
+  },
+  parents_list: [
+    #c81ivodsn84pbnafmiabj2p18qei833h,
+  ],
+  value: #t43ks6746hf0fcefv5e9v1c02k2i0jr9,
+}`
 	res4 = "List<Union<Float,String>> - [\n  \"elem1\",\n  2,\n  \"elem3\",\n]"
-	res5 = "Commit{meta Struct,parents Set,parents_list List,parents_skip_list Union,value Ref} - struct Commit {\n  meta: struct {},\n  parents: set {\n    #kqf9vsd3qd52decpt8min7fb7kpiepah,\n  },\n  parents_list: [\n    #kqf9vsd3qd52decpt8min7fb7kpiepah,\n  ],\n  parents_skip_list: (),\n  value: #5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n}"
+	res5 = `Commit{meta Struct,parents Set,parents_closure Map,parents_list List,value Ref} - struct Commit {
+  meta: struct {},
+  parents: set {
+    #kqf9vsd3qd52decpt8min7fb7kpiepah,
+  },
+  parents_closure: map {
+    (2,62032FE1BCBA0995DD4FB494B98B21469D240C71): [],
+    (3,8D39D3FF643EABCAB7BA63FECE2EB4B9D6E7786F): [
+      #c81ivodsn84pbnafmiabj2p18qei833h,
+    ],
+  },
+  parents_list: [
+    #kqf9vsd3qd52decpt8min7fb7kpiepah,
+  ],
+  value: #5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,
+}`
 )
 
 func (s *nomsShowTestSuite) spec(str string) spec.Spec {
