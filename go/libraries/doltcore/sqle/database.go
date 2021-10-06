@@ -55,7 +55,7 @@ type SqlDatabase interface {
 	DbData() env.DbData
 	Name() string
 
-	StartTransaction(ctx *sql.Context, readonly bool) (sql.Transaction, error)
+	StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error)
 	Flush(*sql.Context) error
 	EditOptions() editor.Options
 }
@@ -111,7 +111,7 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
 }
 
-func (db Database) StartTransaction(ctx *sql.Context, readonly bool) (sql.Transaction, error) {
+func (db Database) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	dsession := dsess.DSessFromSess(ctx.Session)
 
 	if !dsession.HasDB(ctx, db.Name()) {
@@ -126,7 +126,7 @@ func (db Database) StartTransaction(ctx *sql.Context, readonly bool) (sql.Transa
 		}
 	}
 
-	return dsession.StartTransaction(ctx, db.Name(), readonly)
+	return dsession.StartTransaction(ctx, db.Name(), tCharacteristic)
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {

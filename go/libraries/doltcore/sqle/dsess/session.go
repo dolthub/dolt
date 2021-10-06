@@ -278,7 +278,7 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 }
 
 // CommitTransaction commits the in-progress transaction for the database named
-func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, readonly bool) (sql.Transaction, error) {
+func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if TransactionsDisabled(ctx) {
 		return DisabledTransaction{}, nil
 	}
@@ -317,7 +317,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, readonly 
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, readonly), nil
+	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, tCharacteristic), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -842,11 +842,13 @@ func (sess *Session) SwitchWorkingSet(
 	sessionState.dirty = false
 
 	// the current transaction, if there is one, needs to be restarted
-	txReadOnly := false
+	tCharacteristic := sql.ReadWrite
 	if t := ctx.GetTransaction(); t != nil {
-		txReadOnly = t.IsReadOnly()
+		if t.IsReadOnly() {
+			tCharacteristic = sql.ReadOnly
+		}
 	}
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, txReadOnly))
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, tCharacteristic))
 
 	return nil
 }
