@@ -23,9 +23,14 @@ package types
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/metrics"
 )
+
+var chunkWithStats = false
 
 type hashValueBytesFn func(item sequenceItem, rv *rollingValueHasher) error
 
@@ -41,6 +46,8 @@ type sequenceChunker struct {
 	rv                         *rollingValueHasher
 	done                       bool
 	unwrittenCol               Collection
+
+	stats *metrics.Histogram
 }
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
@@ -59,17 +66,23 @@ func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, 
 	// |cur| will be nil if this is a new sequence, implying this is a new tree, or the tree has grown in height relative to its original chunked form.
 
 	sc := &sequenceChunker{
-		cur,
-		level,
-		vrw,
-		nil,
-		make([]sequenceItem, 0, 1<<10),
-		makeChunk, parentMakeChunk,
-		true,
-		hashValueBytes,
-		newRollingValueHasher(vrw.Format(), byte(level%256)),
-		false,
-		nil,
+		cur:             cur,
+		level:           level,
+		vrw:             vrw,
+		parent:          nil,
+		current:         make([]sequenceItem, 0, 1<<10),
+		makeChunk:       makeChunk,
+		parentMakeChunk: parentMakeChunk,
+		isLeaf:          true,
+		hashValueBytes:  hashValueBytes,
+		rv:              newRollingValueHasher(vrw.Format(), byte(level%256)),
+		done:            false,
+		unwrittenCol:    nil,
+	}
+
+	if chunkWithStats {
+		hist := metrics.NewByteHistogram()
+		sc.stats = &hist
 	}
 
 	if cur != nil {
@@ -229,6 +242,7 @@ func (sc *sequenceChunker) advanceTo(ctx context.Context, next *sequenceCursor) 
 	return nil
 }
 
+// Append consumes another sequence item, returns true if a chunk boundary is crossed.
 func (sc *sequenceChunker) Append(ctx context.Context, item sequenceItem) (bool, error) {
 	d.PanicIfTrue(item == nil)
 	sc.current = append(sc.current, item)
@@ -318,10 +332,11 @@ func (sc *sequenceChunker) createParent(ctx context.Context) error {
 // tradeoff for simplicity of the chunking algorithm.
 func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequence, metaTuple, error) {
 	col, key, numLeaves, err := sc.makeChunk(sc.level, sc.current)
-
 	if err != nil {
 		return nil, metaTuple{}, err
 	}
+
+	sc.sample(col.Len())
 
 	// |sc.makeChunk| copies |sc.current| so it's safe to re-use the memory.
 	sc.current = sc.current[:0]
@@ -339,7 +354,6 @@ func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequ
 	}
 
 	mt, err := newMetaTuple(ref, key, numLeaves)
-
 	if err != nil {
 		return nil, metaTuple{}, err
 	}
@@ -385,7 +399,7 @@ func (sc *sequenceChunker) anyPending() bool {
 	return false
 }
 
-// Returns the root sequence of the resulting tree. The logic here is subtle, but hopefully correct and understandable. See comments inline.
+// Done returns the root sequence of the resulting tree. The logic here is subtle, but hopefully correct and understandable.
 func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 	d.PanicIfTrue(sc.done)
 	sc.done = true
@@ -398,10 +412,12 @@ func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 		}
 	}
 
-	// There is pending content above us, so we must push any remaining items from this level up and allow some parent to find the root of the resulting tree.
+	// There is pending content above us, so we must push any remaining items from this level up and allow some parent
+	// to find the root of the resulting tree.
 	if sc.parent != nil && sc.parent.anyPending() {
 		if len(sc.current) > 0 {
-			// If there are items in |current| at this point, they represent the final items of the sequence which occurred beyond the previous *explicit* chunk boundary. The end of input of a sequence is considered an *implicit* boundary.
+			// If there are items in |current| at this point, they represent the final items of the sequence which occurred
+			// beyond the previous *explicit* chunk boundary. The end of input of a sequence is considered an *implicit* boundary.
 			err := sc.handleChunkBoundary(ctx)
 
 			if err != nil {
@@ -412,11 +428,20 @@ func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 		return sc.parent.Done(ctx)
 	}
 
-	// At this point, we know this chunker contains, in |current| every item at this level of the resulting tree. To see this, consider that there are two ways a chunker can enter items into its |current|: (1) as the result of resume() with the cursor on anything other than the first item in the sequence, and (2) as a result of a child chunker hitting an explicit chunk boundary during either Append() or finalize(). The only way there can be no items in some parent chunker's |current| is if this chunker began with cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any items up to a parent as a result of chunking). Therefore, this chunker's current must contain all items within the current sequence.
+	// At this point, we know this chunker contains, in |current| every item at this level of the resulting tree.
+	// To see this, consider that there are two ways a chunker can enter items into its |current|:
+	// 	(1) as the result of resume() with the cursor on anything other than the first item in the sequence, and
+	//	(2) as a result of a child chunker hitting an explicit chunk boundary during either Append() or finalize().
+	//
+	// The only way there can be no items in some parent chunker's |current| is if this chunker began with cursor within
+	// its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and continued through
+	// all sebsequent items without creating any explicit chunk boundaries (and thus never sent any items up to a parent
+	// as a result of chunking). Therefore, this chunker's current must contain all items within the current sequence.
 
 	// This level must represent *a* root of the tree, but it is possibly non-canonical. There are three cases to consider:
-
-	// (1) This is "leaf" chunker and thus produced tree of depth 1 which contains exactly one chunk (never hit a boundary), or (2) This in an internal node of the tree which contains multiple references to child nodes. In either case, this is the canonical root of the tree.
+	//   (1) This is "leaf" chunker and thus produced tree of depth 1 which contains exactly one chunk (never hit a boundary)
+	//   (2) This in an internal node of the tree which contains multiple references to child nodes.
+	// In either case, this is the canonical root of the tree.
 	if sc.isLeaf || len(sc.current) > 1 {
 		seq, _, err := sc.createSequence(ctx, false)
 
@@ -427,7 +452,9 @@ func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 		return seq, nil
 	}
 
-	// (3) This is an internal node of the tree which contains a single reference to a child node. This can occur if a non-leaf chunker happens to chunk on the first item (metaTuple) appended. In this case, this is the root of the tree, but it is *not* canonical and we must walk down until we find cases (1) or (2), above.
+	// (3) This is an internal node of the tree which contains a single reference to a child node.
+	// This can occur if a non-leaf chunker happens to chunk on the first item (metaTuple) appended. In this case, this
+	// is the root of the tree, but it is *not* canonical, and we must walk down until we find cases (1) or (2), above.
 	d.PanicIfFalse(!sc.isLeaf && len(sc.current) == 1)
 	mt := sc.current[0].(metaTuple)
 
@@ -487,4 +514,73 @@ func (sc *sequenceChunker) finalizeCursor(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (sc *sequenceChunker) Stats() (cs ChunkerStats) {
+	if sc.stats == nil {
+		return
+	}
+
+	cs = ChunkerStats{sc.stats}
+	if sc.parent != nil {
+		cs = append(cs, sc.parent.Stats()...)
+	}
+
+	return
+}
+
+func (sc *sequenceChunker) sample(size uint64) {
+	if sc.stats != nil {
+		sc.stats.Sample(size)
+	}
+}
+
+// ChunkerStats records sequenceChunker write stats by tree level
+type ChunkerStats []*metrics.Histogram
+
+func (cs ChunkerStats) Count() (c uint64) {
+	for _, hist := range cs {
+		c += hist.Samples()
+	}
+	return
+}
+
+func (cs ChunkerStats) Sum() (s uint64) {
+	for _, h := range cs {
+		s += h.Sum()
+	}
+	return
+}
+
+func (cs ChunkerStats) Add(other ChunkerStats) ChunkerStats {
+	for level, hist := range other {
+		if level < len(cs) {
+			cs[level].Add(hist)
+		} else {
+			cs = append(cs, hist)
+		}
+	}
+	return cs
+}
+
+func (cs ChunkerStats) String() string {
+	var c strings.Builder
+	var s strings.Builder
+
+	for level, hist := range cs {
+
+		s.WriteString(strconv.Itoa(int(level)))
+		s.WriteString(": ")
+		s.WriteString(strconv.Itoa(int(hist.Sum())))
+		s.WriteRune('\r')
+
+		c.WriteString(strconv.Itoa(int(level)))
+		c.WriteString(": ")
+		c.WriteString(strconv.Itoa(int(hist.Samples())))
+		c.WriteRune('\r')
+	}
+	s.WriteRune('\n')
+	s.WriteString(c.String())
+
+	return s.String()
 }
