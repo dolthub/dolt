@@ -2694,6 +2694,10 @@ SQL
     dolt checkout main
     dolt merge other
 
+    # FF merge no longer checks constraints; forced commits require constraint reification
+    run dolt constraints verify --all
+    [ "$status" -eq "1" ]
+
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
@@ -2720,10 +2724,13 @@ SQL
     [[ "$output" =~ "2,2" ]] || false
     [[ "${#lines[@]}" = "3" ]] || false
 
-    dolt merge --abort
     dolt reset --hard
     dolt checkout main2
     dolt merge other2
+
+    # FF merge no longer checks constraints; forced commits require constraint reification
+    run dolt constraints verify --all
+    [ "$status" -eq "1" ]
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
