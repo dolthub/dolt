@@ -23,11 +23,11 @@ package metrics
 
 import (
 	"fmt"
-	"github.com/dolthub/vitess/go/race"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/dolthub/vitess/go/race"
 	"github.com/dustin/go-humanize"
 
 	"github.com/dolthub/dolt/go/store/d"
