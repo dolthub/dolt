@@ -147,25 +147,25 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 		return ws, noConflicts, fmt.Errorf("failed to get dbData")
 	}
 
-	if spec.Noff {
-		ws, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData)
-		if err == doltdb.ErrUnresolvedConflicts {
-			// if there are unresolved conflicts, write the resulting working set back to the session and return an
-			// error message
-			wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
-			if wsErr != nil {
-				return ws, hasConflicts, wsErr
-			}
-
-			ctx.Warn(DoltConflictWarningCode, err.Error())
-
-			// Return 0 indicating there are conflicts
-			return ws, hasConflicts, nil
-		}
-		return ws, noConflicts, err
-	}
-
 	if canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); canFF {
+		if spec.Noff {
+			ws, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData)
+			if err == doltdb.ErrUnresolvedConflicts {
+				// if there are unresolved conflicts, write the resulting working set back to the session and return an
+				// error message
+				wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
+				if wsErr != nil {
+					return ws, hasConflicts, wsErr
+				}
+
+				ctx.Warn(DoltConflictWarningCode, err.Error())
+
+				// Return 0 indicating there are conflicts
+				return ws, hasConflicts, nil
+			}
+			return ws, noConflicts, err
+		}
+
 		ws, err = executeFFMerge(ctx, spec.Squash, ws, dbData, spec.MergeC)
 		return ws, noConflicts, err
 	} else if err != nil {

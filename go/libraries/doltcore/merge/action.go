@@ -105,16 +105,14 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 	}, true, nil
 }
 
-// TODO deadlock on cyclical foreign key reference conflict noff merge
 // TODO forcing a commit with a constrain violation should warn users that subsequest
 //      FF merges will not surface constraint violations on their own; constraint verify --all
 //      is required to reify violations.
 func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
-	if spec.Noff {
-		return ExecNoFFMerge(ctx, dEnv, spec)
-	}
-
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
+		if spec.Noff {
+			return ExecNoFFMerge(ctx, dEnv, spec)
+		}
 		return nil, ExecuteFFMerge(ctx, dEnv, spec)
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		return nil, err
