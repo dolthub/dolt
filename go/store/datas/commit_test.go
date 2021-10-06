@@ -121,7 +121,7 @@ func TestNewCommit(t *testing.T) {
 
 	assertTypeEquals := func(e, a *types.Type) {
 		t.Helper()
-		assert.True(a.Equals(e), "Actual: %s\nExpected %s", mustString(a.Describe(context.Background())), mustString(e.Describe(context.Background())))
+		assert.True(a.Equals(e), "Actual: %s\nExpected %s\n%s", mustString(a.Describe(context.Background())), mustString(e.Describe(context.Background())), a.HumanReadableString())
 	}
 
 	storage := &chunks.TestStorage{}
@@ -144,6 +144,9 @@ func TestNewCommit(t *testing.T) {
 	assert.NoError(err)
 	assertTypeEquals(et, at)
 
+	_, err = db.WriteValue(context.Background(), commit)
+	assert.NoError(err)
+
 	// Committing another Float
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit, types.Format_7_18))))
 	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
@@ -154,11 +157,14 @@ func TestNewCommit(t *testing.T) {
 	et2 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure: Map<>,
+                parents_closure: Map<Tuple, List<>>,
                 parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float,
         }`)
 	assertTypeEquals(et2, at2)
+
+	_, err = db.WriteValue(context.Background(), commit2)
+	assert.NoError(err)
 
 	// Now commit a String
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18))))
@@ -170,11 +176,14 @@ func TestNewCommit(t *testing.T) {
 	et3 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure: Map<>,
+                parents_closure: Map<Tuple, List<Ref<Value>>>,
                 parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float | String,
         }`)
 	assertTypeEquals(et3, at3)
+
+	_, err = db.WriteValue(context.Background(), commit3)
+	assert.NoError(err)
 
 	// Now commit a String with MetaInfo
 	meta, err := types.NewStruct(types.Format_7_18, "Meta", types.StructData{"date": types.String("some date"), "number": types.Float(9)})
@@ -196,11 +205,14 @@ func TestNewCommit(t *testing.T) {
                         number: Float,
         	},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure: Map<>,
+                parents_closure: Map<Tuple, List<Ref<Value>>>,
                 parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float | String,
         }`)
 	assertTypeEquals(et4, at4)
+
+	_, err = db.WriteValue(context.Background(), commit4)
+	assert.NoError(err)
 
 	// Merge-commit with different parent types
 	parents = mustList(types.NewList(context.Background(), db,
@@ -219,7 +231,7 @@ func TestNewCommit(t *testing.T) {
 	et5 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure: Map<>,
+                parents_closure: Map<Tuple, List<Ref<Value>>>,
                 parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float | String,
         }`)
@@ -458,6 +470,10 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(t, err)
 	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
+	assert.NoError(t, err)
+	_, err = db.WriteValue(context.Background(), c1)
+	assert.NoError(t, err)
+	_, err = db.WriteValue(context.Background(), cx)
 	assert.NoError(t, err)
 	value := types.String("two")
 	parents, err = types.NewList(context.Background(), db, mustRef(types.NewRef(c1, types.Format_7_18)))

@@ -65,7 +65,7 @@ var commitTemplate = types.MakeStructTemplate(CommitName, []string{
 var valueCommitType = nomdl.MustParseType(`Struct Commit {
         meta: Struct {},
         parents: Set<Ref<Cycle<Commit>>>,
-        parents_closure?: Map<Tuple,List<Ref<Value>>>,
+        parents_closure?: Map<Value,Value>,
         parents_list?: List<Ref<Cycle<Commit>>>,
         value: Value,
 }`)
