@@ -20,6 +20,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 // Histogram is intentionally lock free
+//go:build !race
 // +build !race
 
 package metrics
