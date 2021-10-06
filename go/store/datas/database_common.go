@@ -138,9 +138,9 @@ func (db *database) DatasetsInRoot(ctx context.Context, rootHash hash.Hash) (typ
 	return val.(types.Map), nil
 }
 
-func getParentsSkipList(ctx context.Context, vrw types.ValueReadWriter, parents types.List) (types.Tuple, error) {
+func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parents types.List) (types.Map, error) {
 	// TODO
-	return types.EmptyTuple(vrw.Format()), nil
+	return types.NewMap(ctx, vrw)
 }
 
 // Datasets returns the Map of Datasets in the current root. If you intend to edit the map and commit changes back,
@@ -323,12 +323,12 @@ func (db *database) CommitDangling(ctx context.Context, v types.Value, opts Comm
 		opts.Meta = types.EmptyStruct(db.Format())
 	}
 
-	parentsSkipList, err := getParentsSkipList(ctx, db, opts.ParentsList)
+	parentsClosure, err := getParentsClosure(ctx, db, opts.ParentsList)
 	if err != nil {
 		return types.Struct{}, err
 	}
 
-	commitStruct, err := newCommit(ctx, v, opts.ParentsList, parentsSkipList, opts.Meta)
+	commitStruct, err := newCommit(ctx, v, opts.ParentsList, parentsClosure, opts.Meta)
 	if err != nil {
 		return types.Struct{}, err
 	}
@@ -483,12 +483,12 @@ func (db *database) doMerge(
 		return types.Ref{}, err
 	}
 
-	parentsSkipList, err := getParentsSkipList(ctx, db, parents)
+	parentsClosure, err := getParentsClosure(ctx, db, parents)
 	if err != nil {
 		return types.Ref{}, err
 	}
 
-	newCom, err := newCommit(ctx, merged, parents, parentsSkipList, types.EmptyStruct(db.Format()))
+	newCom, err := newCommit(ctx, merged, parents, parentsClosure, types.EmptyStruct(db.Format()))
 	if err != nil {
 		return types.Ref{}, err
 	}
@@ -996,12 +996,12 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 		meta = types.EmptyStruct(ds.Database().Format())
 	}
 
-	parentsSkipList, err := getParentsSkipList(ctx, ds.Database(), parents)
+	parentsClosure, err := getParentsClosure(ctx, ds.Database(), parents)
 	if err != nil {
 		return types.EmptyStruct(ds.Database().Format()), err
 	}
 
-	return newCommit(ctx, v, parents, parentsSkipList, meta)
+	return newCommit(ctx, v, parents, parentsClosure, meta)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

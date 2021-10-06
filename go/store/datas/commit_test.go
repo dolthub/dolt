@@ -91,6 +91,11 @@ func mustList(l types.List, err error) types.List {
 	return l
 }
 
+func mustMap(m types.Map, err error) types.Map {
+	d.PanicIfError(err)
+	return m
+}
+
 func mustType(t *types.Type, err error) *types.Type {
 	d.PanicIfError(err)
 	return t
@@ -124,8 +129,8 @@ func TestNewCommit(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	parentsSkipList := mustTuple(getParentsSkipList(context.Background(), db, parents))
-	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsSkipList, types.EmptyStruct(types.Format_7_18))
+	parentsClosure := mustMap(getParentsClosure(context.Background(), db, parents))
+	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at, err := types.TypeOf(commit)
 	assert.NoError(err)
@@ -133,7 +138,7 @@ func TestNewCommit(t *testing.T) {
 		types.EmptyStructType,
 		mustType(types.MakeSetType(mustType(types.MakeUnionType()))),
 		mustType(types.MakeListType(mustType(types.MakeUnionType()))),
-		mustType(types.TypeOf(types.EmptyTuple(types.Format_7_18))),
+		mustType(types.MakeMapType(mustType(types.MakeUnionType()), mustType(types.MakeUnionType()))),
 		types.PrimitiveTypeMap[types.FloatKind],
 	)
 	assert.NoError(err)
@@ -141,32 +146,32 @@ func TestNewCommit(t *testing.T) {
 
 	// Committing another Float
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit, types.Format_7_18))))
-	parentsSkipList = mustTuple(getParentsSkipList(context.Background(), db, parents))
-	commit2, err := newCommit(context.Background(), types.Float(2), parents, parentsSkipList, types.EmptyStruct(types.Format_7_18))
+	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
+	commit2, err := newCommit(context.Background(), types.Float(2), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at2, err := types.TypeOf(commit2)
 	assert.NoError(err)
 	et2 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
+                parents_closure: Map<>,
                 parents_list: List<Ref<Cycle<Commit>>>,
-                parents_skip_list: Tuple,
                 value: Float,
         }`)
 	assertTypeEquals(et2, at2)
 
 	// Now commit a String
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18))))
-	parentsSkipList = mustTuple(getParentsSkipList(context.Background(), db, parents))
-	commit3, err := newCommit(context.Background(), types.String("Hi"), parents, parentsSkipList, types.EmptyStruct(types.Format_7_18))
+	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
+	commit3, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at3, err := types.TypeOf(commit3)
 	assert.NoError(err)
 	et3 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
+                parents_closure: Map<>,
                 parents_list: List<Ref<Cycle<Commit>>>,
-                parents_skip_list: Tuple,
                 value: Float | String,
         }`)
 	assertTypeEquals(et3, at3)
@@ -180,8 +185,8 @@ func TestNewCommit(t *testing.T) {
 	}`)
 	assertTypeEquals(metaType, mustType(types.TypeOf(meta)))
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18))))
-	parentsSkipList = mustTuple(getParentsSkipList(context.Background(), db, parents))
-	commit4, err := newCommit(context.Background(), types.String("Hi"), parents, parentsSkipList, meta)
+	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
+	commit4, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, meta)
 	assert.NoError(err)
 	at4, err := types.TypeOf(commit4)
 	assert.NoError(err)
@@ -191,8 +196,8 @@ func TestNewCommit(t *testing.T) {
                         number: Float,
         	},
                 parents: Set<Ref<Cycle<Commit>>>,
+                parents_closure: Map<>,
                 parents_list: List<Ref<Cycle<Commit>>>,
-                parents_skip_list: Tuple,
                 value: Float | String,
         }`)
 	assertTypeEquals(et4, at4)
@@ -201,12 +206,12 @@ func TestNewCommit(t *testing.T) {
 	parents = mustList(types.NewList(context.Background(), db,
 		mustRef(types.NewRef(commit2, types.Format_7_18)),
 		mustRef(types.NewRef(commit3, types.Format_7_18))))
-	parentsSkipList = mustTuple(getParentsSkipList(context.Background(), db, parents))
+	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
 	commit5, err := newCommit(
 		context.Background(),
 		types.String("Hi"),
 		parents,
-		parentsSkipList,
+		parentsClosure,
 		types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at5, err := types.TypeOf(commit5)
@@ -214,8 +219,8 @@ func TestNewCommit(t *testing.T) {
 	et5 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
+                parents_closure: Map<>,
                 parents_list: List<Ref<Cycle<Commit>>>,
-                parents_skip_list: Tuple,
                 value: Float | String,
         }`)
 	assertTypeEquals(et5, at5)
@@ -449,22 +454,22 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	parentsSkipList := mustTuple(getParentsSkipList(context.Background(), db, parents))
-	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsSkipList, types.EmptyStruct(types.Format_7_18))
+	parentsClosure := mustMap(getParentsClosure(context.Background(), db, parents))
+	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(t, err)
-	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsSkipList, types.EmptyStruct(types.Format_7_18))
+	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(t, err)
 	value := types.String("two")
 	parents, err = types.NewList(context.Background(), db, mustRef(types.NewRef(c1, types.Format_7_18)))
 	assert.NoError(t, err)
-	parentsSkipList = mustTuple(getParentsSkipList(context.Background(), db, parents))
+	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
 	meta, err := types.NewStruct(types.Format_7_18, "", types.StructData{
 		"basis": cx,
 	})
 	assert.NoError(t, err)
 
 	// Used to fail
-	_, err = newCommit(context.Background(), value, parents, parentsSkipList, meta)
+	_, err = newCommit(context.Background(), value, parents, parentsClosure, meta)
 	assert.NoError(t, err)
 }
 

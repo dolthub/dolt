@@ -40,28 +40,33 @@ const (
 	// `"parents"` is still written as a Set as well, so that commits
 	// created with newer versions of still usable by older versions.
 	ParentsListField = "parents_list"
-	// Added in October, 2021. Stored as a Tuple of Tuples, where
-	// each entry in the inner tuples is a level of the skip list
-	// pointer for a given level to the given parent index.
-	ParentsSkipListField = "parents_skip_list"
-	ValueField           = "value"
-	CommitMetaField      = "meta"
-	CommitName           = "Commit"
+	// Added in October, 2021. Stores a Ref<Map<Tuple,List>>.
+	// The key of the map is a Tuple<Height, InlineBlob(Hash)>, reffable to
+	// a Commit ref. The value of the map is a List of Ref<Value>s pointing
+	// to the parents of the Commit which corresponds to the key.
+	//
+	// This structure is a materialized closure of a commit's parents. It
+	// is used for pull/fetch/push commit graph fan-out and for sub-O(n)
+	// FindCommonAncestor calculations.
+	ParentsClosureField = "parents_closure"
+	ValueField          = "value"
+	CommitMetaField     = "meta"
+	CommitName          = "Commit"
 )
 
 var commitTemplate = types.MakeStructTemplate(CommitName, []string{
 	CommitMetaField,
 	ParentsField,
+	ParentsClosureField,
 	ParentsListField,
-	ParentsSkipListField,
 	ValueField,
 })
 
 var valueCommitType = nomdl.MustParseType(`Struct Commit {
         meta: Struct {},
         parents: Set<Ref<Cycle<Commit>>>,
+        parents_closure?: Map<Tuple,List<Ref<Value>>>,
         parents_list?: List<Ref<Cycle<Commit>>>,
-        parents_skip_list?: Value,
         value: Value,
 }`)
 
@@ -74,17 +79,17 @@ var valueCommitType = nomdl.MustParseType(`Struct Commit {
 //   meta: M,
 //   parents: Set<Ref<Cycle<Commit>>>,
 //   parentsList: List<Ref<Cycle<Commit>>>,
-//   parentsSkipList: Value,
+//   parentsClosure: Map<Tuple,List<Ref<Value>>>,
 //   value: T,
 // }
 // ```
 // where M is a struct type and T is any type.
-func newCommit(ctx context.Context, value types.Value, parentsList types.List, parentsSkipList types.Tuple, meta types.Struct) (types.Struct, error) {
+func newCommit(ctx context.Context, value types.Value, parentsList types.List, parentsClosure types.Map, meta types.Struct) (types.Struct, error) {
 	parentsSet, err := parentsList.ToSet(ctx)
 	if err != nil {
 		return types.EmptyStruct(meta.Format()), err
 	}
-	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parentsSet, parentsList, parentsSkipList, value})
+	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parentsSet, parentsClosure, parentsList, value})
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
@@ -256,7 +261,7 @@ func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
 	return types.Ref{}, false
 }
 
-func makeCommitStructType(metaType, parentsType, parentsListType, parentsSkipListType, valueType *types.Type) (*types.Type, error) {
+func makeCommitStructType(metaType, parentsType, parentsListType, parentsClosureType, valueType *types.Type) (*types.Type, error) {
 	return types.MakeStructType(CommitName,
 		types.StructField{
 			Name: CommitMetaField,
@@ -271,8 +276,8 @@ func makeCommitStructType(metaType, parentsType, parentsListType, parentsSkipLis
 			Type: parentsListType,
 		},
 		types.StructField{
-			Name: ParentsSkipListField,
-			Type: parentsSkipListType,
+			Name: ParentsClosureField,
+			Type: parentsClosureType,
 		},
 		types.StructField{
 			Name: ValueField,
