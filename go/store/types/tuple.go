@@ -454,6 +454,10 @@ func (t Tuple) decoderSkipToFields() (valueDecoder, uint64) {
 	return dec, count
 }
 
+func (t Tuple) Size() int {
+	return len(t.buff)
+}
+
 // Len is the number of fields in the struct.
 func (t Tuple) Len() uint64 {
 	if len(t.buff) == 0 {
