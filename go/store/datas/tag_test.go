@@ -38,8 +38,8 @@ func TestNewTag(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	parentsSkipList := mustTuple(getParentsSkipList(context.Background(), db, parents))
-	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsSkipList, types.EmptyStruct(types.Format_7_18))
+	parentsClosure := mustMap(getParentsClosure(context.Background(), db, parents))
+	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
 	require.NoError(t, err)
 
 	cmRef, err := types.NewRef(commit, types.Format_7_18)
@@ -51,7 +51,7 @@ func TestNewTag(t *testing.T) {
 		types.EmptyStructType,
 		mustType(types.MakeSetType(mustType(types.MakeUnionType()))),
 		mustType(types.MakeListType(mustType(types.MakeUnionType()))),
-		mustType(types.TypeOf(types.EmptyTuple(types.Format_7_18))),
+		mustType(types.MakeMapType(mustType(types.MakeUnionType()), mustType(types.MakeUnionType()))),
 		types.PrimitiveTypeMap[types.FloatKind],
 	)
 	require.NoError(t, err)
