@@ -186,15 +186,16 @@ type keylessDiffer struct {
 
 var _ RowDiffer = &keylessDiffer{}
 
-func (kd *keylessDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pred diffPredicate) (diffs []*diff.Difference, more bool, err error) {
-	diffs = make([]*diff.Difference, numDiffs)
+func (kd *keylessDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pred diffPredicate) ([]*diff.Difference, bool, error) {
+	diffs := make([]*diff.Difference, numDiffs)
 	idx := 0
 
 	for {
 		// first populate |diffs| with copies of |kd.df|
+
+		cpy := kd.df // save a copy of kd.df to reference
 		for (idx < numDiffs) && (kd.copiesLeft > 0) {
-			d := kd.df
-			diffs[idx] = &d
+			diffs[idx] = &cpy
 			idx++
 			kd.copiesLeft--
 		}
@@ -202,34 +203,28 @@ func (kd *keylessDiffer) getDiffs(numDiffs int, timeoutChan <-chan time.Time, pr
 			return diffs, true, nil
 		}
 
-		// then get another Difference
-		var d diff.Difference
-		select {
-		case <-timeoutChan:
-			return diffs, true, nil
+		// then find the next Difference the satisfies |pred|
+		match := false
+		for !match {
+			select {
+			case <-timeoutChan:
+				return diffs, true, nil
 
-		case <-kd.egCtx.Done():
-			return nil, false, kd.eg.Wait()
+			case <-kd.egCtx.Done():
+				return nil, false, kd.eg.Wait()
 
-		case d, more = <-kd.diffChan:
-			if !more {
-				return diffs[:idx], more, nil
-			}
+			case d, more := <-kd.diffChan:
+				if !more {
+					return diffs[:idx], more, nil
+				}
 
-			ok := false
-			for !ok {
+				var err error
 				kd.df, kd.copiesLeft, err = convertDiff(d)
 				if err != nil {
 					return nil, false, err
 				}
 
-				ok = pred(&kd.df)
-
-				if !ok {
-					if d, more = <-kd.diffChan; !more {
-						return diffs[:idx], more, nil
-					}
-				}
+				match = pred(&kd.df)
 			}
 		}
 	}
