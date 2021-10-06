@@ -26,11 +26,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
@@ -155,11 +153,11 @@ func equalSchemas(t *testing.T, expectedSch schema.Schema, sch schema.Schema) {
 }
 
 // TODO: this shouldn't be here
-func CreateWorkingRootUpdate() map[string]envtestutils.TableUpdate {
-	return map[string]envtestutils.TableUpdate{
-		sqltestutil.TableWithHistoryName: {
+func CreateWorkingRootUpdate() map[string]TableUpdate {
+	return map[string]TableUpdate{
+		TableWithHistoryName: {
 			RowUpdates: []row.Row{
-				mustRow(row.New(types.Format_Default, sqltestutil.ReaddAgeAt5HistSch, row.TaggedValues{
+				mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{
 					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
 				})),
 			},
