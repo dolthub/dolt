@@ -19,12 +19,14 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
+// Histogram is intentionally lock free
+// +build !race
+
 package metrics
 
 import (
 	"fmt"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -68,7 +70,7 @@ type Histogram struct {
 func (h *Histogram) Sample(v uint64) {
 	d.PanicIfTrue(v == 0)
 
-	atomic.AddUint64(&h.sum, v)
+	h.sum += v
 
 	pot := 0
 	for v > 0 {
@@ -76,7 +78,7 @@ func (h *Histogram) Sample(v uint64) {
 		pot++
 	}
 
-	atomic.AddUint64(&h.buckets[pot-1], 1)
+	h.buckets[pot-1]++
 }
 
 func (h *Histogram) Clone() *Histogram {
@@ -89,11 +91,11 @@ func (h *Histogram) Clone() *Histogram {
 // duration since |t|, if 0, rounds to 1 and passes to Sample() as an uint64
 // number of nanoseconds.
 func (h *Histogram) SampleTimeSince(t time.Time) {
-	d := time.Since(t)
-	if d == 0 {
-		d = 1
+	dur := time.Since(t)
+	if dur == 0 {
+		dur = 1
 	}
-	h.Sample(uint64(d))
+	h.Sample(uint64(dur))
 }
 
 // SampleLen is a convenience wrapper around Sample which internally type
@@ -109,16 +111,16 @@ func (h Histogram) bucketVal(bucket int) uint64 {
 // Sum return the sum of sampled values, note that Sum can be overflowed without
 // overflowing the histogram buckets.
 func (h Histogram) Sum() uint64 {
-	return atomic.LoadUint64(&h.sum)
+	return h.sum
 }
 
 // Add returns a new Histogram which is the result of adding this and other
 // bucket-wise.
 func (h *Histogram) Add(other *Histogram) {
-	atomic.AddUint64(&h.sum, atomic.LoadUint64(&other.sum))
+	h.sum += other.sum
 
 	for i := 0; i < bucketCount; i++ {
-		atomic.AddUint64(&h.buckets[i], atomic.LoadUint64(&other.buckets[i]))
+		h.buckets[i] += other.buckets[i]
 	}
 }
 
@@ -136,7 +138,7 @@ func (h Histogram) Mean() uint64 {
 func (h Histogram) Samples() uint64 {
 	s := uint64(0)
 	for i := 0; i < bucketCount; i++ {
-		s += atomic.LoadUint64(&h.buckets[i])
+		s += h.buckets[i]
 	}
 	return s
 }
