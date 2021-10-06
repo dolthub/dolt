@@ -17,7 +17,7 @@ package xlsx
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"reflect"
 	"testing"
@@ -91,7 +91,7 @@ func getBytesFromXlsx() []byte {
 	}
 	defer f.Close()
 
-	bs, err := ioutil.ReadAll(f)
+	bs, err := io.ReadAll(f)
 	if err != nil {
 		panic(err)
 	}

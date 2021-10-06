@@ -87,7 +87,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
 	cmStr := "working"
-	args := apr.Args()
+	args := apr.Args
 
 	var root *doltdb.RootValue
 	var verr errhand.VerboseError

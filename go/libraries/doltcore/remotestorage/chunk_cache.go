@@ -22,7 +22,7 @@ import (
 // ChunkCache is an interface used for caching chunks
 type ChunkCache interface {
 	// Put puts a slice of chunks into the cache.
-	Put(c []nbs.CompressedChunk)
+	Put(c []nbs.CompressedChunk) bool
 
 	// Get gets a map of hash to chunk for a set of hashes.  In the event that a chunk is not in the cache, chunks.Empty.
 	// is put in it's place

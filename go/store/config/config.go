@@ -24,7 +24,6 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -93,7 +92,7 @@ func FindNomsConfig() (*Config, error) {
 }
 
 func ReadConfig(name string) (*Config, error) {
-	data, err := ioutil.ReadFile(name)
+	data, err := os.ReadFile(name)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +117,7 @@ func (c *Config) WriteTo(configHome string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(file), os.ModePerm); err != nil {
 		return "", err
 	}
-	if err := ioutil.WriteFile(file, []byte(c.writeableString()), os.ModePerm); err != nil {
+	if err := os.WriteFile(file, []byte(c.writeableString()), os.ModePerm); err != nil {
 		return "", err
 	}
 	return file, nil

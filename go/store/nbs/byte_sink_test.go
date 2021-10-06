@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -111,7 +110,7 @@ func (suite *TableSinkSuite) TestWriteAndFlushToFile() {
 	err = sink.FlushToFile(path)
 	require.NoError(suite.t, err)
 
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	require.NoError(suite.t, err)
 
 	verifyContents(suite.t, data)

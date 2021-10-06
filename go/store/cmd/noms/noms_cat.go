@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -110,7 +109,7 @@ func runCat(ctx context.Context, args []string) int {
 		return 1
 	}
 
-	fileBytes, err := ioutil.ReadFile(chunkFile)
+	fileBytes, err := os.ReadFile(chunkFile)
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Failed to read "+chunkFile, err)

@@ -18,7 +18,7 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/git-dolt/env"
@@ -70,7 +70,7 @@ func Parse(c string) (GitDoltConfig, error) {
 // Load loads a GitDoltConfig from the pointer file with the given filename.
 func Load(ptrFname string) (GitDoltConfig, error) {
 	ptrFname = utils.EnsureSuffix(ptrFname, ".git-dolt")
-	ptrData, err := ioutil.ReadFile(ptrFname)
+	ptrData, err := os.ReadFile(ptrFname)
 	if err != nil {
 		return GitDoltConfig{}, fmt.Errorf("can't find pointer file %s", ptrFname)
 	}
@@ -87,7 +87,7 @@ func Load(ptrFname string) (GitDoltConfig, error) {
 // creating or overwriting it with the given contents.
 func Write(ptrFname string, ptrContents string) error {
 	ptrFname = utils.EnsureSuffix(ptrFname, ".git-dolt")
-	if err := ioutil.WriteFile(ptrFname, []byte(ptrContents), 0644); err != nil {
+	if err := os.WriteFile(ptrFname, []byte(ptrContents), 0644); err != nil {
 		return fmt.Errorf("error writing git-dolt pointer file at %s: %v", ptrFname, err)
 	}
 

@@ -25,7 +25,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -85,7 +84,7 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 }
 
 func makeTempDir(t *testing.T) string {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	return dir
 }
@@ -97,7 +96,7 @@ func writeTableData(dir string, chunx ...[]byte) (addr, error) {
 		return addr{}, err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(dir, name.String()), tableData, 0666)
+	err = os.WriteFile(filepath.Join(dir, name.String()), tableData, 0666)
 
 	if err != nil {
 		return addr{}, err
@@ -126,7 +125,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndex(buff)
 		require.NoError(t, err)
@@ -226,7 +225,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	require.NoError(t, err)
 
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndex(buff)
 		require.NoError(t, err)
@@ -264,7 +263,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	require.NoError(t, err)
 
 	if assert.True(mustUint32(src.count()) > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
+		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
 		ti, err := parseTableIndex(buff)
 		require.NoError(t, err)

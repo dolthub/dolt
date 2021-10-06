@@ -23,7 +23,6 @@ package nbs
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,7 +43,7 @@ func TestFDCache(t *testing.T) {
 	for i := range paths {
 		name := fmt.Sprintf("file%d", i)
 		paths[i] = filepath.Join(dir, name)
-		err := ioutil.WriteFile(paths[i], []byte(name), 0644)
+		err := os.WriteFile(paths[i], []byte(name), 0644)
 		require.NoError(t, err)
 	}
 

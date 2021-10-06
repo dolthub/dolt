@@ -70,7 +70,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	r, refSpecs, err := env.NewFetchOpts(apr.Args(), dEnv.RepoStateReader())
+	r, refSpecs, err := env.NewFetchOpts(apr.Args, dEnv.RepoStateReader())
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

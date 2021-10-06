@@ -24,7 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
-	"io/ioutil"
+	"os"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -37,7 +37,7 @@ const (
 )
 
 func NewCache(ctx context.Context) (*NomsBlockCache, error) {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (nbc *NomsBlockCache) Get(ctx context.Context, hash hash.Hash) (chunks.Chun
 // GetMany gets the Chunks with |hashes| from the store. On return,
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (nbc *NomsBlockCache) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
+func (nbc *NomsBlockCache) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	return nbc.chunks.GetMany(ctx, hashes, found)
 }
 

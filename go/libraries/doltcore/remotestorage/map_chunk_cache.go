@@ -37,7 +37,7 @@ func newMapChunkCache() *mapChunkCache {
 }
 
 // Put puts a slice of chunks into the cache.
-func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) {
+func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) bool {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 
@@ -57,6 +57,8 @@ func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) {
 			mcc.toFlush[h] = c
 		}
 	}
+
+	return false
 }
 
 // Get gets a map of hash to chunk for a set of hashes.  In the event that a chunk is not in the cache, chunks.Empty.
@@ -94,8 +96,6 @@ func (mcc *mapChunkCache) Has(hashes hash.HashSet) (absent hash.HashSet) {
 	return absent
 }
 
-// PutChunk puts a single chunk in the cache.  true returns in the event that the chunk was cached successfully
-// and false is returned if that chunk is already is the cache.
 func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
@@ -104,7 +104,6 @@ func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
 	if existing, ok := mcc.hashToChunk[h]; !ok || existing.IsEmpty() {
 		mcc.hashToChunk[h] = ch
 		mcc.toFlush[h] = ch
-		return true
 	}
 
 	return false

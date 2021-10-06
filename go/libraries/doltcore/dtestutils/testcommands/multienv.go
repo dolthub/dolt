@@ -17,7 +17,6 @@ package testcommands
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,12 +57,12 @@ const (
 
 // TODO this is not a proper builder, dbs need to be added before remotes
 func NewMultiRepoTestSetup(t *testing.T) *MultiRepoTestSetup {
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	homeDir, err := ioutil.TempDir(dir, homePrefix)
+	homeDir, err := os.MkdirTemp(dir, homePrefix)
 	if err != nil {
 		t.Fatal(err)
 	}

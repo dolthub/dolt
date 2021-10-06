@@ -89,7 +89,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 
 	urlStr := apr.Arg(0)
 	commitStr := apr.Arg(1)
-	tblNames := apr.Args()[2:]
+	tblNames := apr.Args[2:]
 
 	_, err := earl.Parse(urlStr)
 

@@ -79,7 +79,7 @@ func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, useDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	args = apr.Args()
+	args = apr.Args
 	if len(args) != 1 {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("error: expected exactly one credential public key or key id as argument").Build(), usage)
 	}

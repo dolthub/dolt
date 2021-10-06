@@ -83,7 +83,7 @@ func TestAddPk(t *testing.T) {
 		idx, ok := sch.Indexes().GetByNameCaseInsensitive(indexName)
 		assert.True(t, ok)
 
-		full, _, _, err := kr1.ReduceToIndexKeys(idx)
+		full, _, _, err := kr1.ReduceToIndexKeys(idx, nil)
 		assert.NoError(t, err)
 		ok, err = newMap.Has(ctx, full)
 		assert.NoError(t, err)
@@ -92,7 +92,7 @@ func TestAddPk(t *testing.T) {
 		kr2, err := createRow(sch, sch.GetAllCols().Tags, []types.Value{types.Int(2), types.Int(2)})
 		assert.NoError(t, err)
 
-		full, _, _, err = kr2.ReduceToIndexKeys(idx)
+		full, _, _, err = kr2.ReduceToIndexKeys(idx, nil)
 		assert.NoError(t, err)
 		ok, err = newMap.Has(ctx, full)
 		assert.NoError(t, err)

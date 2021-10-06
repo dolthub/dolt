@@ -103,6 +103,16 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	return &DoltDB{db}, nil
 }
 
+// NomsRoot returns the hash of the noms dataset map
+func (ddb *DoltDB) NomsRoot(ctx context.Context) (hash.Hash, error) {
+	return ddb.db.NomsRoot(ctx)
+}
+
+// CommitRoot executes a chunkStore commit, atomically swapping the root hash of the database manifest
+func (ddb *DoltDB) CommitRoot(ctx context.Context, last, current hash.Hash) (bool, error) {
+	return ddb.db.CommitRoot(ctx, last, current)
+}
+
 func (ddb *DoltDB) CSMetricsSummary() string {
 	return datas.GetCSStatSummaryForDB(ddb.db)
 }

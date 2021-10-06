@@ -24,7 +24,6 @@ package spec
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -160,7 +159,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 	assert := assert.New(t)
 
 	run := func(prefix string) {
-		tmpDir, err := ioutil.TempDir("", "spec_test")
+		tmpDir, err := os.MkdirTemp("", "spec_test")
 		assert.NoError(err)
 		defer file.RemoveAll(tmpDir)
 
@@ -262,7 +261,7 @@ func TestForDatabase(t *testing.T) {
 		assert.Error(err, spec)
 	}
 
-	tmpDir, err := ioutil.TempDir("", "spec_test")
+	tmpDir, err := os.MkdirTemp("", "spec_test")
 	assert.NoError(err)
 	defer file.RemoveAll(tmpDir)
 
@@ -326,7 +325,7 @@ func TestForDataset(t *testing.T) {
 		assert.NoError(err)
 	}
 
-	tmpDir, err := ioutil.TempDir("", "spec_test")
+	tmpDir, err := os.MkdirTemp("", "spec_test")
 	assert.NoError(err)
 	defer file.RemoveAll(tmpDir)
 
@@ -371,7 +370,7 @@ func TestForPath(t *testing.T) {
 		assert.Error(err)
 	}
 
-	tmpDir, err := ioutil.TempDir("", "spec_test")
+	tmpDir, err := os.MkdirTemp("", "spec_test")
 	assert.NoError(err)
 	defer file.RemoveAll(tmpDir)
 
@@ -498,7 +497,7 @@ func TestAlreadyPinnedPathSpec(t *testing.T) {
 func TestMultipleSpecsSameNBS(t *testing.T) {
 	assert := assert.New(t)
 
-	tmpDir, err := ioutil.TempDir("", "spec_test")
+	tmpDir, err := os.MkdirTemp("", "spec_test")
 	assert.NoError(err)
 	defer file.RemoveAll(tmpDir)
 

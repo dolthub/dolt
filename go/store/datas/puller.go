@@ -377,7 +377,12 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 	ae := atomicerr.New()
 	go func() {
 		defer close(found)
-		err := p.srcChunkStore.GetManyCompressed(ctx, batch, func(c nbs.CompressedChunk) { found <- c })
+		err := p.srcChunkStore.GetManyCompressed(ctx, batch, func(ctx context.Context, c nbs.CompressedChunk) {
+			select {
+			case found <- c:
+			case <-ctx.Done():
+			}
+		})
 		ae.SetIfError(err)
 	}()
 

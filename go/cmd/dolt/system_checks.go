@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -28,7 +27,7 @@ import (
 func canMoveTempFile() bool {
 	const testfile = "./testfile"
 
-	f, err := ioutil.TempFile("", "")
+	f, err := os.CreateTemp("", "")
 
 	if err != nil {
 		return false

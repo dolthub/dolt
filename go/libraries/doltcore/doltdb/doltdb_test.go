@@ -16,7 +16,7 @@ package doltdb
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -226,7 +226,7 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	}
 
 	contents := []byte("not a directory")
-	ioutil.WriteFile(filepath.Join(testDir, dbfactory.DoltDataDir), contents, 0644)
+	os.WriteFile(filepath.Join(testDir, dbfactory.DoltDataDir), contents, 0644)
 
 	ddb, err := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
 	assert.Nil(t, ddb, "Should return nil when loading a non-directory data dir file")

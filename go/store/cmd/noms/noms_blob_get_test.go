@@ -25,7 +25,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -70,7 +70,7 @@ func (s *nbeSuite) TestNomsBlobGet() {
 	filePath := filepath.Join(s.TempDir, "out")
 	s.MustRun(main, []string{"blob", "export", hashSpec, filePath})
 
-	fileBytes, err := ioutil.ReadFile(filePath)
+	fileBytes, err := os.ReadFile(filePath)
 	s.NoError(err)
 	s.Equal(blobBytes, fileBytes)
 

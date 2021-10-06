@@ -24,7 +24,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -68,12 +67,12 @@ func TestWriteChunks(t *testing.T) {
 		t.Error(err)
 	}
 
-	dir, err := ioutil.TempDir("", "write_chunks_test")
+	dir, err := os.MkdirTemp("", "write_chunks_test")
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = ioutil.WriteFile(dir+name, data, os.ModePerm)
+	err = os.WriteFile(dir+name, data, os.ModePerm)
 	if err != nil {
 		t.Error(err)
 	}
@@ -265,7 +264,7 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (bool, error) {
 	return true, nil
 }
 
-func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
+func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	for _, haver := range crg {
 		remaining, err := haver.getMany(ctx, eg, reqs, found, stats)
 		if err != nil {
@@ -278,7 +277,7 @@ func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, req
 	return true, nil
 }
 
-func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
+func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	for _, haver := range crg {
 		remaining, err := haver.getManyCompressed(ctx, eg, reqs, found, stats)
 		if err != nil {

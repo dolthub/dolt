@@ -95,7 +95,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	headRef := dEnv.RepoState.CWBHeadRef()
 	commits := make([]*doltdb.Commit, apr.NArg())
-	for i, arg := range apr.Args() {
+	for i, arg := range apr.Args {
 		commitSpec, err := doltdb.NewCommitSpec(arg)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)

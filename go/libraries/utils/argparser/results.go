@@ -23,17 +23,17 @@ import (
 
 type ArgParseResults struct {
 	options map[string]string
-	args    []string
+	Args    []string
 	parser  *ArgParser
 }
 
 func (res *ArgParseResults) Equals(other *ArgParseResults) bool {
-	if len(res.args) != len(other.args) || len(res.options) != len(res.options) {
+	if len(res.Args) != len(other.Args) || len(res.options) != len(res.options) {
 		return false
 	}
 
-	for i, arg := range res.args {
-		if other.args[i] != arg {
+	for i, arg := range res.Args {
+		if other.Args[i] != arg {
 			return false
 		}
 	}
@@ -53,7 +53,7 @@ func (res *ArgParseResults) Contains(name string) bool {
 }
 
 func (res *ArgParseResults) ContainsArg(name string) bool {
-	for _, val := range res.args {
+	for _, val := range res.Args {
 		if val == name {
 			return true
 		}
@@ -168,16 +168,12 @@ func (res *ArgParseResults) GetIntOrDefault(name string, defVal int) int {
 	return defVal
 }
 
-func (res *ArgParseResults) Args() []string {
-	return res.args
-}
-
 func (res *ArgParseResults) NArg() int {
-	return len(res.args)
+	return len(res.Args)
 }
 
 func (res *ArgParseResults) Arg(idx int) string {
-	return res.args[idx]
+	return res.Args[idx]
 }
 
 func (res *ArgParseResults) AnyFlagsEqualTo(val bool) *set.StrSet {

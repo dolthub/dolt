@@ -26,7 +26,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -215,7 +214,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
 	ss := contents.getSpecSet()
 
-	fileInfos, err := ioutil.ReadDir(ftp.dir)
+	fileInfos, err := os.ReadDir(ftp.dir)
 
 	if err != nil {
 		return err
