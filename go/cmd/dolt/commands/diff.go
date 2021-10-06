@@ -390,17 +390,6 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
 	for _, td := range tableDeltas {
-		if dArgs.diffOutput == SQLDiffOutput {
-			ok, err := td.IsKeyless(ctx)
-			if err != nil {
-				return errhand.VerboseErrorFromError(err)
-			}
-			if ok {
-				// todo: implement keyless SQL diff
-				continue
-			}
-		}
-
 		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
 			continue
 		}
@@ -613,7 +602,20 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			case diff.SchDiffRemoved:
 				cli.Print(sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
 			case diff.SchDiffModified:
+				// Ignore any primary key set changes here
+				if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
+					continue
+				}
+
 				cli.Print(sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+			}
+		}
+
+		// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
+		if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+			cli.Println(sqlfmt.AlterTableDropPks(td.ToName))
+			if toSch.GetPKCols().Size() > 0 {
+				cli.Println(sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
 			}
 		}
 

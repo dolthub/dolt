@@ -489,3 +489,93 @@ SQL
     [[ "$output" =~ "cv1" ]] || false
     [ $status -eq 0 ]
 }
+
+@test "diff: sql update queries only show changed columns" {
+    dolt sql -q "create table t(pk int primary key, val1 int, val2 int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
+
+    dolt commit -am "cm1"
+
+    dolt sql -q "UPDATE t SET val1=2 where pk=1"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = 'UPDATE `t` SET `val1`=2 WHERE (`pk`=1);' ]] || false
+
+    dolt commit -am "cm2"
+
+    dolt sql -q "UPDATE t SET val1=3, val2=4 where pk = 1"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = 'UPDATE `t` SET `val1`=3,`val2`=4 WHERE (`pk`=1);' ]] || false
+
+    dolt commit -am "cm3"
+
+    dolt sql -q "UPDATE t SET val1=3 where (pk=1);"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = '' ]] || false
+
+    dolt sql -q "alter table t add val3 int"
+    dolt commit -am "cm4"
+
+    dolt sql -q "update t set val1=30,val3=4 where pk=1"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE (`pk`=1);' ]] || false
+}
+
+@test "diff: run through some keyless sql diffs" {
+    dolt sql -q "create table t(pk int, val int)"
+    dolt commit -am "cm1"
+
+    dolt sql -q "INSERT INTO t values (1, 1)"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,1);' ]] || false
+
+    dolt commit -am "cm2"
+
+    dolt sql -q "INSERT INTO t values (1, 1)"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [[ "$output" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,1);' ]] || false
+
+    dolt commit -am "cm3"
+
+    dolt sql -q "UPDATE t SET val = 2 where pk = 1"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=1);' ]
+    [ "${lines[1]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=1);' ]
+    [ "${lines[2]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
+    [ "${lines[3]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
+
+    dolt commit -am "cm4"
+
+    dolt sql -q "DELETE FROM t WHERE val < 3"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=2);' ]
+    [ "${lines[1]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=2);' ]
+
+    dolt commit -am "cm5"
+
+    dolt sql -q "alter table t add primary key (pk)"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
+    [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
+    [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+
+    dolt commit -am "cm6"
+
+    dolt sql -q "alter table t add column pk2 int"
+    dolt sql -q "alter table t drop primary key"
+    dolt sql -q "alter table t add primary key (pk, val)"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` ADD `pk2` INT;' ]
+    [ "${lines[1]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
+    [ "${lines[2]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk,val);' ]
+    [ "${lines[3]}" = 'warning: skipping data diff due to primary key set change' ]
+}

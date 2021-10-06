@@ -188,6 +188,33 @@ func AlterTableRenameColStmt(tableName string, oldColName string, newColName str
 	return b.String()
 }
 
+func AlterTableDropPks(tableName string) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" DROP PRIMARY KEY")
+	b.WriteRune(';')
+	return b.String()
+}
+
+func AlterTableAddPrimaryKeys(tableName string, pks *schema.ColCollection) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" ADD PRIMARY KEY (")
+
+	for i := 0; i < pks.Size(); i++ {
+		if i == 0 {
+			b.WriteString(pks.GetAtIndex(i).Name)
+		} else {
+			b.WriteString("," + pks.GetAtIndex(i).Name)
+		}
+	}
+	b.WriteRune(')')
+	b.WriteRune(';')
+	return b.String()
+}
+
 func RenameTableStmt(fromName string, toName string) string {
 	var b strings.Builder
 	b.WriteString("RENAME TABLE ")
