@@ -109,16 +109,15 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 //      FF merges will not surface constraint violations on their own; constraint verify --all
 //      is required to reify violations.
 func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
-	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
+	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+		return nil, err
+	} else if ok {
 		if spec.Noff {
 			return ExecNoFFMerge(ctx, dEnv, spec)
 		}
 		return nil, ExecuteFFMerge(ctx, dEnv, spec)
-	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
-		return nil, err
-	} else {
-		return ExecuteMerge(ctx, dEnv, spec)
 	}
+	return ExecuteMerge(ctx, dEnv, spec)
 }
 
 func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {

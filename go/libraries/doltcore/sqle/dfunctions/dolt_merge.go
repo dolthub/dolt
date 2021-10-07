@@ -147,7 +147,9 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 		return ws, noConflicts, fmt.Errorf("failed to get dbData")
 	}
 
-	if canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); canFF {
+	if canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil {
+		return ws, noConflicts, err
+	} else if canFF {
 		if spec.Noff {
 			ws, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData)
 			if err == doltdb.ErrUnresolvedConflicts {
@@ -168,8 +170,6 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 
 		ws, err = executeFFMerge(ctx, spec.Squash, ws, dbData, spec.MergeC)
 		return ws, noConflicts, err
-	} else if err != nil {
-		return ws, noConflicts, err
 	}
 
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
@@ -180,7 +180,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 	}
 
 	ws, err = executeMerge(ctx, spec.Squash, spec.HeadC, spec.MergeC, ws, dbState.EditSession.Opts)
-	if err == doltdb.ErrUnresolvedConflicts {
+	if err == doltdb.ErrUnresolvedConflicts || err == doltdb.ErrUnresolvedConstraintViolations {
 		// if there are unresolved conflicts, write the resulting working set back to the session and return an
 		// error message
 		wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
