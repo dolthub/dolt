@@ -23,8 +23,8 @@ import (
 
 func TestFindLargerBucket(t *testing.T) {
 	tests := []struct {
-		requested uint32
-		expBucket uint32
+		requested uint64
+		expBucket uint64
 	}{
 		{requested: 63, expBucket: 0},
 		{requested: 64, expBucket: 0},
@@ -42,15 +42,15 @@ func TestFindLargerBucket(t *testing.T) {
 
 			expSize := minimumSize << test.expBucket
 			buf := NewLadder().Get(test.requested)
-			assert.Equal(t, expSize, uint32(len(buf)))
+			assert.Equal(t, expSize, uint64(len(buf)))
 		})
 	}
 }
 
 func TestFindSmallerBucket(t *testing.T) {
 	tests := []struct {
-		requested uint32
-		expBucket uint32
+		requested uint64
+		expBucket uint64
 	}{
 		//{requested: 63, expBucket: 0},
 		{requested: 64, expBucket: 0},

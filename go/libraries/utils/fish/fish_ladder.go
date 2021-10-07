@@ -18,9 +18,9 @@ import "sync"
 
 const (
 	// 10 buckets ranging from 64 bytes to 32K
-	numBufferPools = uint32(10)
+	numBufferPools = uint64(10)
 
-	minimumSize = uint32(1 << 6) // 64 bytes
+	minimumSize = uint64(1 << 6) // 64 bytes
 	maximumSize = minimumSize << numBufferPools
 )
 
@@ -42,7 +42,7 @@ type Ladder struct {
 	levels []*sync.Pool
 }
 
-func (l Ladder) Get(requested uint32) []byte {
+func (l Ladder) Get(requested uint64) []byte {
 	if requested > maximumSize {
 		return make([]byte, requested)
 	}
@@ -52,7 +52,7 @@ func (l Ladder) Get(requested uint32) []byte {
 }
 
 func (l Ladder) Put(buf []byte) {
-	sz := uint32(len(buf))
+	sz := uint64(len(buf))
 	if sz < minimumSize {
 		return // discard buf
 	}
@@ -61,8 +61,8 @@ func (l Ladder) Put(buf []byte) {
 	l.levels[i].Put(buf)
 }
 
-func findLargerBucket(sz uint32) uint32 {
-	i := uint32(0)
+func findLargerBucket(sz uint64) uint64 {
+	i := uint64(0)
 	bucketSz := minimumSize
 	for sz > bucketSz {
 		bucketSz <<= 1
@@ -74,7 +74,7 @@ func findLargerBucket(sz uint32) uint32 {
 	return i
 }
 
-func findSmallerBucket(sz uint32) uint32 {
+func findSmallerBucket(sz uint64) uint64 {
 	if sz < minimumSize {
 		panic("cannot find smaller bucket")
 	}
