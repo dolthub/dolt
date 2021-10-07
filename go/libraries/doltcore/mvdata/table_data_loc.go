@@ -197,7 +197,7 @@ type tableEditorWriteCloser struct {
 
 	statsCB noms.StatsCB
 	stats   types.AppliedEditStats
-	statOps int64
+	statOps int32
 }
 
 var _ DataMoverCloser = (*tableEditorWriteCloser)(nil)
@@ -213,8 +213,8 @@ func (te *tableEditorWriteCloser) GetSchema() schema.Schema {
 
 // WriteRow implements TableWriteCloser
 func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error {
-	if te.statsCB != nil && atomic.LoadInt64(&te.statOps) >= tableWriterStatUpdateRate {
-		atomic.StoreInt64(&te.statOps, 0)
+	if te.statsCB != nil && atomic.LoadInt32(&te.statOps) >= tableWriterStatUpdateRate {
+		atomic.StoreInt32(&te.statOps, 0)
 		te.statsCB(te.stats)
 	}
 
@@ -224,7 +224,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			return err
 		}
 
-		_ = atomic.AddInt64(&te.statOps, 1)
+		_ = atomic.AddInt32(&te.statOps, 1)
 		te.stats.Additions++
 		return nil
 
@@ -244,7 +244,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 				return err
 			}
 
-			_ = atomic.AddInt64(&te.statOps, 1)
+			_ = atomic.AddInt32(&te.statOps, 1)
 			te.stats.Additions++
 			return nil
 		}
@@ -271,7 +271,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			return err
 		}
 
-		_ = atomic.AddInt64(&te.statOps, 1)
+		_ = atomic.AddInt32(&te.statOps, 1)
 		te.stats.Modifications++
 		return nil
 	}
