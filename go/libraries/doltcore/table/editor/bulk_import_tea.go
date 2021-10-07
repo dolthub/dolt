@@ -177,7 +177,7 @@ type BulkImportIEA struct {
 }
 
 // Delete adds a row to be deleted when these edits are eventually applied.
-func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey, value types.Tuple) error {
+func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error {
 	// key is stored in iea.ea, keyHash is stored in iea.deletes.  Capacity is just an estimate and gets off if a key is added and/or deleted more than once.
 	if iea.capMon.capacityExceeded(key.Size()) {
 		return errors.New("capacity exceeded")
@@ -194,7 +194,7 @@ func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash ha
 }
 
 // Insert adds a row to be inserted when these edits are eventually applied.
-func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey types.Tuple, val types.Tuple) error {
+func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, val types.Tuple) error {
 	// key and val are stored in the iea.ea, keyHash is stored in iea.adds, and iea.partialAdds. partialKeyHash is stored in iea.partialAdds[keyHash].
 	// Capacity is just an estimate and gets off if a key is added and/or deleted more than once.
 	size := key.Size() + val.Size() + (3 * hash.ByteLen)
