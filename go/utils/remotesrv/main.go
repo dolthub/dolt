@@ -52,7 +52,6 @@ func main() {
 		log.Println("'dir' parameter not provided. Using the current working dir.")
 	}
 
-
 	if *httpPortParam != -1 {
 		*httpHostParam = fmt.Sprintf("%s:%d", *httpHostParam, *httpPortParam)
 	} else {
