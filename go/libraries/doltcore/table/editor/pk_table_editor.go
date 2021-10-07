@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/hash"
 	"io"
 	"os"
 	"strconv"
@@ -368,6 +369,11 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
+	return te.insertKeyVal(ctx, keyHash, key, val, tagToVal, errFunc)
+}
+
+// InsertKeyVal adds the given tuples to the table.
+func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) (retErr error) {
 	// Run the index editors first, as we can back out of the changes in the event of an error, but can't do that for
 	// changes made to the table. We create a slice that matches the number of index editors. For each successful
 	// operation, we increment the associated index on the slice, and in the event of an error, we undo that number of
@@ -416,7 +422,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
-	err = te.tea.Insert(keyHash, key, val)
+	err := te.tea.Insert(keyHash, key, val)
 	if err != nil {
 		return err
 	}
@@ -453,14 +459,18 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow. This converts the given row into
 // tuples that are then passed to InsertKeyVal.
 func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
-	key, err := dRow.NomsMapKey(te.tSch).Value(ctx)
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
+
+	key, err := dRow.NomsMapKeyTuple(te.tSch, te.indexTF)
 	if err != nil {
 		return err
 	}
-	val, err := dRow.NomsMapValue(te.tSch).Value(ctx)
+	val, err := dRow.NomsMapValueTuple(te.tSch, te.indexTF)
 	if err != nil {
 		return err
 	}
+
 	tagToVal := make(map[uint64]types.Value)
 	_, err = dRow.IterSchema(te.tSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		if val == nil {
@@ -470,14 +480,20 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 		}
 		return false, nil
 	})
+
 	if err != nil {
 		return err
 	}
-	return te.InsertKeyVal(ctx, key.(types.Tuple), val.(types.Tuple), tagToVal, errFunc)
+
+	keyHash, err := key.Hash(te.nbf)
+	if err != nil {
+		return err
+	}
+
+	return te.insertKeyVal(ctx, keyHash, key, val, tagToVal, errFunc)
 }
 
 func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) (retErr error) {
-	// Regarding the lock's position here, refer to the comment in InsertKeyVal
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
@@ -527,7 +543,6 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.
 func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc PKDuplicateErrFunc) (retErr error) {
-	// Regarding the lock's position here, refer to the comment in InsertKeyVal
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
