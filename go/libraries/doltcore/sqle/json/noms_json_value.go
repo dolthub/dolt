@@ -43,9 +43,17 @@ func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val s
 		return noms, nil
 	}
 
-	sqlDoc, err := val.Unmarshall(sql.NewContext(ctx))
-	if err != nil {
-		return NomsJSON{}, err
+	var sqlDoc sql.JSONDocument
+	var err error
+
+	if d, ok := val.(sql.JSONDocument); ok {
+		// optimization to avoid |sql.NewContext|
+		sqlDoc = d
+	} else {
+		sqlDoc, err = val.Unmarshall(sql.NewContext(ctx))
+		if err != nil {
+			return NomsJSON{}, err
+		}
 	}
 
 	v, err := marshalJSON(ctx, vrw, sqlDoc.Val)
