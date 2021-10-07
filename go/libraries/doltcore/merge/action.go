@@ -105,31 +105,19 @@ func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.Dolt
 	}, true, nil
 }
 
+// TODO forcing a commit with a constrain violation should warn users that subsequest
+//      FF merges will not surface constraint violations on their own; constraint verify --all
+//      is required to reify violations.
 func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
-	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
-		ancRoot, err := spec.HeadC.GetRootValue()
-		if err != nil {
-			return nil, err
-		}
-		mergedRoot, err := spec.MergeC.GetRootValue()
-		if err != nil {
-			return nil, err
-		}
-		if cvPossible, err := MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
-			return nil, err
-		} else if cvPossible {
-			return ExecuteMerge(ctx, dEnv, spec)
-		}
+	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+		return nil, err
+	} else if ok {
 		if spec.Noff {
 			return ExecNoFFMerge(ctx, dEnv, spec)
-		} else {
-			return nil, ExecuteFFMerge(ctx, dEnv, spec)
 		}
-	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
-		return nil, err
-	} else {
-		return ExecuteMerge(ctx, dEnv, spec)
+		return nil, ExecuteFFMerge(ctx, dEnv, spec)
 	}
+	return ExecuteMerge(ctx, dEnv, spec)
 }
 
 func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
