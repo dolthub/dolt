@@ -34,10 +34,10 @@ const (
 
 type IndexEditAccumulator interface {
 	// Delete adds a row to be deleted when these edits are eventually applied.
-	Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey, value types.Tuple) error
+	Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error
 
 	// Insert adds a row to be inserted when these edits are eventually applied.
-	Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey types.Tuple, value types.Tuple) error
+	Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error
 
 	// Has returns true if the current TableEditAccumulator contains the given key, or it exists in the row data.
 	Has(ctx context.Context, keyHash hash.Hash, key types.Tuple) (bool, error)
@@ -167,6 +167,8 @@ type indexEditAccumulatorImpl struct {
 	uncommittedEAId uint64
 }
 
+var _ IndexEditAccumulator = (*indexEditAccumulatorImpl)(nil)
+
 func (iea *indexEditAccumulatorImpl) flushUncommitted() {
 	// if we are not already actively writing edits to the uncommittedEA then change the state and push all in mem edits
 	// to a types.EditAccumulator
@@ -208,7 +210,7 @@ func (iea *indexEditAccumulatorImpl) flushUncommitted() {
 }
 
 // Insert adds a row to be inserted when these edits are eventually applied.
-func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey types.Tuple, value types.Tuple) error {
+func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error {
 	if _, ok := iea.uncommitted.deletes[keyHash]; ok {
 		delete(iea.uncommitted.deletes, keyHash)
 	} else {
@@ -234,7 +236,7 @@ func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partia
 }
 
 // Delete adds a row to be deleted when these edits are eventually applied.
-func (iea *indexEditAccumulatorImpl) Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, partialKey, value types.Tuple) error {
+func (iea *indexEditAccumulatorImpl) Delete(ctx context.Context, keyHash, partialKeyHash hash.Hash, key, value types.Tuple) error {
 	if _, ok := iea.uncommitted.adds[keyHash]; ok {
 		delete(iea.uncommitted.adds, keyHash)
 		delete(iea.uncommitted.partialAdds[partialKeyHash], keyHash)
