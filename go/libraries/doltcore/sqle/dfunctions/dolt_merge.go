@@ -147,7 +147,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 		return ws, noConflicts, fmt.Errorf("failed to get dbData")
 	}
 
-	if canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil {
+	if canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 		return ws, noConflicts, err
 	} else if canFF {
 		if spec.Noff {
