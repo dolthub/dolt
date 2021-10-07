@@ -172,6 +172,7 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 			return types.Map{}, err
 		}
 		if !ok || types.IsNull(v) {
+			// If one of the commits does not have a closure, we will not record a closure here.
 			return types.NewMap(ctx, vrw)
 		}
 		parentMaps[i], ok = v.(types.Map)
@@ -180,11 +181,17 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 		}
 		v, ok, err = p.MaybeGet(ParentsListField)
 		if !ok || types.IsNull(v) {
-			return types.Map{}, errors.New("unexpected field value or type for parents_list in commit struct")
+			// If one of the commits does not have a parents_list field, we will not record a closure here.
+			return types.NewMap(ctx, vrw)
 		}
 		parentParentLists[i], ok = v.(types.List)
 		if !ok {
 			return types.Map{}, errors.New("unexpected field value or type for parents_list in commit struct")
+		}
+		if parentMaps[i].Len() == 0 && parentParentLists[i].Len() != 0 {
+			// If one of the commits has an empty parents_closure, but non-empty parents, we will not record
+			// a parents_closure here.
+			return types.NewMap(ctx, vrw)
 		}
 	}
 	// Convert parent lists to List<Ref<Value>>
