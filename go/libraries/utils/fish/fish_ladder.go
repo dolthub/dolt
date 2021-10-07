@@ -18,14 +18,15 @@ import "sync"
 
 const (
 	// 10 buckets ranging from 64 bytes to 32K
-	numBufferPools = uint64(10)
+	numBufPools = uint64(10)
+	lastBufPool = uint64(9)
 
-	minimumSize = uint64(1 << 6) // 64 bytes
-	maximumSize = minimumSize << numBufferPools
+	minimumSize = uint64(1 << 6)             // 64 bytes
+	maximumSize = minimumSize << lastBufPool // 32K bytes
 )
 
 func NewLadder() (l Ladder) {
-	l = Ladder{levels: make([]*sync.Pool, numBufferPools)}
+	l = Ladder{levels: make([]*sync.Pool, numBufPools)}
 	for i := range l.levels {
 		bufSz := minimumSize << i
 
@@ -62,16 +63,16 @@ func (l Ladder) Put(buf []byte) {
 }
 
 func findLargerBucket(sz uint64) uint64 {
-	i := uint64(0)
+	idx := uint64(0)
 	bucketSz := minimumSize
 	for sz > bucketSz {
 		bucketSz <<= 1
-		i++
+		idx++
 	}
-	if i >= numBufferPools {
+	if idx > lastBufPool {
 		panic("cannot find larger bucket")
 	}
-	return i
+	return idx
 }
 
 func findSmallerBucket(sz uint64) uint64 {
@@ -79,11 +80,11 @@ func findSmallerBucket(sz uint64) uint64 {
 		panic("cannot find smaller bucket")
 	}
 
-	i := numBufferPools
-	bucketSz := minimumSize << numBufferPools
+	idx := lastBufPool
+	bucketSz := minimumSize << lastBufPool
 	for sz < bucketSz {
 		bucketSz >>= 1
-		i--
+		idx--
 	}
-	return i
+	return idx
 }

@@ -68,3 +68,53 @@ func TestFindSmallerBucket(t *testing.T) {
 		})
 	}
 }
+
+func TestLadderGet(t *testing.T) {
+	tests := []struct {
+		requested uint64
+		expected  uint64
+	}{
+		{requested: 63, expected: 64},
+		{requested: 64, expected: 64},
+		{requested: 65, expected: 128},
+		{requested: 16383, expected: 16384},
+		{requested: 16384, expected: 16384},
+		{requested: 16385, expected: 32768},
+		{requested: 32768, expected: 32768},
+		{requested: 32768, expected: 32768},
+		{requested: 33333, expected: 33333},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("test case %d", i), func(t *testing.T) {
+			buf := NewLadder().Get(test.requested)
+			assert.Equal(t, test.expected, uint64(len(buf)))
+		})
+	}
+}
+
+func TestLadderPut(t *testing.T) {
+	tests := []struct {
+		sz uint64
+	}{
+		{sz: 63},
+		{sz: 64},
+		{sz: 65},
+		{sz: 127},
+		{sz: 128},
+		{sz: 129},
+		{sz: 16383},
+		{sz: 16384},
+		{sz: 16385},
+		{sz: 32768},
+		{sz: 32768},
+		{sz: 33333},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("test case %d", i), func(t *testing.T) {
+			buf := make([]byte, test.sz)
+			NewLadder().Put(buf)
+		})
+	}
+}
