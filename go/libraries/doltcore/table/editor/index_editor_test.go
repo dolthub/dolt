@@ -735,6 +735,58 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestIndexEditorCapacityExceeded(t *testing.T) {
+	// In the event that we reach the iea capacity on Undo, we need to verify that all code paths fail and remain failing
+	ctx := context.Background()
+	format := types.Format_Default
+	db, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
+	require.NoError(t, err)
+	colColl := schema.NewColCollection(
+		schema.NewColumn("pk", 0, types.IntKind, true),
+		schema.NewColumn("v1", 1, types.IntKind, false))
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
+	index, err := tableSch.Indexes().AddIndexByColNames("idx_cap", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	require.NoError(t, err)
+	indexSch := index.Schema()
+	emptyMap, err := types.NewMap(ctx, db)
+	require.NoError(t, err)
+
+	opts := Options{Deaf: NewInMemDeafWithMaxCapacity(format, 224)}
+	indexEditor := NewIndexEditor(ctx, index, emptyMap, tableSch, opts)
+	for i := 0; i < 3; i++ {
+		dRow, err := row.New(format, indexSch, row.TaggedValues{
+			0: types.Int(i),
+			1: types.Int(i),
+		})
+		require.NoError(t, err)
+		fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(index, nil)
+		require.NoError(t, err)
+		require.NoError(t, indexEditor.InsertRow(ctx, fullKey, partialKey, value))
+	}
+
+	dRow, err := row.New(format, indexSch, row.TaggedValues{
+		0: types.Int(4),
+		1: types.Int(4),
+	})
+	require.NoError(t, err)
+	fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(index, nil)
+	require.NoError(t, err)
+	err = indexEditor.InsertRow(ctx, fullKey, partialKey, value)
+	require.Error(t, err)
+	require.Equal(t, "capacity exceeded", err.Error())
+	indexEditor.Undo(ctx) // This sets the unrecoverable state error, but does not return an error itself
+
+	require.Contains(t, indexEditor.InsertRow(ctx, fullKey, partialKey, value).Error(), "unrecoverable state")
+	require.Contains(t, indexEditor.DeleteRow(ctx, fullKey, partialKey, value).Error(), "unrecoverable state")
+	require.Contains(t, indexEditor.StatementFinished(ctx, false).Error(), "unrecoverable state")
+	require.Contains(t, indexEditor.Close().Error(), "unrecoverable state")
+	_, err = indexEditor.HasPartial(ctx, partialKey)
+	require.Contains(t, err.Error(), "unrecoverable state")
+	_, err = indexEditor.Map(ctx)
+	require.Contains(t, err.Error(), "unrecoverable state")
+}
+
 func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
 	return createTestRowDataFromTaggedValues(t, vrw, sch,
 		row.TaggedValues{
