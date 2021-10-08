@@ -23,14 +23,26 @@ package types
 
 import (
 	"context"
-	"strconv"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/metrics"
 )
 
+const EnableChunkStats = "DOLT_ENABLE_CHUNK_STATS"
+
 var chunkWithStats = false
+
+func init() {
+	_, ok := os.LookupEnv(EnableChunkStats)
+	if ok {
+		chunkWithStats = true
+	}
+}
+
+type writeStats []uint64
 
 type hashValueBytesFn func(item sequenceItem, rv *rollingValueHasher) error
 
@@ -47,7 +59,7 @@ type sequenceChunker struct {
 	done                       bool
 	unwrittenCol               Collection
 
-	stats *metrics.Histogram
+	stats writeStats
 }
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
@@ -81,8 +93,7 @@ func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, 
 	}
 
 	if chunkWithStats {
-		hist := metrics.NewByteHistogram()
-		sc.stats = &hist
+		sc.stats = make(writeStats, 0, 1)
 	}
 
 	if cur != nil {
@@ -336,7 +347,7 @@ func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequ
 		return nil, metaTuple{}, err
 	}
 
-	sc.sample(col.Len())
+	sc.recordWrite(uint64(col.asSequence().asValueImpl().sizeOf()))
 
 	// |sc.makeChunk| copies |sc.current| so it's safe to re-use the memory.
 	sc.current = sc.current[:0]
@@ -516,71 +527,66 @@ func (sc *sequenceChunker) finalizeCursor(ctx context.Context) error {
 	return nil
 }
 
-func (sc *sequenceChunker) Stats() (cs ChunkerStats) {
+func (sc *sequenceChunker) Stats() (stats []writeStats) {
 	if sc.stats == nil {
 		return
 	}
 
-	cs = ChunkerStats{sc.stats}
-	if sc.parent != nil {
-		cs = append(cs, sc.parent.Stats()...)
+	if sc.parent == nil {
+		stats = make([]writeStats, sc.level+1)
+	} else {
+		stats = sc.parent.Stats()
 	}
+	stats[sc.level] = sc.stats
 
 	return
 }
 
-func (sc *sequenceChunker) sample(size uint64) {
+func (sc *sequenceChunker) recordWrite(size uint64) {
 	if sc.stats != nil {
-		sc.stats.Sample(size)
+		sc.stats = append(sc.stats, size)
 	}
 }
 
-// ChunkerStats records sequenceChunker write stats by tree level
-type ChunkerStats []*metrics.Histogram
+// WriteAmplificationStats records sequenceChunker write writeSizes by tree level
+type WriteAmplificationStats struct {
+	stats []metrics.Histogram
+}
 
-func (cs ChunkerStats) Count() (c uint64) {
-	for _, hist := range cs {
+func (was *WriteAmplificationStats) Sample(stats []writeStats) {
+	for i := len(was.stats); i < len(stats); i++ {
+		was.stats = append(was.stats, metrics.NewByteHistogram())
+	}
+
+	for i, writes := range stats {
+		for _, w := range writes {
+			was.stats[i].Sample(w)
+		}
+	}
+}
+
+func (was WriteAmplificationStats) Count() (c uint64) {
+	for _, hist := range was.stats {
 		c += hist.Samples()
 	}
 	return
 }
 
-func (cs ChunkerStats) Sum() (s uint64) {
-	for _, h := range cs {
+func (was WriteAmplificationStats) Sum() (s uint64) {
+	for _, h := range was.stats {
 		s += h.Sum()
 	}
 	return
 }
 
-func (cs ChunkerStats) Add(other ChunkerStats) ChunkerStats {
-	for level, hist := range other {
-		if level < len(cs) {
-			cs[level].Add(hist)
-		} else {
-			cs = append(cs, hist)
-		}
-	}
-	return cs
-}
-
-func (cs ChunkerStats) String() string {
-	var c strings.Builder
+func (was WriteAmplificationStats) String() string {
 	var s strings.Builder
 
-	for level, hist := range cs {
-
-		s.WriteString(strconv.Itoa(int(level)))
-		s.WriteString(": ")
-		s.WriteString(strconv.Itoa(int(hist.Sum())))
-		s.WriteRune('\r')
-
-		c.WriteString(strconv.Itoa(int(level)))
-		c.WriteString(": ")
-		c.WriteString(strconv.Itoa(int(hist.Samples())))
-		c.WriteRune('\r')
+	s.WriteString("| level | chunks |  bytes |\n")
+	for level, hist := range was.stats {
+		c, b := hist.Samples(), hist.Sum()
+		r := fmt.Sprintf("| %5d | %6d | %6d |\n", level, c, b)
+		s.WriteString(r)
 	}
-	s.WriteRune('\n')
-	s.WriteString(c.String())
-
 	return s.String()
 }

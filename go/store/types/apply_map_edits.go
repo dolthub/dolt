@@ -16,6 +16,7 @@ package types
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
@@ -99,7 +100,7 @@ type AppliedEditStats struct {
 	NonExistentDeletes int64
 
 	// ChunkerStats records chunk-writes by level
-	ChunkerStats ChunkerStats
+	ChunkerStats *WriteAmplificationStats
 }
 
 // Add adds two AppliedEditStats structures member by member.
@@ -121,6 +122,9 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 
 func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64) (Map, AppliedEditStats, error) {
 	var stats AppliedEditStats
+	if chunkWithStats {
+		stats.ChunkerStats = &WriteAmplificationStats{}
+	}
 
 	if edits.ReachedEOF() {
 		return m, stats, nil // no edits
@@ -234,7 +238,10 @@ func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64)
 		return EmptyMap, AppliedEditStats{}, err
 	}
 
-	stats.ChunkerStats = ch.Stats()
+	if chunkWithStats {
+		stats.ChunkerStats.Sample(ch.Stats())
+		fmt.Println(stats.ChunkerStats.String())
+	}
 
 	return newMap(seq.(orderedSequence)), stats, nil
 }
