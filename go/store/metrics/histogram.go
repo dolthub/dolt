@@ -201,14 +201,10 @@ func (h Histogram) String() string {
 }
 
 func NewTimeHistogram() Histogram {
-	return Histogram{
-		histType: TimeHistogram,
-	}
+	return Histogram{histType: TimeHistogram}
 }
 
 // NewByteHistogram stringifies values using humanize over byte values
 func NewByteHistogram() Histogram {
-	return Histogram{
-		histType: ByteHistogram,
-	}
+	return Histogram{histType: ByteHistogram}
 }
