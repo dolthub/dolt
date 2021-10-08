@@ -16,10 +16,8 @@ package doltdb
 
 import (
 	"context"
-	"io"
-	"sync"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"io"
 
 	"github.com/dolthub/dolt/go/store/datas"
 )
@@ -96,59 +94,4 @@ func replicate(ctx context.Context, destDB, srcDB datas.Database, tempTableDir s
 
 	_, err = destDB.SetHead(ctx, ds, stRef)
 	return err
-}
-
-func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-pullerEventCh:
-		default:
-		}
-	}
-}
-
-func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-progChan:
-		default:
-		}
-	}
-}
-
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
-	pullerEventCh := make(chan datas.PullerEvent)
-	progChan := make(chan datas.PullProgress)
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		progFunc(ctx, progChan)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pullerProgFunc(ctx, pullerEventCh)
-	}()
-
-	return wg, progChan, pullerEventCh
-}
-
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
-	cancel()
-	close(progChan)
-	close(pullerEventCh)
-	wg.Wait()
 }
