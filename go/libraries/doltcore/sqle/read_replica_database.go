@@ -90,12 +90,12 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 	}, nil
 }
 
-func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
+func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	err := rrd.pullFromReplica(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return rrd.Database.StartTransaction(ctx)
+	return rrd.Database.StartTransaction(ctx, tCharacteristic)
 }
 
 func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
