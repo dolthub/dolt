@@ -35,6 +35,7 @@ func main() {
 	dirParam := flag.String("dir", "", "root directory that this command will run in.")
 	grpcPortParam := flag.Int("grpc-port", -1, "root directory that this command will run in.")
 	httpPortParam := flag.Int("http-port", -1, "root directory that this command will run in.")
+	httpHostParam := flag.String("http-host", "localhost", "host url that this command will assume.")
 	flag.Parse()
 
 	if dirParam != nil && len(*dirParam) > 0 {
@@ -51,10 +52,8 @@ func main() {
 		log.Println("'dir' parameter not provided. Using the current working dir.")
 	}
 
-	httpHost := "localhost"
-
 	if *httpPortParam != -1 {
-		httpHost = fmt.Sprintf("%s:%d", httpHost, *httpPortParam)
+		*httpHostParam = fmt.Sprintf("%s:%d", *httpHostParam, *httpPortParam)
 	} else {
 		*httpPortParam = 80
 		log.Println("'http-port' parameter not provided. Using default port 80")
@@ -65,7 +64,7 @@ func main() {
 		log.Println("'grpc-port' parameter not provided. Using default port 50051")
 	}
 
-	stopChan, wg := startServer(httpHost, *httpPortParam, *grpcPortParam)
+	stopChan, wg := startServer(*httpHostParam, *httpPortParam, *grpcPortParam)
 	waitForSignal()
 
 	close(stopChan)
