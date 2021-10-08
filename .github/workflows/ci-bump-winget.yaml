@@ -34,4 +34,4 @@ jobs:
         env:
           TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           VERSION: ${{ github.event.client_payload.version }}
-          URL: ${{ format('https://github.com/dolthub/dolt/releases/download/{0}/dolt-windows-amd64.msi', github.event.client_payload.version) }}
+          URL: ${{ format('https://github.com/dolthub/dolt/releases/download/v{0}/dolt-windows-amd64.msi', github.event.client_payload.version) }}
