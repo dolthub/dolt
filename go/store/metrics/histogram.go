@@ -63,17 +63,24 @@ type Histogram struct {
 	sum      uint64
 	buckets  [bucketCount]uint64
 	histType HistogramType
+}
 
-	// Histogram is intended to be lock free
-	// |mu| is only used under the race-detector
-	mu *sync.Mutex
+// Histogram is intended to be lock free
+// |histLock| is only used under the race-detector
+var histLock *sync.Mutex
+
+func init() {
+	if race.Enabled {
+		histLock = &sync.Mutex{}
+	}
+	// if !race.Enabled |histLock| will nil panic
 }
 
 // Sample adds a uint64 data point to the histogram
 func (h *Histogram) Sample(v uint64) {
 	if race.Enabled {
-		h.mu.Lock()
-		defer h.mu.Unlock()
+		histLock.Lock()
+		defer histLock.Unlock()
 	}
 
 	d.PanicIfTrue(v == 0)
@@ -90,11 +97,6 @@ func (h *Histogram) Sample(v uint64) {
 }
 
 func (h *Histogram) Clone() *Histogram {
-	if race.Enabled {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-	}
-
 	n := &Histogram{histType: h.histType}
 	n.Add(h)
 	return n
@@ -104,11 +106,6 @@ func (h *Histogram) Clone() *Histogram {
 // duration since |t|, if 0, rounds to 1 and passes to Sample() as an uint64
 // number of nanoseconds.
 func (h *Histogram) SampleTimeSince(t time.Time) {
-	if race.Enabled {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-	}
-
 	dur := time.Since(t)
 	if dur == 0 {
 		dur = 1
@@ -119,11 +116,6 @@ func (h *Histogram) SampleTimeSince(t time.Time) {
 // SampleLen is a convenience wrapper around Sample which internally type
 // asserts the int to a uint64
 func (h *Histogram) SampleLen(l int) {
-	if race.Enabled {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-	}
-
 	h.Sample(uint64(l))
 }
 
@@ -135,8 +127,8 @@ func (h Histogram) bucketVal(bucket int) uint64 {
 // overflowing the histogram buckets.
 func (h Histogram) Sum() uint64 {
 	if race.Enabled {
-		h.mu.Lock()
-		defer h.mu.Unlock()
+		histLock.Lock()
+		defer histLock.Unlock()
 	}
 
 	return h.sum
@@ -146,8 +138,8 @@ func (h Histogram) Sum() uint64 {
 // bucket-wise.
 func (h *Histogram) Add(other *Histogram) {
 	if race.Enabled {
-		h.mu.Lock()
-		defer h.mu.Unlock()
+		histLock.Lock()
+		defer histLock.Unlock()
 	}
 
 	h.sum += other.sum
@@ -159,11 +151,6 @@ func (h *Histogram) Add(other *Histogram) {
 
 // Mean returns 0 if there are no samples, and h.Sum()/h.Samples otherwise.
 func (h Histogram) Mean() uint64 {
-	if race.Enabled {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-	}
-
 	samples := h.Samples()
 	if samples == 0 {
 		return 0
@@ -175,8 +162,8 @@ func (h Histogram) Mean() uint64 {
 // Samples returns the number of samples contained in the histogram
 func (h Histogram) Samples() uint64 {
 	if race.Enabled {
-		h.mu.Lock()
-		defer h.mu.Unlock()
+		histLock.Lock()
+		defer histLock.Unlock()
 	}
 
 	s := uint64(0)
@@ -196,8 +183,8 @@ func timeToString(v uint64) string {
 
 func (h Histogram) String() string {
 	if race.Enabled {
-		h.mu.Lock()
-		defer h.mu.Unlock()
+		histLock.Lock()
+		defer histLock.Unlock()
 	}
 
 	var f func(uint64) string
@@ -216,7 +203,6 @@ func (h Histogram) String() string {
 func NewTimeHistogram() Histogram {
 	return Histogram{
 		histType: TimeHistogram,
-		mu:       &sync.Mutex{},
 	}
 }
 
@@ -224,6 +210,5 @@ func NewTimeHistogram() Histogram {
 func NewByteHistogram() Histogram {
 	return Histogram{
 		histType: ByteHistogram,
-		mu:       &sync.Mutex{},
 	}
 }
