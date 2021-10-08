@@ -72,14 +72,11 @@ type Stats struct {
 
 func NewStats() *Stats {
 	return &Stats{
-		OpenLatency:   metrics.NewTimeHistogram(),
-		CommitLatency: metrics.NewTimeHistogram(),
-
-		IndexReadLatency:  metrics.NewTimeHistogram(),
-		IndexBytesPerRead: metrics.NewByteHistogram(),
-
-		GetLatency: metrics.NewTimeHistogram(),
-
+		OpenLatency:                      metrics.NewTimeHistogram(),
+		CommitLatency:                    metrics.NewTimeHistogram(),
+		IndexReadLatency:                 metrics.NewTimeHistogram(),
+		IndexBytesPerRead:                metrics.NewByteHistogram(),
+		GetLatency:                       metrics.NewTimeHistogram(),
 		FileReadLatency:                  metrics.NewTimeHistogram(),
 		FileBytesPerRead:                 metrics.NewByteHistogram(),
 		S3ReadLatency:                    metrics.NewTimeHistogram(),
