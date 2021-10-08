@@ -219,8 +219,16 @@ func (v NomsJSON) ToString(ctx *sql.Context) (string, error) {
 		return "", err
 	}
 
+	// avert your eyes
+	var c context.Context
+	if ctx != nil {
+		c = ctx
+	} else {
+		c = context.Background()
+	}
+
 	sb := &strings.Builder{}
-	if err = marshalToString(ctx, sb, jd); err != nil {
+	if err = marshalToString(c, sb, jd); err != nil {
 		return "", err
 	}
 

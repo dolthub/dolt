@@ -389,6 +389,7 @@ func (sc *sequenceChunker) anyPending() bool {
 func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 	d.PanicIfTrue(sc.done)
 	sc.done = true
+	defer sc.cleanup()
 
 	if sc.cur != nil {
 		err := sc.finalizeCursor(ctx)
@@ -487,4 +488,8 @@ func (sc *sequenceChunker) finalizeCursor(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (sc *sequenceChunker) cleanup() {
+	sc.rv.cleanup()
 }

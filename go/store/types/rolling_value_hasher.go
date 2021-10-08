@@ -144,3 +144,7 @@ func (rv *rollingValueHasher) hashBytes(buff []byte) {
 	rv.bw.writeRaw(buff)
 	rv.sl.Update(rv.bw.data())
 }
+
+func (rv *rollingValueHasher) cleanup() {
+	rv.bw.recycle()
+}

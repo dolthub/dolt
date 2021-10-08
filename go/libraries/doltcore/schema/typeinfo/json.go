@@ -96,7 +96,7 @@ func (ti *jsonType) FormatValue(v types.Value) (*string, error) {
 	}
 	if noms, ok := v.(types.JSON); ok {
 		// TODO(andy) fix context
-		s, err := json.NomsJSON(noms).ToString(sql.NewEmptyContext())
+		s, err := json.NomsJSON(noms).ToString(nil) // perf hack
 		if err != nil {
 			return nil, err
 		}

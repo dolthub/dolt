@@ -30,19 +30,19 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
+	"github.com/dolthub/dolt/go/libraries/utils/fish"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
-
-const initialBufferSize = 2048
 
 func EncodeValue(v Value, nbf *NomsBinFormat) (chunks.Chunk, error) {
 	if v.Kind() == UnknownKind {
 		return chunks.EmptyChunk, ErrUnknownType
 	}
 
-	w := binaryNomsWriter{make([]byte, 4), 0}
+	buf := codecBufPool.Get(4)
+	w := binaryNomsWriter{buf, 0}
 	err := v.writeTo(&w, nbf)
 
 	if err != nil {
@@ -103,13 +103,6 @@ type binaryNomsReader struct {
 
 func (b *binaryNomsReader) readBytes(count uint32) []byte {
 	v := b.buff[b.offset : b.offset+count]
-	b.offset += count
-	return v
-}
-
-func (b *binaryNomsReader) readCopyOfBytes(count uint32) []byte {
-	v := make([]byte, count)
-	copy(v, b.buff[b.offset:b.offset+count])
 	b.offset += count
 	return v
 }
@@ -356,19 +349,24 @@ type binaryNomsWriter struct {
 	offset uint32
 }
 
+var codecBufPool = fish.NewLadder()
+
+const initialBufferSize = 1024
+
 func newBinaryNomsWriterWithSizeHint(sizeHint uint64) binaryNomsWriter {
-	size := uint32(initialBufferSize)
+	size := uint64(initialBufferSize)
 	if sizeHint >= math.MaxUint32 {
 		size = math.MaxUint32
 	} else if sizeHint > uint64(size) {
-		size = uint32(sizeHint)
+		size = uint64(sizeHint)
 	}
 
-	return binaryNomsWriter{make([]byte, size), 0}
+	buf := codecBufPool.Get(size)
+	return binaryNomsWriter{buff: buf, offset: 0}
 }
 
 func newBinaryNomsWriter() binaryNomsWriter {
-	return binaryNomsWriter{make([]byte, initialBufferSize), 0}
+	return newBinaryNomsWriterWithSizeHint(initialBufferSize)
 }
 
 func (b *binaryNomsWriter) data() []byte {
@@ -377,6 +375,10 @@ func (b *binaryNomsWriter) data() []byte {
 
 func (b *binaryNomsWriter) reset() {
 	b.offset = 0
+}
+
+func (b *binaryNomsWriter) recycle() {
+	codecBufPool.Put(b.buff)
 }
 
 const (
@@ -415,8 +417,9 @@ func (b *binaryNomsWriter) ensureCapacity(n uint32) {
 		}
 	}
 
-	b.buff = make([]byte, length)
+	b.buff = codecBufPool.Get(length)
 	copy(b.buff, old)
+	codecBufPool.Put(old)
 }
 
 func (b *binaryNomsWriter) writeUint8(v uint8) {
