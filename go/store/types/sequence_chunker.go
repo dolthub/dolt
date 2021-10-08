@@ -36,9 +36,10 @@ const EnableChunkStats = "DOLT_ENABLE_CHUNK_STATS"
 var chunkWithStats = false
 
 func init() {
-	_, ok := os.LookupEnv(EnableChunkStats)
-	if ok {
+	stats, ok := os.LookupEnv(EnableChunkStats)
+	if ok && stats == "true" {
 		chunkWithStats = true
+		TestSmooth = true
 	}
 }
 

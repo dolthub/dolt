@@ -16,7 +16,6 @@ package types
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
@@ -240,7 +239,7 @@ func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64)
 
 	if chunkWithStats {
 		stats.ChunkerStats.Sample(ch.Stats())
-		fmt.Println(stats.ChunkerStats.String())
+		//panic("\n" + stats.ChunkerStats.String())
 	}
 
 	return newMap(seq.(orderedSequence)), stats, nil
