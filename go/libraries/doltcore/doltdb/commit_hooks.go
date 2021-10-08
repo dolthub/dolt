@@ -73,10 +73,7 @@ func replicate(ctx context.Context, destDB, srcDB datas.Database, tempTableDir s
 		return err
 	}
 
-	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, pullerEventCh := runProgFuncs(newCtx)
-	defer stopProgFuncs(cancelFunc, wg, progChan, pullerEventCh)
-	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB, stRef.TargetHash(), pullerEventCh)
+	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB, stRef.TargetHash(), nil)
 	if err == datas.ErrDBUpToDate {
 		return nil
 	} else if err != nil {
