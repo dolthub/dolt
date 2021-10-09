@@ -559,9 +559,11 @@ func (ms metaSequence) getChildren(ctx context.Context, start, end uint64) ([]se
 	return seqs, err
 }
 
-func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) error {
-	rv.hashBytes(item.(metaTuple).buff)
-	return nil
+func metaHashValueBytes(item sequenceItem, c chunker) error {
+	return c.Write(func(bw *binaryNomsWriter) error {
+		bw.writeRaw(item.(metaTuple).buff)
+		return nil
+	})
 }
 
 type emptySequence struct {

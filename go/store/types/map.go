@@ -46,15 +46,15 @@ func newMap(seq orderedSequence) Map {
 	return Map{seq}
 }
 
-func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) error {
+func mapHashValueBytes(item sequenceItem, c chunker) error {
 	entry := item.(mapEntry)
-	err := hashValueBytes(entry.key, rv)
+	err := hashValueBytes(entry.key, c)
 
 	if err != nil {
 		return err
 	}
 
-	err = hashValueBytes(entry.value, rv)
+	err = hashValueBytes(entry.value, c)
 
 	if err != nil {
 		return err

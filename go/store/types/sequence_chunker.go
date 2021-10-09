@@ -27,7 +27,22 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-type hashValueBytesFn func(item sequenceItem, rv *rollingValueHasher) error
+// chunker decides where byte streams should be split.
+type chunker interface {
+	Write(func(bw *binaryNomsWriter) error) error
+	Nbf() *NomsBinFormat
+	CrossedBoundary() bool
+	Reset()
+}
+
+func hashValueBytes(item sequenceItem, c chunker) error {
+	return c.Write(func(bw *binaryNomsWriter) error {
+		v := item.(Value)
+		return v.writeTo(bw, c.Nbf())
+	})
+}
+
+type hashValueBytesFn func(item sequenceItem, sl chunker) error
 
 type sequenceChunker struct {
 	cur                        *sequenceCursor
@@ -38,7 +53,7 @@ type sequenceChunker struct {
 	makeChunk, parentMakeChunk makeChunkFn
 	isLeaf                     bool
 	hashValueBytes             hashValueBytesFn
-	rv                         *rollingValueHasher
+	ch                         chunker
 	done                       bool
 	unwrittenCol               Collection
 }
@@ -232,13 +247,13 @@ func (sc *sequenceChunker) advanceTo(ctx context.Context, next *sequenceCursor) 
 func (sc *sequenceChunker) Append(ctx context.Context, item sequenceItem) (bool, error) {
 	d.PanicIfTrue(item == nil)
 	sc.current = append(sc.current, item)
-	err := sc.hashValueBytes(item, sc.rv)
+	err := sc.hashValueBytes(item, sc.ch)
 
 	if err != nil {
 		return false, err
 	}
 
-	if sc.rv.crossedBoundary {
+	if sc.ch.CrossedBoundary() {
 		// When a metaTuple contains a key that is so large that it causes a chunk boundary to be crossed simply by encoding
 		// the metaTuple then we will create a metaTuple to encode the metaTuple containing the same key again, and again
 		// crossing a chunk boundary causes infinite recursion.  The solution is not to allow a metaTuple with a single
@@ -349,7 +364,7 @@ func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequ
 
 func (sc *sequenceChunker) handleChunkBoundary(ctx context.Context) error {
 	d.PanicIfFalse(len(sc.current) > 0)
-	sc.rv.Reset()
+	sc.ch.Reset()
 	if sc.parent == nil {
 		err := sc.createParent(ctx)
 

@@ -267,7 +267,14 @@ func (b Blob) Concat(ctx context.Context, other Blob) (Blob, error) {
 }
 
 func (b Blob) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error) {
-	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
+	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashByte)
+}
+
+func hashByte(item sequenceItem, c chunker) error {
+	return c.Write(func(bw *binaryNomsWriter) error {
+		bw.writeUint8(item.(byte))
+		return nil
+	})
 }
 
 func (b Blob) asSequence() sequence {
@@ -419,10 +426,7 @@ func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) (Blob
 }
 
 func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) (Blob, error) {
-	sc, err := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) error {
-		rv.HashByte(item.(byte))
-		return nil
-	})
+	sc, err := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashByte)
 
 	if err != nil {
 		return Blob{}, err
