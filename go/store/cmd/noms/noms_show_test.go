@@ -44,37 +44,30 @@ type nomsShowTestSuite struct {
 }
 
 const (
-	res1 = "Commit{meta Struct,parents Set,parents_closure Map,parents_list List,value Ref} - struct Commit {\n  meta: struct {},\n  parents: set {},\n  parents_closure: map {},\n  parents_list: [],\n  value: #nl181uu1ioc2j6t7mt9paidjlhlcjtgj,\n}"
+	res1 = "Commit{meta Struct,parents Set,parents_list List,value Ref} - struct Commit {\n  meta: struct {},\n  parents: set {},\n  parents_list: [],\n  value: #nl181uu1ioc2j6t7mt9paidjlhlcjtgj,\n}"
 	res2 = "String - \"test string\""
-	res3 = `Commit{meta Struct,parents Set,parents_closure Map,parents_list List,value Ref} - struct Commit {
+	res3 = `Commit{meta Struct,parents Set,parents_closure Ref,parents_list List,value Ref} - struct Commit {
   meta: struct {},
   parents: set {
-    #c81ivodsn84pbnafmiabj2p18qei833h,
+    #4u3mpdq0o8at437p37i5u94fk2frr4qm,
   },
-  parents_closure: map {
-    (2,62032FE1BCBA0995DD4FB494B98B21469D240C71): [],
-  },
+  parents_closure: #pr2umfcqukd4ltrgkpvsjrig7afb9ghg,
   parents_list: [
-    #c81ivodsn84pbnafmiabj2p18qei833h,
+    #4u3mpdq0o8at437p37i5u94fk2frr4qm,
   ],
   value: #t43ks6746hf0fcefv5e9v1c02k2i0jr9,
 }`
 	res4 = "List<Union<Float,String>> - [\n  \"elem1\",\n  2,\n  \"elem3\",\n]"
-	res5 = `Commit{meta Struct,parents Set,parents_closure Map,parents_list List,value Ref} - struct Commit {
+	res5 = `Commit{meta Struct,parents Set,parents_closure Ref,parents_list List,value Ref} - struct Commit {
   meta: struct {},
   parents: set {
-    #kqf9vsd3qd52decpt8min7fb7kpiepah,
+    #idcre7pv1p74mfmidiguol1pu6rmt0bu,
   },
-  parents_closure: map {
-    (2,62032FE1BCBA0995DD4FB494B98B21469D240C71): [],
-    (3,8D39D3FF643EABCAB7BA63FECE2EB4B9D6E7786F): [
-      #c81ivodsn84pbnafmiabj2p18qei833h,
-    ],
-  },
+  parents_closure: #7pl4tlkc531difn1f32vlaqdve5g04p0,
   parents_list: [
-    #kqf9vsd3qd52decpt8min7fb7kpiepah,
+    #idcre7pv1p74mfmidiguol1pu6rmt0bu,
   ],
-  value: #5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,
+  value: #nl181uu1ioc2j6t7mt9paidjlhlcjtgj,
 }`
 )
 

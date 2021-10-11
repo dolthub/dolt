@@ -92,7 +92,7 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 
 	// delete one dataset, print message at delete
 	rtnVal, _ = s.MustRun(main, []string{"ds", "-d", datasetName})
-	s.Equal("Deleted "+datasetName+" (was #crijpd272uejr9g6ok16jil0fgg2f1lu)\n", rtnVal)
+	s.Equal("Deleted "+datasetName+" (was #7jrps2q0ubq0phnha37gd6051m8uqq6b)\n", rtnVal)
 
 	// print datasets, just one left
 	rtnVal, _ = s.MustRun(main, []string{"ds", dbSpec})
@@ -100,7 +100,7 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 
 	// delete the second dataset
 	rtnVal, _ = s.MustRun(main, []string{"ds", "-d", dataset2Name})
-	s.Equal("Deleted "+dataset2Name+" (was #rk2ps88bier009heqpm8no291avqa8jm)\n", rtnVal)
+	s.Equal("Deleted "+dataset2Name+" (was #hiqpb7kk36vo80uc36virlnrddru2o7h)\n", rtnVal)
 
 	// print datasets, none left
 	rtnVal, _ = s.MustRun(main, []string{"ds", dbSpec})
