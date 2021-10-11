@@ -42,7 +42,15 @@ func hashValueBytes(item sequenceItem, c chunker) error {
 	})
 }
 
-type hashValueBytesFn func(item sequenceItem, sl chunker) error
+//  newChunkerFn makes a chunker.
+type newChunkerFn func(fmt *NomsBinFormat, salt byte) chunker
+
+// hashValueBytesFn translates |item| into a byte stream to provide to |ch|.
+type hashValueBytesFn func(item sequenceItem, ch chunker) error
+
+// makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items,
+// a tuple of a reference to that chunk which can itself be chunked + its underlying value.
+type makeChunkFn func(level uint64, values []sequenceItem) (Collection, orderedKey, uint64, error)
 
 type sequenceChunker struct {
 	cur                        *sequenceCursor
@@ -53,19 +61,17 @@ type sequenceChunker struct {
 	makeChunk, parentMakeChunk makeChunkFn
 	isLeaf                     bool
 	hashValueBytes             hashValueBytesFn
+	newCh                      newChunkerFn
 	ch                         chunker
 	done                       bool
 	unwrittenCol               Collection
 }
 
-// makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
-type makeChunkFn func(level uint64, values []sequenceItem) (Collection, orderedKey, uint64, error)
-
-func newEmptySequenceChunker(ctx context.Context, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
-	return newSequenceChunker(ctx, nil, uint64(0), vrw, makeChunk, parentMakeChunk, hashValueBytes)
+func newEmptySequenceChunker(ctx context.Context, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, newCh newChunkerFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
+	return newSequenceChunker(ctx, nil, uint64(0), vrw, makeChunk, parentMakeChunk, newCh, hashValueBytes)
 }
 
-func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
+func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, newCh newChunkerFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
 	d.PanicIfFalse(makeChunk != nil)
 	d.PanicIfFalse(parentMakeChunk != nil)
 	d.PanicIfFalse(hashValueBytes != nil)
@@ -74,17 +80,19 @@ func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, 
 	// |cur| will be nil if this is a new sequence, implying this is a new tree, or the tree has grown in height relative to its original chunked form.
 
 	sc := &sequenceChunker{
-		cur,
-		level,
-		vrw,
-		nil,
-		make([]sequenceItem, 0, 1<<10),
-		makeChunk, parentMakeChunk,
-		true,
-		hashValueBytes,
-		newRollingValueHasher(vrw.Format(), byte(level%256)),
-		false,
-		nil,
+		cur:             cur,
+		level:           level,
+		vrw:             vrw,
+		parent:          nil,
+		current:         make([]sequenceItem, 0, 1<<10),
+		makeChunk:       makeChunk,
+		parentMakeChunk: parentMakeChunk,
+		isLeaf:          true,
+		hashValueBytes:  hashValueBytes,
+		newCh:           newCh,
+		ch:              newCh(vrw.Format(), byte(level%256)),
+		done:            false,
+		unwrittenCol:    nil,
 	}
 
 	if cur != nil {
@@ -295,7 +303,7 @@ func (sc *sequenceChunker) createParent(ctx context.Context) error {
 	}
 
 	var err error
-	sc.parent, err = newSequenceChunker(ctx, parent, sc.level+1, sc.vrw, sc.parentMakeChunk, sc.parentMakeChunk, metaHashValueBytes)
+	sc.parent, err = newSequenceChunker(ctx, parent, sc.level+1, sc.vrw, sc.parentMakeChunk, sc.parentMakeChunk, sc.newCh, metaHashValueBytes)
 
 	if err != nil {
 		return err

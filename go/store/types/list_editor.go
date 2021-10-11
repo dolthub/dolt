@@ -139,7 +139,7 @@ func (le *ListEditor) List(ctx context.Context) (List, error) {
 
 		var err error
 		if ch == nil {
-			ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+			ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), newListChunker, hashValueBytes)
 		} else {
 			err = ch.advanceTo(ctx, cur)
 		}

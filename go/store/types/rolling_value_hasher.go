@@ -106,6 +106,21 @@ func (rv *rollingValueHasher) Write(cb func(w *binaryNomsWriter) error) (err err
 	return
 }
 
+func (rv *rollingValueHasher) HashByte(b byte) bool {
+	return rv.hashByte(b, rv.bw.offset)
+}
+
+func (rv *rollingValueHasher) hashByte(b byte, offset uint32) bool {
+	if !rv.crossedBoundary {
+		rv.bz.HashByte(b ^ rv.salt)
+		rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
+		if offset > maxChunkSize {
+			rv.crossedBoundary = true
+		}
+	}
+	return rv.crossedBoundary
+}
+
 func (rv *rollingValueHasher) Nbf() *NomsBinFormat {
 	return rv.nbf
 }
@@ -121,17 +136,71 @@ func (rv *rollingValueHasher) Reset() {
 	rv.sl.Reset()
 }
 
-func (rv *rollingValueHasher) HashByte(b byte) bool {
-	return rv.hashByte(b, rv.bw.offset)
+// rollingByteHasher is a chunker for Blobs
+type rollingByteHasher struct {
+	bw              binaryNomsWriter
+	idx             uint32
+	bz              *buzhash.BuzHash
+	crossedBoundary bool
+	pattern, window uint32
+	salt            byte
+	nbf             *NomsBinFormat
 }
 
-func (rv *rollingValueHasher) hashByte(b byte, offset uint32) bool {
-	if !rv.crossedBoundary {
-		rv.bz.HashByte(b ^ rv.salt)
-		rv.crossedBoundary = (rv.bz.Sum32()&rv.pattern == rv.pattern)
+func newRollingByteHasher(nbf *NomsBinFormat, salt byte) *rollingByteHasher {
+	pattern, window := chunkingConfig()
+	w := newBinaryNomsWriter()
+
+	rb := &rollingByteHasher{
+		bw:      w,
+		bz:      buzhash.NewBuzHash(window),
+		pattern: pattern,
+		window:  window,
+		salt:    salt,
+		nbf:     nbf,
+	}
+
+	return rb
+}
+
+var _ chunker = &rollingByteHasher{}
+
+func (bh *rollingByteHasher) Write(cb func(w *binaryNomsWriter) error) (err error) {
+	err = cb(&bh.bw)
+	if err != nil {
+		return err
+	}
+
+	for ; bh.idx < bh.bw.offset; bh.idx++ {
+		bh.hashByte(bh.bw.buff[bh.idx], bh.bw.offset)
+	}
+
+	return
+}
+
+func (bh *rollingByteHasher) hashByte(b byte, offset uint32) bool {
+	if !bh.crossedBoundary {
+		bh.bz.HashByte(b ^ bh.salt)
+		bh.crossedBoundary = (bh.bz.Sum32()&bh.pattern == bh.pattern)
 		if offset > maxChunkSize {
-			rv.crossedBoundary = true
+			bh.crossedBoundary = true
 		}
 	}
-	return rv.crossedBoundary
+	return bh.crossedBoundary
+}
+
+func (bh *rollingByteHasher) Nbf() *NomsBinFormat {
+	return bh.nbf
+}
+
+func (bh *rollingByteHasher) CrossedBoundary() bool {
+	return bh.crossedBoundary
+}
+
+func (bh *rollingByteHasher) Reset() {
+	bh.crossedBoundary = false
+	bh.bz = buzhash.NewBuzHash(bh.window)
+
+	bh.bw.reset()
+	bh.idx = 0
 }

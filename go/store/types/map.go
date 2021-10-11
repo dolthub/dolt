@@ -63,6 +63,10 @@ func mapHashValueBytes(item sequenceItem, c chunker) error {
 	return nil
 }
 
+func newMapChunker(nbf *NomsBinFormat, salt byte) chunker {
+	return newRollingValueHasher(nbf, salt)
+}
+
 func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) (Map, error) {
 	entries, err := buildMapData(vrw.Format(), kv)
 
@@ -608,7 +612,7 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 }
 
 func newEmptyMapSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
-	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), newMapChunker, mapHashValueBytes)
 }
 
 func (m Map) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {

@@ -179,7 +179,7 @@ func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64)
 
 					if ch == nil {
 						var err error
-						ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+						ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), newMapChunker, mapHashValueBytes)
 
 						if ae.SetIfError(err) {
 							continue
