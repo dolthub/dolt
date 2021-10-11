@@ -99,7 +99,7 @@ func mustMap(m types.Map, err error) types.Map {
 }
 
 func mustParentsClosure(t *testing.T, exists bool) func(types.Ref, bool, error) types.Ref {
-	return func (r types.Ref, got bool, err error) types.Ref {
+	return func(r types.Ref, got bool, err error) types.Ref {
 		t.Helper()
 		require.NoError(t, err)
 		require.Equal(t, exists, got)
