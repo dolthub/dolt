@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -97,6 +98,15 @@ func mustMap(m types.Map, err error) types.Map {
 	return m
 }
 
+func mustParentsClosure(t *testing.T, exists bool) func(types.Ref, bool, error) types.Ref {
+	return func (r types.Ref, got bool, err error) types.Ref {
+		t.Helper()
+		require.NoError(t, err)
+		require.Equal(t, exists, got)
+		return r
+	}
+}
+
 func mustType(t *types.Type, err error) *types.Type {
 	d.PanicIfError(err)
 	return t
@@ -130,8 +140,8 @@ func TestNewCommit(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	parentsClosure := mustMap(getParentsClosure(context.Background(), db, parents))
-	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
+	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(context.Background(), db, parents))
+	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, false, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at, err := types.TypeOf(commit)
 	assert.NoError(err)
@@ -139,8 +149,9 @@ func TestNewCommit(t *testing.T) {
 		types.EmptyStructType,
 		mustType(types.MakeSetType(mustType(types.MakeUnionType()))),
 		mustType(types.MakeListType(mustType(types.MakeUnionType()))),
-		mustType(types.MakeMapType(mustType(types.MakeUnionType()), mustType(types.MakeUnionType()))),
+		mustType(types.MakeRefType(types.PrimitiveTypeMap[types.ValueKind])),
 		types.PrimitiveTypeMap[types.FloatKind],
+		false,
 	)
 	assert.NoError(err)
 	assertTypeEquals(et, at)
@@ -150,15 +161,15 @@ func TestNewCommit(t *testing.T) {
 
 	// Committing another Float
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit, types.Format_7_18))))
-	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
-	commit2, err := newCommit(context.Background(), types.Float(2), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
+	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	commit2, err := newCommit(context.Background(), types.Float(2), parents, parentsClosure, true, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at2, err := types.TypeOf(commit2)
 	assert.NoError(err)
 	et2 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure: Map<Tuple, List<>>,
+                parents_closure?: Ref<Value>,
                 parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float,
         }`)
@@ -169,15 +180,15 @@ func TestNewCommit(t *testing.T) {
 
 	// Now commit a String
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18))))
-	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
-	commit3, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
+	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	commit3, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at3, err := types.TypeOf(commit3)
 	assert.NoError(err)
 	et3 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure: Map<Tuple, List<Ref<Value>>>,
+                parents_closure?: Ref<Value>,
                 parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float | String,
         }`)
@@ -195,8 +206,8 @@ func TestNewCommit(t *testing.T) {
 	}`)
 	assertTypeEquals(metaType, mustType(types.TypeOf(meta)))
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18))))
-	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
-	commit4, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, meta)
+	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	commit4, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, meta)
 	assert.NoError(err)
 	at4, err := types.TypeOf(commit4)
 	assert.NoError(err)
@@ -206,7 +217,7 @@ func TestNewCommit(t *testing.T) {
                         number: Float,
         	},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure: Map<Tuple, List<Ref<Value>>>,
+                parents_closure?: Ref<Value>,
                 parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float | String,
         }`)
@@ -219,12 +230,13 @@ func TestNewCommit(t *testing.T) {
 	parents = mustList(types.NewList(context.Background(), db,
 		mustRef(types.NewRef(commit2, types.Format_7_18)),
 		mustRef(types.NewRef(commit3, types.Format_7_18))))
-	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
 	commit5, err := newCommit(
 		context.Background(),
 		types.String("Hi"),
 		parents,
 		parentsClosure,
+		true,
 		types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at5, err := types.TypeOf(commit5)
@@ -232,7 +244,7 @@ func TestNewCommit(t *testing.T) {
 	et5 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parents_closure: Map<Tuple, List<Ref<Value>>>,
+                parents_closure?: Ref<Value>,
                 parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float | String,
         }`)
@@ -404,11 +416,23 @@ func TestCommitParentsClosure(t *testing.T) {
 		if !assert.NoError(err) {
 			return
 		}
+		if len(es) == 0 {
+			assert.False(ok, "must not find parents_closure field when its length is 0")
+			return
+		}
 		if !assert.True(ok, "must find parents_closure field in commit.") {
 			return
 		}
-		m, ok := v.(types.Map)
-		if !assert.True(ok, "parents_closure field must contain a map value.") {
+		r, ok := v.(types.Ref)
+		if !assert.True(ok, "parents_closure field must contain a ref value.") {
+			return
+		}
+		tv, err := r.TargetValue(context.Background(), db)
+		if !assert.NoError(err, "getting target value of parents_closure field must not error") {
+			return
+		}
+		m, ok := tv.(types.Map)
+		if !assert.True(ok, "parents_closure ref target value must contain a map value.") {
 			return
 		}
 		if !assert.Equal(len(es), int(m.Len()), "expected length %v and got %v", len(es), m.Len()) {
@@ -640,10 +664,10 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	parentsClosure := mustMap(getParentsClosure(context.Background(), db, parents))
-	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
+	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(context.Background(), db, parents))
+	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsClosure, false, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(t, err)
-	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsClosure, types.EmptyStruct(types.Format_7_18))
+	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsClosure, false, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(t, err)
 	_, err = db.WriteValue(context.Background(), c1)
 	assert.NoError(t, err)
@@ -652,14 +676,14 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	value := types.String("two")
 	parents, err = types.NewList(context.Background(), db, mustRef(types.NewRef(c1, types.Format_7_18)))
 	assert.NoError(t, err)
-	parentsClosure = mustMap(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
 	meta, err := types.NewStruct(types.Format_7_18, "", types.StructData{
 		"basis": cx,
 	})
 	assert.NoError(t, err)
 
 	// Used to fail
-	_, err = newCommit(context.Background(), value, parents, parentsClosure, meta)
+	_, err = newCommit(context.Background(), value, parents, parentsClosure, true, meta)
 	assert.NoError(t, err)
 }
 

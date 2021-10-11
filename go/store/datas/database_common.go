@@ -138,11 +138,11 @@ func (db *database) DatasetsInRoot(ctx context.Context, rootHash hash.Hash) (typ
 	return val.(types.Map), nil
 }
 
-func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Map, error) {
+func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Ref, bool, error) {
 	parentRefs := make([]types.Ref, int(parentRefsL.Len()))
 	parents := make([]types.Struct, len(parentRefs))
 	if len(parents) == 0 {
-		return types.NewMap(ctx, vrw)
+		return types.Ref{}, false, nil
 	}
 	err := parentRefsL.IterAll(ctx, func(v types.Value, i uint64) error {
 		r, ok := v.(types.Ref)
@@ -162,36 +162,52 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 		return nil
 	})
 	if err != nil {
-		return types.Map{}, err
+		return types.Ref{}, false, err
 	}
 	parentMaps := make([]types.Map, len(parents))
 	parentParentLists := make([]types.List, len(parents))
 	for i, p := range parents {
 		v, ok, err := p.MaybeGet(ParentsClosureField)
 		if err != nil {
-			return types.Map{}, err
+			return types.Ref{}, false, err
 		}
 		if !ok || types.IsNull(v) {
-			// If one of the commits does not have a closure, we will not record a closure here.
-			return types.NewMap(ctx, vrw)
-		}
-		parentMaps[i], ok = v.(types.Map)
-		if !ok {
-			return types.Map{}, errors.New("unexpected field value type for parents_closure in commit struct")
+			empty, err := types.NewMap(ctx, vrw)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			parentMaps[i] = empty
+		} else {
+			r, ok := v.(types.Ref)
+			if !ok {
+				return types.Ref{}, false, errors.New("unexpected field value type for parents_closure in commit struct")
+			}
+			tv, err := r.TargetValue(ctx, vrw)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			parentMaps[i], ok = tv.(types.Map)
+			if !ok {
+				return types.Ref{}, false, fmt.Errorf("unexpected target value type for parents_closure in commit struct: %v", tv)
+			}
 		}
 		v, ok, err = p.MaybeGet(ParentsListField)
 		if !ok || types.IsNull(v) {
-			// If one of the commits does not have a parents_list field, we will not record a closure here.
-			return types.NewMap(ctx, vrw)
-		}
-		parentParentLists[i], ok = v.(types.List)
-		if !ok {
-			return types.Map{}, errors.New("unexpected field value or type for parents_list in commit struct")
+			empty, err := types.NewList(ctx, vrw)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			parentParentLists[i] = empty
+		} else {
+			parentParentLists[i], ok = v.(types.List)
+			if !ok {
+				return types.Ref{}, false, errors.New("unexpected field value or type for parents_list in commit struct")
+			}
 		}
 		if parentMaps[i].Len() == 0 && parentParentLists[i].Len() != 0 {
 			// If one of the commits has an empty parents_closure, but non-empty parents, we will not record
 			// a parents_closure here.
-			return types.NewMap(ctx, vrw)
+			return types.Ref{}, false, nil
 		}
 	}
 	// Convert parent lists to List<Ref<Value>>
@@ -209,11 +225,11 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 			return nil
 		})
 		if err != nil {
-			return types.Map{}, err
+			return types.Ref{}, false, err
 		}
 		parentParentLists[i], err = types.NewList(ctx, vrw, newRefs...)
 		if err != nil {
-			return types.Map{}, err
+			return types.Ref{}, false, err
 		}
 	}
 	editor := parentMaps[0].Edit()
@@ -222,7 +238,7 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 		key, err := types.NewTuple(vrw.Format(), types.Uint(r.Height()), types.InlineBlob(h[:]))
 		if err != nil {
 			editor.Close(ctx)
-			return types.Map{}, err
+			return types.Ref{}, false, err
 		}
 		editor.Set(key, parentParentLists[i])
 	}
@@ -240,10 +256,22 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 		}
 		if derr != nil {
 			editor.Close(ctx)
-			return types.Map{}, derr
+			return types.Ref{}, false, derr
 		}
 	}
-	return editor.Map(ctx)
+	m, err := editor.Map(ctx)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	r, err := vrw.WriteValue(ctx, m)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	r, err = types.ToRefOfValue(r, vrw.Format())
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	return r, true, nil
 }
 
 // Datasets returns the Map of Datasets in the current root. If you intend to edit the map and commit changes back,
@@ -426,12 +454,12 @@ func (db *database) CommitDangling(ctx context.Context, v types.Value, opts Comm
 		opts.Meta = types.EmptyStruct(db.Format())
 	}
 
-	parentsClosure, err := getParentsClosure(ctx, db, opts.ParentsList)
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, db, opts.ParentsList)
 	if err != nil {
 		return types.Struct{}, err
 	}
 
-	commitStruct, err := newCommit(ctx, v, opts.ParentsList, parentsClosure, opts.Meta)
+	commitStruct, err := newCommit(ctx, v, opts.ParentsList, parentsClosure, includeParentsClosure, opts.Meta)
 	if err != nil {
 		return types.Struct{}, err
 	}
@@ -586,12 +614,12 @@ func (db *database) doMerge(
 		return types.Ref{}, err
 	}
 
-	parentsClosure, err := getParentsClosure(ctx, db, parents)
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, db, parents)
 	if err != nil {
 		return types.Ref{}, err
 	}
 
-	newCom, err := newCommit(ctx, merged, parents, parentsClosure, types.EmptyStruct(db.Format()))
+	newCom, err := newCommit(ctx, merged, parents, parentsClosure, includeParentsClosure, types.EmptyStruct(db.Format()))
 	if err != nil {
 		return types.Ref{}, err
 	}
@@ -1099,12 +1127,12 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 		meta = types.EmptyStruct(ds.Database().Format())
 	}
 
-	parentsClosure, err := getParentsClosure(ctx, ds.Database(), parents)
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, ds.Database(), parents)
 	if err != nil {
 		return types.EmptyStruct(ds.Database().Format()), err
 	}
 
-	return newCommit(ctx, v, parents, parentsClosure, meta)
+	return newCommit(ctx, v, parents, parentsClosure, includeParentsClosure, meta)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

@@ -40,7 +40,7 @@ const (
 	// `"parents"` is still written as a Set as well, so that commits
 	// created with newer versions of still usable by older versions.
 	ParentsListField = "parents_list"
-	// Added in October, 2021. Stores a Ref<Map<Tuple,List>>.
+	// Added in October, 2021. Stores a Ref<Value(Map<Tuple,List>)>.
 	// The key of the map is a Tuple<Height, InlineBlob(Hash)>, reffable to
 	// a Commit ref. The value of the map is a List of Ref<Value>s pointing
 	// to the parents of the Commit which corresponds to the key.
@@ -54,7 +54,7 @@ const (
 	CommitName          = "Commit"
 )
 
-var commitTemplate = types.MakeStructTemplate(CommitName, []string{
+var commitTemplateWithParentsClosure = types.MakeStructTemplate(CommitName, []string{
 	CommitMetaField,
 	ParentsField,
 	ParentsClosureField,
@@ -62,10 +62,17 @@ var commitTemplate = types.MakeStructTemplate(CommitName, []string{
 	ValueField,
 })
 
+var commitTemplateWithoutParentsClosure = types.MakeStructTemplate(CommitName, []string{
+	CommitMetaField,
+	ParentsField,
+	ParentsListField,
+	ValueField,
+})
+
 var valueCommitType = nomdl.MustParseType(`Struct Commit {
         meta: Struct {},
         parents: Set<Ref<Cycle<Commit>>>,
-        parents_closure?: Map<Value,Value>,
+        parents_closure?: Ref<Value>, // Ref<Map<Value,Value>>,
         parents_list?: List<Ref<Cycle<Commit>>>,
         value: Value,
 }`)
@@ -79,17 +86,21 @@ var valueCommitType = nomdl.MustParseType(`Struct Commit {
 //   meta: M,
 //   parents: Set<Ref<Cycle<Commit>>>,
 //   parentsList: List<Ref<Cycle<Commit>>>,
-//   parentsClosure: Map<Tuple,List<Ref<Value>>>,
+//   parentsClosure: Ref<Value>, // Map<Tuple,List<Ref<Value>>>,
 //   value: T,
 // }
 // ```
 // where M is a struct type and T is any type.
-func newCommit(ctx context.Context, value types.Value, parentsList types.List, parentsClosure types.Map, meta types.Struct) (types.Struct, error) {
+func newCommit(ctx context.Context, value types.Value, parentsList types.List, parentsClosure types.Ref, includeParentsClosure bool, meta types.Struct) (types.Struct, error) {
 	parentsSet, err := parentsList.ToSet(ctx)
 	if err != nil {
 		return types.EmptyStruct(meta.Format()), err
 	}
-	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parentsSet, parentsClosure, parentsList, value})
+	if includeParentsClosure {
+		return commitTemplateWithParentsClosure.NewStruct(meta.Format(), []types.Value{meta, parentsSet, parentsClosure, parentsList, value})
+	} else {
+		return commitTemplateWithoutParentsClosure.NewStruct(meta.Format(), []types.Value{meta, parentsSet, parentsList, value})
+	}
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
@@ -261,29 +272,50 @@ func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
 	return types.Ref{}, false
 }
 
-func makeCommitStructType(metaType, parentsType, parentsListType, parentsClosureType, valueType *types.Type) (*types.Type, error) {
-	return types.MakeStructType(CommitName,
-		types.StructField{
-			Name: CommitMetaField,
-			Type: metaType,
-		},
-		types.StructField{
-			Name: ParentsField,
-			Type: parentsType,
-		},
-		types.StructField{
-			Name: ParentsListField,
-			Type: parentsListType,
-		},
-		types.StructField{
-			Name: ParentsClosureField,
-			Type: parentsClosureType,
-		},
-		types.StructField{
-			Name: ValueField,
-			Type: valueType,
-		},
-	)
+func makeCommitStructType(metaType, parentsType, parentsListType, parentsClosureType, valueType *types.Type, includeParentsClosure bool) (*types.Type, error) {
+	if includeParentsClosure {
+		return types.MakeStructType(CommitName,
+			types.StructField{
+				Name: CommitMetaField,
+				Type: metaType,
+			},
+			types.StructField{
+				Name: ParentsField,
+				Type: parentsType,
+			},
+			types.StructField{
+				Name: ParentsListField,
+				Type: parentsListType,
+			},
+			types.StructField{
+				Name: ParentsClosureField,
+				Type: parentsClosureType,
+			},
+			types.StructField{
+				Name: ValueField,
+				Type: valueType,
+			},
+		)
+	} else {
+		return types.MakeStructType(CommitName,
+			types.StructField{
+				Name: CommitMetaField,
+				Type: metaType,
+			},
+			types.StructField{
+				Name: ParentsField,
+				Type: parentsType,
+			},
+			types.StructField{
+				Name: ParentsListField,
+				Type: parentsListType,
+			},
+			types.StructField{
+				Name: ValueField,
+				Type: valueType,
+			},
+		)
+	}
 }
 
 func getRefElementType(t *types.Type) *types.Type {
