@@ -27,26 +27,37 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-// chunker decides where byte streams should be split.
-type chunker interface {
-	Write(func(bw *binaryNomsWriter) error) error
-	Nbf() *NomsBinFormat
+// sequenceSplitter decides where sequences should be split into chunks.
+type sequenceSplitter interface {
+	// Append provides more sequenceItems to the splitter. Callers pass a callback
+	// function that uses |bw| to serialize sequenceItems. Splitter's make chunk
+	// boundary decisions based on the contents of the byte buffer |bw.buff|. Upon
+	// return, callers can use |CrossedBoundary| to see if a chunk boundary has crossed.
+	Append(func(bw *binaryNomsWriter) error) error
+
+	// CrossedBoundary returns true if the provided sequenceItems have caused a chunk
+	// boundary to be crossed.
 	CrossedBoundary() bool
+
+	// Reset clears the current byte buffer and resets the state of the splitter.
 	Reset()
+
+	// Nbf returns the splitter's NomsBinFormat.
+	Nbf() *NomsBinFormat
 }
 
-func hashValueBytes(item sequenceItem, c chunker) error {
-	return c.Write(func(bw *binaryNomsWriter) error {
+func hashValueBytes(item sequenceItem, sp sequenceSplitter) error {
+	return sp.Append(func(bw *binaryNomsWriter) error {
 		v := item.(Value)
-		return v.writeTo(bw, c.Nbf())
+		return v.writeTo(bw, sp.Nbf())
 	})
 }
 
-//  newChunkerFn makes a chunker.
-type newChunkerFn func(fmt *NomsBinFormat, salt byte) chunker
+//  newSplitterFn makes a sequenceSplitter.
+type newSplitterFn func(fmt *NomsBinFormat, salt byte) sequenceSplitter
 
-// hashValueBytesFn translates |item| into a byte stream to provide to |ch|.
-type hashValueBytesFn func(item sequenceItem, ch chunker) error
+// hashValueBytesFn translates |item| into a byte stream to provide to |sp|.
+type hashValueBytesFn func(item sequenceItem, sp sequenceSplitter) error
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items,
 // a tuple of a reference to that chunk which can itself be chunked + its underlying value.
@@ -61,17 +72,17 @@ type sequenceChunker struct {
 	makeChunk, parentMakeChunk makeChunkFn
 	isLeaf                     bool
 	hashValueBytes             hashValueBytesFn
-	newCh                      newChunkerFn
-	ch                         chunker
+	newCh                      newSplitterFn
+	sp                         sequenceSplitter
 	done                       bool
 	unwrittenCol               Collection
 }
 
-func newEmptySequenceChunker(ctx context.Context, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, newCh newChunkerFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
+func newEmptySequenceChunker(ctx context.Context, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, newCh newSplitterFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
 	return newSequenceChunker(ctx, nil, uint64(0), vrw, makeChunk, parentMakeChunk, newCh, hashValueBytes)
 }
 
-func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, newCh newChunkerFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
+func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, newCh newSplitterFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
 	d.PanicIfFalse(makeChunk != nil)
 	d.PanicIfFalse(parentMakeChunk != nil)
 	d.PanicIfFalse(hashValueBytes != nil)
@@ -90,7 +101,7 @@ func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, 
 		isLeaf:          true,
 		hashValueBytes:  hashValueBytes,
 		newCh:           newCh,
-		ch:              newCh(vrw.Format(), byte(level%256)),
+		sp:              newCh(vrw.Format(), byte(level%256)),
 		done:            false,
 		unwrittenCol:    nil,
 	}
@@ -255,13 +266,13 @@ func (sc *sequenceChunker) advanceTo(ctx context.Context, next *sequenceCursor) 
 func (sc *sequenceChunker) Append(ctx context.Context, item sequenceItem) (bool, error) {
 	d.PanicIfTrue(item == nil)
 	sc.current = append(sc.current, item)
-	err := sc.hashValueBytes(item, sc.ch)
+	err := sc.hashValueBytes(item, sc.sp)
 
 	if err != nil {
 		return false, err
 	}
 
-	if sc.ch.CrossedBoundary() {
+	if sc.sp.CrossedBoundary() {
 		// When a metaTuple contains a key that is so large that it causes a chunk boundary to be crossed simply by encoding
 		// the metaTuple then we will create a metaTuple to encode the metaTuple containing the same key again, and again
 		// crossing a chunk boundary causes infinite recursion.  The solution is not to allow a metaTuple with a single
@@ -312,7 +323,7 @@ func (sc *sequenceChunker) createParent(ctx context.Context) error {
 	sc.parent.isLeaf = false
 
 	if sc.unwrittenCol != nil {
-		// There is an unwritten collection, but this chunker now has a parent, so
+		// There is an unwritten collection, but this sequenceSplitter now has a parent, so
 		// write it. See createSequence().
 		_, err := sc.vrw.WriteValue(ctx, sc.unwrittenCol)
 
@@ -372,7 +383,7 @@ func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequ
 
 func (sc *sequenceChunker) handleChunkBoundary(ctx context.Context) error {
 	d.PanicIfFalse(len(sc.current) > 0)
-	sc.ch.Reset()
+	sc.sp.Reset()
 	if sc.parent == nil {
 		err := sc.createParent(ctx)
 
@@ -395,7 +406,7 @@ func (sc *sequenceChunker) handleChunkBoundary(ctx context.Context) error {
 	return nil
 }
 
-// Returns true if this chunker or any of its parents have any pending items in their |current| slice.
+// Returns true if this sequenceSplitter or any of its parents have any pending items in their |current| slice.
 func (sc *sequenceChunker) anyPending() bool {
 	if len(sc.current) > 0 {
 		return true
@@ -435,11 +446,11 @@ func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 		return sc.parent.Done(ctx)
 	}
 
-	// At this point, we know this chunker contains, in |current| every item at this level of the resulting tree. To see this, consider that there are two ways a chunker can enter items into its |current|: (1) as the result of resume() with the cursor on anything other than the first item in the sequence, and (2) as a result of a child chunker hitting an explicit chunk boundary during either Append() or finalize(). The only way there can be no items in some parent chunker's |current| is if this chunker began with cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any items up to a parent as a result of chunking). Therefore, this chunker's current must contain all items within the current sequence.
+	// At this point, we know this sequenceSplitter contains, in |current| every item at this level of the resulting tree. To see this, consider that there are two ways a sequenceSplitter can enter items into its |current|: (1) as the result of resume() with the cursor on anything other than the first item in the sequence, and (2) as a result of a child sequenceSplitter hitting an explicit chunk boundary during either Append() or finalize(). The only way there can be no items in some parent sequenceSplitter's |current| is if this sequenceSplitter began with cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any items up to a parent as a result of chunking). Therefore, this sequenceSplitter's current must contain all items within the current sequence.
 
 	// This level must represent *a* root of the tree, but it is possibly non-canonical. There are three cases to consider:
 
-	// (1) This is "leaf" chunker and thus produced tree of depth 1 which contains exactly one chunk (never hit a boundary), or (2) This in an internal node of the tree which contains multiple references to child nodes. In either case, this is the canonical root of the tree.
+	// (1) This is "leaf" sequenceSplitter and thus produced tree of depth 1 which contains exactly one chunk (never hit a boundary), or (2) This in an internal node of the tree which contains multiple references to child nodes. In either case, this is the canonical root of the tree.
 	if sc.isLeaf || len(sc.current) > 1 {
 		seq, _, err := sc.createSequence(ctx, false)
 
@@ -450,7 +461,7 @@ func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 		return seq, nil
 	}
 
-	// (3) This is an internal node of the tree which contains a single reference to a child node. This can occur if a non-leaf chunker happens to chunk on the first item (metaTuple) appended. In this case, this is the root of the tree, but it is *not* canonical and we must walk down until we find cases (1) or (2), above.
+	// (3) This is an internal node of the tree which contains a single reference to a child node. This can occur if a non-leaf sequenceSplitter happens to chunk on the first item (metaTuple) appended. In this case, this is the root of the tree, but it is *not* canonical and we must walk down until we find cases (1) or (2), above.
 	d.PanicIfFalse(!sc.isLeaf && len(sc.current) == 1)
 	mt := sc.current[0].(metaTuple)
 

@@ -96,9 +96,9 @@ func newRollingValueHasher(nbf *NomsBinFormat, salt byte) *rollingValueHasher {
 	return rv
 }
 
-var _ chunker = &rollingValueHasher{}
+var _ sequenceSplitter = &rollingValueHasher{}
 
-func (rv *rollingValueHasher) Write(cb func(w *binaryNomsWriter) error) (err error) {
+func (rv *rollingValueHasher) Append(cb func(w *binaryNomsWriter) error) (err error) {
 	err = cb(&rv.bw)
 	if err == nil {
 		rv.sl.Update(rv.bw.data())
@@ -136,7 +136,8 @@ func (rv *rollingValueHasher) Reset() {
 	rv.sl.Reset()
 }
 
-// rollingByteHasher is a chunker for Blobs
+// rollingByteHasher is a sequenceSplitter for Blobs. It directly hashes
+// bytes streams without using Sloppy for pseudo-compression.
 type rollingByteHasher struct {
 	bw              binaryNomsWriter
 	idx             uint32
@@ -163,9 +164,9 @@ func newRollingByteHasher(nbf *NomsBinFormat, salt byte) *rollingByteHasher {
 	return rb
 }
 
-var _ chunker = &rollingByteHasher{}
+var _ sequenceSplitter = &rollingByteHasher{}
 
-func (bh *rollingByteHasher) Write(cb func(w *binaryNomsWriter) error) (err error) {
+func (bh *rollingByteHasher) Append(cb func(w *binaryNomsWriter) error) (err error) {
 	err = cb(&bh.bw)
 	if err != nil {
 		return err

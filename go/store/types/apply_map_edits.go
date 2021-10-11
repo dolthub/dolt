@@ -179,7 +179,7 @@ func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64)
 
 					if ch == nil {
 						var err error
-						ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), newMapChunker, mapHashValueBytes)
+						ch, err = newMapLeafChunkerFromCursor(ctx, cur, vrw)
 
 						if ae.SetIfError(err) {
 							continue
@@ -419,4 +419,10 @@ func appendToWRes(ctx context.Context, wRes *mapWorkResult, cur *sequenceCursor,
 	wRes.cursorEntries = append(wRes.cursorEntries, []mapEntry{mEnt})
 
 	return nil
+}
+
+func newMapLeafChunkerFromCursor(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error) {
+	makeChunk := makeMapLeafChunkFn(vrw)
+	makeParentChunk := newOrderedMetaSequenceChunkFn(MapKind, vrw)
+	return newSequenceChunker(ctx, cur, 0, vrw, makeChunk, makeParentChunk, newMapChunker, mapHashValueBytes)
 }

@@ -345,7 +345,7 @@ func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequ
 	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), newSetChunker, hashValueBytes)
 }
 
-func newSetChunker(nbf *NomsBinFormat, salt byte) chunker {
+func newSetChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
 	return newRollingValueHasher(nbf, salt)
 }
 

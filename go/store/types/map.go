@@ -46,15 +46,15 @@ func newMap(seq orderedSequence) Map {
 	return Map{seq}
 }
 
-func mapHashValueBytes(item sequenceItem, c chunker) error {
+func mapHashValueBytes(item sequenceItem, sp sequenceSplitter) error {
 	entry := item.(mapEntry)
-	err := hashValueBytes(entry.key, c)
+	err := hashValueBytes(entry.key, sp)
 
 	if err != nil {
 		return err
 	}
 
-	err = hashValueBytes(entry.value, c)
+	err = hashValueBytes(entry.value, sp)
 
 	if err != nil {
 		return err
@@ -63,7 +63,7 @@ func mapHashValueBytes(item sequenceItem, c chunker) error {
 	return nil
 }
 
-func newMapChunker(nbf *NomsBinFormat, salt byte) chunker {
+func newMapChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
 	return newRollingValueHasher(nbf, salt)
 }
 
@@ -612,7 +612,9 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 }
 
 func newEmptyMapSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
-	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), newMapChunker, mapHashValueBytes)
+	makeChunk := makeMapLeafChunkFn(vrw)
+	makeParentChunk := newOrderedMetaSequenceChunkFn(MapKind, vrw)
+	return newEmptySequenceChunker(ctx, vrw, makeChunk, makeParentChunk, newMapChunker, mapHashValueBytes)
 }
 
 func (m Map) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {

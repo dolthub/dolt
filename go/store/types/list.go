@@ -485,10 +485,12 @@ func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splic
 }
 
 func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error) {
-	return newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), newListChunker, hashValueBytes)
+	makeChunk := makeListLeafChunkFn(vrw)
+	makeParentChunk := newIndexedMetaSequenceChunkFn(ListKind, vrw)
+	return newSequenceChunker(ctx, cur, 0, vrw, makeChunk, makeParentChunk, newListChunker, hashValueBytes)
 }
 
-func newListChunker(nbf *NomsBinFormat, salt byte) chunker {
+func newListChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
 	return newRollingValueHasher(nbf, salt)
 }
 
