@@ -267,7 +267,20 @@ func (b Blob) Concat(ctx context.Context, other Blob) (Blob, error) {
 }
 
 func (b Blob) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error) {
-	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
+	makeChunk := makeBlobLeafChunkFn(vrw)
+	parentMakeChunk := newIndexedMetaSequenceChunkFn(BlobKind, vrw)
+	return newSequenceChunker(ctx, cur, 0, vrw, makeChunk, parentMakeChunk, newBlobChunker, hashByte)
+}
+
+func hashByte(item sequenceItem, sp sequenceSplitter) error {
+	return sp.Append(func(bw *binaryNomsWriter) error {
+		bw.writeUint8(item.(byte))
+		return nil
+	})
+}
+
+func newBlobChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
+	return newRollingByteHasher(nbf, salt)
 }
 
 func (b Blob) asSequence() sequence {
@@ -330,6 +343,12 @@ func (cbr *BlobReader) Seek(offset int64, whence int) (int64, error) {
 
 	cbr.pos = int64(abs)
 	return abs, nil
+}
+
+func newEmptyBlobChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
+	makeChunk := makeBlobLeafChunkFn(vrw)
+	makeParentChunk := newIndexedMetaSequenceChunkFn(BlobKind, vrw)
+	return newEmptySequenceChunker(ctx, vrw, makeChunk, makeParentChunk, newBlobChunker, hashByte)
 }
 
 func makeBlobLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
@@ -419,16 +438,12 @@ func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) (Blob
 }
 
 func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) (Blob, error) {
-	sc, err := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) error {
-		rv.HashByte(item.(byte))
-		return nil
-	})
-
+	sc, err := newEmptyBlobChunker(ctx, vrw)
 	if err != nil {
 		return Blob{}, err
 	}
 
-	// TODO: The code below is temporary. It's basically a custom leaf-level chunker for blobs. There are substational
+	// TODO: The code below is temporary. It's basically a custom leaf-level sequenceSplitter for blobs. There are substational
 	// perf gains by doing it this way as it avoids the cost of boxing every single byte which is chunked.
 	chunkBuff := [8192]byte{}
 	chunkBytes := chunkBuff[:]

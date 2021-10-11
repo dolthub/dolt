@@ -342,7 +342,11 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 }
 
 func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
-	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), newSetChunker, hashValueBytes)
+}
+
+func newSetChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
+	return newRollingValueHasher(nbf, salt)
 }
 
 func (s Set) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
