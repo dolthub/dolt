@@ -139,29 +139,14 @@ func (rv *rollingValueHasher) Reset() {
 // rollingByteHasher is a sequenceSplitter for Blobs. It directly hashes
 // bytes streams without using Sloppy for pseudo-compression.
 type rollingByteHasher struct {
-	bw              binaryNomsWriter
-	idx             uint32
-	bz              *buzhash.BuzHash
-	crossedBoundary bool
-	pattern, window uint32
-	salt            byte
-	nbf             *NomsBinFormat
+	*rollingValueHasher
+	idx uint32
 }
 
 func newRollingByteHasher(nbf *NomsBinFormat, salt byte) *rollingByteHasher {
-	pattern, window := chunkingConfig()
-	w := newBinaryNomsWriter()
-
-	rb := &rollingByteHasher{
-		bw:      w,
-		bz:      buzhash.NewBuzHash(window),
-		pattern: pattern,
-		window:  window,
-		salt:    salt,
-		nbf:     nbf,
+	return &rollingByteHasher{
+		rollingValueHasher: newRollingValueHasher(nbf, salt),
 	}
-
-	return rb
 }
 
 var _ sequenceSplitter = &rollingByteHasher{}
@@ -179,29 +164,7 @@ func (bh *rollingByteHasher) Append(cb func(w *binaryNomsWriter) error) (err err
 	return
 }
 
-func (bh *rollingByteHasher) hashByte(b byte, offset uint32) bool {
-	if !bh.crossedBoundary {
-		bh.bz.HashByte(b ^ bh.salt)
-		bh.crossedBoundary = (bh.bz.Sum32()&bh.pattern == bh.pattern)
-		if offset > maxChunkSize {
-			bh.crossedBoundary = true
-		}
-	}
-	return bh.crossedBoundary
-}
-
-func (bh *rollingByteHasher) Nbf() *NomsBinFormat {
-	return bh.nbf
-}
-
-func (bh *rollingByteHasher) CrossedBoundary() bool {
-	return bh.crossedBoundary
-}
-
 func (bh *rollingByteHasher) Reset() {
-	bh.crossedBoundary = false
-	bh.bz = buzhash.NewBuzHash(bh.window)
-
-	bh.bw.reset()
+	bh.rollingValueHasher.Reset()
 	bh.idx = 0
 }
