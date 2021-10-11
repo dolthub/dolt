@@ -23,9 +23,26 @@ package types
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/metrics"
 )
+
+const EnableChunkStats = "DOLT_ENABLE_CHUNK_STATS"
+
+var chunkWithStats = false
+
+func init() {
+	stats, ok := os.LookupEnv(EnableChunkStats)
+	if ok && stats == "true" {
+		chunkWithStats = true
+	}
+}
+
+type writeStats []uint64
 
 // sequenceSplitter decides where sequences should be split into chunks.
 type sequenceSplitter interface {
@@ -76,6 +93,8 @@ type sequenceChunker struct {
 	sp                         sequenceSplitter
 	done                       bool
 	unwrittenCol               Collection
+
+	stats writeStats
 }
 
 func newEmptySequenceChunker(ctx context.Context, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, newCh newSplitterFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
@@ -104,6 +123,10 @@ func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, 
 		sp:              newCh(vrw.Format(), byte(level%256)),
 		done:            false,
 		unwrittenCol:    nil,
+	}
+
+	if chunkWithStats {
+		sc.stats = make(writeStats, 0, 1)
 	}
 
 	if cur != nil {
@@ -263,6 +286,7 @@ func (sc *sequenceChunker) advanceTo(ctx context.Context, next *sequenceCursor) 
 	return nil
 }
 
+// Append consumes another sequence item, returns true if a chunk boundary is crossed.
 func (sc *sequenceChunker) Append(ctx context.Context, item sequenceItem) (bool, error) {
 	d.PanicIfTrue(item == nil)
 	sc.current = append(sc.current, item)
@@ -352,10 +376,11 @@ func (sc *sequenceChunker) createParent(ctx context.Context) error {
 // tradeoff for simplicity of the chunking algorithm.
 func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequence, metaTuple, error) {
 	col, key, numLeaves, err := sc.makeChunk(sc.level, sc.current)
-
 	if err != nil {
 		return nil, metaTuple{}, err
 	}
+
+	sc.recordWrite(uint64(col.asSequence().asValueImpl().sizeOf()))
 
 	// |sc.makeChunk| copies |sc.current| so it's safe to re-use the memory.
 	sc.current = sc.current[:0]
@@ -373,7 +398,6 @@ func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequ
 	}
 
 	mt, err := newMetaTuple(ref, key, numLeaves)
-
 	if err != nil {
 		return nil, metaTuple{}, err
 	}
@@ -419,7 +443,7 @@ func (sc *sequenceChunker) anyPending() bool {
 	return false
 }
 
-// Returns the root sequence of the resulting tree. The logic here is subtle, but hopefully correct and understandable. See comments inline.
+// Done returns the root sequence of the resulting tree. The logic here is subtle, but hopefully correct and understandable.
 func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 	d.PanicIfTrue(sc.done)
 	sc.done = true
@@ -432,10 +456,12 @@ func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 		}
 	}
 
-	// There is pending content above us, so we must push any remaining items from this level up and allow some parent to find the root of the resulting tree.
+	// There is pending content above us, so we must push any remaining items from this level up and allow some parent
+	// to find the root of the resulting tree.
 	if sc.parent != nil && sc.parent.anyPending() {
 		if len(sc.current) > 0 {
-			// If there are items in |current| at this point, they represent the final items of the sequence which occurred beyond the previous *explicit* chunk boundary. The end of input of a sequence is considered an *implicit* boundary.
+			// If there are items in |current| at this point, they represent the final items of the sequence which occurred
+			// beyond the previous *explicit* chunk boundary. The end of input of a sequence is considered an *implicit* boundary.
 			err := sc.handleChunkBoundary(ctx)
 
 			if err != nil {
@@ -446,11 +472,20 @@ func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 		return sc.parent.Done(ctx)
 	}
 
-	// At this point, we know this sequenceSplitter contains, in |current| every item at this level of the resulting tree. To see this, consider that there are two ways a sequenceSplitter can enter items into its |current|: (1) as the result of resume() with the cursor on anything other than the first item in the sequence, and (2) as a result of a child sequenceSplitter hitting an explicit chunk boundary during either Append() or finalize(). The only way there can be no items in some parent sequenceSplitter's |current| is if this sequenceSplitter began with cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any items up to a parent as a result of chunking). Therefore, this sequenceSplitter's current must contain all items within the current sequence.
+	// At this point, we know this sequenceSplitter contains, in |current| every item at this level of the resulting tree.
+	// To see this, consider that there are two ways a sequenceSplitter can enter items into its |current|:
+	// 	(1) as the result of resume() with the cursor on anything other than the first item in the sequence, and
+	//	(2) as a result of a child sequenceSplitter hitting an explicit chunk boundary during either Append() or finalize().
+	//
+	// The only way there can be no items in some parent sequenceSplitter's |current| is if this sequenceSplitter began with cursor within
+	// its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and continued through
+	// all sebsequent items without creating any explicit chunk boundaries (and thus never sent any items up to a parent
+	// as a result of chunking). Therefore, this sequenceSplitter's current must contain all items within the current sequence.
 
 	// This level must represent *a* root of the tree, but it is possibly non-canonical. There are three cases to consider:
-
-	// (1) This is "leaf" sequenceSplitter and thus produced tree of depth 1 which contains exactly one chunk (never hit a boundary), or (2) This in an internal node of the tree which contains multiple references to child nodes. In either case, this is the canonical root of the tree.
+	//   (1) This is "leaf" sequenceSplitter and thus produced tree of depth 1 which contains exactly one chunk (never hit a boundary)
+	//   (2) This in an internal node of the tree which contains multiple references to child nodes.
+	// In either case, this is the canonical root of the tree.
 	if sc.isLeaf || len(sc.current) > 1 {
 		seq, _, err := sc.createSequence(ctx, false)
 
@@ -461,7 +496,9 @@ func (sc *sequenceChunker) Done(ctx context.Context) (sequence, error) {
 		return seq, nil
 	}
 
-	// (3) This is an internal node of the tree which contains a single reference to a child node. This can occur if a non-leaf sequenceSplitter happens to chunk on the first item (metaTuple) appended. In this case, this is the root of the tree, but it is *not* canonical and we must walk down until we find cases (1) or (2), above.
+	// (3) This is an internal node of the tree which contains a single reference to a child node.
+	// This can occur if a non-leaf sequenceSplitter happens to chunk on the first item (metaTuple) appended. In this case, this
+	// is the root of the tree, but it is *not* canonical, and we must walk down until we find cases (1) or (2), above.
 	d.PanicIfFalse(!sc.isLeaf && len(sc.current) == 1)
 	mt := sc.current[0].(metaTuple)
 
@@ -521,4 +558,68 @@ func (sc *sequenceChunker) finalizeCursor(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (sc *sequenceChunker) Stats() (stats []writeStats) {
+	if sc.stats == nil {
+		return
+	}
+
+	if sc.parent == nil {
+		stats = make([]writeStats, sc.level+1)
+	} else {
+		stats = sc.parent.Stats()
+	}
+	stats[sc.level] = sc.stats
+
+	return
+}
+
+func (sc *sequenceChunker) recordWrite(size uint64) {
+	if sc.stats != nil {
+		sc.stats = append(sc.stats, size)
+	}
+}
+
+// WriteAmplificationStats records sequenceChunker write writeSizes by tree level
+type WriteAmplificationStats struct {
+	stats []metrics.Histogram
+}
+
+func (was *WriteAmplificationStats) Sample(stats []writeStats) {
+	for i := len(was.stats); i < len(stats); i++ {
+		was.stats = append(was.stats, metrics.NewByteHistogram())
+	}
+
+	for i, writes := range stats {
+		for _, w := range writes {
+			was.stats[i].Sample(w)
+		}
+	}
+}
+
+func (was WriteAmplificationStats) Count() (c uint64) {
+	for _, hist := range was.stats {
+		c += hist.Samples()
+	}
+	return
+}
+
+func (was WriteAmplificationStats) Sum() (s uint64) {
+	for _, h := range was.stats {
+		s += h.Sum()
+	}
+	return
+}
+
+func (was WriteAmplificationStats) String() string {
+	var s strings.Builder
+
+	s.WriteString("| level | chunks |  bytes |\n")
+	for level, hist := range was.stats {
+		c, b := hist.Samples(), hist.Sum()
+		r := fmt.Sprintf("| %5d | %6d | %6d |\n", level, c, b)
+		s.WriteString(r)
+	}
+	return s.String()
 }
