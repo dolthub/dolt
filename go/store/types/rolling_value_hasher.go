@@ -68,6 +68,13 @@ func TestWithSmallChunks(cb func()) {
 	cb()
 }
 
+func newDefaultSequenceSplitter(nbf *NomsBinFormat, salt byte) sequenceSplitter {
+	if smoothChunking {
+		return newSmoothRollingHasher(nbf, salt)
+	}
+	return newRollingValueHasher(nbf, salt)
+}
+
 type rollingValueHasher struct {
 	bw              binaryNomsWriter
 	bz              *buzhash.BuzHash
@@ -139,6 +146,7 @@ func (rv *rollingValueHasher) Reset() {
 // rollingByteHasher is a sequenceSplitter for Blobs. It directly hashes
 // bytes streams without using Sloppy for pseudo-compression.
 type rollingByteHasher struct {
+	// todo(andy): convert to smoothRollingHasher
 	*rollingValueHasher
 	idx uint32
 }

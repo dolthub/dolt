@@ -64,7 +64,7 @@ func mapHashValueBytes(item sequenceItem, sp sequenceSplitter) error {
 }
 
 func newMapChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
-	return newRollingValueHasher(nbf, salt)
+	return newDefaultSequenceSplitter(nbf, salt)
 }
 
 func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) (Map, error) {

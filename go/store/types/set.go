@@ -346,7 +346,7 @@ func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequ
 }
 
 func newSetChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
-	return newRollingValueHasher(nbf, salt)
+	return newDefaultSequenceSplitter(nbf, salt)
 }
 
 func (s Set) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {

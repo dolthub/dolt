@@ -491,7 +491,7 @@ func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueRead
 }
 
 func newListChunker(nbf *NomsBinFormat, salt byte) sequenceSplitter {
-	return newRollingValueHasher(nbf, salt)
+	return newDefaultSequenceSplitter(nbf, salt)
 }
 
 func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {

@@ -22,6 +22,9 @@
 package types
 
 import (
+	"os"
+	"strings"
+
 	"github.com/kch42/buzhash"
 
 	"github.com/dolthub/dolt/go/store/sloppy"
@@ -30,7 +33,18 @@ import (
 const (
 	smoothMinChunkSize = 1 << 9
 	smoothMaxChunkSize = 1 << 14
+
+	smoothChunkingFeatureFlag = "DOLT_ENABLE_SMOOTH_CHUNKING"
 )
+
+func init() {
+	val, ok := os.LookupEnv(smoothChunkingFeatureFlag)
+	if ok && strings.ToLower(val) == "true" {
+		smoothChunking = true
+	}
+}
+
+var smoothChunking = false
 
 // smoothRollingHasher is a sequenceSplitter designed to constrain the output
 // chunk size distribution. smoothRollingHasher matches against different patterns
@@ -53,7 +67,7 @@ type smoothRollingHasher struct {
 
 var _ sequenceSplitter = &smoothRollingHasher{}
 
-type patternRange [2]uint32 // { endOfRange, pattern }
+type patternRange [2]uint32 // { rangeEnd, pattern }
 
 const (
 	rangeEnd = 0
