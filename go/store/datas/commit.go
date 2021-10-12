@@ -164,152 +164,42 @@ func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, v
 // struct.  If the commit does not have a materialized parents_closure, this
 // implementation delegates to FindCommonAncestorUsingParentsList.
 func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
-	if c1.TargetHash() == c2.TargetHash() {
-		return c1, true, nil
-	}
-
-	c1tv, err := c1.TargetValue(ctx, vr1)
+	pi1, err := newParentsClosureIterator(ctx, c1, vr1)
 	if err != nil {
 		return types.Ref{}, false, err
 	}
-	c2tv, err := c2.TargetValue(ctx, vr2)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-
-	c1s, ok := c1tv.(types.Struct)
-	if !ok {
-		return types.Ref{}, false, fmt.Errorf("target ref is not struct: %v", c1tv)
-	}
-	c2s, ok := c2tv.(types.Struct)
-	if !ok {
-		return types.Ref{}, false, fmt.Errorf("target ref is not struct: %v", c2tv)
-	}
-
-	c1pcv, ok, err := c1s.MaybeGet(ParentsClosureField)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-	if !ok {
-		return FindCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
-	}
-	c2pcv, ok, err := c2s.MaybeGet(ParentsClosureField)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-	if !ok {
+	if pi1 == nil {
 		return FindCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
 	}
 
-	c1pcr, ok := c1pcv.(types.Ref)
-	if !ok {
-		return types.Ref{}, false, fmt.Errorf("value of parents_closure field is not Ref: %v", c1pcv)
-	}
-	c2pcr, ok := c2pcv.(types.Ref)
-	if !ok {
-		return types.Ref{}, false, fmt.Errorf("value of parents_closure field is not Ref: %v", c2pcv)
-	}
-
-	c1pvtv, err := c1pcr.TargetValue(ctx, vr1)
+	pi2, err := newParentsClosureIterator(ctx, c2, vr2)
 	if err != nil {
 		return types.Ref{}, false, err
 	}
-	c2pvtv, err := c2pcr.TargetValue(ctx, vr2)
-	if err != nil {
-		return types.Ref{}, false, err
+	if pi2 == nil {
+		return FindCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
 	}
-
-	c1m, ok := c1pvtv.(types.Map)
-	if !ok {
-		return types.Ref{}, false, fmt.Errorf("target value of parents_closure Ref is not Map: %v", c1pvtv)
-	}
-	c2m, ok := c2pvtv.(types.Map)
-	if !ok {
-		return types.Ref{}, false, fmt.Errorf("target value of parents_closure Ref is not Map: %v", c2pvtv)
-	}
-
-	highest, err := types.NewTuple(vr1.Format(), types.Uint(18446744073709551615))
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-
-	c1mi, err := c1m.IteratorBackFrom(ctx, highest)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-	c2mi, err := c2m.IteratorBackFrom(ctx, highest)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-
-	var c1k, c2k types.Value
-	h := c1.TargetHash()
-	ib := make([]byte, len(hash.Hash{}))
-	copy(ib, h[:])
-	c1k, err = types.NewTuple(vr1.Format(), types.Uint(c1.Height()), types.InlineBlob(ib))
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-	h = c2.TargetHash()
-	copy(ib, h[:])
-	c2k, err = types.NewTuple(vr2.Format(), types.Uint(c2.Height()), types.InlineBlob(ib))
 
 	for {
-		if c1k == nil || types.IsNull(c1k) || c2k == nil || types.IsNull(c2k) {
-			return types.Ref{}, false, nil
-		}
-		c1kt := c1k.(types.Tuple)
-		c2kt := c2k.(types.Tuple)
-		var h1, h2 hash.Hash
-		f2, err := c1kt.Get(1)
-		if err != nil {
-			panic(err)
-		}
-		copy(h1[:], []byte(f2.(types.InlineBlob)))
-		f2, err = c2kt.Get(1)
-		if err != nil {
-			panic(err)
-		}
-		copy(h2[:], []byte(f2.(types.InlineBlob)))
-		if c1kt.Equals(c2kt) {
-			hib, err := c1kt.Get(1)
-			if err != nil {
+		h1, h2 := pi1.Hash(), pi2.Hash()
+		if h1 == h2 {
+			if err := firstError(pi1.Err(), pi2.Err()); err != nil {
 				return types.Ref{}, false, err
 			}
-			var h hash.Hash
-			copy(h[:], []byte(hib.(types.InlineBlob)))
-			fetched, err := vr1.ReadValue(ctx, h)
-			if err != nil {
-				return types.Ref{}, false, err
-			}
-			r, err := types.NewRef(fetched, vr1.Format())
+			r, err := hashToRef(ctx, vr1, h1)
 			if err != nil {
 				return types.Ref{}, false, err
 			}
 			return r, true, nil
 		}
-		l, err := c1kt.Less(vr1.Format(), c2kt)
-		if err != nil {
-			return types.Ref{}, false, err
-		}
-		if l {
-			c2k, _, err = c2mi.Next(ctx)
-			if err != nil {
-				return types.Ref{}, false, err
+		if pi1.Less(vr1.Format(), pi2) {
+			if !pi2.Next(ctx) {
+				return types.Ref{}, false, firstError(pi1.Err(), pi2.Err())
 			}
-			if c2k == nil || types.IsNull(c2k) {
-				return types.Ref{}, false, nil
-			}
-			c2kt = c2k.(types.Tuple)
 		} else {
-			c1k, _, err = c1mi.Next(ctx)
-			if err != nil {
-				return types.Ref{}, false, err
+			if !pi1.Next(ctx) {
+				return types.Ref{}, false, firstError(pi1.Err(), pi2.Err())
 			}
-			if c1k == nil || types.IsNull(c1k) {
-				return types.Ref{}, false, nil
-			}
-			c1kt = c1k.(types.Tuple)
 		}
 	}
 }
@@ -476,6 +366,142 @@ func getRefElementType(t *types.Type) *types.Type {
 	d.PanicIfFalse(t.TargetKind() == types.RefKind)
 
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
+}
+
+type parentsClosureIterator struct {
+	mi   types.MapIterator
+	err  error
+	curr types.Tuple
+}
+
+func (i *parentsClosureIterator) Err() error {
+	return i.err
+}
+
+func (i *parentsClosureIterator) Hash() hash.Hash {
+	if i.err != nil {
+		return hash.Hash{}
+	}
+	var h hash.Hash
+	field, err := i.curr.Get(1)
+	if err != nil {
+		i.err = err
+		return hash.Hash{}
+	}
+	ib, ok := field.(types.InlineBlob)
+	if !ok {
+		i.err = fmt.Errorf("second field of tuple key parents closure should have been InlineBlob")
+		return hash.Hash{}
+	}
+	copy(h[:], []byte(ib))
+	return h
+}
+
+func (i *parentsClosureIterator) Less(f *types.NomsBinFormat, other *parentsClosureIterator) bool {
+	if i.err != nil || other.err != nil {
+		return false
+	}
+	ret, err := i.curr.Less(f, other.curr)
+	if err != nil {
+		i.err = err
+		other.err = err
+		return false
+	}
+	return ret
+}
+
+func (i *parentsClosureIterator) Next(ctx context.Context) bool {
+	if i.err != nil {
+		return false
+	}
+	n, _, err := i.mi.Next(ctx)
+	if err != nil {
+		i.err = err
+		return false
+	}
+	if n == nil || types.IsNull(n) {
+		return false
+	}
+	t, ok := n.(types.Tuple)
+	if !ok {
+		i.err = fmt.Errorf("key value of parents closure map should have been Tuple")
+		return false
+	}
+	i.curr = t
+	return true
+}
+
+func hashToRef(ctx context.Context, vr types.ValueReader, h hash.Hash) (types.Ref, error) {
+	fetched, err := vr.ReadValue(ctx, h)
+	if err != nil {
+		return types.Ref{}, err
+	}
+	return types.NewRef(fetched, vr.Format())
+}
+
+func refToMapKeyTuple(f *types.NomsBinFormat, r types.Ref) (types.Tuple, error) {
+	h := r.TargetHash()
+	ib := make([]byte, len(hash.Hash{}))
+	copy(ib, h[:])
+	return types.NewTuple(f, types.Uint(r.Height()), types.InlineBlob(ib))
+}
+
+func firstError(l, r error) error {
+	if l != nil {
+		return l
+	}
+	return r
+}
+
+func newParentsClosureIterator(ctx context.Context, r types.Ref, vr types.ValueReader) (*parentsClosureIterator, error) {
+	sv, err := r.TargetValue(ctx, vr)
+	if err != nil {
+		return nil, err
+	}
+	s, ok := sv.(types.Struct)
+	if !ok {
+		return nil, fmt.Errorf("target ref is not struct: %v", sv)
+	}
+
+	fv, ok, err := s.MaybeGet(ParentsClosureField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	mr, ok := fv.(types.Ref)
+	if !ok {
+		return nil, fmt.Errorf("value of parents_closure field is not Ref: %v", fv)
+	}
+
+	mv, err := mr.TargetValue(ctx, vr)
+	if err != nil {
+		return nil, err
+	}
+
+	m, ok := mv.(types.Map)
+	if !ok {
+		return nil, fmt.Errorf("target value of parents_closure Ref is not Map: %v", mv)
+	}
+
+	maxKeyTuple, err := types.NewTuple(vr.Format(), types.Uint(18446744073709551615))
+	if err != nil {
+		return nil, err
+	}
+
+	mi, err := m.IteratorBackFrom(ctx, maxKeyTuple)
+	if err != nil {
+		return nil, err
+	}
+
+	initialCurr, err := refToMapKeyTuple(vr.Format(), r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &parentsClosureIterator{mi, nil, initialCurr}, nil
 }
 
 func IsCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
