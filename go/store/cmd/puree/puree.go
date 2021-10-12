@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/dolthub/dolt/go/store/metrics"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -35,8 +34,7 @@ var Dir = flag.String("dir", ".", "directory of the repository")
 var Branch = flag.String("branch", "master", "branch of the repository")
 var Table = flag.String("table", "", "table to test against")
 var Seed = flag.Int("seed", 1, "seed to use for rng key selector")
-
-var NewChunker = flag.Bool("new", false, "use new smooth chunker")
+var Verbose = flag.Bool("verbose", false, "detail stats by level")
 
 func main() {
 	flag.Parse()
@@ -47,11 +45,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	printSummary(maps)
-
-	if *NewChunker {
-		types.SmoothChunking = true
-	}
 
 	err = TestWriteAmplification(ctx, int64(*Seed), maps)
 	if err != nil {
@@ -61,63 +54,93 @@ func main() {
 	fmt.Println("disco")
 }
 
-func printSummary(maps map[string]types.Map) {
-	fmt.Println("Test Tables")
-	for name, m := range maps {
-		fmt.Printf("%s: %8d rows\n", name, m.Len())
-	}
+const samples = 100
+
+func RunExperiment(v Variables, fn func() error) (err error) {
+	// save previous values
+	prevSmooth := types.SmoothChunking
+
+	// set test values
+	types.SmoothChunking = v.smooth
+
+	err = fn()
+
+	// restore previous values
+	types.SmoothChunking = prevSmooth
+
+	return err
 }
 
-type WriteAmpExperiment interface {
+type Variables struct {
+	smooth bool
+}
+
+func (v Variables) String() string {
+	return fmt.Sprintf("Smooth Chunking %t", v.smooth)
+}
+
+type WriteAmpTest interface {
 	Name(table string) string
-	Setup(ctx context.Context, m types.Map, seed int64, samples int64) error
+	Setup(ctx context.Context, m types.Map, seed int64) error
 	Run(ctx context.Context) (*WriteAmplificationStats, error)
 	TearDown(ctx context.Context) error
 }
 
 func TestWriteAmplification(ctx context.Context, seed int64, maps map[string]types.Map) (err error) {
-	experiments := []WriteAmpExperiment{
-		//&DeleteExperiment{editSize: 1},
-		//&DeleteExperiment{editSize: 2},
-		//&DeleteExperiment{editSize: 10},
-		//&DeleteExperiment{editSize: 50},
-		&InsertExperiment{editSize: 1},
-		&InsertExperiment{editSize: 2},
-		&InsertExperiment{editSize: 5},
-		&InsertExperiment{editSize: 10},
-		&InsertExperiment{editSize: 200},
+	tests := []WriteAmpTest{
+		&DeleteTest{editSize: 1},
+		&DeleteTest{editSize: 10},
+		&DeleteTest{editSize: 50},
+		&InsertTest{editSize: 1},
+		&InsertTest{editSize: 10},
+		&InsertTest{editSize: 50},
 	}
 
-	const samples = 50
+	experiments := []Variables{
+		{smooth: false},
+		{smooth: true},
+	}
 
 	for name, rows := range maps {
-		for _, exp := range experiments {
-			suf := fmt.Sprintf(" %d times", samples)
-			fmt.Println(exp.Name(name) + suf)
 
-			err = exp.Setup(ctx, rows, seed, samples)
-			if err != nil {
-				return err
+		for _, test := range tests {
+			fmt.Println(fmt.Sprintf("---------- %s ----------", test.Name(name)))
+
+			for _, vars := range experiments {
+				fmt.Println(vars.String())
+
+				err = test.Setup(ctx, rows, seed)
+				if err != nil {
+					return err
+				}
+
+				var results *WriteAmplificationStats
+				err = RunExperiment(vars, func() error {
+					results, err = test.Run(ctx)
+					return err
+				})
+				if err != nil {
+					return err
+				}
+
+				err = test.TearDown(ctx)
+				if err != nil {
+					return err
+				}
+
+				if *Verbose {
+					fmt.Println(results.SummaryByLevel())
+				} else {
+					fmt.Println(results.Summary())
+				}
 			}
-
-			results, err := exp.Run(ctx)
-			if err != nil {
-				return err
-			}
-
-			err = exp.TearDown(ctx)
-			if err != nil {
-				return err
-			}
-
-			fmt.Println(results.Summary(samples))
 		}
 	}
 
 	return
 }
 
-type InsertExperiment struct {
+type InsertTest struct {
 	orig, mod types.Map
 
 	editSize uint64
@@ -126,17 +149,15 @@ type InsertExperiment struct {
 	stats *WriteAmplificationStats
 }
 
-var _ WriteAmpExperiment = &InsertExperiment{}
+var _ WriteAmpTest = &InsertTest{}
 
-func (ie *InsertExperiment) Name(table string) string {
-	return fmt.Sprintf("Insert %d rows into %s", ie.editSize, table)
+func (ie *InsertTest) Name(table string) string {
+	return fmt.Sprintf("Insert %d rows into %s %d times", ie.editSize, table, samples)
 }
 
-func (ie *InsertExperiment) Setup(ctx context.Context, m types.Map, seed int64, samples int64) (err error) {
+func (ie *InsertTest) Setup(ctx context.Context, m types.Map, seed int64) (err error) {
 	ie.orig = m
-	ie.stats = &WriteAmplificationStats{
-		stats: make([]metrics.Histogram, m.Height()),
-	}
+	ie.stats = NewWriteAmplificationStats(m.Height())
 	ie.edits = make([]types.KVPSlice, samples)
 
 	src := rand.NewSource(seed)
@@ -173,11 +194,11 @@ func (ie *InsertExperiment) Setup(ctx context.Context, m types.Map, seed int64, 
 	return nil
 }
 
-func (ie *InsertExperiment) collect(stats []types.WriteStats) {
+func (ie *InsertTest) collect(stats []types.WriteStats) {
 	ie.stats.Sample(stats)
 }
 
-func (ie *InsertExperiment) Run(ctx context.Context) (*WriteAmplificationStats, error) {
+func (ie *InsertTest) Run(ctx context.Context) (*WriteAmplificationStats, error) {
 	types.ChunkWithStats = true
 	types.WriteStatSink = ie.collect
 
@@ -195,12 +216,12 @@ func (ie *InsertExperiment) Run(ctx context.Context) (*WriteAmplificationStats, 
 	return ie.stats, nil
 }
 
-func (ie *InsertExperiment) TearDown(ctx context.Context) error {
+func (ie *InsertTest) TearDown(ctx context.Context) error {
 	types.ChunkWithStats = false
 	return nil
 }
 
-type DeleteExperiment struct {
+type DeleteTest struct {
 	orig types.Map
 
 	editSize uint64
@@ -209,20 +230,18 @@ type DeleteExperiment struct {
 	stats *WriteAmplificationStats
 }
 
-var _ WriteAmpExperiment = &DeleteExperiment{}
+var _ WriteAmpTest = &DeleteTest{}
 
-func (de *DeleteExperiment) Name(table string) string {
-	return fmt.Sprintf("Delete %d rows from %s", de.editSize, table)
+func (de *DeleteTest) Name(table string) string {
+	return fmt.Sprintf("Delete %d rows from %s %d times", de.editSize, table, samples)
 }
 
-func (de *DeleteExperiment) Setup(ctx context.Context, m types.Map, seed int64, samples int64) error {
+func (de *DeleteTest) Setup(ctx context.Context, m types.Map, seed int64) (err error) {
 	types.ChunkWithStats = true
 	types.WriteStatSink = de.collect
 
 	de.orig = m
-	de.stats = &WriteAmplificationStats{
-		stats: make([]metrics.Histogram, m.Height()),
-	}
+	de.stats = NewWriteAmplificationStats(m.Height())
 
 	src := rand.NewSource(seed)
 	de.edits = make([]uint64, samples)
@@ -234,11 +253,11 @@ func (de *DeleteExperiment) Setup(ctx context.Context, m types.Map, seed int64, 
 	return nil
 }
 
-func (de *DeleteExperiment) collect(stats []types.WriteStats) {
+func (de *DeleteTest) collect(stats []types.WriteStats) {
 	de.stats.Sample(stats)
 }
 
-func (de *DeleteExperiment) Run(ctx context.Context) (*WriteAmplificationStats, error) {
+func (de *DeleteTest) Run(ctx context.Context) (*WriteAmplificationStats, error) {
 	for _, pos := range de.edits {
 		iter, err := de.orig.IteratorAt(ctx, pos)
 		if err != nil {
@@ -263,7 +282,7 @@ func (de *DeleteExperiment) Run(ctx context.Context) (*WriteAmplificationStats, 
 	return de.stats, nil
 }
 
-func (de *DeleteExperiment) TearDown(ctx context.Context) error {
+func (de *DeleteTest) TearDown(ctx context.Context) error {
 	types.ChunkWithStats = false
 	return nil
 }
