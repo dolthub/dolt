@@ -115,7 +115,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 		}
 
-		tables := apr.Args()
+		tables := apr.Args
 
 		roots, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, roots)
 		if err != nil {

@@ -24,14 +24,13 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
-	sqltestutil.CreateTestDatabase(dEnv, t)
+	sqle.CreateTestDatabase(dEnv, t)
 
 	ctx := context.Background()
 	root, _ := dEnv.WorkingRoot(ctx)

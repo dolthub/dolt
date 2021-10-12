@@ -27,11 +27,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -1607,7 +1605,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	defer cleanup()
 
 	dEnv := dtestutils.CreateTestEnv()
-	envtestutils.InitializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
+	InitializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
@@ -1630,7 +1628,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	root, err = dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 
-	root = envtestutils.UpdateTables(t, ctx, root, CreateWorkingRootUpdate())
+	root = UpdateTables(t, ctx, root, CreateWorkingRootUpdate())
 
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)

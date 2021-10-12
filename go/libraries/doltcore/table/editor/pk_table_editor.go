@@ -25,6 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -98,8 +100,10 @@ type pkTableEditor struct {
 	tea      TableEditAccumulator
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
-	indexTF  *types.TupleFactory
 	cvEditor *types.MapEditor
+
+	// TupleFactory is not thread-safe.  writeMutex needs to be acquired before using tf
+	tf *types.TupleFactory
 
 	// Whenever any write operation occurs on the table editor, this is set to true for the lifetime of the editor.
 	dirty uint32
@@ -123,7 +127,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		opts:       opts,
 		nbf:        t.Format(),
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
-		indexTF:    tf,
+		tf:         tf,
 		writeMutex: &sync.Mutex{},
 	}
 	var err error
@@ -368,6 +372,11 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
+	return te.insertKeyVal(ctx, keyHash, key, val, tagToVal, errFunc)
+}
+
+// InsertKeyVal adds the given tuples to the table.
+func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) (retErr error) {
 	// Run the index editors first, as we can back out of the changes in the event of an error, but can't do that for
 	// changes made to the table. We create a slice that matches the number of index editors. For each successful
 	// operation, we increment the associated index on the slice, and in the event of an error, we undo that number of
@@ -384,7 +393,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal, te.indexTF)
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal, te.tf)
 		if err != nil {
 			return err
 		}
@@ -416,7 +425,7 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
-	err = te.tea.Insert(keyHash, key, val)
+	err := te.tea.Insert(keyHash, key, val)
 	if err != nil {
 		return err
 	}
@@ -453,16 +462,8 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow. This converts the given row into
 // tuples that are then passed to InsertKeyVal.
 func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
-	key, err := dRow.NomsMapKey(te.tSch).Value(ctx)
-	if err != nil {
-		return err
-	}
-	val, err := dRow.NomsMapValue(te.tSch).Value(ctx)
-	if err != nil {
-		return err
-	}
 	tagToVal := make(map[uint64]types.Value)
-	_, err = dRow.IterSchema(te.tSch, func(tag uint64, val types.Value) (stop bool, err error) {
+	_, err := dRow.IterSchema(te.tSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		if val == nil {
 			tagToVal[tag] = types.NullValue
 		} else {
@@ -470,14 +471,33 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 		}
 		return false, nil
 	})
+
 	if err != nil {
 		return err
 	}
-	return te.InsertKeyVal(ctx, key.(types.Tuple), val.(types.Tuple), tagToVal, errFunc)
+
+	// Regarding the lock's position here, refer to the comment in InsertKeyVal
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
+
+	key, err := dRow.NomsMapKeyTuple(te.tSch, te.tf)
+	if err != nil {
+		return err
+	}
+	val, err := dRow.NomsMapValueTuple(te.tSch, te.tf)
+	if err != nil {
+		return err
+	}
+
+	keyHash, err := key.Hash(te.nbf)
+	if err != nil {
+		return err
+	}
+
+	return te.insertKeyVal(ctx, keyHash, key, val, tagToVal, errFunc)
 }
 
 func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) (retErr error) {
-	// Regarding the lock's position here, refer to the comment in InsertKeyVal
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
@@ -494,7 +514,7 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 	}()
 
 	for i, indexEd := range te.indexEds {
-		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal, te.indexTF)
+		fullKey, partialKey, err := row.ReduceToIndexKeysFromTagMap(te.nbf, indexEd.Index(), tagToVal, te.tf)
 		if err != nil {
 			return err
 		}
@@ -527,16 +547,20 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.
 func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc PKDuplicateErrFunc) (retErr error) {
-	dOldKeyVal, err := dOldRow.NomsMapKey(te.tSch).Value(ctx)
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
+
+	dOldKeyVal, err := dOldRow.NomsMapKeyTuple(te.tSch, te.tf)
 	if err != nil {
 		return err
 	}
 
-	dNewKeyVal, err := dNewRow.NomsMapKey(te.tSch).Value(ctx)
+	dNewKeyVal, err := dNewRow.NomsMapKeyTuple(te.tSch, te.tf)
 	if err != nil {
 		return err
 	}
-	dNewRowVal, err := dNewRow.NomsMapValue(te.tSch).Value(ctx)
+
+	dNewRowVal, err := dNewRow.NomsMapValueTuple(te.tSch, te.tf)
 	if err != nil {
 		return err
 	}
@@ -545,14 +569,11 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	if err != nil {
 		return err
 	}
+
 	oldHash, err := dOldKeyVal.Hash(dOldRow.Format())
 	if err != nil {
 		return err
 	}
-
-	// Regarding the lock's position here, refer to the comment in InsertKeyVal
-	te.writeMutex.Lock()
-	defer te.writeMutex.Unlock()
 
 	// Index operations should come before all table operations. For the reasoning, refer to the comment in InsertKeyVal
 	indexOpsToUndo := make([]int, len(te.indexEds))
@@ -567,7 +588,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	}()
 
 	for i, indexEd := range te.indexEds {
-		oldFullKey, oldPartialKey, oldVal, err := dOldRow.ReduceToIndexKeys(indexEd.Index())
+		oldFullKey, oldPartialKey, oldVal, err := dOldRow.ReduceToIndexKeys(indexEd.Index(), te.tf)
 		if err != nil {
 			return err
 		}
@@ -576,7 +597,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 			return err
 		}
 		indexOpsToUndo[i]++
-		newFullKey, newPartialKey, newVal, err := dNewRow.ReduceToIndexKeys(indexEd.Index())
+		newFullKey, newPartialKey, newVal, err := dNewRow.ReduceToIndexKeys(indexEd.Index(), te.tf)
 		if err != nil {
 			return err
 		}
@@ -602,21 +623,20 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		indexOpsToUndo[i]++
 	}
 
-	err = te.tea.Delete(oldHash, dOldKeyVal.(types.Tuple))
+	err = te.tea.Delete(oldHash, dOldKeyVal)
 	if err != nil {
 		return err
 	}
 
 	te.setDirty(true)
 
-	dNewKeyTpl := dNewKeyVal.(types.Tuple)
-	if kvp, pkExists, err := te.tea.Get(ctx, newHash, dNewKeyTpl); err != nil {
+	if kvp, pkExists, err := te.tea.Get(ctx, newHash, dNewKeyVal); err != nil {
 		return err
 	} else if pkExists {
 		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
-	return te.tea.Insert(newHash, dNewKeyTpl, dNewRowVal.(types.Tuple))
+	return te.tea.Insert(newHash, dNewKeyVal, dNewRowVal)
 }
 
 func (te *pkTableEditor) GetAutoIncrementValue() types.Value {
@@ -790,8 +810,8 @@ func (te *pkTableEditor) Close(ctx context.Context) error {
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 	defer func() {
-		tupleFactories.Put(te.indexTF)
-		te.indexTF = nil
+		tupleFactories.Put(te.tf)
+		te.tf = nil
 	}()
 
 	if te.cvEditor != nil {

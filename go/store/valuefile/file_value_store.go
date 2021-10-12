@@ -126,7 +126,7 @@ func (f *FileValueStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, er
 }
 
 // GetMany gets chunks by their hashes. Chunks that are found are written to the channel.
-func (f *FileValueStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
+func (f *FileValueStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
 
@@ -135,7 +135,7 @@ func (f *FileValueStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 
 		if ok {
 			ch := chunks.NewChunkWithHash(h, data)
-			found(&ch)
+			found(ctx, &ch)
 		}
 	}
 

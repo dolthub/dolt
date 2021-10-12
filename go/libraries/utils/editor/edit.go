@@ -16,7 +16,6 @@ package editor
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +27,7 @@ import (
 //OpenCommitEditor allows user to write/edit commit message in temporary file
 func OpenCommitEditor(ed string, initialContents string) (string, error) {
 	filename := filepath.Join(os.TempDir(), uuid.New().String())
-	err := ioutil.WriteFile(filename, []byte(initialContents), os.ModePerm)
+	err := os.WriteFile(filename, []byte(initialContents), os.ModePerm)
 
 	if err != nil {
 		return "", err
@@ -53,7 +52,7 @@ func OpenCommitEditor(ed string, initialContents string) (string, error) {
 	fmt.Printf("Waiting for command to finish.\n")
 	err = cmd.Wait()
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 
 	if err != nil {
 		return "", err

@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -97,7 +97,7 @@ func TestNBSAsTableFileStore(t *testing.T) {
 		rd, err := src.Open(context.Background())
 		require.NoError(t, err)
 
-		data, err := ioutil.ReadAll(rd)
+		data, err := io.ReadAll(rd)
 		require.NoError(t, err)
 
 		err = rd.Close()
@@ -164,7 +164,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	assert.NotEmpty(t, absent)
 
 	currTableFiles := func(dirName string) *set.StrSet {
-		infos, err := ioutil.ReadDir(dirName)
+		infos, err := os.ReadDir(dirName)
 		require.NoError(t, err)
 		curr := set.NewStrSet(nil)
 		for _, fi := range infos {
@@ -193,7 +193,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	for _, fileName := range absent {
 		assert.False(t, postGC.Contains(fileName))
 	}
-	infos, err := ioutil.ReadDir(nomsDir)
+	infos, err := os.ReadDir(nomsDir)
 	require.NoError(t, err)
 
 	// assert that we only have files for current sources,

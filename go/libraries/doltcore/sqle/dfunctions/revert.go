@@ -92,7 +92,7 @@ func (r *RevertFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	commits := make([]*doltdb.Commit, apr.NArg())
-	for i, revisionStr := range apr.Args() {
+	for i, revisionStr := range apr.Args {
 		commitSpec, err := doltdb.NewCommitSpec(revisionStr)
 		if err != nil {
 			return nil, err

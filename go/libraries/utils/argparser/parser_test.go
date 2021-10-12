@@ -86,7 +86,7 @@ func TestArgParser(t *testing.T) {
 
 		if err == nil {
 			assert.Equal(t, test.expectedOptions, apr.options)
-			assert.Equal(t, test.expectedArgs, apr.args)
+			assert.Equal(t, test.expectedArgs, apr.Args)
 		}
 	}
 }

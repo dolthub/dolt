@@ -18,6 +18,8 @@ import (
 	"errors"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/utils/set"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -95,8 +97,15 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 			case DiffModifiedOld:
 				return nil
 			case DiffModifiedNew:
-				// TODO: minimize update statement to modified rows
-				stmt, err := sqlfmt.RowAsUpdateStmt(r, sds.tableName, sds.sch)
+				// Pass in the update as a setStr
+				keys := make([]string, len(colDiffs))
+
+				i := 0
+				for k := range colDiffs {
+					keys[i] = k
+					i++
+				}
+				stmt, err := sqlfmt.RowAsUpdateStmt(r, sds.tableName, sds.sch, set.NewStrSet(keys))
 
 				if err != nil {
 					return err

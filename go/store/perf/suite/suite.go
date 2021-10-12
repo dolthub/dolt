@@ -91,7 +91,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -382,7 +381,7 @@ func (suite *PerfSuite) NewAssert() *assert.Assertions {
 // TempFile creates a temporary file, which will be automatically cleaned up by
 // the perf test suite. Files will be prefixed with the test's dataset ID
 func (suite *PerfSuite) TempFile() *os.File {
-	f, err := ioutil.TempFile("", suite.tempPrefix())
+	f, err := os.CreateTemp("", suite.tempPrefix())
 	require.NoError(suite.T, err)
 	suite.tempFiles = append(suite.tempFiles, f)
 	return f
@@ -392,7 +391,7 @@ func (suite *PerfSuite) TempFile() *os.File {
 // up by the perf test suite. Directories will be prefixed with the test's
 // dataset ID.
 func (suite *PerfSuite) TempDir() string {
-	d, err := ioutil.TempDir("", suite.tempPrefix())
+	d, err := os.MkdirTemp("", suite.tempPrefix())
 	require.NoError(suite.T, err)
 	suite.tempDirs = append(suite.tempDirs, d)
 	return d

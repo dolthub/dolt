@@ -133,7 +133,7 @@ func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (remaining bool, err error) {
+func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (remaining bool, err error) {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if rp, ok := haver.(chunkReadPlanner); ok {
@@ -161,7 +161,7 @@ func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRe
 	return f(ts.novel) && err == nil && f(ts.upstream), err
 }
 
-func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (remaining bool, err error) {
+func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (remaining bool, err error) {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if rp, ok := haver.(chunkReadPlanner); ok {

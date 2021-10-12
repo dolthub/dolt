@@ -23,7 +23,7 @@ package nbs
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,7 +42,7 @@ func TestStats(t *testing.T) {
 		return store.Stats().(Stats)
 	}
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize)
 	require.NoError(t, err)
@@ -119,7 +119,12 @@ func TestStats(t *testing.T) {
 		hashes[i] = c.Hash()
 	}
 	chunkChan := make(chan *chunks.Chunk, 3)
-	err = store.GetMany(context.Background(), hashes.HashSet(), func(c *chunks.Chunk) { chunkChan <- c })
+	err = store.GetMany(context.Background(), hashes.HashSet(), func(ctx context.Context, c *chunks.Chunk) {
+		select {
+		case chunkChan <- c:
+		case <-ctx.Done():
+		}
+	})
 	require.NoError(t, err)
 	assert.Equal(uint64(4), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(54), stats(store).FileBytesPerRead.Sum())

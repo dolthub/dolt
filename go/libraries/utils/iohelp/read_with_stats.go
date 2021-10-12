@@ -29,10 +29,10 @@ type ReadStats struct {
 }
 
 type ReaderWithStats struct {
-	rd      io.Reader
-	size    int64
-	start   time.Time
 	read    uint64
+	size    int64
+	rd      io.Reader
+	start   time.Time
 	closeCh chan struct{}
 }
 

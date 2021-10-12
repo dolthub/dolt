@@ -106,7 +106,7 @@ func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string,
 	} else {
 		switch ops.Size() {
 		case 1:
-			return processConfigCommand(dEnv, cfgTypes, ops.AsSlice()[0], apr.Args(), usage)
+			return processConfigCommand(dEnv, cfgTypes, ops.AsSlice()[0], apr.Args, usage)
 		default:
 			cli.PrintErrln(color.RedString("Exactly one of the -add, -get, -unset, -list flags must be set."))
 			usage()

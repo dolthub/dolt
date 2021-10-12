@@ -15,7 +15,6 @@
 package utils
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +26,7 @@ import (
 
 func TestFindGitConfigDir(t *testing.T) {
 	// Setup
-	tmpDir, err := ioutil.TempDir("", "git-dolt-test")
+	tmpDir, err := os.MkdirTemp("", "git-dolt-test")
 	if err != nil {
 		t.Errorf("Error creating temp directory: %v", err)
 	}

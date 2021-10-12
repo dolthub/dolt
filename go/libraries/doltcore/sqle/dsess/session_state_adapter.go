@@ -34,6 +34,7 @@ type SessionStateAdapter struct {
 	session  *Session
 	dbName   string
 	remotes  map[string]env.Remote
+	backups  map[string]env.Remote
 	branches map[string]env.BranchConfig
 }
 
@@ -124,6 +125,10 @@ func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
 	return s.remotes, nil
 }
 
+func (s SessionStateAdapter) GetBackups() (map[string]env.Remote, error) {
+	return s.backups, nil
+}
+
 func (s SessionStateAdapter) GetBranches() (map[string]env.BranchConfig, error) {
 	return s.branches, nil
 }
@@ -137,7 +142,15 @@ func (s SessionStateAdapter) AddRemote(name string, url string, fetchSpecs []str
 	return fmt.Errorf("cannot insert remote in an SQL session")
 }
 
+func (s SessionStateAdapter) AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error {
+	return fmt.Errorf("cannot insert remote in an SQL session")
+}
+
 func (s SessionStateAdapter) RemoveRemote(ctx context.Context, name string) error {
+	return fmt.Errorf("cannot delete remote in an SQL session")
+}
+
+func (s SessionStateAdapter) RemoveBackup(ctx context.Context, name string) error {
 	return fmt.Errorf("cannot delete remote in an SQL session")
 }
 

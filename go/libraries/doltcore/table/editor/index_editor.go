@@ -68,11 +68,12 @@ func (u *uniqueKeyErr) Error() string {
 type IndexEditor struct {
 	nbf *types.NomsBinFormat
 
-	idxSch schema.Schema
-	tblSch schema.Schema
-	idx    schema.Index
-	iea    IndexEditAccumulator
-	stack  indexOperationStack
+	idxSch       schema.Schema
+	tblSch       schema.Schema
+	idx          schema.Index
+	iea          IndexEditAccumulator
+	stack        indexOperationStack
+	permanentErr error // If this is set then we should always return this error as the IndexEditor is no longer usable
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -81,12 +82,13 @@ type IndexEditor struct {
 // NewIndexEditor creates a new index editor
 func NewIndexEditor(ctx context.Context, index schema.Index, indexData types.Map, tableSch schema.Schema, opts Options) *IndexEditor {
 	ie := &IndexEditor{
-		idxSch:     index.Schema(),
-		tblSch:     tableSch,
-		idx:        index,
-		iea:        opts.Deaf.NewIndexEA(ctx, indexData),
-		nbf:        indexData.Format(),
-		writeMutex: &sync.Mutex{},
+		idxSch:       index.Schema(),
+		tblSch:       tableSch,
+		idx:          index,
+		iea:          opts.Deaf.NewIndexEA(ctx, indexData),
+		nbf:          indexData.Format(),
+		permanentErr: nil,
+		writeMutex:   &sync.Mutex{},
 	}
 	return ie
 }
@@ -105,6 +107,10 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
+
+	if ie.permanentErr != nil {
+		return ie.permanentErr
+	}
 
 	if ie.idx.IsUnique() {
 		if matches, err := ie.iea.HasPartial(ctx, ie.idxSch, partialKeyHash, partialKey); err != nil {
@@ -126,7 +132,7 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 		}
 	}
 
-	err = ie.iea.Insert(ctx, keyHash, partialKeyHash, key, partialKey, value)
+	err = ie.iea.Insert(ctx, keyHash, partialKeyHash, key, value)
 	if err != nil {
 		return err
 	}
@@ -149,7 +155,11 @@ func (ie *IndexEditor) DeleteRow(ctx context.Context, key, partialKey, value typ
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
 
-	err = ie.iea.Delete(ctx, keyHash, partialKeyHash, key, partialKey, value)
+	if ie.permanentErr != nil {
+		return ie.permanentErr
+	}
+
+	err = ie.iea.Delete(ctx, keyHash, partialKeyHash, key, value)
 	if err != nil {
 		return err
 	}
@@ -168,6 +178,10 @@ func (ie *IndexEditor) HasPartial(ctx context.Context, partialKey types.Tuple) (
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
 
+	if ie.permanentErr != nil {
+		return false, ie.permanentErr
+	}
+
 	tpls, err := ie.iea.HasPartial(ctx, ie.idxSch, partialKeyHash, partialKey)
 	if err != nil {
 		return false, err
@@ -180,9 +194,16 @@ func (ie *IndexEditor) HasPartial(ctx context.Context, partialKey types.Tuple) (
 // Insert on a key, it will use Delete on that same key. The stack size is very small, therefore too many consecutive
 // calls will cause the stack to empty. This should only be called in the event that an operation was performed that
 // has failed for other reasons, such as an INSERT on the parent table failing on a separate index editor. In the event
-// that Undo is called and there are no operations to undo OR the reverse operation fails (it never should), this panics
-// rather than errors, as the index editor is in an invalid state that cannot be corrected.
+// that Undo is called and there are no operations to undo OR the reverse operation fails (such as memory capacity
+// reached), then we set a permanent error as the index editor is in an invalid state that cannot be corrected.
+//
+// We don't return an error here as Undo will only be called when there's an error in a different editor. We allow the
+// user to handle that initial error, as ALL further calls to this IndexEditor will return the error set here.
 func (ie *IndexEditor) Undo(ctx context.Context) {
+	if ie.permanentErr != nil {
+		return
+	}
+
 	indexOp, ok := ie.stack.Pop()
 	if !ok {
 		panic(fmt.Sprintf("attempted to undo the last operation on index '%s' but failed due to an empty stack", ie.idx.Name()))
@@ -195,16 +216,18 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 	if indexOp.isInsert {
 		err := ie.DeleteRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
-			panic(fmt.Sprintf("index '%s' is in an invalid and unrecoverable state: "+
+			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
 				"attempted to undo previous insertion but encountered the following error: %v",
-				ie.idx.Name(), err))
+				ie.idx.Name(), err)
+			return
 		}
 	} else {
 		err := ie.InsertRow(ctx, indexOp.fullKey, indexOp.partialKey, indexOp.value)
 		if err != nil {
-			panic(fmt.Sprintf("index '%s' is in an invalid and unrecoverable state: "+
+			ie.permanentErr = fmt.Errorf("index '%s' is in an invalid and unrecoverable state: "+
 				"attempted to undo previous deletion but encountered the following error: %v",
-				ie.idx.Name(), err))
+				ie.idx.Name(), err)
+			return
 		}
 	}
 }
@@ -213,6 +236,10 @@ func (ie *IndexEditor) Undo(ctx context.Context) {
 func (ie *IndexEditor) Map(ctx context.Context) (types.Map, error) {
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
+
+	if ie.permanentErr != nil {
+		return types.EmptyMap, ie.permanentErr
+	}
 
 	return ie.iea.MaterializeEdits(ctx, ie.nbf)
 }
@@ -231,7 +258,9 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 	ie.writeMutex.Lock()
 	defer ie.writeMutex.Unlock()
 
-	if errored {
+	if ie.permanentErr != nil {
+		return ie.permanentErr
+	} else if errored {
 		return ie.iea.Rollback(ctx)
 	}
 
@@ -240,7 +269,7 @@ func (ie *IndexEditor) StatementFinished(ctx context.Context, errored bool) erro
 
 // Close is a no-op for an IndexEditor.
 func (ie *IndexEditor) Close() error {
-	return nil
+	return ie.permanentErr
 }
 
 func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts Options) (types.Map, error) {
@@ -317,7 +346,7 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 			return err
 		}
 
-		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index)
+		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index, nil)
 		if err != nil {
 			return err
 		}

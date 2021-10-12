@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -78,7 +77,7 @@ func readerForTuples(t *testing.T, nbf *types.NomsBinFormat, vrw types.ValueRead
 	err := wr.WriteTuples(tuples...)
 	require.NoError(t, err)
 
-	return types.NewTupleReader(nbf, vrw, ioutil.NopCloser(bytes.NewBuffer(buf.Bytes())))
+	return types.NewTupleReader(nbf, vrw, io.NopCloser(bytes.NewBuffer(buf.Bytes())))
 }
 
 func newTuple(t *testing.T, nbf *types.NomsBinFormat, vals ...types.Value) types.Tuple {
@@ -159,7 +158,7 @@ func genReader(t *testing.T, r *rand.Rand, nbf *types.NomsBinFormat, vrw types.V
 		require.NoError(t, err)
 	}
 
-	return numItems, types.NewTupleReader(nbf, vrw, ioutil.NopCloser(bytes.NewBuffer(buf.Bytes())))
+	return numItems, types.NewTupleReader(nbf, vrw, io.NopCloser(bytes.NewBuffer(buf.Bytes())))
 }
 
 func TestTupleStreamMerger(t *testing.T) {

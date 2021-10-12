@@ -29,7 +29,8 @@ var noopChunkCache = &noopChunkCacheImpl{}
 type noopChunkCacheImpl struct {
 }
 
-func (*noopChunkCacheImpl) Put(chnks []nbs.CompressedChunk) {
+func (*noopChunkCacheImpl) Put(chnks []nbs.CompressedChunk) bool {
+	return false
 }
 
 func (*noopChunkCacheImpl) Get(hashes hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
@@ -41,7 +42,7 @@ func (*noopChunkCacheImpl) Has(hashes hash.HashSet) (absent hash.HashSet) {
 }
 
 func (*noopChunkCacheImpl) PutChunk(ch nbs.CompressedChunk) bool {
-	return true
+	return false
 }
 
 func (*noopChunkCacheImpl) GetAndClearChunksToFlush() map[hash.Hash]nbs.CompressedChunk {

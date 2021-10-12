@@ -438,7 +438,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 				if err != nil {
 					return nil, err
 				}
-				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index())
+				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index(), nil)
 				if err != nil {
 					return nil, err
 				}

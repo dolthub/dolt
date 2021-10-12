@@ -17,7 +17,7 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -91,7 +91,7 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	queryStr = fmt.Sprintf("%sCREATE TABLE `%s` LIKE `%s`;", queryStr, newTbl, oldTbl)
 	queryStr = fmt.Sprintf("%sINSERT INTO `%s` SELECT * FROM `%s`;", queryStr, newTbl, oldTbl)
 
-	cli.CliOut = ioutil.Discard // display nothing on success
+	cli.CliOut = io.Discard // display nothing on success
 	return commands.SqlCmd{}.Exec(ctx, "", []string{
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),

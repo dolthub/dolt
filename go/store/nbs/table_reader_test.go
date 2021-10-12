@@ -15,7 +15,7 @@
 package nbs
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 
@@ -36,7 +36,7 @@ func TestParseTableIndex(t *testing.T) {
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
 	defer f.Close()
-	bs, err := ioutil.ReadAll(f)
+	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
 	idx, err := parseTableIndex(bs)
 	require.NoError(t, err)
@@ -60,7 +60,7 @@ func TestMMapIndex(t *testing.T) {
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
 	defer f.Close()
-	bs, err := ioutil.ReadAll(f)
+	bs, err := io.ReadAll(f)
 	require.NoError(t, err)
 	idx, err := parseTableIndex(bs)
 	require.NoError(t, err)
@@ -97,4 +97,28 @@ func TestMMapIndex(t *testing.T) {
 	assert.Equal(t, idx.Prefixes(), mmidx.Prefixes())
 	assert.Equal(t, idx.TableFileSize(), mmidx.TableFileSize())
 	assert.Equal(t, idx.TotalUncompressedData(), mmidx.TotalUncompressedData())
+}
+
+func TestCanReadAhead(t *testing.T) {
+	type expected struct {
+		end uint64
+		can bool
+	}
+	type testCase struct {
+		rec       offsetRec
+		start     uint64
+		end       uint64
+		blockSize uint64
+		ex        expected
+	}
+	for _, c := range []testCase{
+		testCase{offsetRec{offset: 8191, length: 2048}, 0, 4096, 4096, expected{end: 10239, can: true}},
+		testCase{offsetRec{offset: 8191, length: 2048}, 0, 4096, 2048, expected{end: 4096, can: false}},
+		testCase{offsetRec{offset: 2048, length: 2048}, 0, 4096, 2048, expected{end: 4096, can: true}},
+		testCase{offsetRec{offset: 137438953472, length: 2048}, 0, 137438953472, 4096, expected{end: 137438953472, can: false}},
+	} {
+		end, can := canReadAhead(c.rec, c.start, c.end, c.blockSize)
+		assert.Equal(t, c.ex.end, end)
+		assert.Equal(t, c.ex.can, can)
+	}
 }

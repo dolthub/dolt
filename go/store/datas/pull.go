@@ -260,12 +260,12 @@ func filterAppendicesFromSourceFiles(appendixFiles []nbs.TableFile, sourceFiles 
 
 // Pull objects that descend from sourceRef from srcDB to sinkDB.
 func Pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) error {
-	return pull(ctx, srcDB, sinkDB, sourceRef, progressCh, defaultBatchSize)
+	return pull(ctx, srcDB, sinkDB, sourceRef.TargetHash(), progressCh, defaultBatchSize)
 }
 
-func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress, batchSize int) error {
+func pull(ctx context.Context, srcDB, sinkDB Database, sourceHash hash.Hash, progressCh chan PullProgress, batchSize int) error {
 	// Sanity Check
-	exists, err := srcDB.chunkStore().Has(ctx, sourceRef.TargetHash())
+	exists, err := srcDB.chunkStore().Has(ctx, sourceHash)
 
 	if err != nil {
 		return err
@@ -275,7 +275,7 @@ func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 		return errors.New("not found")
 	}
 
-	exists, err = sinkDB.chunkStore().Has(ctx, sourceRef.TargetHash())
+	exists, err = sinkDB.chunkStore().Has(ctx, sourceHash)
 
 	if err != nil {
 		return err
@@ -293,7 +293,7 @@ func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 	updateProgress := makeProgTrack(progressCh)
 
 	// TODO: This batches based on limiting the _number_ of chunks processed at the same time. We really want to batch based on the _amount_ of chunk data being processed simultaneously. We also want to consider the chunks in a particular order, however, and the current GetMany() interface doesn't provide any ordering guarantees. Once BUG 3750 is fixed, we should be able to revisit this and do a better job.
-	absent := hash.HashSlice{sourceRef.TargetHash()}
+	absent := hash.HashSlice{sourceHash}
 	for absentCount := len(absent); absentCount != 0; absentCount = len(absent) {
 		updateProgress(0, uint64(absentCount), 0)
 
@@ -363,14 +363,14 @@ func persistChunks(ctx context.Context, cs chunks.ChunkStore) error {
 // optimization problem down to the chunk store which can make smarter decisions.
 func PullWithoutBatching(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) error {
 	// by increasing the batch size to MaxInt32 we effectively remove batching here.
-	return pull(ctx, srcDB, sinkDB, sourceRef, progressCh, math.MaxInt32)
+	return pull(ctx, srcDB, sinkDB, sourceRef.TargetHash(), progressCh, math.MaxInt32)
 }
 
 // concurrently pull all chunks from this batch that the sink is missing out of the source
 func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sampleSize uint64, sampleCount uint64, updateProgress func(moreDone uint64, moreKnown uint64, moreApproxBytesWritten uint64)) (map[hash.Hash]*chunks.Chunk, error) {
 	mu := &sync.Mutex{}
 	neededChunks := map[hash.Hash]*chunks.Chunk{}
-	err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), func(c *chunks.Chunk) {
+	err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), func(ctx context.Context, c *chunks.Chunk) {
 		mu.Lock()
 		defer mu.Unlock()
 		neededChunks[c.Hash()] = c

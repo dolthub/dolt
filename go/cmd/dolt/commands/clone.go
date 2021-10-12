@@ -98,11 +98,20 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	verr := clone(ctx, apr, dEnv)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	return 0
+}
+
+func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
 	remoteName := apr.GetValueOrDefault(remoteParam, "origin")
 	branch := apr.GetValueOrDefault(branchParam, "")
 	dir, urlStr, verr := parseArgs(apr)
 	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+		return verr
 	}
 
 	userDirExists, _ := dEnv.FS.Exists(dir)
@@ -110,24 +119,24 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
 
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("error: '%s' is not valid.", urlStr).Build(), usage)
+		return errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
 	}
 	var params map[string]string
 	params, verr = parseRemoteArgs(apr, scheme, remoteUrl)
 	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+		return verr
 	}
 
 	var r env.Remote
 	var srcDB *doltdb.DoltDB
 	r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params, dEnv)
 	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+		return verr
 	}
 
 	dEnv, err = actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, dEnv)
@@ -142,7 +151,7 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			_ = os.Chdir("../")
 			_ = dEnv.FS.Delete(dir, true)
 		}
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	evt := events.GetEventFromContext(ctx)
@@ -153,7 +162,7 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		}
 	}
 
-	return 0
+	return nil
 }
 
 func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseError) {

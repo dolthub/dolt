@@ -86,7 +86,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return handleStageError(err)
 		}
 	} else {
-		tables, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), apr.Args())
+		tables, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), apr.Args)
 		if err != nil {
 			return handleStageError(err)
 		}

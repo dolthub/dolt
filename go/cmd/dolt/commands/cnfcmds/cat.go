@@ -78,7 +78,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, catDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	args = apr.Args()
+	args = apr.Args
 
 	if len(args) == 0 {
 		cli.Println("No tables specified")

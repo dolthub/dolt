@@ -24,7 +24,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"sort"
@@ -125,7 +124,7 @@ func main() {
 				d.PanicIfError(err)
 			}()
 			open = func() (chunks.ChunkStore, error) {
-				f, err := ioutil.TempFile(dir, "")
+				f, err := os.CreateTemp(dir, "")
 				d.Chk.NoError(err)
 				return newFileBlockStore(f)
 			}
@@ -224,7 +223,7 @@ func main() {
 }
 
 func makeTempDir(tmpdir string, t assert.TestingT) (dir string) {
-	dir, err := ioutil.TempDir(tmpdir, "")
+	dir, err := os.MkdirTemp(tmpdir, "")
 	assert.NoError(t, err)
 	return
 }

@@ -27,7 +27,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"

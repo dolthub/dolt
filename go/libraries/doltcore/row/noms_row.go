@@ -256,10 +256,30 @@ func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
 	return nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
 }
 
+func (nr nomsRow) NomsMapKeyTuple(sch schema.Schema, tf *types.TupleFactory) (types.Tuple, error) {
+	tv := nr.key.NomsTupleForPKCols(nr.nbf, sch.GetPKCols())
+
+	if tf != nil {
+		return tf.Create(tv.vs...)
+	} else {
+		return types.NewTuple(tv.nbf, tv.vs...)
+	}
+}
+
+func (nr nomsRow) NomsMapValueTuple(sch schema.Schema, tf *types.TupleFactory) (types.Tuple, error) {
+	tv := nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
+
+	if tf != nil {
+		return tf.Create(tv.vs...)
+	} else {
+		return types.NewTuple(tv.nbf, tv.vs...)
+	}
+}
+
 // ReduceToIndexKeys creates a full key, partial key, and value tuple from the given row (first tuple being the full key). Please
 // refer to the note in the index editor for more information regarding partial keys. NomsRows map always
 // keys to an empty value tuple.
-func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple, types.Tuple, error) {
+func (nr nomsRow) ReduceToIndexKeys(idx schema.Index, tf *types.TupleFactory) (types.Tuple, types.Tuple, types.Tuple, error) {
 	vals := make([]types.Value, 0, len(idx.AllTags())*2)
 	for _, tag := range idx.AllTags() {
 		val, ok := nr.GetColVal(tag)
@@ -268,14 +288,30 @@ func (nr nomsRow) ReduceToIndexKeys(idx schema.Index) (types.Tuple, types.Tuple,
 		}
 		vals = append(vals, types.Uint(tag), val)
 	}
-	fullKey, err := types.NewTuple(nr.Format(), vals...)
-	if err != nil {
-		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+
+	var err error
+	var fullKey types.Tuple
+	var partialKey types.Tuple
+	if tf == nil {
+		fullKey, err = types.NewTuple(nr.Format(), vals...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+		}
+		partialKey, err = types.NewTuple(nr.Format(), vals[:idx.Count()*2]...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+		}
+	} else {
+		fullKey, err = tf.Create(vals...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+		}
+		partialKey, err = tf.Create(vals[:idx.Count()*2]...)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
+		}
 	}
-	partialKey, err := types.NewTuple(nr.Format(), vals[:idx.Count()*2]...)
-	if err != nil {
-		return types.Tuple{}, types.Tuple{}, types.Tuple{}, err
-	}
+
 	return fullKey, partialKey, types.EmptyTuple(nr.Format()), nil
 }
 

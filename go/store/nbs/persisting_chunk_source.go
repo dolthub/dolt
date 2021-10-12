@@ -134,7 +134,7 @@ func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats)
 	return cr.get(ctx, h, stats)
 }
 
-func (ccs *persistingChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
+func (ccs *persistingChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	cr := ccs.getReader()
 	if cr == nil {
 		return false, ErrNoReader
@@ -142,7 +142,7 @@ func (ccs *persistingChunkSource) getMany(ctx context.Context, eg *errgroup.Grou
 	return cr.getMany(ctx, eg, reqs, found, stats)
 }
 
-func (ccs *persistingChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
+func (ccs *persistingChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	cr := ccs.getReader()
 	if cr == nil {
 		return false, ErrNoReader
@@ -268,11 +268,11 @@ func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]by
 	return nil, nil
 }
 
-func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
+func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	return true, nil
 }
 
-func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
+func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	return true, nil
 }
 

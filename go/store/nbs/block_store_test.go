@@ -26,7 +26,6 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -59,7 +58,7 @@ type BlockStoreSuite struct {
 
 func (suite *BlockStoreSuite) SetupTest() {
 	var err error
-	suite.dir, err = ioutil.TempDir("", "")
+	suite.dir, err = os.MkdirTemp("", "")
 	suite.NoError(err)
 	suite.store, err = NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
 	suite.NoError(err)
@@ -224,7 +223,12 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	}
 
 	chunkChan := make(chan *chunks.Chunk, len(hashes))
-	err = suite.store.GetMany(context.Background(), hashes.HashSet(), func(c *chunks.Chunk) { chunkChan <- c })
+	err = suite.store.GetMany(context.Background(), hashes.HashSet(), func(ctx context.Context, c *chunks.Chunk) {
+		select {
+		case chunkChan <- c:
+		case <-ctx.Done():
+		}
+	})
 	suite.NoError(err)
 	close(chunkChan)
 

@@ -344,7 +344,7 @@ func TestDoltScripts(t *testing.T) {
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	script := enginetest.TransactionTest{
 		Name: "rollback",

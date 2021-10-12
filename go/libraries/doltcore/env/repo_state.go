@@ -29,6 +29,7 @@ type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
 	GetRemotes() (map[string]Remote, error)
+	GetBackups() (map[string]Remote, error)
 	GetBranches() (map[string]BranchConfig, error)
 }
 
@@ -39,7 +40,9 @@ type RepoStateWriter interface {
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	AddRemote(name string, url string, fetchSpecs []string, params map[string]string) error
+	AddBackup(name string, url string, fetchSpecs []string, params map[string]string) error
 	RemoveRemote(ctx context.Context, name string) error
+	RemoveBackup(ctx context.Context, name string) error
 	TempTableFilesDir() string
 	UpdateBranch(name string, new BranchConfig) error
 }
@@ -66,6 +69,7 @@ type BranchConfig struct {
 type RepoState struct {
 	Head     ref.MarshalableRef      `json:"head"`
 	Remotes  map[string]Remote       `json:"remotes"`
+	Backups  map[string]Remote       `json:"backups"`
 	Branches map[string]BranchConfig `json:"branches"`
 	// |staged|, |working|, and |merge| are legacy fields left over from when Dolt repos stored this info in the repo
 	// state file, not in the DB directly. They're still here so that we can migrate existing repositories forward to the
@@ -80,6 +84,7 @@ type RepoState struct {
 type repoStateLegacy struct {
 	Head     ref.MarshalableRef      `json:"head"`
 	Remotes  map[string]Remote       `json:"remotes"`
+	Backups  map[string]Remote       `json:"backups"`
 	Branches map[string]BranchConfig `json:"branches"`
 	Staged   string                  `json:"staged,omitempty"`
 	Working  string                  `json:"working,omitempty"`
@@ -107,6 +112,7 @@ func (rs *repoStateLegacy) toRepoState() *RepoState {
 	return &RepoState{
 		Head:     rs.Head,
 		Remotes:  rs.Remotes,
+		Backups:  rs.Backups,
 		Branches: rs.Branches,
 		staged:   rs.Staged,
 		working:  rs.Working,
@@ -151,6 +157,7 @@ func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 		working:  hashStr,
 		Remotes:  map[string]Remote{r.Name: r},
 		Branches: make(map[string]BranchConfig),
+		Backups:  make(map[string]Remote),
 	}
 
 	err := rs.Save(fs)
@@ -172,6 +179,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
 		Head:     ref.MarshalableRef{Ref: headRef},
 		Remotes:  make(map[string]Remote),
 		Branches: make(map[string]BranchConfig),
+		Backups:  make(map[string]Remote),
 	}
 
 	err = rs.Save(fs)
@@ -208,4 +216,12 @@ func (rs *RepoState) AddRemote(r Remote) {
 
 func (rs *RepoState) RemoveRemote(r Remote) {
 	delete(rs.Remotes, r.Name)
+}
+
+func (rs *RepoState) AddBackup(r Remote) {
+	rs.Backups[r.Name] = r
+}
+
+func (rs *RepoState) RemoveBackup(r Remote) {
+	delete(rs.Backups, r.Name)
 }

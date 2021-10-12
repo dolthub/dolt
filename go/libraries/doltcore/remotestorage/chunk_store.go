@@ -250,7 +250,7 @@ type CacheStats interface {
 func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	hashes := hash.HashSet{h: struct{}{}}
 	var found *chunks.Chunk
-	err := dcs.GetMany(ctx, hashes, func(c *chunks.Chunk) { found = c })
+	err := dcs.GetMany(ctx, hashes, func(_ context.Context, c *chunks.Chunk) { found = c })
 	if err != nil {
 		return chunks.EmptyChunk, err
 	}
@@ -261,10 +261,10 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 	}
 }
 
-func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
+func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	ae := atomicerr.New()
 	decompressedSize := uint64(0)
-	err := dcs.GetManyCompressed(ctx, hashes, func(cc nbs.CompressedChunk) {
+	err := dcs.GetManyCompressed(ctx, hashes, func(ctx context.Context, cc nbs.CompressedChunk) {
 		if ae.IsSet() {
 			return
 		}
@@ -273,7 +273,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 			return
 		}
 		atomic.AddUint64(&decompressedSize, uint64(len(c.Data())))
-		found(&c)
+		found(ctx, &c)
 	})
 	if span := opentracing.SpanFromContext(ctx); span != nil {
 		span.LogKV("decompressed_bytes", decompressedSize)
@@ -289,7 +289,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(nbs.CompressedChunk)) error {
+func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error {
 	span, ctx := tracing.StartSpan(ctx, "remotestorage.GetManyCompressed")
 	defer span.Finish()
 
@@ -305,7 +305,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 		if c.IsEmpty() {
 			notCached = append(notCached, h)
 		} else {
-			found(c)
+			found(ctx, c)
 		}
 	}
 
@@ -362,6 +362,9 @@ func (gr *GetRange) SplitAtGaps(maxGapBytes uint64) []*GetRange {
 		j := i + 1
 		for j < len(gr.Ranges) {
 			if gr.GapBetween(j-1, j) > maxGapBytes {
+				break
+			}
+			if gr.GapBetween(i, j) > MaxFetchSize {
 				break
 			}
 			j++
@@ -606,14 +609,12 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 	return res, nil
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, found func(nbs.CompressedChunk)) error {
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, found func(context.Context, nbs.CompressedChunk)) error {
 	// get the locations where the chunks can be downloaded from
 	dlLocs, err := dcs.getDLLocs(ctx, notCached)
 	if err != nil {
 		return err
 	}
-
-	var wg sync.WaitGroup
 
 	// channel to receive chunks on
 	chunkChan := make(chan nbs.CompressedChunk, 128)
@@ -623,35 +624,37 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 		toSend[h] = struct{}{}
 	}
 
+	eg, egCtx := errgroup.WithContext(ctx)
 	// start a go routine to receive the downloaded chunks on
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for chunk := range chunkChan {
-			dcs.cache.PutChunk(chunk)
+	eg.Go(func() error {
+		for {
+			select {
+			case chunk, ok := <-chunkChan:
+				if !ok {
+					return nil
+				}
+				if dcs.cache.PutChunk(chunk) {
+					return errors.New("too much data...")
+				}
+				h := chunk.Hash()
 
-			h := chunk.Hash()
-
-			if _, send := toSend[h]; send {
-				found(chunk)
+				if _, send := toSend[h]; send {
+					found(egCtx, chunk)
+				}
+			case <-egCtx.Done():
+				return nil
 			}
 		}
-	}()
+	})
 
 	// download the chunks and close the channel after
-	func() {
+	eg.Go(func() error {
 		defer close(chunkChan)
-		err = dcs.downloadChunks(ctx, dlLocs, chunkChan)
-	}()
+		return dcs.downloadChunks(egCtx, dlLocs, chunkChan)
+	})
 
 	// wait for all the results to finish processing
-	wg.Wait()
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return eg.Wait()
 }
 
 // Returns true iff the value at the address |h| is contained in the
@@ -736,7 +739,9 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	}
 
 	if len(found) > 0 {
-		dcs.cache.Put(found)
+		if dcs.cache.Put(found) {
+			return hash.HashSet{}, errors.New("too much data")
+		}
 	}
 
 	return absent, nil
@@ -748,7 +753,9 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 // Get(), GetMany(), Has() and HasMany().
 func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
 	cc := nbs.ChunkToCompressedChunk(c)
-	dcs.cache.Put([]nbs.CompressedChunk{cc})
+	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
+		return errors.New("too much data")
+	}
 	return nil
 }
 
@@ -998,6 +1005,8 @@ func aggregateDownloads(aggDistance uint64, resourceGets map[string]*GetRange) [
 const (
 	chunkAggDistance = 8 * 1024
 )
+
+const MaxFetchSize = 128 * 1024 * 1024
 
 var defaultConcurrency ConcurrencyParams = ConcurrencyParams{
 	ConcurrentSmallFetches: 64,

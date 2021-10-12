@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -257,7 +256,7 @@ func (fs *InMemFS) OpenForRead(fp string) (io.ReadCloser, error) {
 	fileObj := fs.objs[fp].(*memFile)
 	buf := bytes.NewReader(fileObj.data)
 
-	return ioutil.NopCloser(buf), nil
+	return io.NopCloser(buf), nil
 }
 
 // ReadFile reads the entire contents of a file
@@ -269,7 +268,7 @@ func (fs *InMemFS) ReadFile(fp string) ([]byte, error) {
 		return nil, err
 	}
 
-	return ioutil.ReadAll(r)
+	return io.ReadAll(r)
 }
 
 type inMemFSWriteCloser struct {

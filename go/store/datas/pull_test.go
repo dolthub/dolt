@@ -26,7 +26,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"reflect"
 	"sync"
 	"testing"
@@ -386,7 +385,7 @@ func (ttf *TestFailingTableFile) NumChunks() int {
 }
 
 func (ttf *TestFailingTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
-	return ioutil.NopCloser(bytes.NewReader([]byte{0x00})), errors.New("this is a test error")
+	return io.NopCloser(bytes.NewReader([]byte{0x00})), errors.New("this is a test error")
 }
 
 type TestTableFile struct {
@@ -404,7 +403,7 @@ func (ttf *TestTableFile) NumChunks() int {
 }
 
 func (ttf *TestTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
-	return ioutil.NopCloser(bytes.NewReader(ttf.data)), nil
+	return io.NopCloser(bytes.NewReader(ttf.data)), nil
 }
 
 type TestTableFileWriter struct {

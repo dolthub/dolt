@@ -68,17 +68,17 @@ func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk,
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
+func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	mu := &sync.Mutex{}
 	notInOldGen := hashes.Copy()
-	err := gcs.oldGen.GetMany(ctx, hashes, func(chunk *chunks.Chunk) {
+	err := gcs.oldGen.GetMany(ctx, hashes, func(ctx context.Context, chunk *chunks.Chunk) {
 		func() {
 			mu.Lock()
 			defer mu.Unlock()
 			delete(notInOldGen, chunk.Hash())
 		}()
 
-		found(chunk)
+		found(ctx, chunk)
 	})
 
 	if err != nil {
@@ -92,17 +92,17 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 	return gcs.newGen.GetMany(ctx, notInOldGen, found)
 }
 
-func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
+func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
 	mu := &sync.Mutex{}
 	notInOldGen := hashes.Copy()
-	err := gcs.oldGen.GetManyCompressed(ctx, hashes, func(chunk CompressedChunk) {
+	err := gcs.oldGen.GetManyCompressed(ctx, hashes, func(ctx context.Context, chunk CompressedChunk) {
 		func() {
 			mu.Lock()
 			defer mu.Unlock()
 			delete(notInOldGen, chunk.Hash())
 		}()
 
-		found(chunk)
+		found(ctx, chunk)
 	})
 
 	if err != nil {
@@ -223,7 +223,7 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 	}
 
 	var putErr error
-	err = gcs.newGen.GetMany(ctx, notInOldGen, func(chunk *chunks.Chunk) {
+	err = gcs.newGen.GetMany(ctx, notInOldGen, func(ctx context.Context, chunk *chunks.Chunk) {
 		if putErr == nil {
 			putErr = gcs.oldGen.Put(ctx, *chunk)
 		}

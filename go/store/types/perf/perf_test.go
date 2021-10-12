@@ -24,7 +24,6 @@ package perf
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"testing"
@@ -172,7 +171,7 @@ func (s *perfSuite) testBuild500megBlob(p int) {
 
 	s.Pause(func() {
 		for i := range readers {
-			f, err := ioutil.TempFile("", "testBuildBlob")
+			f, err := os.CreateTemp("", "testBuildBlob")
 			assert.NoError(err)
 			_, err = f.Write(s.randomBytes(int64(i), size/p))
 			assert.NoError(err)

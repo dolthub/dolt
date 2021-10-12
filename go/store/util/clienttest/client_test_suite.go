@@ -22,7 +22,7 @@
 package clienttest
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 
@@ -54,11 +54,11 @@ type ExitError struct {
 
 func (suite *ClientTestSuite) SetupSuite() {
 	td := tempfiles.MovableTempFileProvider.GetTempDir()
-	dir, err := ioutil.TempDir(td, "nomstest")
+	dir, err := os.MkdirTemp(td, "nomstest")
 	d.Chk.NoError(err)
-	stdOutput, err := ioutil.TempFile(dir, "out")
+	stdOutput, err := os.CreateTemp(dir, "out")
 	d.Chk.NoError(err)
-	errOutput, err := ioutil.TempFile(dir, "err")
+	errOutput, err := os.CreateTemp(dir, "err")
 	d.Chk.NoError(err)
 
 	suite.TempDir = dir
@@ -112,7 +112,7 @@ func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stder
 
 		_, err := suite.out.Seek(0, 0)
 		d.Chk.NoError(err)
-		capturedOut, err := ioutil.ReadAll(suite.out)
+		capturedOut, err := io.ReadAll(suite.out)
 		d.Chk.NoError(err)
 
 		_, err = suite.out.Seek(0, 0)
@@ -122,7 +122,7 @@ func (suite *ClientTestSuite) Run(m func(), args []string) (stdout string, stder
 
 		_, err = suite.err.Seek(0, 0)
 		d.Chk.NoError(err)
-		capturedErr, err := ioutil.ReadAll(suite.err)
+		capturedErr, err := io.ReadAll(suite.err)
 		d.Chk.NoError(err)
 
 		_, err = suite.err.Seek(0, 0)
