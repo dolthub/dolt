@@ -40,11 +40,11 @@ const (
 func init() {
 	val, ok := os.LookupEnv(smoothChunkingFeatureFlag)
 	if ok && strings.ToLower(val) == "true" {
-		smoothChunking = true
+		SmoothChunking = true
 	}
 }
 
-var smoothChunking = false
+var SmoothChunking = false
 
 // smoothRollingHasher is a sequenceSplitter designed to constrain the output
 // chunk size distribution. smoothRollingHasher matches against different patterns

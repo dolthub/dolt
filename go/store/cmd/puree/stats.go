@@ -42,12 +42,21 @@ func (was WriteAmplificationStats) Sum() (s uint64) {
 func (was WriteAmplificationStats) Summary(samples int64) string {
 	var s strings.Builder
 
+	var count float64
+	var bytes float64
+
 	s.WriteString("| level | chunks |    bytes |\n")
 	for level, hist := range was.stats {
 		c := float64(hist.Samples()) / float64(samples)
 		b := float64(hist.Sum()) / float64(samples)
+		count += c
+		bytes += b
+
 		r := fmt.Sprintf("| %5d | %6.2f | %8.2f |\n", level, c, b)
 		s.WriteString(r)
 	}
+	r := fmt.Sprintf("| total | %6.2f | %8.2f |\n", count, bytes)
+	s.WriteString(r)
+
 	return s.String()
 }

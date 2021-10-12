@@ -69,7 +69,7 @@ func TestWithSmallChunks(cb func()) {
 }
 
 func newDefaultSequenceSplitter(nbf *NomsBinFormat, salt byte) sequenceSplitter {
-	if smoothChunking {
+	if SmoothChunking {
 		return newSmoothRollingHasher(nbf, salt)
 	}
 	return newRollingValueHasher(nbf, salt)

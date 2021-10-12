@@ -36,6 +36,8 @@ var Branch = flag.String("branch", "master", "branch of the repository")
 var Table = flag.String("table", "", "table to test against")
 var Seed = flag.Int("seed", 1, "seed to use for rng key selector")
 
+var NewChunker = flag.Bool("new", false, "use new smooth chunker")
+
 func main() {
 	flag.Parse()
 
@@ -46,6 +48,10 @@ func main() {
 		panic(err)
 	}
 	printSummary(maps)
+
+	if *NewChunker {
+		types.SmoothChunking = true
+	}
 
 	err = TestWriteAmplification(ctx, int64(*Seed), maps)
 	if err != nil {
