@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -34,28 +35,28 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func CollectMaps(ctx context.Context, dir, branch, table string) (maps map[string]types.Map, err error) {
+func CollectMaps(ctx context.Context, dir, branch, table string) (maps map[string]types.Map, vrw types.ValueReadWriter, err error) {
 	root, err := GetRootVal(ctx, dir, branch)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if table != "" {
 		t, name, ok, err := root.GetTableInsensitive(ctx, table)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("table %s not found", table)
+			return nil, nil, fmt.Errorf("table %s not found", table)
 		}
 		table = name
 
 		m, err := t.GetRowData(ctx)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		return map[string]types.Map{table: m}, nil
+		return map[string]types.Map{table: m}, root.VRW(), nil
 	}
 
 	maps = make(map[string]types.Map)
@@ -68,10 +69,10 @@ func CollectMaps(ctx context.Context, dir, branch, table string) (maps map[strin
 		return
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return maps, nil
+	return maps, root.VRW(), nil
 }
 
 func GetRootVal(ctx context.Context, dir, branch string) (*doltdb.RootValue, error) {
@@ -82,4 +83,85 @@ func GetRootVal(ctx context.Context, dir, branch string) (*doltdb.RootValue, err
 		return nil, err
 	}
 	return c.GetRootValue()
+}
+
+func RewriteMapWithStats(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (types.Map, RewriteStats, error) {
+	stats := RewriteStats{
+		before: &Hist{},
+		after:  &Hist{},
+	}
+
+	stats.before = getChunkSizes(ctx, vrw, m)
+
+	m2, _ := types.NewMap(ctx, vrw)
+	me := m2.Edit()
+
+	err := m.IterAll(ctx, func(key, val types.Value) (err error) {
+		me.Set(key, val)
+		return
+	})
+	if err != nil {
+		return types.EmptyMap, stats, err
+	}
+
+	m2, err = me.Map(ctx)
+	if err != nil {
+		return types.EmptyMap, stats, err
+	}
+	_, err = vrw.WriteValue(ctx, m2)
+	if err != nil {
+		return types.EmptyMap, stats, err
+	}
+
+	stats.after = getChunkSizes(ctx, vrw, m2)
+
+	return m2, stats, nil
+}
+
+type RewriteStats struct {
+	before, after *Hist
+}
+
+func getChunkSizes(ctx context.Context, vrw types.ValueReadWriter, m types.Map) *Hist {
+	r, err := types.NewRef(m, m.Format())
+	if err != nil {
+		panic(err)
+	}
+
+	h := &Hist{}
+	if err := walkMap(ctx, []types.Ref{r}, vrw, hash.NewHashSet(), h); err != nil {
+		panic(err)
+	}
+
+	return h
+}
+
+func walkMap(ctx context.Context, rs []types.Ref, vrw types.ValueReadWriter, hs hash.HashSet, chunksizes *Hist) error {
+	res := make([]types.Ref, 0)
+	next := rs
+	for len(next) > 0 {
+		cur := next
+		next = make([]types.Ref, 0)
+		for _, r := range cur {
+			hs.Insert(r.TargetHash())
+			if r.Height() == 1 {
+				res = append(res, r)
+				continue
+			}
+			v, err := r.TargetValue(ctx, vrw)
+			if err != nil {
+				return err
+			}
+			m := v.(types.Map)
+			chunksizes.add(int(m.EncodedLen()))
+			err = m.WalkRefs(m.Format(), func(r types.Ref) error {
+				next = append(next, r)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

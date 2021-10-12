@@ -26,6 +26,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -36,17 +37,19 @@ var Table = flag.String("table", "", "table to test against")
 var Seed = flag.Int("seed", 1, "seed to use for rng key selector")
 var Verbose = flag.Bool("verbose", false, "detail stats by level")
 
+var Rewrite = flag.Bool("rewrite", false, "rewrite ")
+
 func main() {
 	flag.Parse()
 
 	ctx := context.Background()
 
-	maps, err := CollectMaps(ctx, *Dir, *Branch, *Table)
+	maps, vrw, err := CollectMaps(ctx, *Dir, *Branch, *Table)
 	if err != nil {
 		panic(err)
 	}
 
-	err = TestWriteAmplification(ctx, int64(*Seed), maps)
+	err = TestWriteAmplification(ctx, vrw, int64(*Seed), maps)
 	if err != nil {
 		panic(err)
 	}
@@ -86,7 +89,7 @@ type WriteAmpTest interface {
 	TearDown(ctx context.Context) error
 }
 
-func TestWriteAmplification(ctx context.Context, seed int64, maps map[string]types.Map) (err error) {
+func TestWriteAmplification(ctx context.Context, vrw types.ValueReadWriter, seed int64, maps map[string]types.Map) (err error) {
 	tests := []WriteAmpTest{
 		&DeleteTest{editSize: 1},
 		&DeleteTest{editSize: 10},
@@ -97,11 +100,29 @@ func TestWriteAmplification(ctx context.Context, seed int64, maps map[string]typ
 	}
 
 	experiments := []Variables{
-		{smooth: false},
+		//{smooth: false},
 		{smooth: true},
 	}
 
 	for name, rows := range maps {
+
+		if *Rewrite {
+			// run tests against rewritten maps
+			t1 := time.Now()
+			types.SmoothChunking = true
+
+			var stats RewriteStats
+			rows, stats, err = RewriteMapWithStats(ctx, vrw, rows)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("\n====================")
+			fmt.Printf("Rerwote %s map in %f seconds\n", name, time.Since(t1).Seconds())
+			fmt.Printf("before chunk sizes: %s\n", stats.before.String())
+			fmt.Printf("after  chunk sizes: %s\n", stats.after.String())
+			fmt.Println("====================\n")
+		}
 
 		for _, test := range tests {
 			fmt.Println(fmt.Sprintf("---------- %s ----------", test.Name(name)))
