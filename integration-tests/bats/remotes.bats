@@ -861,6 +861,40 @@ SQL
     [[ "$output" =~ "1" ]] || false
 }
 
+@test "remotes: validate that a config isn't needed for a pull." {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt push test-remote main
+    dolt fetch test-remote
+    cd "dolt-repo-clones"
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd ..
+  dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote main
+
+    # cd to the other directory and execute a pull without a config
+    cd "dolt-repo-clones/test-repo"
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test commit" ]] || false
+}
+
 create_main_remote_branch() {
     dolt remote add origin http://localhost:50051/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
