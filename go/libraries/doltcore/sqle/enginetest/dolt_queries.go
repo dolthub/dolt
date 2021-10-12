@@ -21,9 +21,9 @@ import (
 
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
 // this slice into others with good names as it grows.
-var DoltScripts = []enginetest.ScriptTest {
+var DoltScripts = []enginetest.ScriptTest{
 	{
-		Name:        "test as of indexed join (https://github.com/dolthub/dolt/issues/2189)",
+		Name: "test as of indexed join (https://github.com/dolthub/dolt/issues/2189)",
 		SetUpScript: []string{
 			"create table a (pk int primary key, c1 int)",
 			"insert into a values (1,1), (2,2), (3,3)",
@@ -45,7 +45,7 @@ var DoltScripts = []enginetest.ScriptTest {
 			},
 			{
 				Query: "select a1.* from a as of @second_commit a1 " +
-						"left join a as of @second_commit a2 on a1.pk = a2.pk where a2.pk is null order by 1",
+					"left join a as of @second_commit a2 on a1.pk = a2.pk where a2.pk is null order by 1",
 				Expected: []sql.Row{},
 			},
 		},
