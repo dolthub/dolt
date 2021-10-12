@@ -130,7 +130,8 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 
 			name, email, err := env.GetNameAndEmail(dEnv.Config)
 			if err != nil {
-				return err
+				name = ""
+				email = ""
 			}
 
 			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
