@@ -868,14 +868,10 @@ SQL
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-  dolt sql <<SQL
+    dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk int,
+  val int,
   PRIMARY KEY (pk)
 );
 SQL
@@ -893,6 +889,29 @@ SQL
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
+
+    dolt sql -q "insert into test values (1,1)"
+
+    cd ../../
+    # turn back on the configs and make a change
+    dolt config --global --add user.name mysql-test-runner
+    dolt config --global --add user.email mysql-test-runner@liquidata.co
+    dolt sql -q "insert into test values (1,2)"
+    dolt commit -am "commit from main repo"
+    cd "dolt-repo-clones/test-repo"
+
+    # turn configs off again
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    # Test that pull still works
+    run dolt pull
+    [ "$status" -eq 0 ]
+
+    # A commit to clean up the merge state should error correctly
+    run dolt commit -am "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Could not determine user.name." ]] || false
 }
 
 create_main_remote_branch() {
