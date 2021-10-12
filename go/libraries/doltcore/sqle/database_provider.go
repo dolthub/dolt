@@ -137,7 +137,12 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	if err != nil {
 		return err
 	}
+	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
+	if err != nil {
+		return err
+	}
 	opts := editor.Options{
+		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
 		Deaf: editor.NewDbEaFactory(
 			mem.Rsw.TempTableFilesDir(),
 			mem.Ddb.ValueReadWriter()),
