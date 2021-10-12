@@ -117,11 +117,11 @@ func TestWriteAmplification(ctx context.Context, vrw types.ValueReadWriter, seed
 				return err
 			}
 
-			fmt.Println("\n====================")
+			fmt.Println("====================")
 			fmt.Printf("Rerwote %s map in %f seconds\n", name, time.Since(t1).Seconds())
 			fmt.Printf("before chunk sizes: %s\n", stats.before.String())
 			fmt.Printf("after  chunk sizes: %s\n", stats.after.String())
-			fmt.Println("====================\n")
+			fmt.Println("====================")
 		}
 
 		for _, test := range tests {
