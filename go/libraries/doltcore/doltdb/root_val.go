@@ -931,7 +931,7 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 	return newRootValue(root.vrw, rootValSt)
 }
 
-func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*RootValue, error) {
+func (root *RootValue) RemoveTables(ctx context.Context, allowDroppingFKReferenced bool, tables ...string) (*RootValue, error) {
 	tableMap, err := root.getTableMap()
 
 	if err != nil {
@@ -974,7 +974,11 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 		return nil, err
 	}
 
-	err = fkc.RemoveTables(ctx, tables...)
+	if allowDroppingFKReferenced {
+		err = fkc.RemoveAndUnresolveTables(ctx, root, tables...)
+	} else {
+		err = fkc.RemoveTables(ctx, tables...)
+	}
 
 	if err != nil {
 		return nil, err

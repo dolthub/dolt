@@ -1685,3 +1685,171 @@ SQL
     [[ "$output" =~ "Bad Row:" ]] || false
     [[ "$output" =~ "naics_2017" ]] || false
 }
+
+@test "foreign-keys: Delayed foreign key resolution" {
+    dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE delayed_child (
+  pk int PRIMARY KEY,
+  v1 int,
+  CONSTRAINT fk_delayed FOREIGN KEY (v1) REFERENCES delayed_parent(v1)
+);
+CREATE TABLE delayed_parent (
+  pk int PRIMARY KEY,
+  v1 int,
+  INDEX (v1)
+);
+INSERT INTO delayed_child VALUES (1, 2);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    run dolt schema show delayed_child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_delayed" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "INSERT INTO delayed_child VALUES (2, 3);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key constraint fails" ]] || false
+    [[ "$output" =~ "fk_delayed" ]] || false
+    dolt sql <<SQL
+INSERT INTO delayed_parent VALUES (1, 2), (2, 3);
+INSERT INTO delayed_child VALUES (2, 3);
+SQL
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "foreign-keys: Delayed foreign key resolution through file" {
+    # Generally foreign keys are disabled when importing a MySQL dump so this tests that exact scenario
+    # Should logically be the same as the above test but you never know what may change
+    cat <<SQL > delayed.sql
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE delayed_child (
+  pk int PRIMARY KEY,
+  v1 int,
+  CONSTRAINT fk_delayed FOREIGN KEY (v1) REFERENCES delayed_parent(v1)
+);
+CREATE TABLE delayed_parent (
+  pk int PRIMARY KEY,
+  v1 int,
+  INDEX (v1)
+);
+INSERT INTO delayed_child VALUES (1, 2);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    dolt sql < delayed.sql
+    run dolt schema show delayed_child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_delayed" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "INSERT INTO delayed_child VALUES (2, 3);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key constraint fails" ]] || false
+    [[ "$output" =~ "fk_delayed" ]] || false
+    dolt sql <<SQL
+INSERT INTO delayed_parent VALUES (1, 2), (2, 3);
+INSERT INTO delayed_child VALUES (2, 3);
+SQL
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "foreign-keys: Delayed foreign key resolution resetting FOREIGN_KEY_CHECKS" {
+    dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE delayed_child (
+  pk int PRIMARY KEY,
+  v1 int,
+  CONSTRAINT fk_delayed FOREIGN KEY (v1) REFERENCES delayed_parent(v1)
+);
+INSERT INTO delayed_child VALUES (1, 2);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    run dolt schema show delayed_child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "fk_delayed" ]] || false
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "INSERT INTO delayed_child VALUES (2, 3);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key constraint fails" ]] || false
+    [[ "$output" =~ "fk_delayed" ]] || false
+    dolt sql <<SQL
+CREATE TABLE delayed_parent (
+  pk int PRIMARY KEY,
+  v1 int,
+  INDEX (v1)
+);
+INSERT INTO delayed_parent VALUES (1, 2), (2, 3);
+INSERT INTO delayed_child VALUES (2, 3);
+SQL
+    run dolt sql -q "SELECT * FROM delayed_child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "foreign-keys: DROP TABLE with FOREIGN_KEY_CHECKS=0" {
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_dropped FOREIGN KEY (v1) REFERENCES parent(v1)"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'fk_dropped' ]] || false
+
+    run dolt sql -q "DROP TABLE parent"
+    [ "$status" -eq "1" ]
+    dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE PARENT;
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    run dolt sql -q "INSERT INTO child VALUES (4, 5, 6);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key constraint fails" ]] || false
+    [[ "$output" =~ "fk_dropped" ]] || false
+    dolt sql <<SQL
+CREATE TABLE parent (pk INT PRIMARY KEY, v1 INT, INDEX (v1));
+INSERT INTO parent VALUES (1, 5);
+INSERT INTO child VALUES (4, 5, 6);
+SQL
+    run dolt sql -q "SELECT * FROM parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,5" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -q "SELECT * FROM child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "$output" =~ "4,5,6" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}
