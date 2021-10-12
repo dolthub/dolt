@@ -308,9 +308,10 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb Da
 	type caFinder func(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error)
 
 	methods := map[string]caFinder{
-		"FindCommonAncestor": FindCommonAncestor,
-		"SetClosure":         commonAncWithSetClosure,
-		"LazyClosure":        commonAncWithLazyClosure,
+		"FindCommonAncestor":                 FindCommonAncestor,
+		"SetClosure":                         commonAncWithSetClosure,
+		"LazyClosure":                        commonAncWithLazyClosure,
+		"FindCommonAncestorUsingParentsList": FindCommonAncestorUsingParentsList,
 	}
 
 	for name, method := range methods {
@@ -578,7 +579,7 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	// No common ancestor
 	found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(d2, types.Format_7_18)), mustRef(types.NewRef(a6, types.Format_7_18)), db, db)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	if !assert.False(ok) {
 		d2V, _, _ := d2.MaybeGet(ValueField)

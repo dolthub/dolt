@@ -103,13 +103,8 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	}
 }
 
-// FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
-// one exists, setting ok to true. If there is no common ancestor, ok is set
-// to false. Refs of |c1| are dereferenced through |vr1|, while refs of |c2|
-// are dereference through |vr2|.
-func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
+func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
 	t1, err := types.TypeOf(c1)
-
 	if err != nil {
 		return types.Ref{}, false, err
 	}
@@ -120,7 +115,6 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 	}
 
 	t2, err := types.TypeOf(c2)
-
 	if err != nil {
 		return types.Ref{}, false, err
 	}
@@ -158,7 +152,166 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 		}
 	}
 
-	return a, ok, nil
+	return types.Ref{}, false, nil
+}
+
+// FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
+// one exists, setting ok to true. If there is no common ancestor, ok is set
+// to false. Refs of |c1| are dereferenced through |vr1|, while refs of |c2|
+// are dereference through |vr2|.
+//
+// This implementation makes use of the parents_closure field on the commit
+// struct.  If the commit does not have a materialized parents_closure, this
+// implementation delegates to FindCommonAncestorUsingParentsList.
+func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
+	if c1.TargetHash() == c2.TargetHash() {
+		return c1, true, nil
+	}
+
+	c1tv, err := c1.TargetValue(ctx, vr1)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	c2tv, err := c2.TargetValue(ctx, vr2)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+
+	c1s, ok := c1tv.(types.Struct)
+	if !ok {
+		return types.Ref{}, false, fmt.Errorf("target ref is not struct: %v", c1tv)
+	}
+	c2s, ok := c2tv.(types.Struct)
+	if !ok {
+		return types.Ref{}, false, fmt.Errorf("target ref is not struct: %v", c2tv)
+	}
+
+	c1pcv, ok, err := c1s.MaybeGet(ParentsClosureField)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	if !ok {
+		return FindCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
+	}
+	c2pcv, ok, err := c2s.MaybeGet(ParentsClosureField)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	if !ok {
+		return FindCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
+	}
+
+	c1pcr, ok := c1pcv.(types.Ref)
+	if !ok {
+		return types.Ref{}, false, fmt.Errorf("value of parents_closure field is not Ref: %v", c1pcv)
+	}
+	c2pcr, ok := c2pcv.(types.Ref)
+	if !ok {
+		return types.Ref{}, false, fmt.Errorf("value of parents_closure field is not Ref: %v", c2pcv)
+	}
+
+	c1pvtv, err := c1pcr.TargetValue(ctx, vr1)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	c2pvtv, err := c2pcr.TargetValue(ctx, vr2)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+
+	c1m, ok := c1pvtv.(types.Map)
+	if !ok {
+		return types.Ref{}, false, fmt.Errorf("target value of parents_closure Ref is not Map: %v", c1pvtv)
+	}
+	c2m, ok := c2pvtv.(types.Map)
+	if !ok {
+		return types.Ref{}, false, fmt.Errorf("target value of parents_closure Ref is not Map: %v", c2pvtv)
+	}
+
+	highest, err := types.NewTuple(vr1.Format(), types.Uint(18446744073709551615))
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+
+	c1mi, err := c1m.IteratorBackFrom(ctx, highest)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	c2mi, err := c2m.IteratorBackFrom(ctx, highest)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+
+	var c1k, c2k types.Value
+	h := c1.TargetHash()
+	ib := make([]byte, len(hash.Hash{}))
+	copy(ib, h[:])
+	c1k, err = types.NewTuple(vr1.Format(), types.Uint(c1.Height()), types.InlineBlob(ib))
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	h = c2.TargetHash()
+	copy(ib, h[:])
+	c2k, err = types.NewTuple(vr2.Format(), types.Uint(c2.Height()), types.InlineBlob(ib))
+
+	for {
+		if c1k == nil || types.IsNull(c1k) || c2k == nil || types.IsNull(c2k) {
+			return types.Ref{}, false, nil
+		}
+		c1kt := c1k.(types.Tuple)
+		c2kt := c2k.(types.Tuple)
+		var h1, h2 hash.Hash
+		f2, err := c1kt.Get(1)
+		if err != nil {
+			panic(err)
+		}
+		copy(h1[:], []byte(f2.(types.InlineBlob)))
+		f2, err = c2kt.Get(1)
+		if err != nil {
+			panic(err)
+		}
+		copy(h2[:], []byte(f2.(types.InlineBlob)))
+		if c1kt.Equals(c2kt) {
+			hib, err := c1kt.Get(1)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			var h hash.Hash
+			copy(h[:], []byte(hib.(types.InlineBlob)))
+			fetched, err := vr1.ReadValue(ctx, h)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			r, err := types.NewRef(fetched, vr1.Format())
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			return r, true, nil
+		}
+		l, err := c1kt.Less(vr1.Format(), c2kt)
+		if err != nil {
+			return types.Ref{}, false, err
+		}
+		if l {
+			c2k, _, err = c2mi.Next(ctx)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			if c2k == nil || types.IsNull(c2k) {
+				return types.Ref{}, false, nil
+			}
+			c2kt = c2k.(types.Tuple)
+		} else {
+			c1k, _, err = c1mi.Next(ctx)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			if c1k == nil || types.IsNull(c1k) {
+				return types.Ref{}, false, nil
+			}
+			c1kt = c1k.(types.Tuple)
+		}
+	}
 }
 
 // FindClosureCommonAncestor returns the most recent common ancestor of |cl| and |cm|,
