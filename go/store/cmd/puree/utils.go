@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -40,13 +41,14 @@ func CollectMaps(ctx context.Context, dir, branch, table string) (maps map[strin
 	}
 
 	if table != "" {
-		t, ok, err := root.GetTable(ctx, table)
+		t, name, ok, err := root.GetTableInsensitive(ctx, table)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
 			return nil, fmt.Errorf("table %s not found", table)
 		}
+		table = name
 
 		m, err := t.GetRowData(ctx)
 		if err != nil {

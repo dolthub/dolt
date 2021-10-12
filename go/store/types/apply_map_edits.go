@@ -97,9 +97,6 @@ type AppliedEditStats struct {
 	// NonexistantDeletes counts the number of items where a deletion was attempted, but the key didn't exist in the map
 	// so there was no impact
 	NonExistentDeletes int64
-
-	// ChunkerStats records chunk-writes by level
-	ChunkerStats *WriteAmplificationStats
 }
 
 // Add adds two AppliedEditStats structures member by member.
@@ -121,9 +118,6 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 
 func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64) (Map, AppliedEditStats, error) {
 	var stats AppliedEditStats
-	if chunkWithStats {
-		stats.ChunkerStats = &WriteAmplificationStats{}
-	}
 
 	if edits.ReachedEOF() {
 		return m, stats, nil // no edits
@@ -237,9 +231,8 @@ func ApplyNEdits(ctx context.Context, edits EditProvider, m Map, numEdits int64)
 		return EmptyMap, AppliedEditStats{}, err
 	}
 
-	if chunkWithStats {
-		stats.ChunkerStats.Sample(ch.Stats())
-		//panic("\n" + stats.ChunkerStats.String())
+	if ChunkWithStats {
+		WriteStatSink(ch.Stats())
 	}
 
 	return newMap(seq.(orderedSequence)), stats, nil

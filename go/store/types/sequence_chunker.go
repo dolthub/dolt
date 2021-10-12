@@ -23,26 +23,26 @@ package types
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/metrics"
 )
 
 const EnableChunkStats = "DOLT_ENABLE_CHUNK_STATS"
 
-var chunkWithStats = false
+var ChunkWithStats = false
+
+var WriteStatSink func(s []WriteStats) = nil
+
+type WriteStats []uint64
 
 func init() {
 	stats, ok := os.LookupEnv(EnableChunkStats)
 	if ok && stats == "true" {
-		chunkWithStats = true
+		ChunkWithStats = true
+		WriteStatSink = func(s []WriteStats) {}
 	}
 }
-
-type writeStats []uint64
 
 // sequenceSplitter decides where sequences should be split into chunks.
 type sequenceSplitter interface {
@@ -94,7 +94,7 @@ type sequenceChunker struct {
 	done                       bool
 	unwrittenCol               Collection
 
-	stats writeStats
+	stats WriteStats
 }
 
 func newEmptySequenceChunker(ctx context.Context, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, newCh newSplitterFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {
@@ -125,8 +125,8 @@ func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, 
 		unwrittenCol:    nil,
 	}
 
-	if chunkWithStats {
-		sc.stats = make(writeStats, 0, 1)
+	if ChunkWithStats {
+		sc.stats = make(WriteStats, 0, 1)
 	}
 
 	if cur != nil {
@@ -560,13 +560,13 @@ func (sc *sequenceChunker) finalizeCursor(ctx context.Context) error {
 	return nil
 }
 
-func (sc *sequenceChunker) Stats() (stats []writeStats) {
+func (sc *sequenceChunker) Stats() (stats []WriteStats) {
 	if sc.stats == nil {
 		return
 	}
 
 	if sc.parent == nil {
-		stats = make([]writeStats, sc.level+1)
+		stats = make([]WriteStats, sc.level+1)
 	} else {
 		stats = sc.parent.Stats()
 	}
@@ -579,47 +579,4 @@ func (sc *sequenceChunker) recordWrite(size uint64) {
 	if sc.stats != nil {
 		sc.stats = append(sc.stats, size)
 	}
-}
-
-// WriteAmplificationStats records sequenceChunker write writeSizes by tree level
-type WriteAmplificationStats struct {
-	stats []metrics.Histogram
-}
-
-func (was *WriteAmplificationStats) Sample(stats []writeStats) {
-	for i := len(was.stats); i < len(stats); i++ {
-		was.stats = append(was.stats, metrics.NewByteHistogram())
-	}
-
-	for i, writes := range stats {
-		for _, w := range writes {
-			was.stats[i].Sample(w)
-		}
-	}
-}
-
-func (was WriteAmplificationStats) Count() (c uint64) {
-	for _, hist := range was.stats {
-		c += hist.Samples()
-	}
-	return
-}
-
-func (was WriteAmplificationStats) Sum() (s uint64) {
-	for _, h := range was.stats {
-		s += h.Sum()
-	}
-	return
-}
-
-func (was WriteAmplificationStats) String() string {
-	var s strings.Builder
-
-	s.WriteString("| level | chunks |  bytes |\n")
-	for level, hist := range was.stats {
-		c, b := hist.Samples(), hist.Sum()
-		r := fmt.Sprintf("| %5d | %6d | %6d |\n", level, c, b)
-		s.WriteString(r)
-	}
-	return s.String()
 }

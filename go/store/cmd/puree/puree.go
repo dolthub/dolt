@@ -25,6 +25,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math/rand"
+
+	"github.com/dolthub/dolt/go/store/metrics"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -61,35 +64,46 @@ func printSummary(maps map[string]types.Map) {
 
 type WriteAmpExperiment interface {
 	Name(table string) string
-	Setup(ctx context.Context, m types.Map, seed int64) error
-	Test(ctx context.Context) ([]interface{}, error)
+	Setup(ctx context.Context, m types.Map, seed int64, samples int64) error
+	Run(ctx context.Context) (*WriteAmplificationStats, error)
+	TearDown(ctx context.Context) error
 }
 
 func TestWriteAmplification(ctx context.Context, seed int64, maps map[string]types.Map) (err error) {
-	tests := []WriteAmpExperiment{
-		DeleteExperiment{editSize: 1, numEdits: 50},
-		DeleteExperiment{editSize: 2, numEdits: 50},
-		DeleteExperiment{editSize: 5, numEdits: 50},
-		DeleteExperiment{editSize: 10, numEdits: 50},
-		InsertExperiment{editSize: 1, numEdits: 50},
-		InsertExperiment{editSize: 2, numEdits: 50},
-		InsertExperiment{editSize: 5, numEdits: 50},
-		InsertExperiment{editSize: 10, numEdits: 50},
+	experiments := []WriteAmpExperiment{
+		&DeleteExperiment{editSize: 1},
+		&DeleteExperiment{editSize: 2},
+		&DeleteExperiment{editSize: 10},
+		&DeleteExperiment{editSize: 50},
+		//&InsertExperiment{editSize: 1},
+		//&InsertExperiment{editSize: 2},
+		//&InsertExperiment{editSize: 5},
+		//&InsertExperiment{editSize: 10},
 	}
 
-	for _, test := range tests {
-		for _, table := range maps {
-			err = test.Setup(ctx, table, seed)
+	const samples = 50
+
+	for name, rows := range maps {
+		for _, exp := range experiments {
+			suf := fmt.Sprintf(" %d times", samples)
+			fmt.Println(exp.Name(name) + suf)
+
+			err = exp.Setup(ctx, rows, seed, samples)
 			if err != nil {
 				return err
 			}
 
-			results, err := test.Test(ctx)
+			results, err := exp.Run(ctx)
 			if err != nil {
 				return err
 			}
 
-			fmt.Println(results)
+			err = exp.TearDown(ctx)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(results.Summary(samples))
 		}
 	}
 
@@ -99,45 +113,92 @@ func TestWriteAmplification(ctx context.Context, seed int64, maps map[string]typ
 type InsertExperiment struct {
 	orig, mod types.Map
 	edits     []types.KVPSlice
-
-	numEdits uint32
-	editSize uint32
+	editSize  uint32
 }
 
-var _ WriteAmpExperiment = InsertExperiment{}
+var _ WriteAmpExperiment = &InsertExperiment{}
 
-func (ie InsertExperiment) Name(table string) string {
+func (ie *InsertExperiment) Name(table string) string {
 	return fmt.Sprintf("Insert %d rows into %s", ie.editSize, table)
 }
 
-func (ie InsertExperiment) Setup(ctx context.Context, m types.Map, seed int64) error {
+func (ie *InsertExperiment) Setup(ctx context.Context, m types.Map, seed int64, samples int64) error {
 	ie.orig = m
 	return nil
 }
 
-func (ie InsertExperiment) Test(context.Context) ([]interface{}, error) {
+func (ie *InsertExperiment) Run(context.Context) (*WriteAmplificationStats, error) {
 	return nil, nil
 }
 
-type DeleteExperiment struct {
-	orig  types.Map
-	edits []types.ValueSlice
-
-	numEdits uint32
-	editSize uint32
-}
-
-var _ WriteAmpExperiment = DeleteExperiment{}
-
-func (de DeleteExperiment) Name(table string) string {
-	return fmt.Sprintf("Delete %d rows from %s", de.editSize, table)
-}
-
-func (de DeleteExperiment) Setup(ctx context.Context, m types.Map, seed int64) error {
-	de.orig = m
+func (ie *InsertExperiment) TearDown(ctx context.Context) error {
 	return nil
 }
 
-func (de DeleteExperiment) Test(context.Context) ([]interface{}, error) {
-	return nil, nil
+type DeleteExperiment struct {
+	orig types.Map
+
+	editSize uint64
+	edits    []uint64
+
+	stats *WriteAmplificationStats
+}
+
+var _ WriteAmpExperiment = &DeleteExperiment{}
+
+func (de *DeleteExperiment) Name(table string) string {
+	return fmt.Sprintf("Delete %d rows from %s", de.editSize, table)
+}
+
+func (de *DeleteExperiment) Setup(ctx context.Context, m types.Map, seed int64, samples int64) error {
+	types.ChunkWithStats = true
+	types.WriteStatSink = de.collect
+
+	de.orig = m
+	de.stats = &WriteAmplificationStats{
+		stats: make([]metrics.Histogram, m.Height()),
+	}
+
+	src := rand.NewSource(seed)
+	de.edits = make([]uint64, samples)
+	for i := range de.edits {
+		limit := de.orig.Len() - de.editSize
+		de.edits[i] = uint64(src.Int63()) % limit
+	}
+
+	return nil
+}
+
+func (de *DeleteExperiment) Run(ctx context.Context) (*WriteAmplificationStats, error) {
+	for _, pos := range de.edits {
+		iter, err := de.orig.IteratorAt(ctx, pos)
+		if err != nil {
+			return nil, err
+		}
+
+		edit := de.orig.Edit()
+		for i := uint64(0); i < de.editSize; i++ {
+			k, _, err := iter.Next(ctx)
+			if err != nil {
+				return nil, err
+			}
+			edit.Remove(k)
+		}
+
+		_, err = edit.Map(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return de.stats, nil
+}
+
+func (de *DeleteExperiment) collect(stats []types.WriteStats) {
+	de.stats.Sample(stats)
+}
+
+func (de *DeleteExperiment) TearDown(ctx context.Context) error {
+	types.ChunkWithStats = false
+	return nil
 }

@@ -275,6 +275,10 @@ func (m Map) Empty() bool {
 	return m.orderedSequence.Empty()
 }
 
+func (m Map) Height() uint64 {
+	return m.treeLevel()
+}
+
 func (m Map) Format() *NomsBinFormat {
 	return m.format()
 }
