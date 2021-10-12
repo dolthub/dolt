@@ -255,7 +255,6 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 			return err
 		}
 
-		w.outdent()
 		w.write(")")
 
 	case MapKind:
@@ -445,11 +444,6 @@ func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 		w.write(t.TargetKind().String())
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {
-			if et.TargetKind() == UnionKind && len(et.Desc.(CompoundDesc).ElemTypes) == 0 {
-				// If one of the element types is an empty union all the other element types must
-				// also be empty union types.
-				break
-			}
 			if i != 0 {
 				w.write(", ")
 			}
@@ -460,6 +454,9 @@ func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 		}
 		w.write(">")
 	case UnionKind:
+		if len(t.Desc.(CompoundDesc).ElemTypes) == 0 {
+			w.write("Union<>")
+		}
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {
 			if i != 0 {
 				w.write(" | ")

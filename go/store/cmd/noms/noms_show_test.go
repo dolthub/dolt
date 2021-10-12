@@ -46,9 +46,29 @@ type nomsShowTestSuite struct {
 const (
 	res1 = "Commit{meta Struct,parents Set,parents_list List,value Ref} - struct Commit {\n  meta: struct {},\n  parents: set {},\n  parents_list: [],\n  value: #nl181uu1ioc2j6t7mt9paidjlhlcjtgj,\n}"
 	res2 = "String - \"test string\""
-	res3 = "Commit{meta Struct,parents Set,parents_list List,value Ref} - struct Commit {\n  meta: struct {},\n  parents: set {\n    #4g7ggl6999v5mlucl4a507n7k3kvckiq,\n  },\n  parents_list: [\n    #4g7ggl6999v5mlucl4a507n7k3kvckiq,\n  ],\n  value: #82adk7hfcudg8fktittm672to66t6qeu,\n}"
+	res3 = `Commit{meta Struct,parents Set,parents_closure Ref,parents_list List,value Ref} - struct Commit {
+  meta: struct {},
+  parents: set {
+    #4u3mpdq0o8at437p37i5u94fk2frr4qm,
+  },
+  parents_closure: #pr2umfcqukd4ltrgkpvsjrig7afb9ghg,
+  parents_list: [
+    #4u3mpdq0o8at437p37i5u94fk2frr4qm,
+  ],
+  value: #t43ks6746hf0fcefv5e9v1c02k2i0jr9,
+}`
 	res4 = "List<Union<Float,String>> - [\n  \"elem1\",\n  2,\n  \"elem3\",\n]"
-	res5 = "Commit{meta Struct,parents Set,parents_list List,value Ref} - struct Commit {\n  meta: struct {},\n  parents: set {\n    #3tmg89vabs2k6hotdock1kuo13j4lmqv,\n  },\n  parents_list: [\n    #3tmg89vabs2k6hotdock1kuo13j4lmqv,\n  ],\n  value: #5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n}"
+	res5 = `Commit{meta Struct,parents Set,parents_closure Ref,parents_list List,value Ref} - struct Commit {
+  meta: struct {},
+  parents: set {
+    #idcre7pv1p74mfmidiguol1pu6rmt0bu,
+  },
+  parents_closure: #7pl4tlkc531difn1f32vlaqdve5g04p0,
+  parents_list: [
+    #idcre7pv1p74mfmidiguol1pu6rmt0bu,
+  ],
+  value: #nl181uu1ioc2j6t7mt9paidjlhlcjtgj,
+}`
 )
 
 func (s *nomsShowTestSuite) spec(str string) spec.Spec {

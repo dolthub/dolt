@@ -343,7 +343,7 @@ func TestDecodeTypeMismatch(t *testing.T) {
 	assertDecodeErrorMessage(t, types.Float(42), &b, "Cannot unmarshal from: Float to: bool details: ")
 
 	var blob types.Blob
-	assertDecodeErrorMessage(t, mustValue(types.NewList(context.Background(), vs)), &blob, "Cannot unmarshal from: List<> to: types.Blob details: ")
+	assertDecodeErrorMessage(t, mustValue(types.NewList(context.Background(), vs)), &blob, "Cannot unmarshal from: List<Union<>> to: types.Blob details: ")
 
 	type S struct {
 		X int

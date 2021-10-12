@@ -259,11 +259,11 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "Map<Float, String>", mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))
 	assertWriteHRSEqual(t, "Float | String", mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))
 	assertWriteHRSEqual(t, "Bool", mustType(MakeUnionType(PrimitiveTypeMap[BoolKind])))
-	assertWriteHRSEqual(t, "", mustType(MakeUnionType()))
+	assertWriteHRSEqual(t, "Union<>", mustType(MakeUnionType()))
 	assertWriteHRSEqual(t, "List<Float | String>", mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))))
 	assertWriteHRSEqual(t, "List<Int | Uint>", mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[IntKind], PrimitiveTypeMap[UintKind])))))
 	assertWriteHRSEqual(t, "List<Int | Null>", mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[IntKind], PrimitiveTypeMap[NullKind])))))
-	assertWriteHRSEqual(t, "List<>", mustType(MakeListType(mustType(MakeUnionType()))))
+	assertWriteHRSEqual(t, "List<Union<>>", mustType(MakeListType(mustType(MakeUnionType()))))
 }
 
 func TestRecursiveStruct(t *testing.T) {
