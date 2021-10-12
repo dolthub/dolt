@@ -78,16 +78,6 @@ type rollingValueHasher struct {
 	nbf             *NomsBinFormat
 }
 
-func hashValueBytes(item sequenceItem, rv *rollingValueHasher) error {
-	return rv.HashValue(item.(Value))
-}
-
-func hashValueByte(item sequenceItem, rv *rollingValueHasher) error {
-	rv.HashByte(item.(byte))
-
-	return nil
-}
-
 func newRollingValueHasher(nbf *NomsBinFormat, salt byte) *rollingValueHasher {
 	pattern, window := chunkingConfig()
 	w := newBinaryNomsWriter()
@@ -106,6 +96,16 @@ func newRollingValueHasher(nbf *NomsBinFormat, salt byte) *rollingValueHasher {
 	return rv
 }
 
+var _ sequenceSplitter = &rollingValueHasher{}
+
+func (rv *rollingValueHasher) Append(cb func(w *binaryNomsWriter) error) (err error) {
+	err = cb(&rv.bw)
+	if err == nil {
+		rv.sl.Update(rv.bw.data())
+	}
+	return
+}
+
 func (rv *rollingValueHasher) HashByte(b byte) bool {
 	return rv.hashByte(b, rv.bw.offset)
 }
@@ -121,6 +121,14 @@ func (rv *rollingValueHasher) hashByte(b byte, offset uint32) bool {
 	return rv.crossedBoundary
 }
 
+func (rv *rollingValueHasher) Nbf() *NomsBinFormat {
+	return rv.nbf
+}
+
+func (rv *rollingValueHasher) CrossedBoundary() bool {
+	return rv.crossedBoundary
+}
+
 func (rv *rollingValueHasher) Reset() {
 	rv.crossedBoundary = false
 	rv.bz = buzhash.NewBuzHash(rv.window)
@@ -128,19 +136,35 @@ func (rv *rollingValueHasher) Reset() {
 	rv.sl.Reset()
 }
 
-func (rv *rollingValueHasher) HashValue(v Value) error {
-	err := v.writeTo(&rv.bw, rv.nbf)
+// rollingByteHasher is a sequenceSplitter for Blobs. It directly hashes
+// bytes streams without using Sloppy for pseudo-compression.
+type rollingByteHasher struct {
+	*rollingValueHasher
+	idx uint32
+}
 
+func newRollingByteHasher(nbf *NomsBinFormat, salt byte) *rollingByteHasher {
+	return &rollingByteHasher{
+		rollingValueHasher: newRollingValueHasher(nbf, salt),
+	}
+}
+
+var _ sequenceSplitter = &rollingByteHasher{}
+
+func (bh *rollingByteHasher) Append(cb func(w *binaryNomsWriter) error) (err error) {
+	err = cb(&bh.bw)
 	if err != nil {
 		return err
 	}
 
-	rv.sl.Update(rv.bw.data())
+	for ; bh.idx < bh.bw.offset; bh.idx++ {
+		bh.hashByte(bh.bw.buff[bh.idx], bh.bw.offset)
+	}
 
-	return nil
+	return
 }
 
-func (rv *rollingValueHasher) hashBytes(buff []byte) {
-	rv.bw.writeRaw(buff)
-	rv.sl.Update(rv.bw.data())
+func (bh *rollingByteHasher) Reset() {
+	bh.rollingValueHasher.Reset()
+	bh.idx = 0
 }

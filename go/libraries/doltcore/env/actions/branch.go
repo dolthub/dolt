@@ -434,7 +434,7 @@ func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[st
 		}
 	}
 
-	head, err = head.RemoveTables(ctx, toDrop...)
+	head, err = head.RemoveTables(ctx, false, toDrop...)
 	if err != nil {
 		return nil, err
 	}

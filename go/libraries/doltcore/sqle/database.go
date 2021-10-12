@@ -604,6 +604,15 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
+	allowDroppingFKReferenced := false
+	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
+	if err != nil {
+		return err
+	}
+	if fkChecks.(int8) == 0 {
+		allowDroppingFKReferenced = true
+	}
+
 	// Temporary Tables Get Precedence over schema tables
 	tempTableRoot, tempRootExists := db.GetTemporaryTablesRoot(ctx)
 	if tempRootExists {
@@ -613,7 +622,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		}
 
 		if tempTableExists {
-			newRoot, err := tempTableRoot.RemoveTables(ctx, tableName)
+			newRoot, err := tempTableRoot.RemoveTables(ctx, allowDroppingFKReferenced, tableName)
 			if err != nil {
 				return err
 			}
@@ -636,7 +645,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	newRoot, err := root.RemoveTables(ctx, tableName)
+	newRoot, err := root.RemoveTables(ctx, allowDroppingFKReferenced, tableName)
 	if err != nil {
 		return err
 	}

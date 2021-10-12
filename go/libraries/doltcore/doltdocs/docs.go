@@ -236,7 +236,7 @@ func UpdateRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) 
 	docTbl, err := CreateOrUpdateDocsTable(ctx, root, docs)
 
 	if errors.Is(ErrEmptyDocsTable, err) {
-		root, err = root.RemoveTables(ctx, doltdb.DocTableName)
+		root, err = root.RemoveTables(ctx, false, doltdb.DocTableName)
 		if err != nil {
 			return nil, err
 		}
