@@ -110,7 +110,7 @@ func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) (Map, error) 
 func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value) *StreamingMap {
 	d.PanicIfTrue(vrw == nil)
 	sm := &StreamingMap{}
-	sm.eg, sm.egCtx = errgroup.WithContext(ctx)
+	sm.eg, sm.egCtx = errgroup.WithContext(context.TODO())
 	sm.eg.Go(func() error {
 		m, err := readMapInput(sm.egCtx, vrw, kvs)
 		sm.m = m
