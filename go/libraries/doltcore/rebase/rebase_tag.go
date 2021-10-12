@@ -212,7 +212,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 				return nil, fmt.Errorf("error rebasing, table %s not found in rebasedParentRoot", tblName)
 			}
 
-			newRoot, err = newRoot.RemoveTables(ctx, tblName)
+			newRoot, err = newRoot.RemoveTables(ctx, false, tblName)
 
 			if err != nil {
 				return nil, err

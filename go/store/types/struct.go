@@ -250,7 +250,7 @@ func readStructTypeOfValue(nbf *NomsBinFormat, dec *valueDecoder) (*Type, error)
 		t, err := dec.readTypeOfValue(nbf)
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding type of field %s: %w", fname, err)
 		}
 
 		typeFields[i] = StructField{

@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -104,18 +106,30 @@ func (te *sqlTableEditor) duplicateKeyErrFunc(keyString, indexName string, k, v 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if !schema.IsKeyless(te.sch) {
 		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
-
 		if err != nil {
 			return err
 		}
-
-		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
+		err = te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
+		if sql.ErrForeignKeyNotResolved.Is(err) {
+			if err = te.resolveFks(ctx); err != nil {
+				return err
+			}
+			return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
+		}
+		return err
 	}
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 	if err != nil {
 		return err
 	}
-	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
+	err = te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
+	if sql.ErrForeignKeyNotResolved.Is(err) {
+		if err = te.resolveFks(ctx); err != nil {
+			return err
+		}
+		return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
+	}
+	return err
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
@@ -125,13 +139,27 @@ func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 			return err
 		}
 
-		return te.tableEditor.DeleteByKey(ctx, k, tagToVal)
+		err = te.tableEditor.DeleteByKey(ctx, k, tagToVal)
+		if sql.ErrForeignKeyNotResolved.Is(err) {
+			if err = te.resolveFks(ctx); err != nil {
+				return err
+			}
+			return te.tableEditor.DeleteByKey(ctx, k, tagToVal)
+		}
+		return err
 	} else {
 		dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 		if err != nil {
 			return err
 		}
-		return te.tableEditor.DeleteRow(ctx, dRow)
+		err = te.tableEditor.DeleteRow(ctx, dRow)
+		if sql.ErrForeignKeyNotResolved.Is(err) {
+			if err = te.resolveFks(ctx); err != nil {
+				return err
+			}
+			return te.tableEditor.DeleteRow(ctx, dRow)
+		}
+		return err
 	}
 }
 
@@ -145,7 +173,14 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 		return err
 	}
 
-	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
+	err = te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
+	if sql.ErrForeignKeyNotResolved.Is(err) {
+		if err = te.resolveFks(ctx); err != nil {
+			return err
+		}
+		return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
+	}
+	return err
 }
 
 func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
@@ -210,4 +245,24 @@ func (te *sqlTableEditor) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) e
 	}
 
 	return sess.SetRoot(ctx, te.dbName, newRoot)
+}
+
+func (te *sqlTableEditor) resolveFks(ctx *sql.Context) error {
+	tbl, err := te.tableEditor.Table(ctx)
+	if err != nil {
+		return err
+	}
+	return te.sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+		fkc, err := root.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, foreignKey := range fkc.UnresolvedForeignKeys() {
+			newRoot, _, err := creation.ResolveForeignKey(ctx, root, tbl, foreignKey, te.sess.Opts)
+			if err == nil {
+				root = newRoot
+			}
+		}
+		return root, nil
+	})
 }

@@ -238,7 +238,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NilConflict() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_ImmediateConflict() {
-	s.tryThreeWayConflict(mustValue(types.NewSet(context.Background(), s.vs)), mustValue(s.create(mm2b)), mustValue(s.create(mm2)), "Cannot merge Set<> with "+s.typeStr)
+	s.tryThreeWayConflict(mustValue(types.NewSet(context.Background(), s.vs)), mustValue(s.create(mm2b)), mustValue(s.create(mm2)), "Cannot merge Set<Union<>> with "+s.typeStr)
 	s.tryThreeWayConflict(mustValue(s.create(mm2b)), mustValue(types.NewSet(context.Background(), s.vs)), mustValue(s.create(mm2)), "Cannot merge "+s.typeStr)
 }
 

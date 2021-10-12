@@ -138,6 +138,142 @@ func (db *database) DatasetsInRoot(ctx context.Context, rootHash hash.Hash) (typ
 	return val.(types.Map), nil
 }
 
+func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Ref, bool, error) {
+	parentRefs := make([]types.Ref, int(parentRefsL.Len()))
+	parents := make([]types.Struct, len(parentRefs))
+	if len(parents) == 0 {
+		return types.Ref{}, false, nil
+	}
+	err := parentRefsL.IterAll(ctx, func(v types.Value, i uint64) error {
+		r, ok := v.(types.Ref)
+		if !ok {
+			return errors.New("parentsRef element was not a Ref")
+		}
+		parentRefs[int(i)] = r
+		tv, err := r.TargetValue(ctx, vrw)
+		if err != nil {
+			return err
+		}
+		s, ok := tv.(types.Struct)
+		if !ok {
+			return errors.New("parentRef target value was not a Struct")
+		}
+		parents[int(i)] = s
+		return nil
+	})
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	parentMaps := make([]types.Map, len(parents))
+	parentParentLists := make([]types.List, len(parents))
+	for i, p := range parents {
+		v, ok, err := p.MaybeGet(ParentsClosureField)
+		if err != nil {
+			return types.Ref{}, false, err
+		}
+		if !ok || types.IsNull(v) {
+			empty, err := types.NewMap(ctx, vrw)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			parentMaps[i] = empty
+		} else {
+			r, ok := v.(types.Ref)
+			if !ok {
+				return types.Ref{}, false, errors.New("unexpected field value type for parents_closure in commit struct")
+			}
+			tv, err := r.TargetValue(ctx, vrw)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			parentMaps[i], ok = tv.(types.Map)
+			if !ok {
+				return types.Ref{}, false, fmt.Errorf("unexpected target value type for parents_closure in commit struct: %v", tv)
+			}
+		}
+		v, ok, err = p.MaybeGet(ParentsListField)
+		if !ok || types.IsNull(v) {
+			empty, err := types.NewList(ctx, vrw)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			parentParentLists[i] = empty
+		} else {
+			parentParentLists[i], ok = v.(types.List)
+			if !ok {
+				return types.Ref{}, false, errors.New("unexpected field value or type for parents_list in commit struct")
+			}
+		}
+		if parentMaps[i].Len() == 0 && parentParentLists[i].Len() != 0 {
+			// If one of the commits has an empty parents_closure, but non-empty parents, we will not record
+			// a parents_closure here.
+			return types.Ref{}, false, nil
+		}
+	}
+	// Convert parent lists to List<Ref<Value>>
+	for i, l := range parentParentLists {
+		newRefs := make([]types.Value, int(l.Len()))
+		err := l.IterAll(ctx, func(v types.Value, i uint64) error {
+			r, ok := v.(types.Ref)
+			if !ok {
+				return errors.New("unexpected entry type for parents_list in commit struct")
+			}
+			newRefs[int(i)], err = types.ToRefOfValue(r, vrw.Format())
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return types.Ref{}, false, err
+		}
+		parentParentLists[i], err = types.NewList(ctx, vrw, newRefs...)
+		if err != nil {
+			return types.Ref{}, false, err
+		}
+	}
+	editor := parentMaps[0].Edit()
+	for i, r := range parentRefs {
+		h := r.TargetHash()
+		key, err := types.NewTuple(vrw.Format(), types.Uint(r.Height()), types.InlineBlob(h[:]))
+		if err != nil {
+			editor.Close(ctx)
+			return types.Ref{}, false, err
+		}
+		editor.Set(key, parentParentLists[i])
+	}
+	for i := 1; i < len(parentMaps); i++ {
+		changes := make(chan types.ValueChanged)
+		var derr error
+		go func() {
+			defer close(changes)
+			derr = parentMaps[1].Diff(ctx, parentMaps[0], changes)
+		}()
+		for c := range changes {
+			if c.ChangeType == types.DiffChangeAdded {
+				editor.Set(c.Key, c.NewValue)
+			}
+		}
+		if derr != nil {
+			editor.Close(ctx)
+			return types.Ref{}, false, derr
+		}
+	}
+	m, err := editor.Map(ctx)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	r, err := vrw.WriteValue(ctx, m)
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	r, err = types.ToRefOfValue(r, vrw.Format())
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+	return r, true, nil
+}
+
 // Datasets returns the Map of Datasets in the current root. If you intend to edit the map and commit changes back,
 // then you should fetch the current root, then call DatasetsInRoot with that hash. Otherwise another writer could
 // change the root value between when you get the root hash and call this method.
@@ -318,7 +454,12 @@ func (db *database) CommitDangling(ctx context.Context, v types.Value, opts Comm
 		opts.Meta = types.EmptyStruct(db.Format())
 	}
 
-	commitStruct, err := NewCommit(ctx, v, opts.ParentsList, opts.Meta)
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, db, opts.ParentsList)
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	commitStruct, err := newCommit(ctx, v, opts.ParentsList, parentsClosure, includeParentsClosure, opts.Meta)
 	if err != nil {
 		return types.Struct{}, err
 	}
@@ -473,7 +614,12 @@ func (db *database) doMerge(
 		return types.Ref{}, err
 	}
 
-	newCom, err := NewCommit(ctx, merged, parents, types.EmptyStruct(db.Format()))
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, db, parents)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	newCom, err := newCommit(ctx, merged, parents, parentsClosure, includeParentsClosure, types.EmptyStruct(db.Format()))
 	if err != nil {
 		return types.Ref{}, err
 	}
@@ -980,7 +1126,13 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 	if meta.IsZeroValue() {
 		meta = types.EmptyStruct(ds.Database().Format())
 	}
-	return NewCommit(ctx, v, parents, meta)
+
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, ds.Database(), parents)
+	if err != nil {
+		return types.EmptyStruct(ds.Database().Format()), err
+	}
+
+	return newCommit(ctx, v, parents, parentsClosure, includeParentsClosure, meta)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

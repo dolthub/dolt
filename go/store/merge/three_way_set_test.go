@@ -105,6 +105,6 @@ func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_Refs() {
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_ImmediateConflict() {
-	s.tryThreeWayConflict(mustValue(types.NewMap(context.Background(), s.vs)), mustValue(s.create(ss1b)), mustValue(s.create(ss1)), "Cannot merge Map<> with "+s.typeStr)
+	s.tryThreeWayConflict(mustValue(types.NewMap(context.Background(), s.vs)), mustValue(s.create(ss1b)), mustValue(s.create(ss1)), "Cannot merge Map<Union<>, Union<>> with "+s.typeStr)
 	s.tryThreeWayConflict(mustValue(s.create(ss1b)), mustValue(types.NewMap(context.Background(), s.vs)), mustValue(s.create(ss1)), "Cannot merge "+s.typeStr)
 }
