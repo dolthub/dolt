@@ -129,8 +129,8 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			}
 
 			name, email, configErr := env.GetNameAndEmail(dEnv.Config)
-			// In the case of a ff merge we might not actually need the config information. We'll check whether its
-			// possible once the actual merge spec is computed.
+			// If the name and email aren't set we can set them to empty values for now. This is only valid for ff
+			// merges which detect for later.
 			if configErr != nil {
 				if pullSpec.Noff {
 					return configErr
@@ -143,7 +143,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return err
 			}
 
-			// Verify the config - ff relationship as described above.
+			// If configurations are not set and a ff merge are not possible throw an error.
 			if configErr != nil {
 				canFF, err := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
 				if err != nil {
