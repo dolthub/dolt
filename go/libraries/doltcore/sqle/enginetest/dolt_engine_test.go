@@ -334,10 +334,17 @@ func TestTransactions(t *testing.T) {
 	}
 }
 
+func TestDoltScripts(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DoltScripts {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	script := enginetest.TransactionTest{
 		Name: "rollback",

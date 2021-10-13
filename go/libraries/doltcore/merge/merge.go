@@ -444,14 +444,19 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 		return nil
 	})
 
+	var conflicts types.Map
+	eg.Go(func() error {
+		var err error
+		// |sm|'s errgroup is a child of |eg|
+		// so we must wait here, before |eg| finishes
+		conflicts, err = sm.Wait()
+		return err
+	})
+
 	if err := eg.Wait(); err != nil {
 		return nil, types.EmptyMap, nil, err
 	}
 
-	conflicts, err := sm.Wait()
-	if err != nil {
-		return nil, types.EmptyMap, nil, err
-	}
 	newRoot, err := sess.Flush(ctx)
 	if err != nil {
 		return nil, types.EmptyMap, nil, err
