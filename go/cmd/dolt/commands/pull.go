@@ -145,7 +145,10 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 
 			// Verify the config - ff relationship as described above.
 			if configErr != nil {
-				canFF, _ := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
+				canFF, err := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
+				if err != nil {
+					return err
+				}
 
 				if !canFF {
 					return configErr
