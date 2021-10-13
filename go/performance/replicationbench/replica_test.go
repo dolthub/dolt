@@ -17,8 +17,6 @@ package serverbench
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"os"
 	"path"
 	"runtime"
@@ -30,6 +28,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 

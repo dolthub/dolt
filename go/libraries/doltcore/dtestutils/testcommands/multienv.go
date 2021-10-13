@@ -17,6 +17,9 @@ package testcommands
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -30,8 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
-	"os"
-	"path/filepath"
 )
 
 const (

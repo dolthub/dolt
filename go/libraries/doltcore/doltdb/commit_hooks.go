@@ -16,8 +16,9 @@ package doltdb
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"io"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/dolt/go/store/datas"
 )
