@@ -135,7 +135,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				if pullSpec.Noff {
 					return configErr
 				}
-				name, email = "",""
+				name, email = "", ""
 			}
 
 			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
@@ -165,6 +165,9 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			if err != nil {
 				return err
 			}
+
+			// TODO: We should add functionality to create a commit from a no-ff/normal merge operation instead of
+			// leaving the branch in a merged state.
 		}
 	}
 
