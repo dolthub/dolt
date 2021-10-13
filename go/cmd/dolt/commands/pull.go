@@ -128,10 +128,30 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return err
 			}
 
-			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, "", "", pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
+			name, email, configErr := env.GetNameAndEmail(dEnv.Config)
+			// In the case of a ff merge we might not actually need the config information. We'll check whether its
+			// possible once the actual merge spec is computed.
+			if configErr != nil {
+				if pullSpec.Noff {
+					return configErr
+				}
+				name, email = "",""
+			}
+
+			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
 			if err != nil {
 				return err
 			}
+
+			// Verify the config - ff relationship as described above.
+			if configErr != nil {
+				canFF, _ := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
+
+				if !canFF {
+					return configErr
+				}
+			}
+
 			err = mergePrinting(ctx, dEnv, mergeSpec)
 			if !ok {
 				return nil

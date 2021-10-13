@@ -890,28 +890,44 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
 
-    dolt sql -q "insert into test values (1,1)"
-
-    cd ../../
-    # turn back on the configs and make a change
+    # turn back on the configs and make a change in the remote
     dolt config --global --add user.name mysql-test-runner
     dolt config --global --add user.email mysql-test-runner@liquidata.co
-    dolt sql -q "insert into test values (1,2)"
-    dolt commit -am "commit from main repo"
-    cd "dolt-repo-clones/test-repo"
 
+    cd ../../
+    dolt sql -q "insert into test values (1,1)"
+    dolt commit -am "commit from main repo"
+    dolt push test-remote main
+
+    # Try a --no-ff merge and make sure it fails
+    cd "dolt-repo-clones/test-repo"
     # turn configs off again
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
-    # Test that pull still works
-    run dolt pull
-    [ "$status" -eq 0 ]
-
-    # A commit to clean up the merge state should error correctly
-    run dolt commit -am "merge"
+    run dolt pull --no-ff
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Could not determine user.name." ]] || false
+    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
+
+    # Now do a two sided merge
+    dolt config --global --add user.name mysql-test-runner
+    dolt config --global --add user.email mysql-test-runner@liquidata.co
+
+    dolt sql -q "insert into test values (2,1)"
+    dolt commit -am "commit from test repo"
+
+    cd ../../
+    dolt sql -q "insert into test values (2,2)"
+    dolt commit -am "commit from main repo"
+    dolt push test-remote main
+
+    cd "dolt-repo-clones/test-repo"
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
 }
 
 create_main_remote_branch() {
