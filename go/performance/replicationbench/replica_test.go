@@ -42,7 +42,7 @@ type serverTest struct {
 }
 
 // usage: `go test -bench .`
-func BenchmarkServerExample(b *testing.B) {
+func BenchmarkPushOnWrite(b *testing.B) {
 
 	setup := make([]query, 1)
 	setup[0] = "CREATE TABLE bench (a int, b int, c int);"
