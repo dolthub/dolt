@@ -1,4 +1,4 @@
-name: Bump Dolt on Winget
+name: Bump Dolt on winget
 
 on:
   workflow_dispatch:
@@ -11,27 +11,35 @@ on:
 
 jobs:
   winget-bump:
-    name: Bump Dolt Winget
+    name: Bump Dolt winget
     runs-on: windows-2019
     defaults:
       run:
         shell: powershell
     steps:
-      - name: Create Winget PR
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+      - name: Get version
+        id: get_version
+        run: |
+          version=""
+
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]
+          then
+            version="${{ github.event.client_payload.version }}"
+          else
+            version="${{ github.event.inputs.version }}"
+          fi
+
+          if [[ $version == v* ]]; then
+            version="${version:1}"
+          fi
+
+          echo "::set-output name=version::$version"
+
+      - name: Create winget PR
         run: |
           iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
           .\wingetcreate.exe update DoltHub.Dolt -u $Env:URL -v $Env:VERSION -t $Env:TOKEN --submit
         env:
           TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
-          VERSION: ${{ github.event.inputs.version }}
-          URL: ${{ format('https://github.com/dolthub/dolt/releases/download/v{0}/dolt-windows-amd64.msi', github.event.inputs.version) }}
-      - name: Create Winget PR
-        if: ${{ github.event_name == 'repository_dispatch' }}
-        run: |
-          iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          .\wingetcreate.exe update DoltHub.Dolt -u $Env:URL -v $Env:VERSION -t $Env:TOKEN --submit
-        env:
-          TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
-          VERSION: ${{ github.event.client_payload.version }}
-          URL: ${{ format('https://github.com/dolthub/dolt/releases/download/{0}/dolt-windows-amd64.msi', github.event.client_payload.version) }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+          URL: ${{ format('https://github.com/dolthub/dolt/releases/download/v{0}/dolt-windows-amd64.msi', steps.get_version.outputs.version) }}
