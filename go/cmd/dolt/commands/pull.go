@@ -128,15 +128,33 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return err
 			}
 
-			name, email, err := env.GetNameAndEmail(dEnv.Config)
-			if err != nil {
-				return err
+			name, email, configErr := env.GetNameAndEmail(dEnv.Config)
+			// If the name and email aren't set we can set them to empty values for now. This is only valid for ff
+			// merges which detect for later.
+			if configErr != nil {
+				if pullSpec.Noff {
+					return configErr
+				}
+				name, email = "", ""
 			}
 
 			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
 			if err != nil {
 				return err
 			}
+
+			// If configurations are not set and a ff merge are not possible throw an error.
+			if configErr != nil {
+				canFF, err := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
+				if err != nil {
+					return err
+				}
+
+				if !canFF {
+					return configErr
+				}
+			}
+
 			err = mergePrinting(ctx, dEnv, mergeSpec)
 			if !ok {
 				return nil
@@ -150,6 +168,9 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			if err != nil {
 				return err
 			}
+
+			// TODO: We should add functionality to create a commit from a no-ff/normal merge operation instead of
+			// leaving the branch in a merged state.
 		}
 	}
 
