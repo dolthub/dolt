@@ -17,6 +17,7 @@ package editor
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -218,6 +219,15 @@ func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context
 
 	nbf := ste.Format()
 	for _, foreignKey := range ste.referencingTables {
+		if !foreignKey.IsResolved() {
+			return sql.ErrForeignKeyNotResolved.New(
+				ste.Name(),
+				foreignKey.Name,
+				strings.Join(foreignKey.UnresolvedFKDetails.TableColumns, "`, `"),
+				foreignKey.ReferencedTableName,
+				strings.Join(foreignKey.UnresolvedFKDetails.ReferencedTableColumns, "`, `"))
+		}
+
 		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
@@ -324,6 +334,15 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 
 	nbf := ste.Format()
 	for _, foreignKey := range ste.referencingTables {
+		if !foreignKey.IsResolved() {
+			return sql.ErrForeignKeyNotResolved.New(
+				ste.Name(),
+				foreignKey.Name,
+				strings.Join(foreignKey.UnresolvedFKDetails.TableColumns, "`, `"),
+				foreignKey.ReferencedTableName,
+				strings.Join(foreignKey.UnresolvedFKDetails.ReferencedTableColumns, "`, `"))
+		}
+
 		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
@@ -515,6 +534,15 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVa
 	}
 
 	for _, foreignKey := range ste.referencedTables {
+		if !foreignKey.IsResolved() {
+			return sql.ErrForeignKeyNotResolved.New(
+				ste.Name(),
+				foreignKey.Name,
+				strings.Join(foreignKey.UnresolvedFKDetails.TableColumns, "`, `"),
+				foreignKey.ReferencedTableName,
+				strings.Join(foreignKey.UnresolvedFKDetails.ReferencedTableColumns, "`, `"))
+		}
+
 		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, taggedVals)
 		if err != nil {
 			return err

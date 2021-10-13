@@ -64,7 +64,7 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 	}
 	foundViolationsSet := set.NewStrSet(nil)
 	for _, foreignKey := range fkColl.AllKeys() {
-		if tables.Size() != 0 && !tables.Contains(foreignKey.TableName) {
+		if !foreignKey.IsResolved() || (tables.Size() != 0 && !tables.Contains(foreignKey.TableName)) {
 			continue
 		}
 

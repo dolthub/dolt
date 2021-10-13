@@ -32,14 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/util/clienttest"
 )
 
-func mustTuple(tpl types.Tuple, err error) types.Tuple {
-	if err != nil {
-		panic(err)
-	}
-
-	return tpl
-}
-
 func addTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map, tableName string, alternatingKeyVals ...types.Value) (types.Map, error) {
 	val, ok, err := m.MaybeGet(ctx, types.String(tableName))
 

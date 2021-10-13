@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -109,66 +108,6 @@ func (tes *TableEditSession) UpdateRoot(ctx context.Context, updatingFunc func(c
 		return err
 	}
 	return tes.setRoot(ctx, newRoot)
-}
-
-// ValidateForeignKeys ensures that all open table editors conform to their foreign key constraints. This does not
-// consider any tables that do not have open editors.
-func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
-	tes.writeMutex.Lock()
-	defer tes.writeMutex.Unlock()
-
-	_, err := tes.flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	if tes.Opts.ForeignKeyChecksDisabled {
-		// When fk checks are disabled, we don't load any foreign key data. Although we could load them here now, we can
-		// take a bit of a performance hit and create an internal edit session that loads all of the foreign keys.
-		// Otherwise, to preserve this edit session would create a much larger (and more difficult to understand) block
-		// of code. The primary perf hit comes from foreign keys that reference tables that declare foreign keys of
-		// their own, which is not common, so the average perf hit is relatively minimal.
-		validationTes := CreateTableEditSession(tes.root, Options{})
-		for tableName, _ := range tes.tables {
-			_, err = validationTes.getTableEditor(ctx, tableName, nil)
-			if err != nil {
-				return err
-			}
-		}
-		return validationTes.ValidateForeignKeys(ctx)
-	} else {
-		// if we loaded foreign keys then all referenced tables exist, so we can just use them
-		for _, ste := range tes.tables {
-			tbl, err := ste.tableEditor.Table(ctx)
-			if err != nil {
-				return err
-			}
-			rowData, err := tbl.GetRowData(ctx)
-			if err != nil {
-				return err
-			}
-			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-				r, err := row.FromNoms(ste.tableEditor.Schema(), key.(types.Tuple), value.(types.Tuple))
-				if err != nil {
-					return true, err
-				}
-				rTaggedValues, err := r.TaggedValues()
-				if err != nil {
-					return true, err
-				}
-				err = ste.validateForInsert(ctx, rTaggedValues)
-				if err != nil {
-					return true, err
-				}
-				return false, nil
-			})
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks
@@ -287,6 +226,9 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *sessionedTableEditor) error {
 	// these are the tables that reference us, so we need to update them
 	for _, foreignKey := range localTableEditor.referencingTables {
+		if !foreignKey.IsResolved() {
+			continue
+		}
 		_, err := tes.getTableEditor(ctx, foreignKey.TableName, nil)
 		if err != nil {
 			return err
@@ -294,6 +236,9 @@ func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEdit
 	}
 	// these are the tables that we reference, so we need to refer to them
 	for _, foreignKey := range localTableEditor.referencedTables {
+		if !foreignKey.IsResolved() {
+			continue
+		}
 		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil)
 		if err != nil {
 			return err
@@ -339,9 +284,11 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		}
 		localTableEditor.tableEditor = newTableEditor
 		localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
-		err = tes.loadForeignKeys(ctx, localTableEditor)
-		if err != nil {
-			return err
+		if !tes.Opts.ForeignKeyChecksDisabled {
+			err = tes.loadForeignKeys(ctx, localTableEditor)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

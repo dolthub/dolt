@@ -84,6 +84,18 @@ jobs:
           asset_name: install.sh
           asset_content_type: text/plain
 
+  create-windows-msi:
+    needs: create-release
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Trigger Upload MSI
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: upload-msi
+          repository: dolthub/windows-msi-creator
+          client-payload: '{"tag": "${{ github.event.inputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}"}, "actor": "${{ github.actor }}"}'
+
   create-release-notes:
     needs: create-release
     runs-on: ubuntu-18.04

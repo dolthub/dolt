@@ -55,7 +55,7 @@ type SqlDatabase interface {
 	DbData() env.DbData
 	Name() string
 
-	StartTransaction(ctx *sql.Context) (sql.Transaction, error)
+	StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error)
 	Flush(*sql.Context) error
 	EditOptions() editor.Options
 }
@@ -111,7 +111,7 @@ func (r ReadOnlyDatabase) IsReadOnly() bool {
 	return true
 }
 
-func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
+func (db Database) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	dsession := dsess.DSessFromSess(ctx.Session)
 
 	if !dsession.HasDB(ctx, db.Name()) {
@@ -126,7 +126,7 @@ func (db Database) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
 		}
 	}
 
-	return dsession.StartTransaction(ctx, db.Name())
+	return dsession.StartTransaction(ctx, db.Name(), tCharacteristic)
 }
 
 func (db Database) CommitTransaction(ctx *sql.Context, tx sql.Transaction) error {
@@ -604,6 +604,15 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
+	allowDroppingFKReferenced := false
+	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
+	if err != nil {
+		return err
+	}
+	if fkChecks.(int8) == 0 {
+		allowDroppingFKReferenced = true
+	}
+
 	// Temporary Tables Get Precedence over schema tables
 	tempTableRoot, tempRootExists := db.GetTemporaryTablesRoot(ctx)
 	if tempRootExists {
@@ -613,7 +622,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		}
 
 		if tempTableExists {
-			newRoot, err := tempTableRoot.RemoveTables(ctx, tableName)
+			newRoot, err := tempTableRoot.RemoveTables(ctx, allowDroppingFKReferenced, tableName)
 			if err != nil {
 				return err
 			}
@@ -636,7 +645,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	newRoot, err := root.RemoveTables(ctx, tableName)
+	newRoot, err := root.RemoveTables(ctx, allowDroppingFKReferenced, tableName)
 	if err != nil {
 		return err
 	}

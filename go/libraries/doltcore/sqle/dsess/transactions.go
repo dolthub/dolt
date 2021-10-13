@@ -60,12 +60,17 @@ func (d DisabledTransaction) String() string {
 	return "Disabled transaction"
 }
 
+func (d DisabledTransaction) IsReadOnly() bool {
+	return false
+}
+
 type DoltTransaction struct {
-	startState    *doltdb.WorkingSet
-	workingSetRef ref.WorkingSetRef
-	dbData        env.DbData
-	savepoints    []savepoint
-	mergeEditOpts editor.Options
+	startState      *doltdb.WorkingSet
+	workingSetRef   ref.WorkingSetRef
+	dbData          env.DbData
+	savepoints      []savepoint
+	mergeEditOpts   editor.Options
+	tCharacteristic sql.TransactionCharacteristic
 }
 
 type savepoint struct {
@@ -78,18 +83,24 @@ func NewDoltTransaction(
 	workingSet ref.WorkingSetRef,
 	dbData env.DbData,
 	mergeEditOpts editor.Options,
+	tCharacteristic sql.TransactionCharacteristic,
 ) *DoltTransaction {
 	return &DoltTransaction{
-		startState:    startState,
-		workingSetRef: workingSet,
-		dbData:        dbData,
-		mergeEditOpts: mergeEditOpts,
+		startState:      startState,
+		workingSetRef:   workingSet,
+		dbData:          dbData,
+		mergeEditOpts:   mergeEditOpts,
+		tCharacteristic: tCharacteristic,
 	}
 }
 
 func (tx DoltTransaction) String() string {
 	// TODO: return more info (hashes need caching)
 	return "DoltTransaction"
+}
+
+func (tx DoltTransaction) IsReadOnly() bool {
+	return tx.tCharacteristic == sql.ReadOnly
 }
 
 var txLock sync.Mutex

@@ -84,7 +84,7 @@ func (db *UserSpaceDatabase) DbData() env.DbData {
 	panic("UserSpaceDatabase does not have dbdata")
 }
 
-func (db *UserSpaceDatabase) StartTransaction(ctx *sql.Context) (sql.Transaction, error) {
+func (db *UserSpaceDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	panic("UserSpaceDatabase does not support transactions")
 }
 
