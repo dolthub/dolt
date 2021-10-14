@@ -16,13 +16,14 @@ package val
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/store/pool"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-var maskPool buffPool
+var maskPool pool.buffPool
 
 func TestMemberSet(t *testing.T) {
 	for i := 1; i < 100; i++ {

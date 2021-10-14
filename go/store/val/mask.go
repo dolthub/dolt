@@ -14,9 +14,11 @@
 
 package val
 
+import "github.com/dolthub/dolt/go/store/pool"
+
 type memberSet []byte
 
-func makeMemberSet(pool BuffPool, count int) memberSet {
+func makeMemberSet(pool pool.BuffPool, count int) memberSet {
 	sz := uint64(maskSize(count))
 	return pool.Get(sz)
 }

@@ -16,6 +16,7 @@ package val
 
 import (
 	"encoding/binary"
+	"github.com/dolthub/dolt/go/store/pool"
 )
 
 const (
@@ -24,7 +25,7 @@ const (
 
 type Tuple []byte
 
-func NewTuple(pool BuffPool, values ...Value) Tuple {
+func NewTuple(pool pool.BuffPool, values ...Value) Tuple {
 	count := 0
 	pos := byteSize(0)
 	for _, v := range values {
@@ -54,7 +55,7 @@ func NewTuple(pool BuffPool, values ...Value) Tuple {
 	return tup
 }
 
-func makeTuple(pool BuffPool, bufSz byteSize, values, fields int) (tup Tuple, offs offsetSlice, ms memberSet) {
+func makeTuple(pool pool.BuffPool, bufSz byteSize, values, fields int) (tup Tuple, offs offsetSlice, ms memberSet) {
 	offSz := offsetSize(values)
 	maskSz := maskSize(fields)
 	countSz := numFieldsSize
