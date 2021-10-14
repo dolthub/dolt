@@ -15,13 +15,14 @@
 package val
 
 import (
+	"github.com/dolthub/dolt/go/store/pool"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-var tupPool buffPool
+var tupPool pool.buffPool
 
 func TestNewTuple(t *testing.T) {
 	t.Run("test tuple round trip", func(t *testing.T) {
