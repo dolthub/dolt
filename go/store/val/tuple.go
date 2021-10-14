@@ -60,18 +60,15 @@ func makeTuple(pool BuffPool, bufSz byteSize, values, fields int) (tup Tuple, of
 	countSz := numFieldsSize
 
 	tup = pool.Get(uint64(bufSz + offSz + maskSz + countSz))
-	if len(tup) < 3 {
-		panic("")
-	}
 
-	writeNumFields(tup, fields)
+	writeFieldCount(tup, fields)
 	offs = offsetSlice(tup[bufSz : bufSz+offSz])
 	ms = memberSet(tup[bufSz+offSz : bufSz+offSz+maskSz])
 
 	return
 }
 
-func writeNumFields(tup Tuple, count int) {
+func writeFieldCount(tup Tuple, count int) {
 	binary.LittleEndian.PutUint16(tup[len(tup)-int(numFieldsSize):], uint16(count))
 }
 
@@ -80,58 +77,55 @@ func (tup Tuple) GetField(i int) []byte {
 		return nil
 	}
 
-	offs, end := tup.offsetSlice()
+	offs, bufStop := tup.offsetSlice()
 	i = tup.fieldToValue(i)
 
 	start := offs.get(i)
-	if !offs.isLastIndex(i) {
-		end = offs.get(i+1)
+
+	var stop offset
+	if offs.isLastIndex(i) {
+		stop = bufStop
+	} else {
+		stop = offs.get(i + 1)
 	}
 
-	return tup[start:end]
+	return tup[start:stop]
 }
 
 func (tup Tuple) size() byteSize {
 	return byteSize(len(tup))
 }
 
-func (tup Tuple) numFields() int {
+func (tup Tuple) fieldCount() int {
 	bb := tup[len(tup)-int(numFieldsSize):]
 	return int(binary.LittleEndian.Uint16(bb))
 }
 
+func (tup Tuple) valueCount() int {
+	return tup.mask().count()
+}
+
 func (tup Tuple) mask() memberSet {
-	end := tup.size() - numFieldsSize
-	start := end - maskSize(tup.numFields())
-	if int(start) > len(tup) || int(end) > len(tup) {
-		panic("")
-	}
-	return memberSet(tup[start:end])
+	stop := tup.size() - numFieldsSize
+	start := stop - maskSize(tup.fieldCount())
+	return memberSet(tup[start:stop])
 }
 
 func (tup Tuple) fieldToValue(i int) int {
 	return tup.mask().countPrefix(i) - 1
 }
 
-func (tup Tuple) offsetSlice() (sl offsetSlice, start offset) {
+func (tup Tuple) offsetSlice() (offs offsetSlice, bufStop offset) {
 	mask := tup.mask()
-	end := tup.size() - numFieldsSize - mask.size()
-
-	cnt := mask.count()
-	offSz := offsetSize(cnt)
-
-	start = offset(end - offSz)
-	sl = offsetSlice(tup[start:end])
+	offStop := tup.size() - numFieldsSize - mask.size()
+	bufStop = offset(offStop - offsetSize(mask.count()))
+	offs = offsetSlice(tup[bufStop:offStop])
 	return
 }
 
 type offset uint16
 
 type offsetSlice []byte
-
-func makeOffsetSlice(pool BuffPool, count int) offsetSlice {
-	return pool.Get(uint64(offsetSize(count)))
-}
 
 func offsetSize(count int) byteSize {
 	if count == 0 {

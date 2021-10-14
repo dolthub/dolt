@@ -15,7 +15,7 @@
 package val
 
 type Value struct {
-	Typ Type
+	Enc Encoding
 	Val []byte
 }
 
@@ -28,5 +28,5 @@ func (v Value) size() byteSize {
 }
 
 func (v Value) fixedSize() bool {
-	return FixedSize(v.Typ)
+	return FixedWidth(v.Enc)
 }

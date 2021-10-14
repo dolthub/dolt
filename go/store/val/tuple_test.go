@@ -40,14 +40,11 @@ func testRoundTrip(t *testing.T) {
 }
 
 func randomValues(t *testing.T) (vals []Value) {
-	vals = make([]Value, (rand.Uint32() % 19)+1)
-	assert.True(t, len(vals)>0)
+	vals = make([]Value, (rand.Uint32()%19)+1)
+	assert.True(t, len(vals) > 0)
 
 	for i := range vals {
-		vals[i] = Value{
-			Typ: BinaryType,
-			Val: nil,
-		}
+		vals[i] = Value{Enc: randomEncoding()}
 
 		if rand.Uint32()%4 == 0 {
 			// 25% NULL
@@ -58,4 +55,25 @@ func randomValues(t *testing.T) (vals []Value) {
 		rand.Read(vals[i].Val)
 	}
 	return
+}
+
+func randomEncoding() Encoding {
+	all := []Encoding{
+		NullEnc,
+		Int8Enc,
+		Uint8Enc,
+		Int16Enc,
+		Uint16Enc,
+		Int24Enc,
+		Uint24Enc,
+		Int32Enc,
+		Uint32Enc,
+		Int64Enc,
+		Uint64Enc,
+		Float32Enc,
+		Float64Enc,
+		StringEnc,
+		BytesEnc,
+	}
+	return all[rand.Int()%len(all)]
 }
