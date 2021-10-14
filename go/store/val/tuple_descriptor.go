@@ -15,18 +15,13 @@
 package val
 
 import (
+	"bytes"
 	"time"
 )
 
-type Collation uint16
-
-const (
-	ByteOrderCollation Collation = 0
-)
-
 type Type struct {
-	Enc Encoding
-	Col Collation
+	Enc  Encoding
+	Coll Collation
 }
 
 type TupleDesc struct {
@@ -48,6 +43,16 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 		}
 	}
 	panic("incorrect value encoding")
+}
+
+func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
+	for i, typ := range td.types {
+		cmp = compare(typ.Enc, typ.Coll, left.GetField(i), right.GetField(i))
+		if cmp != EqualCmp {
+			break
+		}
+	}
+	return
 }
 
 func (td TupleDesc) GetBool(i int, tup Tuple) bool {
@@ -118,4 +123,25 @@ func (td TupleDesc) GetString(i int, tup Tuple) string {
 func (td TupleDesc) GetBytes(i int, tup Tuple) []byte {
 	td.expectEncoding(i, BytesEnc)
 	return readBytes(tup.GetField(i))
+}
+
+type Collation uint16
+
+const (
+	ByteOrderCollation Collation = 0
+)
+
+type Comparison int
+
+const (
+	GreaterCmp Comparison = 1
+	EqualCmp   Comparison = 0
+	LesserCmp  Comparison = -1
+)
+
+func compare(_ Encoding, coll Collation, left, right []byte) Comparison {
+	if coll != ByteOrderCollation {
+		panic("unknown collation")
+	}
+	return Comparison(bytes.Compare(left, right))
 }
