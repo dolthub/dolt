@@ -14,19 +14,38 @@
 
 package val
 
-type Value struct {
-	Enc Encoding
-	Val []byte
+import "encoding/binary"
+
+type Offsets []byte
+
+func OffsetsSize(count int) ByteSize {
+	if count == 0 {
+		return 0
+	}
+	return ByteSize((count - 1) * 2)
 }
 
-func (v Value) Null() bool {
-	return v.Val == nil
+func (sl Offsets) Count() int {
+	return (len(sl) / 2) + 1
 }
 
-func (v Value) size() ByteSize {
-	return ByteSize(len(v.Val))
+func (sl Offsets) Get(i int) ByteSize {
+	if i == 0 {
+		return 0
+	}
+	start := (i - 1) * 2
+	off := binary.LittleEndian.Uint16(sl[start : start+2])
+	return ByteSize(off)
 }
 
-func (v Value) fixedSize() bool {
-	return FixedWidth(v.Enc)
+func (sl Offsets) Put(i int, off ByteSize) {
+	if i == 0 {
+		return
+	}
+	start := (i - 1) * 2
+	binary.LittleEndian.PutUint16(sl[start:start+2], uint16(off))
+}
+
+func (sl Offsets) IsLastIndex(i int) bool {
+	return len(sl) == i*2
 }

@@ -16,7 +16,6 @@ package val
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/store/pool"
 	"math/rand"
 	"testing"
 

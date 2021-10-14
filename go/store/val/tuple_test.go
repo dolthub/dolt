@@ -15,7 +15,6 @@
 package val
 
 import (
-	"github.com/dolthub/dolt/go/store/pool"
 	"math/rand"
 	"testing"
 

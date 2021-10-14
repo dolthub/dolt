@@ -16,18 +16,19 @@ package val
 
 import (
 	"encoding/binary"
+
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
 const (
-	numFieldsSize byteSize = 2
+	numFieldsSize ByteSize = 2
 )
 
 type Tuple []byte
 
 func NewTuple(pool pool.BuffPool, values ...Value) Tuple {
 	count := 0
-	pos := byteSize(0)
+	pos := ByteSize(0)
 	for _, v := range values {
 		if v.Null() {
 			continue
@@ -39,13 +40,13 @@ func NewTuple(pool pool.BuffPool, values ...Value) Tuple {
 	tup, offs, mask := makeTuple(pool, pos, count, len(values))
 
 	count = 0
-	pos = byteSize(0)
+	pos = ByteSize(0)
 	for i, v := range values {
 		if v.Null() {
 			continue
 		}
 		mask.set(i)
-		offs.put(count, offset(pos))
+		offs.Put(count, pos)
 		count++
 
 		copy(tup[pos:pos+v.size()], v.Val)
@@ -55,15 +56,15 @@ func NewTuple(pool pool.BuffPool, values ...Value) Tuple {
 	return tup
 }
 
-func makeTuple(pool pool.BuffPool, bufSz byteSize, values, fields int) (tup Tuple, offs offsetSlice, ms memberSet) {
-	offSz := offsetSize(values)
+func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tuple, offs Offsets, ms memberSet) {
+	offSz := OffsetsSize(values)
 	maskSz := maskSize(fields)
 	countSz := numFieldsSize
 
 	tup = pool.Get(uint64(bufSz + offSz + maskSz + countSz))
 
 	writeFieldCount(tup, fields)
-	offs = offsetSlice(tup[bufSz : bufSz+offSz])
+	offs = Offsets(tup[bufSz : bufSz+offSz])
 	ms = memberSet(tup[bufSz+offSz : bufSz+offSz+maskSz])
 
 	return
@@ -81,20 +82,20 @@ func (tup Tuple) GetField(i int) []byte {
 	offs, bufStop := tup.offsetSlice()
 	i = tup.fieldToValue(i)
 
-	start := offs.get(i)
+	start := offs.Get(i)
 
-	var stop offset
-	if offs.isLastIndex(i) {
+	var stop ByteSize
+	if offs.IsLastIndex(i) {
 		stop = bufStop
 	} else {
-		stop = offs.get(i + 1)
+		stop = offs.Get(i + 1)
 	}
 
 	return tup[start:stop]
 }
 
-func (tup Tuple) size() byteSize {
-	return byteSize(len(tup))
+func (tup Tuple) size() ByteSize {
+	return ByteSize(len(tup))
 }
 
 func (tup Tuple) fieldCount() int {
@@ -116,46 +117,10 @@ func (tup Tuple) fieldToValue(i int) int {
 	return tup.mask().countPrefix(i) - 1
 }
 
-func (tup Tuple) offsetSlice() (offs offsetSlice, bufStop offset) {
+func (tup Tuple) offsetSlice() (offs Offsets, bufStop ByteSize) {
 	mask := tup.mask()
 	offStop := tup.size() - numFieldsSize - mask.size()
-	bufStop = offset(offStop - offsetSize(mask.count()))
-	offs = offsetSlice(tup[bufStop:offStop])
+	bufStop = offStop - OffsetsSize(mask.count())
+	offs = Offsets(tup[bufStop:offStop])
 	return
-}
-
-type offset uint16
-
-type offsetSlice []byte
-
-func offsetSize(count int) byteSize {
-	if count == 0 {
-		return 0
-	}
-	return byteSize((count - 1) * 2)
-}
-
-func (sl offsetSlice) count() int {
-	return (len(sl) / 2) + 1
-}
-
-func (sl offsetSlice) get(i int) offset {
-	if i == 0 {
-		return 0
-	}
-	start := (i - 1) * 2
-	off := binary.LittleEndian.Uint16(sl[start : start+2])
-	return offset(off)
-}
-
-func (sl offsetSlice) put(i int, off offset) {
-	if i == 0 {
-		return
-	}
-	start := (i - 1) * 2
-	binary.LittleEndian.PutUint16(sl[start:start+2], uint16(off))
-}
-
-func (sl offsetSlice) isLastIndex(i int) bool {
-	return len(sl) == i*2
 }
