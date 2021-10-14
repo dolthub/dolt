@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-type byteSize uint16
+type ByteSize uint16
 
 type Encoding uint8
 
@@ -27,7 +27,7 @@ func FixedWidth(t Encoding) bool {
 	return t >= sentinel
 }
 
-func SizeOf(enc Encoding) byteSize {
+func SizeOf(enc Encoding) ByteSize {
 	if !FixedWidth(enc) {
 		panic("cannot size variable width Encoding")
 	}
@@ -80,7 +80,7 @@ const (
 	// GeometryEnc
 )
 
-var encodingSize = [14]byteSize{
+var encodingSize = [14]ByteSize{
 	1, // NullEnc
 	1, // Int8Enc
 	1, // Uint8Enc

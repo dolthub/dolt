@@ -23,13 +23,13 @@ func makeMemberSet(pool pool.BuffPool, count int) memberSet {
 	return pool.Get(sz)
 }
 
-// maskSize returns the byteSize of a mask with |count| members.
-func maskSize(count int) byteSize {
-	return byteSize((count + 7) / 8)
+// maskSize returns the ByteSize of a mask with |Count| members.
+func maskSize(count int) ByteSize {
+	return ByteSize((count + 7) / 8)
 }
 
-func (ms memberSet) size() byteSize {
-	return byteSize(len(ms))
+func (ms memberSet) size() ByteSize {
+	return ByteSize(len(ms))
 }
 
 func (ms memberSet) set(i int) {
