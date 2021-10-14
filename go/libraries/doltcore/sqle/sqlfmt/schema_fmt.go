@@ -101,22 +101,40 @@ func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	sb.WriteString("CONSTRAINT ")
 	sb.WriteString(QuoteIdentifier(fk.Name))
 	sb.WriteString(" FOREIGN KEY (")
-	for i, tag := range fk.TableColumns {
-		if i != 0 {
-			sb.WriteRune(',')
+	if fk.IsResolved() {
+		for i, tag := range fk.TableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			c, _ := sch.GetAllCols().GetByTag(tag)
+			sb.WriteString(QuoteIdentifier(c.Name))
 		}
-		c, _ := sch.GetAllCols().GetByTag(tag)
-		sb.WriteString(QuoteIdentifier(c.Name))
+	} else {
+		for i, col := range fk.UnresolvedFKDetails.TableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(QuoteIdentifier(col))
+		}
 	}
 	sb.WriteString(")\n    REFERENCES ")
 	sb.WriteString(QuoteIdentifier(fk.ReferencedTableName))
 	sb.WriteString(" (")
-	for i, tag := range fk.ReferencedTableColumns {
-		if i != 0 {
-			sb.WriteRune(',')
+	if fk.IsResolved() {
+		for i, tag := range fk.ReferencedTableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			c, _ := parentSch.GetAllCols().GetByTag(tag)
+			sb.WriteString(QuoteIdentifier(c.Name))
 		}
-		c, _ := parentSch.GetAllCols().GetByTag(tag)
-		sb.WriteString(QuoteIdentifier(c.Name))
+	} else {
+		for i, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(QuoteIdentifier(col))
+		}
 	}
 	sb.WriteRune(')')
 	if fk.OnDelete != doltdb.ForeignKeyReferenceOption_DefaultAction {

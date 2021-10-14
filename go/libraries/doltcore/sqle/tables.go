@@ -686,34 +686,31 @@ func (t *DoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint
 	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFk))
 
 	for i, fk := range declaredFk {
+		if !fk.IsResolved() {
+			toReturn[i] = sql.ForeignKeyConstraint{
+				Name:              fk.Name,
+				Columns:           fk.UnresolvedFKDetails.TableColumns,
+				ReferencedTable:   fk.ReferencedTableName,
+				ReferencedColumns: fk.UnresolvedFKDetails.ReferencedTableColumns,
+				OnUpdate:          toReferenceOption(fk.OnUpdate),
+				OnDelete:          toReferenceOption(fk.OnDelete),
+			}
+			continue
+		}
 		parent, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
-			if fk.IsResolved() {
-				return nil, fmt.Errorf("cannot find table %s "+
-					"referenced in foreign key %s", fk.ReferencedTableName, fk.Name)
-			} else {
-				toReturn[i] = sql.ForeignKeyConstraint{
-					Name:              fk.Name,
-					Columns:           fk.UnresolvedFKDetails.TableColumns,
-					ReferencedTable:   fk.ReferencedTableName,
-					ReferencedColumns: fk.UnresolvedFKDetails.ReferencedTableColumns,
-					OnUpdate:          toReferenceOption(fk.OnUpdate),
-					OnDelete:          toReferenceOption(fk.OnDelete),
-				}
-			}
-		} else {
-			parentSch, err := parent.GetSchema(ctx)
-			if err != nil {
-				return nil, err
-			}
-
-			toReturn[i], err = toForeignKeyConstraint(fk, t.sch, parentSch)
-			if err != nil {
-				return nil, err
-			}
+			return nil, fmt.Errorf("cannot find table %s referenced in foreign key %s", fk.ReferencedTableName, fk.Name)
+		}
+		parentSch, err := parent.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		toReturn[i], err = toForeignKeyConstraint(fk, t.sch, parentSch)
+		if err != nil {
+			return nil, err
 		}
 	}
 

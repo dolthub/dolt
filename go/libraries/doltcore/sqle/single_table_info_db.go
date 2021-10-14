@@ -97,6 +97,17 @@ func (db *SingleTableInfoDatabase) PartitionRows(*sql.Context, sql.Partition) (s
 func (db *SingleTableInfoDatabase) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
 	fks := make([]sql.ForeignKeyConstraint, len(db.foreignKeys))
 	for i, fk := range db.foreignKeys {
+		if !fk.IsResolved() {
+			fks[i] = sql.ForeignKeyConstraint{
+				Name:              fk.Name,
+				Columns:           fk.UnresolvedFKDetails.TableColumns,
+				ReferencedTable:   fk.ReferencedTableName,
+				ReferencedColumns: fk.UnresolvedFKDetails.ReferencedTableColumns,
+				OnUpdate:          toReferenceOption(fk.OnUpdate),
+				OnDelete:          toReferenceOption(fk.OnDelete),
+			}
+			continue
+		}
 		if parentSch, ok := db.parentSchs[fk.ReferencedTableName]; ok {
 			var err error
 			fks[i], err = toForeignKeyConstraint(fk, db.sch, parentSch)
