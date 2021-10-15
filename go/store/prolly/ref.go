@@ -24,6 +24,8 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/chunks"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
@@ -79,4 +81,32 @@ func newMetaTuple(pool pool.BuffPool, ref hash.Hash, key [][]byte) metaTuple {
 func (mt metaTuple) GetRef() hash.Hash {
 	ref := val.Tuple(mt).GetField(-1)
 	return hash.New(ref)
+}
+
+type nodeStore struct {
+	store chunks.ChunkStore
+	bp    pool.BuffPool
+}
+
+var _ NodeReadWriter = nodeStore{}
+
+var sharedPool = pool.NewBuffPool()
+
+func NewNodeStore(cs chunks.ChunkStore) NodeReadWriter {
+	return nodeStore{store: cs, bp: sharedPool}
+}
+
+func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (node, error) {
+	c, err := ns.store.Get(ctx, ref)
+	return c.Data(), err
+}
+
+func (ns nodeStore) Write(ctx context.Context, nd node) (hash.Hash, error) {
+	c := chunks.NewChunk(nd)
+	err := ns.store.Put(ctx, c)
+	return c.Hash(), err
+}
+
+func (ns nodeStore) Pool() pool.BuffPool {
+	return ns.bp
 }

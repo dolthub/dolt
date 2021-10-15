@@ -23,16 +23,18 @@ package prolly
 
 import (
 	"encoding/binary"
+	"math"
 
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
+	// todo(andy): include cumulative size
 	treeLevelSize = val.ByteSize(1)
 	itemCountSize = val.ByteSize(2)
 
-	// todo(andy): include cumulative size
+	maxNodeDataSize = val.ByteSize(math.MaxUint16)
 )
 
 type nodeItem []byte
@@ -64,6 +66,7 @@ func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd nod
 	pos = 0
 	offs := val.Offsets(nd[offStart:offStop])
 	for i, item := range items {
+		copy(nd[pos:pos+item.size()], item)
 		offs.Put(i, pos)
 		pos += item.size()
 	}
@@ -95,12 +98,13 @@ func (nd node) level() int {
 }
 
 func (nd node) count() int {
-	sl := nd[nd.size()-itemCountSize:]
-	return int(binary.LittleEndian.Uint16(sl))
+	stop := nd.size() - treeLevelSize
+	start := stop - itemCountSize
+	return int(binary.LittleEndian.Uint16(nd[start:stop]))
 }
 
 func (nd node) offsets() (offs val.Offsets, itemStop val.ByteSize) {
-	stop := nd.size() - itemCountSize
+	stop := nd.size() - treeLevelSize - itemCountSize
 	itemStop = stop - val.OffsetsSize(nd.count())
 	return val.Offsets(nd[itemStop:stop]), itemStop
 }
