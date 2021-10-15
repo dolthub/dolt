@@ -27,20 +27,51 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-// nodeCursor explores a tree of node items.
-type nodeCursor struct {
-	nd  node
-	idx int
+func iterTree(ctx context.Context, nrw NodeReadWriter, nd node, cb func(item nodeItem) error) error {
+	if nd.empty() {
+		return nil
+	}
 
-	nrw    NodeReadWriter
-	parent *nodeCursor
+	cur, err := newNodeCursor(ctx, nrw, nd)
+	if err != nil {
+		return err
+	}
+
+	ok := true
+	for ok {
+		err = cb(cur.current())
+		if err != nil {
+			return err
+		}
+
+		ok, err = cur.advance(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return err
 }
 
-func newNodeCursor(nd node, idx int, nrw NodeReadWriter, parent *nodeCursor) *nodeCursor {
-	if idx >= nd.count() || idx < 0 {
-		panic("node cursor out of bounds")
+// nodeCursor explores a tree of node items.
+type nodeCursor struct {
+	nd     node
+	idx    int
+	parent *nodeCursor
+	nrw    NodeReadWriter
+}
+
+func newNodeCursor(ctx context.Context, nrw NodeReadWriter, nd node) (cur *nodeCursor, err error) {
+	cur = &nodeCursor{nd: nd, nrw: nrw}
+	for !cur.nd.leafNode() {
+		nd, err = fetchRef(ctx, nrw, cur.current())
+		if err != nil {
+			return nil, err
+		}
+
+		parent := cur
+		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
 	}
-	return &nodeCursor{parent: parent, nd: nd, idx: idx}
+	return
 }
 
 func (cur *nodeCursor) valid() bool {
