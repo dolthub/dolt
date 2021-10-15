@@ -32,7 +32,7 @@ func TestNewTuple(t *testing.T) {
 func testRoundTrip(t *testing.T) {
 	for n := 0; n < 100; n++ {
 		vals := randomValues(t)
-		tup := NewTuple(tupPool, vals...)
+		tup := TupleFromValues(tupPool, vals...)
 		for i, v := range vals {
 			assert.Equal(t, v.Val, tup.GetField(i))
 		}

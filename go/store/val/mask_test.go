@@ -26,7 +26,7 @@ var maskPool pool.buffPool
 
 func TestMemberSet(t *testing.T) {
 	for i := 1; i < 100; i++ {
-		name := fmt.Sprintf("test member set size %d", i)
+		name := fmt.Sprintf("test member set sizeOf %d", i)
 		t.Run(name, func(t *testing.T) {
 			testMemberSet(t, i)
 			testCountPrefix(t, i)
