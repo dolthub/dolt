@@ -16,10 +16,15 @@ package pool
 
 type BuffPool interface {
 	Get(size uint64) []byte
+	GetSlices(size uint64) [][]byte
 }
 
 type buffPool byte
 
 func (bp buffPool) Get(size uint64) []byte {
 	return make([]byte, size)
+}
+
+func (bp buffPool) GetSlices(size uint64) [][]byte {
+	return make([][]byte, size)
 }

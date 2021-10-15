@@ -29,7 +29,7 @@ func FixedWidth(t Encoding) bool {
 
 func SizeOf(enc Encoding) ByteSize {
 	if !FixedWidth(enc) {
-		panic("cannot size variable width Encoding")
+		panic("cannot sizeOf variable width Encoding")
 	}
 	return encodingSize[enc]
 }

@@ -26,15 +26,23 @@ const (
 
 type Tuple []byte
 
-func NewTuple(pool pool.BuffPool, values ...Value) Tuple {
+func TupleFromValues(pool pool.BuffPool, values ...Value) Tuple {
+	var vv [][]byte // stack alloc
+	for _, val := range values {
+		vv = append(vv, val.Val)
+	}
+	return NewTuple(pool, vv...)
+}
+
+func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	count := 0
 	pos := ByteSize(0)
 	for _, v := range values {
-		if v.Null() {
+		if isNull(v) {
 			continue
 		}
 		count++
-		pos += v.size()
+		pos += sizeOf(v)
 	}
 
 	tup, offs, mask := makeTuple(pool, pos, count, len(values))
@@ -42,15 +50,15 @@ func NewTuple(pool pool.BuffPool, values ...Value) Tuple {
 	count = 0
 	pos = ByteSize(0)
 	for i, v := range values {
-		if v.Null() {
+		if isNull(v) {
 			continue
 		}
 		mask.set(i)
 		offs.Put(count, pos)
 		count++
 
-		copy(tup[pos:pos+v.size()], v.Val)
-		pos += v.size()
+		copy(tup[pos:pos+sizeOf(v)], v)
+		pos += sizeOf(v)
 	}
 
 	return tup
@@ -70,16 +78,17 @@ func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tupl
 	return
 }
 
-func writeFieldCount(tup Tuple, count int) {
-	binary.LittleEndian.PutUint16(tup[len(tup)-int(numFieldsSize):], uint16(count))
-}
-
 func (tup Tuple) GetField(i int) []byte {
-	if !tup.mask().present(i) {
-		return nil
+	if i < 0 {
+		// supports negative indexing
+		i = tup.fieldCount() - i
 	}
 
-	offs, bufStop := tup.offsetSlice()
+	if !tup.mask().present(i) {
+		return nil // NULL
+	}
+
+	offs, bufStop := tup.offsets()
 	i = tup.fieldToValue(i)
 
 	start := offs.Get(i)
@@ -94,13 +103,17 @@ func (tup Tuple) GetField(i int) []byte {
 	return tup[start:stop]
 }
 
+func (tup Tuple) Count() int {
+	return tup.fieldCount()
+}
+
 func (tup Tuple) size() ByteSize {
 	return ByteSize(len(tup))
 }
 
 func (tup Tuple) fieldCount() int {
-	bb := tup[len(tup)-int(numFieldsSize):]
-	return int(binary.LittleEndian.Uint16(bb))
+	sl := tup[tup.size()-numFieldsSize:]
+	return int(binary.LittleEndian.Uint16(sl))
 }
 
 func (tup Tuple) valueCount() int {
@@ -117,10 +130,22 @@ func (tup Tuple) fieldToValue(i int) int {
 	return tup.mask().countPrefix(i) - 1
 }
 
-func (tup Tuple) offsetSlice() (offs Offsets, bufStop ByteSize) {
+func (tup Tuple) offsets() (offs Offsets, fieldStop ByteSize) {
 	mask := tup.mask()
 	offStop := tup.size() - numFieldsSize - mask.size()
-	bufStop = offStop - OffsetsSize(mask.count())
-	offs = Offsets(tup[bufStop:offStop])
+	fieldStop = offStop - OffsetsSize(mask.count())
+	offs = Offsets(tup[fieldStop:offStop])
 	return
+}
+
+func isNull(val []byte) bool {
+	return val == nil
+}
+
+func sizeOf(val []byte) ByteSize {
+	return ByteSize(len(val))
+}
+
+func writeFieldCount(tup Tuple, count int) {
+	binary.LittleEndian.PutUint16(tup[len(tup)-int(numFieldsSize):], uint16(count))
 }
