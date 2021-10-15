@@ -21,6 +21,10 @@ type BuffPool interface {
 
 type buffPool byte
 
+func NewBuffPool() BuffPool {
+	return buffPool(0)
+}
+
 func (bp buffPool) Get(size uint64) []byte {
 	return make([]byte, size)
 }
