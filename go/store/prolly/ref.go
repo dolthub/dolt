@@ -39,9 +39,13 @@ type NodeReadWriter interface { // todo(andy): fun name
 
 func fetchRef(ctx context.Context, nrw NodeReadWriter, item nodeItem) (node, error) {
 	ref := val.Tuple(item).GetField(-1)
+	if len(ref) != 20 {
+		_ = val.Tuple(item).GetField(-1)
+	}
 	return nrw.Read(ctx, hash.New(ref))
 }
 
+// todo(andy): this is specific to Map
 func writeNewNode(ctx context.Context, nrw NodeReadWriter, level uint64, items ...nodeItem) (node, metaTuple, error) {
 	nd := makeProllyNode(nrw.Pool(), level, items...)
 	leaf := level == 0
@@ -80,6 +84,9 @@ func newMetaTuple(pool pool.BuffPool, ref hash.Hash, key [][]byte) metaTuple {
 
 func (mt metaTuple) GetRef() hash.Hash {
 	ref := val.Tuple(mt).GetField(-1)
+	if len(ref) != 20 {
+		panic("")
+	}
 	return hash.New(ref)
 }
 

@@ -81,7 +81,7 @@ func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tupl
 func (tup Tuple) GetField(i int) []byte {
 	if i < 0 {
 		// supports negative indexing
-		i = tup.fieldCount() - i
+		i = tup.fieldCount() + i
 	}
 
 	if !tup.mask().present(i) {
@@ -123,6 +123,10 @@ func (tup Tuple) valueCount() int {
 func (tup Tuple) mask() memberSet {
 	stop := tup.size() - numFieldsSize
 	start := stop - maskSize(tup.fieldCount())
+	if start > tup.size() || stop > tup.size() {
+		cnt := tup.fieldCount()
+		maskSize(cnt)
+	}
 	return memberSet(tup[start:stop])
 }
 

@@ -97,6 +97,10 @@ func TestWithSmallChunks(cb func()) {
 	cb()
 }
 
+func newDefaultNodeSplitter(salt byte) nodeSplitter {
+	return newRollingHasher(salt)
+}
+
 func newRollingHasher(salt byte) *rollingHasher {
 	pattern, window := chunkingConfig()
 

@@ -35,6 +35,9 @@ import (
 func TestRoundTripNodeItems(t *testing.T) {
 	for trial := 0; trial < 100; trial++ {
 		items := randomNodeItems(t, (rand.Int()%101)+50)
+		// sanity check
+		require.True(t, sumSize(items) < maxNodeDataSize)
+
 		nd := newLeafNode(items)
 		assert.True(t, nd.leafNode())
 		assert.Equal(t, len(items), nd.count())
@@ -52,17 +55,18 @@ var shared = pool.NewBuffPool()
 
 func randomNodeItems(t *testing.T, count int) (items []nodeItem) {
 	items = make([]nodeItem, count)
-
-	var sum val.ByteSize
 	for i := range items {
 		sz := (rand.Int() % 41) + 10
 		items[i] = make(nodeItem, sz)
 		_, err := rand.Read(items[i])
 		assert.NoError(t, err)
-		sum += val.ByteSize(sz)
 	}
+	return
+}
 
-	// sanity check
-	require.True(t, sum < maxNodeDataSize)
+func sumSize(items []nodeItem) (sz val.ByteSize) {
+	for _, item := range items {
+		sz += val.ByteSize(len(item))
+	}
 	return
 }

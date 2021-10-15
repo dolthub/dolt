@@ -113,6 +113,10 @@ func (nd node) leafNode() bool {
 	return nd.level() == 0
 }
 
+func (nd node) empty() bool {
+	return len(nd) == 0 || nd.count() == 0
+}
+
 func writeTreeLevel(nd node, level uint64) {
 	nd[nd.size()-treeLevelSize] = uint8(level)
 }

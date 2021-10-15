@@ -44,11 +44,11 @@ type treeChunker struct {
 	nrw NodeReadWriter
 }
 
-func newEmptyTreeChunker(ctx context.Context, vrw NodeReadWriter, newCh newSplitterFn) (*treeChunker, error) {
-	return newTreeChunker(ctx, nil, uint64(0), vrw, newCh)
+func newEmptyTreeChunker(ctx context.Context, nrw NodeReadWriter, newCh newSplitterFn) (*treeChunker, error) {
+	return newTreeChunker(ctx, nil, uint64(0), nrw, newCh)
 }
 
-func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, vrw NodeReadWriter, newSplit newSplitterFn) (*treeChunker, error) {
+func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, nrw NodeReadWriter, newSplit newSplitterFn) (*treeChunker, error) {
 	// |cur| will be nil if this is a new node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
@@ -59,7 +59,7 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, vrw Node
 		parent:   nil,
 		newSplit: newSplit,
 		splitter: newSplit(byte(level % 256)),
-		nrw:      vrw,
+		nrw:      nrw,
 	}
 
 	if cur != nil {
