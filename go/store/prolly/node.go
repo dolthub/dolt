@@ -30,9 +30,9 @@ import (
 )
 
 const (
-	// todo(andy): include cumulative size
-	treeLevelSize = val.ByteSize(1)
-	itemCountSize = val.ByteSize(2)
+	cumulativeCountSize = val.ByteSize(6)
+	nodeCountSize       = val.ByteSize(2)
+	treeLevelSize       = val.ByteSize(1)
 
 	maxNodeDataSize = val.ByteSize(math.MaxUint16)
 )
@@ -46,25 +46,27 @@ func (i nodeItem) size() val.ByteSize {
 type node []byte
 
 func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd node) {
+	var cumulativeCount uint64
 	var pos val.ByteSize
 	for _, item := range items {
 		pos += item.size()
+		cumulativeCount += cumulativeCountFromItem(level, item)
 	}
+	count := len(items)
 
-	offStart := pos
-	pos += val.OffsetsSize(len(items))
-	offStop := pos
-
-	pos += itemCountSize
+	pos += val.OffsetsSize(count)
+	pos += cumulativeCountSize
+	pos += nodeCountSize
 	pos += treeLevelSize
 
 	nd = pool.Get(uint64(pos))
 
-	writeItemCount(nd, len(items))
+	writeCumulativeCount(nd, cumulativeCount)
+	writeItemCount(nd, count)
 	writeTreeLevel(nd, level)
 
 	pos = 0
-	offs := val.Offsets(nd[offStart:offStop])
+	offs, _ := nd.offsets()
 	for i, item := range items {
 		copy(nd[pos:pos+item.size()], item)
 		offs.Put(i, pos)
@@ -72,6 +74,13 @@ func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd nod
 	}
 
 	return nd
+}
+
+func cumulativeCountFromItem(level uint64, item nodeItem) uint64 {
+	if level == 0 {
+		return 1
+	}
+	return metaTuple(item).GetCumulativeCount()
 }
 
 func (nd node) getItem(i int) nodeItem {
@@ -97,15 +106,22 @@ func (nd node) level() int {
 	return int(nd[nd.size()-treeLevelSize])
 }
 
-func (nd node) count() int {
+func (nd node) nodeCount() int {
 	stop := nd.size() - treeLevelSize
-	start := stop - itemCountSize
+	start := stop - nodeCountSize
 	return int(binary.LittleEndian.Uint16(nd[start:stop]))
 }
 
+func (nd node) cumulativeCount() uint64 {
+	stop := nd.size() - treeLevelSize - nodeCountSize
+	start := stop - cumulativeCountSize
+	buf := nd[start:stop]
+	return readUint48(buf)
+}
+
 func (nd node) offsets() (offs val.Offsets, itemStop val.ByteSize) {
-	stop := nd.size() - treeLevelSize - itemCountSize
-	itemStop = stop - val.OffsetsSize(nd.count())
+	stop := nd.size() - treeLevelSize - nodeCountSize - cumulativeCountSize
+	itemStop = stop - val.OffsetsSize(nd.nodeCount())
 	return val.Offsets(nd[itemStop:stop]), itemStop
 }
 
@@ -114,7 +130,7 @@ func (nd node) leafNode() bool {
 }
 
 func (nd node) empty() bool {
-	return len(nd) == 0 || nd.count() == 0
+	return len(nd) == 0 || nd.nodeCount() == 0
 }
 
 func writeTreeLevel(nd node, level uint64) {
@@ -123,6 +139,40 @@ func writeTreeLevel(nd node, level uint64) {
 
 func writeItemCount(nd node, count int) {
 	stop := nd.size() - treeLevelSize
-	start := stop - itemCountSize
+	start := stop - nodeCountSize
 	binary.LittleEndian.PutUint16(nd[start:stop], uint16(count))
+}
+
+func writeCumulativeCount(nd node, count uint64) {
+	stop := nd.size() - treeLevelSize - nodeCountSize
+	start := stop - cumulativeCountSize
+	writeUint48(nd[start:stop], count)
+}
+
+const (
+	uint48Size = 6
+	uint48Max  = uint64(1<<48 - 1)
+)
+
+func writeUint48(dest []byte, u uint64) {
+	if len(dest) != uint48Size {
+		panic("incorrect number of bytes for uint48")
+	}
+	if u > uint48Max {
+		panic("uint is greater than max uint")
+	}
+
+	var tmp [8]byte
+	binary.LittleEndian.PutUint64(tmp[:], u)
+	copy(dest, tmp[:uint48Size])
+}
+
+func readUint48(src []byte) (u uint64) {
+	if len(src) != uint48Size {
+		panic("incorrect number of bytes for uint48")
+	}
+	var tmp [8]byte
+	copy(tmp[:uint48Size], src)
+	u = binary.LittleEndian.Uint64(tmp[:])
+	return
 }

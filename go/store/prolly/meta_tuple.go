@@ -23,7 +23,6 @@ package prolly
 
 import (
 	"context"
-
 	"github.com/dolthub/dolt/go/store/chunks"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -31,63 +30,78 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type NodeReadWriter interface { // todo(andy): fun name
-	Read(ctx context.Context, ref hash.Hash) (node, error)
-	Write(ctx context.Context, nd node) (hash.Hash, error)
-	Pool() pool.BuffPool
+const (
+	metaTupleCountIdx = -2
+	metaTupleRefIdx   = -1
+
+	metaTupleRefSize   = 20
+)
+
+
+type metaTuple val.Tuple
+
+func newMetaTuple(pool pool.BuffPool, count uint64, ref hash.Hash, key [][]byte) metaTuple {
+	var cnt [6]byte
+	writeUint48(cnt[:], count)
+	key = append(key, cnt[:], ref[:])
+	return metaTuple(val.NewTuple(pool, key...))
+}
+
+func (mt metaTuple) GetCumulativeCount() uint64 {
+	cnt := val.Tuple(mt).GetField(metaTupleCountIdx)
+	return readUint48(cnt)
+}
+
+func (mt metaTuple) GetRef() hash.Hash {
+	ref := val.Tuple(mt).GetField(metaTupleRefIdx)
+	if len(ref) != metaTupleRefSize {
+		panic("incorrect number of bytes for meta tuple ref")
+	}
+	return hash.New(ref)
 }
 
 func fetchRef(ctx context.Context, nrw NodeReadWriter, item nodeItem) (node, error) {
-	ref := val.Tuple(item).GetField(-1)
-	if len(ref) != 20 {
-		_ = val.Tuple(item).GetField(-1)
-	}
-	return nrw.Read(ctx, hash.New(ref))
+	return nrw.Read(ctx, metaTuple(item).GetRef())
 }
 
-// todo(andy): this is specific to Map
 func writeNewNode(ctx context.Context, nrw NodeReadWriter, level uint64, items ...nodeItem) (node, metaTuple, error) {
 	nd := makeProllyNode(nrw.Pool(), level, items...)
-	leaf := level == 0
 
-	h, err := nrw.Write(ctx, nd)
+	ref, err := nrw.Write(ctx, nd)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var last val.Tuple
-	if leaf {
-		last = val.Tuple(items[len(items)-2])
-	} else {
-		last = val.Tuple(items[len(items)-1])
-	}
+	fields := metaTupleFields(level, items...)
+	meta := newMetaTuple(nrw.Pool(), nd.cumulativeCount(), ref, fields)
 
-	var metaKey [][]byte
-	for i := 0; i < last.Count(); i++ {
-		metaKey = append(metaKey, last.GetField(i))
-	}
-	if !leaf {
-		// discard ref from child
-		metaKey = metaKey[:len(metaKey)-1]
-	}
-
-	meta := newMetaTuple(nrw.Pool(), h, metaKey)
 	return nd, meta, nil
 }
 
-type metaTuple val.Tuple
+func metaTupleFields(level uint64, items ...nodeItem) (fields [][]byte) {
+	// todo(andy): this is specific to Map
+	var key val.Tuple
+	var cnt int
 
-func newMetaTuple(pool pool.BuffPool, ref hash.Hash, key [][]byte) metaTuple {
-	key = append(key, ref[:])
-	return metaTuple(val.NewTuple(pool, key...))
+	if level == 0 {
+		key = val.Tuple(items[len(items)-2])
+		cnt = key.Count()
+	} else {
+		key = val.Tuple(items[len(items)-1])
+		// discard ref and count from child
+		cnt = key.Count() - 2
+	}
+
+	for i := 0; i < cnt; i++ {
+		fields = append(fields, key.GetField(i))
+	}
+	return
 }
 
-func (mt metaTuple) GetRef() hash.Hash {
-	ref := val.Tuple(mt).GetField(-1)
-	if len(ref) != 20 {
-		panic("")
-	}
-	return hash.New(ref)
+type NodeReadWriter interface { // todo(andy): fun name
+	Read(ctx context.Context, ref hash.Hash) (node, error)
+	Write(ctx context.Context, nd node) (hash.Hash, error)
+	Pool() pool.BuffPool
 }
 
 type nodeStore struct {

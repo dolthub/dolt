@@ -75,7 +75,7 @@ func newNodeCursor(ctx context.Context, nrw NodeReadWriter, nd node) (cur *nodeC
 }
 
 func (cur *nodeCursor) valid() bool {
-	return cur.idx >= 0 && cur.idx < cur.nd.count()
+	return cur.idx >= 0 && cur.idx < cur.nd.nodeCount()
 }
 
 // current returns the item at the current cursor position
@@ -101,7 +101,7 @@ func (cur *nodeCursor) atNodeEnd() bool {
 }
 
 func (cur *nodeCursor) lastIdx() int {
-	return cur.nd.count() - 1
+	return cur.nd.nodeCount() - 1
 }
 
 func (cur *nodeCursor) compare(other *nodeCursor) int {
@@ -111,7 +111,7 @@ func (cur *nodeCursor) compare(other *nodeCursor) int {
 			return p
 		}
 	}
-	d.PanicIfFalse(cur.nd.count() == other.nd.count())
+	d.PanicIfFalse(cur.nd.nodeCount() == other.nd.nodeCount())
 	return cur.idx - other.idx
 }
 
@@ -120,12 +120,12 @@ func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
 }
 
 func (cur *nodeCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPastEnd bool) (bool, error) {
-	if cur.idx < cur.nd.count()-1 {
+	if cur.idx < cur.nd.nodeCount()-1 {
 		cur.idx++
 		return true, nil
 	}
 
-	if cur.idx == cur.nd.count() {
+	if cur.idx == cur.nd.nodeCount() {
 		return false, nil
 	}
 
