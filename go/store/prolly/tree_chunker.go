@@ -366,7 +366,7 @@ func (sc *treeChunker) Done(ctx context.Context) (node, error) {
 			return nil, err
 		}
 
-		if child.leafNode() || child.count() > 1 {
+		if child.leafNode() || child.nodeCount() > 1 {
 			return child, nil
 		}
 

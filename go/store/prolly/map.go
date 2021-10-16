@@ -21,15 +21,16 @@
 
 package prolly
 
-var EmptyMap Map
+import "github.com/dolthub/dolt/go/store/val"
 
 type Map struct {
-	node
+	root    node
+	keyDesc val.TupleDesc
+	valDesc val.TupleDesc
+	nrw     NodeReadWriter
 }
 
-func newMapChunker(salt byte) nodeSplitter {
-	return newRollingHasher(salt)
-}
+
 
 //
 //func NewMap(ctx context.Context, vrw NodeReadWriter, items ...nodeItem) (Map, error) {

@@ -40,7 +40,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 
 		nd := newLeafNode(items)
 		assert.True(t, nd.leafNode())
-		assert.Equal(t, len(items), nd.count())
+		assert.Equal(t, len(items), nd.nodeCount())
 		for i, exp := range items {
 			assert.Equal(t, exp, nd.getItem(i))
 		}
