@@ -37,7 +37,6 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -171,7 +170,7 @@ func portInUse(hostPort string) bool {
 }
 
 func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsqle.DoltDatabaseProvider, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
-	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
+	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
@@ -179,46 +178,25 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 		doltDbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, doltDbs)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 
 		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, pro, dConf, dbStates...)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 
 		err = doltSess.SetSessionVariable(tmpSqlCtx, sql.AutoCommitSessionVar, autocommit)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
-
-		ir := sql.NewIndexRegistry()
-		vr := sql.NewViewRegistry()
-		sqlCtx := sql.NewContext(
-			ctx,
-			sql.WithIndexRegistry(ir),
-			sql.WithViewRegistry(vr),
-			sql.WithSession(doltSess),
-			sql.WithTracer(tracing.Tracer(ctx)))
 
 		dbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		for _, db := range dbs {
-			root, err := db.GetRoot(sqlCtx)
-			if err != nil {
-				cli.PrintErrln(err)
-				return nil, nil, nil, err
-			}
-
-			err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
-			if err != nil {
-				cli.PrintErr(err)
-				return nil, nil, nil, err
-			}
-
 			db.DbData().Ddb.SetCommitHookLogger(ctx, doltSess.GetLogger().Logger.Out)
 		}
 
-		return doltSess, ir, vr, nil
+		return doltSess, nil
 	}
 }
 

@@ -872,35 +872,36 @@ func (db Database) Flush(ctx *sql.Context) error {
 	return nil
 }
 
+// GetView implements sql.ViewDatabase
 func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, error) {
-	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return "", false, err
 	}
-	if !found {
-		return "", false, nil
-	}
 
-	tbl := stbl.(*WritableDoltTable)
-	row, exists, err := fragFromSchemasTable(ctx, tbl, "view", viewName)
+	tbl, ok, err := root.GetTable(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return "", false, err
 	}
-	if !exists {
+	if !ok {
 		return "", false, nil
 	}
 
-	if len(row) < 4 {
-		return "", false, errDoltSchemasTableFormat
+	fragments, err := getSchemaFragmentsOfType(ctx, tbl, "view")
+	if err != nil {
+		return "", false, err
 	}
 
-	if def, ok := row[2].(string); ok {
-		return def, true, nil
-	} else {
-		return "", false, errDoltSchemasTableFormat
+	for _, fragment := range fragments {
+		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
+			return fragment.fragment,  true, nil
+		}
 	}
+
+	return "", false, nil
 }
 
+// GetView implements sql.ViewDatabase
 func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
@@ -915,53 +916,18 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 		return nil, nil
 	}
 
-	sch, err := tbl.GetSchema(ctx)
+	frags, err := getSchemaFragmentsOfType(ctx, tbl, "view")
 	if err != nil {
 		return nil, err
 	}
 
-	typeCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
-	if !ok {
-		return nil, errDoltSchemasTableFormat
-	}
-	nameCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesNameCol)
-	if !ok {
-		return nil, errDoltSchemasTableFormat
-	}
-	fragCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesFragmentCol)
-	if !ok {
-		return nil, errDoltSchemasTableFormat
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
 	var views []sql.ViewDefinition
-	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
-		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		if typeColVal, ok := dRow.GetColVal(typeCol.Tag); ok && typeColVal.Equals(types.String("view")) {
-			name, ok := dRow.GetColVal(nameCol.Tag)
-			if !ok {
-				taggedVals, _ := dRow.TaggedValues()
-				return true, fmt.Errorf("missing `%s` value for view row: (%s)", doltdb.SchemasTablesNameCol, taggedVals)
-			}
-			def, ok := dRow.GetColVal(fragCol.Tag)
-			if !ok {
-				taggedVals, _ := dRow.TaggedValues()
-				return true, fmt.Errorf("missing `%s` value for view row: (%s)", doltdb.SchemasTablesFragmentCol, taggedVals)
-			}
-			views = append(views, sql.ViewDefinition{
-				Name:           string(name.(types.String)),
-				TextDefinition: string(def.(types.String)),
-			})
-
-		}
-		return false, nil
-	})
+	for _, frag := range frags {
+		views = append(views, sql.ViewDefinition{
+			Name:           frag.name,
+			TextDefinition: frag.fragment,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -998,55 +964,22 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		return nil, nil
 	}
 
-	sch, err := tbl.GetSchema(ctx)
+	frags, err := getSchemaFragmentsOfType(ctx, tbl, "view")
 	if err != nil {
 		return nil, err
 	}
 
-	typeCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
-	if !ok {
-		return nil, errDoltSchemasTableFormat
-	}
-	nameCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesNameCol)
-	if !ok {
-		return nil, errDoltSchemasTableFormat
-	}
-	fragCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesFragmentCol)
-	if !ok {
-		return nil, errDoltSchemasTableFormat
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
 	var triggers []sql.TriggerDefinition
-	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
-		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		if typeColVal, ok := dRow.GetColVal(typeCol.Tag); ok && typeColVal.Equals(types.String("trigger")) {
-			name, ok := dRow.GetColVal(nameCol.Tag)
-			if !ok {
-				taggedVals, _ := dRow.TaggedValues()
-				return true, fmt.Errorf("missing `%s` value for trigger row: (%s)", doltdb.SchemasTablesNameCol, taggedVals)
-			}
-			createStmt, ok := dRow.GetColVal(fragCol.Tag)
-			if !ok {
-				taggedVals, _ := dRow.TaggedValues()
-				return true, fmt.Errorf("missing `%s` value for trigger row: (%s)", doltdb.SchemasTablesFragmentCol, taggedVals)
-			}
-			triggers = append(triggers, sql.TriggerDefinition{
-				Name:            string(name.(types.String)),
-				CreateStatement: string(createStmt.(types.String)),
-			})
-		}
-		return false, nil
-	})
+	for _, frag := range frags {
+		triggers = append(triggers, sql.TriggerDefinition{
+			Name:           frag.name,
+			CreateStatement: frag.fragment,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	return triggers, nil
 }
 

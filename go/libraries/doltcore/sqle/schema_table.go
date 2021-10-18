@@ -29,6 +29,7 @@ import (
 )
 
 var errDoltSchemasTableFormat = fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
+var noSchemaIndexDefined = fmt.Errorf("could not find index `%s` on system table `%s`", doltdb.SchemasTablesIndexName, doltdb.SchemasTableName)
 
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
@@ -206,7 +207,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		}
 	}
 	if fragNameIndex == nil {
-		return nil, false, fmt.Errorf("could not find index `%s` on system table `%s`", doltdb.SchemasTablesIndexName, doltdb.SchemasTableName)
+		return nil, false, noSchemaIndexDefined
 	}
 
 	indexLookup, err := fragNameIndex.Get(fragType, name)
@@ -227,4 +228,64 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 	} else {
 		return nil, false, err
 	}
+}
+
+type schemaFragment struct {
+	name string
+	fragment string
+}
+
+func getSchemaFragmentsOfType(ctx *sql.Context, tbl *doltdb.Table, fragmentType string) ([]schemaFragment, error) {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	typeCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
+	if !ok {
+		return nil, errDoltSchemasTableFormat
+	}
+	nameCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesNameCol)
+	if !ok {
+		return nil, errDoltSchemasTableFormat
+	}
+	fragCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesFragmentCol)
+	if !ok {
+		return nil, errDoltSchemasTableFormat
+	}
+
+	rowData, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var fragments []schemaFragment
+	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
+		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+		if typeColVal, ok := dRow.GetColVal(typeCol.Tag); ok && typeColVal.Equals(types.String(fragmentType)) {
+			name, ok := dRow.GetColVal(nameCol.Tag)
+			if !ok {
+				taggedVals, _ := dRow.TaggedValues()
+				return true, fmt.Errorf("missing `%s` value for view row: (%s)", doltdb.SchemasTablesNameCol, taggedVals)
+			}
+			def, ok := dRow.GetColVal(fragCol.Tag)
+			if !ok {
+				taggedVals, _ := dRow.TaggedValues()
+				return true, fmt.Errorf("missing `%s` value for view row: (%s)", doltdb.SchemasTablesFragmentCol, taggedVals)
+			}
+			fragments = append(fragments, schemaFragment{
+				name:           string(name.(types.String)),
+				fragment: string(def.(types.String)),
+			})
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return fragments, nil
 }
