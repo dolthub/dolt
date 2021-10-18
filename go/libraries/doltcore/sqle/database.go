@@ -964,7 +964,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		return nil, nil
 	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, tbl, "view")
+	frags, err := getSchemaFragmentsOfType(ctx, tbl, "trigger")
 	if err != nil {
 		return nil, err
 	}
