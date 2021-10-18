@@ -95,6 +95,7 @@ func (db Database) EditOptions() editor.Options {
 
 var _ sql.Database = Database{}
 var _ sql.TableCreator = Database{}
+var _ sql.ViewDatabase = Database{}
 var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TemporaryTableDatabase = Database{}
 
@@ -871,6 +872,103 @@ func (db Database) Flush(ctx *sql.Context) error {
 	return nil
 }
 
+func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, error) {
+	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return "", false, err
+	}
+	if !found {
+		return "", false, nil
+	}
+
+	tbl := stbl.(*WritableDoltTable)
+	row, exists, err := fragFromSchemasTable(ctx, tbl, "view", viewName)
+	if err != nil {
+		return "", false, err
+	}
+	if !exists {
+		return "", false, nil
+	}
+
+	if len(row) < 4 {
+		return "", false, errDoltSchemasTableFormat
+	}
+
+	if def, ok := row[2].(string); ok {
+		return def, true, nil
+	} else {
+		return "", false, errDoltSchemasTableFormat
+	}
+}
+
+func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, ok, err := root.GetTable(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	typeCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
+	if !ok {
+		return nil, errDoltSchemasTableFormat
+	}
+	nameCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesNameCol)
+	if !ok {
+		return nil, errDoltSchemasTableFormat
+	}
+	fragCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesFragmentCol)
+	if !ok {
+		return nil, errDoltSchemasTableFormat
+	}
+
+	rowData, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var views []sql.ViewDefinition
+	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
+		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+		if typeColVal, ok := dRow.GetColVal(typeCol.Tag); ok && typeColVal.Equals(types.String("view")) {
+			name, ok := dRow.GetColVal(nameCol.Tag)
+			if !ok {
+				taggedVals, _ := dRow.TaggedValues()
+				return true, fmt.Errorf("missing `%s` value for view row: (%s)", doltdb.SchemasTablesNameCol, taggedVals)
+			}
+			def, ok := dRow.GetColVal(fragCol.Tag)
+			if !ok {
+				taggedVals, _ := dRow.TaggedValues()
+				return true, fmt.Errorf("missing `%s` value for view row: (%s)", doltdb.SchemasTablesFragmentCol, taggedVals)
+			}
+			views = append(views, sql.ViewDefinition{
+				Name:           string(name.(types.String)),
+				TextDefinition: string(def.(types.String)),
+			})
+
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return views, nil
+}
+
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
@@ -907,15 +1005,15 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 
 	typeCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
 	if !ok {
-		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
+		return nil, errDoltSchemasTableFormat
 	}
 	nameCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesNameCol)
 	if !ok {
-		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
+		return nil, errDoltSchemasTableFormat
 	}
 	fragCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesFragmentCol)
 	if !ok {
-		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
+		return nil, errDoltSchemasTableFormat
 	}
 
 	rowData, err := tbl.GetRowData(ctx)

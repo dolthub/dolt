@@ -28,14 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// The fixed SQL schema for the `dolt_schemas` table.
-func SchemasTableSqlSchema() sql.Schema {
-	sqlSchema, err := sqlutil.FromDoltSchema(doltdb.SchemasTableName, SchemasTableSchema())
-	if err != nil {
-		panic(err) // should never happen
-	}
-	return sqlSchema
-}
+var errDoltSchemasTableFormat = fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
 
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
