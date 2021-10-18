@@ -211,7 +211,7 @@ func (ti *enumType) Promote() TypeInfo {
 
 // String implements TypeInfo interface.
 func (ti *enumType) String() string {
-	return fmt.Sprintf(`Enum(Collation: %v, Values: %v)`, ti.sqlEnumType.Collation().String(), strings.Join(ti.sqlEnumType.Values(), ", "))
+	return fmt.Sprintf(`Enum(Coll: %v, Values: %v)`, ti.sqlEnumType.Collation().String(), strings.Join(ti.sqlEnumType.Values(), ", "))
 }
 
 // ToSqlType implements TypeInfo interface.

@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,27 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// This file incorporates work covered by the following copyright and
-// permission notice:
-//
-// Copyright 2016 Attic Labs, Inc. All rights reserved.
-// Licensed under the Apache License, version 2.0:
-// http://www.apache.org/licenses/LICENSE-2.0
 
 package prolly
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/hash"
 	"math/rand"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestTreeChunker(t *testing.T) {
@@ -63,7 +54,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
-	assert.Equal(t, 1000, root.cumulativeCount())
+	assert.Equal(t, uint64(1000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, nrw, root), 1000)
 	validateTreeItems(t, nrw, root, items)
 
@@ -71,7 +62,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
-	assert.Equal(t, 10_000, root.cumulativeCount())
+	assert.Equal(t, uint64(10_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, nrw, root), 10_000)
 	validateTreeItems(t, nrw, root, items)
 
@@ -79,9 +70,21 @@ func roundTripTreeItems(t *testing.T) {
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
-	assert.Equal(t, 100_000, root.cumulativeCount())
+	assert.Equal(t, uint64(100_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, nrw, root), 100_000)
 	validateTreeItems(t, nrw, root, items)
+}
+
+func roundTripMetaTupleFields(t *testing.T) {
+	vals := [][]byte{{0}}
+
+	cnt := uint64(rand.Uint32() & 8096)
+	ref := hash.Hash{}
+	rand.Read(ref[:])
+
+	meta := newMetaTuple(shared, cnt, ref, vals)
+	assert.Equal(t, cnt, meta.GetCumulativeCount())
+	//assert.Equal(t, cnt, meta.GetRef())
 }
 
 func countTree(t *testing.T, nrw NodeReadWriter, nd node) (count int) {
@@ -94,76 +97,16 @@ func countTree(t *testing.T, nrw NodeReadWriter, nd node) (count int) {
 	return
 }
 
-func validateTreeItems(t *testing.T, nrw NodeReadWriter, nd node, expected []nodeItem) {
+func validateTreeItems(t *testing.T, nrw NodeReadWriter, nd node, expected [][2]nodeItem) {
 	i := 0
 	ctx := context.Background()
 	err := iterTree(ctx, nrw, nd, func(actual nodeItem) (err error) {
-		assert.Equal(t, expected[i], actual)
+		if !assert.Equal(t, expected[i/2][i%2], actual) {
+			panic("here")
+		}
 		i++
 		return
 	})
 	require.NoError(t, err)
-	return
-}
-
-
-func roundTripMetaTupleFields(t *testing.T) {
-	vals := [][]byte{{0}}
-
-	cnt := uint64(rand.Uint32()&8096)
-	ref := hash.Hash{}
-	rand.Read(ref[:])
-
-	meta := newMetaTuple(shared, cnt, ref, vals)
-	assert.Equal(t, cnt, meta.GetCumulativeCount())
-	//assert.Equal(t, cnt, meta.GetRef())
-}
-
-func newTestNRW() NodeReadWriter {
-	ts := &chunks.TestStorage{}
-	return NewNodeStore(ts.NewView())
-}
-
-func randomTree(t *testing.T, count int) (node, []nodeItem, NodeReadWriter) {
-	ctx := context.Background()
-	nrw := newTestNRW()
-	chunker, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)
-	require.NoError(t, err)
-
-	items := randomTupleItems(count)
-	for i := 0; i < len(items); i += 2 {
-		_, err := chunker.Append(ctx, items[i], items[i+1])
-		assert.NoError(t, err)
-	}
-	nd, err := chunker.Done(ctx)
-	assert.NoError(t, err)
-	return nd, items, nrw
-}
-
-func randomTupleItems(count int) (items []nodeItem) {
-	fields := (rand.Int() % 20) + 1
-	items = make([]nodeItem, count)
-	for i := range items {
-		items[i] = nodeItem(randomTuple(fields))
-	}
-	return
-}
-
-func randomTuple(fields int) val.Tuple {
-	vals := make([][]byte, fields)
-	for i := range vals {
-		vals[i] = randomVal()
-
-	}
-	return val.NewTuple(shared, vals...)
-}
-
-func randomVal() (v []byte) {
-	x := rand.Int()
-	if x%4 == 0 {
-		return nil // 25% NULL
-	}
-	v = make([]byte, x%20)
-	rand.Read(v)
 	return
 }

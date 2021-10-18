@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,26 +11,51 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// This file incorporates work covered by the following copyright and
-// permission notice:
-//
-// Copyright 2016 Attic Labs, Inc. All rights reserved.
-// Licensed under the Apache License, version 2.0:
-// http://www.apache.org/licenses/LICENSE-2.0
 
 package prolly
 
-import "github.com/dolthub/dolt/go/store/val"
+import (
+	"context"
+
+	"github.com/dolthub/dolt/go/store/val"
+)
 
 type Map struct {
 	root    node
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
-	nrw     NodeReadWriter
+	// todo(andy): do we need a metaTuple descriptor?
+	nrw NodeReadWriter
 }
 
+type KeyValueFn func(key, value val.Tuple) error
 
+func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
+	query := nodeItem(key)
+
+	err = newCursorAtItem(ctx, m.nrw, m.root, query, m.compareKeys, func(cur *nodeCursor) error {
+
+		var k, v val.Tuple
+		if m.compareKeys(query, cur.current()) == 0 {
+			k = val.Tuple(cur.current())
+
+			if _, err = cur.advance(ctx); err != nil {
+				return err
+			}
+
+			v = val.Tuple(cur.current())
+		}
+
+		return cb(k, v)
+	})
+
+	return err
+}
+
+func (m Map) compareKeys(left, right nodeItem) int {
+	l, r := val.Tuple(left), val.Tuple(right)
+	return int(m.keyDesc.Compare(l, r))
+}
 
 //
 //func NewMap(ctx context.Context, vrw NodeReadWriter, items ...nodeItem) (Map, error) {
