@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,7 +32,8 @@ func TestNodeCursor(t *testing.T) {
 }
 
 func testNewCursorAtItem(t *testing.T, count int) {
-	root, items, nrw := randomTree(t, count)
+	fields := (rand.Int() % 20) + 1
+	root, items, nrw := randomTree(t, count, fields)
 	assert.NotNil(t, root)
 
 	ctx := context.Background()
