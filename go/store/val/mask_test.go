@@ -20,9 +20,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/store/pool"
 )
 
-var maskPool pool.buffPool
+var maskPool = pool.NewBuffPool()
 
 func TestMemberSet(t *testing.T) {
 	for i := 1; i < 100; i++ {

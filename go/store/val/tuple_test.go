@@ -19,9 +19,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/store/pool"
 )
 
-var tupPool pool.buffPool
+var tupPool = pool.NewBuffPool()
 
 func TestNewTuple(t *testing.T) {
 	t.Run("test tuple round trip", func(t *testing.T) {
