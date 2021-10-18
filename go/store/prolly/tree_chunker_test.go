@@ -43,14 +43,16 @@ func TestMetaTuple(t *testing.T) {
 }
 
 func smokeTestTreeChunker(t *testing.T) {
-	root, _, _ := randomTree(t, 1000)
+	fields := (rand.Int() % 20) + 1
+	root, _, _ := randomTree(t, 1000, fields)
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
 }
 
 func roundTripTreeItems(t *testing.T) {
-	root, items, nrw := randomTree(t, 1000)
+	fields := (rand.Int() % 20) + 1
+	root, items, nrw := randomTree(t, 1000, fields)
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
@@ -58,7 +60,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.Equal(t, countTree(t, nrw, root), 1000)
 	validateTreeItems(t, nrw, root, items)
 
-	root, items, nrw = randomTree(t, 10_000)
+	root, items, nrw = randomTree(t, 10_000, fields)
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
@@ -66,7 +68,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.Equal(t, countTree(t, nrw, root), 10_000)
 	validateTreeItems(t, nrw, root, items)
 
-	root, items, nrw = randomTree(t, 100_000)
+	root, items, nrw = randomTree(t, 100_000, fields)
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)

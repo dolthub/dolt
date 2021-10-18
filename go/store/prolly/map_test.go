@@ -16,7 +16,10 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 	"testing"
+
+	"github.com/dolthub/dolt/go/store/val"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,26 +27,46 @@ import (
 
 func TestMap(t *testing.T) {
 	t.Run("get item from map", func(t *testing.T) {
-		testMapGetItem(t)
+		testMapGetItem(t, 10)
+		testMapGetItem(t, 100)
+		testMapGetItem(t, 1000)
 	})
 }
 
-func testMapGetItem(t *testing.T) {
-	root, items, nrw := randomTree(t, 1000)
-	assert.NotNil(t, root)
-
+func testMapGetItem(t *testing.T, count int) {
 	ctx := context.Background()
+	m, items := randomMap(t, count)
+
 	for _, kv := range items {
-		key, value := kv[0], kv[1]
-		err := newCursorAtItem(ctx, nrw, root, key, compareRandomTuples, func(cur *nodeCursor) (err error) {
-			assert.Equal(t, key, cur.current())
-			_, err = cur.advance(ctx)
-			require.NoError(t, err)
-			assert.Equal(t, value, cur.current())
+		k, v := val.Tuple(kv[0]), val.Tuple(kv[1])
+		err := m.Get(ctx, k, func(key, val val.Tuple) (err error) {
+			assert.NotNil(t, k)
+			if !assert.Equal(t, k, key) {
+				fmt.Println(k, key)
+			}
+			if !assert.Equal(t, v, val) {
+				fmt.Println(v, val)
+			}
 			return
 		})
 		require.NoError(t, err)
 	}
+}
 
-	validateTreeItems(t, nrw, root, items)
+func randomMap(t *testing.T, count int) (Map, [][2]nodeItem) {
+	t1 := val.Type{Coll: val.ByteOrderCollation, Nullable: false}
+	t2 := val.Type{Coll: val.ByteOrderCollation, Nullable: true}
+
+	root, items, nrw := randomTree(t, count, 3)
+	assert.NotNil(t, root)
+
+	m := Map{
+		root: root,
+		// non-null keys, nullable values
+		keyDesc: val.NewTupleDescriptor(t1, t1, t1),
+		valDesc: val.NewTupleDescriptor(t2, t2, t2),
+		nrw:     nrw,
+	}
+
+	return m, items
 }

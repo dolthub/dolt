@@ -27,25 +27,10 @@ type Type struct {
 
 type TupleDesc struct {
 	types []Type
-
-	// |compareRaw| is set to true if the described Tuples
-	// are byte-comparable. If all elements of |types| are
-	// non-nullable and have ByteOrderCollation, then the
-	// described Tuples can be compared as byte slices
-	// without needed to access each field.
-	compareRaw bool
 }
 
 func NewTupleDescriptor(types ...Type) (td TupleDesc) {
-	td = TupleDesc{types: types, compareRaw: true}
-
-	for _, typ := range types {
-		if typ.Nullable || typ.Coll != ByteOrderCollation {
-			td.compareRaw = false
-			break
-		}
-	}
-	return
+	return TupleDesc{types: types}
 }
 
 func (td TupleDesc) count() int {
@@ -62,10 +47,6 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 }
 
 func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
-	if td.compareRaw {
-		return Comparison(bytes.Compare(left, right))
-	}
-
 	for i, typ := range td.types {
 		cmp = compare(typ, left.GetField(i), right.GetField(i))
 		if cmp != EqualCmp {

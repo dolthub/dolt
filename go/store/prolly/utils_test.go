@@ -33,13 +33,13 @@ func newTestNRW() NodeReadWriter {
 	return NewNodeStore(ts.NewView())
 }
 
-func randomTree(t *testing.T, count int) (node, [][2]nodeItem, NodeReadWriter) {
+func randomTree(t *testing.T, count, fields int) (node, [][2]nodeItem, NodeReadWriter) {
 	ctx := context.Background()
 	nrw := newTestNRW()
 	chunker, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)
 	require.NoError(t, err)
 
-	items := randomTupleItems(t, count)
+	items := randomTupleItems(t, count, fields)
 	for _, item := range items {
 		_, err := chunker.Append(ctx, item[0], item[1])
 		assert.NoError(t, err)
@@ -49,12 +49,11 @@ func randomTree(t *testing.T, count int) (node, [][2]nodeItem, NodeReadWriter) {
 	return nd, items, nrw
 }
 
-func randomTupleItems(t *testing.T, count int) (items [][2]nodeItem) {
-	fields := (rand.Int() % 20) + 1
+func randomTupleItems(t *testing.T, count, fields int) (items [][2]nodeItem) {
 	items = make([][2]nodeItem, count/2)
 	for i := range items {
-		items[i][0] = nodeItem(randomTuple(fields))
-		items[i][1] = nodeItem(randomTuple(fields))
+		items[i][0] = nodeItem(randomTuple(fields, false))
+		items[i][1] = nodeItem(randomTuple(fields, true))
 		require.Equal(t, 0, compareRandomTuples(items[i][0], items[i][0]))
 	}
 	sortRandTuples(items)
@@ -107,18 +106,18 @@ func compareRandomTuples(left, right nodeItem) (cmp int) {
 	return cmp
 }
 
-func randomTuple(fields int) val.Tuple {
+func randomTuple(fields int, nullable bool) val.Tuple {
 	vals := make([][]byte, fields)
 	for i := range vals {
-		vals[i] = randomVal()
+		vals[i] = randomVal(nullable)
 
 	}
 	return val.NewTuple(shared, vals...)
 }
 
-func randomVal() (v []byte) {
+func randomVal(nullable bool) (v []byte) {
 	x := rand.Int()
-	if x%4 == 0 {
+	if x%4 == 0 && nullable {
 		return nil // 25% NULL
 	}
 	v = make([]byte, x%20)
