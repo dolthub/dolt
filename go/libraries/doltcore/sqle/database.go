@@ -894,7 +894,7 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 
 	for _, fragment := range fragments {
 		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
-			return fragment.fragment,  true, nil
+			return fragment.fragment, true, nil
 		}
 	}
 
@@ -972,7 +972,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 	var triggers []sql.TriggerDefinition
 	for _, frag := range frags {
 		triggers = append(triggers, sql.TriggerDefinition{
-			Name:           frag.name,
+			Name:            frag.name,
 			CreateStatement: frag.fragment,
 		})
 	}
