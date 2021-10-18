@@ -33,7 +33,7 @@ func newTestNRW() NodeReadWriter {
 	return NewNodeStore(ts.NewView())
 }
 
-func randomTree(t *testing.T, count, fields int) (node, [][2]nodeItem, NodeReadWriter) {
+func randomTree(t *testing.T, count, fields int) (Node, [][2]nodeItem, NodeReadWriter) {
 	ctx := context.Background()
 	nrw := newTestNRW()
 	chunker, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)

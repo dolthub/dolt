@@ -89,7 +89,7 @@ func roundTripMetaTupleFields(t *testing.T) {
 	//assert.Equal(t, cnt, meta.GetRef())
 }
 
-func countTree(t *testing.T, nrw NodeReadWriter, nd node) (count int) {
+func countTree(t *testing.T, nrw NodeReadWriter, nd Node) (count int) {
 	ctx := context.Background()
 	err := iterTree(ctx, nrw, nd, func(_ nodeItem) (err error) {
 		count++
@@ -99,7 +99,7 @@ func countTree(t *testing.T, nrw NodeReadWriter, nd node) (count int) {
 	return
 }
 
-func validateTreeItems(t *testing.T, nrw NodeReadWriter, nd node, expected [][2]nodeItem) {
+func validateTreeItems(t *testing.T, nrw NodeReadWriter, nd Node, expected [][2]nodeItem) {
 	i := 0
 	ctx := context.Background()
 	err := iterTree(ctx, nrw, nd, func(actual nodeItem) (err error) {

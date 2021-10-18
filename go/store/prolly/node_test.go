@@ -40,7 +40,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 	}
 }
 
-func newLeafNode(items []nodeItem) node {
+func newLeafNode(items []nodeItem) Node {
 	return makeProllyNode(shared, 0, items...)
 }
 

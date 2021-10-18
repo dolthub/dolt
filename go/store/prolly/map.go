@@ -16,16 +16,53 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 type Map struct {
-	root    node
+	root    Node
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 	// todo(andy): do we need a metaTuple descriptor?
 	nrw NodeReadWriter
+}
+
+func NewMap(node Node, nrw NodeReadWriter, keyDesc, valDesc val.TupleDesc) Map {
+	return Map{
+		root:    node,
+		keyDesc: keyDesc,
+		valDesc: valDesc,
+		nrw:     nrw,
+	}
+}
+
+func MakeNewMap(ctx context.Context, nrw NodeReadWriter, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
+	m := NewMap(nil, nrw, keyDesc, valDesc)
+
+	ch, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)
+	if err != nil {
+		return Map{}, err
+	}
+
+	if len(tups)%2 != 0 {
+		return Map{}, fmt.Errorf("tuples must be key-value pairs")
+	}
+
+	for i := 0; i < len(tups); i += 2 {
+		_, err = ch.Append(ctx, nodeItem(tups[i]), nodeItem(tups[i+1]))
+		if err != nil {
+			return Map{}, err
+		}
+	}
+
+	m.root, err = ch.Done(ctx)
+	if err != nil {
+		return Map{}, err
+	}
+
+	return m, nil
 }
 
 type KeyValueFn func(key, value val.Tuple) error
@@ -36,7 +73,8 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 	err = newCursorAtItem(ctx, m.nrw, m.root, query, m.compareKeys, func(cur *nodeCursor) error {
 
 		var k, v val.Tuple
-		if m.compareKeys(query, cur.current()) == 0 {
+		c := cur.current()
+		if m.compareKeys(query, c) == 0 {
 			k = val.Tuple(cur.current())
 
 			if _, err = cur.advance(ctx); err != nil {
@@ -86,7 +124,7 @@ func (m Map) compareKeys(left, right nodeItem) int {
 //
 //// Collection interface
 //
-//func (m Map) asSequence() node {
+//func (m Map) asSequence() Node {
 //	return m.orderedSequence
 //}
 //

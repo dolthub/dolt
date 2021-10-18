@@ -25,15 +25,15 @@ type compareItems func(left, right nodeItem) int
 
 type cursorFn func(cur *nodeCursor) error
 
-// nodeCursor explores a tree of node items.
+// nodeCursor explores a tree of Node items.
 type nodeCursor struct {
-	nd     node
+	nd     Node
 	idx    int
 	parent *nodeCursor
 	nrw    NodeReadWriter
 }
 
-func newCursor(ctx context.Context, nrw NodeReadWriter, nd node) (cur *nodeCursor, err error) {
+func newCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.nd.leafNode() {
 		nd, err = fetchRef(ctx, nrw, cur.current())
@@ -47,7 +47,7 @@ func newCursor(ctx context.Context, nrw NodeReadWriter, nd node) (cur *nodeCurso
 	return
 }
 
-func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd node, item nodeItem, cmp compareItems, cb cursorFn) (err error) {
+func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, cmp compareItems, cb cursorFn) (err error) {
 	cur := nodeCursor{nd: nd, nrw: nrw}
 
 	err = cur.seek(ctx, nrw, item, cmp)
@@ -146,13 +146,17 @@ func (cur *nodeCursor) search(item nodeItem, cb compareItems) int {
 	if cur.level() == 0 {
 		// leaf nodes
 		idx := sort.Search(cur.nd.nodeCount()/2, func(i int) bool {
-			return cb(item, cur.nd.getItem(i*2)) <= 0
+			it := cur.nd.getItem(i * 2)
+			cmp := cb(item, it)
+			return cmp <= 0
 		})
 		return idx * 2
 	} else {
 		// internal nodes
 		return sort.Search(cur.nd.nodeCount(), func(i int) bool {
-			return cb(item, cur.nd.getItem(i)) <= 0
+			it := cur.nd.getItem(i)
+			cmp := cb(item, it)
+			return cmp <= 0
 		})
 	}
 }
@@ -258,7 +262,7 @@ func (cur *nodeCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBe
 	return false, nil
 }
 
-// fetchNode loads the node that the cursor index points to.
+// fetchNode loads the Node that the cursor index points to.
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *nodeCursor) fetchNode(ctx context.Context) (err error) {
 	d.PanicIfFalse(cur.parent != nil)
@@ -278,7 +282,7 @@ func (cur *nodeCursor) compare(other *nodeCursor) int {
 	return cur.idx - other.idx
 }
 
-func iterTree(ctx context.Context, nrw NodeReadWriter, nd node, cb func(item nodeItem) error) error {
+func iterTree(ctx context.Context, nrw NodeReadWriter, nd Node, cb func(item nodeItem) error) error {
 	if nd.empty() {
 		return nil
 	}

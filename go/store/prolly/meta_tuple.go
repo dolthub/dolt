@@ -53,11 +53,11 @@ func (mt metaTuple) GetRef() hash.Hash {
 	return hash.New(ref)
 }
 
-func fetchRef(ctx context.Context, nrw NodeReadWriter, item nodeItem) (node, error) {
+func fetchRef(ctx context.Context, nrw NodeReadWriter, item nodeItem) (Node, error) {
 	return nrw.Read(ctx, metaTuple(item).GetRef())
 }
 
-func writeNewNode(ctx context.Context, nrw NodeReadWriter, level uint64, items ...nodeItem) (node, metaTuple, error) {
+func writeNewNode(ctx context.Context, nrw NodeReadWriter, level uint64, items ...nodeItem) (Node, metaTuple, error) {
 	nd := makeProllyNode(nrw.Pool(), level, items...)
 
 	ref, err := nrw.Write(ctx, nd)
@@ -92,8 +92,8 @@ func metaTupleFields(level uint64, items ...nodeItem) (fields [][]byte) {
 }
 
 type NodeReadWriter interface { // todo(andy): fun name
-	Read(ctx context.Context, ref hash.Hash) (node, error)
-	Write(ctx context.Context, nd node) (hash.Hash, error)
+	Read(ctx context.Context, ref hash.Hash) (Node, error)
+	Write(ctx context.Context, nd Node) (hash.Hash, error)
 	Pool() pool.BuffPool
 }
 
@@ -110,12 +110,12 @@ func NewNodeStore(cs chunks.ChunkStore) NodeReadWriter {
 	return nodeStore{store: cs, bp: sharedPool}
 }
 
-func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (node, error) {
+func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	c, err := ns.store.Get(ctx, ref)
 	return c.Data(), err
 }
 
-func (ns nodeStore) Write(ctx context.Context, nd node) (hash.Hash, error) {
+func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	c := chunks.NewChunk(nd)
 	err := ns.store.Put(ctx, c)
 	return c.Hash(), err
