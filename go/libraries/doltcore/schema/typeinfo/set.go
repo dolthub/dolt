@@ -204,7 +204,7 @@ func (ti *setType) Promote() TypeInfo {
 
 // String implements TypeInfo interface.
 func (ti *setType) String() string {
-	return fmt.Sprintf(`Set(Collation: %v, Values: %v)`, ti.sqlSetType.Collation().String(), strings.Join(ti.sqlSetType.Values(), ","))
+	return fmt.Sprintf(`Set(Coll: %v, Values: %v)`, ti.sqlSetType.Collation().String(), strings.Join(ti.sqlSetType.Values(), ","))
 }
 
 // ToSqlType implements TypeInfo interface.

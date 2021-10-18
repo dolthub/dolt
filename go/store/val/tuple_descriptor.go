@@ -20,16 +20,32 @@ import (
 )
 
 type Type struct {
-	Enc  Encoding
-	Coll Collation
+	Enc      Encoding
+	Coll     Collation
+	Nullable bool
 }
 
 type TupleDesc struct {
 	types []Type
+
+	// |compareRaw| is set to true if the described Tuples
+	// are byte-comparable. If all elements of |types| are
+	// non-nullable and have ByteOrderCollation, then the
+	// described Tuples can be compared as byte slices
+	// without needed to access each field.
+	compareRaw bool
 }
 
-func NewTupleDescriptor(types ...Type) TupleDesc {
-	return TupleDesc{types: types}
+func NewTupleDescriptor(types ...Type) (td TupleDesc) {
+	td = TupleDesc{types: types, compareRaw: true}
+
+	for _, typ := range types {
+		if typ.Nullable || typ.Coll != ByteOrderCollation {
+			td.compareRaw = false
+			break
+		}
+	}
+	return
 }
 
 func (td TupleDesc) count() int {
@@ -46,8 +62,12 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 }
 
 func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
+	if td.compareRaw {
+		return Comparison(bytes.Compare(left, right))
+	}
+
 	for i, typ := range td.types {
-		cmp = compare(typ.Enc, typ.Coll, left.GetField(i), right.GetField(i))
+		cmp = compare(typ, left.GetField(i), right.GetField(i))
 		if cmp != EqualCmp {
 			break
 		}
@@ -139,8 +159,8 @@ const (
 	LesserCmp  Comparison = -1
 )
 
-func compare(_ Encoding, coll Collation, left, right []byte) Comparison {
-	if coll != ByteOrderCollation {
+func compare(typ Type, left, right []byte) Comparison {
+	if typ.Coll != ByteOrderCollation {
 		panic("unknown collation")
 	}
 	return Comparison(bytes.Compare(left, right))

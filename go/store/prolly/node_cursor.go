@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,46 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// This file incorporates work covered by the following copyright and
-// permission notice:
-//
-// Copyright 2016 Attic Labs, Inc. All rights reserved.
-// Licensed under the Apache License, version 2.0:
-// http://www.apache.org/licenses/LICENSE-2.0
 
 package prolly
 
 import (
 	"context"
+	"sort"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-func iterTree(ctx context.Context, nrw NodeReadWriter, nd node, cb func(item nodeItem) error) error {
-	if nd.empty() {
-		return nil
-	}
+type compareItems func(left, right nodeItem) int
 
-	cur, err := newNodeCursor(ctx, nrw, nd)
-	if err != nil {
-		return err
-	}
-
-	ok := true
-	for ok {
-		err = cb(cur.current())
-		if err != nil {
-			return err
-		}
-
-		ok, err = cur.advance(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	return err
-}
+type cursorFn func(cur *nodeCursor) error
 
 // nodeCursor explores a tree of node items.
 type nodeCursor struct {
@@ -60,7 +33,7 @@ type nodeCursor struct {
 	nrw    NodeReadWriter
 }
 
-func newNodeCursor(ctx context.Context, nrw NodeReadWriter, nd node) (cur *nodeCursor, err error) {
+func newCursor(ctx context.Context, nrw NodeReadWriter, nd node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.nd.leafNode() {
 		nd, err = fetchRef(ctx, nrw, cur.current())
@@ -74,6 +47,32 @@ func newNodeCursor(ctx context.Context, nrw NodeReadWriter, nd node) (cur *nodeC
 	return
 }
 
+func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd node, item nodeItem, cmp compareItems, cb cursorFn) (err error) {
+	cur := nodeCursor{nd: nd, nrw: nrw}
+
+	err = cur.seek(ctx, nrw, item, cmp)
+	if err != nil {
+		return err
+	}
+
+	for !cur.nd.leafNode() {
+		nd, err = fetchRef(ctx, nrw, cur.current())
+		if err != nil {
+			return err
+		}
+
+		parent := cur
+		cur = nodeCursor{nd: nd, parent: &parent, nrw: nrw}
+
+		err = cur.seek(ctx, nrw, item, cmp)
+		if err != nil {
+			return err
+		}
+	}
+
+	return cb(&cur)
+}
+
 func (cur *nodeCursor) valid() bool {
 	return cur.idx >= 0 && cur.idx < cur.nd.nodeCount()
 }
@@ -82,6 +81,14 @@ func (cur *nodeCursor) valid() bool {
 func (cur *nodeCursor) current() nodeItem {
 	d.PanicIfFalse(cur.valid())
 	return cur.nd.getItem(cur.idx)
+}
+
+func (cur *nodeCursor) firstItem() nodeItem {
+	return cur.nd.getItem(0)
+}
+
+func (cur *nodeCursor) lastItem() nodeItem {
+	return cur.nd.getItem(cur.lastIdx())
 }
 
 func (cur *nodeCursor) skipToNodeStart() {
@@ -104,15 +111,70 @@ func (cur *nodeCursor) lastIdx() int {
 	return cur.nd.nodeCount() - 1
 }
 
-func (cur *nodeCursor) compare(other *nodeCursor) int {
+func (cur *nodeCursor) level() uint64 {
+	return uint64(cur.nd.level())
+}
+
+func (cur *nodeCursor) seek(ctx context.Context, nrw NodeReadWriter, item nodeItem, cb compareItems) (err error) {
+	inBounds := true
 	if cur.parent != nil {
-		p := cur.parent.compare(other.parent)
-		if p != 0 {
-			return p
+		inBounds = cb(item, cur.firstItem()) >= 0 || cb(item, cur.lastItem()) <= 0
+	}
+
+	if !inBounds {
+		// |item| is outside the bounds of |cur.nd|, search up the tree
+		err = cur.parent.seek(ctx, nrw, item, cb)
+		if err != nil {
+			return err
+		}
+
+		cur.nd, err = fetchRef(ctx, nrw, cur.parent.current())
+		if err != nil {
+			return err
 		}
 	}
-	d.PanicIfFalse(cur.nd.nodeCount() == other.nd.nodeCount())
-	return cur.idx - other.idx
+
+	cur.idx = cur.search(item, cb)
+
+	return
+}
+
+// search returns the index of |item| if it's present in |cur.nd|, or the
+// index of the next greatest element if it is not present.
+func (cur *nodeCursor) search(item nodeItem, cb compareItems) int {
+	// todo(andy): this is specific to Map
+	if cur.level() == 0 {
+		// leaf nodes
+		idx := sort.Search(cur.nd.nodeCount()/2, func(i int) bool {
+			return cb(item, cur.nd.getItem(i*2)) <= 0
+		})
+		return idx * 2
+	} else {
+		// internal nodes
+		return sort.Search(cur.nd.nodeCount(), func(i int) bool {
+			return cb(item, cur.nd.getItem(i)) <= 0
+		})
+	}
+}
+
+func (cur *nodeCursor) validateNode(cb compareItems) {
+	if cur.level() == 0 {
+		for i := 2; i < cur.nd.nodeCount(); i += 2 {
+			prev := cur.nd.getItem(i - 2)
+			curr := cur.nd.getItem(i)
+			if cb(prev, curr) != -1 {
+				panic("")
+			}
+		}
+	} else {
+		for i := 1; i < cur.nd.nodeCount(); i++ {
+			prev := cur.nd.getItem(i - 1)
+			curr := cur.nd.getItem(i)
+			if cb(prev, curr) != -1 {
+				panic("")
+			}
+		}
+	}
 }
 
 func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
@@ -196,74 +258,49 @@ func (cur *nodeCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBe
 	return false, nil
 }
 
-// todo(andy): refactor advance/retreat
-//func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
-//	if cur.advanceInNode() {
-//		return true, nil
-//	}
-//
-//	if cur.parent == nil {
-//		return false, nil
-//	}
-//
-//	ok, err := cur.parent.advance(ctx)
-//	if !ok || err != nil {
-//		return ok, err
-//	}
-//
-//	err = cur.fetchNode(ctx)
-//	if err != nil {
-//		return false, err
-//	}
-//	cur.skipToNodeStart()
-//
-//	return true, nil
-//}
-//
-//func (cur *nodeCursor) advanceInNode() bool {
-//	if cur.atNodeEnd() {
-//		return false
-//	}
-//	cur.idx++
-//	return true
-//}
-//
-//func (cur *nodeCursor) retreat(ctx context.Context) (bool, error) {
-//	if cur.retreatInNode() {
-//		return true, nil
-//	}
-//
-//	if cur.parent == nil {
-//		return false, nil
-//	}
-//
-//	ok, err := cur.parent.retreat(ctx)
-//	if !ok || err != nil {
-//		return ok, err
-//	}
-//
-//	err = cur.fetchNode(ctx)
-//	if err != nil {
-//		return false, err
-//	}
-//	cur.skipToNodeEnd()
-//
-//	return true, nil
-//}
-//
-//func (cur *nodeCursor) retreatInNode() bool {
-//	if cur.atNodeStart() {
-//		return false
-//	}
-//	cur.idx--
-//	return true
-//}
-
 // fetchNode loads the node that the cursor index points to.
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *nodeCursor) fetchNode(ctx context.Context) (err error) {
 	d.PanicIfFalse(cur.parent != nil)
 	cur.nd, err = fetchRef(ctx, cur.nrw, cur.parent.current())
 	cur.idx = -1 // caller must set
+	return err
+}
+
+func (cur *nodeCursor) compare(other *nodeCursor) int {
+	if cur.parent != nil {
+		p := cur.parent.compare(other.parent)
+		if p != 0 {
+			return p
+		}
+	}
+	d.PanicIfFalse(cur.nd.nodeCount() == other.nd.nodeCount())
+	return cur.idx - other.idx
+}
+
+func iterTree(ctx context.Context, nrw NodeReadWriter, nd node, cb func(item nodeItem) error) error {
+	if nd.empty() {
+		return nil
+	}
+
+	cur, err := newCursor(ctx, nrw, nd)
+	if err != nil {
+		return err
+	}
+
+	ok := true
+	for ok {
+		curr := cur.current()
+
+		err = cb(curr)
+		if err != nil {
+			return err
+		}
+
+		ok, err = cur.advance(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	return err
 }
