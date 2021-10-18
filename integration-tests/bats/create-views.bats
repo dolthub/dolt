@@ -177,7 +177,7 @@ SQL
     run dolt sql -q 'select * from testing'
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
-    [[ "${lines[1]}" =~ '2 + 2' ]] || false
+    [[ "${lines[1]}" =~ '2+2' ]] || false
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
 
