@@ -36,9 +36,9 @@ func (i nodeItem) size() val.ByteSize {
 	return val.ByteSize(len(i))
 }
 
-type node []byte
+type Node []byte
 
-func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd node) {
+func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd Node) {
 	var cumulativeCount uint64
 	var pos val.ByteSize
 	for _, item := range items {
@@ -76,7 +76,7 @@ func cumulativeCountFromItem(level uint64, item nodeItem) uint64 {
 	return metaTuple(item).GetCumulativeCount()
 }
 
-func (nd node) getItem(i int) nodeItem {
+func (nd Node) getItem(i int) nodeItem {
 	offs, itemStop := nd.offsets()
 
 	start := offs.Get(i)
@@ -91,52 +91,52 @@ func (nd node) getItem(i int) nodeItem {
 	return nodeItem(nd[start:stop])
 }
 
-func (nd node) size() val.ByteSize {
+func (nd Node) size() val.ByteSize {
 	return val.ByteSize(len(nd))
 }
 
-func (nd node) level() int {
+func (nd Node) level() int {
 	return int(nd[nd.size()-treeLevelSize])
 }
 
-func (nd node) nodeCount() int {
+func (nd Node) nodeCount() int {
 	stop := nd.size() - treeLevelSize
 	start := stop - nodeCountSize
 	return int(binary.LittleEndian.Uint16(nd[start:stop]))
 }
 
-func (nd node) cumulativeCount() uint64 {
+func (nd Node) cumulativeCount() uint64 {
 	stop := nd.size() - treeLevelSize - nodeCountSize
 	start := stop - cumulativeCountSize
 	buf := nd[start:stop]
 	return readUint48(buf)
 }
 
-func (nd node) offsets() (offs val.Offsets, itemStop val.ByteSize) {
+func (nd Node) offsets() (offs val.Offsets, itemStop val.ByteSize) {
 	stop := nd.size() - treeLevelSize - nodeCountSize - cumulativeCountSize
 	itemStop = stop - val.OffsetsSize(nd.nodeCount())
 	return val.Offsets(nd[itemStop:stop]), itemStop
 }
 
-func (nd node) leafNode() bool {
+func (nd Node) leafNode() bool {
 	return nd.level() == 0
 }
 
-func (nd node) empty() bool {
+func (nd Node) empty() bool {
 	return len(nd) == 0 || nd.nodeCount() == 0
 }
 
-func writeTreeLevel(nd node, level uint64) {
+func writeTreeLevel(nd Node, level uint64) {
 	nd[nd.size()-treeLevelSize] = uint8(level)
 }
 
-func writeItemCount(nd node, count int) {
+func writeItemCount(nd Node, count int) {
 	stop := nd.size() - treeLevelSize
 	start := stop - nodeCountSize
 	binary.LittleEndian.PutUint16(nd[start:stop], uint16(count))
 }
 
-func writeCumulativeCount(nd node, count uint64) {
+func writeCumulativeCount(nd Node, count uint64) {
 	stop := nd.size() - treeLevelSize - nodeCountSize
 	start := stop - cumulativeCountSize
 	writeUint48(nd[start:stop], count)

@@ -37,12 +37,12 @@ type treeChunker struct {
 	nrw NodeReadWriter
 }
 
-func newEmptyTreeChunker(ctx context.Context, nrw NodeReadWriter, newCh newSplitterFn) (*treeChunker, error) {
-	return newTreeChunker(ctx, nil, uint64(0), nrw, newCh)
+func newEmptyTreeChunker(ctx context.Context, nrw NodeReadWriter, newSplit newSplitterFn) (*treeChunker, error) {
+	return newTreeChunker(ctx, nil, uint64(0), nrw, newSplit)
 }
 
 func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, nrw NodeReadWriter, newSplit newSplitterFn) (*treeChunker, error) {
-	// |cur| will be nil if this is a new node, implying this is a new tree, or the tree has grown in height relative
+	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
 	sc := &treeChunker{
@@ -143,15 +143,15 @@ func (sc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 
 				if sc.cur.parent.compare(next.parent) < 0 {
 					// Case (4): We stopped consuming items on this level before entering
-					// the node referenced by |next|
+					// the Node referenced by |next|
 					reachedNext = false
 				}
 
 				// Note: Logically, what is happening here is that we are consuming the
 				// item at the current level. Logically, we'd call sc.cur.forward(),
-				// but that would force loading of the next node, which we don't
+				// but that would force loading of the next Node, which we don't
 				// need for any reason, so instead we forward the parent and take care
-				// not to allow it to step outside the node.
+				// not to allow it to step outside the Node.
 				_, err := sc.cur.parent.advanceMaybeAllowPastEnd(ctx, false)
 				if err != nil {
 					return err
@@ -240,10 +240,10 @@ func (sc *treeChunker) createParent(ctx context.Context) (err error) {
 	return nil
 }
 
-// createNode creates a node from the current items in |sc.current|,
-// clears the current items, then returns the new node and a metaTuple that
-// points to it. The node is always eagerly written.
-func (sc *treeChunker) createNode(ctx context.Context) (node, nodeItem, error) {
+// createNode creates a Node from the current items in |sc.current|,
+// clears the current items, then returns the new Node and a metaTuple that
+// points to it. The Node is always eagerly written.
+func (sc *treeChunker) createNode(ctx context.Context) (Node, nodeItem, error) {
 	nd, meta, err := writeNewNode(ctx, sc.nrw, sc.level, sc.current...)
 	if err != nil {
 		return nil, nil, err
@@ -292,9 +292,9 @@ func (sc *treeChunker) anyPending() bool {
 	return false
 }
 
-// Done returns the root node of the resulting tree.
+// Done returns the root Node of the resulting tree.
 // The logic here is subtle, but hopefully correct and understandable. See comments inline.
-func (sc *treeChunker) Done(ctx context.Context) (node, error) {
+func (sc *treeChunker) Done(ctx context.Context) (Node, error) {
 	d.PanicIfTrue(sc.done)
 	sc.done = true
 
@@ -310,8 +310,8 @@ func (sc *treeChunker) Done(ctx context.Context) (node, error) {
 	// to find the root of the resulting tree.
 	if sc.parent != nil && sc.parent.anyPending() {
 		if len(sc.current) > 0 {
-			// If there are items in |current| at this point, they represent the final items of the node which occurred
-			// beyond the previous *explicit* chunk boundary. The end of input of a node is considered an *implicit*
+			// If there are items in |current| at this point, they represent the final items of the Node which occurred
+			// beyond the previous *explicit* chunk boundary. The end of input of a Node is considered an *implicit*
 			// boundary.
 			err := sc.handleChunkBoundary(ctx)
 			if err != nil {
@@ -324,18 +324,18 @@ func (sc *treeChunker) Done(ctx context.Context) (node, error) {
 
 	// At this point, we know this nodeSplitter contains, in |current| every item at this level of the resulting tree.
 	// To see this, consider that there are two ways a nodeSplitter can enter items into its |current|:
-	//  (1) as the result of resume() with the cursor on anything other than the first item in the node, and
+	//  (1) as the result of resume() with the cursor on anything other than the first item in the Node, and
 	//  (2) as a result of a child nodeSplitter hitting an explicit chunk boundary during either Append() or finalize().
 	// The only way there can be no items in some parent nodeSplitter's |current| is if this nodeSplitter began with
 	// cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and
 	// continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any
 	// items up to a parent as a result of chunking). Therefore, this nodeSplitter's current must contain all items
-	// within the current node.
+	// within the current Node.
 
 	// This level must represent *a* root of the tree, but it is possibly non-canonical. There are three possible cases:
 	// (1) This is "leaf" nodeSplitter and thus produced tree of depth 1 which contains exactly one chunk
 	//     (never hit a boundary), or
-	// (2) This in an internal node of the tree which contains multiple references to child nodes. In either case,
+	// (2) This in an internal Node of the tree which contains multiple references to child nodes. In either case,
 	//     this is the canonical root of the tree.
 	if sc.isLeaf() || len(sc.current) > 1 {
 		seq, _, err := sc.createNode(ctx)
@@ -347,7 +347,7 @@ func (sc *treeChunker) Done(ctx context.Context) (node, error) {
 		return seq, nil
 	}
 
-	// (3) This is an internal node of the tree which contains a single reference to a child node. This can occur if a
+	// (3) This is an internal Node of the tree which contains a single reference to a child Node. This can occur if a
 	//     non-leaf nodeSplitter happens to chunk on the first item (metaTuple) appended. In this case, this is the root
 	//     of the tree, but it is *not* canonical, and we must walk down until we find cases (1) or (2), above.
 	d.PanicIfFalse(!sc.isLeaf() && len(sc.current) == 1)
@@ -367,8 +367,8 @@ func (sc *treeChunker) Done(ctx context.Context) (node, error) {
 	}
 }
 
-// If we are mutating an existing node, appending subsequent items in the node until we reach a pre-existing chunk
-// boundary or the end of the node.
+// If we are mutating an existing Node, appending subsequent items in the Node until we reach a pre-existing chunk
+// boundary or the end of the Node.
 func (sc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 	for sc.cur.valid() {
 		item := sc.cur.current()
@@ -376,7 +376,7 @@ func (sc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 		if ok, err := sc.Append(ctx, item); err != nil {
 			return err
 		} else if ok && sc.cur.atNodeEnd() {
-			break // boundary occurred at same place in old & new node
+			break // boundary occurred at same place in old & new Node
 		}
 
 		_, err = sc.cur.advance(ctx)
