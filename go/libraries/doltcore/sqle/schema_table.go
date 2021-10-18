@@ -231,7 +231,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 }
 
 type schemaFragment struct {
-	name string
+	name     string
 	fragment string
 }
 
@@ -277,7 +277,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *doltdb.Table, fragmentType 
 				return true, fmt.Errorf("missing `%s` value for view row: (%s)", doltdb.SchemasTablesFragmentCol, taggedVals)
 			}
 			fragments = append(fragments, schemaFragment{
-				name:           string(name.(types.String)),
+				name:     string(name.(types.String)),
 				fragment: string(def.(types.String)),
 			})
 		}
