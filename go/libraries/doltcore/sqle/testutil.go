@@ -100,8 +100,6 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 	sqlCtx := sql.NewContext(
 		ctx,
 		sql.WithSession(session),
-		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()),
 	).WithCurrentDB("dolt")
 
 	return sqlCtx
@@ -120,11 +118,6 @@ func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Data
 
 	sqlCtx.SetCurrentDatabase(db.Name())
 	err = db.SetRoot(sqlCtx, root)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = RegisterSchemaFragments(sqlCtx, db, root)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -260,7 +260,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 		panic("not a Dolt SQL Database")
 	}
 
-	e := enginetest.NewEngineWithDbs(d.t, d, []sql.Database{db}, nil)
+	e := enginetest.NewEngineWithDbs(d.t, d, []sql.Database{db})
 
 	asOfString, ok := asOf.(string)
 	require.True(d.t, ok)
