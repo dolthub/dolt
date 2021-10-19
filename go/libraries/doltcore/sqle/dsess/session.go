@@ -130,52 +130,52 @@ func IsWorkingKey(key string) (bool, string) {
 }
 
 type DoltSession interface {
-    sql.Session
-    StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error)
+	sql.Session
+	StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error)
 	RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error
 	PendingCommitAllStaged(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error)
-    LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error)
-    Flush(ctx *sql.Context, dbName string) error
-    CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error
-    DoltCommit(
-        ctx *sql.Context,
-        dbName string,
-        tx sql.Transaction,
-        commit *doltdb.PendingCommit,
-    ) (*doltdb.Commit, error)
-    CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, error)
-    CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error
-    AddDB(ctx *sql.Context, dbState InitialDbState) error
-    HasDB(ctx *sql.Context, dbName string) bool
-    SetSessionVarDirectly(ctx *sql.Context, key string, value interface{}) error
-    SetSessionVariable(ctx *sql.Context, key string, value interface{}) error
-    GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, error)
-    SetTempTableRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error
-    GetTempTableRootValue(ctx *sql.Context, dbName string) (*doltdb.RootValue, bool)
-    WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error)
-    SwitchWorkingSet(
-        ctx *sql.Context,
-        dbName string,
-        wsRef ref.WorkingSetRef) error
-    SetWorkingSet(ctx *sql.Context,
-        dbName string,
-        ws *doltdb.WorkingSet,
-        headRoot *doltdb.RootValue,
-    ) error
-    SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error
-    SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error
-    GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bool)
-    GetDbData(ctx *sql.Context, dbName string) (env.DbData, bool)
-    GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB, bool)
-    ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error
-    RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error
-    EnableBatchedMode()
-    CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error
-    NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error)
-    Username() string
-    Email() string
+	LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error)
+	Flush(ctx *sql.Context, dbName string) error
+	CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error
+	DoltCommit(
+		ctx *sql.Context,
+		dbName string,
+		tx sql.Transaction,
+		commit *doltdb.PendingCommit,
+	) (*doltdb.Commit, error)
+	CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, error)
+	CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error
+	AddDB(ctx *sql.Context, dbState InitialDbState) error
+	HasDB(ctx *sql.Context, dbName string) bool
+	SetSessionVarDirectly(ctx *sql.Context, key string, value interface{}) error
+	SetSessionVariable(ctx *sql.Context, key string, value interface{}) error
+	GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, error)
+	SetTempTableRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error
+	GetTempTableRootValue(ctx *sql.Context, dbName string) (*doltdb.RootValue, bool)
+	WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error)
+	SwitchWorkingSet(
+		ctx *sql.Context,
+		dbName string,
+		wsRef ref.WorkingSetRef) error
+	SetWorkingSet(ctx *sql.Context,
+		dbName string,
+		ws *doltdb.WorkingSet,
+		headRoot *doltdb.RootValue,
+	) error
+	SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error
+	SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error
+	GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bool)
+	GetDbData(ctx *sql.Context, dbName string) (env.DbData, bool)
+	GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB, bool)
+	ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error
+	RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error
+	EnableBatchedMode()
+	CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error
+	NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error)
+	Username() string
+	Email() string
 	BatchMode() batchMode
-    GetDbStates() map[string]*DatabaseSessionState
+	GetDbStates() map[string]*DatabaseSessionState
 }
 
 // Session is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance

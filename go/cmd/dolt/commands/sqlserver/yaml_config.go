@@ -114,13 +114,13 @@ func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 
 func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 	return YAMLConfig{
-		LogLevelStr:    strPtr(string(cfg.LogLevel())),
+		LogLevelStr: strPtr(string(cfg.LogLevel())),
 		BehaviorConfig: BehaviorYAMLConfig{
 			boolPtr(cfg.ReadOnly()),
 			boolPtr(cfg.AutoCommit()),
 			boolPtr(cfg.NoDefaults()),
 		},
-		UserConfig:     UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
+		UserConfig: UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
 		ListenerConfig: ListenerYAMLConfig{
 			strPtr(cfg.Host()),
 			intPtr(cfg.Port()),
@@ -310,8 +310,8 @@ func (cfg YAMLConfig) WithDefaults(config config.ReadableConfig) (ServerConfig, 
 	// TODO load all defaults
 	if val := config.GetStringOrDefault(timeoutFlag, ""); val != "" {
 		if t, err := strconv.ParseUint(val, 10, 64); err != nil {
-			*cfg.ListenerConfig.ReadTimeoutMillis = t*1000
-			*cfg.ListenerConfig.WriteTimeoutMillis = t*1000
+			*cfg.ListenerConfig.ReadTimeoutMillis = t * 1000
+			*cfg.ListenerConfig.WriteTimeoutMillis = t * 1000
 		}
 	}
 	if val := config.GetStringOrDefault(maxConnectionsFlag, ""); val != "" {

@@ -1415,7 +1415,7 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 }
 
 type sqlEngine struct {
-	dbs            map[string]dsqle.SqlDatabase
+	dbs map[string]dsqle.SqlDatabase
 	//sess           *dsess.Session
 	sess           sql.Session
 	contextFactory func(ctx context.Context) (*sql.Context, error)

@@ -199,7 +199,6 @@ func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 	return cfg.requireSecureTransport
 }
 
-
 func (cfg *commandLineServerConfig) WithDefaults(conf config.ReadableConfig) (ServerConfig, error) {
 	// TODO load defaults
 

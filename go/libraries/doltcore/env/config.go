@@ -64,7 +64,6 @@ const (
 
 	// GlobalConfig is the user's global config portion of the ConfigHierarchy
 	GlobalConfig
-
 )
 
 const (
