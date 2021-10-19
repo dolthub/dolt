@@ -70,24 +70,30 @@ type KeyValueFn func(key, value val.Tuple) error
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
 	query := nodeItem(key)
 
-	err = newCursorAtItem(ctx, m.nrw, m.root, query, m.compareKeys, func(cur *nodeCursor) error {
+	cur := nodeCursor{nd: m.root, nrw: m.nrw}
+	_ = cur.seek(ctx, query, m.compareKeys)
+	for !cur.nd.leafNode() {
 
-		var k, v val.Tuple
-		c := cur.current()
-		if m.compareKeys(query, c) == 0 {
-			k = val.Tuple(cur.current())
-
-			if _, err = cur.advance(ctx); err != nil {
-				return err
-			}
-
-			v = val.Tuple(cur.current())
+		// reuse |cur| object to keep stack alloc'd
+		cur.nd, err = fetchRef(ctx, m.nrw, cur.current())
+		if err != nil {
+			return err
 		}
 
-		return cb(k, v)
-	})
+		_ = cur.seek(ctx, query, m.compareKeys)
+	}
 
-	return err
+	var k, v val.Tuple
+	if m.compareKeys(query, cur.current()) == 0 {
+		k = val.Tuple(cur.current())
+		if _, err = cur.advance(ctx); err != nil {
+			return err
+		}
+
+		v = val.Tuple(cur.current())
+	}
+
+	return cb(k, v)
 }
 
 func (m Map) compareKeys(left, right nodeItem) int {

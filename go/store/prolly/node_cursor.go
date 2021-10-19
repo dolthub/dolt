@@ -50,7 +50,7 @@ func newCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur *nodeCurso
 func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, cmp compareItems, cb cursorFn) (err error) {
 	cur := nodeCursor{nd: nd, nrw: nrw}
 
-	err = cur.seek(ctx, nrw, item, cmp)
+	err = cur.seek(ctx, item, cmp)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item node
 		parent := cur
 		cur = nodeCursor{nd: nd, parent: &parent, nrw: nrw}
 
-		err = cur.seek(ctx, nrw, item, cmp)
+		err = cur.seek(ctx, item, cmp)
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func (cur *nodeCursor) level() uint64 {
 	return uint64(cur.nd.level())
 }
 
-func (cur *nodeCursor) seek(ctx context.Context, nrw NodeReadWriter, item nodeItem, cb compareItems) (err error) {
+func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareItems) (err error) {
 	inBounds := true
 	if cur.parent != nil {
 		inBounds = cb(item, cur.firstItem()) >= 0 || cb(item, cur.lastItem()) <= 0
@@ -123,12 +123,12 @@ func (cur *nodeCursor) seek(ctx context.Context, nrw NodeReadWriter, item nodeIt
 
 	if !inBounds {
 		// |item| is outside the bounds of |cur.nd|, search up the tree
-		err = cur.parent.seek(ctx, nrw, item, cb)
+		err = cur.parent.seek(ctx, item, cb)
 		if err != nil {
 			return err
 		}
 
-		cur.nd, err = fetchRef(ctx, nrw, cur.parent.current())
+		cur.nd, err = fetchRef(ctx, cur.nrw, cur.parent.current())
 		if err != nil {
 			return err
 		}
