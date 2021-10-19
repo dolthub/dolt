@@ -20,9 +20,8 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"sort"
+	"strconv"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -31,12 +30,27 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func init() {
-	prollyMapSmall = generateProllyBench(10_000)
-	prollyMapMedium = generateProllyBench(100_000)
+func BenchmarkAll(b *testing.B) {
+	benchmarkProllyMap(b, 10_000)
+	benchmarkTypesMap(b, 10_000)
+	benchmarkProllyMap(b, 100_000)
+	benchmarkTypesMap(b, 100_000)
+}
 
-	typesMapSmall = generateTypesBench(10_000)
-	typesMapMedium = generateTypesBench(100_000)
+func BenchmarkProllySmall(b *testing.B) {
+	benchmarkProllyMap(b, 10_000)
+}
+
+func BenchmarkTypesSmall(b *testing.B) {
+	benchmarkTypesMap(b, 10_000)
+}
+
+func BenchmarkProllyMedium(b *testing.B) {
+	benchmarkProllyMap(b, 100_000)
+}
+
+func BenchmarkTypesMedium(b *testing.B) {
+	benchmarkTypesMap(b, 100_000)
 }
 
 type prollyBench struct {
@@ -44,72 +58,47 @@ type prollyBench struct {
 	tups [][2]val.Tuple
 }
 
-var prollyMapSmall prollyBench
-var prollyMapMedium prollyBench
-var prollyMapLarge prollyBench
-
 type typesBench struct {
 	m    types.Map
 	tups [][2]types.Tuple
 }
 
-var typesMapSmall typesBench
-var typesMapMedium typesBench
-var typesMapLarge typesBench
+func benchmarkProllyMap(b *testing.B, size uint64) {
+	bench := generateProllyBench(size)
+	b.ResetTimer()
 
-func BenchmarkAll(b *testing.B) {
-	b.Run("prolly map small", func(b *testing.B) {
-		benchmarkProllyMap(b, prollyMapSmall)
+	s := strconv.Itoa(int(size))
+	b.Run("benchmark prolly map "+s, func(b *testing.B) {
+		ctx := context.Background()
+		for i := 0; i < len(bench.tups)/10; i++ {
+			idx := rand.Uint64() % uint64(len(bench.tups))
+			_ = bench.m.Get(ctx, bench.tups[idx][0], func(key, value val.Tuple) (e error) {
+				return
+
+				//assert.NotNil(b, key)
+				//assert.Equal(b, bench.tups[idx][0], key)
+				//assert.Equal(b, bench.tups[idx][1], value)
+			})
+		}
 	})
-	b.Run("types map small", func(b *testing.B) {
-		benchmarkTypesMap(b, typesMapSmall)
+}
+
+func benchmarkTypesMap(b *testing.B, size uint64) {
+	bench := generateTypesBench(size)
+	b.ResetTimer()
+
+	s := strconv.Itoa(int(size))
+	b.Run("benchmark types map "+s, func(b *testing.B) {
+		ctx := context.Background()
+		for i := 0; i < len(bench.tups)/10; i++ {
+			idx := rand.Uint64() % uint64(len(bench.tups))
+			_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
+
+			//_, ok, err := bench.m.MaybeGet(ctx, bench.tups[idx][0])
+			//assert.NoError(b, err)
+			//assert.True(b, ok)
+		}
 	})
-	b.Run("prolly map medium", func(b *testing.B) {
-		benchmarkProllyMap(b, prollyMapMedium)
-	})
-	b.Run("types map medium", func(b *testing.B) {
-		benchmarkTypesMap(b, typesMapMedium)
-	})
-}
-
-func BenchmarkProllySmall(b *testing.B) {
-	benchmarkProllyMap(b, prollyMapSmall)
-}
-
-func BenchmarkProllyMedium(b *testing.B) {
-	benchmarkProllyMap(b, prollyMapMedium)
-}
-
-func BenchmarkTypesSmall(b *testing.B) {
-	benchmarkTypesMap(b, typesMapSmall)
-}
-
-func BenchmarkTypesMedium(b *testing.B) {
-	benchmarkTypesMap(b, typesMapMedium)
-}
-
-func benchmarkProllyMap(b *testing.B, bench prollyBench) {
-	ctx := context.Background()
-	for i := 0; i < len(bench.tups)/10; i++ {
-		idx := rand.Uint64() % uint64(len(bench.tups))
-		err := bench.m.Get(ctx, bench.tups[idx][0], func(key, value val.Tuple) (e error) {
-			assert.NotNil(b, key)
-			assert.Equal(b, bench.tups[idx][0], key)
-			assert.Equal(b, bench.tups[idx][1], value)
-			return
-		})
-		assert.NoError(b, err)
-	}
-}
-
-func benchmarkTypesMap(b *testing.B, bench typesBench) {
-	ctx := context.Background()
-	for i := 0; i < len(bench.tups)/10; i++ {
-		idx := rand.Uint64() % uint64(len(bench.tups))
-		_, ok, err := bench.m.MaybeGet(ctx, bench.tups[idx][0])
-		assert.NoError(b, err)
-		assert.True(b, ok)
-	}
 }
 
 func generateProllyBench(size uint64) prollyBench {
