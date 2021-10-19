@@ -15,6 +15,8 @@
 package sqlserver
 
 import (
+	"github.com/dolthub/go-mysql-server/sql/config"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -58,6 +60,8 @@ func intPtr(n int) *int {
 type BehaviorYAMLConfig struct {
 	ReadOnly   *bool `yaml:"read_only"`
 	AutoCommit *bool
+	// NoDefaults disables loading persisted auto configuration.
+	NoDefaults *bool `yaml:"no_defaults"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -111,7 +115,11 @@ func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 	return YAMLConfig{
 		LogLevelStr:    strPtr(string(cfg.LogLevel())),
-		BehaviorConfig: BehaviorYAMLConfig{boolPtr(cfg.ReadOnly()), boolPtr(cfg.AutoCommit())},
+		BehaviorConfig: BehaviorYAMLConfig{
+			boolPtr(cfg.ReadOnly()),
+			boolPtr(cfg.AutoCommit()),
+			boolPtr(cfg.NoDefaults()),
+		},
 		UserConfig:     UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
 		ListenerConfig: ListenerYAMLConfig{
 			strPtr(cfg.Host()),
@@ -289,4 +297,27 @@ func (cfg YAMLConfig) RequireSecureTransport() bool {
 		return false
 	}
 	return *cfg.ListenerConfig.RequireSecureTransport
+}
+
+func (cfg YAMLConfig) NoDefaults() bool {
+	if cfg.BehaviorConfig.NoDefaults == nil {
+		return false
+	}
+	return *cfg.BehaviorConfig.NoDefaults
+}
+
+func (cfg YAMLConfig) WithDefaults(config config.ReadableConfig) (ServerConfig, error) {
+	// TODO load all defaults
+	if val := config.GetStringOrDefault(timeoutFlag, ""); val != "" {
+		if t, err := strconv.ParseUint(val, 10, 64); err != nil {
+			*cfg.ListenerConfig.ReadTimeoutMillis = t*1000
+			*cfg.ListenerConfig.WriteTimeoutMillis = t*1000
+		}
+	}
+	if val := config.GetStringOrDefault(maxConnectionsFlag, ""); val != "" {
+		if mc, err := strconv.ParseUint(val, 10, 64); err != nil {
+			*cfg.ListenerConfig.MaxConnections = mc
+		}
+	}
+	return cfg, nil
 }

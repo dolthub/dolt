@@ -18,9 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
-
+	config2 "github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/go-mysql-server/sql/config"
 	"github.com/fatih/color"
+	"strconv"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -43,6 +44,7 @@ const (
 	configFileFlag       = "config"
 	queryParallelismFlag = "query-parallelism"
 	maxConnectionsFlag   = "max-connections"
+	noDefaultsFlag       = "no-defaults"
 )
 
 var sqlServerDocs = cli.CommandDocumentationContent{
@@ -128,6 +130,8 @@ func (cmd SqlServerCmd) CreateArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(noAutoCommitFlag, "", "When provided sessions will not automatically commit their changes to the working set. Anything not manually committed will be lost.")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
+	ap.SupportsInt(noDefaultsFlag, "", "no-defaults", fmt.Sprintf("Autoload persisted server configuration (default `%d`)", serverConfig.NoDefaults()))
+
 	return ap
 }
 
@@ -192,11 +196,30 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requiresRepo bool) (ServerConfig, error) {
 	cfgFile, ok := apr.GetValue(configFileFlag)
 
+	var conf ServerConfig
+	var err error
 	if ok {
-		return getYAMLServerConfig(dEnv.FS, cfgFile)
+		conf, err = getYAMLServerConfig(dEnv.FS, cfgFile)
+	} else {
+		conf, err = getCommandLineServerConfig(dEnv, apr, requiresRepo)
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	return getCommandLineServerConfig(dEnv, apr, requiresRepo)
+	if !conf.NoDefaults() {
+		local, ok := dEnv.Config.GetConfig(env.LocalConfig)
+		if !ok {
+			return nil, config2.ErrNoConfig
+		}
+		defaults := config.NewPrefixConfig(local, env.ServerConfigPrefix)
+		conf, err = conf.WithDefaults(defaults)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return conf, nil
 }
 
 func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requiresRepo bool) (ServerConfig, error) {
@@ -252,6 +275,8 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
+	serverConfig.noDefaults = !apr.Contains(noDefaultsFlag)
+
 	return serverConfig, nil
 }
 

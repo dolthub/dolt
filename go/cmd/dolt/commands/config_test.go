@@ -20,8 +20,8 @@ import (
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/go-mysql-server/sql/config"
 )
 
 var globalCfg = set.NewStrSet([]string{globalParamName})

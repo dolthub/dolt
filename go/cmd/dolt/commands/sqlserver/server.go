@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/config"
 	"net"
 	"strconv"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	sqlconfig "github.com/dolthub/go-mysql-server/sql/config"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/sirupsen/logrus"
@@ -129,6 +131,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return nil, err
 	}
 
+	// TODO: pass persisted config from dEnv
 	mySQLServer, startError = server.NewServer(
 		server.Config{
 			Protocol:               "tcp",
@@ -174,15 +177,21 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 
+		localConf, ok := dConf.GetConfig(env.LocalConfig)
+		if !ok {
+			return nil, nil, nil, config.ErrNoConfig
+		}
+		defaults := sqlconfig.NewPrefixConfig(localConf, "server")
+
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
-		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
+		mysqlSess := sql.NewSession(host, client, conn.ConnectionID, defaults)
 		doltDbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, doltDbs)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, pro, dConf, dbStates...)
+		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, pro, localConf, dbStates...)
 		if err != nil {
 			return nil, nil, nil, err
 		}

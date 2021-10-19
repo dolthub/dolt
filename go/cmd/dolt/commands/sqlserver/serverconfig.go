@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/config"
 	"net"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -45,6 +46,7 @@ const (
 	defaultAutoCommit       = true
 	defaultMaxConnections   = 100
 	defaultQueryParallelism = 2
+	defaultNoDefaults       = false
 )
 
 // String returns the string representation of the log level.
@@ -101,6 +103,10 @@ type ServerConfig interface {
 	TLSCert() string
 	// RequireSecureTransport is true if the server should reject non-TLS connections.
 	RequireSecureTransport() bool
+	// NoDefaults
+	NoDefaults() bool
+	// WithDefaults overrides values from default config
+	WithDefaults(config.ReadableConfig) (ServerConfig, error)
 }
 
 type commandLineServerConfig struct {
@@ -118,6 +124,7 @@ type commandLineServerConfig struct {
 	tlsKey                 string
 	tlsCert                string
 	requireSecureTransport bool
+	noDefaults             bool
 }
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
@@ -175,6 +182,11 @@ func (cfg *commandLineServerConfig) QueryParallelism() int {
 	return cfg.queryParallelism
 }
 
+// NoDefaults returns whether to autoload persisted server configuration
+func (cfg *commandLineServerConfig) NoDefaults() bool {
+	return cfg.noDefaults
+}
+
 func (cfg *commandLineServerConfig) TLSKey() string {
 	return cfg.tlsKey
 }
@@ -185,6 +197,13 @@ func (cfg *commandLineServerConfig) TLSCert() string {
 
 func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 	return cfg.requireSecureTransport
+}
+
+
+func (cfg *commandLineServerConfig) WithDefaults(conf config.ReadableConfig) (ServerConfig, error) {
+	// TODO load defaults
+
+	return cfg, nil
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
@@ -267,6 +286,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		autoCommit:       defaultAutoCommit,
 		maxConnections:   defaultMaxConnections,
 		queryParallelism: defaultQueryParallelism,
+		noDefaults:       defaultNoDefaults,
 	}
 }
 

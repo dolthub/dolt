@@ -21,13 +21,13 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/config"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -135,7 +135,6 @@ type Session struct {
 	BatchMode batchMode
 	Username  string
 	Email     string
-	Config    config.ReadableConfig
 	dbStates  map[string]*DatabaseSessionState
 	provider  RevisionDatabaseProvider
 }
@@ -197,15 +196,14 @@ type InitialDbState struct {
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, conf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
-	username := conf.GetStringOrDefault(env.UserNameKey, "")
-	email := conf.GetStringOrDefault(env.UserEmailKey, "")
+func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, userConf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
+	username := userConf.GetStringOrDefault(env.UserNameKey, "")
+	email := userConf.GetStringOrDefault(env.UserEmailKey, "")
 
 	sess := &Session{
 		Session:  sqlSess,
 		Username: username,
 		Email:    email,
-		Config:   conf,
 		dbStates: make(map[string]*DatabaseSessionState),
 		provider: pro,
 	}

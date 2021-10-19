@@ -22,9 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/go-mysql-server/sql/config"
 )
 
 func TestGetAbsRemoteUrl(t *testing.T) {

@@ -21,9 +21,10 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+
+	"github.com/dolthub/go-mysql-server/sql/config"
 )
 
 const (
@@ -63,6 +64,12 @@ const (
 
 	// GlobalConfig is the user's global config portion of the ConfigHierarchy
 	GlobalConfig
+
+)
+
+const (
+	// ServerConfigPrefix is config namespace accessible by the SQL engine (ex: server.key)
+	ServerConfigPrefix = "server"
 )
 
 // String gives the string name of an element that was used when it was added to the ConfigHierarchy, which is the
