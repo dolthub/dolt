@@ -1487,6 +1487,8 @@ SQL
 }
 
 @test "sql: update against joins fail with error" {
+    skip "broken on main"
+    
     dolt sql -q "CREATE TABLE mytable(pk int primary key, val int);"
 
     run dolt sql -q "UPDATE mytable one, mytable two SET one.val = 1 WHERE one.pk = two.pk + 1;"

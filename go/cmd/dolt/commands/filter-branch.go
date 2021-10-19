@@ -238,8 +238,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(sess),
-		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
 	err := sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
 	if err != nil {
@@ -294,11 +292,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	}
 
 	err = db.SetRoot(sqlCtx, root)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
 	if err != nil {
 		return nil, nil, err
 	}

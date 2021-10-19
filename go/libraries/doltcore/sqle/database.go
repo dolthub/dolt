@@ -22,8 +22,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -36,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
@@ -98,6 +95,7 @@ func (db Database) EditOptions() editor.Options {
 
 var _ sql.Database = Database{}
 var _ sql.TableCreator = Database{}
+var _ sql.ViewDatabase = Database{}
 var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TemporaryTableDatabase = Database{}
 
@@ -874,6 +872,69 @@ func (db Database) Flush(ctx *sql.Context) error {
 	return nil
 }
 
+// GetView implements sql.ViewDatabase
+func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return "", false, err
+	}
+
+	tbl, ok, err := root.GetTable(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
+		return "", false, nil
+	}
+
+	fragments, err := getSchemaFragmentsOfType(ctx, tbl, "view")
+	if err != nil {
+		return "", false, err
+	}
+
+	for _, fragment := range fragments {
+		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
+			return fragment.fragment, true, nil
+		}
+	}
+
+	return "", false, nil
+}
+
+// GetView implements sql.ViewDatabase
+func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, ok, err := root.GetTable(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	frags, err := getSchemaFragmentsOfType(ctx, tbl, "view")
+	if err != nil {
+		return nil, err
+	}
+
+	var views []sql.ViewDefinition
+	for _, frag := range frags {
+		views = append(views, sql.ViewDefinition{
+			Name:           frag.name,
+			TextDefinition: frag.fragment,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return views, nil
+}
+
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
@@ -885,7 +946,7 @@ func (db Database) CreateView(ctx *sql.Context, name string, definition string) 
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
 func (db Database) DropView(ctx *sql.Context, name string) error {
-	return db.dropFragFromSchemasTable(ctx, "view", name, sql.ErrNonExistingView.New(name))
+	return db.dropFragFromSchemasTable(ctx, "view", name, sql.ErrViewDoesNotExist.New(name))
 }
 
 // GetTriggers implements sql.TriggerDatabase.
@@ -903,55 +964,22 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		return nil, nil
 	}
 
-	sch, err := tbl.GetSchema(ctx)
+	frags, err := getSchemaFragmentsOfType(ctx, tbl, "trigger")
 	if err != nil {
 		return nil, err
 	}
 
-	typeCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
-	if !ok {
-		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
-	}
-	nameCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesNameCol)
-	if !ok {
-		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
-	}
-	fragCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesFragmentCol)
-	if !ok {
-		return nil, fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
 	var triggers []sql.TriggerDefinition
-	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
-		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		if typeColVal, ok := dRow.GetColVal(typeCol.Tag); ok && typeColVal.Equals(types.String("trigger")) {
-			name, ok := dRow.GetColVal(nameCol.Tag)
-			if !ok {
-				taggedVals, _ := dRow.TaggedValues()
-				return true, fmt.Errorf("missing `%s` value for trigger row: (%s)", doltdb.SchemasTablesNameCol, taggedVals)
-			}
-			createStmt, ok := dRow.GetColVal(fragCol.Tag)
-			if !ok {
-				taggedVals, _ := dRow.TaggedValues()
-				return true, fmt.Errorf("missing `%s` value for trigger row: (%s)", doltdb.SchemasTablesFragmentCol, taggedVals)
-			}
-			triggers = append(triggers, sql.TriggerDefinition{
-				Name:            string(name.(types.String)),
-				CreateStatement: string(createStmt.(types.String)),
-			})
-		}
-		return false, nil
-	})
+	for _, frag := range frags {
+		triggers = append(triggers, sql.TriggerDefinition{
+			Name:            frag.name,
+			CreateStatement: frag.fragment,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	return triggers, nil
 }
 
@@ -1176,65 +1204,4 @@ func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) 
 	}
 
 	return tables, nil
-}
-
-// RegisterSchemaFragments register SQL schema fragments that are persisted in the given
-// `Database` with the provided `sql.ViewRegistry`. Returns an error if
-// there are I/O issues, but currently silently fails to register some
-// schema fragments if they don't parse, or if registries within the
-// `catalog` return errors.
-func RegisterSchemaFragments(ctx *sql.Context, db SqlDatabase, root *doltdb.RootValue) error {
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	tbl, found, err := root.GetTable(ctx, doltdb.SchemasTableName)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return nil
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	iter, err := newRowIterator(ctx, tbl, nil, &doltTablePartition{rowData: rowData, end: NoUpperBound})
-	if err != nil {
-		return err
-	}
-	defer iter.Close(ctx)
-
-	var parseErrors []error
-
-	r, err := iter.Next()
-	for err == nil {
-		if r[0] == "view" {
-			name := r[1].(string)
-			definition := r[2].(string)
-			cv, err := parse.Parse(ctx, fmt.Sprintf("create view %s as %s", sqlfmt.QuoteIdentifier(name), definition))
-			if err != nil {
-				parseErrors = append(parseErrors, err)
-			} else {
-				err = ctx.Register(db.Name(), cv.(*plan.CreateView).Definition.AsView())
-				if err != nil {
-					return err
-				}
-			}
-		}
-		r, err = iter.Next()
-	}
-	if err != io.EOF {
-		return err
-	}
-
-	if len(parseErrors) > 0 {
-		// TODO: Warning for uncreated views...
-	}
-
-	return nil
 }

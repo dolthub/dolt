@@ -50,10 +50,7 @@ const (
 type DoltHarness struct {
 	Version string
 	engine  *sqle.Engine
-
 	sess    *dsess.Session
-	idxReg  *sql.IndexRegistry
-	viewReg *sql.ViewRegistry
 }
 
 func (h *DoltHarness) EngineStr() string {
@@ -69,8 +66,6 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 	ctx := sql.NewContext(
 		context.Background(),
 		sql.WithPid(rand.Uint64()),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
 		sql.WithSession(h.sess))
 
 	statement = normalizeStatement(statement)
@@ -88,8 +83,6 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 	ctx := sql.NewContext(
 		context.Background(),
 		sql.WithPid(uint64(pid)),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
 		sql.WithSession(h.sess))
 
 	var sch sql.Schema
@@ -141,13 +134,9 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	}
 
 	h.sess = dsess.DefaultSession()
-	h.idxReg = sql.NewIndexRegistry()
-	h.viewReg = sql.NewViewRegistry()
 
 	ctx := sql.NewContext(
 		context.Background(),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
 		sql.WithSession(h.sess))
 
 	dbs := h.engine.Analyzer.Catalog.AllDatabases()
@@ -158,7 +147,6 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 
 		sess := dsess.DSessFromSess(ctx.Session)
 		err := sess.AddDB(ctx, getDbState(db, dEnv))
-
 		if err != nil {
 			return err
 		}
@@ -169,13 +157,6 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		}
 
 		err = dsqlDB.SetRoot(ctx, root)
-
-		if err != nil {
-			return err
-		}
-
-		err = dsql.RegisterSchemaFragments(ctx, dsqlDB, root)
-
 		if err != nil {
 			return err
 		}

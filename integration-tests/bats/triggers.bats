@@ -174,7 +174,7 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM view1" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "2 + 2" ]] || false
+    [[ "$output" =~ "2+2" ]] || false
     [[ "$output" =~ "4" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     # creating a new view/trigger will recreate the dolt_schemas table
@@ -191,12 +191,12 @@ SQL
     [[ "${#lines[@]}" = "3" ]] || false
     run dolt sql -q "SELECT * FROM view1" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "2 + 2" ]] || false
+    [[ "$output" =~ "2+2" ]] || false
     [[ "$output" =~ "4" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM view2" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "3 + 3" ]] || false
+    [[ "$output" =~ "3+3" ]] || false
     [[ "$output" =~ "6" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 }
