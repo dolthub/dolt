@@ -51,3 +51,30 @@ func testNewCursorAtItem(t *testing.T, count int) {
 
 	validateTreeItems(t, nrw, root, items)
 }
+
+func TestTreeCursor(t *testing.T) {
+	t.Run("tree cursor", func(t *testing.T) {
+		testTreeCursor(t, 10)
+		testTreeCursor(t, 100)
+		testTreeCursor(t, 1000)
+	})
+}
+
+func testTreeCursor(t *testing.T, count int) {
+	fields := (rand.Int() % 20) + 1
+	root, items, nrw := randomTree(t, count, fields)
+	assert.NotNil(t, root)
+
+	ctx := context.Background()
+	tc, err := newTreeCursor(ctx, nrw, root)
+	require.NoError(t, err)
+	for _, item := range items {
+		assert.Equal(t, item[0], tc.current())
+		_, err = tc.advance(ctx)
+		require.NoError(t, err)
+
+		assert.Equal(t, item[1], tc.current())
+		_, err = tc.advance(ctx)
+		require.NoError(t, err)
+	}
+}
