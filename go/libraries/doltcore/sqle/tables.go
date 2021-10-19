@@ -510,7 +510,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, e
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
-	if sess.BatchMode == dsess.Batched {
+	if sess.BatchMode() == dsess.Batched {
 		if t.ed != nil {
 			return t.ed, nil
 		}

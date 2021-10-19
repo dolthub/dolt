@@ -129,12 +129,61 @@ func IsWorkingKey(key string) (bool, string) {
 	return false, ""
 }
 
+type DoltSession interface {
+    sql.Session
+    StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error)
+	RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error
+	PendingCommitAllStaged(ctx *sql.Context, dbName string, props actions.CommitStagedProps) (*doltdb.PendingCommit, error)
+    LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error)
+    Flush(ctx *sql.Context, dbName string) error
+    CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error
+    DoltCommit(
+        ctx *sql.Context,
+        dbName string,
+        tx sql.Transaction,
+        commit *doltdb.PendingCommit,
+    ) (*doltdb.Commit, error)
+    CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, error)
+    CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error
+    AddDB(ctx *sql.Context, dbState InitialDbState) error
+    HasDB(ctx *sql.Context, dbName string) bool
+    SetSessionVarDirectly(ctx *sql.Context, key string, value interface{}) error
+    SetSessionVariable(ctx *sql.Context, key string, value interface{}) error
+    GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, error)
+    SetTempTableRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error
+    GetTempTableRootValue(ctx *sql.Context, dbName string) (*doltdb.RootValue, bool)
+    WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error)
+    SwitchWorkingSet(
+        ctx *sql.Context,
+        dbName string,
+        wsRef ref.WorkingSetRef) error
+    SetWorkingSet(ctx *sql.Context,
+        dbName string,
+        ws *doltdb.WorkingSet,
+        headRoot *doltdb.RootValue,
+    ) error
+    SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error
+    SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error
+    GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bool)
+    GetDbData(ctx *sql.Context, dbName string) (env.DbData, bool)
+    GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB, bool)
+    ReleaseSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error
+    RollbackToSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error
+    EnableBatchedMode()
+    CreateSavepoint(ctx *sql.Context, savepointName, dbName string, tx sql.Transaction) error
+    NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error)
+    Username() string
+    Email() string
+	BatchMode() batchMode
+    GetDbStates() map[string]*DatabaseSessionState
+}
+
 // Session is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type Session struct {
 	sql.Session
-	BatchMode batchMode
-	Username  string
-	Email     string
+	batchMode batchMode
+	username  string
+	email     string
 	dbStates  map[string]*DatabaseSessionState
 	provider  RevisionDatabaseProvider
 }
@@ -175,8 +224,8 @@ var _ sql.Session = &Session{}
 func DefaultSession() *Session {
 	sess := &Session{
 		Session:  sql.NewBaseSession(),
-		Username: "",
-		Email:    "",
+		username: "",
+		email:    "",
 		dbStates: make(map[string]*DatabaseSessionState),
 		provider: emptyRevisionDatabaseProvider{},
 	}
@@ -196,14 +245,22 @@ type InitialDbState struct {
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, userConf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
-	username := userConf.GetStringOrDefault(env.UserNameKey, "")
-	email := userConf.GetStringOrDefault(env.UserEmailKey, "")
+func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, conf *env.DoltCliConfig, dbs ...InitialDbState) (sql.Session, error) {
+	username := conf.GetStringOrDefault(env.UserNameKey, "")
+	email := conf.GetStringOrDefault(env.UserEmailKey, "")
+
+	localConf, ok := conf.GetConfig(env.LocalConfig)
+	if !ok {
+		return nil, errors.New("config not found")
+	}
+	defaults := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+
+	persistedSqlSession := sql.NewPersistedSession(sqlSess, defaults)
 
 	sess := &Session{
-		Session:  sqlSess,
-		Username: username,
-		Email:    email,
+		Session:  persistedSqlSession,
+		username: username,
+		email:    email,
 		dbStates: make(map[string]*DatabaseSessionState),
 		provider: pro,
 	}
@@ -216,19 +273,27 @@ func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvi
 		}
 	}
 
-	return sess, nil
+	return NewPersistedSession(sess, persistedSqlSession), nil
+
+	//return sess, nil
 }
 
 // EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
 // Sessions operating in batched mode don't flush any edit buffers except when told to do so explicitly, or when a
 // transaction commits. Disable @@autocommit to prevent edit buffers from being flushed prematurely in this mode.
 func (sess *Session) EnableBatchedMode() {
-	sess.BatchMode = Batched
+	sess.batchMode = Batched
 }
 
 // DSessFromSess retrieves a dolt session from a standard sql.Session
-func DSessFromSess(sess sql.Session) *Session {
-	return sess.(*Session)
+func DSessFromSess(sess sql.Session) DoltSession {
+	return sess.(DoltSession)
+	//switch sqlSess := sess.(type) {
+	//case *Session, *PersistedSession:
+	//	return sqlSess
+	//default:
+	//		return nil
+	//}
 }
 
 // LookupDbState returns the session state for the database named
@@ -256,6 +321,10 @@ func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSe
 		return nil, ok, sql.ErrDatabaseNotFound.New(dbName)
 	}
 	return dbState, ok, nil
+}
+
+func (sess *Session) GetDbStates() map[string]*DatabaseSessionState {
+	return sess.dbStates
 }
 
 // Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally
@@ -343,7 +412,7 @@ func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSet
 // CommitTransaction commits the in-progress transaction for the database named. Depending on session settings, this
 // may write only a new working set, or may additionally create a new dolt commit for the current HEAD.
 func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if sess.BatchMode == Batched {
+	if sess.BatchMode() == Batched {
 		err := sess.Flush(ctx, dbName)
 		if err != nil {
 			return err
@@ -376,8 +445,8 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 			Date:       ctx.QueryTime(),
 			AllowEmpty: false,
 			Force:      false,
-			Name:       sess.Username,
-			Email:      sess.Email,
+			Name:       sess.Username(),
+			Email:      sess.Email(),
 		})
 		if err != nil {
 			return err
@@ -1129,6 +1198,18 @@ func (sess *Session) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, e
 		return nil, err
 	}
 	return dbState.WorkingSet.Ref().ToHeadRef()
+}
+
+func (sess *Session) Username() string {
+	return sess.username
+}
+
+func (sess *Session) Email() string {
+	return sess.email
+}
+
+func (sess *Session) BatchMode() batchMode {
+	return sess.batchMode
 }
 
 // setSessionVarsForDb updates the three session vars that track the value of the session root hashes

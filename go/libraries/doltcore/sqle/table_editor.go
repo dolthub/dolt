@@ -207,7 +207,7 @@ func (te *sqlTableEditor) Close(ctx *sql.Context) error {
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// If we're running in batched mode, don't flush the edits until explicitly told to do so
-	if sess.BatchMode == dsess.Batched {
+	if sess.BatchMode() == dsess.Batched {
 		return nil
 	}
 	return te.flush(ctx)

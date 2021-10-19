@@ -1416,7 +1416,8 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 
 type sqlEngine struct {
 	dbs            map[string]dsqle.SqlDatabase
-	sess           *dsess.Session
+	//sess           *dsess.Session
+	sess           sql.Session
 	contextFactory func(ctx context.Context) (*sql.Context, error)
 	engine         *sqle.Engine
 	resultFormat   resultFormat
@@ -1474,6 +1475,12 @@ func newSqlEngine(
 	}
 
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
+	//localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
+	//if !ok {
+	//	return nil, config.ErrNoConfig
+	//}
+	//defaults := sqlconfig.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+	//
 	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
 
 	// TODO: this should just be the session default like it is with MySQL
@@ -1491,7 +1498,7 @@ func newSqlEngine(
 	}, nil
 }
 
-func newSqlContext(sess *dsess.Session, cat sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
+func newSqlContext(sess sql.Session, cat sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx,
 			sql.WithSession(sess),

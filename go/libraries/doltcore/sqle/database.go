@@ -781,7 +781,7 @@ func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sq
 	return db.createTempDoltTable(ctx, tableName, tempTableRootValue, doltSch, sess)
 }
 
-func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema, dsess *dsess.Session) error {
+func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema, dsess dsess.DoltSession) error {
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
