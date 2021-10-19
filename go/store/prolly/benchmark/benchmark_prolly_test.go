@@ -93,13 +93,9 @@ func benchmarkProllyMap(b *testing.B, bench prollyBench) {
 	for i := 0; i < len(bench.tups)/10; i++ {
 		idx := rand.Uint64() % uint64(len(bench.tups))
 		err := bench.m.Get(ctx, bench.tups[idx][0], func(key, value val.Tuple) (e error) {
-			if !assert.NotNil(b, key) {
-				_ = bench.m.Get(ctx, bench.tups[idx][0], func(key, value val.Tuple) error {
-					return nil
-				})
-			}
-			//assert.Equal(b, bench.tups[idx][0], key)
-			//assert.Equal(b, bench.tups[idx][1], value)
+			assert.NotNil(b, key)
+			assert.Equal(b, bench.tups[idx][0], key)
+			assert.Equal(b, bench.tups[idx][1], value)
 			return
 		})
 		assert.NoError(b, err)
@@ -206,18 +202,24 @@ func newTestVRW() types.ValueReadWriter {
 func generateTypesTuples(size uint64) [][2]types.Tuple {
 	src := rand.NewSource(0)
 
+	// tags
+	t0, t1, t2 := types.Uint(0), types.Uint(1), types.Uint(2)
+	t3, t4, t5 := types.Uint(3), types.Uint(4), types.Uint(5)
+
 	tups := make([][2]types.Tuple, size)
 	for i := range tups {
 
 		// key
-		k := types.Uint(uint64(i))
-		tups[i][0], _ = types.NewTuple(types.Format_Default, k)
+		k := types.Int(i)
+		tups[i][0], _ = types.NewTuple(types.Format_Default, t0, k)
 
 		// val
-		var vv [5]types.Value
-		for i := range vv {
+		var vv [5 * 2]types.Value
+		for i := 1; i < 10; i += 2 {
 			vv[i] = types.Uint(uint64(src.Int63()))
 		}
+		vv[0], vv[2], vv[4], vv[6], vv[8] = t1, t2, t3, t4, t5
+
 		tups[i][1], _ = types.NewTuple(types.Format_Default, vv[:]...)
 	}
 
