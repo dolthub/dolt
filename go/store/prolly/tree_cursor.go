@@ -32,6 +32,8 @@ type nodeCursor2 struct {
 	nrw NodeReadWriter
 }
 
+type compareFn func(left, right nodeItem) int
+
 type treeCursorFn func(cur treeCursor) error
 
 func newTreeCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur treeCursor, err error) {
@@ -60,7 +62,7 @@ var curPool = sync.Pool{
 	},
 }
 
-func newTreeCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, cmp compareItems, cb treeCursorFn) (err error) {
+func newTreeCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, cmp compareFn, cb treeCursorFn) (err error) {
 	arr := curPool.Get().([]nodeCursor2)
 	defer func() { curPool.Put(arr) }()
 
@@ -145,7 +147,7 @@ func (cur treeCursor) nrw() NodeReadWriter {
 	return cur[tip].nrw
 }
 
-func (cur treeCursor) seek(ctx context.Context, nrw NodeReadWriter, item nodeItem, cb compareItems) (err error) {
+func (cur treeCursor) seek(ctx context.Context, nrw NodeReadWriter, item nodeItem, cb compareFn) (err error) {
 	inBounds := true
 	if cur.parent().valid() {
 		inBounds = cb(item, cur.firstItem()) >= 0 || cb(item, cur.lastItem()) <= 0
@@ -171,7 +173,7 @@ func (cur treeCursor) seek(ctx context.Context, nrw NodeReadWriter, item nodeIte
 
 // search returns the index of |item| if it's present in |cur.nd|, or the
 // index of the next greatest element if it is not present.
-func (cur treeCursor) search(item nodeItem, cb compareItems) int {
+func (cur treeCursor) search(item nodeItem, cb compareFn) int {
 	// todo(andy): this is specific to Map
 	if cur.level() == 0 {
 		// leaf nodes
@@ -191,7 +193,7 @@ func (cur treeCursor) search(item nodeItem, cb compareItems) int {
 	}
 }
 
-func (cur treeCursor) validateNode(cb compareItems) {
+func (cur treeCursor) validateNode(cb compareFn) {
 	if cur.level() == 0 {
 		for i := 2; i < cur[tip].nd.nodeCount(); i += 2 {
 			prev := cur[tip].nd.getItem(i - 2)

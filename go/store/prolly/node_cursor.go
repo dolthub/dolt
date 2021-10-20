@@ -21,10 +21,6 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-type compareItems func(left, right nodeItem) int
-
-type cursorFn func(cur *nodeCursor) error
-
 // nodeCursor explores a tree of Node items.
 type nodeCursor struct {
 	nd     Node
@@ -32,6 +28,10 @@ type nodeCursor struct {
 	parent *nodeCursor
 	nrw    NodeReadWriter
 }
+
+type cursorFn func(cur *nodeCursor) error
+
+type searchFn func(item nodeItem, nd Node) (idx int)
 
 func newCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
@@ -47,7 +47,7 @@ func newCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur *nodeCurso
 	return
 }
 
-func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, cmp compareItems, cb cursorFn) (err error) {
+func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, cmp compareFn, cb cursorFn) (err error) {
 	cur := nodeCursor{nd: nd, nrw: nrw}
 
 	err = cur.seek(ctx, item, cmp)
@@ -73,8 +73,27 @@ func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item node
 	return cb(&cur)
 }
 
+func newLeafCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, sf searchFn) (cur nodeCursor, err error) {
+	cur = nodeCursor{nd: nd, parent: nil, nrw: nrw}
+
+	cur.idx = sf(item, cur.nd)
+	for !cur.nd.leafNode() {
+
+		// reuse |cur| object to keep stack alloc'd
+		cur.nd, err = fetchRef(ctx, nrw, cur.current())
+		if err != nil {
+			return cur, err
+		}
+
+		cur.idx = sf(item, cur.nd)
+	}
+
+	return cur, nil
+}
+
 func (cur *nodeCursor) valid() bool {
-	return cur.idx >= 0 && cur.idx < cur.nd.nodeCount()
+	cnt := cur.nd.nodeCount()
+	return cur.idx >= 0 && cur.idx < cnt
 }
 
 // current returns the item at the current cursor position
@@ -115,7 +134,7 @@ func (cur *nodeCursor) level() uint64 {
 	return uint64(cur.nd.level())
 }
 
-func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareItems) (err error) {
+func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (err error) {
 	inBounds := true
 	if cur.parent != nil {
 		inBounds = cb(item, cur.firstItem()) >= 0 || cb(item, cur.lastItem()) <= 0
@@ -141,7 +160,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareItems)
 
 // search returns the index of |item| if it's present in |cur.nd|, or the
 // index of the next greatest element if it is not present.
-func (cur *nodeCursor) search(item nodeItem, cb compareItems) int {
+func (cur *nodeCursor) search(item nodeItem, cb compareFn) int {
 	// todo(andy): this is specific to Map
 	if cur.level() == 0 {
 		// leaf nodes
@@ -154,26 +173,6 @@ func (cur *nodeCursor) search(item nodeItem, cb compareItems) int {
 		return sort.Search(cur.nd.nodeCount(), func(i int) bool {
 			return cb(item, cur.nd.getItem(i)) <= 0
 		})
-	}
-}
-
-func (cur *nodeCursor) validateNode(cb compareItems) {
-	if cur.level() == 0 {
-		for i := 2; i < cur.nd.nodeCount(); i += 2 {
-			prev := cur.nd.getItem(i - 2)
-			curr := cur.nd.getItem(i)
-			if cb(prev, curr) != -1 {
-				panic("")
-			}
-		}
-	} else {
-		for i := 1; i < cur.nd.nodeCount(); i++ {
-			prev := cur.nd.getItem(i - 1)
-			curr := cur.nd.getItem(i)
-			if cb(prev, curr) != -1 {
-				panic("")
-			}
-		}
 	}
 }
 

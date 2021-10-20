@@ -27,26 +27,42 @@ type Type struct {
 
 type TupleDesc struct {
 	types []Type
+
+	rawCompare []int
 }
 
 func NewTupleDescriptor(types ...Type) (td TupleDesc) {
 	return TupleDesc{types: types}
 }
 
+func NewRawTupleDescriptor(cmps []int, types ...Type) (td TupleDesc) {
+	td = NewTupleDescriptor(types...)
+	td.rawCompare = cmps
+	return
+}
+
 func (td TupleDesc) count() int {
 	return len(td.types)
 }
 
-func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
-	for _, enc := range encodings {
-		if enc == td.types[i].Enc {
-			return
-		}
-	}
-	panic("incorrect value encoding")
-}
-
 func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
+	if td.rawCompare != nil {
+		var l, r byte
+		for _, idx := range td.rawCompare {
+			l, r = left[idx], right[idx]
+			if l != r {
+				break
+			}
+		}
+		if l > r {
+			return 1
+		}
+		if l < r {
+			return -1
+		}
+		return 0
+	}
+
 	for i, typ := range td.types {
 		cmp = compare(typ, left.GetField(i), right.GetField(i))
 		if cmp != EqualCmp {
@@ -124,6 +140,15 @@ func (td TupleDesc) GetString(i int, tup Tuple) string {
 func (td TupleDesc) GetBytes(i int, tup Tuple) []byte {
 	td.expectEncoding(i, BytesEnc)
 	return readBytes(tup.GetField(i))
+}
+
+func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
+	for _, enc := range encodings {
+		if enc == td.types[i].Enc {
+			return
+		}
+	}
+	panic("incorrect value encoding")
 }
 
 type Collation uint16

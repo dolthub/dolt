@@ -16,7 +16,6 @@ package prolly
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -41,12 +40,8 @@ func testMapGetItem(t *testing.T, count int) {
 		k, v := val.Tuple(kv[0]), val.Tuple(kv[1])
 		err := m.Get(ctx, k, func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, k)
-			if !assert.Equal(t, k, key) {
-				fmt.Println(k, key)
-			}
-			if !assert.Equal(t, v, val) {
-				fmt.Println(v, val)
-			}
+			assert.Equal(t, k, key)
+			assert.Equal(t, v, val)
 			return
 		})
 		require.NoError(t, err)
