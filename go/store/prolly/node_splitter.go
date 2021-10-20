@@ -92,6 +92,7 @@ func TestWithSmallChunks(cb func()) {
 
 func newDefaultNodeSplitter(salt byte) nodeSplitter {
 	return newRollingHasher(salt)
+	//return newSmoothRollingHasher(salt)
 }
 
 func newRollingHasher(salt byte) *rollingHasher {
@@ -132,5 +133,6 @@ func (rv *rollingHasher) CrossedBoundary() bool {
 
 func (rv *rollingHasher) Reset() {
 	rv.crossedBoundary = false
+	rv.offset = 0
 	rv.bz = buzhash.NewBuzHash(rv.window)
 }
