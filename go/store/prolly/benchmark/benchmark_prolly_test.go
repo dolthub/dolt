@@ -31,26 +31,30 @@ import (
 )
 
 func BenchmarkAll(b *testing.B) {
-	benchmarkProllyMap(b, 10_000)
-	benchmarkTypesMap(b, 10_000)
-	benchmarkProllyMap(b, 100_000)
-	benchmarkTypesMap(b, 100_000)
+	benchmarkProllyMap(b, 10_000, 1)
+	benchmarkTypesMap(b, 10_000, 1)
+	benchmarkProllyMap(b, 100_000, 1)
+	benchmarkTypesMap(b, 100_000, 1)
 }
 
 func BenchmarkProllySmall(b *testing.B) {
-	benchmarkProllyMap(b, 10_000)
+	benchmarkProllyMap(b, 10_000, 10)
 }
 
 func BenchmarkTypesSmall(b *testing.B) {
-	benchmarkTypesMap(b, 10_000)
+	benchmarkTypesMap(b, 10_000, 10)
 }
 
 func BenchmarkProllyMedium(b *testing.B) {
-	benchmarkProllyMap(b, 100_000)
+	benchmarkProllyMap(b, 100_000, 1)
 }
 
 func BenchmarkTypesMedium(b *testing.B) {
-	benchmarkTypesMap(b, 100_000)
+	benchmarkTypesMap(b, 100_000, 1)
+}
+
+func BenchmarkProllyLarge(b *testing.B) {
+	benchmarkProllyMap(b, 1_000_000, 1)
 }
 
 type prollyBench struct {
@@ -63,40 +67,44 @@ type typesBench struct {
 	tups [][2]types.Tuple
 }
 
-func benchmarkProllyMap(b *testing.B, size uint64) {
+func benchmarkProllyMap(b *testing.B, size, iters uint64) {
 	bench := generateProllyBench(size)
 	b.ResetTimer()
 
 	s := strconv.Itoa(int(size))
 	b.Run("benchmark prolly map "+s, func(b *testing.B) {
 		ctx := context.Background()
-		for i := 0; i < len(bench.tups)/10; i++ {
-			idx := rand.Uint64() % uint64(len(bench.tups))
-			_ = bench.m.Get(ctx, bench.tups[idx][0], func(key, value val.Tuple) (e error) {
-				return
+		for k := uint64(0); k < iters; k++ {
+			for i := 0; i < len(bench.tups); i++ {
+				idx := rand.Uint64() % uint64(len(bench.tups))
+				_ = bench.m.Get(ctx, bench.tups[idx][0], func(key, value val.Tuple) (e error) {
+					return
 
-				//assert.NotNil(b, key)
-				//assert.Equal(b, bench.tups[idx][0], key)
-				//assert.Equal(b, bench.tups[idx][1], value)
-			})
+					//assert.NotNil(b, key)
+					//assert.Equal(b, bench.tups[idx][0], key)
+					//assert.Equal(b, bench.tups[idx][1], value)
+				})
+			}
 		}
 	})
 }
 
-func benchmarkTypesMap(b *testing.B, size uint64) {
+func benchmarkTypesMap(b *testing.B, size, iters uint64) {
 	bench := generateTypesBench(size)
 	b.ResetTimer()
 
 	s := strconv.Itoa(int(size))
 	b.Run("benchmark types map "+s, func(b *testing.B) {
-		ctx := context.Background()
-		for i := 0; i < len(bench.tups)/10; i++ {
-			idx := rand.Uint64() % uint64(len(bench.tups))
-			_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
+		for k := uint64(0); k < iters; k++ {
+			ctx := context.Background()
+			for i := 0; i < len(bench.tups); i++ {
+				idx := rand.Uint64() % uint64(len(bench.tups))
+				_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
 
-			//_, ok, err := bench.m.MaybeGet(ctx, bench.tups[idx][0])
-			//assert.NoError(b, err)
-			//assert.True(b, ok)
+				//_, ok, err := bench.m.MaybeGet(ctx, bench.tups[idx][0])
+				//assert.NoError(b, err)
+				//assert.True(b, ok)
+			}
 		}
 	})
 }
@@ -105,7 +113,8 @@ func generateProllyBench(size uint64) prollyBench {
 	ctx := context.Background()
 	nrw := newTestNRW()
 
-	kd := val.NewTupleDescriptor(
+	//kd := val.NewTupleDescriptor(
+	kd := val.NewRawTupleDescriptor(
 		val.Type{Coll: val.ByteOrderCollation, Nullable: false},
 	)
 	vd := val.NewTupleDescriptor(

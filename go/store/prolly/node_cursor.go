@@ -146,17 +146,13 @@ func (cur *nodeCursor) search(item nodeItem, cb compareItems) int {
 	if cur.level() == 0 {
 		// leaf nodes
 		idx := sort.Search(cur.nd.nodeCount()/2, func(i int) bool {
-			it := cur.nd.getItem(i * 2)
-			cmp := cb(item, it)
-			return cmp <= 0
+			return cb(item, cur.nd.getItem(i*2)) <= 0
 		})
 		return idx * 2
 	} else {
 		// internal nodes
 		return sort.Search(cur.nd.nodeCount(), func(i int) bool {
-			it := cur.nd.getItem(i)
-			cmp := cb(item, it)
-			return cmp <= 0
+			return cb(item, cur.nd.getItem(i)) <= 0
 		})
 	}
 }
