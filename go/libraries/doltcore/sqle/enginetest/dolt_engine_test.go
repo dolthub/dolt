@@ -169,7 +169,6 @@ func TestReplaceIntoErrors(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	t.Skip("Broken on GMS main, vinai@ to fix")
 	enginetest.TestUpdate(t, newDoltHarness(t))
 }
 
