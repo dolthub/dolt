@@ -113,10 +113,11 @@ func generateProllyBench(size uint64) prollyBench {
 	ctx := context.Background()
 	nrw := newTestNRW()
 
+	kd := val.NewRawTupleDescriptor([]int{0, 1, 2, 3, 4, 5, 6, 7},
 	//kd := val.NewTupleDescriptor(
-	kd := val.NewRawTupleDescriptor(
 		val.Type{Coll: val.ByteOrderCollation, Nullable: false},
 	)
+
 	vd := val.NewTupleDescriptor(
 		val.Type{Coll: val.ByteOrderCollation, Nullable: true},
 		val.Type{Coll: val.ByteOrderCollation, Nullable: true},

@@ -70,17 +70,9 @@ type KeyValueFn func(key, value val.Tuple) error
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
 	query := nodeItem(key)
 
-	cur := nodeCursor{nd: m.root, nrw: m.nrw}
-	_ = cur.seek(ctx, query, m.compareKeys)
-	for !cur.nd.leafNode() {
-
-		// reuse |cur| object to keep stack alloc'd
-		cur.nd, err = fetchRef(ctx, m.nrw, cur.current())
-		if err != nil {
-			return err
-		}
-
-		_ = cur.seek(ctx, query, m.compareKeys)
+	cur, err := newLeafCursorAtItem(ctx, m.nrw, m.root, query, m.searchNode)
+	if err != nil {
+		return err
 	}
 
 	var k, v val.Tuple
@@ -97,8 +89,40 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 }
 
 func (m Map) compareKeys(left, right nodeItem) int {
+	//return bytes.Compare(left, right)
+
 	l, r := val.Tuple(left), val.Tuple(right)
 	return int(m.keyDesc.Compare(l, r))
+}
+
+func (m Map) searchNode(query nodeItem, nd Node) int {
+	var card int
+	if nd.level() == 0 {
+		// leaf nodes
+		card = 2
+	} else {
+		// internal nodes
+		card = 1
+	}
+
+	n := nd.nodeCount() / card
+	// Define f(-1) == false and f(n) == true.
+	// Invariant: f(i-1) == false, f(j) == true.
+	i, j := 0, n
+	for i < j {
+		h := int(uint(i+j) >> 1) // avoid overflow when computing h
+		less := m.compareKeys(query, nd.getItem(h*card)) <= 0
+
+		// i ≤ h < j
+		if !less {
+			i = h + 1 // preserves f(i-1) == false
+		} else {
+			j = h // preserves f(j) == true
+		}
+	}
+	// i == j, f(i-1) == false, and
+	// f(j) (= f(i)) == true  =>  answer is i.
+	return i * card
 }
 
 //
