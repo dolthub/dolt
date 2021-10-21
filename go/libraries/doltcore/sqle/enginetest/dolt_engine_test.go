@@ -66,30 +66,39 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []enginetest.ScriptTest{
 		{
-			// All DECLARE statements are only allowed under BEGIN/END blocks
-			Name: "Top-level DECLARE statements",
+			Name: "failed statements data validation for INSERT, UPDATE",
+			SetUpScript: []string{
+				"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));",
+				"INSERT INTO test VALUES (1,1), (4,4), (5,5);",
+			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:    "select 1+1",
-					Expected: []sql.Row{{2}},
+					Query:          "INSERT INTO test VALUES (2,2), (3,3), (1,1);",
+					ExpectedErrStr: "duplicate primary key given: [1]",
+				},
+				{
+					Query:    "SELECT * FROM test;",
+					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
+				},
+				{
+					Query:          "UPDATE test SET pk = pk + 1;",
+					ExpectedErrStr: "duplicate primary key given: [5]",
+				},
+				{
+					Query:    "SELECT * FROM test;",
+					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
 				},
 			},
-		},
-		{
-			Name: "last_insert_id() behavior",
-			SetUpScript: []string{
-				"create table a (x int primary key, y int)",
-			},
-			Assertions: []enginetest.ScriptTestAssertion{},
 		},
 	}
 
 	harness := newDoltHarness(t)
 	for _, test := range scripts {
-		engine := enginetest.NewEngine(t, harness)
+		myDb := harness.NewDatabase("mydb")
+		databases := []sql.Database{myDb}
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
 		engine.Analyzer.Debug = true
 		engine.Analyzer.Verbose = true
-
 		enginetest.TestScriptWithEngine(t, engine, harness, test)
 	}
 }

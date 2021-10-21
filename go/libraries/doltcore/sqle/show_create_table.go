@@ -32,8 +32,6 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Conte
 	sess := dsess.DefaultSession()
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(sess),
-		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()),
 		sql.WithTracer(tracing.Tracer(ctx)))
 
 	var cfg config.ReadableConfig = nil

@@ -1486,12 +1486,19 @@ SQL
     [ "${lines[20]}" = "20" ]
 }
 
-@test "sql: update against joins fail with error" {
-    dolt sql -q "CREATE TABLE mytable(pk int primary key, val int);"
+@test "sql: simple update against join works" {
+    dolt sql -q "CREATE TABLE test(pk int primary key, val int);"
+    dolt sql -q "INSERT INTO test values (1,1)"
 
-    run dolt sql -q "UPDATE mytable one, mytable two SET one.val = 1 WHERE one.pk = two.pk + 1;"
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "table doesn't support UPDATE" ]] || false
+    dolt sql -q "CREATE TABLE test2(pk int primary key)"
+    dolt sql -q "insert into test2 values (1)"
+
+    run dolt sql -q "UPDATE test INNER JOIN test2 on test.pk = test2.pk set val = 2"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT * FROM test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,2" ]] || false
 }
 
 # regression test for query errors involving partial and full index matches

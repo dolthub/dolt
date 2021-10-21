@@ -94,7 +94,7 @@ jobs:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: upload-msi
           repository: dolthub/windows-msi-creator
-          client-payload: '{"tag": "${{ github.event.inputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}"}, "actor": "${{ github.actor }}"}'
+          client-payload: '{"tag": "${{ github.event.inputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}", "actor": "${{ github.actor }}"}'
 
   create-release-notes:
     needs: create-release

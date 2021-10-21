@@ -10,12 +10,11 @@ on:
     types: [ bump-winget ]
 
 jobs:
-  winget-bump:
-    name: Bump Dolt winget
-    runs-on: windows-2019
-    defaults:
-      run:
-        shell: powershell
+  get-version:
+    name: Get Version
+    runs-on: ubuntu-18.04
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
     steps:
       - name: Get version
         id: get_version
@@ -29,17 +28,21 @@ jobs:
             version="${{ github.event.inputs.version }}"
           fi
 
-          if [[ $version == v* ]]; then
-            version="${version:1}"
-          fi
-
           echo "::set-output name=version::$version"
 
+  winget-bump:
+    needs: get-version
+    name: Bump Dolt winget
+    runs-on: windows-2019
+    defaults:
+      run:
+        shell: powershell
+    steps:
       - name: Create winget PR
         run: |
           iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
           .\wingetcreate.exe update DoltHub.Dolt -u $Env:URL -v $Env:VERSION -t $Env:TOKEN --submit
         env:
           TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
-          VERSION: ${{ steps.get_version.outputs.version }}
-          URL: ${{ format('https://github.com/dolthub/dolt/releases/download/v{0}/dolt-windows-amd64.msi', steps.get_version.outputs.version) }}
+          VERSION: ${{ needs.get-version.outputs.version }}
+          URL: ${{ format('https://github.com/dolthub/dolt/releases/download/v{0}/dolt-windows-amd64.msi', needs.get-version.outputs.version) }}

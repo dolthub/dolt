@@ -1502,22 +1502,10 @@ func newSqlContext(sess sql.Session, cat sql.Catalog) func(ctx context.Context) 
 	return func(ctx context.Context) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx,
 			sql.WithSession(sess),
-			sql.WithIndexRegistry(sql.NewIndexRegistry()),
-			sql.WithViewRegistry(sql.NewViewRegistry()),
 			sql.WithTracer(tracing.Tracer(ctx)))
 
 		seenOne := false
 		for _, db := range dsqle.DbsAsDSQLDBs(cat.AllDatabases()) {
-			root, err := db.GetRoot(sqlCtx)
-			if err != nil {
-				return nil, err
-			}
-
-			err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
-			if err != nil {
-				return nil, err
-			}
-
 			if !seenOne {
 				sqlCtx.SetCurrentDatabase(db.Name())
 				seenOne = true
