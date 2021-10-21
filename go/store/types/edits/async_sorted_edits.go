@@ -235,7 +235,7 @@ func pairCollections(colls []*KVPCollection) [][2]*KVPCollection {
 		numColls -= 1
 	}
 
-	for i := 0; i < numColls; i+=2 {
+	for i := 0; i < numColls; i += 2 {
 		pairs = append(pairs, [2]*KVPCollection{colls[i], colls[i+1]})
 	}
 
