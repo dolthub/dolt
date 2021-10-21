@@ -22,6 +22,7 @@ type PersistedSession struct {
 }
 
 var _ DoltSession = &PersistedSession{}
+var _ sql.Session = &PersistedSession{}
 
 func NewPersistedSession(dsess DoltSession, sqlSess sql.PersistableSession) *PersistedSession {
 	return &PersistedSession{dsess, sqlSess}

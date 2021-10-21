@@ -130,7 +130,7 @@ func (cmd SqlServerCmd) CreateArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(noAutoCommitFlag, "", "When provided sessions will not automatically commit their changes to the working set. Anything not manually committed will be lost.")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
-	ap.SupportsInt(noDefaultsFlag, "", "no-defaults", fmt.Sprintf("Autoload persisted server configuration (default `%d`)", serverConfig.NoDefaults()))
+	ap.SupportsInt(noDefaultsFlag, "", "no-defaults", fmt.Sprintf("Autoload persisted server configuration (default `%t`)", serverConfig.NoDefaults()))
 
 	return ap
 }

@@ -60,7 +60,7 @@ func intPtr(n int) *int {
 type BehaviorYAMLConfig struct {
 	ReadOnly   *bool `yaml:"read_only"`
 	AutoCommit *bool
-	// NoDefaults disables loading persisted auto configuration.
+	// NoDefaults disables loading persisted system variable configuration.
 	NoDefaults *bool `yaml:"no_defaults"`
 }
 

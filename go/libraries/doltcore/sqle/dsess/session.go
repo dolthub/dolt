@@ -245,7 +245,7 @@ type InitialDbState struct {
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, conf *env.DoltCliConfig, dbs ...InitialDbState) (sql.Session, error) {
+func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, conf *env.DoltCliConfig, dbs ...InitialDbState) (DoltSession, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 

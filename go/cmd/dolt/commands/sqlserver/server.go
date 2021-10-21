@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/config"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/sirupsen/logrus"
@@ -128,6 +129,13 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return nil, err
 	}
 
+	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
+	defaultsConf := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+
+	if !ok {
+		return nil, config.ErrUnknownConfig
+	}
+
 	// TODO: pass persisted config from dEnv
 	mySQLServer, startError = server.NewServer(
 		server.Config{
@@ -144,6 +152,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		},
 		sqlEngine,
 		newSessionBuilder(sqlEngine, dEnv.Config, pro, mrEnv, serverConfig.AutoCommit()),
+		defaultsConf,
 	)
 
 	if startError != nil {
@@ -187,6 +196,13 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 		if err != nil {
 			return nil, err
 		}
+
+		localConf, ok := dConf.GetConfig(env.LocalConfig)
+		if !ok {
+			return nil, config.ErrUnknownConfig
+		}
+		defaultsConf := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+		sql.InitSystemVariablesWithDefaults(defaultsConf)
 
 		err = doltSess.SetSessionVariable(tmpSqlCtx, sql.AutoCommitSessionVar, autocommit)
 		if err != nil {

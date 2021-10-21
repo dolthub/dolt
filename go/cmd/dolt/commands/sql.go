@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/config"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -1475,13 +1476,14 @@ func newSqlEngine(
 	}
 
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
-	//localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
-	//if !ok {
-	//	return nil, config.ErrNoConfig
-	//}
-	//defaults := sqlconfig.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-	//
 	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
+
+	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
+	if !ok {
+		return nil, config.ErrUnknownConfig
+	}
+	defaultsConf := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+	sql.InitSystemVariablesWithDefaults(defaultsConf)
 
 	// TODO: this should just be the session default like it is with MySQL
 	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)
