@@ -332,10 +332,10 @@ func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 	}
 
 	eps := make([]types.EditProvider, 0, len(flushedEPs)+1)
-	eps = append(eps, committedEP)
 	for i := 0; i < len(flushedEPs); i++ {
 		eps = append(eps, flushedEPs[i].Edits)
 	}
+	eps = append(eps, committedEP)
 
 	defer func() {
 		for _, ep := range eps {
