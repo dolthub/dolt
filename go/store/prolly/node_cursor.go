@@ -47,48 +47,80 @@ func newCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur *nodeCurso
 	return
 }
 
-func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, cmp compareFn, cb cursorFn) (err error) {
-	cur := nodeCursor{nd: nd, nrw: nrw}
+func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
+	cur = nodeCursor{nd: nd, nrw: nrw}
 
-	err = cur.seek(ctx, item, cmp)
-	if err != nil {
-		return err
-	}
-
+	cur.idx = search(item, cur.nd)
 	for !cur.nd.leafNode() {
 		nd, err = fetchRef(ctx, nrw, cur.current())
 		if err != nil {
-			return err
+			return cur, err
 		}
 
 		parent := cur
 		cur = nodeCursor{nd: nd, parent: &parent, nrw: nrw}
 
-		err = cur.seek(ctx, item, cmp)
-		if err != nil {
-			return err
-		}
+		cur.idx = search(item, cur.nd)
 	}
 
-	return cb(&cur)
+	return cur, nil
 }
 
-func newLeafCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, sf searchFn) (cur nodeCursor, err error) {
+// todo(andy): this is a temporary function to optimize memory usage
+func newLeafCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
 	cur = nodeCursor{nd: nd, parent: nil, nrw: nrw}
 
-	cur.idx = sf(item, cur.nd)
+	cur.idx = search(item, cur.nd)
 	for !cur.nd.leafNode() {
-
 		// reuse |cur| object to keep stack alloc'd
 		cur.nd, err = fetchRef(ctx, nrw, cur.current())
 		if err != nil {
 			return cur, err
 		}
 
-		cur.idx = sf(item, cur.nd)
+		cur.idx = search(item, cur.nd)
 	}
 
 	return cur, nil
+}
+
+func newCursorAtIndex(ctx context.Context, nrw NodeReadWriter, nd Node, idx uint64) (cur nodeCursor, err error) {
+	cur = nodeCursor{nd: nd, parent: nil, nrw: nrw}
+
+	remaining := idx
+	for lvl := nd.level(); lvl > 0; lvl-- {
+		d.PanicIfFalse(cur.idx == 0)
+
+		meta := metaTuple(cur.current())
+		for remaining > meta.GetCumulativeCount() {
+			remaining -= meta.GetCumulativeCount()
+
+			_, err = cur.advance(ctx)
+			if err != nil {
+				return cur, err
+			}
+
+			meta = metaTuple(cur.current())
+		}
+
+		nd, err = fetchRef(ctx, nrw, cur.current())
+		if err != nil {
+			return cur, err
+		}
+
+		parent := cur
+		cur = nodeCursor{nd: nd, parent: &parent, nrw: nrw}
+	}
+
+	d.PanicIfFalse(nd.nodeCount() < int(remaining))
+	parent := cur
+	cur = nodeCursor{
+		nd:     nd,
+		idx:    int(remaining),
+		parent: &parent,
+		nrw:    nrw,
+	}
+	return
 }
 
 func (cur *nodeCursor) valid() bool {
@@ -275,31 +307,4 @@ func (cur *nodeCursor) compare(other *nodeCursor) int {
 	}
 	d.PanicIfFalse(cur.nd.nodeCount() == other.nd.nodeCount())
 	return cur.idx - other.idx
-}
-
-func iterTree(ctx context.Context, nrw NodeReadWriter, nd Node, cb func(item nodeItem) error) error {
-	if nd.empty() {
-		return nil
-	}
-
-	cur, err := newCursor(ctx, nrw, nd)
-	if err != nil {
-		return err
-	}
-
-	ok := true
-	for ok {
-		curr := cur.current()
-
-		err = cb(curr)
-		if err != nil {
-			return err
-		}
-
-		ok, err = cur.advance(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	return err
 }
