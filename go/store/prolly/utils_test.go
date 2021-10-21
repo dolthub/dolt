@@ -33,6 +33,33 @@ func newTestNRW() NodeReadWriter {
 	return NewNodeStore(ts.NewView())
 }
 
+func iterTree(ctx context.Context, nrw NodeReadWriter, nd Node, cb func(item nodeItem) error) error {
+	if nd.empty() {
+		return nil
+	}
+
+	cur, err := newCursor(ctx, nrw, nd)
+	if err != nil {
+		return err
+	}
+
+	ok := true
+	for ok {
+		curr := cur.current()
+
+		err = cb(curr)
+		if err != nil {
+			return err
+		}
+
+		ok, err = cur.advance(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
 func randomTree(t *testing.T, count, fields int) (Node, [][2]nodeItem, NodeReadWriter) {
 	ctx := context.Background()
 	nrw := newTestNRW()
