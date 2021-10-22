@@ -16,6 +16,7 @@ package edits
 
 import (
 	"context"
+	"io"
 	"math/rand"
 	"testing"
 	"time"
@@ -62,6 +63,50 @@ func TestKVPCollection(t *testing.T) {
 		rng := rand.New(rand.NewSource(seed))
 		testKVPCollection(t, rng)
 	}
+}
+
+func TestKVPCollectionDestructiveMergeStable(t *testing.T) {
+	left := NewKVPCollection(types.Format_LD_1, types.KVPSlice{
+		types.KVP{Key: types.Int(0)},
+		types.KVP{Key: types.Int(1)},
+		types.KVP{Key: types.Int(2)},
+	})
+	right := NewKVPCollection(types.Format_LD_1, types.KVPSlice{
+		types.KVP{Key: types.Int(0), Val: types.Int(0)},
+		types.KVP{Key: types.Int(1), Val: types.Int(0)},
+		types.KVP{Key: types.Int(2), Val: types.Int(0)},
+	})
+	var err error
+	left, err = left.DestructiveMerge(right)
+	assert.NoError(t, err)
+	i := left.Iterator()
+	var v *types.KVP
+	v, err = i.Next()
+	assert.NoError(t, err)
+	assert.Equal(t, types.Int(0), v.Key)
+	assert.Nil(t, v.Val)
+	v, err = i.Next()
+	assert.NoError(t, err)
+	assert.Equal(t, types.Int(0), v.Key)
+	assert.NotNil(t, v.Val)
+	v, err = i.Next()
+	assert.NoError(t, err)
+	assert.Equal(t, types.Int(1), v.Key)
+	assert.Nil(t, v.Val)
+	v, err = i.Next()
+	assert.NoError(t, err)
+	assert.Equal(t, types.Int(1), v.Key)
+	assert.NotNil(t, v.Val)
+	v, err = i.Next()
+	assert.NoError(t, err)
+	assert.Equal(t, types.Int(2), v.Key)
+	assert.Nil(t, v.Val)
+	v, err = i.Next()
+	assert.NoError(t, err)
+	assert.Equal(t, types.Int(2), v.Key)
+	assert.NotNil(t, v.Val)
+	_, err = i.Next()
+	assert.Equal(t, io.EOF, err)
 }
 
 func testKVPCollection(t *testing.T, rng *rand.Rand) {
