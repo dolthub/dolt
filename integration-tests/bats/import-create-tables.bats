@@ -166,6 +166,16 @@ DELIM
     skip "cannot overwrite a table with foreign key constraints"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "fktest @ working" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`fktest\` (" ]] || false
+    [[ "$output" =~ "  \`pk\` int unsigned NOT NULL," ]] || false 
+    [[ "$output" =~ "  \`c1\` int unsigned NOT NULL," ]] || false
+    [[ "$output" =~ "  \`c2\` int unsigned NOT NULL," ]] || false
+    [[ "$output" =~ "  \`c3\` int unsigned NOT NULL," ]] || false
+    [[ "$output" =~ "  \`c4\` int unsigned NOT NULL," ]] || false
+    [[ "$output" =~ "  \`c5\` int unsigned NOT NULL," ]] || false
+    [[ "$output" =~ "  PRIMARY KEY (\`pk\`)" ]] || false
+    [[ ! "$output" =~ "CONSTRAINT \`gpgd234u\` FOREIGN KEY (\`tpk\`) REFERENCES \`test\` (\`pk\`)" ]] || false
+    [[ "$output" =~ ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;" ]] || false
 }
 
 @test "import-create-tables: try to create a table with a bad csv" {
