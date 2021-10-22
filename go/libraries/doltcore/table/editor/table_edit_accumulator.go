@@ -53,7 +53,8 @@ type TableEditAccumulator interface {
 	MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error)
 }
 
-const flushThreshold = 256 * 1024
+// var for testing
+var flushThreshold int64 = 256 * 1024
 
 // inMemModifications represent row adds and deletes that have not been written to the underlying storage and only exist
 // in memory

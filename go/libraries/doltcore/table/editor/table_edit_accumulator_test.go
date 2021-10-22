@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var emptyTpl = types.EmptyTuple(types.Format_Default)
@@ -62,6 +63,46 @@ func requireGet(ctx context.Context, t *testing.T, tea TableEditAccumulator, key
 	_, has, err := tea.Get(ctx, h, key)
 	require.NoError(t, err)
 	require.Equal(t, expected, has)
+}
+
+func TestTableEditAccumulatorStableOrder(t *testing.T) {
+	origFlushThreshold := flushThreshold
+	defer func() {
+		flushThreshold = origFlushThreshold
+	}()
+	flushThreshold = 2
+
+	ctx := context.Background()
+	nbf := types.Format_Default
+	teaf := newTestTEAF()
+	m, err := types.NewMap(ctx, teaf.vrw)
+	require.NoError(t, err)
+	tea := teaf.NewTableEA(ctx, m).(*tableEditAccumulatorImpl)
+
+	h := func(k types.Tuple) hash.Hash {
+		h, err := k.Hash(nbf)
+		require.NoError(t, err)
+		return h
+	}
+
+	k1 := newTuple(t, types.Int(0))
+	k2 := newTuple(t, types.Int(1))
+	err = tea.Delete(h(k1), k1)
+	require.NoError(t, err)
+	err = tea.Delete(h(k2), k2)
+	require.NoError(t, err)
+
+	err = tea.Insert(h(k1), k1, emptyTpl)
+	require.NoError(t, err)
+	err = tea.Insert(h(k2), k2, emptyTpl)
+	require.NoError(t, err)
+
+	err = tea.Commit(ctx, nbf)
+	require.NoError(t, err)
+
+	m, err = tea.MaterializeEdits(ctx, nbf)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), m.Len())
 }
 
 func TestGet(t *testing.T) {
