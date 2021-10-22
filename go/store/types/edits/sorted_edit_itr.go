@@ -45,15 +45,15 @@ func (itr *SortedEditItr) Next() (*types.KVP, error) {
 		return nil, io.EOF
 	}
 
-	lesser := itr.rightItr
-	isLess, err := itr.leftItr.Less(itr.rightItr)
+	lesser := itr.leftItr
+	isLess, err := itr.rightItr.Less(itr.leftItr)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if isLess {
-		lesser = itr.leftItr
+		lesser = itr.rightItr
 	}
 
 	kvp, err := lesser.Next()
@@ -86,15 +86,15 @@ func (itr *SortedEditItr) Peek() (*types.KVP, error) {
 		return nil, nil
 	}
 
-	lesser := itr.rightItr
-	isLess, err := itr.leftItr.Less(itr.rightItr)
+	lesser := itr.leftItr
+	isLess, err := itr.rightItr.Less(itr.leftItr)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if isLess {
-		lesser = itr.leftItr
+		lesser = itr.rightItr
 	}
 
 	return lesser.Peek(), nil

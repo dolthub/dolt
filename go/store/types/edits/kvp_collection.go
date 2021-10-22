@@ -67,15 +67,15 @@ func (left *KVPCollection) DestructiveMerge(right *KVPCollection) (*KVPCollectio
 	var otherItr *KVPCollItr
 
 	for !done {
-		currItr, otherItr = rItr, lItr
-		isLess, err := lItr.Less(rItr)
+		currItr, otherItr = lItr, rItr
+		isLess, err := rItr.Less(lItr)
 
 		if err != nil {
 			return nil, err
 		}
 
 		if isLess {
-			currItr, otherItr = lItr, rItr
+			currItr, otherItr = rItr, lItr
 		}
 
 		kvp, exhaustedBuff, done = currItr.nextForDestructiveMerge()
