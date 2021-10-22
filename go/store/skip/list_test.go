@@ -15,8 +15,10 @@
 package skip
 
 import (
+	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,13 +42,18 @@ func testSkipList(t *testing.T, vals ...[]byte) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
 
+	// test puts
 	list := NewSkipList(strCmp)
 	for _, v := range vals {
 		list.Put(v, v)
+		//printList(list)
 	}
-
 	assert.Equal(t, len(vals), list.Count())
 
+	// test gets
+	rand.Shuffle(len(vals), func(i, j int) {
+		vals[i], vals[j] = vals[j], vals[i]
+	})
 	for _, exp := range vals {
 		act, ok := list.Get(exp)
 		assert.True(t, ok)
@@ -57,6 +64,7 @@ func testSkipList(t *testing.T, vals ...[]byte) {
 	assert.False(t, ok)
 	assert.Nil(t, act)
 
+	// test iter
 	sort.Slice(vals, func(i, j int) bool {
 		return strCmp(vals[i], vals[j]) == -1
 	})
@@ -67,6 +75,38 @@ func testSkipList(t *testing.T, vals ...[]byte) {
 		assert.Equal(t, vals[i], key)
 		i++
 	})
+
+	// test in-place updates
+	v2 := []byte("789")
+	for _, v := range vals {
+		list.Put(v, v2)
+	}
+	assert.Equal(t, len(vals), list.Count())
+
+	rand.Shuffle(len(vals), func(i, j int) {
+		vals[i], vals[j] = vals[j], vals[i]
+	})
+	for _, exp := range vals {
+		act, ok := list.Get(exp)
+		assert.True(t, ok)
+		assert.Equal(t, v2, act)
+	}
+}
+
+func printList(l *List) {
+	sb := strings.Builder{}
+	sb.WriteString("[ ")
+	seenOne := false
+
+	l.Iter(func(key, _ []byte) {
+		if seenOne {
+			sb.WriteString(", ")
+		}
+		seenOne = true
+		sb.Write(key)
+	})
+	sb.WriteString(" ]")
+	fmt.Println(sb.String())
 }
 
 func b(s string) []byte {
