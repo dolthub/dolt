@@ -35,6 +35,12 @@ func TestSkipList(t *testing.T) {
 			testSkipList(t, vals...)
 		}
 	})
+	t.Run("test random skip list", func(t *testing.T) {
+		for i := 0; i < 10; i++ {
+			vals := randomVals((rand.Int63()%10_000)+100)
+			testSkipList(t, vals...)
+		}
+	})
 }
 
 func testSkipList(t *testing.T, vals ...[]byte) {
@@ -91,6 +97,16 @@ func testSkipList(t *testing.T, vals ...[]byte) {
 		assert.True(t, ok)
 		assert.Equal(t, v2, act)
 	}
+}
+
+func randomVals(cnt int64) (vals [][]byte) {
+	vals = make([][]byte, cnt)
+	for i := range vals {
+		bb := make([]byte, (rand.Int63()%91)+10)
+		rand.Read(bb)
+		vals[i] = bb
+	}
+	return
 }
 
 func printList(l *List) {

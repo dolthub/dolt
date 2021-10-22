@@ -57,7 +57,7 @@ func NewSkipList(cmp ValueCmp) (l *List) {
 		src:   rand.NewSource(0),
 	}
 
-	// initialize sentinal node
+	// initialize sentinel node
 	l.nodes[nullID] = skipNode{
 		id:  nullID,
 		key: nil, val: nil,
@@ -104,33 +104,32 @@ func (l *List) Put(key, val []byte) {
 	}
 
 	next := l.head
-	var prev skipNode
+	var prevNd skipNode
 	var breadcrumbs skipPointer
 
 	for h := int(highest); h >= 0; h-- {
-		curr := l.getNode(next[h])
-		for l.compareKeys(key, curr.key) > 0 {
-			prev = curr
-			next = curr.next
-			curr = l.getNode(next[h])
+		currNd := l.getNode(next[h])
+		for l.compareKeys(key, currNd.key) > 0 {
+			prevNd = currNd
+			next = currNd.next
+			currNd = l.getNode(next[h])
 		}
-		// prev.key < key <= curr.key
+		// prevNd.key < key <= currNd.key
 
-		if l.compareKeys(key, curr.key) == 0 {
+		if l.compareKeys(key, currNd.key) == 0 {
 			// in-place update
-			curr.val = val
-			l.putNode(curr)
+			currNd.val = val
+			l.updateNode(currNd)
 			return
 		}
 
 		// save our steps
-		breadcrumbs[h] = prev.id
+		breadcrumbs[h] = prevNd.id
 	}
 
 	insert := l.makeNode(key, val)
 	for h := uint8(0); h <= insert.height; h++ {
-		// if |insert| is less than |head| for this level,
-		// then update l.head
+		// update l.head if |insert| is less than |head|
 		head := l.getNode(l.head[h])
 		if l.compare(insert, head) < 0 {
 			l.head[h] = insert.id
@@ -142,9 +141,9 @@ func (l *List) Put(key, val []byte) {
 		prev := l.getNode(breadcrumbs[h])
 		insert.next[h] = prev.next[h]
 		prev.next[h] = insert.id
-		l.putNode(prev)
+		l.updateNode(prev)
 	}
-	l.putNode(insert)
+	l.updateNode(insert)
 
 	return
 }
@@ -165,7 +164,7 @@ func (l *List) getNode(id nodeId) skipNode {
 	return l.nodes[id]
 }
 
-func (l *List) putNode(node skipNode) {
+func (l *List) updateNode(node skipNode) {
 	l.nodes[node.id] = node
 }
 
