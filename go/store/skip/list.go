@@ -15,56 +15,64 @@
 package skip
 
 import (
-	"hash"
-
-	"github.com/cespare/xxhash"
+	"math"
+	"math/rand"
 )
 
 const (
-	maxHeight = uint64(5)
+	maxCount = math.MaxUint16 - 1
+
+	maxHeight = uint8(5)
 	highest   = maxHeight - 1
 
 	nullID = nodeId(0)
 )
 
-type List struct {
-	head   skipPointer
-	nodes  map[nodeId]skipNode
-	hasher hash.Hash64
-	cmp    ValueCmp
-}
+type nodeId uint16
+
+type skipPointer [maxHeight]nodeId
 
 type skipNode struct {
 	id       nodeId
 	key, val []byte
-	next     skipPointer
-	height   uint64
+
+	height uint8
+	next   skipPointer
 }
-
-type nodeId uint64
-
-type skipPointer [maxHeight]nodeId
 
 type ValueCmp func(left, right []byte) int
 
-func NewSkipList(cmp ValueCmp) *List {
-	nodes := make(map[nodeId]skipNode, 128)
+type List struct {
+	head  skipPointer
+	nodes []skipNode
+	cmp   ValueCmp
+	src   rand.Source
+}
 
-	nodes[nullID] = skipNode{
+func NewSkipList(cmp ValueCmp) (l *List) {
+	l = &List{
+		// todo(andy): buffer pool
+		nodes: make([]skipNode, 1, 128),
+		cmp:   cmp,
+		src:   rand.NewSource(0),
+	}
+
+	// initialize sentinal node
+	l.nodes[nullID] = skipNode{
 		id:  nullID,
 		key: nil, val: nil,
 		height: maxHeight,
 	}
 
-	return &List{
-		nodes:  nodes,
-		hasher: xxhash.New(),
-		cmp:    cmp,
-	}
+	return
 }
 
 func (l *List) Count() int {
 	return len(l.nodes) - 1
+}
+
+func (l *List) Full() bool {
+	return l.Count() >= maxCount
 }
 
 func (l *List) Has(key []byte) (ok bool) {
@@ -73,10 +81,19 @@ func (l *List) Has(key []byte) (ok bool) {
 }
 
 func (l *List) Get(key []byte) (val []byte, ok bool) {
-	var n skipNode
-	n, ok = l.nodes[getHash(l.hasher, key)]
-	if ok {
-		val = n.val
+	ptr := l.head
+	var curr skipNode
+
+	for h := int64(highest); h >= 0; h-- {
+		curr = l.getNode(ptr[h])
+		for l.compareKeys(key, curr.key) > 0 {
+			ptr = curr.next
+			curr = l.getNode(ptr[h])
+		}
+	}
+
+	if l.compareKeys(key, curr.key) == 0 {
+		val, ok = curr.val, true
 	}
 	return
 }
@@ -86,46 +103,48 @@ func (l *List) Put(key, val []byte) {
 		panic("key must be non-nil")
 	}
 
-	node := makeNode(l.hasher, key, val)
+	next := l.head
+	var prev skipNode
+	var breadcrumbs skipPointer
 
-	if l.Has(key) {
-		// we already have an entry for |key|,
-		// so we can update in-place
-		l.putNode(node)
-		return
+	for h := int(highest); h >= 0; h-- {
+		curr := l.getNode(next[h])
+		for l.compareKeys(key, curr.key) > 0 {
+			prev = curr
+			next = curr.next
+			curr = l.getNode(next[h])
+		}
+		// prev.key < key <= curr.key
+
+		if l.compareKeys(key, curr.key) == 0 {
+			// in-place update
+			curr.val = val
+			l.putNode(curr)
+			return
+		}
+
+		// save our steps
+		breadcrumbs[h] = prev.id
 	}
 
-	first := l.firstNode()
-	// check if |node| is the new first
-	if l.compare(node, first) <= 0 {
-		for h := uint64(0); h <= node.height; h++ {
-			node.next[h] = l.head[h]
-			l.head[h] = node.id
-		}
-		l.putNode(node)
-		return
-	}
-
-	// otherwise, search for an insertion point
-	prev := first
-	for h := int64(highest); h >= 0; h-- {
-
-		next := l.getNode(prev.next[h])
-		for l.compare(node, next) > 0 {
-			prev = next
-			next = l.getNode(next.next[h])
-		}
-		// invariant: |prev| < |node| < |curr|
-
-		if node.height < uint64(h) {
+	insert := l.makeNode(key, val)
+	for h := uint8(0); h <= insert.height; h++ {
+		// if |insert| is less than |head| for this level,
+		// then update l.head
+		head := l.getNode(l.head[h])
+		if l.compare(insert, head) < 0 {
+			l.head[h] = insert.id
+			insert.next[h] = head.id
 			continue
 		}
 
-		node.next[h] = prev.next[h]
-		prev.next[h] = node.id
+		// otherwise, splice in |insert| at breadcrumbs[h]
+		prev := l.getNode(breadcrumbs[h])
+		insert.next[h] = prev.next[h]
+		prev.next[h] = insert.id
 		l.putNode(prev)
 	}
-	l.putNode(node)
+	l.putNode(insert)
 
 	return
 }
@@ -138,54 +157,51 @@ func (l *List) Iter(cb func(key, val []byte)) {
 	}
 }
 
-func (l List) firstNode() skipNode {
+func (l *List) firstNode() skipNode {
 	return l.getNode(l.head[0])
 }
 
-func (l List) getNode(id nodeId) skipNode {
+func (l *List) getNode(id nodeId) skipNode {
 	return l.nodes[id]
 }
 
-func (l List) putNode(node skipNode) {
+func (l *List) putNode(node skipNode) {
 	l.nodes[node.id] = node
 }
 
-func (l List) compare(left, right skipNode) int {
-	if right.id == nullID {
+func (l *List) compare(left, right skipNode) int {
+	return l.compareKeys(left.key, right.key)
+}
+
+func (l *List) compareKeys(left, right []byte) int {
+	if right == nil {
+		// |right| is sentinel key
 		return -1
 	}
-	return l.cmp(left.key, right.key)
+	return l.cmp(left, right)
 }
 
-func makeNode(hasher hash.Hash64, key, val []byte) skipNode {
-	id := getHash(hasher, key)
-	return skipNode{
-		id:     id,
+func (l *List) makeNode(key, val []byte) (n skipNode) {
+	n = skipNode{
+		id:     nodeId(len(l.nodes)),
 		key:    key,
 		val:    val,
-		height: getHeight(id),
+		height: rollHeight(l.src),
 	}
-}
+	l.nodes = append(l.nodes, n)
 
-func getHash(h hash.Hash64, key []byte) (id nodeId) {
-	id = nullID
-	for id == nullID {
-		// if we roll |nullID|, keep hashing
-		_, _ = h.Write(key)
-		id = nodeId(h.Sum64())
-	}
-	h.Reset()
 	return
 }
 
 const (
-	pattern1 = uint64(1<<2 - 1)
-	pattern2 = uint64(1<<4 - 1)
-	pattern3 = uint64(1<<6 - 1)
-	pattern4 = uint64(1<<8 - 1)
+	pattern1 = uint64(1<<3 - 1)
+	pattern2 = uint64(1<<6 - 1)
+	pattern3 = uint64(1<<9 - 1)
+	pattern4 = uint64(1<<12 - 1)
 )
 
-func getHeight(id nodeId) (h uint64) {
+func rollHeight(r rand.Source) (h uint8) {
+	roll := r.Int63()
 	patterns := []uint64{
 		pattern1,
 		pattern2,
@@ -194,7 +210,7 @@ func getHeight(id nodeId) (h uint64) {
 	}
 
 	for _, pat := range patterns {
-		if uint64(id)&pat != pat {
+		if uint64(roll)&pat != pat {
 			break
 		}
 		h++
