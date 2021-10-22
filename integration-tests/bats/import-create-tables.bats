@@ -141,6 +141,33 @@ DELIM
     [ ! "${lines[2]}" = "1,1,2,3,4,5" ]
 }
 
+@test "import-create-tables: use -f to overwrite data in existing table with fk constraints" {
+    cat <<DELIM > other.csv
+pk,c1,c2,c3,c4,c5
+8,1,2,3,4,5
+9,1,2,3,4,5
+DELIM
+    dolt table import -c --pk=pk test 1pk5col-ints.csv
+    run dolt sql -q "create table fktest(id int not null, tpk int unsigned, c2 int, primary key(id), foreign key (tpk) references test(pk))"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "insert into fktest values (1, 0, 1)"
+    [ "$status" -eq 0 ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "fktest" ]] || false
+    run dolt table import -c --pk=id fktest 1pk5col-ints.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fktest already exists. Use -f to overwrite." ]] || false
+    run dolt table import -f -c --pk=pk fktest other.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt schema show fktest
+    skip "cannot overwrite a table with foreign key constraints"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "fktest @ working" ]] || false
+}
+
 @test "import-create-tables: try to create a table with a bad csv" {
     run dolt table import -c --pk=pk test `batshelper bad.csv`
     [ "$status" -eq 1 ]
