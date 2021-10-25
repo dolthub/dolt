@@ -67,6 +67,10 @@ func MakeNewMap(ctx context.Context, nrw NodeReadWriter, keyDesc, valDesc val.Tu
 	return m, nil
 }
 
+func (m Map) Mutate() MutableMap {
+	return newMutableMap(m)
+}
+
 func (m Map) Count() uint64 {
 	return m.root.cumulativeCount() / 2
 }

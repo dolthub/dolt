@@ -37,17 +37,24 @@ func NewTupleMap(keyDesc TupleDesc, tups ...Tuple) (tm TupleMap) {
 	return
 }
 
+func (tm TupleMap) compare(left, right []byte) int {
+	return int(tm.keyDesc.Compare(left, right))
+}
+
 func (tm TupleMap) Count() int {
 	return tm.list.Count()
 }
 
-func (tm TupleMap) Get(key Tuple) (val Tuple) {
-	val, _ = tm.list.Get(key)
-	return
+func (tm TupleMap) Get(key Tuple) (val Tuple, ok bool) {
+	return tm.list.Get(key)
 }
 
-func (tm TupleMap) Put(key, val Tuple) {
-	tm.list.Put(key, val)
+func (tm TupleMap) Put(key, val Tuple) (ok bool) {
+	ok = !tm.list.Full()
+	if ok {
+		tm.list.Put(key, val)
+	}
+	return
 }
 
 func (tm TupleMap) Has(key Tuple) (ok bool) {
@@ -55,6 +62,29 @@ func (tm TupleMap) Has(key Tuple) (ok bool) {
 	return
 }
 
-func (tm TupleMap) compare(left, right []byte) int {
-	return int(tm.keyDesc.Compare(left, right))
+func (tm TupleMap) Iter() KeyValueIter {
+	return KeyValueIter{ListIter: tm.list.Iter()}
+}
+
+type KeyValueIter struct {
+	*skip.ListIter
+	idx int
+}
+
+func (it KeyValueIter) Count() int {
+	return it.ListIter.Count()
+}
+
+func (it KeyValueIter) Next() (key, val Tuple) {
+	key, val = it.Next()
+	it.idx++
+	return
+}
+
+func (it KeyValueIter) Remaining() int {
+	return it.Count() - it.idx
+}
+
+func (it KeyValueIter) Close() error {
+	return nil
 }
