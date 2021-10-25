@@ -148,11 +148,13 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 	}
 
 	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
-	switch err {
-	case doltdb.ErrIsAhead, doltdb.ErrUpToDate:
-		ctx.Warn(DoltMergeWarningCode, err.Error())
-	default:
-		return ws, noConflicts, err
+	if err != nil {
+		switch err {
+		case doltdb.ErrIsAhead, doltdb.ErrUpToDate:
+			ctx.Warn(DoltMergeWarningCode, err.Error())
+		default:
+			return ws, noConflicts, err
+		}
 	}
 
 	if canFF {
