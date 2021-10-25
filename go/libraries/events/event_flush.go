@@ -47,7 +47,7 @@ type Flusher interface {
 	Flush(ctx context.Context) error
 }
 
-// lockAndFlush locks the given lockPath and passes the flushCB to the filesys' Iter method
+// lockAndFlush locks the given lockPath and passes the flushCB to the filesys' IterAll method
 func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockPath string, fcb flushCB) error {
 	fsLock := filesys.CreateFilesysLock(fs, lockPath)
 
