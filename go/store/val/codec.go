@@ -15,8 +15,9 @@
 package val
 
 import (
+	"bytes"
 	"encoding/binary"
-	"time"
+	"math"
 )
 
 type ByteSize uint16
@@ -25,13 +26,6 @@ type Encoding uint8
 
 func FixedWidth(t Encoding) bool {
 	return t >= sentinel
-}
-
-func SizeOf(enc Encoding) ByteSize {
-	if !FixedWidth(enc) {
-		panic("cannot sizeOf variable width Encoding")
-	}
-	return encodingSize[enc]
 }
 
 // Fixed Width Encodings
@@ -49,8 +43,8 @@ const (
 	Uint64Enc  Encoding = 10
 	Float32Enc Encoding = 11
 	Float64Enc Encoding = 12
-	TimeEnc    Encoding = 13
 
+	// TimeEnc    Encoding = 13
 	// TimestampEnc
 	// DateEnc
 	// TimeEnc
@@ -80,21 +74,23 @@ const (
 	// GeometryEnc
 )
 
-var encodingSize = [14]ByteSize{
-	1, // NullEnc
-	1, // Int8Enc
-	1, // Uint8Enc
-	2, // Int16Enc
-	2, // Uint16Enc
-	3, // Int24Enc
-	3, // Uint24Enc
-	4, // Int32Enc
-	4, // Uint32Enc
-	8, // Int64Enc
-	8, // Uint64Enc
-	4, // Float32Enc
-	8, // Float64Enc
-	4, // TimeEnc
+func rawComparisonMap(enc Encoding) (indexes []int, ok bool) {
+	// todo(andy): add fixed width char and byte encodings
+	lookup := map[Encoding][]int{
+		Int8Enc:   {0},
+		Uint8Enc:  {0},
+		Int16Enc:  {1, 0},
+		Uint16Enc: {1, 0},
+		Int24Enc:  {2, 1, 0},
+		Uint24Enc: {2, 1, 0},
+		Int32Enc:  {3, 2, 1, 0},
+		Uint32Enc: {3, 2, 1, 0},
+		Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},
+		Uint64Enc: {7, 6, 5, 4, 3, 2, 1, 0},
+	}
+
+	indexes, ok = lookup[enc]
+	return
 }
 
 func readBool(val []byte) bool {
@@ -103,50 +99,225 @@ func readBool(val []byte) bool {
 func readInt8(val []byte) int8 {
 	return int8(val[0])
 }
+
 func readUint8(val []byte) uint8 {
 	return val[0]
 }
+
 func readInt16(val []byte) int16 {
 	return int16(binary.LittleEndian.Uint16(val))
-
 }
+
 func readUint16(val []byte) uint16 {
 	return binary.LittleEndian.Uint16(val)
-
 }
+
 func readInt32(val []byte) int32 {
 	return int32(binary.LittleEndian.Uint32(val))
-
 }
+
 func readUint32(val []byte) uint32 {
 	return binary.LittleEndian.Uint32(val)
-
 }
+
 func readInt64(val []byte) int64 {
 	return int64(binary.LittleEndian.Uint64(val))
-
 }
+
 func readUint64(val []byte) uint64 {
 	return binary.LittleEndian.Uint64(val)
-
 }
+
 func readFloat32(val []byte) float32 {
-	panic("unimplemented")
-
+	return math.Float32frombits(readUint32(val))
 }
+
 func readFloat64(val []byte) float64 {
-	panic("unimplemented")
+	return math.Float64frombits(readUint64(val))
 }
 
-func readTime(val []byte) time.Time {
-	panic("unimplemented")
-}
-
-func readString(val []byte) string {
+func readString(val []byte, coll Collation) string {
 	// todo(andy): fix allocation
 	return string(val)
 }
 
-func readBytes(val []byte) []byte {
+func readBytes(val []byte, coll Collation) []byte {
 	return val
+}
+
+func writeBool(buf []byte, val bool) {
+	if val {
+		buf[0] = byte(1)
+	} else {
+		buf[0] = byte(0)
+	}
+}
+
+func writeInt8(buf []byte, val int8) {
+	buf[0] = byte(val)
+}
+
+func writeUint8(buf []byte, val uint8) {
+	buf[0] = byte(val)
+}
+
+func writeInt16(buf []byte, val int16) {
+	binary.LittleEndian.PutUint16(buf, uint16(val))
+}
+
+func writeUint16(buf []byte, val uint16) {
+	binary.LittleEndian.PutUint16(buf, val)
+}
+
+func writeInt32(buf []byte, val int32) {
+	binary.LittleEndian.PutUint32(buf, uint32(val))
+}
+
+func writeUint32(buf []byte, val uint32) {
+	binary.LittleEndian.PutUint32(buf, val)
+}
+
+func writeInt64(buf []byte, val int64) {
+	binary.LittleEndian.PutUint64(buf, uint64(val))
+}
+
+func writeUint64(buf []byte, val uint64) {
+	binary.LittleEndian.PutUint64(buf, val)
+}
+
+func writeFloat32(buf []byte, val float32) {
+	binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
+}
+
+func writeFloat64(buf []byte, val float64) {
+	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
+}
+
+func writeString(buf []byte, val string, coll Collation) {
+	copy(buf, val)
+}
+
+func writeBytes(buf, val []byte, coll Collation) {
+	copy(buf, val)
+}
+
+// false is less that true
+func compareBool(l, r bool) int {
+	if l == r {
+		return 0
+	}
+	if !l && r {
+		return -1
+	}
+	return 1
+}
+
+func compareInt8(l, r int8) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareUint8(l, r uint8) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareInt16(l, r int16) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareUint16(l, r uint16) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareInt32(l, r int32) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareUint32(l, r uint32) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareInt64(l, r int64) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareUint64(l, r uint64) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareFloat32(l, r float32) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareFloat64(l, r float64) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func compareString(l, r string, coll Collation) int {
+	// todo(andy): collations
+	return bytes.Compare([]byte(l), []byte(r))
+}
+
+func compareBytes(l, r []byte, coll Collation) int {
+	// todo(andy): collations
+	return bytes.Compare(l, r)
 }
