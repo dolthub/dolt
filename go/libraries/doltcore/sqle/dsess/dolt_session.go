@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,19 +38,19 @@ func NewDoltSession(sess *Session, conf config.ReadWriteConfig) *DoltSession {
 
 // PersistGlobal implements sql.PersistableSession
 func (s *DoltSession) PersistGlobal(sysVarName string, value interface{}) error {
-	sysVar, _, err := validatePersistedSysVar(sysVarName)
+	sysVar, _, err := validatePersistableSysVar(sysVarName)
 	if err != nil {
 		return err
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return setConfigValue(s.globalsConf, sysVar.Name, value)
+	return setPersistedValue(s.globalsConf, sysVar.Name, value)
 }
 
 // RemovePersistedGlobal implements sql.PersistableSession
 func (s *DoltSession) RemovePersistedGlobal(sysVarName string) error {
-	sysVar, _, err := validatePersistedSysVar(sysVarName)
+	sysVar, _, err := validatePersistableSysVar(sysVarName)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (s *DoltSession) NewPersistedSystemVariables() ([]sql.SystemVariable, error
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic
-func validatePersistedSysVar(name string) (sql.SystemVariable, interface{}, error) {
+func validatePersistableSysVar(name string) (sql.SystemVariable, interface{}, error) {
 	sysVar, val, ok := sql.SystemVariables.GetGlobal(name)
 	if !ok {
 		return sql.SystemVariable{}, nil, sql.ErrUnknownSystemVariable.New(name)
@@ -97,8 +97,8 @@ func validatePersistedSysVar(name string) (sql.SystemVariable, interface{}, erro
 	return sysVar, val, nil
 }
 
-// setConfigValue casts and persists a key value pair assuming thread safety
-func setConfigValue(conf config.WritableConfig, key string, value interface{}) error {
+// setPersistedValue casts and persists a key value pair assuming thread safety
+func setPersistedValue(conf config.WritableConfig, key string, value interface{}) error {
 	switch v := value.(type) {
 	case int:
 		return config.SetInt(conf, key, int64(v))
@@ -162,7 +162,7 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 		return nil, err
 	}
 
-	_, value, err := validatePersistedSysVar(k)
+	_, value, err := validatePersistableSysVar(k)
 	if err != nil {
 		return nil, err
 	}
