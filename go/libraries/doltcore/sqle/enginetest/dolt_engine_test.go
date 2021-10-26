@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
@@ -454,15 +455,16 @@ func TestAddDropPks(t *testing.T) {
 
 func TestPersist(t *testing.T) {
 	harness := newDoltHarness(t)
-	newPersistableSession := func(ctx *sql.Context) sql.PersistableSession {
-		dEnv := dtestutils.CreateTestEnv()
-		//pro := sqle.NewDoltDatabaseProvider(dEnv.Config)
-		localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
-		if !ok {
 
-		}
-		globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+	dEnv := dtestutils.CreateTestEnv()
+	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
+	require.True(t, ok)
+	globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+
+	newPersistableSession := func(ctx *sql.Context) sql.PersistableSession {
 		session := dsess.NewDoltSession(ctx.Session.(*dsess.DoltSession).Session, globals)
+		err := session.RemoveAllPersistedGlobals()
+		require.NoError(t, err)
 		return session
 	}
 	enginetest.TestPersist(t, harness, newPersistableSession)

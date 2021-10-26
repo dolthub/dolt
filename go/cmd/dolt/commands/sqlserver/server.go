@@ -129,20 +129,6 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return nil, err
 	}
 
-	// load persisted globals
-	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
-	if !ok {
-		return nil, config.ErrUnknownConfig
-	}
-	globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-	sql.InitSystemVariables()
-	persistedGlobalVars, err := dsess.GetPersistedGlobals(globals)
-	if err != nil {
-		return nil, err
-	}
-
-	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
-
 	serverConf := server.Config{
 		Protocol:               "tcp",
 		Address:                hostPort,
@@ -156,11 +142,22 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		// to the value of mysql that we support.
 	}
 
+	sql.InitSystemVariables()
 	if !serverConf.NoDefaults {
+		localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
+		if !ok {
+			return nil, config.ErrUnknownConfig
+		}
+		globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+		persistedGlobalVars, err := dsess.GetPersistedGlobals(globals)
+		if err != nil {
+			return nil, err
+		}
+		sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+
 		serverConf, err = serverConf.WithGlobals()
 	}
 
-	// TODO: pass persisted config from dEnv
 	mySQLServer, startError = server.NewServer(
 		serverConf,
 		sqlEngine,

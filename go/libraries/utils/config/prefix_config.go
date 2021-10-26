@@ -21,6 +21,8 @@ import (
 
 // PrefixConfig decorates read and write access to the underlying config by appending a prefix to the accessed keys
 // on reads and writes
+// TODO: this is temporary to namespace server configs in .dolt/config.json
+// TODO: separate CLI and SQL configs and delete this class
 type PrefixConfig struct {
 	c      ReadWriteConfig
 	prefix string

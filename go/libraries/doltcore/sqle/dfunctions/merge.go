@@ -202,7 +202,7 @@ func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*do
 	return cm, cmh, nil
 }
 
-func getHead(ctx *sql.Context, sess dsess.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
+func getHead(ctx *sql.Context, sess *dsess.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
 	head, err := sess.GetHeadCommit(ctx, dbName)
 	if err != nil {
 		return nil, hash.Hash{}, nil, err

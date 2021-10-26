@@ -120,7 +120,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 // and merging into working set. Returns a new WorkingSet and whether there were merge conflicts. This currently
 // persists merge commits in the database, but expects the caller to update the working set.
 // TODO FF merging commit with constraint violations requires `constraint verify`
-func mergeIntoWorkingSet(ctx *sql.Context, sess dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec) (*doltdb.WorkingSet, int, error) {
+func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec) (*doltdb.WorkingSet, int, error) {
 	if conflicts, err := roots.Working.HasConflicts(ctx); err != nil {
 		return ws, noConflicts, err
 	} else if conflicts {
@@ -251,7 +251,7 @@ func executeFFMerge(ctx *sql.Context, squash bool, ws *doltdb.WorkingSet, dbData
 
 func executeNoFFMerge(
 	ctx *sql.Context,
-	dSess dsess.DoltSession,
+	dSess *dsess.DoltSession,
 	spec *merge.MergeSpec,
 	dbName string,
 	ws *doltdb.WorkingSet,
@@ -301,7 +301,7 @@ func executeNoFFMerge(
 	return ws, dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
 }
 
-func createMergeSpec(ctx *sql.Context, sess dsess.DoltSession, dbName string, apr *argparser.ArgParseResults, commitSpecStr string) (*merge.MergeSpec, error) {
+func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, apr *argparser.ArgParseResults, commitSpecStr string) (*merge.MergeSpec, error) {
 	ddb, ok := sess.GetDoltDB(ctx, dbName)
 
 	dbData, ok := sess.GetDbData(ctx, dbName)

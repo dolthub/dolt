@@ -226,8 +226,6 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 	}
 
 	return dsess, nil
-
-	//return sess, nil
 }
 
 // EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
@@ -237,67 +235,9 @@ func (sess *Session) EnableBatchedMode() {
 	sess.batchMode = Batched
 }
 
-// AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
-// other state tracking metadata.
-func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
-	db := dbState.Db
-	defineSystemVariables(db.Name())
-
-	sessionState := &DatabaseSessionState{}
-	sess.dbStates[db.Name()] = sessionState
-
-	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
-	//  the writer with one that errors out
-	sessionState.dbData = dbState.DbData
-	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
-	sessionState.dbData.Rsr = adapter
-	sessionState.dbData.Rsw = adapter
-	sessionState.readOnly, sessionState.detachedHead, sessionState.readReplica = dbState.ReadOnly, dbState.DetachedHead, dbState.ReadReplica
-
-	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
-	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
-
-	// WorkingSet is nil in the case of a read only, detached head DB
-	if dbState.WorkingSet != nil {
-		sessionState.WorkingSet = dbState.WorkingSet
-		workingRoot := dbState.WorkingSet.WorkingRoot()
-		// logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
-
-		err := sess.setRoot(ctx, db.Name(), workingRoot)
-		if err != nil {
-			return err
-		}
-	} else {
-		headRoot, err := dbState.HeadCommit.GetRootValue()
-		if err != nil {
-			return err
-		}
-
-		sessionState.headRoot = headRoot
-	}
-
-	// This has to happen after SetRoot above, since it does a stale check before its work
-	// TODO: this needs to be kept up to date as the working set ref changes
-	sessionState.headCommit = dbState.HeadCommit
-
-	// After setting the initial root we have no state to commit
-	sessionState.dirty = false
-
-	return sess.setSessionVarsForDb(ctx, db.Name())
-}
-
 // DSessFromSess retrieves a dolt session from a standard sql.Session
-func DSessFromSess(sess sql.Session) DoltSession {
-	//switch s := sess.(type) {
-	//case *DoltSession:
-	//	return *s
-	//case DoltSession:
-	//	return s
-	//default:
-	//	panic("invalid DoltSession")
-	//}
-	return *sess.(*DoltSession)
+func DSessFromSess(sess sql.Session) *DoltSession {
+	return sess.(*DoltSession)
 }
 
 // LookupDbState returns the session state for the database named
@@ -1125,6 +1065,56 @@ func (sess *Session) SetSessionVarDirectly(ctx *sql.Context, key string, value i
 func (sess *Session) HasDB(ctx *sql.Context, dbName string) bool {
 	_, ok, err := sess.LookupDbState(ctx, dbName)
 	return ok && err == nil
+}
+
+// AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
+// other state tracking metadata.
+func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
+	db := dbState.Db
+	defineSystemVariables(db.Name())
+
+	sessionState := &DatabaseSessionState{}
+	sess.dbStates[db.Name()] = sessionState
+
+	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
+	//  the writer with one that errors out
+	sessionState.dbData = dbState.DbData
+	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
+	sessionState.dbData.Rsr = adapter
+	sessionState.dbData.Rsw = adapter
+	sessionState.readOnly, sessionState.detachedHead, sessionState.readReplica = dbState.ReadOnly, dbState.DetachedHead, dbState.ReadReplica
+
+	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
+	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
+	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
+
+	// WorkingSet is nil in the case of a read only, detached head DB
+	if dbState.WorkingSet != nil {
+		sessionState.WorkingSet = dbState.WorkingSet
+		workingRoot := dbState.WorkingSet.WorkingRoot()
+		// logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
+
+		err := sess.setRoot(ctx, db.Name(), workingRoot)
+		if err != nil {
+			return err
+		}
+	} else {
+		headRoot, err := dbState.HeadCommit.GetRootValue()
+		if err != nil {
+			return err
+		}
+
+		sessionState.headRoot = headRoot
+	}
+
+	// This has to happen after SetRoot above, since it does a stale check before its work
+	// TODO: this needs to be kept up to date as the working set ref changes
+	sessionState.headCommit = dbState.HeadCommit
+
+	// After setting the initial root we have no state to commit
+	sessionState.dirty = false
+
+	return sess.setSessionVarsForDb(ctx, db.Name())
 }
 
 // CreateTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing

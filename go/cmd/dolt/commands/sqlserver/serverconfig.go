@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
@@ -104,10 +102,8 @@ type ServerConfig interface {
 	TLSCert() string
 	// RequireSecureTransport is true if the server should reject non-TLS connections.
 	RequireSecureTransport() bool
-	// NoDefaults
+	// NoDefaults is true if we do not load persisted globals
 	NoDefaults() bool
-	// WithDefaults overrides values from default config
-	WithDefaults(config.ReadableConfig) (ServerConfig, error)
 }
 
 type commandLineServerConfig struct {
@@ -198,12 +194,6 @@ func (cfg *commandLineServerConfig) TLSCert() string {
 
 func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 	return cfg.requireSecureTransport
-}
-
-func (cfg *commandLineServerConfig) WithDefaults(conf config.ReadableConfig) (ServerConfig, error) {
-	// TODO load defaults
-
-	return cfg, nil
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in

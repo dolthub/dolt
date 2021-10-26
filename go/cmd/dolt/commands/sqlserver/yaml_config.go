@@ -15,7 +15,6 @@
 package sqlserver
 
 import (
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -23,7 +22,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 func strPtr(s string) *string {
@@ -304,20 +302,4 @@ func (cfg YAMLConfig) NoDefaults() bool {
 		return false
 	}
 	return *cfg.BehaviorConfig.NoDefaults
-}
-
-func (cfg YAMLConfig) WithDefaults(config config.ReadableConfig) (ServerConfig, error) {
-	// TODO load all defaults
-	if val := config.GetStringOrDefault(timeoutFlag, ""); val != "" {
-		if t, err := strconv.ParseUint(val, 10, 64); err != nil {
-			*cfg.ListenerConfig.ReadTimeoutMillis = t * 1000
-			*cfg.ListenerConfig.WriteTimeoutMillis = t * 1000
-		}
-	}
-	if val := config.GetStringOrDefault(maxConnectionsFlag, ""); val != "" {
-		if mc, err := strconv.ParseUint(val, 10, 64); err != nil {
-			*cfg.ListenerConfig.MaxConnections = mc
-		}
-	}
-	return cfg, nil
 }

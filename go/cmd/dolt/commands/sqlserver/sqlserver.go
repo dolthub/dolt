@@ -27,9 +27,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/config"
 )
 
 const (
@@ -206,18 +204,6 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requires
 	}
 	if err != nil {
 		return nil, err
-	}
-
-	if !conf.NoDefaults() {
-		local, ok := dEnv.Config.GetConfig(env.LocalConfig)
-		if !ok {
-			return nil, config.ErrNoConfig
-		}
-		defaults := config2.NewPrefixConfig(local, env.ServerConfigPrefix)
-		conf, err = conf.WithDefaults(defaults)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return conf, nil
