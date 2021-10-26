@@ -1357,6 +1357,7 @@ func TestMergeableIndexes(t *testing.T) {
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
 			session := dsess.DSessFromSess(sqlCtx.Session)
+
 			dbState := getDbState(t, db, denv)
 			err := session.AddDB(sqlCtx, dbState)
 
@@ -1565,6 +1566,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
 			session := dsess.DSessFromSess(sqlCtx.Session)
+
 			dbState := getDbState(t, db, denv)
 			err := session.AddDB(sqlCtx, dbState)
 			require.NoError(t, err)

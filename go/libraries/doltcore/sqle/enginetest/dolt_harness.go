@@ -127,7 +127,7 @@ func (d *DoltHarness) NewContext() *sql.Context {
 func (d *DoltHarness) NewSession() *sql.Context {
 	states := make([]dsess.InitialDbState, len(d.databases))
 	for i, db := range d.databases {
-		states[i] = getDbState(d.t, db, d.env, d.databaseGlobalStates[i])
+		states[i] = getDbState(d.t, db, d.env)
 	}
 	dbs := dsqleDBsAsSqlDBs(d.databases)
 	pro := d.NewDatabaseProvider(dbs...)
@@ -196,7 +196,7 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	return sqle.NewDoltDatabaseProvider(d.env.Config, dbs...)
 }
 
-func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState globalstate.GlobalState) dsess.InitialDbState {
+func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()

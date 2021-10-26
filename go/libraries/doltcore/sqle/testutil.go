@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/store/config"
 )
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
@@ -99,9 +98,10 @@ func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, stateme
 // NewTestSQLCtx returns a new *sql.Context with a default DoltSession, a new IndexRegistry, and a new ViewRegistry
 func NewTestSQLCtx(ctx context.Context) *sql.Context {
 	session := dsess.DefaultSession()
+	dsess := dsess.NewDoltSession(session, config2.NewMapConfig(make(map[string]string)))
 	sqlCtx := sql.NewContext(
 		ctx,
-		sql.WithSession(session),
+		sql.WithSession(dsess),
 	).WithCurrentDB("dolt")
 
 	return sqlCtx
@@ -112,13 +112,6 @@ func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Data
 	engine := sqle.NewDefault(NewDoltDatabaseProvider(dEnv.Config, db))
 
 	sqlCtx := NewTestSQLCtx(ctx)
-
-	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
-	if !ok {
-		return nil, nil, config.ErrNoConfig
-	}
-	globals := config2.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-	sqlCtx.Session = dsess.NewDoltSession(sqlCtx.Session.(*dsess.Session), globals)
 
 	err := dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
 	if err != nil {

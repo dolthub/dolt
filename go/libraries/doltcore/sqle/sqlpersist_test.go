@@ -126,5 +126,4 @@ func testPersistQuery(t *testing.T, test PersistTest) {
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)
-	//assertSchemasEqual(t, mustSqlSchema(test.ExpectedSchema), sch)
 }
