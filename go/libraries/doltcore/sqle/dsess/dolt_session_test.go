@@ -15,11 +15,13 @@
 package dsess
 
 import (
-	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"testing"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/src-d/go-errors.v1"
-	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 func TestDoltSessionInit(t *testing.T) {
@@ -43,21 +45,21 @@ func TestNewPersistedSystemVariables(t *testing.T) {
 }
 
 func TestValidatePeristableSystemVar(t *testing.T) {
-	tests := []struct{
+	tests := []struct {
 		Name string
-		Err *errors.Kind
+		Err  *errors.Kind
 	}{
 		{
 			Name: "max_connections",
-			Err: nil,
+			Err:  nil,
 		},
 		{
 			Name: "init_file",
-			Err: sql.ErrSystemVariableReadOnly,
+			Err:  sql.ErrSystemVariableReadOnly,
 		},
 		{
 			Name: "unknown",
-			Err: sql.ErrUnknownSystemVariable,
+			Err:  sql.ErrUnknownSystemVariable,
 		},
 	}
 
@@ -74,69 +76,69 @@ func TestValidatePeristableSystemVar(t *testing.T) {
 }
 
 func TestSetPersistedValue(t *testing.T) {
-	tests := []struct{
-		Name string
-		Value interface{}
+	tests := []struct {
+		Name        string
+		Value       interface{}
 		ExpectedRes interface{}
-		Err *errors.Kind
+		Err         *errors.Kind
 	}{
 		{
-			Name: "int",
+			Name:  "int",
 			Value: 7,
 		},
 		{
-			Name: "int8",
+			Name:  "int8",
 			Value: int8(7),
 		},
 		{
-			Name: "int16",
+			Name:  "int16",
 			Value: int16(7),
 		},
 		{
-			Name: "int32",
+			Name:  "int32",
 			Value: int32(7),
 		},
 		{
-			Name: "int64",
+			Name:  "int64",
 			Value: int64(7),
 		},
 		{
-			Name: "uint",
+			Name:  "uint",
 			Value: uint(7),
 		},
 		{
-			Name: "uint8",
+			Name:  "uint8",
 			Value: uint8(7),
 		},
 		{
-			Name: "uint16",
+			Name:  "uint16",
 			Value: uint16(7),
 		},
 		{
-			Name: "uint32",
+			Name:  "uint32",
 			Value: uint32(7),
 		},
 		{
-			Name: "uint64",
+			Name:  "uint64",
 			Value: uint64(7),
 		},
 		{
-			Name: "float32",
-			Value: float32(7),
+			Name:        "float32",
+			Value:       float32(7),
 			ExpectedRes: "7.00000000",
 		},
 		{
-			Name: "float64",
-			Value: float64(7),
+			Name:        "float64",
+			Value:       float64(7),
 			ExpectedRes: "7.00000000",
 		},
 		{
-			Name: "string",
+			Name:  "string",
 			Value: "7",
 		},
 		{
 			Value: complex64(7),
-			Err: sql.ErrInvalidType,
+			Err:   sql.ErrInvalidType,
 		},
 	}
 
@@ -156,25 +158,25 @@ func TestSetPersistedValue(t *testing.T) {
 }
 
 func TestGetPersistedValue(t *testing.T) {
-	tests := []struct{
-		Name string
+	tests := []struct {
+		Name        string
 		ExpectedRes interface{}
-		Err *errors.Kind
+		Err         *errors.Kind
 	}{
 		{
-			Name: "long_query_time",
+			Name:        "long_query_time",
 			ExpectedRes: float64(7),
 		},
 		{
-			Name: "tls_ciphersuites",
+			Name:        "tls_ciphersuites",
 			ExpectedRes: "7",
 		},
 		{
-			Name: "max_connections",
+			Name:        "max_connections",
 			ExpectedRes: int64(7),
 		},
 		{
-			Name: "tmp_table_size",
+			Name:        "tmp_table_size",
 			ExpectedRes: uint64(7),
 		},
 	}

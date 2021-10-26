@@ -20,7 +20,7 @@ teardown() {
     teardown_common
 }
 
-@test "sql-server: persist global variable before server startup" {
+@test "sql-server-config: persist global variable before server startup" {
     cd repo1
     echo '{"server.max_connections":"1000"}' > .dolt/config.json
     start_sql_server repo1
@@ -29,7 +29,7 @@ teardown() {
 
 }
 
-@test "sql-server: persist invalid global variable name before server startup" {
+@test "sql-server-config: persist invalid global variable name before server startup" {
     cd repo1
     echo '{"server.unknown":"1000"}' > .dolt/config.json
     run start_sql_server repo1
@@ -38,7 +38,7 @@ teardown() {
     [[ "$output" =~ "Unknown system variable 'unknown'" ]]
 }
 
-@test "sql-server: persist invalid global variable value before server startup" {
+@test "sql-server-config: persist invalid global variable value before server startup" {
     cd repo1
     echo '{"server.max_connections":"string"}' > .dolt/config.json
     run start_sql_server repo1
@@ -47,7 +47,7 @@ teardown() {
     [[ "$output" =~ "strconv.ParseInt: parsing \"string\": invalid syntax" ]]
 }
 
-@test "sql-server: persist global variable during server session" {
+@test "sql-server-config: persist global variable during server session" {
     cd repo1
     start_sql_server repo1
 
@@ -59,7 +59,7 @@ teardown() {
     [[ "$output" =~ "\"server.max_connections\":\"1000\"" ]]
 }
 
-@test "sql-server: persist only global variable during server session" {
+@test "sql-server-config: persist only global variable during server session" {
     cd repo1
     start_sql_server repo1
 
@@ -72,7 +72,7 @@ teardown() {
     [[ "$output" =~ "\"server.max_connections\":\"7777\"" ]]
 }
 
-@test "sql-server: persist invalid global variable name during server session" {
+@test "sql-server-config: persist invalid global variable name during server session" {
     cd repo1
     start_sql_server repo1
     run insert_query repo1 1 "SET @@PERSIST.unknown = 1000"
@@ -81,7 +81,7 @@ teardown() {
     [[ "$output" =~ "Unknown system variable 'unknown'" ]]
 }
 
-@test "sql-server: persist invalid global variable value during server session" {
+@test "sql-server-config: persist invalid global variable value during server session" {
     cd repo1
     start_sql_server repo1
     run insert_query repo1 1 "SET @@PERSIST.max_connections = 'string'"
@@ -90,7 +90,7 @@ teardown() {
     [[ "$output" =~ "Variable 'max_connections' can't be set to the value of 'string'" ]]
 }
 
-@test "sql-server: reset persisted variable" {
+@test "sql-server-config: reset persisted variable" {
     skip "TODO: parser support for RESET PERSIST"
     cd repo1
     start_sql_server repo1
@@ -103,7 +103,7 @@ teardown() {
     [[ ! "$output" =~ "\"server.max_connections\":\"1000\"" ]]
 }
 
-@test "sql-server: reset all persisted variables" {
+@test "sql-server-config: reset all persisted variables" {
     skip "TODO: parser support for RESET PERSIST"
     cd repo1
     start_sql_server repo1
