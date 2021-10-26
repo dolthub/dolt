@@ -53,7 +53,8 @@ type TableEditAccumulator interface {
 	MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error)
 }
 
-const flushThreshold = 256 * 1024
+// var for testing
+var flushThreshold int64 = 256 * 1024
 
 // inMemModifications represent row adds and deletes that have not been written to the underlying storage and only exist
 // in memory
@@ -311,6 +312,10 @@ func (tea *tableEditAccumulatorImpl) Rollback(ctx context.Context) error {
 
 // MaterializeEdits applies the in memory edits to the row data and returns types.Map
 func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *types.NomsBinFormat) (m types.Map, err error) {
+	// In the case where the current edits become so large that they need to be flushed to disk, the committed edits will also be flushed
+	// to disk first before the uncommitted edits.  When commit gets run now the uncommitted edits will then become committed edits,
+	// but they need to be applied after the flushed edits.  So in the loop below where we build the list of EditProviders the newly
+	// committed edits must be applied last.
 	err = tea.Commit(ctx, nbf)
 	if err != nil {
 		return types.EmptyMap, err
@@ -332,10 +337,10 @@ func (tea *tableEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 	}
 
 	eps := make([]types.EditProvider, 0, len(flushedEPs)+1)
-	eps = append(eps, committedEP)
 	for i := 0; i < len(flushedEPs); i++ {
 		eps = append(eps, flushedEPs[i].Edits)
 	}
+	eps = append(eps, committedEP)
 
 	defer func() {
 		for _, ep := range eps {

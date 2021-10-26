@@ -16,7 +16,6 @@ package edits
 
 import (
 	"context"
-	"sort"
 
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
@@ -223,23 +222,21 @@ func (ase *AsyncSortedEdits) mergeCollections() error {
 	return nil
 }
 
-// we pair collections so that as you perform many merges you end up with collections of edits that are similarly sized
 func pairCollections(colls []*KVPCollection) [][2]*KVPCollection {
 	numColls := len(colls)
 	pairs := make([][2]*KVPCollection, 0, numColls/2+1)
-	sort.Slice(colls, func(i, j int) bool {
-		return colls[i].Size() < colls[j].Size()
-	})
 
+	// These pairs need to come back in order because our sort is stable.
+	// If there is an odd number of collections, put the first element as a
+	// single non-merge collection pair at the front of the list.
 	if numColls%2 == 1 {
-		pairs = append(pairs, [2]*KVPCollection{colls[numColls-1], nil})
-
-		colls = colls[:numColls-1]
+		pairs = append(pairs, [2]*KVPCollection{colls[0], nil})
+		colls = colls[1:]
 		numColls -= 1
 	}
 
-	for i, j := 0, numColls-1; i < numColls/2; i, j = i+1, j-1 {
-		pairs = append(pairs, [2]*KVPCollection{colls[i], colls[j]})
+	for i := 0; i < numColls; i += 2 {
+		pairs = append(pairs, [2]*KVPCollection{colls[i], colls[i+1]})
 	}
 
 	return pairs
