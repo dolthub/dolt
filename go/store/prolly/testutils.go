@@ -79,6 +79,7 @@ func randomTree(t *testing.T, count, fields int) (Node, [][2]nodeItem, NodeReadW
 func randomTupleItems(t *testing.T, count, fields int) (items [][2]nodeItem) {
 	items = make([][2]nodeItem, count/2)
 	for i := range items {
+		// non-null keys
 		items[i][0] = nodeItem(randomTuple(fields, false))
 		items[i][1] = nodeItem(randomTuple(fields, true))
 		require.Equal(t, 0, compareRandomTuples(items[i][0], items[i][0]))

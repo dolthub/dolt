@@ -15,8 +15,7 @@
 package val
 
 import (
-	"bytes"
-	"time"
+	"fmt"
 )
 
 type Type struct {
@@ -32,12 +31,26 @@ type TupleDesc struct {
 }
 
 func NewTupleDescriptor(types ...Type) (td TupleDesc) {
-	return TupleDesc{types: types}
-}
+	td.types = types
 
-func NewRawTupleDescriptor(cmps []int, types ...Type) (td TupleDesc) {
-	td = NewTupleDescriptor(types...)
-	td.rawCompare = cmps
+	raw := true
+	offset := 0
+	for _, typ := range types {
+		mapping, ok := rawComparisonMap(typ.Enc)
+		if !ok {
+			raw = false
+			break
+		}
+		for i := range mapping {
+			mapping[i] += offset
+		}
+		td.rawCompare = append(td.rawCompare, mapping...)
+		offset += len(mapping)
+	}
+	if !raw {
+		td.rawCompare = nil
+	}
+
 	return
 }
 
@@ -127,19 +140,14 @@ func (td TupleDesc) GetFloat64(i int, tup Tuple) float64 {
 	return readFloat64(tup.GetField(i))
 }
 
-func (td TupleDesc) GetTime(i int, tup Tuple) time.Time {
-	td.expectEncoding(i, TimeEnc)
-	return readTime(tup.GetField(i))
-}
-
 func (td TupleDesc) GetString(i int, tup Tuple) string {
 	td.expectEncoding(i, StringEnc)
-	return readString(tup.GetField(i))
+	return readString(tup.GetField(i), td.types[i].Coll)
 }
 
 func (td TupleDesc) GetBytes(i int, tup Tuple) []byte {
 	td.expectEncoding(i, BytesEnc)
-	return readBytes(tup.GetField(i))
+	return readBytes(tup.GetField(i), td.types[i].Coll)
 }
 
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
@@ -166,8 +174,41 @@ const (
 )
 
 func compare(typ Type, left, right []byte) Comparison {
-	if typ.Coll != ByteOrderCollation {
-		panic("unknown collation")
+	var cmp int
+	switch typ.Enc {
+	case NullEnc:
+		panic("unimplemented")
+	case Int8Enc:
+		cmp = compareInt8(readInt8(left), readInt8(right))
+	case Uint8Enc:
+		cmp = compareUint8(readUint8(left), readUint8(right))
+	case Int16Enc:
+		cmp = compareInt16(readInt16(left), readInt16(right))
+	case Uint16Enc:
+		cmp = compareUint16(readUint16(left), readUint16(right))
+	case Int24Enc:
+		panic("unimplemented")
+	case Uint24Enc:
+		panic("unimplemented")
+	case Int32Enc:
+		cmp = compareInt32(readInt32(left), readInt32(right))
+	case Uint32Enc:
+		cmp = compareUint32(readUint32(left), readUint32(right))
+	case Int64Enc:
+		cmp = compareInt64(readInt64(left), readInt64(right))
+	case Uint64Enc:
+		cmp = compareUint64(readUint64(left), readUint64(right))
+	case Float32Enc:
+		cmp = compareFloat32(readFloat32(left), readFloat32(right))
+	case Float64Enc:
+		cmp = compareFloat64(readFloat64(left), readFloat64(right))
+	case StringEnc:
+		cmp = compareString(readString(left, typ.Coll), readString(right, typ.Coll), typ.Coll)
+	case BytesEnc:
+		cmp = compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
+	default:
+		panic(fmt.Sprintf("unknown encoding %d", typ.Enc))
 	}
-	return Comparison(bytes.Compare(left, right))
+
+	return Comparison(cmp)
 }
