@@ -144,17 +144,17 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	sql.InitSystemVariables()
 	if !serverConf.NoDefaults {
+		// without an active DoltSession, so must access system variables directly
 		localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
 		if !ok {
 			return nil, config.ErrUnknownConfig
 		}
 		globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-		persistedGlobalVars, err := dsess.GetPersistedGlobals(globals)
+		persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
 		if err != nil {
 			return nil, err
 		}
 		sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
-
 		serverConf, err = serverConf.WithGlobals()
 	}
 

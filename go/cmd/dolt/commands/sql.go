@@ -53,7 +53,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -1416,7 +1415,7 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 }
 
 type sqlEngine struct {
-	dbs map[string]dsqle.SqlDatabase
+	dbs            map[string]dsqle.SqlDatabase
 	sess           sql.Session
 	contextFactory func(ctx context.Context) (*sql.Context, error)
 	engine         *sqle.Engine
@@ -1477,18 +1476,12 @@ func newSqlEngine(
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
 	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
 
-	// initialize peristed globals
-	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
-	if !ok {
-		return nil, config.ErrUnknownConfig
-	}
-	globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+	// persisted globals
 	sql.InitSystemVariables()
-	persistedGlobalVars, err := dsess.GetPersistedGlobals(globals)
+	persistedGlobalVars, err := sess.NewPersistedSystemVariables()
 	if err != nil {
 		return nil, err
 	}
-
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 
 	// TODO: this should just be the session default like it is with MySQL

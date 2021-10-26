@@ -16,6 +16,7 @@ package dsess
 
 import (
 	"strconv"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -25,34 +26,37 @@ import (
 type DoltSession struct {
 	*Session
 	globalsConf config.ReadWriteConfig
+	mu          *sync.Mutex
 }
 
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 
 func NewDoltSession(sess *Session, conf config.ReadWriteConfig) *DoltSession {
-	return &DoltSession{Session: sess, globalsConf: conf}
+	return &DoltSession{Session: sess, globalsConf: conf, mu: &sync.Mutex{}}
 }
 
 // PersistGlobal implements sql.PersistableSession
 func (s *DoltSession) PersistGlobal(sysVarName string, value interface{}) error {
-	sysVar, _, err := validateSysVar(sysVarName)
+	sysVar, _, err := validatePersistedSysVar(sysVarName)
 	if err != nil {
 		return err
 	}
 
-	// TODO lock?
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return setConfigValue(s.globalsConf, sysVar.Name, value)
 }
 
 // RemovePersistedGlobal implements sql.PersistableSession
 func (s *DoltSession) RemovePersistedGlobal(sysVarName string) error {
-	sysVar, _, err := validateSysVar(sysVarName)
+	sysVar, _, err := validatePersistedSysVar(sysVarName)
 	if err != nil {
 		return err
 	}
 
-	// TODO lock?
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.globalsConf.Unset([]string{sysVar.Name})
 }
 
@@ -66,43 +70,23 @@ func (s *DoltSession) RemoveAllPersistedGlobals() error {
 		return false
 	})
 
-	// TODO lock?
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.globalsConf.Unset(allVars)
 }
 
+// RemoveAllPersistedGlobals implements sql.PersistableSession
 func (s *DoltSession) GetPersistedValue(k string) (interface{}, error) {
-	v, err := s.globalsConf.GetString(k)
-	if err != nil {
-		return nil, err
-	}
-
-	sysVar, value, err := validateSysVar(k)
-	if err != nil {
-		return nil, err
-	}
-
-	var res interface{}
-	switch value.(type) {
-	case int, int8, int16, int32, int64:
-		res, err = strconv.ParseInt(v, 10, 64)
-	case uint, uint8, uint16, uint32, uint64:
-		res, err = strconv.ParseUint(v, 10, 64)
-	case float32, float64:
-		res, err = strconv.ParseFloat(v, 64)
-	case string:
-		return v, nil
-	default:
-		return nil, sql.ErrInvalidType.New(value)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return sysVar.Type.Convert(res)
+	return getPersistedValue(s.globalsConf, k)
 }
 
-func validateSysVar(name string) (sql.SystemVariable, interface{}, error) {
+// NewPersistedSystemVariables returns a list of System Variables associated with the session
+func (s *DoltSession) NewPersistedSystemVariables() ([]sql.SystemVariable, error) {
+	return NewPersistedSystemVariables(s.globalsConf)
+}
+
+// validatePersistedSysVar checks whether a system variable exists and is dynamic
+func validatePersistedSysVar(name string) (sql.SystemVariable, interface{}, error) {
 	sysVar, val, ok := sql.SystemVariables.GetGlobal(name)
 	if !ok {
 		return sql.SystemVariable{}, nil, sql.ErrUnknownSystemVariable.New(name)
@@ -113,6 +97,7 @@ func validateSysVar(name string) (sql.SystemVariable, interface{}, error) {
 	return sysVar, val, nil
 }
 
+// setConfigValue casts and persists a key value pair assuming thread safety
 func setConfigValue(conf config.WritableConfig, key string, value interface{}) error {
 	switch v := value.(type) {
 	case int:
@@ -146,35 +131,20 @@ func setConfigValue(conf config.WritableConfig, key string, value interface{}) e
 	}
 }
 
-func GetPersistedGlobals(conf config.ReadableConfig) ([]sql.SystemVariable, error) {
+// NewPersistedSystemVariables returns system variables from the persisted config
+func NewPersistedSystemVariables(conf config.ReadableConfig) ([]sql.SystemVariable, error) {
 	allVars := make([]sql.SystemVariable, conf.Size())
 	i := 0
 	var err error
 	var sysVar sql.SystemVariable
-	var value interface{}
+	var def interface{}
 	conf.Iter(func(k, v string) bool {
-		sysVar, value, err = validateSysVar(k)
+		def, err = getPersistedValue(conf, k)
 		if err != nil {
 			return true
 		}
-
-		switch value.(type) {
-		case int, int8, int16, int32, int64:
-			sysVar.Default, err = strconv.ParseInt(v, 10, 64)
-		case uint, uint8, uint16, uint32, uint64:
-			sysVar.Default, err = strconv.ParseUint(v, 10, 64)
-		case float32, float64:
-			sysVar.Default, err = strconv.ParseFloat(v, 64)
-		case string:
-			sysVar.Default = v
-		default:
-			err = sql.ErrInvalidType.New(value)
-		}
-
-		if err != nil {
-			return true
-		}
-
+		sysVar, _, _ = sql.SystemVariables.GetGlobal(k)
+		sysVar.Default = def
 		allVars[i] = sysVar
 		i++
 		return false
@@ -183,4 +153,37 @@ func GetPersistedGlobals(conf config.ReadableConfig) ([]sql.SystemVariable, erro
 		return nil, err
 	}
 	return allVars, nil
+}
+
+// getPersistedValue reads and converts a config value to the associated SystemVariable type
+func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error) {
+	v, err := conf.GetString(k)
+	if err != nil {
+		return nil, err
+	}
+
+	_, value, err := validatePersistedSysVar(k)
+	if err != nil {
+		return nil, err
+	}
+
+	var res interface{}
+	switch value.(type) {
+	case int, int8, int16, int32, int64:
+		res, err = strconv.ParseInt(v, 10, 64)
+	case uint, uint8, uint16, uint32, uint64:
+		res, err = strconv.ParseUint(v, 10, 64)
+	case float32, float64:
+		res, err = strconv.ParseFloat(v, 64)
+	case string:
+		return v, nil
+	default:
+		return nil, sql.ErrInvalidType.New(value)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
