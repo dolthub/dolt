@@ -62,7 +62,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	require.NoError(t, err)
 	return &DoltHarness{
 		t:              t,
-		session:        &session,
+		session:        session,
 		skippedQueries: defaultSkippedQueries,
 	}
 }
@@ -121,7 +121,7 @@ func (d *DoltHarness) Parallelism() int {
 func (d *DoltHarness) NewContext() *sql.Context {
 	return sql.NewContext(
 		context.Background(),
-		sql.WithSession(*d.session))
+		sql.WithSession(d.session))
 }
 
 func (d *DoltHarness) NewSession() *sql.Context {
@@ -133,7 +133,7 @@ func (d *DoltHarness) NewSession() *sql.Context {
 	pro := d.NewDatabaseProvider(dbs...)
 
 	var err error
-	*d.session, err = dsess.NewSession(
+	d.session, err = dsess.NewSession(
 		enginetest.NewContext(d),
 		enginetest.NewBaseSession(),
 		pro.(dsess.RevisionDatabaseProvider),

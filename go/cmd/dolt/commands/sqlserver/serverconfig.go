@@ -17,8 +17,9 @@ package sqlserver
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/config"
 	"net"
+
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )

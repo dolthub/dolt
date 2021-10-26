@@ -18,17 +18,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	config2 "github.com/dolthub/dolt/go/store/config"
-	"github.com/dolthub/go-mysql-server/sql/config"
-	"github.com/fatih/color"
 	"strconv"
+
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/config"
 )
 
 const (
@@ -210,9 +211,9 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requires
 	if !conf.NoDefaults() {
 		local, ok := dEnv.Config.GetConfig(env.LocalConfig)
 		if !ok {
-			return nil, config2.ErrNoConfig
+			return nil, config.ErrNoConfig
 		}
-		defaults := config.NewPrefixConfig(local, env.ServerConfigPrefix)
+		defaults := config2.NewPrefixConfig(local, env.ServerConfigPrefix)
 		conf, err = conf.WithDefaults(defaults)
 		if err != nil {
 			return nil, err

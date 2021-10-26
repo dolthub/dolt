@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/config"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/sirupsen/logrus"
@@ -38,6 +37,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -129,30 +129,42 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return nil, err
 	}
 
+	// load persisted globals
 	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
-	defaultsConf := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-
 	if !ok {
 		return nil, config.ErrUnknownConfig
+	}
+	globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+	sql.InitSystemVariables()
+	persistedGlobalVars, err := dsess.GetPersistedGlobals(globals)
+	if err != nil {
+		return nil, err
+	}
+
+	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+
+	serverConf := server.Config{
+		Protocol:               "tcp",
+		Address:                hostPort,
+		Auth:                   userAuth,
+		ConnReadTimeout:        readTimeout,
+		ConnWriteTimeout:       writeTimeout,
+		MaxConnections:         serverConfig.MaxConnections(),
+		TLSConfig:              tlsConfig,
+		RequireSecureTransport: serverConfig.RequireSecureTransport(),
+		// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+		// to the value of mysql that we support.
+	}
+
+	if !serverConf.NoDefaults {
+		serverConf, err = serverConf.WithGlobals()
 	}
 
 	// TODO: pass persisted config from dEnv
 	mySQLServer, startError = server.NewServer(
-		server.Config{
-			Protocol:               "tcp",
-			Address:                hostPort,
-			Auth:                   userAuth,
-			ConnReadTimeout:        readTimeout,
-			ConnWriteTimeout:       writeTimeout,
-			MaxConnections:         serverConfig.MaxConnections(),
-			TLSConfig:              tlsConfig,
-			RequireSecureTransport: serverConfig.RequireSecureTransport(),
-			// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-			// to the value of mysql that we support.
-		},
+		serverConf,
 		sqlEngine,
 		newSessionBuilder(sqlEngine, dEnv.Config, pro, mrEnv, serverConfig.AutoCommit()),
-		defaultsConf,
 	)
 
 	if startError != nil {
@@ -196,13 +208,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 		if err != nil {
 			return nil, err
 		}
-
-		localConf, ok := dConf.GetConfig(env.LocalConfig)
-		if !ok {
-			return nil, config.ErrUnknownConfig
-		}
-		defaultsConf := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-		sql.InitSystemVariablesWithDefaults(defaultsConf)
 
 		err = doltSess.SetSessionVariable(tmpSqlCtx, sql.AutoCommitSessionVar, autocommit)
 		if err != nil {

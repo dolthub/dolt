@@ -15,7 +15,6 @@
 package sqlserver
 
 import (
-	"github.com/dolthub/go-mysql-server/sql/config"
 	"strconv"
 	"strings"
 	"unicode"
@@ -24,6 +23,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 func strPtr(s string) *string {

@@ -20,7 +20,11 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 func init() {
@@ -446,4 +450,20 @@ func TestTestReadOnlyDatabases(t *testing.T) {
 
 func TestAddDropPks(t *testing.T) {
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
+}
+
+func TestPersist(t *testing.T) {
+	harness := newDoltHarness(t)
+	newPersistableSession := func(ctx *sql.Context) sql.PersistableSession {
+		dEnv := dtestutils.CreateTestEnv()
+		//pro := sqle.NewDoltDatabaseProvider(dEnv.Config)
+		localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
+		if !ok {
+
+		}
+		globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+		session := dsess.NewDoltSession(ctx.Session.(*dsess.DoltSession).Session, globals)
+		return session
+	}
+	enginetest.TestPersist(t, harness, newPersistableSession)
 }

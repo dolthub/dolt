@@ -22,8 +22,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
-	"github.com/dolthub/go-mysql-server/sql/config"
 )
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
