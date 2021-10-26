@@ -15,10 +15,10 @@
 package doltdb
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -738,12 +738,13 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	empty, err := types.NewMap(ctx, root.VRW())
+	emptyProlly :=  prolly.NewEmptyMap(sch, root.VRW())
+	emptyRef, err := writeProllyMapAndGetRef(ctx, root.VRW(), emptyProlly)
 	if err != nil {
 		return nil, err
 	}
 
-	emptyRef, err := WriteValAndGetRef(ctx, root.VRW(), empty)
+	empty, err := types.NewMap(ctx, root.VRW())
 	if err != nil {
 		return nil, err
 	}
@@ -763,7 +764,7 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	tbl, err := NewTable(ctx, root.VRW(), schVal, empty, indexes, nil)
+	tbl, err := NewTable(ctx, root.VRW(), schVal, emptyProlly, indexes, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1235,40 +1236,6 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 	}
 
 	return nil
-}
-
-// DebugString returns a human readable string with the contents of this root. If |transitive| is true, row data from
-// all tables is also included. This method is very expensive for large root values, so |transitive| should only be used
-// when debugging tests.
-func (root *RootValue) DebugString(ctx context.Context, transitive bool) string {
-	var buf bytes.Buffer
-	err := types.WriteEncodedValue(ctx, &buf, root.valueSt)
-	if err != nil {
-		panic(err)
-	}
-
-	if transitive {
-		buf.WriteString("\nTables:")
-		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
-			buf.WriteString("\nName:")
-			buf.WriteString(name)
-			buf.WriteString("\n")
-
-			buf.WriteString("Data:\n")
-			data, err := table.GetRowData(ctx)
-			if err != nil {
-				panic(err)
-			}
-
-			err = types.WriteEncodedValue(ctx, &buf, data)
-			if err != nil {
-				panic(err)
-			}
-			return false, nil
-		})
-	}
-
-	return buf.String()
 }
 
 // MapTableHashes returns a map of each table name and hash.

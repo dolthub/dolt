@@ -17,6 +17,7 @@ package doltdocs
 import (
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"strconv"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -126,7 +127,7 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 			return nil, err
 		}
 
-		newDocsTbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
+		newDocsTbl, err := doltdb.NewTable(ctx, vrw, schVal, prolly.Map{}, empty, nil)
 		if err != nil {
 			return nil, err
 		}

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"regexp"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -84,13 +85,13 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map, autoIncVal types.Value) (*Table, error) {
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData prolly.Map, indexData types.Map, autoIncVal types.Value) (*Table, error) {
 	schemaRef, err := WriteValAndGetRef(ctx, vrw, schemaVal)
 	if err != nil {
 		return nil, err
 	}
 
-	rowDataRef, err := WriteValAndGetRef(ctx, vrw, rowData)
+	rowDataRef, err := writeProllyMapAndGetRef(ctx, vrw, rowData)
 	if err != nil {
 		return nil, err
 	}
@@ -433,8 +434,8 @@ func (t *Table) HashOf() (hash.Hash, error) {
 
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
-func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
-	rowDataRef, err := WriteValAndGetRef(ctx, t.vrw, updatedRows)
+func (t *Table) UpdateRows(ctx context.Context, updatedRows prolly.Map) (*Table, error) {
+	rowDataRef, err := writeProllyMapAndGetRef(ctx, t.vrw, updatedRows)
 
 	if err != nil {
 		return nil, err
@@ -450,23 +451,24 @@ func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, 
 }
 
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
-func (t *Table) GetRowData(ctx context.Context) (types.Map, error) {
-	val, _, err := t.tableStruct.MaybeGet(tableRowsKey)
-
+func (t *Table) GetRowData(ctx context.Context) (prolly.Map, error) {
+	sch, err := t.GetSchema(ctx)
 	if err != nil {
-		return types.EmptyMap, err
+		return prolly.Map{}, err
+	}
+
+	val, _, err := t.tableStruct.MaybeGet(tableRowsKey)
+	if err != nil {
+		return prolly.Map{}, err
 	}
 
 	rowMapRef := val.(types.Ref)
-
 	val, err = rowMapRef.TargetValue(ctx, t.vrw)
-
 	if err != nil {
-		return types.EmptyMap, err
+		return prolly.Map{}, err
 	}
 
-	rowMap := val.(types.Map)
-	return rowMap, nil
+	return prolly.MapFromValue(val, sch, t.vrw), nil
 }
 
 func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
@@ -563,36 +565,37 @@ func (t *Table) SetIndexData(ctx context.Context, indexesMap types.Map) (*Table,
 }
 
 // GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
-func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
+func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (prolly.Map, error) {
+	tblSch, err := t.GetSchema(ctx)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	sch := tblSch.Indexes().GetByName(indexName).Schema()
+
 	indexesMap, err := t.GetIndexData(ctx)
 	if err != nil {
-		return types.EmptyMap, err
+		return prolly.Map{}, err
 	}
 
 	indexMapRef, ok, err := indexesMap.MaybeGet(ctx, types.String(indexName))
 	if err != nil {
-		return types.EmptyMap, err
+		return prolly.Map{}, err
 	}
 	if !ok {
-		return types.EmptyMap, fmt.Errorf("index `%s` is missing its data", indexName)
+		return prolly.Map{}, fmt.Errorf("index `%s` is missing its data", indexName)
 	}
 
-	indexMap, err := indexMapRef.(types.Ref).TargetValue(ctx, t.vrw)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	return indexMap.(types.Map), nil
+	return prolly.MapFromValue(indexMapRef.(types.Ref), sch, t.vrw), nil
 }
 
 // SetIndexRowData replaces the current row data for the given index and returns an updated Table.
-func (t *Table) SetIndexRowData(ctx context.Context, indexName string, indexRowData types.Map) (*Table, error) {
+func (t *Table) SetIndexRowData(ctx context.Context, indexName string, indexRowData prolly.Map) (*Table, error) {
 	indexesMap, err := t.GetIndexData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	indexRowDataRef, err := WriteValAndGetRef(ctx, t.vrw, indexRowData)
+	indexRowDataRef, err := writeProllyMapAndGetRef(ctx, t.vrw, indexRowData)
 	if err != nil {
 		return nil, err
 	}
@@ -654,40 +657,8 @@ func (t *Table) RenameIndexRowData(ctx context.Context, oldIndexName, newIndexNa
 
 // VerifyIndexRowData verifies that the index with the given name's data matches what the index expects.
 func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error {
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-
-	index := sch.Indexes().GetByName(indexName)
-	if index == nil {
-		return fmt.Errorf("index `%s` does not exist", indexName)
-	}
-
-	indexesMap, err := t.GetIndexData(ctx)
-	if err != nil {
-		return err
-	}
-
-	indexMapRef, ok, err := indexesMap.MaybeGet(ctx, types.String(indexName))
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("index `%s` is missing its data", indexName)
-	}
-
-	indexMapValue, err := indexMapRef.(types.Ref).TargetValue(ctx, t.vrw)
-	if err != nil {
-		return err
-	}
-
-	iter, err := indexMapValue.(types.Map).Iterator(ctx)
-	if err != nil {
-		return err
-	}
-
-	return index.VerifyMap(ctx, iter, indexMapValue.(types.Map).Format())
+	// todo(andy)
+	return nil
 }
 
 func (t *Table) GetAutoIncrementValue(ctx context.Context) (types.Value, error) {
@@ -736,4 +707,8 @@ func (t *Table) SetAutoIncrementValue(val types.Value) (*Table, error) {
 	default:
 		return nil, fmt.Errorf("cannot set auto increment to non-numeric value")
 	}
+}
+
+func writeProllyMapAndGetRef(ctx context.Context, vrw types.ValueReadWriter, m prolly.Map) (types.Ref, error) {
+	return WriteValAndGetRef(ctx, vrw, prolly.ValueFromMap(m))
 }

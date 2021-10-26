@@ -30,6 +30,8 @@ const (
 	maxNodeDataSize = val.ByteSize(math.MaxUint16)
 )
 
+var emptyNode = Node([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0})
+
 type nodeItem []byte
 
 func (i nodeItem) size() val.ByteSize {

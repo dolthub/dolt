@@ -17,6 +17,7 @@ package rebase
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -370,7 +371,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		// so we don't need to copy the value here
 		var autoVal types.Value = nil
 
-		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, emptyMap, autoVal)
+		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, prolly.Map{}, emptyMap, autoVal)
 
 		if err != nil {
 			return nil, err

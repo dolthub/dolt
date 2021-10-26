@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"os"
 	"path/filepath"
 	"testing"
@@ -77,7 +78,7 @@ func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 	}
 
 	empty, _ := types.NewMap(context.Background(), vrw)
-	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData, empty, nil)
+	tbl, err := NewTable(context.Background(), vrw, schemaVal, prolly.Map{}, empty, nil)
 
 	if err != nil {
 		return nil, err

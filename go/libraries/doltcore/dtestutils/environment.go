@@ -16,6 +16,7 @@ package dtestutils
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -83,7 +84,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	require.NoError(t, err)
 	empty, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, prolly.Map{}, empty, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)

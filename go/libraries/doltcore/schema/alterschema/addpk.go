@@ -17,6 +17,7 @@ package alterschema
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -102,6 +103,8 @@ func rearrangeSchema(sch schema.Schema, cols []sql.IndexColumn) (schema.Schema, 
 }
 
 func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *doltdb.Table, newSchema schema.Schema, name string, opts editor.Options) (*doltdb.Table, error) {
+	panic("todo")
+
 	marshalledSchema, err := encoding.MarshalSchemaAsNomsValue(context.Background(), oldTable.ValueReadWriter(), newSchema)
 	if err != nil {
 		return nil, err
@@ -113,7 +116,7 @@ func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *do
 	}
 
 	// Create the new Table and rebuild all the indexes
-	newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), marshalledSchema, empty, empty, nil)
+	newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), marshalledSchema, prolly.Map{}, empty, nil)
 	if err != nil {
 		return nil, err
 	}

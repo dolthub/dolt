@@ -17,6 +17,7 @@ package schcmds
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -315,7 +316,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			}
 		}
 
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, empty, indexData, nil)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, prolly.Map{}, indexData, nil)
 		if err != nil {
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 		}
