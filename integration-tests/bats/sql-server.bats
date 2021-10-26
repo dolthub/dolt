@@ -1102,3 +1102,4 @@ while True:
 
     server_query repo1 1 "show tables" "Table\ntest"
 }
+
