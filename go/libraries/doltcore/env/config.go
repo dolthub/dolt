@@ -19,10 +19,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
@@ -68,6 +67,7 @@ const (
 
 const (
 	// ServerConfigPrefix is config namespace accessible by the SQL engine (ex: server.key)
+	// TODO fix the config UX and remove the prefix config shunt
 	ServerConfigPrefix = "server"
 )
 

@@ -203,20 +203,20 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 
-	var globals config.ReadWriteConfig
-	if localConf, ok := conf.GetConfig(env.LocalConfig); !ok {
-		ctx.Warn(NonpersistableSessionCode, "multi-db mode does not support persistable sessions")
-		globals = config.NewMapConfig(make(map[string]string))
-	} else {
-		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-	}
-
 	sess := &Session{
 		Session:  sqlSess,
 		username: username,
 		email:    email,
 		dbStates: make(map[string]*DatabaseSessionState),
 		provider: pro,
+	}
+
+	var globals config.ReadWriteConfig
+	if localConf, ok := conf.GetConfig(env.LocalConfig); !ok {
+		ctx.Warn(NonpersistableSessionCode, "multi-db mode does not support persistable sessions")
+		globals = config.NewMapConfig(make(map[string]string))
+	} else {
+		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
 	}
 
 	dsess := NewDoltSession(sess, globals)

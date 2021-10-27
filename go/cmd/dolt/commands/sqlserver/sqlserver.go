@@ -193,20 +193,10 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 }
 
 func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requiresRepo bool) (ServerConfig, error) {
-	cfgFile, ok := apr.GetValue(configFileFlag)
-
-	var conf ServerConfig
-	var err error
-	if ok {
-		conf, err = getYAMLServerConfig(dEnv.FS, cfgFile)
-	} else {
-		conf, err = getCommandLineServerConfig(dEnv, apr, requiresRepo)
+	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
+		return getYAMLServerConfig(dEnv.FS, cfgFile)
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	return conf, nil
+	return getCommandLineServerConfig(dEnv, apr, requiresRepo)
 }
 
 func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requiresRepo bool) (ServerConfig, error) {

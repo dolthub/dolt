@@ -46,9 +46,6 @@ type PersistTest struct {
 	ExpectedErr string
 	// Setup logic to run before executing this test, after initial tables have been created and populated
 	AdditionalSetup SetupFn
-	// Whether to skip this test on SqlEngine (go-mysql-server) execution.
-	// Over time, this should become false for every query.
-	SkipOnSqlEngine bool
 }
 
 const maxConnTag = 0
@@ -98,11 +95,6 @@ func TestExecutePersist(t *testing.T) {
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
 func testPersistQuery(t *testing.T, test PersistTest) {
-
-	if test.SkipOnSqlEngine {
-		t.Skip("Skipping test broken on SQL engine")
-	}
-
 	dEnv := dtestutils.CreateTestEnv()
 	CreateEmptyTestDatabase(dEnv, t)
 
