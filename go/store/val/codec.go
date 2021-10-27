@@ -17,10 +17,24 @@ package val
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 )
 
+type Type struct {
+	Enc      Encoding
+	Coll     Collation
+	Nullable bool
+}
+
 type ByteSize uint16
+
+type Collation uint16
+
+const (
+	NullCollation      Collation = 0
+	ByteOrderCollation Collation = 1
+)
 
 type Encoding uint8
 
@@ -73,25 +87,6 @@ const (
 	// ExpressionEnc
 	// GeometryEnc
 )
-
-func rawComparisonMap(enc Encoding) (indexes []int, ok bool) {
-	// todo(andy): add fixed width char and byte encodings
-	lookup := map[Encoding][]int{
-		Int8Enc:   {0},
-		Uint8Enc:  {0},
-		Int16Enc:  {1, 0},
-		Uint16Enc: {1, 0},
-		Int24Enc:  {2, 1, 0},
-		Uint24Enc: {2, 1, 0},
-		Int32Enc:  {3, 2, 1, 0},
-		Uint32Enc: {3, 2, 1, 0},
-		Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},
-		Uint64Enc: {7, 6, 5, 4, 3, 2, 1, 0},
-	}
-
-	indexes, ok = lookup[enc]
-	return
-}
 
 func readBool(val []byte) bool {
 	return val[0] == 1
@@ -199,6 +194,44 @@ func writeString(buf []byte, val string, coll Collation) {
 
 func writeBytes(buf, val []byte, coll Collation) {
 	copy(buf, val)
+}
+
+func compare(typ Type, left, right []byte) (cmp int) {
+	// todo(andy): handle NULLs
+
+	switch typ.Enc {
+	case Int8Enc:
+		cmp = compareInt8(readInt8(left), readInt8(right))
+	case Uint8Enc:
+		cmp = compareUint8(readUint8(left), readUint8(right))
+	case Int16Enc:
+		cmp = compareInt16(readInt16(left), readInt16(right))
+	case Uint16Enc:
+		cmp = compareUint16(readUint16(left), readUint16(right))
+	case Int24Enc:
+		panic("unimplemented")
+	case Uint24Enc:
+		panic("unimplemented")
+	case Int32Enc:
+		cmp = compareInt32(readInt32(left), readInt32(right))
+	case Uint32Enc:
+		cmp = compareUint32(readUint32(left), readUint32(right))
+	case Int64Enc:
+		cmp = compareInt64(readInt64(left), readInt64(right))
+	case Uint64Enc:
+		cmp = compareUint64(readUint64(left), readUint64(right))
+	case Float32Enc:
+		cmp = compareFloat32(readFloat32(left), readFloat32(right))
+	case Float64Enc:
+		cmp = compareFloat64(readFloat64(left), readFloat64(right))
+	case StringEnc:
+		cmp = compareString(readString(left, typ.Coll), readString(right, typ.Coll), typ.Coll)
+	case BytesEnc:
+		cmp = compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
+	default:
+		panic(fmt.Sprintf("unknown encoding %d", typ.Enc))
+	}
+	return
 }
 
 // false is less that true
@@ -320,4 +353,65 @@ func compareString(l, r string, coll Collation) int {
 func compareBytes(l, r []byte, coll Collation) int {
 	// todo(andy): collations
 	return bytes.Compare(l, r)
+}
+
+type comparisonMapping []int
+
+// compareRaw compares Tuples without accessing and decoding fields.
+func compareRaw(left, right Tuple, mapping comparisonMapping) Comparison {
+	var l, r byte
+	for _, idx := range mapping {
+		l, r = left[idx], right[idx]
+		if l != r {
+			break
+		}
+	}
+	if l > r {
+		return 1
+	}
+	if l < r {
+		return -1
+	}
+	return 0
+}
+
+func maybeGetRawComparison(types ...Type) comparisonMapping {
+	// todo(andy): add back
+	return nil
+
+	//var raw []int
+	//offset := 0
+	//for _, typ := range types {
+	//	mapping, ok := rawComparisonMap(typ.Enc)
+	//	if !ok {
+	//		// every type in |types| must be
+	//		// raw-comparable to use a mapping
+	//		return nil
+	//	}
+	//	for i := range mapping {
+	//		mapping[i] += offset
+	//	}
+	//	raw = append(raw, mapping...)
+	//	offset += len(mapping)
+	//}
+	//return raw
+}
+
+func rawComparisonMap(enc Encoding) (mapping []int, ok bool) {
+	// todo(andy): add fixed width char and byte encodings
+	lookup := map[Encoding][]int{
+		Int8Enc:   {0},
+		Uint8Enc:  {0},
+		Int16Enc:  {1, 0},
+		Uint16Enc: {1, 0},
+		Int24Enc:  {2, 1, 0},
+		Uint24Enc: {2, 1, 0},
+		Int32Enc:  {3, 2, 1, 0},
+		Uint32Enc: {3, 2, 1, 0},
+		Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},
+		Uint64Enc: {7, 6, 5, 4, 3, 2, 1, 0},
+	}
+
+	mapping, ok = lookup[enc]
+	return
 }

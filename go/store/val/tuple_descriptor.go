@@ -14,43 +14,28 @@
 
 package val
 
-import (
-	"fmt"
-)
-
-type Type struct {
-	Enc      Encoding
-	Coll     Collation
-	Nullable bool
-}
-
 type TupleDesc struct {
 	types []Type
-
-	rawCompare []int
+	raw   comparisonMapping
 }
 
+type Comparison int
+
+const (
+	GreaterCmp Comparison = 1
+	EqualCmp   Comparison = 0
+	LesserCmp  Comparison = -1
+)
+
 func NewTupleDescriptor(types ...Type) (td TupleDesc) {
-	td.types = types
-
-	raw := true
-	offset := 0
 	for _, typ := range types {
-		mapping, ok := rawComparisonMap(typ.Enc)
-		if !ok {
-			raw = false
-			break
+		if typ.Enc == 0 || typ.Coll == 0 {
+			panic("invalid type")
 		}
-		for i := range mapping {
-			mapping[i] += offset
-		}
-		td.rawCompare = append(td.rawCompare, mapping...)
-		offset += len(mapping)
-	}
-	if !raw {
-		td.rawCompare = nil
 	}
 
+	td.types = types
+	td.raw = maybeGetRawComparison(types...)
 	return
 }
 
@@ -59,29 +44,17 @@ func (td TupleDesc) count() int {
 }
 
 func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
-	if td.rawCompare != nil {
-		var l, r byte
-		for _, idx := range td.rawCompare {
-			l, r = left[idx], right[idx]
-			if l != r {
-				break
-			}
-		}
-		if l > r {
-			return 1
-		}
-		if l < r {
-			return -1
-		}
-		return 0
+	if td.raw != nil {
+		return compareRaw(left, right, td.raw)
 	}
 
 	for i, typ := range td.types {
-		cmp = compare(typ, left.GetField(i), right.GetField(i))
+		cmp = Comparison(compare(typ, left.GetField(i), right.GetField(i)))
 		if cmp != EqualCmp {
 			break
 		}
 	}
+
 	return
 }
 
@@ -157,58 +130,4 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 		}
 	}
 	panic("incorrect value encoding")
-}
-
-type Collation uint16
-
-const (
-	ByteOrderCollation Collation = 0
-)
-
-type Comparison int
-
-const (
-	GreaterCmp Comparison = 1
-	EqualCmp   Comparison = 0
-	LesserCmp  Comparison = -1
-)
-
-func compare(typ Type, left, right []byte) Comparison {
-	var cmp int
-	switch typ.Enc {
-	case NullEnc:
-		panic("unimplemented")
-	case Int8Enc:
-		cmp = compareInt8(readInt8(left), readInt8(right))
-	case Uint8Enc:
-		cmp = compareUint8(readUint8(left), readUint8(right))
-	case Int16Enc:
-		cmp = compareInt16(readInt16(left), readInt16(right))
-	case Uint16Enc:
-		cmp = compareUint16(readUint16(left), readUint16(right))
-	case Int24Enc:
-		panic("unimplemented")
-	case Uint24Enc:
-		panic("unimplemented")
-	case Int32Enc:
-		cmp = compareInt32(readInt32(left), readInt32(right))
-	case Uint32Enc:
-		cmp = compareUint32(readUint32(left), readUint32(right))
-	case Int64Enc:
-		cmp = compareInt64(readInt64(left), readInt64(right))
-	case Uint64Enc:
-		cmp = compareUint64(readUint64(left), readUint64(right))
-	case Float32Enc:
-		cmp = compareFloat32(readFloat32(left), readFloat32(right))
-	case Float64Enc:
-		cmp = compareFloat64(readFloat64(left), readFloat64(right))
-	case StringEnc:
-		cmp = compareString(readString(left, typ.Coll), readString(right, typ.Coll), typ.Coll)
-	case BytesEnc:
-		cmp = compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
-	default:
-		panic(fmt.Sprintf("unknown encoding %d", typ.Enc))
-	}
-
-	return Comparison(cmp)
 }
