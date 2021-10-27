@@ -15,6 +15,7 @@
 package config
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,5 +109,6 @@ func TestPrefixConfigIter(t *testing.T) {
 		keys = append(keys, k)
 		return false
 	})
+	sort.Strings(keys)
 	assert.Equal(t, []string{"k1", "k2"}, keys)
 }
