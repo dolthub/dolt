@@ -46,6 +46,8 @@ const (
 	DoltDefaultBranchKey          = "dolt_default_branch"
 )
 
+const warningCode = 1105
+
 var transactionMergeStomp = false
 
 type batchMode int8
@@ -201,11 +203,13 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 
-	localConf, ok := conf.GetConfig(env.LocalConfig)
-	if !ok {
-		return nil, errors.New("config not found")
+	var globals config.ReadWriteConfig
+	if localConf, ok := conf.GetConfig(env.LocalConfig); !ok {
+		ctx.Warn(warningCode, "multi-db mode does not support persistable sessions")
+		globals = config.NewMapConfig(make(map[string]string))
+	} else {
+		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
 	}
-	globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
 
 	sess := &Session{
 		Session:  sqlSess,

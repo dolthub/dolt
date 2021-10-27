@@ -404,6 +404,11 @@ func execBatch(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	for _, e := range mrEnv {
+		dEnv = e
+		break
+	}
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -1475,6 +1480,9 @@ func newSqlEngine(
 
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
 	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
+	if err != nil {
+		return nil, err
+	}
 
 	// persisted globals
 	sql.InitSystemVariables()
