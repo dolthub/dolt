@@ -147,7 +147,10 @@ func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (doltdocs.Docs, err
 	if err != nil {
 		return nil, err
 	}
+	return GetUnstagedDocsFromRoots(ctx, dEnv, roots)
+}
 
+func GetUnstagedDocsFromRoots(ctx context.Context, dEnv *env.DoltEnv, roots doltdb.Roots) (doltdocs.Docs, error) {
 	docsOnDisk, err := dEnv.DocsReadWriter().GetDocsOnDisk()
 	if err != nil {
 		return nil, err
