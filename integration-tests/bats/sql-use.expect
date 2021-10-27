@@ -1,0 +1,29 @@
+#!/usr/bin/expect
+
+set timeout 1
+spawn dolt sql
+expect {
+  "doltsql> " { send "use `doltsql/test`;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "doltsql/test> " { send "show tables;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "doltsql/test> " { send "use information_schema;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "information_schema> " { send "show tables;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "information_schema> " { send "DELIMITER $$ ;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
