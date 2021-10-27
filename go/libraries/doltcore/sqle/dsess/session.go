@@ -157,7 +157,7 @@ type DatabaseSessionState struct {
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.
-	Err                  error
+	Err error
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
@@ -204,7 +204,7 @@ type InitialDbState struct {
 	// usable to initialize a database at a revision specifier, for
 	// example. Adding this InitialDbState to a session will return this
 	// error.
-	Err          error
+	Err error
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
