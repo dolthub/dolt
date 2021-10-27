@@ -1417,7 +1417,7 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 
 type sqlEngine struct {
 	dbs            map[string]dsqle.SqlDatabase
-	sess           sql.Session
+	sess           *dsess.DoltSession
 	contextFactory func(ctx context.Context) (*sql.Context, error)
 	engine         *sqle.Engine
 	resultFormat   resultFormat
@@ -1503,7 +1503,7 @@ func newSqlEngine(
 	}, nil
 }
 
-func newSqlContext(sess sql.Session, cat sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
+func newSqlContext(sess *dsess.DoltSession, cat sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx,
 			sql.WithSession(sess),

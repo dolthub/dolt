@@ -235,7 +235,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 // we set manually with the one at the working set of the HEAD being rebased.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
 func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *sqlEngine, error) {
-	sess := dsess.NewDoltSession(dsess.DefaultSession(), &config.MapConfig{})
+	sess := dsess.NewDoltSession(dsess.DefaultSession(), config.NewMapConfig(make(map[string]string)))
 
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(sess),

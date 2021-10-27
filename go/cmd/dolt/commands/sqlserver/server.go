@@ -158,19 +158,6 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	//serverConf := server.Config{
-	//	Protocol:               "tcp",
-	//	Address:                hostPort,
-	//	Auth:                   userAuth,
-	//	ConnReadTimeout:        readTimeout,
-	//	ConnWriteTimeout:       writeTimeout,
-	//	MaxConnections:         serverConfig.MaxConnections(),
-	//	TLSConfig:              tlsConfig,
-	//	RequireSecureTransport: serverConfig.RequireSecureTransport(),
-	//	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-	//	// to the value of mysql that we support.
-	//}
-
 	mySQLServer, startError = server.NewServer(
 		serverConf,
 		sqlEngine,
@@ -206,7 +193,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 		tmpSqlCtx := sql.NewEmptyContext()
 
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
-		//mysqlSess := sql.NewPersistedSession(host, client, conn.ConnectionID, defaults)
 		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
 		doltDbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, doltDbs)
