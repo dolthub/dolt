@@ -143,13 +143,16 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 
 	sql.InitSystemVariables()
+	// this will overwrite cli flags
 	if !serverConf.NoDefaults {
 		// without an active DoltSession, so must access system variables directly
-		localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
-		if !ok {
-			return nil, config.ErrUnknownConfig
+		var globals config.ReadWriteConfig
+		if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
+			cli.Println("Multi-db mode does not support persistable sessions")
+			globals = config.NewMapConfig(make(map[string]string))
+		} else {
+			globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
 		}
-		globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
 		persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
 		if err != nil {
 			return nil, err
