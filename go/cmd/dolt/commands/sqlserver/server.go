@@ -84,6 +84,27 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		permissions = auth.ReadPerm
 	}
 
+	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	// to the value of mysql that we support.
+	serverConf := server.Config{Protocol: "tcp"}
+
+	sql.InitSystemVariables()
+	if !serverConfig.NoDefaults() {
+		var globals config.ReadWriteConfig
+		if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
+			cli.Println("Multi-db mode does not support persistable sessions")
+			globals = config.NewMapConfig(make(map[string]string))
+		} else {
+			globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+		}
+		persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
+		if err != nil {
+			return nil, err
+		}
+		sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+		serverConf, err = serverConf.WithGlobals()
+	}
+
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
 	var mrEnv env.MultiRepoEnv
@@ -129,37 +150,26 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return nil, err
 	}
 
-	serverConf := server.Config{
-		Protocol:               "tcp",
-		Address:                hostPort,
-		Auth:                   userAuth,
-		ConnReadTimeout:        readTimeout,
-		ConnWriteTimeout:       writeTimeout,
-		MaxConnections:         serverConfig.MaxConnections(),
-		TLSConfig:              tlsConfig,
-		RequireSecureTransport: serverConfig.RequireSecureTransport(),
-		// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-		// to the value of mysql that we support.
-	}
+	serverConf.Address = hostPort
+	serverConf.Auth = userAuth
+	serverConf.ConnReadTimeout = readTimeout
+	serverConf.ConnWriteTimeout = writeTimeout
+	serverConf.MaxConnections = serverConfig.MaxConnections()
+	serverConf.TLSConfig = tlsConfig
+	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	sql.InitSystemVariables()
-	// this will overwrite cli flags
-	if !serverConf.NoDefaults {
-		// without an active DoltSession, so must access system variables directly
-		var globals config.ReadWriteConfig
-		if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
-			cli.Println("Multi-db mode does not support persistable sessions")
-			globals = config.NewMapConfig(make(map[string]string))
-		} else {
-			globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-		}
-		persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
-		if err != nil {
-			return nil, err
-		}
-		sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
-		serverConf, err = serverConf.WithGlobals()
-	}
+	//serverConf := server.Config{
+	//	Protocol:               "tcp",
+	//	Address:                hostPort,
+	//	Auth:                   userAuth,
+	//	ConnReadTimeout:        readTimeout,
+	//	ConnWriteTimeout:       writeTimeout,
+	//	MaxConnections:         serverConfig.MaxConnections(),
+	//	TLSConfig:              tlsConfig,
+	//	RequireSecureTransport: serverConfig.RequireSecureTransport(),
+	//	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	//	// to the value of mysql that we support.
+	//}
 
 	mySQLServer, startError = server.NewServer(
 		serverConf,
