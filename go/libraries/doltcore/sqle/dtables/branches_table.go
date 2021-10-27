@@ -218,7 +218,12 @@ func (bWr branchWriter) Insert(ctx *sql.Context, r sql.Row) error {
 
 	// TODO: this isn't safe in a SQL context, since we have to update the working set of the new branch and it's a
 	//  race. It needs to be able to retry the same as committing a transaction.
-	return ddb.NewBranchAtCommit(ctx, branchRef, cm)
+	err = ddb.NewBranchAtCommit(ctx, branchRef, cm)
+	if err != nil {
+		return err
+	}
+
+	return bWr.bt.ddb.ExecuteCommitHooks(ctx, branchRef)
 }
 
 // Update the given row. Provides both the old and new rows.

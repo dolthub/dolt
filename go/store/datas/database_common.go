@@ -937,7 +937,7 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	db.callCommitHooks(ctx, commitDS)
+	db.ExecuteCommitHooks(ctx, commitDS)
 
 	return commitDS, workingSetDS, nil
 }
@@ -1160,7 +1160,7 @@ func (db *database) PostCommitHooks() []CommitHook {
 	return db.postCommitHooks
 }
 
-func (db *database) callCommitHooks(ctx context.Context, ds Dataset) {
+func (db *database) ExecuteCommitHooks(ctx context.Context, ds Dataset) {
 	var err error
 	for _, hook := range db.postCommitHooks {
 		err = hook.Execute(ctx, ds, db)
