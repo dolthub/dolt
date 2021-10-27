@@ -27,6 +27,12 @@ setup() {
     sleep 1
 
     export MYSQL_PWD=""
+
+    python3 -m venv venv
+    source venv/bin/activate
+    #pip install mysql-connector-python
+    # pip install pymysql
+    # pip install SQLAlchemy
 }
 
 teardown() {

@@ -8,12 +8,19 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var queries [5]string = [5]string{
+var queries = [12]string{
 	"create table test (pk int, `value` int, primary key(pk))",
 	"describe test",
 	"select * from test",
 	"insert into test (pk, `value`) values (0,0)",
-	"select * from test"}
+	"select * from test",
+	"select dolt_add('-A')",
+	"select dolt_commit('-m', 'added table test')",
+	"select dolt_checkout('-b', 'mybranch')",
+	"insert into test values (1,1)",
+	"select dolt_commit('-a', '-m', 'updated test')",
+    "select dolt_checkout('main')",
+    "select dolt_merge('mybranch')"}
 
 type ResFunc func(rows *sql.Rows) error
 
@@ -35,6 +42,36 @@ var stmtTests []StmtTest = []StmtTest{
 				}
 				if pk != 0 || value != 0 {
 					return fmt.Errorf("Unexpected values for pk or value: %d, %d", pk, value)
+				}
+				return nil
+			},
+		},
+	},
+	{
+		Query: "SELECT COUNT(*) FROM dolt_log",
+		Res: []ResFunc{
+			func(rows *sql.Rows) error {
+				var size int64
+				if err := rows.Scan(&size); err != nil {
+					return err
+				}
+				if size != 3 {
+					return fmt.Errorf("Unexpected values for size: %d", size)
+				}
+				return nil
+			},
+		},
+	},
+	{
+		Query: "select count(*) from test",
+		Res: []ResFunc{
+			func(rows *sql.Rows) error {
+				var size int64
+				if err := rows.Scan(&size); err != nil {
+					return err
+				}
+				if size != 2 {
+					return fmt.Errorf("Unexpected values for size: %d", size)
 				}
 				return nil
 			},
