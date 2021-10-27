@@ -41,6 +41,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -75,7 +76,6 @@ If the schema for the existing table does not match the schema for the new file,
 A mapping file can be used to map fields between the file being imported and the table being written to. This can be used when creating a new table, or updating or replacing an existing table.
 
 ` + schcmds.MappingFileHelp +
-
 		`
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimeter`,
 
@@ -382,6 +382,18 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, mvOpts)
 
 	cli.PrintErrln()
+
+	// todo(andy): remove
+	root, _ = dEnv.WorkingRoot(ctx)
+	tbl, _, _ := root.GetTable(ctx, mvOpts.tableName)
+	rows, _ := tbl.GetRowData(ctx)
+	cli.Println(fmt.Sprintf("rows: %d", rows.Count()))
+	_ = rows.IterAll(ctx, func(key, value val.Tuple) error {
+		cli.Println(key)
+		cli.Println(value)
+		cli.Println("\n")
+		return nil
+	})
 
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))

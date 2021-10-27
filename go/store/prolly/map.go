@@ -194,8 +194,27 @@ func (m Map) IterIndexRange(ctx context.Context, rng IndexRange, cb KeyValueFn) 
 }
 
 func (m Map) IterAll(ctx context.Context, cb KeyValueFn) (err error) {
-	r := IndexRange{low: 0, high: m.Count()}
-	return m.IterIndexRange(ctx, r, cb)
+	cur, err := newCursor(ctx, m.nrw, m.root)
+	if err != nil {
+		return err
+	}
+
+	for cur.valid() {
+		k := val.Tuple(cur.current())
+		if _, err = cur.advance(ctx); err != nil {
+			return err
+		}
+
+		v := val.Tuple(cur.current())
+		if _, err = cur.advance(ctx); err != nil {
+			return err
+		}
+
+		if err = cb(k, v); err != nil {
+			return err
+		}
+	}
+	return
 }
 
 func (m Map) searchNode(query nodeItem, nd Node) int {
