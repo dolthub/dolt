@@ -79,7 +79,7 @@ func (it keyValueIter) Count() int {
 }
 
 func (it keyValueIter) Next() (key, val val.Tuple) {
-	key, val = it.Next()
+	key, val = it.ListIter.Next()
 	it.idx++
 	return
 }
