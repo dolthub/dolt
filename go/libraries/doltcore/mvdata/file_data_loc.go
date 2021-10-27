@@ -34,7 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-// DFFromString returns a data object from a string.
+// DFFromString returns a rows object from a string.
 func DFFromString(dfStr string) DataFormat {
 	switch strings.ToLower(dfStr) {
 	case "csv", ".csv":
@@ -61,7 +61,7 @@ type FileDataLocation struct {
 	Format DataFormat
 }
 
-// String returns a string representation of the data location.
+// String returns a string representation of the rows location.
 func (dl FileDataLocation) String() string {
 	return dl.Format.ReadableStr() + ":" + dl.Path
 }

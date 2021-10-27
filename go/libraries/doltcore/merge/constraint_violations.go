@@ -424,43 +424,44 @@ func childFkConstraintViolationsProcess(
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
 func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName string, root *doltdb.RootValue) (*constraintViolationsLoadedTable, bool, error) {
-	tbl, trueTblName, ok, err := root.GetTableInsensitive(ctx, tblName)
-	if err != nil {
-		return nil, false, err
-	}
-	if !ok {
-		return nil, false, doltdb.ErrTableNotFound
-	}
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	idx, ok := sch.Indexes().GetByNameCaseInsensitive(idxName)
-	if !ok {
-		return &constraintViolationsLoadedTable{
-			TableName: trueTblName,
-			Table:     tbl,
-			Schema:    sch,
-			RowData:   rowData,
-		}, false, nil
-	}
-	indexData, err := tbl.GetIndexRowData(ctx, idx.Name())
-	if err != nil {
-		return nil, false, err
-	}
-	return &constraintViolationsLoadedTable{
-		TableName:   trueTblName,
-		Table:       tbl,
-		Schema:      sch,
-		RowData:     rowData,
-		Index:       idx,
-		IndexSchema: idx.Schema(),
-		IndexData:   indexData,
-	}, true, nil
+	return nil, false, nil
+	//tbl, trueTblName, ok, err := root.GetTableInsensitive(ctx, tblName)
+	//if err != nil {
+	//	return nil, false, err
+	//}
+	//if !ok {
+	//	return nil, false, doltdb.ErrTableNotFound
+	//}
+	//sch, err := tbl.GetSchema(ctx)
+	//if err != nil {
+	//	return nil, false, err
+	//}
+	//rowData, err := tbl.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, false, err
+	//}
+	//idx, ok := sch.Indexes().GetByNameCaseInsensitive(idxName)
+	//if !ok {
+	//	return &constraintViolationsLoadedTable{
+	//		TableName: trueTblName,
+	//		Table:     tbl,
+	//		Schema:    sch,
+	//		RowData:   rowData,
+	//	}, false, nil
+	//}
+	//indexData, err := tbl.GetIndexRowData(ctx, idx.Name())
+	//if err != nil {
+	//	return nil, false, err
+	//}
+	//return &constraintViolationsLoadedTable{
+	//	TableName:   trueTblName,
+	//	Table:       tbl,
+	//	Schema:      sch,
+	//	RowData:     rowData,
+	//	Index:       idx,
+	//	IndexSchema: idx.Schema(),
+	//	IndexData:   indexData,
+	//}, true, nil
 }
 
 // toConstraintViolationRow converts the given key and value tuples into ones suitable to add to a constraint violation map.

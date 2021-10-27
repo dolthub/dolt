@@ -39,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -181,98 +182,101 @@ func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 // GetIndexes implements sql.IndexedTable
 func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	tbl, err := t.doltTable(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var sqlIndexes []sql.Index
-	cols := sch.GetPKCols().GetColumns()
-
-	if len(cols) > 0 {
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           t.db,
-			id:           "PRIMARY",
-			indexRowData: rowData,
-			indexSch:     sch,
-			table:        tbl,
-			tableData:    rowData,
-			tableName:    t.Name(),
-			tableSch:     sch,
-			unique:       true,
-			generated:    false,
-		})
-		for i := 1; i < len(cols); i++ {
-			sqlIndexes = append(sqlIndexes, &doltIndex{
-				cols:         cols[:i],
-				db:           t.db,
-				id:           fmt.Sprintf("PRIMARY_PARTIAL_%d", i),
-				indexRowData: rowData,
-				indexSch:     sch,
-				table:        tbl,
-				tableData:    rowData,
-				tableName:    t.Name(),
-				tableSch:     sch,
-				unique:       false,
-				comment:      fmt.Sprintf("partial of PRIMARY multi-column index on %d column(s)", i),
-				generated:    true,
-			})
-		}
-	}
-
-	for _, index := range sch.Indexes().AllIndexes() {
-		indexRowData, err := tbl.GetIndexRowData(ctx, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		cols := make([]schema.Column, index.Count())
-		for i, tag := range index.IndexedColumnTags() {
-			cols[i], _ = index.GetColumn(tag)
-		}
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           t.db,
-			id:           index.Name(),
-			indexRowData: indexRowData,
-			indexSch:     index.Schema(),
-			table:        tbl,
-			tableData:    rowData,
-			tableName:    t.Name(),
-			tableSch:     sch,
-			unique:       index.IsUnique(),
-			comment:      index.Comment(),
-			generated:    false,
-		})
-		for i := 1; i < len(cols); i++ {
-			sqlIndexes = append(sqlIndexes, &doltIndex{
-				cols:         cols[:i],
-				db:           t.db,
-				id:           fmt.Sprintf("%s_PARTIAL_%d", index.Name(), i),
-				indexRowData: indexRowData,
-				indexSch:     index.Schema(),
-				table:        tbl,
-				tableData:    rowData,
-				tableName:    t.Name(),
-				tableSch:     sch,
-				unique:       false,
-				comment:      fmt.Sprintf("prefix of %s multi-column index on %d column(s)", index.Name(), i),
-				generated:    true,
-			})
-		}
-	}
-
-	return sqlIndexes, nil
+	// todo(andy)
+	return nil, nil
+	//
+	//tbl, err := t.doltTable(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//sch, err := tbl.GetSchema(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//rowData, err := tbl.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//var sqlIndexes []sql.Index
+	//cols := sch.GetPKCols().GetColumns()
+	//
+	//if len(cols) > 0 {
+	//	sqlIndexes = append(sqlIndexes, &doltIndex{
+	//		cols:         cols,
+	//		db:           t.db,
+	//		id:           "PRIMARY",
+	//		indexRowData: rowData,
+	//		indexSch:     sch,
+	//		table:        tbl,
+	//		tableData:    rowData,
+	//		tableName:    t.Name(),
+	//		tableSch:     sch,
+	//		unique:       true,
+	//		generated:    false,
+	//	})
+	//	for i := 1; i < len(cols); i++ {
+	//		sqlIndexes = append(sqlIndexes, &doltIndex{
+	//			cols:         cols[:i],
+	//			db:           t.db,
+	//			id:           fmt.Sprintf("PRIMARY_PARTIAL_%d", i),
+	//			indexRowData: rowData,
+	//			indexSch:     sch,
+	//			table:        tbl,
+	//			tableData:    rowData,
+	//			tableName:    t.Name(),
+	//			tableSch:     sch,
+	//			unique:       false,
+	//			comment:      fmt.Sprintf("partial of PRIMARY multi-column index on %d column(s)", i),
+	//			generated:    true,
+	//		})
+	//	}
+	//}
+	//
+	//for _, index := range sch.Indexes().AllIndexes() {
+	//	indexRowData, err := tbl.GetIndexRowData(ctx, index.Name())
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	cols := make([]schema.Column, index.Count())
+	//	for i, tag := range index.IndexedColumnTags() {
+	//		cols[i], _ = index.GetColumn(tag)
+	//	}
+	//	sqlIndexes = append(sqlIndexes, &doltIndex{
+	//		cols:         cols,
+	//		db:           t.db,
+	//		id:           index.Name(),
+	//		indexRowData: indexRowData,
+	//		indexSch:     index.Schema(),
+	//		table:        tbl,
+	//		tableData:    rowData,
+	//		tableName:    t.Name(),
+	//		tableSch:     sch,
+	//		unique:       index.IsUnique(),
+	//		comment:      index.Comment(),
+	//		generated:    false,
+	//	})
+	//	for i := 1; i < len(cols); i++ {
+	//		sqlIndexes = append(sqlIndexes, &doltIndex{
+	//			cols:         cols[:i],
+	//			db:           t.db,
+	//			id:           fmt.Sprintf("%s_PARTIAL_%d", index.Name(), i),
+	//			indexRowData: indexRowData,
+	//			indexSch:     index.Schema(),
+	//			table:        tbl,
+	//			tableData:    rowData,
+	//			tableName:    t.Name(),
+	//			tableSch:     sch,
+	//			unique:       false,
+	//			comment:      fmt.Sprintf("prefix of %s multi-column index on %d column(s)", index.Name(), i),
+	//			generated:    true,
+	//		})
+	//	}
+	//}
+	//
+	//return sqlIndexes, nil
 }
 
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
@@ -311,7 +315,7 @@ func (t *DoltTable) NumRows(ctx *sql.Context) (uint64, error) {
 		return 0, err
 	}
 
-	return m.Len(), nil
+	return m.Count(), nil
 }
 
 // Format returns the NomsBinFormat for the underlying table
@@ -352,7 +356,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
-	numElements := rowData.Len()
+	numElements := rowData.Count()
 
 	if numElements == 0 {
 		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 0, rowData}), nil
@@ -559,20 +563,24 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	numOfRows := int(rowData.Len())
+
+	numOfRows := int(rowData.Count())
 	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, table.ValueReadWriter(), t.sch)
 	if err != nil {
 		return 0, err
 	}
-	empty, err := types.NewMap(ctx, table.ValueReadWriter())
+
+	empty := prolly.NewEmptyMap(t.sch)
+	indexes, err := types.NewMap(ctx, table.ValueReadWriter())
 	if err != nil {
 		return 0, err
 	}
 	// truncate table resets auto-increment value
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), schVal, empty, empty, nil)
+	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), schVal, empty, indexes, nil)
 	if err != nil {
 		return 0, err
 	}
+
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable, t.opts)
 	if err != nil {
 		return 0, err
@@ -582,10 +590,12 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
 	if err != nil {
 		return 0, err
 	}
+
 	err = t.setRoot(ctx, newRoot)
 	if err != nil {
 		return 0, err
@@ -732,11 +742,11 @@ var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
 type doltTablePartitionIter struct {
 	i          int
 	mu         *sync.Mutex
-	rowData    types.Map
+	rowData    prolly.Map
 	partitions []doltTablePartition
 }
 
-func newDoltTablePartitionIter(rowData types.Map, partitions ...doltTablePartition) *doltTablePartitionIter {
+func newDoltTablePartitionIter(rowData prolly.Map, partitions ...doltTablePartition) *doltTablePartitionIter {
 	return &doltTablePartitionIter{0, &sync.Mutex{}, rowData, partitions}
 }
 
@@ -769,7 +779,7 @@ type doltTablePartition struct {
 	start uint64
 	// all elements in the partition will be less than end (exclusive)
 	end     uint64
-	rowData types.Map
+	rowData prolly.Map
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition.
@@ -780,8 +790,9 @@ func (p doltTablePartition) Key() []byte {
 // IteratorForPartition returns a types.MapIterator implementation which will iterate through the values
 // for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
 // unless paired with a mutex
-func (p doltTablePartition) IteratorForPartition(ctx context.Context, m types.Map) (types.MapTupleIterator, error) {
-	return m.RangeIterator(ctx, p.start, p.end)
+func (p doltTablePartition) IteratorForPartition(ctx context.Context, m prolly.Map) (types.MapTupleIterator, error) {
+	panic("unimplemented")
+	//return m.IterIndexRange(ctx, p.start, p.end)
 }
 
 type partitionIter struct {
@@ -1445,11 +1456,13 @@ func createIndexForTable(
 			return nil, err
 		}
 	} else { // set the index row data and get a new root with the updated table
-		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
-		if err != nil {
-			return nil, err
-		}
-		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+		// todo(andy)
+		//indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
+		//if err != nil {
+		//	return nil, err
+		//}
+		empty := prolly.NewEmptyMap(index.Schema())
+		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), empty)
 		if err != nil {
 			return nil, err
 		}

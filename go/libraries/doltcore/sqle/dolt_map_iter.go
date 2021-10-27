@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"errors"
-	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -189,25 +188,6 @@ func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int
 
 // KVGetFunc defines a function that returns a Key Value pair
 type KVGetFunc func(ctx context.Context) (types.Tuple, types.Tuple, error)
-
-func GetGetFuncForMapIter(nbf *types.NomsBinFormat, mapItr types.MapIterator) func(ctx context.Context) (types.Tuple, types.Tuple, error) {
-	return func(ctx context.Context) (types.Tuple, types.Tuple, error) {
-		k, v, err := mapItr.Next(ctx)
-
-		if err != nil {
-			return types.Tuple{}, types.Tuple{}, err
-		} else if k == nil {
-			return types.Tuple{}, types.Tuple{}, io.EOF
-		}
-
-		valTup, ok := v.(types.Tuple)
-		if !ok {
-			valTup = types.EmptyTuple(nbf)
-		}
-
-		return k.(types.Tuple), valTup, nil
-	}
-}
 
 // DoltMapIter uses a types.MapIterator to iterate over a types.Map and returns sql.Row instances that it reads and
 // converts

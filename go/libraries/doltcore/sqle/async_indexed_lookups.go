@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/utils/async"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type lookupResult struct {
@@ -34,8 +34,8 @@ type lookupResult struct {
 // toLookup represents an table lookup that should be performed by one of the global asyncLookups instance's worker routines
 type toLookup struct {
 	idx        uint64
-	t          types.Tuple
-	tupleToRow func(types.Tuple) (sql.Row, error)
+	t          val.Tuple
+	tupleToRow func(val.Tuple) (sql.Row, error)
 	resBuf     *async.RingBuffer
 	epoch      int
 }

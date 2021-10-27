@@ -165,22 +165,22 @@ func ResolveForeignKey(
 		UnresolvedFKDetails:    doltdb.UnresolvedFKDetails{},
 	}
 
-	tableData, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, doltdb.ForeignKey{}, err
-	}
-	tableIndexData, err := table.GetIndexRowData(ctx, tableIndex.Name())
-	if err != nil {
-		return nil, doltdb.ForeignKey{}, err
-	}
-	refTableIndexData, err := refTbl.GetIndexRowData(ctx, refTableIndex.Name())
-	if err != nil {
-		return nil, doltdb.ForeignKey{}, err
-	}
-	err = foreignKey.ValidateData(ctx, sch, tableData, tableIndexData, refTableIndexData, tableIndex, refTableIndex, table.ValueReadWriter())
-	if err != nil {
-		return nil, doltdb.ForeignKey{}, err
-	}
+	//tableData, err := table.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, doltdb.ForeignKey{}, err
+	//}
+	//tableIndexData, err := table.GetIndexRowData(ctx, tableIndex.Name())
+	//if err != nil {
+	//	return nil, doltdb.ForeignKey{}, err
+	//}
+	//refTableIndexData, err := refTbl.GetIndexRowData(ctx, refTableIndex.Name())
+	//if err != nil {
+	//	return nil, doltdb.ForeignKey{}, err
+	//}
+	//err = foreignKey.ValidateData(ctx, sch, tableData, tableIndexData, refTableIndexData, tableIndex, refTableIndex, table.ValueReadWriter())
+	//if err != nil {
+	//	return nil, doltdb.ForeignKey{}, err
+	//}
 
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {

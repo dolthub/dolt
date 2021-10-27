@@ -17,7 +17,6 @@ package schcmds
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -42,6 +41,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

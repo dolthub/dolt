@@ -104,8 +104,9 @@ type importOptions struct {
 	primaryKeys []string
 	nameMapper  rowconv.NameMapper
 	src         mvdata.DataLocation
-	dest        mvdata.TableDataLocation
-	srcOptions  interface{}
+	//dest        mvdata.TableDataLocation
+	dest       mvdata.ProllyDataLocation
+	srcOptions interface{}
 }
 
 func (m importOptions) WritesToTable() bool {
@@ -231,7 +232,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		}
 	}
 
-	tableLoc := mvdata.TableDataLocation{Name: tableName}
+	tableLoc := mvdata.ProllyDataLocation{Name: tableName}
 
 	return &importOptions{
 		operation:   moveOp,

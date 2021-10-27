@@ -23,7 +23,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type IndexLookupKeyIterator interface {
@@ -43,7 +44,7 @@ func (il *doltIndexLookup) String() string {
 	return fmt.Sprintf("doltIndexLookup:%s", il.idx.ID())
 }
 
-func (il *doltIndexLookup) IndexRowData() types.Map {
+func (il *doltIndexLookup) IndexRowData() prolly.Map {
 	return il.idx.IndexRowData()
 }
 
@@ -135,7 +136,7 @@ func (il *doltIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.IndexLook
 }
 
 // RowIter returns a row iterator for this index lookup. The iterator will return the single matching row for the index.
-func (il *doltIndexLookup) RowIter(ctx *sql.Context, rowData types.Map, columns []string) (sql.RowIter, error) {
+func (il *doltIndexLookup) RowIter(ctx *sql.Context, rowData prolly.Map, columns []string) (sql.RowIter, error) {
 	return il.RowIterForRanges(ctx, rowData, il.ranges, columns)
 }
 
@@ -156,22 +157,25 @@ func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
 	return covers
 }
 
-func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData types.Map, ranges []lookup.Range, columns []string) (sql.RowIter, error) {
+func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData prolly.Map, ranges []lookup.Range, columns []string) (sql.RowIter, error) {
 	readRanges := make([]*noms.ReadRange, len(ranges))
 	for i, lookupRange := range ranges {
 		readRanges[i] = lookupRange.ToReadRange()
 	}
 
-	nrr := noms.NewNomsRangeReader(il.idx.IndexSchema(), rowData, readRanges)
+	return sql.RowsToRowIter(), nil
+
+	// todo(andy)
+	/*nrr := noms.NewNomsRangeReader(il.idx.IndexSchema(), rowData, readRanges)
 
 	covers := il.indexCoversCols(columns)
 	if covers {
 		return NewCoveringIndexRowIterAdapter(ctx, il.idx, nrr, columns), nil
 	} else {
 		return NewIndexLookupRowIterAdapter(ctx, il.idx, nrr), nil
-	}
+	}*/
 }
 
-type nomsKeyIter interface {
-	ReadKey(ctx context.Context) (types.Tuple, error)
+type keyIter interface {
+	ReadKey(ctx context.Context) (val.Tuple, error)
 }

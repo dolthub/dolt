@@ -37,10 +37,6 @@ const (
 
 type Encoding uint8
 
-func FixedWidth(t Encoding) bool {
-	return t >= sentinel
-}
-
 // Fixed Width Encodings
 const (
 	NullEnc    Encoding = 0
@@ -86,6 +82,10 @@ const (
 	// ExpressionEnc
 	// GeometryEnc
 )
+
+func FixedWidth(t Encoding) bool {
+	return t >= sentinel
+}
 
 func readBool(val []byte) bool {
 	return val[0] == 1

@@ -20,12 +20,11 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func NewEmptyMap(sch schema.Schema, vrw types.ValueReadWriter) Map {
+func NewEmptyMap(sch schema.Schema) Map {
 	return Map{
 		root:    emptyNode,
 		keyDesc: keyDescriptorFromSchema(sch),
 		valDesc: valueDescriptorFromSchema(sch),
-		nrw:     NewNodeStore(vrw.(*types.ValueStore).ChunkStore()),
 	}
 }
 

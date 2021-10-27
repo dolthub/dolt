@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
@@ -107,89 +106,91 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 // updateTableWithModifiedColumn updates the existing table with the new schema. If the column type has changed, then
 // the data is updated.
 func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSch, newSch schema.Schema, oldCol, modifiedCol schema.Column, opts editor.Options) (*doltdb.Table, error) {
-	vrw := tbl.ValueReadWriter()
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSch)
-	if err != nil {
-		return nil, err
-	}
+	return tbl, nil
 
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
-		if schema.IsKeyless(newSch) {
-			return nil, fmt.Errorf("keyless table column type alteration is not yet supported")
-		}
-		rowData, err = updateRowDataWithNewType(ctx, rowData, tbl.ValueReadWriter(), oldSch, newSch, oldCol, modifiedCol)
-		if err != nil {
-			return nil, err
-		}
-	} else if !modifiedCol.IsNullable() {
-		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-			r, err := row.FromNoms(newSch, key.(types.Tuple), value.(types.Tuple))
-			if err != nil {
-				return false, err
-			}
-			val, ok := r.GetColVal(modifiedCol.Tag)
-			if !ok || val == nil || val == types.NullValue {
-				return true, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
-			}
-			return false, nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	indexData, err := tbl.GetIndexData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var autoVal types.Value
-	// Note: The correct way to add an auto increment value to an existing schema is to you use the
-	// ALTER TABLE CHANGE COLUMN syntax not ALTER TABLE autoincrement. (see auto_increment.bats)
-	if schema.HasAutoIncrement(newSch) && schema.HasAutoIncrement(oldSch) {
-		autoVal, err = tbl.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-	updatedTable, err := doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData, autoVal)
-	if err != nil {
-		return nil, err
-	}
-
-	if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
-		// If we're modifying the primary key then all indexes are affected. Otherwise we just want to update the
-		// touched ones.
-		if modifiedCol.IsPartOfPK {
-			for _, index := range newSch.Indexes().AllIndexes() {
-				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name(), opts)
-				if err != nil {
-					return nil, err
-				}
-				updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
-				if err != nil {
-					return nil, err
-				}
-			}
-		} else {
-			for _, index := range newSch.Indexes().IndexesWithTag(modifiedCol.Tag) {
-				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name(), opts)
-				if err != nil {
-					return nil, err
-				}
-				updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	return updatedTable, nil
+	//vrw := tbl.ValueReadWriter()
+	//newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSch)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//rowData, err := tbl.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
+	//	if schema.IsKeyless(newSch) {
+	//		return nil, fmt.Errorf("keyless table column type alteration is not yet supported")
+	//	}
+	//	rowData, err = updateRowDataWithNewType(ctx, rowData, tbl.ValueReadWriter(), oldSch, newSch, oldCol, modifiedCol)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//} else if !modifiedCol.IsNullable() {
+	//	err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+	//		r, err := row.FromNoms(newSch, key.(types.Tuple), value.(types.Tuple))
+	//		if err != nil {
+	//			return false, err
+	//		}
+	//		val, ok := r.GetColVal(modifiedCol.Tag)
+	//		if !ok || val == nil || val == types.NullValue {
+	//			return true, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
+	//		}
+	//		return false, nil
+	//	})
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
+	//
+	//indexData, err := tbl.GetIndexData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//var autoVal types.Value
+	//// Note: The correct way to add an auto increment value to an existing schema is to you use the
+	//// ALTER TABLE CHANGE COLUMN syntax not ALTER TABLE autoincrement. (see auto_increment.bats)
+	//if schema.HasAutoIncrement(newSch) && schema.HasAutoIncrement(oldSch) {
+	//	autoVal, err = tbl.GetAutoIncrementValue(ctx)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
+	//updatedTable, err := doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData, autoVal)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
+	//	// If we're modifying the primary key then all indexes are affected. Otherwise we just want to update the
+	//	// touched ones.
+	//	if modifiedCol.IsPartOfPK {
+	//		for _, index := range newSch.Indexes().AllIndexes() {
+	//			indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name(), opts)
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//			updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//		}
+	//	} else {
+	//		for _, index := range newSch.Indexes().IndexesWithTag(modifiedCol.Tag) {
+	//			indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name(), opts)
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//			updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//		}
+	//	}
+	//}
+	//
+	//return updatedTable, nil
 }
 
 // updateRowDataWithNewType returns a new map of row data containing the updated rows from the changed schema column type.

@@ -31,29 +31,29 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-// DataFormat is an enumeration of the valid data formats
+// DataFormat is an enumeration of the valid rows formats
 type DataFormat string
 
 const (
-	// InvalidDataFormat is the format of a data lotacion that isn't valid
+	// InvalidDataFormat is the format of a rows lotacion that isn't valid
 	InvalidDataFormat DataFormat = "invalid"
 
-	// DoltDB is the format of a data location for a dolt table
+	// DoltDB is the format of a rows location for a dolt table
 	DoltDB DataFormat = "doltdb"
 
-	// CsvFile is the format of a data location that is a .csv file
+	// CsvFile is the format of a rows location that is a .csv file
 	CsvFile DataFormat = ".csv"
 
-	// PsvFile is the format of a data location that is a .psv file
+	// PsvFile is the format of a rows location that is a .psv file
 	PsvFile DataFormat = ".psv"
 
-	// XlsxFile is the format of a data location that is a .xlsx file
+	// XlsxFile is the format of a rows location that is a .xlsx file
 	XlsxFile DataFormat = ".xlsx"
 
-	// JsonFile is the format of a data location that is a json file
+	// JsonFile is the format of a rows location that is a json file
 	JsonFile DataFormat = ".json"
 
-	// SqlFile is the format of a data location that is a .sql file
+	// SqlFile is the format of a rows location that is a .sql file
 	SqlFile DataFormat = ".sql"
 )
 

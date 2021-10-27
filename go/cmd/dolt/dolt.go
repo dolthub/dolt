@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
@@ -87,11 +86,8 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
 	dumpDocsCommand,
-	commands.MigrateCmd{},
-	indexcmds.Commands,
 	commands.ReadTablesCmd{},
 	commands.GarbageCollectionCmd{},
-	commands.FilterBranchCmd{},
 	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
 })
@@ -247,11 +243,11 @@ func runMain() int {
 	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
-	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {
-		if commands.MigrationNeeded(ctx, dEnv, args) {
-			return 1
-		}
-	}
+	//if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {
+	//	if commands.MigrationNeeded(ctx, dEnv, args) {
+	//		return 1
+	//	}
+	//}
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {

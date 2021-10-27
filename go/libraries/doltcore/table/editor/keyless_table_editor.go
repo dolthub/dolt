@@ -17,7 +17,6 @@ package editor
 import (
 	"context"
 	"fmt"
-	"io"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -25,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -135,13 +133,13 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 		mu:       &sync.Mutex{},
 	}
 
-	for i, index := range sch.Indexes().AllIndexes() {
-		indexData, err := tbl.GetIndexRowData(ctx, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, sch, opts)
-	}
+	//for i, index := range sch.Indexes().AllIndexes() {
+	//	indexData, err := tbl.GetIndexRowData(ctx, index.Name())
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	te.indexEds[i] = NewIndexEditor(ctx, index, indexData, sch, opts)
+	//}
 	return te, nil
 }
 
@@ -384,104 +382,104 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 	if err != nil {
 		return nil, err
 	}
-
-	ed := rowData.Edit()
-	iter := table.NewMapPointReader(rowData, keys...)
-
-	var ok bool
-	for {
-		k, v, err := iter.NextTuple(ctx)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		delta, err := acc.getRowDelta(k)
-		if err != nil {
-			return nil, err
-		}
-
-		oldv := v
-		if v.Empty() {
-			// row does not yet exist
-			v, ok, err = initializeCardinality(delta.val, delta.delta)
-
-		} else {
-			v, ok, err = modifyCardinalityWithDelta(v, delta.delta)
-
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		func(k, v types.Tuple) (*doltdb.Table, error) {
-			indexOpsToUndo := make([]int, len(indexEds))
-			defer func() {
-				if retErr != nil {
-					for i, opsToUndo := range indexOpsToUndo {
-						for undone := 0; undone < opsToUndo; undone++ {
-							indexEds[i].Undo(ctx)
-						}
-					}
-				}
-			}()
-
-			for i, indexEd := range indexEds {
-				var r row.Row
-				if v.Empty() {
-					r, _, err = row.KeylessRowsFromTuples(k, oldv)
-				} else {
-					r, _, err = row.KeylessRowsFromTuples(k, v)
-				}
-				if err != nil {
-					return nil, err
-				}
-				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index(), nil)
-				if err != nil {
-					return nil, err
-				}
-
-				if delta.delta < 1 {
-					err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
-					if err != nil {
-						return nil, err
-					}
-				} else {
-					err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
-					if err != nil {
-						return nil, err
-					}
-				}
-				indexOpsToUndo[i]++
-			}
-			return nil, nil
-		}(k, v)
-
-		if ok {
-			ed.Set(k, v)
-		} else {
-			ed.Remove(k)
-		}
-
-	}
-
-	for i := 0; i < len(indexEds); i++ {
-		indexMap, idxErr := indexEds[i].Map(ctx)
-		if idxErr != nil {
-			return nil, err
-		}
-		tbl, idxErr = tbl.SetIndexRowData(ctx, indexEds[i].Index().Name(), indexMap)
-		if idxErr != nil {
-			return nil, err
-		}
-	}
-
-	rowData, err = ed.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
+	//
+	//ed := rowData.Edit()
+	//iter := table.NewMapPointReader(rowData, keys...)
+	//
+	//var ok bool
+	//for {
+	//	k, v, err := iter.NextTuple(ctx)
+	//	if err == io.EOF {
+	//		break
+	//	}
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	delta, err := acc.getRowDelta(k)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	oldv := v
+	//	if v.Empty() {
+	//		// row does not yet exist
+	//		v, ok, err = initializeCardinality(delta.val, delta.delta)
+	//
+	//	} else {
+	//		v, ok, err = modifyCardinalityWithDelta(v, delta.delta)
+	//
+	//	}
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	func(k, v types.Tuple) (*doltdb.Table, error) {
+	//		indexOpsToUndo := make([]int, len(indexEds))
+	//		defer func() {
+	//			if retErr != nil {
+	//				for i, opsToUndo := range indexOpsToUndo {
+	//					for undone := 0; undone < opsToUndo; undone++ {
+	//						indexEds[i].Undo(ctx)
+	//					}
+	//				}
+	//			}
+	//		}()
+	//
+	//		for i, indexEd := range indexEds {
+	//			var r row.Row
+	//			if v.Empty() {
+	//				r, _, err = row.KeylessRowsFromTuples(k, oldv)
+	//			} else {
+	//				r, _, err = row.KeylessRowsFromTuples(k, v)
+	//			}
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//			fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index(), nil)
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//
+	//			if delta.delta < 1 {
+	//				err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
+	//				if err != nil {
+	//					return nil, err
+	//				}
+	//			} else {
+	//				err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
+	//				if err != nil {
+	//					return nil, err
+	//				}
+	//			}
+	//			indexOpsToUndo[i]++
+	//		}
+	//		return nil, nil
+	//	}(k, v)
+	//
+	//	if ok {
+	//		ed.Set(k, v)
+	//	} else {
+	//		ed.Remove(k)
+	//	}
+	//
+	//}
+	//
+	//for i := 0; i < len(indexEds); i++ {
+	//	indexMap, idxErr := indexEds[i].Map(ctx)
+	//	if idxErr != nil {
+	//		return nil, err
+	//	}
+	//	tbl, idxErr = tbl.SetIndexRowData(ctx, indexEds[i].Index().Name(), indexMap)
+	//	if idxErr != nil {
+	//		return nil, err
+	//	}
+	//}
+	//
+	//rowData, err = ed.Map(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	return tbl.UpdateRows(ctx, rowData)
 }

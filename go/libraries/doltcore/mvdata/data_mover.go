@@ -100,7 +100,7 @@ type GCTableWriteCloser interface {
 	GC(ctx context.Context) error
 }
 
-// Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
+// Move is the method that executes the pipeline which will move rows from the pipeline's source DataLocation to it's
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
 func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount int64, err error) {
 	defer imp.Rd.Close(ctx)
@@ -209,7 +209,7 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
-			bdr := errhand.BuildDError("\nA bad row was encountered while moving data.")
+			bdr := errhand.BuildDError("\nA bad row was encountered while moving rows.")
 
 			r := pipeline.GetTransFailureRow(err)
 			if r != nil {
@@ -223,7 +223,7 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 
 			return nil, badCount, bdr.Build()
 		}
-		return nil, badCount, errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
+		return nil, badCount, errhand.BuildDError("An error occurred moving rows:\n").AddCause(err).Build()
 	}
 
 	if mvOpts.WritesToTable() {

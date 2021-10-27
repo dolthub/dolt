@@ -68,7 +68,6 @@ type doltTableRowIter struct {
 // Returns a new row iterator for the table given
 func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, partition *doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.GetSchema(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -82,34 +81,7 @@ func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, part
 }
 
 func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
-	mapIter, err := iterForPartition(ctx, partition)
-	if err != nil {
-		return nil, err
-	}
-
-	cols, tagToSqlColIdx, err := getTagToResColIdx(ctx, tbl, projectedCols)
-	if err != nil {
-		return nil, err
-	}
-
-	idxOfCardinality := len(cols)
-	tagToSqlColIdx[schema.KeylessRowCardinalityTag] = idxOfCardinality
-
-	colsCopy := make([]schema.Column, len(cols), len(cols)+1)
-	copy(colsCopy, cols)
-	colsCopy = append(colsCopy, schema.NewColumn("__cardinality__", schema.KeylessRowCardinalityTag, types.UintKind, false))
-
-	conv := NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, colsCopy, len(colsCopy))
-	keyedItr, err := NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
-	if err != nil {
-		return nil, err
-	}
-
-	return &keylessRowIter{
-		keyedIter:   keyedItr,
-		cardIdx:     idxOfCardinality,
-		nonCardCols: len(cols),
-	}, nil
+	panic("unimplement")
 }
 
 func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
@@ -128,12 +100,13 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []str
 }
 
 func iterForPartition(ctx context.Context, partition *doltTablePartition) (types.MapTupleIterator, error) {
-	rowData := partition.rowData
-	if partition.end == NoUpperBound {
-		return rowData.RangeIterator(ctx, 0, rowData.Len())
-	} else {
-		return partition.IteratorForPartition(ctx, rowData)
-	}
+	panic("unimplement")
+	//rowData := partition.rowData
+	//if partition.end == NoUpperBound {
+	//	return rowData.RangeIterator(ctx, 0, rowData.Len())
+	//} else {
+	//	return partition.IteratorForPartition(ctx, rowData)
+	//}
 }
 
 func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []string) ([]schema.Column, map[uint64]int, error) {

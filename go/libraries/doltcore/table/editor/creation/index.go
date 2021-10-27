@@ -113,14 +113,14 @@ func CreateIndex(
 			return nil, err
 		}
 	} else { // set the index row data and get a new root with the updated table
-		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
-		if err != nil {
-			return nil, err
-		}
-		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), indexRowData)
-		if err != nil {
-			return nil, err
-		}
+		//indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
+		//if err != nil {
+		//	return nil, err
+		//}
+		//newTable, err = newTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+		//if err != nil {
+		//	return nil, err
+		//}
 	}
 	return &CreateIndexReturn{
 		NewTable: newTable,

@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 // SingleTableInfoDatabase is intended to allow a sole schema to make use of any display functionality in `go-mysql-server`.
@@ -139,10 +139,10 @@ func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, er
 			cols:         cols,
 			db:           db,
 			id:           index.Name(),
-			indexRowData: types.EmptyMap,
+			indexRowData: prolly.NewEmptyMap(db.sch),
 			indexSch:     index.Schema(),
 			table:        nil,
-			tableData:    types.EmptyMap,
+			tableData:    prolly.NewEmptyMap(db.sch),
 			tableName:    db.tableName,
 			tableSch:     db.sch,
 			unique:       index.IsUnique(),

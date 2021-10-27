@@ -217,7 +217,7 @@ func TestCreateRdWr(t *testing.T) {
 		wr.Close(context.Background())
 
 		if numBad != 0 || pipeErr != nil {
-			t.Fatal("Failed to write data. bad:", numBad, err)
+			t.Fatal("Failed to write rows. bad:", numBad, err)
 		}
 
 		if wr, ok := wr.(DataMoverCloser); ok {

@@ -133,6 +133,58 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) []byte {
 	return readBytes(tup.GetField(i), td.Types[i].Coll)
 }
 
+func (td TupleDesc) PutBool(buf []byte, v bool) {
+	writeBool(buf, v)
+}
+
+func (td TupleDesc) PutInt8(buf []byte, v int8) {
+	writeInt8(buf, v)
+}
+
+func (td TupleDesc) PutUint8(buf []byte, v uint8) {
+	writeUint8(buf, v)
+}
+
+func (td TupleDesc) PutInt16(buf []byte, v int16) {
+	writeInt16(buf, v)
+}
+
+func (td TupleDesc) PutUint16(buf []byte, v uint16) {
+	writeUint16(buf, v)
+}
+
+func (td TupleDesc) PutInt32(buf []byte, v int32) {
+	writeInt32(buf, v)
+}
+
+func (td TupleDesc) PutUint32(buf []byte, v uint32) {
+	writeUint32(buf, v)
+}
+
+func (td TupleDesc) PutInt64(buf []byte, v int64) {
+	writeInt64(buf, v)
+}
+
+func (td TupleDesc) PutUint64(buf []byte, v uint64) {
+	writeUint64(buf, v)
+}
+
+func (td TupleDesc) PutFloat32(buf []byte, v float32) {
+	writeFloat32(buf, v)
+}
+
+func (td TupleDesc) PutFloat64(buf []byte, v float64) {
+	writeFloat64(buf, v)
+}
+
+func (td TupleDesc) PutString(idx int, buf []byte, v string) {
+	writeString(buf, v, td.types[idx].Coll)
+}
+
+func (td TupleDesc) PutBytes(idx int, buf []byte, v []byte) {
+	writeBytes(buf, v, td.types[idx].Coll)
+}
+
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	for _, enc := range encodings {
 		if enc == td.Types[i].Enc {

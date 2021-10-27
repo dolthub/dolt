@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -200,11 +201,11 @@ type blameInput struct {
 
 func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb.Commit, tableName string) (*blameGraph, error) {
 	// get the commits in reverse topological order ending with `commit`
-	hash, err := commit.HashOf()
+	h, err := commit.HashOf()
 	if err != nil {
 		return nil, err
 	}
-	commits, err := commitwalk.GetTopologicalOrderCommits(ctx, dEnv.DoltDB, hash)
+	commits, err := commitwalk.GetTopologicalOrderCommits(ctx, dEnv.DoltDB, h)
 	if err != nil {
 		return nil, err
 	}
@@ -317,26 +318,21 @@ func blameInputsFromCommits(ctx context.Context, dEnv *env.DoltEnv, tableName st
 }
 
 // rowsFromCommit returns the row data of the table with the given name at the given commit
-func rowsFromCommit(ctx context.Context, commit *doltdb.Commit, tableName string) (types.Map, error) {
+func rowsFromCommit(ctx context.Context, commit *doltdb.Commit, tableName string) (rows prolly.Map, err error) {
 	root, err := commit.GetRootValue()
 	if err != nil {
-		return types.EmptyMap, err
+		return rows, err
 	}
 
-	table, ok, err := root.GetTable(ctx, tableName)
+	tbl, ok, err := root.GetTable(ctx, tableName)
 	if err != nil {
-		return types.EmptyMap, err
+		return rows, err
 	}
 	if !ok {
-		return types.EmptyMap, fmt.Errorf("no table named %s found", tableName)
+		return rows, fmt.Errorf("no table named %s found", tableName)
 	}
 
-	rowData, err := table.GetRowData(ctx)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	return rowData, nil
+	return tbl.GetRowData(ctx)
 }
 
 func getCommitHashes(old, new *doltdb.Commit) (string, string, error) {
@@ -455,19 +451,19 @@ func rowChanged(ctx context.Context, input blameInput, rowPK types.Value) (bool,
 	return !row.AreEqual(*parentRow, *childRow, input.ParentSchema), nil
 }
 
-func blameGraphFromRows(ctx context.Context, nbf *types.NomsBinFormat, rows types.Map) (*blameGraph, error) {
+func blameGraphFromRows(ctx context.Context, nbf *types.NomsBinFormat, rows prolly.Map) (*blameGraph, error) {
 	graph := make(blameGraph)
-	err := rows.IterAll(ctx, func(key, val types.Value) error {
-		hash, err := key.Hash(nbf)
-		if err != nil {
-			return err
-		}
-		graph[hash] = blameInfo{Key: key}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
+	//err := rows.IterAll(ctx, func(key, val val.Value) error {
+	//	hash, err := key.Hash(nbf)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	graph[hash] = blameInfo{Key: key}
+	//	return nil
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
 	return &graph, nil
 }
 

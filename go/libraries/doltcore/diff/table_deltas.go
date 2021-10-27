@@ -295,25 +295,26 @@ func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {
 
 // GetMaps returns the table's row map at the fromRoot and toRoot, or and empty map if the table did not exist.
 func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error) {
-	if td.FromTable != nil {
-		from, err = td.FromTable.GetRowData(ctx)
-		if err != nil {
-			return from, to, err
-		}
-	} else {
-		from, _ = types.NewMap(ctx, td.ToTable.ValueReadWriter())
-	}
-
-	if td.ToTable != nil {
-		to, err = td.ToTable.GetRowData(ctx)
-		if err != nil {
-			return from, to, err
-		}
-	} else {
-		to, _ = types.NewMap(ctx, td.FromTable.ValueReadWriter())
-	}
-
-	return from, to, nil
+	return
+	//if td.FromTable != nil {
+	//	from, err = td.FromTable.GetRowData(ctx)
+	//	if err != nil {
+	//		return from, to, err
+	//	}
+	//} else {
+	//	from, _ = types.NewMap(ctx, td.ToTable.ValueReadWriter())
+	//}
+	//
+	//if td.ToTable != nil {
+	//	to, err = td.ToTable.GetRowData(ctx)
+	//	if err != nil {
+	//		return from, to, err
+	//	}
+	//} else {
+	//	to, _ = types.NewMap(ctx, td.FromTable.ValueReadWriter())
+	//}
+	//
+	//return from, to, nil
 }
 
 func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {

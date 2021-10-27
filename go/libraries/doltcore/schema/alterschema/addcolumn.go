@@ -20,11 +20,8 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Nullable represents whether a column can have a null value.
@@ -169,49 +166,51 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 }
 
 func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, newSchema schema.Schema) (*doltdb.Table, error) {
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
+	return tbl, nil
 
-	me := rowData.Edit()
-
-	newSqlSchema, err := sqlutil.FromDoltSchema(tblName, newSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	columnIndex := -1
-	for i, colTag := range newSchema.GetAllCols().Tags {
-		if colTag == tag {
-			columnIndex = i
-			break
-		}
-	}
-	if columnIndex == -1 {
-		return nil, fmt.Errorf("could not find tag `%d` in new schema", tag)
-	}
-
-	err = rowData.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
-		oldRow, err := row.FromNoms(newSchema, k.(types.Tuple), v.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		newRow, err := sqlutil.ApplyDefaults(ctx, tbl.ValueReadWriter(), newSchema, newSqlSchema, []int{columnIndex}, oldRow)
-		if err != nil {
-			return true, err
-		}
-		me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	newRowData, err := me.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return tbl.UpdateRows(ctx, newRowData)
+	//rowData, err := tbl.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//me := rowData.Edit()
+	//
+	//newSqlSchema, err := sqlutil.FromDoltSchema(tblName, newSchema)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//columnIndex := -1
+	//for i, colTag := range newSchema.GetAllCols().Tags {
+	//	if colTag == tag {
+	//		columnIndex = i
+	//		break
+	//	}
+	//}
+	//if columnIndex == -1 {
+	//	return nil, fmt.Errorf("could not find tag `%d` in new schema", tag)
+	//}
+	//
+	//err = rowData.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
+	//	oldRow, err := row.FromNoms(newSchema, k.(types.Tuple), v.(types.Tuple))
+	//	if err != nil {
+	//		return true, err
+	//	}
+	//	newRow, err := sqlutil.ApplyDefaults(ctx, tbl.ValueReadWriter(), newSchema, newSqlSchema, []int{columnIndex}, oldRow)
+	//	if err != nil {
+	//		return true, err
+	//	}
+	//	me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
+	//	return false, nil
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//newRowData, err := me.Map(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//return tbl.UpdateRows(ctx, newRowData)
 }

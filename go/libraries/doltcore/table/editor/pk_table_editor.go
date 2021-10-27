@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -130,36 +129,37 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		tf:         tf,
 		writeMutex: &sync.Mutex{},
 	}
-	var err error
-	rowData, err := t.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	te.tea = opts.Deaf.NewTableEA(ctx, rowData)
+	//var err error
+	//rowData, err := t.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	for i, index := range tableSch.Indexes().AllIndexes() {
-		indexData, err := t.GetIndexRowData(ctx, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, tableSch, opts)
-	}
-
-	err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.AutoIncrement {
-			te.autoIncVal, err = t.GetAutoIncrementValue(ctx)
-			if err != nil {
-				return true, err
-			}
-			te.hasAutoInc = true
-			te.autoIncCol = col
-			return true, err
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
+	//te.tea = opts.Deaf.NewTableEA(ctx, rowData)
+	//
+	//for i, index := range tableSch.Indexes().AllIndexes() {
+	//	indexData, err := t.GetIndexRowData(ctx, index.Name())
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	te.indexEds[i] = NewIndexEditor(ctx, index, indexData, tableSch, opts)
+	//}
+	//
+	//err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	//	if col.AutoIncrement {
+	//		te.autoIncVal, err = t.GetAutoIncrementValue(ctx)
+	//		if err != nil {
+	//			return true, err
+	//		}
+	//		te.hasAutoInc = true
+	//		te.autoIncCol = col
+	//		return true, err
+	//	}
+	//	return false, nil
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	return te, nil
 }
@@ -177,93 +177,97 @@ func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, in
 		return false, fmt.Errorf("an index editor for `%s` could not be found", indexName)
 	}
 
-	tbl, err := te.Table(ctx)
-	if err != nil {
-		return false, err
-	}
+	return false, nil
 
-	idxMap, err := tbl.GetIndexRowData(ctx, indexName)
-	if err != nil {
-		return false, err
-	}
+	//tbl, err := te.Table(ctx)
+	//if err != nil {
+	//	return false, err
+	//}
+	//
+	//idxMap, err := tbl.GetIndexRowData(ctx, indexName)
+	//if err != nil {
+	//	return false, err
+	//}
 
-	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
-		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			return tuple.StartsWith(key), nil
-		}}},
-	)
+	//indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
+	//	[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+	//		return tuple.StartsWith(key), nil
+	//	}}},
+	//)
 
-	_, err = indexIter.ReadRow(ctx)
-	if err == nil { // row exists
-		return true, nil
-	} else if err != io.EOF {
-		return false, err
-	} else {
-		return false, nil
-	}
+	//_, err = indexIter.ReadRow(ctx)
+	//if err == nil { // row exists
+	//	return true, nil
+	//} else if err != io.EOF {
+	//	return false, err
+	//} else {
+	//	return false, nil
+	//}
 }
 
 // GetIndexedRowKVPs returns all matching row keys and values for the given key on the index. The key is assumed to be in the format
 // expected of the index, similar to searching on the index map itself.
 func GetIndexedRowKVPs(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([][2]types.Tuple, error) {
-	tbl, err := te.Table(ctx)
-	if err != nil {
-		return nil, err
-	}
+	return nil, nil
 
-	idxMap, err := tbl.GetIndexRowData(ctx, indexName)
-	if err != nil {
-		return nil, err
-	}
+	//tbl, err := te.Table(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
-		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			return tuple.StartsWith(key), nil
-		}}},
-	)
+	//idxMap, err := tbl.GetIndexRowData(ctx, indexName)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
+	//	[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+	//		return tuple.StartsWith(key), nil
+	//	}}},
+	//)
 
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
+	//rowData, err := tbl.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	lookupTags := make(map[uint64]int)
-	for i, tag := range te.Schema().GetPKCols().Tags {
-		lookupTags[tag] = i
-	}
+	//lookupTags := make(map[uint64]int)
+	//for i, tag := range te.Schema().GetPKCols().Tags {
+	//	lookupTags[tag] = i
+	//}
+	//
+	//// handle keyless case, where no columns are pk's and rowIdTag is the only lookup tag
+	//if len(lookupTags) == 0 {
+	//	lookupTags[schema.KeylessRowIdTag] = 0
+	//}
 
-	// handle keyless case, where no columns are pk's and rowIdTag is the only lookup tag
-	if len(lookupTags) == 0 {
-		lookupTags[schema.KeylessRowIdTag] = 0
-	}
+	//var rowKVPS [][2]types.Tuple
+	//for {
+	//	k, err := indexIter.ReadKey(ctx)
+	//
+	//	if err == io.EOF {
+	//		break
+	//	} else if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	pkTupleVal, err := indexKeyToTableKey(tbl.Format(), k, lookupTags)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	fieldsVal, ok, err := rowData.MaybeGetTuple(ctx, pkTupleVal)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	if !ok {
+	//		return nil, nil
+	//	}
+	//
+	//	rowKVPS = append(rowKVPS, [2]types.Tuple{pkTupleVal, fieldsVal})
+	//}
 
-	var rowKVPS [][2]types.Tuple
-	for {
-		k, err := indexIter.ReadKey(ctx)
-
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		}
-
-		pkTupleVal, err := indexKeyToTableKey(tbl.Format(), k, lookupTags)
-		if err != nil {
-			return nil, err
-		}
-
-		fieldsVal, ok, err := rowData.MaybeGetTuple(ctx, pkTupleVal)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, nil
-		}
-
-		rowKVPS = append(rowKVPS, [2]types.Tuple{pkTupleVal, fieldsVal})
-	}
-
-	return rowKVPS, nil
+	//return rowKVPS, nil
 
 }
 
@@ -668,70 +672,70 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 		}
 	}
 
-	var tbl *doltdb.Table
-	err = func() error {
-		te.writeMutex.Lock()
-		defer te.writeMutex.Unlock()
+	//var tbl *doltdb.Table
+	//err = func() error {
+	//	te.writeMutex.Lock()
+	//	defer te.writeMutex.Unlock()
+	//
+	//	updatedMap, err := te.tea.MaterializeEdits(ctx, te.nbf)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	newTable, err := te.t.UpdateRows(ctx, updatedMap)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	te.t = newTable
+	//	tbl = te.t
+	//	return nil
+	//}()
 
-		updatedMap, err := te.tea.MaterializeEdits(ctx, te.nbf)
-		if err != nil {
-			return err
-		}
-
-		newTable, err := te.t.UpdateRows(ctx, updatedMap)
-		if err != nil {
-			return err
-		}
-
-		te.t = newTable
-		tbl = te.t
-		return nil
-	}()
-
-	if err != nil {
-		return nil, err
-	}
-
-	idxMutex := &sync.Mutex{}
-	idxWg := &sync.WaitGroup{}
-	idxWg.Add(len(te.indexEds))
-	for i := 0; i < len(te.indexEds); i++ {
-		go func(i int) {
-			defer idxWg.Done()
-			indexMap, idxErr := te.indexEds[i].Map(ctx)
-			idxMutex.Lock()
-			defer idxMutex.Unlock()
-			if err != nil {
-				return
-			}
-			if idxErr != nil {
-				err = idxErr
-				return
-			}
-			tbl, idxErr = tbl.SetIndexRowData(ctx, te.indexEds[i].Index().Name(), indexMap)
-			if idxErr != nil {
-				err = idxErr
-				return
-			}
-		}(i)
-	}
-	idxWg.Wait()
-	if err != nil {
-		return nil, err
-	}
-
-	if te.cvEditor != nil {
-		cvMap, err := te.cvEditor.Map(ctx)
-		if err != nil {
-			return nil, err
-		}
-		te.cvEditor = nil
-		tbl, err = tbl.SetConstraintViolations(ctx, cvMap)
-		if err != nil {
-			return nil, err
-		}
-	}
-	te.t = tbl
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//idxMutex := &sync.Mutex{}
+	//idxWg := &sync.WaitGroup{}
+	//idxWg.Add(len(te.indexEds))
+	//for i := 0; i < len(te.indexEds); i++ {
+	//	go func(i int) {
+	//		defer idxWg.Done()
+	//		indexMap, idxErr := te.indexEds[i].Map(ctx)
+	//		idxMutex.Lock()
+	//		defer idxMutex.Unlock()
+	//		if err != nil {
+	//			return
+	//		}
+	//		if idxErr != nil {
+	//			err = idxErr
+	//			return
+	//		}
+	//		tbl, idxErr = tbl.SetIndexRowData(ctx, te.indexEds[i].Index().Name(), indexMap)
+	//		if idxErr != nil {
+	//			err = idxErr
+	//			return
+	//		}
+	//	}(i)
+	//}
+	//idxWg.Wait()
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if te.cvEditor != nil {
+	//	cvMap, err := te.cvEditor.Map(ctx)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	te.cvEditor = nil
+	//	tbl, err = tbl.SetConstraintViolations(ctx, cvMap)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
+	//te.t = tbl
 
 	return te.t, nil
 }

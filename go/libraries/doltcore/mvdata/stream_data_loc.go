@@ -37,7 +37,7 @@ type StreamDataLocation struct {
 	Reader io.ReadCloser
 }
 
-// String returns a string representation of the data location.
+// String returns a string representation of the rows location.
 func (dl StreamDataLocation) String() string {
 	return "stream"
 }

@@ -72,6 +72,10 @@ func (m Map) Mutate() MutableMap {
 	return newMutableMap(m)
 }
 
+func (m Map) TupleDescriptors() (val.TupleDesc, val.TupleDesc) {
+	return m.keyDesc, m.keyDesc
+}
+
 func (m Map) Count() uint64 {
 	return m.root.cumulativeCount() / 2
 }

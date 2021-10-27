@@ -32,7 +32,6 @@ import (
 	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -55,189 +54,191 @@ func NewMerger(ctx context.Context, root, mergeRoot, ancRoot *doltdb.RootValue, 
 
 // MergeTable merges schema and table data for the table tblName.
 func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *editor.TableEditSession) (*doltdb.Table, *MergeStats, error) {
-	rootHasTable, tbl, rootSchema, rootHash, err := getTableInfoFromRoot(ctx, tblName, merger.root)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeHasTable, mergeTbl, mergeSchema, mergeHash, err := getTableInfoFromRoot(ctx, tblName, merger.mergeRoot)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ancHasTable, ancTbl, ancSchema, ancHash, err := getTableInfoFromRoot(ctx, tblName, merger.ancRoot)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var ancRows types.Map
-	if ancHasTable {
-		ancRows, err = ancTbl.GetRowData(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	{ // short-circuit logic
-
-		// Nothing changed
-		if rootHasTable && mergeHasTable && ancHasTable && rootHash == mergeHash && rootHash == ancHash {
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
-		}
-
-		// Both made identical changes
-		// For keyless tables, this counts as a conflict
-		if rootHasTable && mergeHasTable && rootHash == mergeHash && !schema.IsKeyless(rootSchema) {
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
-		}
-
-		// One or both added this table
-		if !ancHasTable {
-			if mergeHasTable && rootHasTable {
-				if schema.SchemasAreEqual(rootSchema, mergeSchema) {
-					// If both added the same table, pretend it was in the ancestor all along with no data
-					// Don't touch ancHash to avoid triggering other short-circuit logic below
-					ancHasTable, ancSchema, ancTbl = true, rootSchema, tbl
-					ancRows, _ = types.NewMap(ctx, merger.vrw)
-				} else {
-					return nil, nil, ErrSameTblAddedTwice
-				}
-			} else if rootHasTable {
-				// fast-forward
-				return tbl, &MergeStats{Operation: TableUnmodified}, nil
-			} else {
-				// fast-forward
-				return mergeTbl, &MergeStats{Operation: TableAdded}, nil
-			}
-		}
-
-		// Deleted in both, fast-forward
-		if ancHasTable && !rootHasTable && !mergeHasTable {
-			return nil, &MergeStats{Operation: TableRemoved}, nil
-		}
-
-		// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
-		if ancHasTable && (!rootHasTable || !mergeHasTable) {
-			if (mergeHasTable && mergeHash != ancHash) ||
-				(rootHasTable && rootHash != ancHash) {
-				return nil, nil, ErrTableDeletedAndModified
-			}
-			// fast-forward
-			return nil, &MergeStats{Operation: TableRemoved}, nil
-		}
-
-		// Changes only in root, table unmodified
-		if mergeHash == ancHash {
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
-		}
-
-		// Changes only in merge root, fast-forward
-		if rootHash == ancHash {
-			ms := MergeStats{Operation: TableModified}
-			if rootHash != mergeHash {
-				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
-				if err != nil {
-					return nil, nil, err
-				}
-			}
-			// force load the table editor since this counts as a change
-			_, err := sess.GetTableEditor(ctx, tblName, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-			return mergeTbl, &ms, nil
-		}
-	}
-
-	postMergeSchema, schConflicts, err := SchemaMerge(rootSchema, mergeSchema, ancSchema, tblName)
-	if err != nil {
-		return nil, nil, err
-	}
-	if schConflicts.Count() != 0 {
-		// error on schema conflicts for now
-		return nil, nil, schConflicts.AsError()
-	}
-
-	updatedTbl, err := tbl.UpdateSchema(ctx, postMergeSchema)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// If any indexes were added during the merge, then we need to generate their row data to add to our updated table.
-	addedIndexesSet := make(map[string]string)
-	for _, index := range postMergeSchema.Indexes().AllIndexes() {
-		addedIndexesSet[strings.ToLower(index.Name())] = index.Name()
-	}
-	for _, index := range rootSchema.Indexes().AllIndexes() {
-		delete(addedIndexesSet, strings.ToLower(index.Name()))
-	}
-	for _, addedIndex := range addedIndexesSet {
-		newIndexData, err := editor.RebuildIndex(ctx, updatedTbl, addedIndex, sess.Opts)
-		if err != nil {
-			return nil, nil, err
-		}
-		updatedTbl, err = updatedTbl.SetIndexRowData(ctx, addedIndex, newIndexData)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	err = sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-		return root.PutTable(ctx, tblName, updatedTbl)
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	updatedTblEditor, err := sess.GetTableEditor(ctx, tblName, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rows, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeRows, err := mergeTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	resultTbl, conflicts, stats, err := mergeTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, ancRows, updatedTblEditor, sess)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if conflicts.Len() > 0 {
-
-		asr, err := ancTbl.GetSchemaRef()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		sr, err := tbl.GetSchemaRef()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		msr, err := mergeTbl.GetSchemaRef()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		schemas := doltdb.NewConflict(asr, sr, msr)
-		resultTbl, err = resultTbl.SetConflicts(ctx, schemas, conflicts)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	resultTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, resultTbl)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return resultTbl, stats, nil
+	return nil, nil, nil
+	//
+	//rootHasTable, tbl, rootSchema, rootHash, err := getTableInfoFromRoot(ctx, tblName, merger.root)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//mergeHasTable, mergeTbl, mergeSchema, mergeHash, err := getTableInfoFromRoot(ctx, tblName, merger.mergeRoot)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//ancHasTable, ancTbl, ancSchema, ancHash, err := getTableInfoFromRoot(ctx, tblName, merger.ancRoot)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//var ancRows types.Map
+	//if ancHasTable {
+	//	ancRows, err = ancTbl.GetRowData(ctx)
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//}
+	//
+	//{ // short-circuit logic
+	//
+	//	// Nothing changed
+	//	if rootHasTable && mergeHasTable && ancHasTable && rootHash == mergeHash && rootHash == ancHash {
+	//		return tbl, &MergeStats{Operation: TableUnmodified}, nil
+	//	}
+	//
+	//	// Both made identical changes
+	//	// For keyless tables, this counts as a conflict
+	//	if rootHasTable && mergeHasTable && rootHash == mergeHash && !schema.IsKeyless(rootSchema) {
+	//		return tbl, &MergeStats{Operation: TableUnmodified}, nil
+	//	}
+	//
+	//	// One or both added this table
+	//	if !ancHasTable {
+	//		if mergeHasTable && rootHasTable {
+	//			if schema.SchemasAreEqual(rootSchema, mergeSchema) {
+	//				// If both added the same table, pretend it was in the ancestor all along with no data
+	//				// Don't touch ancHash to avoid triggering other short-circuit logic below
+	//				ancHasTable, ancSchema, ancTbl = true, rootSchema, tbl
+	//				ancRows, _ = types.NewMap(ctx, merger.vrw)
+	//			} else {
+	//				return nil, nil, ErrSameTblAddedTwice
+	//			}
+	//		} else if rootHasTable {
+	//			// fast-forward
+	//			return tbl, &MergeStats{Operation: TableUnmodified}, nil
+	//		} else {
+	//			// fast-forward
+	//			return mergeTbl, &MergeStats{Operation: TableAdded}, nil
+	//		}
+	//	}
+	//
+	//	// Deleted in both, fast-forward
+	//	if ancHasTable && !rootHasTable && !mergeHasTable {
+	//		return nil, &MergeStats{Operation: TableRemoved}, nil
+	//	}
+	//
+	//	// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
+	//	if ancHasTable && (!rootHasTable || !mergeHasTable) {
+	//		if (mergeHasTable && mergeHash != ancHash) ||
+	//			(rootHasTable && rootHash != ancHash) {
+	//			return nil, nil, ErrTableDeletedAndModified
+	//		}
+	//		// fast-forward
+	//		return nil, &MergeStats{Operation: TableRemoved}, nil
+	//	}
+	//
+	//	// Changes only in root, table unmodified
+	//	if mergeHash == ancHash {
+	//		return tbl, &MergeStats{Operation: TableUnmodified}, nil
+	//	}
+	//
+	//	// Changes only in merge root, fast-forward
+	//	if rootHash == ancHash {
+	//		ms := MergeStats{Operation: TableModified}
+	//		if rootHash != mergeHash {
+	//			ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
+	//			if err != nil {
+	//				return nil, nil, err
+	//			}
+	//		}
+	//		// force load the table editor since this counts as a change
+	//		_, err := sess.GetTableEditor(ctx, tblName, nil)
+	//		if err != nil {
+	//			return nil, nil, err
+	//		}
+	//		return mergeTbl, &ms, nil
+	//	}
+	//}
+	//
+	//postMergeSchema, schConflicts, err := SchemaMerge(rootSchema, mergeSchema, ancSchema, tblName)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//if schConflicts.Count() != 0 {
+	//	// error on schema conflicts for now
+	//	return nil, nil, schConflicts.AsError()
+	//}
+	//
+	//updatedTbl, err := tbl.UpdateSchema(ctx, postMergeSchema)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//// If any indexes were added during the merge, then we need to generate their row data to add to our updated table.
+	//addedIndexesSet := make(map[string]string)
+	//for _, index := range postMergeSchema.Indexes().AllIndexes() {
+	//	addedIndexesSet[strings.ToLower(index.Name())] = index.Name()
+	//}
+	//for _, index := range rootSchema.Indexes().AllIndexes() {
+	//	delete(addedIndexesSet, strings.ToLower(index.Name()))
+	//}
+	//for _, addedIndex := range addedIndexesSet {
+	//	newIndexData, err := editor.RebuildIndex(ctx, updatedTbl, addedIndex, sess.Opts)
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//	updatedTbl, err = updatedTbl.SetIndexRowData(ctx, addedIndex, newIndexData)
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//}
+	//
+	//err = sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+	//	return root.PutTable(ctx, tblName, updatedTbl)
+	//})
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//updatedTblEditor, err := sess.GetTableEditor(ctx, tblName, nil)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//rows, err := tbl.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//mergeRows, err := mergeTbl.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//resultTbl, conflicts, stats, err := mergeTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, ancRows, updatedTblEditor, sess)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//if conflicts.Len() > 0 {
+	//
+	//	asr, err := ancTbl.GetSchemaRef()
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//
+	//	sr, err := tbl.GetSchemaRef()
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//
+	//	msr, err := mergeTbl.GetSchemaRef()
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//
+	//	schemas := doltdb.NewConflict(asr, sr, msr)
+	//	resultTbl, err = resultTbl.SetConflicts(ctx, schemas, conflicts)
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//}
+	//
+	//resultTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, resultTbl)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//return resultTbl, stats, nil
 }
 
 func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.RootValue) (
@@ -267,41 +268,41 @@ func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.Root
 }
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {
-	rows, err := tbl.GetRowData(ctx)
+	//rows, err := tbl.GetRowData(ctx)
+	//
+	//if err != nil {
+	//	return MergeStats{}, err
+	//}
+	//
+	//mergeRows, err := mergeTbl.GetRowData(ctx)
+	//
+	//if err != nil {
+	//	return MergeStats{}, err
+	//}
 
-	if err != nil {
-		return MergeStats{}, err
-	}
-
-	mergeRows, err := mergeTbl.GetRowData(ctx)
-
-	if err != nil {
-		return MergeStats{}, err
-	}
-
-	ae := atomicerr.New()
-	ch := make(chan diff.DiffSummaryProgress)
-	go func() {
-		defer close(ch)
-		err := diff.Summary(ctx, ch, rows, mergeRows)
-
-		ae.SetIfError(err)
-	}()
+	//ae := atomicerr.New()
+	//ch := make(chan diff.DiffSummaryProgress)
+	//go func() {
+	//	defer close(ch)
+	//	err := diff.Summary(ctx, ch, rows, mergeRows)
+	//
+	//	ae.SetIfError(err)
+	//}()
 
 	ms := MergeStats{Operation: TableModified}
-	for p := range ch {
-		if ae.IsSet() {
-			break
-		}
-
-		ms.Adds += int(p.Adds)
-		ms.Deletes += int(p.Removes)
-		ms.Modifications += int(p.Changes)
-	}
-
-	if err := ae.Get(); err != nil {
-		return MergeStats{}, err
-	}
+	//for p := range ch {
+	//	if ae.IsSet() {
+	//		break
+	//	}
+	//
+	//	ms.Adds += int(p.Adds)
+	//	ms.Deletes += int(p.Removes)
+	//	ms.Modifications += int(p.Changes)
+	//}
+	//
+	//if err := ae.Get(); err != nil {
+	//	return MergeStats{}, err
+	//}
 
 	return ms, nil
 }

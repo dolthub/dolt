@@ -17,8 +17,6 @@ package alterschema
 import (
 	"context"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -27,51 +25,53 @@ import (
 )
 
 func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *types.NomsBinFormat, opts editor.Options) (*doltdb.Table, error) {
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
+	return table, nil
 
-	if sch.GetPKCols().Size() == 0 {
-		return nil, sql.ErrCantDropFieldOrKey.New("PRIMARY")
-	}
-
-	// Modify the schema to convert the primary key cols into non primary key cols
-	newCollection := schema.MapColCollection(sch.GetAllCols(), func(col schema.Column) schema.Column {
-		col.IsPartOfPK = false
-		return col
-	})
-
-	newSchema, err := schema.SchemaFromCols(newCollection)
-	if err != nil {
-		return nil, err
-	}
-
-	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
-
-	table, err = table.UpdateSchema(ctx, newSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert all of the keyed row data to keyless row data
-	rowData, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	newRowData, err := keyedRowDataToKeylessRowData(ctx, nbf, table.ValueReadWriter(), rowData, newSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	table, err = table.UpdateRows(ctx, newRowData)
-	if err != nil {
-		return nil, err
-	}
-
-	// Rebuild all of the indexes now that the primary key has been changed
-	return editor.RebuildAllIndexes(ctx, table, opts)
+	//sch, err := table.GetSchema(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if sch.GetPKCols().Size() == 0 {
+	//	return nil, sql.ErrCantDropFieldOrKey.New("PRIMARY")
+	//}
+	//
+	//// Modify the schema to convert the primary key cols into non primary key cols
+	//newCollection := schema.MapColCollection(sch.GetAllCols(), func(col schema.Column) schema.Column {
+	//	col.IsPartOfPK = false
+	//	return col
+	//})
+	//
+	//newSchema, err := schema.SchemaFromCols(newCollection)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
+	//
+	//table, err = table.UpdateSchema(ctx, newSchema)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//// Convert all of the keyed row data to keyless row data
+	//rowData, err := table.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//newRowData, err := keyedRowDataToKeylessRowData(ctx, nbf, table.ValueReadWriter(), rowData, newSchema)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//table, err = table.UpdateRows(ctx, newRowData)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//// Rebuild all of the indexes now that the primary key has been changed
+	//return editor.RebuildAllIndexes(ctx, table, opts)
 }
 
 func keyedRowDataToKeylessRowData(ctx context.Context, nbf *types.NomsBinFormat, vrw types.ValueReadWriter, rowData types.Map, newSch schema.Schema) (types.Map, error) {

@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -39,9 +39,8 @@ var resultBufferPool = &sync.Pool{
 
 type indexLookupRowIterAdapter struct {
 	idx        DoltIndex
-	keyIter    nomsKeyIter
+	keyIter    keyIter
 	lookupTags map[uint64]int
-	conv       *KVToSqlRowConverter
 	ctx        *sql.Context
 	cancelF    func()
 
@@ -52,7 +51,7 @@ type indexLookupRowIterAdapter struct {
 }
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
-func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsKeyIter) *indexLookupRowIterAdapter {
+func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter keyIter) *indexLookupRowIterAdapter {
 	lookupTags := make(map[uint64]int)
 	for i, tag := range idx.Schema().GetPKCols().Tags {
 		lookupTags[tag] = i
@@ -63,8 +62,6 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 		lookupTags[schema.KeylessRowIdTag] = 0
 	}
 
-	cols := idx.Schema().GetAllCols().GetColumns()
-	conv := NewKVToSqlRowConverterForCols(idx.IndexRowData().Format(), cols)
 	resBuf := resultBufferPool.Get().(*async.RingBuffer)
 	epoch := resBuf.Reset()
 
@@ -73,7 +70,6 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 	iter := &indexLookupRowIterAdapter{
 		idx:        idx,
 		keyIter:    keyIter,
-		conv:       conv,
 		lookupTags: lookupTags,
 		ctx:        ctx,
 		cancelF:    cancelF,
@@ -155,85 +151,85 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context, epoch int) {
 	}
 }
 
-func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple) (types.Tuple, error) {
-	tplItr, err := indexKey.Iterator()
-
-	if err != nil {
-		return types.Tuple{}, err
-	}
-
-	resVals := make([]types.Value, len(i.lookupTags)*2)
-	for {
-		_, tag, err := tplItr.NextUint64()
-
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return types.Tuple{}, err
-		}
-
-		idx, inKey := i.lookupTags[tag]
-
-		if inKey {
-			_, valVal, err := tplItr.Next()
-
-			if err != nil {
-				return types.Tuple{}, err
-			}
-
-			resVals[idx*2] = types.Uint(tag)
-			resVals[idx*2+1] = valVal
-		} else {
-			err := tplItr.Skip()
-
-			if err != nil {
-				return types.Tuple{}, err
-			}
-		}
-	}
-
-	return types.NewTuple(nbf, resVals...)
+func (i *indexLookupRowIterAdapter) indexKeyToTableKey(indexKey val.Tuple) (val.Tuple, error) {
+	panic("unimplement")
+	//tplItr, err := indexKey.Iterator()
+	//
+	//if err != nil {
+	//	return types.Tuple{}, err
+	//}
+	//
+	//resVals := make([]types.Value, len(i.lookupTags)*2)
+	//for {
+	//	_, tag, err := tplItr.NextUint64()
+	//
+	//	if err != nil {
+	//		if err == io.EOF {
+	//			break
+	//		}
+	//
+	//		return types.Tuple{}, err
+	//	}
+	//
+	//	idx, inKey := i.lookupTags[tag]
+	//
+	//	if inKey {
+	//		_, valVal, err := tplItr.Next()
+	//
+	//		if err != nil {
+	//			return types.Tuple{}, err
+	//		}
+	//
+	//		resVals[idx*2] = types.Uint(tag)
+	//		resVals[idx*2+1] = valVal
+	//	} else {
+	//		err := tplItr.Skip()
+	//
+	//		if err != nil {
+	//			return types.Tuple{}, err
+	//		}
+	//	}
+	//}
+	//
+	//return types.NewTuple(nbf, resVals...)
 }
 
 // processKey is called within queueRows and processes each key, sending the resulting row to the row channel.
-func (i *indexLookupRowIterAdapter) processKey(indexKey types.Tuple) (sql.Row, error) {
-	tableData := i.idx.TableData()
-
-	pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), indexKey)
-	if err != nil {
-		return nil, err
-	}
-
-	fieldsVal, ok, err := tableData.MaybeGetTuple(i.ctx, pkTupleVal)
-	if err != nil {
-		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
-	}
-
-	sqlRow, err := i.conv.ConvertKVTuplesToSqlRow(pkTupleVal, fieldsVal)
-	if err != nil {
-		return nil, err
-	}
-
-	return sqlRow, nil
+func (i *indexLookupRowIterAdapter) processKey(indexKey val.Tuple) (sql.Row, error) {
+	panic("unimplement")
+	//tableData := i.idx.TableData()
+	//
+	//pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), indexKey)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//fieldsVal, ok, err := tableData.MaybeGetTuple(i.ctx, pkTupleVal)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if !ok {
+	//	return nil, nil
+	//}
+	//
+	//sqlRow, err := i.conv.ConvertKVTuplesToSqlRow(pkTupleVal, fieldsVal)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//return sqlRow, nil
 }
 
 type coveringIndexRowIterAdapter struct {
-	idx       DoltIndex
-	keyIter   nomsKeyIter
-	conv      *KVToSqlRowConverter
 	ctx       *sql.Context
+	idx       DoltIndex
+	keyIter   keyIter
 	pkCols    *schema.ColCollection
 	nonPKCols *schema.ColCollection
-	nbf       *types.NomsBinFormat
 }
 
-func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsKeyIter, resultCols []string) *coveringIndexRowIterAdapter {
+func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter keyIter, resultCols []string) *coveringIndexRowIterAdapter {
 	idxCols := idx.IndexSchema().GetPKCols()
 	tblPKCols := idx.Schema().GetPKCols()
 	sch := idx.Schema()
@@ -257,25 +253,23 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nom
 	}
 
 	return &coveringIndexRowIterAdapter{
+		ctx:       ctx,
 		idx:       idx,
 		keyIter:   keyIter,
-		conv:      NewKVToSqlRowConverter(idx.IndexRowData().Format(), tagToSqlColIdx, cols, len(cols)),
-		ctx:       ctx,
 		pkCols:    sch.GetPKCols(),
 		nonPKCols: sch.GetNonPKCols(),
-		nbf:       idx.TableData().Format(),
 	}
 }
 
 // Next returns the next row from the iterator.
 func (ci *coveringIndexRowIterAdapter) Next() (sql.Row, error) {
-	key, err := ci.keyIter.ReadKey(ci.ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return ci.conv.ConvertKVTuplesToSqlRow(key, types.Tuple{})
+	panic("unimplement")
+	//key, err := ci.keyIter.ReadKey(ci.ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//return nil, nil
 }
 
 func (ci *coveringIndexRowIterAdapter) Close(*sql.Context) error {

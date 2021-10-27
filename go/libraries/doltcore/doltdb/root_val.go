@@ -18,8 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"strings"
+
+	"github.com/dolthub/dolt/go/store/prolly"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -738,18 +739,18 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	emptyProlly :=  prolly.NewEmptyMap(sch, root.VRW())
+	emptyProlly := prolly.NewEmptyMap(sch)
 	emptyRef, err := writeProllyMapAndGetRef(ctx, root.VRW(), emptyProlly)
 	if err != nil {
 		return nil, err
 	}
 
-	empty, err := types.NewMap(ctx, root.VRW())
+	indexes, err := types.NewMap(ctx, root.VRW())
 	if err != nil {
 		return nil, err
 	}
 
-	ed := empty.Edit()
+	ed := indexes.Edit()
 	err = sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
 		// create an empty indexRowData map for every index
 		ed.Set(types.String(index.Name()), emptyRef)
@@ -759,7 +760,7 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	indexes, err := ed.Map(ctx)
+	indexes, err = ed.Map(ctx)
 	if err != nil {
 		return nil, err
 	}

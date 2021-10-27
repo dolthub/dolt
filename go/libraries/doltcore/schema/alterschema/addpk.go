@@ -17,7 +17,6 @@ package alterschema
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -103,74 +101,74 @@ func rearrangeSchema(sch schema.Schema, cols []sql.IndexColumn) (schema.Schema, 
 }
 
 func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *doltdb.Table, newSchema schema.Schema, name string, opts editor.Options) (*doltdb.Table, error) {
-	panic("todo")
-
-	marshalledSchema, err := encoding.MarshalSchemaAsNomsValue(context.Background(), oldTable.ValueReadWriter(), newSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	empty, err := types.NewMap(ctx, oldTable.ValueReadWriter())
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the new Table and rebuild all the indexes
-	newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), marshalledSchema, prolly.Map{}, empty, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	newTable, err = editor.RebuildAllIndexes(ctx, newTable, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the table editor and insert all of the new data into it
-	tableEditor, err := editor.NewTableEditor(ctx, newTable, newSchema, name, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	oldRowData, err := oldTable.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	err = oldRowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
-		keyless, card, err := row.KeylessRowsFromTuples(key.(types.Tuple), value.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-
-		// A row that exists more than once must be a duplicate.
-		if card > 1 {
-			return true, fmtPrimaryKeyError(newSchema, keyless)
-		}
-
-		taggedVals, err := keyless.TaggedValues()
-		if err != nil {
-			return true, err
-		}
-
-		keyedRow, err := row.New(nbf, newSchema, taggedVals)
-		if err != nil {
-			return true, err
-		}
-
-		err = tableEditor.InsertRow(ctx, keyedRow, duplicatePkFunction)
-		if err != nil {
-			return true, err
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return tableEditor.Table(ctx)
+	return oldTable, nil
+	//
+	//marshalledSchema, err := encoding.MarshalSchemaAsNomsValue(context.Background(), oldTable.ValueReadWriter(), newSchema)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//empty, err := types.NewMap(ctx, oldTable.ValueReadWriter())
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//// Create the new Table and rebuild all the indexes
+	//newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), marshalledSchema, prolly.Map{}, empty, nil)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//newTable, err = editor.RebuildAllIndexes(ctx, newTable, opts)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//// Create the table editor and insert all of the new data into it
+	//tableEditor, err := editor.NewTableEditor(ctx, newTable, newSchema, name, opts)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//oldRowData, err := oldTable.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//err = oldRowData.Iter(ctx, func(key types.Value, value types.Value) (stop bool, err error) {
+	//	keyless, card, err := row.KeylessRowsFromTuples(key.(types.Tuple), value.(types.Tuple))
+	//	if err != nil {
+	//		return true, err
+	//	}
+	//
+	//	// A row that exists more than once must be a duplicate.
+	//	if card > 1 {
+	//		return true, fmtPrimaryKeyError(newSchema, keyless)
+	//	}
+	//
+	//	taggedVals, err := keyless.TaggedValues()
+	//	if err != nil {
+	//		return true, err
+	//	}
+	//
+	//	keyedRow, err := row.New(nbf, newSchema, taggedVals)
+	//	if err != nil {
+	//		return true, err
+	//	}
+	//
+	//	err = tableEditor.InsertRow(ctx, keyedRow, duplicatePkFunction)
+	//	if err != nil {
+	//		return true, err
+	//	}
+	//
+	//	return false, nil
+	//})
+	//
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//return tableEditor.Table(ctx)
 }
 
 func fmtPrimaryKeyError(sch schema.Schema, keylessRow row.Row) error {

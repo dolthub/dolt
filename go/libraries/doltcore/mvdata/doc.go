@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package mvdata provides the ability to move data to, or from data locations (file, table, etc)
+// Package mvdata provides the ability to move rows to, or from rows locations (file, table, etc)
 package mvdata

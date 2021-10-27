@@ -191,7 +191,7 @@ func listTableVerbose(ctx context.Context, tbl string, root *doltdb.RootValue) (
 		return "", errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
 	}
 
-	return fmt.Sprintf("\t%-32s %s    %d rows\n", tbl, h.String(), rows.Len()), nil
+	return fmt.Sprintf("\t%-32s %s    %d rows\n", tbl, h.String(), rows.Count()), nil
 }
 
 func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {

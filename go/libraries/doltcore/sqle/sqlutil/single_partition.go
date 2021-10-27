@@ -18,7 +18,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/prolly"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -26,7 +26,7 @@ import (
 var _ sql.Partition = SinglePartition{}
 
 type SinglePartition struct {
-	RowData types.Map
+	RowData prolly.Map
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition. We have only a single partition
@@ -39,10 +39,10 @@ var _ sql.PartitionIter = SinglePartitionIter{}
 
 type SinglePartitionIter struct {
 	once    *sync.Once
-	RowData types.Map
+	RowData prolly.Map
 }
 
-func NewSinglePartitionIter(rowData types.Map) SinglePartitionIter {
+func NewSinglePartitionIter(rowData prolly.Map) SinglePartitionIter {
 	return SinglePartitionIter{&sync.Once{}, rowData}
 }
 

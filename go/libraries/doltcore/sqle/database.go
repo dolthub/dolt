@@ -28,15 +28,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
@@ -270,85 +267,85 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 }
 
 func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
-	lwrName := strings.ToLower(tblName)
+	//lwrName := strings.ToLower(tblName)
 
-	sess := dsess.DSessFromSess(ctx.Session)
+	//sess := dsess.DSessFromSess(ctx.Session)
 
-	// NOTE: system tables are not suitable for caching
-	switch {
-	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
-		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
-		head, err := sess.GetHeadCommit(ctx, db.name)
-		if err != nil {
-			return nil, false, err
-		}
-		dt, err := dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
-		if err != nil {
-			return nil, false, err
-		}
-		return dt, true, nil
-	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
-		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
-		dt, err := dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root)
-		if err != nil {
-			return nil, false, err
-		}
-		return dt, true, nil
-	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
-		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
-		head, err := sess.GetHeadCommit(ctx, db.name)
-		if err != nil {
-			return nil, false, err
-		}
-		dt, err := dtables.NewHistoryTable(ctx, suffix, db.ddb, root, head)
-		if err != nil {
-			return nil, false, err
-		}
-		return dt, true, nil
-	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
-		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
-		dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
-		if err != nil {
-			return nil, false, err
-		}
-		return dt, true, nil
-	case strings.HasPrefix(lwrName, doltdb.DoltConstViolTablePrefix):
-		suffix := tblName[len(doltdb.DoltConstViolTablePrefix):]
-		dt, err := dtables.NewConstraintViolationsTable(ctx, suffix, root, dtables.RootSetter(db))
-		if err != nil {
-			return nil, false, err
-		}
-		return dt, true, nil
-	}
-
-	// NOTE: system tables are not suitable for caching
-	var dt sql.Table
-	found := false
-	switch lwrName {
-	case doltdb.LogTableName:
-		head, err := sess.GetHeadCommit(ctx, db.name)
-		if err != nil {
-			return nil, false, err
-		}
-		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
-	case doltdb.TableOfTablesInConflictName:
-		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.ddb, root), true
-	case doltdb.TableOfTablesWithViolationsName:
-		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
-	case doltdb.BranchesTableName:
-		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
-	case doltdb.RemotesTableName:
-		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
-	case doltdb.CommitsTableName:
-		dt, found = dtables.NewCommitsTable(ctx, db.ddb), true
-	case doltdb.CommitAncestorsTableName:
-		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
-	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}), db.drw), true
-	}
-	if found {
-		return dt, found, nil
-	}
+	//// NOTE: system tables are not suitable for caching
+	//switch {
+	//case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
+	//	suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
+	//	head, err := sess.GetHeadCommit(ctx, db.name)
+	//	if err != nil {
+	//		return nil, false, err
+	//	}
+	//	dt, err := dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
+	//	if err != nil {
+	//		return nil, false, err
+	//	}
+	//	return dt, true, nil
+	//case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
+	//	suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
+	//	dt, err := dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root)
+	//	if err != nil {
+	//		return nil, false, err
+	//	}
+	//	return dt, true, nil
+	//case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
+	//	suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
+	//	head, err := sess.GetHeadCommit(ctx, db.name)
+	//	if err != nil {
+	//		return nil, false, err
+	//	}
+	//	dt, err := dtables.NewHistoryTable(ctx, suffix, db.ddb, root, head)
+	//	if err != nil {
+	//		return nil, false, err
+	//	}
+	//	return dt, true, nil
+	//case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
+	//	suffix := tblName[len(doltdb.DoltConfTablePrefix):]
+	//	dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
+	//	if err != nil {
+	//		return nil, false, err
+	//	}
+	//	return dt, true, nil
+	//case strings.HasPrefix(lwrName, doltdb.DoltConstViolTablePrefix):
+	//	suffix := tblName[len(doltdb.DoltConstViolTablePrefix):]
+	//	dt, err := dtables.NewConstraintViolationsTable(ctx, suffix, root, dtables.RootSetter(db))
+	//	if err != nil {
+	//		return nil, false, err
+	//	}
+	//	return dt, true, nil
+	//}
+	//
+	//// NOTE: system tables are not suitable for caching
+	//var dt sql.Table
+	//found := false
+	//switch lwrName {
+	//case doltdb.LogTableName:
+	//	head, err := sess.GetHeadCommit(ctx, db.name)
+	//	if err != nil {
+	//		return nil, false, err
+	//	}
+	//	dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
+	//case doltdb.TableOfTablesInConflictName:
+	//	dt, found = dtables.NewTableOfTablesInConflict(ctx, db.ddb, root), true
+	//case doltdb.TableOfTablesWithViolationsName:
+	//	dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
+	//case doltdb.BranchesTableName:
+	//	dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
+	//case doltdb.RemotesTableName:
+	//	dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
+	//case doltdb.CommitsTableName:
+	//	dt, found = dtables.NewCommitsTable(ctx, db.ddb), true
+	//case doltdb.CommitAncestorsTableName:
+	//	dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
+	//case doltdb.StatusTableName:
+	//	dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}), db.drw), true
+	//}
+	//if found {
+	//	return dt, found, nil
+	//}
 
 	return db.getTable(ctx, root, tblName, false)
 }
@@ -1001,70 +998,71 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 
 // GetStoredProcedures implements sql.StoredProcedureDatabase.
 func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureDetails, error) {
-	missingValue := errors.NewKind("missing `%s` value for procedure row: (%s)")
-
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	table, ok, err := root.GetTable(ctx, doltdb.ProceduresTableName)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
-	}
-
-	rowData, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var spds []sql.StoredProcedureDetails
-	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
-		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		taggedVals, err := dRow.TaggedValues()
-		if err != nil {
-			return true, err
-		}
-
-		name, ok := dRow.GetColVal(schema.DoltProceduresNameTag)
-		if !ok {
-			return true, missingValue.New(doltdb.ProceduresTableNameCol, taggedVals)
-		}
-		createStmt, ok := dRow.GetColVal(schema.DoltProceduresCreateStmtTag)
-		if !ok {
-			return true, missingValue.New(doltdb.ProceduresTableCreateStmtCol, taggedVals)
-		}
-		createdAt, ok := dRow.GetColVal(schema.DoltProceduresCreatedAtTag)
-		if !ok {
-			return true, missingValue.New(doltdb.ProceduresTableCreatedAtCol, taggedVals)
-		}
-		modifiedAt, ok := dRow.GetColVal(schema.DoltProceduresModifiedAtTag)
-		if !ok {
-			return true, missingValue.New(doltdb.ProceduresTableModifiedAtCol, taggedVals)
-		}
-		spds = append(spds, sql.StoredProcedureDetails{
-			Name:            string(name.(types.String)),
-			CreateStatement: string(createStmt.(types.String)),
-			CreatedAt:       time.Time(createdAt.(types.Timestamp)),
-			ModifiedAt:      time.Time(modifiedAt.(types.Timestamp)),
-		})
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return spds, nil
+	return nil, nil
+	//missingValue := errors.NewKind("missing `%s` value for procedure row: (%s)")
+	//
+	//root, err := db.GetRoot(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//table, ok, err := root.GetTable(ctx, doltdb.ProceduresTableName)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//if !ok {
+	//	return nil, nil
+	//}
+	//
+	//rowData, err := table.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//sch, err := table.GetSchema(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//var spds []sql.StoredProcedureDetails
+	//err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
+	//	dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
+	//	if err != nil {
+	//		return true, err
+	//	}
+	//	taggedVals, err := dRow.TaggedValues()
+	//	if err != nil {
+	//		return true, err
+	//	}
+	//
+	//	name, ok := dRow.GetColVal(schema.DoltProceduresNameTag)
+	//	if !ok {
+	//		return true, missingValue.New(doltdb.ProceduresTableNameCol, taggedVals)
+	//	}
+	//	createStmt, ok := dRow.GetColVal(schema.DoltProceduresCreateStmtTag)
+	//	if !ok {
+	//		return true, missingValue.New(doltdb.ProceduresTableCreateStmtCol, taggedVals)
+	//	}
+	//	createdAt, ok := dRow.GetColVal(schema.DoltProceduresCreatedAtTag)
+	//	if !ok {
+	//		return true, missingValue.New(doltdb.ProceduresTableCreatedAtCol, taggedVals)
+	//	}
+	//	modifiedAt, ok := dRow.GetColVal(schema.DoltProceduresModifiedAtTag)
+	//	if !ok {
+	//		return true, missingValue.New(doltdb.ProceduresTableModifiedAtCol, taggedVals)
+	//	}
+	//	spds = append(spds, sql.StoredProcedureDetails{
+	//		Name:            string(name.(types.String)),
+	//		CreateStatement: string(createStmt.(types.String)),
+	//		CreatedAt:       time.Time(createdAt.(types.Timestamp)),
+	//		ModifiedAt:      time.Time(modifiedAt.(types.Timestamp)),
+	//	})
+	//	return false, nil
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
+	//return spds, nil
 }
 
 // SaveStoredProcedure implements sql.StoredProcedureDatabase.
@@ -1078,61 +1076,62 @@ func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
 }
 
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, existingErr error) (retErr error) {
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
-	if err != nil {
-		return err
-	}
-
-	_, exists, err := fragFromSchemasTable(ctx, tbl, fragType, name)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return existingErr
-	}
-
-	// If rows exist, then grab the highest id and add 1 to get the new id
-	indexToUse := int64(1)
-	ts, err := db.TableEditSession(ctx, tbl.IsTemporary())
-	if err != nil {
-		return err
-	}
-
-	te, err := ts.GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
-	if err != nil {
-		return err
-	}
-	dTable, err := te.Table(ctx)
-	if err != nil {
-		return err
-	}
-	rowData, err := dTable.GetRowData(ctx)
-	if err != nil {
-		return err
-	}
-	if rowData.Len() > 0 {
-		keyTpl, _, err := rowData.Last(ctx)
-		if err != nil {
-			return err
-		}
-		if keyTpl != nil {
-			key, err := keyTpl.(types.Tuple).Get(1)
-			if err != nil {
-				return err
-			}
-			indexToUse = int64(key.(types.Int)) + 1
-		}
-	}
-
-	// Insert the new row into the db
-	inserter := tbl.Inserter(ctx)
-	defer func() {
-		err := inserter.Close(ctx)
-		if retErr == nil {
-			retErr = err
-		}
-	}()
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, indexToUse})
+	return nil
+	//tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//_, exists, err := fragFromSchemasTable(ctx, tbl, fragType, name)
+	//if err != nil {
+	//	return err
+	//}
+	//if exists {
+	//	return existingErr
+	//}
+	//
+	//// If rows exist, then grab the highest id and add 1 to get the new id
+	//indexToUse := int64(1)
+	//ts, err := db.TableEditSession(ctx, tbl.IsTemporary())
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//te, err := ts.GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
+	//if err != nil {
+	//	return err
+	//}
+	//dTable, err := te.Table(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//rowData, err := dTable.GetRowData(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//if rowData.Len() > 0 {
+	//	keyTpl, _, err := rowData.Last(ctx)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if keyTpl != nil {
+	//		key, err := keyTpl.(types.Tuple).Get(1)
+	//		if err != nil {
+	//			return err
+	//		}
+	//		indexToUse = int64(key.(types.Int)) + 1
+	//	}
+	//}
+	//
+	//// Insert the new row into the db
+	//inserter := tbl.Inserter(ctx)
+	//defer func() {
+	//	err := inserter.Close(ctx)
+	//	if retErr == nil {
+	//		retErr = err
+	//	}
+	//}()
+	//return inserter.Insert(ctx, sql.Row{fragType, name, definition, indexToUse})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {

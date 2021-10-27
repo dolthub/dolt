@@ -16,125 +16,21 @@ package doltdocs
 
 import (
 	"context"
-	"errors"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"strconv"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 // updateDocsTable takes in docTbl param and updates it with the value in docs. It returns the updated table.
 func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*doltdb.Table, error) {
-	m, err := docTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := docTbl.GetSchema(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	me := m.Edit()
-	for _, doc := range docs {
-		key, err := docTblKeyFromName(docTbl.Format(), doc.DocPk)
-		if err != nil {
-			return nil, err
-		}
-
-		docRow, exists, err := table.GetRow(ctx, docTbl, sch, key)
-		if err != nil {
-			return nil, err
-		}
-
-		if exists && doc.Text == nil {
-			me = me.Remove(docRow.NomsMapKey(sch))
-		} else if doc.Text != nil {
-			docTaggedVals := row.TaggedValues{
-				schema.DocNameTag: types.String(doc.DocPk),
-				schema.DocTextTag: types.String(doc.Text),
-			}
-			docRow, err = row.New(types.Format_Default, sch, docTaggedVals)
-			if err != nil {
-				return nil, err
-			}
-			me = me.Set(docRow.NomsMapKey(sch), docRow.NomsMapValue(sch))
-		}
-	}
-	updatedMap, err := me.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if updatedMap.Len() == 0 {
-		return nil, ErrEmptyDocsTable
-	}
-
-	docTbl, err = docTbl.UpdateRows(ctx, updatedMap)
-
-	return docTbl, err
+	return nil, nil
 }
 
 // createDocsTable creates a new in memory table that stores the given doc details.
 func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) (*doltdb.Table, error) {
-	imt := table.NewInMemTable(Schema)
-
-	// Determines if the table needs to be created at all and initializes a schema if it does.
-	createTable := false
-	for _, doc := range docs {
-		if doc.Text != nil {
-			createTable = true
-			docTaggedVals := row.TaggedValues{
-				schema.DocNameTag: types.String(doc.DocPk),
-				schema.DocTextTag: types.String(doc.Text),
-			}
-
-			docRow, err := row.New(types.Format_Default, Schema, docTaggedVals)
-			if err != nil {
-				return nil, err
-			}
-			err = imt.AppendRow(docRow)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	if createTable {
-		rd := table.NewInMemTableReader(imt)
-		wr := noms.NewNomsMapCreator(context.Background(), vrw, Schema)
-
-		_, _, err := table.PipeRows(context.Background(), rd, wr, false)
-		if err != nil {
-			return nil, err
-		}
-		rd.Close(context.Background())
-		wr.Close(context.Background())
-
-		schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, wr.GetSchema())
-
-		if err != nil {
-			return nil, ErrMarshallingSchema
-		}
-
-		empty, err := types.NewMap(ctx, vrw)
-		if err != nil {
-			return nil, err
-		}
-
-		newDocsTbl, err := doltdb.NewTable(ctx, vrw, schVal, prolly.Map{}, empty, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		return newDocsTbl, nil
-	}
-
 	return nil, nil
 }
 
@@ -181,19 +77,7 @@ func getDocTextFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schem
 
 // getDocRow returns the associated row of a particular doc from the docTbl given.
 func getDocRow(ctx context.Context, docTbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
-	rowMap, err := docTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	var fields types.Value
-	fields, ok, err = rowMap.MaybeGet(ctx, key)
-	if err != nil || !ok {
-		return nil, ok, err
-	}
-
-	r, err = row.FromNoms(sch, key, fields.(types.Tuple))
-	return r, ok, err
+	return
 }
 
 // getDocTextFromRow updates return the text field of a provided row.
@@ -246,45 +130,5 @@ func GetAllDocs(ctx context.Context, root *doltdb.RootValue) (Docs, bool, error)
 
 // getDocsFromTable takes the doltdocs table and a schema and return all docs in the dolt_docs table.
 func getDocsFromTable(ctx context.Context, table *doltdb.Table) (Docs, error) {
-	ret := make(Docs, 0)
-
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	err = rows.IterAll(ctx, func(key, val types.Value) error {
-		newRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
-		if err != nil {
-			return err
-		}
-
-		cols := sch.GetAllCols().GetColumns()
-		colVals := make([]types.Value, len(cols))
-		for i, col := range cols {
-			colval, ok := newRow.GetColVal(col.Tag)
-			if !ok {
-				return errors.New("error: could not get doc column value")
-			}
-			colVals[i] = colval
-		}
-
-		if len(colVals) < 2 {
-			return errors.New("error: not enough values read from the table")
-		}
-
-		doc := Doc{}
-		doc.DocPk = string(colVals[0].(types.String))
-		doc.Text = []byte(colVals[1].(types.String))
-		ret = append(ret, doc)
-
-		return nil
-	})
-
-	return ret, err
+	return nil, nil
 }

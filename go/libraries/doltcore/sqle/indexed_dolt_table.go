@@ -24,7 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 // IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
@@ -77,7 +77,7 @@ func (idt *IndexedDoltTable) IsTemporary() bool {
 type rangePartition struct {
 	partitionRange lookup.Range
 	keyBytes       []byte
-	rowData        types.Map
+	rowData        prolly.Map
 }
 
 func (rp rangePartition) Key() []byte {
@@ -88,10 +88,10 @@ type rangePartitionIter struct {
 	ranges  []lookup.Range
 	curr    int
 	mu      *sync.Mutex
-	rowData types.Map
+	rowData prolly.Map
 }
 
-func NewRangePartitionIter(ranges []lookup.Range, rowData types.Map) *rangePartitionIter {
+func NewRangePartitionIter(ranges []lookup.Range, rowData prolly.Map) *rangePartitionIter {
 	return &rangePartitionIter{
 		ranges:  ranges,
 		curr:    0,

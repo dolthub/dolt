@@ -48,7 +48,7 @@ type TableDataLocation struct {
 	Name string
 }
 
-// String returns a string representation of the data location.
+// String returns a string representation of the rows location.
 func (dl TableDataLocation) String() string {
 	return DoltDB.ReadableStr() + ":" + dl.Name
 }
@@ -60,20 +60,21 @@ func (dl TableDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, 
 
 // NewReader creates a TableReadCloser for the DataLocation
 func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, _ filesys.ReadableFS, _ interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
-	tbl, ok, err := root.GetTable(ctx, dl.Name)
-	if err != nil {
-		return nil, false, err
-	}
-	if !ok {
-		return nil, false, doltdb.ErrTableNotFound
-	}
-
-	rd, err := table.NewDoltTableReader(ctx, tbl)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return rd, true, nil
+	panic("unimplemented")
+	//tbl, ok, err := root.GetTable(ctx, dl.Name)
+	//if err != nil {
+	//	return nil, false, err
+	//}
+	//if !ok {
+	//	return nil, false, doltdb.ErrTableNotFound
+	//}
+	//
+	//rd, err := table.NewDoltTableReader(ctx, tbl)
+	//if err != nil {
+	//	return nil, false, err
+	//}
+	//
+	//return rd, true, nil
 }
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
@@ -104,6 +105,8 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMo
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
 func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, wrSch schema.Schema, statsCB noms.StatsCB, rdTags []uint64, opts editor.Options) (table.TableWriteCloser, error) {
+	panic("unimplemented")
+
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 	if err != nil {
 		return nil, err
@@ -112,10 +115,10 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, errors.New("Could not find table " + dl.Name)
 	}
 
-	m, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
+	//m, err := tbl.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
 	tblSch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -136,9 +139,9 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 	}
 
 	return &tableEditorWriteCloser{
-		dEnv:        dEnv,
-		insertOnly:  insertOnly,
-		initialData: m,
+		dEnv:       dEnv,
+		insertOnly: insertOnly,
+		//initialData: m,
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
 		sess:        sess,

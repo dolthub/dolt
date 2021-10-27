@@ -50,7 +50,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -298,15 +297,18 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				verr = UpdateWorkingWithVErr(mrEnv[currentDB], roots[currentDB])
 			}
 		}
-	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		sq, err := dtables.RetrieveFromQueryCatalog(ctx, roots[currentDB], savedQueryName)
+		//} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
+	} else if _, exOk := apr.GetValue(executeFlag); exOk {
 
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-
-		cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-		verr = execQuery(ctx, dEnv, mrEnv, roots, readOnly, sq.Query, format)
+		verr = nil
+		//sq, err := dtables.RetrieveFromQueryCatalog(ctx, roots[currentDB], savedQueryName)
+		//
+		//if err != nil {
+		//	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		//}
+		//
+		//cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
+		//verr = execQuery(ctx, dEnv, mrEnv, roots, readOnly, sq.Query, format)
 	} else if apr.Contains(listSavedFlag) {
 		hasQC, err := roots[currentDB].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
@@ -684,12 +686,13 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 
 // Saves the query given to the catalog with the name and message given.
 func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name string, message string) (*doltdb.RootValue, errhand.VerboseError) {
-	_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
-	if err != nil {
-		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
-	}
-
-	return newRoot, nil
+	return nil, nil
+	//_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
+	//if err != nil {
+	//	return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
+	//}
+	//
+	//return newRoot, nil
 }
 
 // runMultiStatementMode alows for the execution of more than one query, but it doesn't attempt any batch optimizations

@@ -278,7 +278,7 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts
 		return types.EmptyMap, err
 	}
 
-	tableRowData, err := tbl.GetRowData(ctx)
+	//tableRowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -288,11 +288,13 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts
 		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
 	}
 
-	rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index, opts)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	return rebuiltIndexData, nil
+	return types.Map{}, nil
+
+	//rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index, opts)
+	//if err != nil {
+	//	return types.EmptyMap, err
+	//}
+	//return rebuiltIndexData, nil
 }
 
 func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*doltdb.Table, error) {
@@ -305,7 +307,7 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 		return t, nil
 	}
 
-	tableRowData, err := t.GetRowData(ctx)
+	//tableRowData, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -315,20 +317,20 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 		return nil, err
 	}
 
-	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index, opts)
-		if err != nil {
-			return nil, err
-		}
-		rebuiltIndexRowDataRef, err := doltdb.WriteValAndGetRef(ctx, t.ValueReadWriter(), rebuiltIndexRowData)
-		if err != nil {
-			return nil, err
-		}
-		indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
+	//for _, index := range sch.Indexes().AllIndexes() {
+	//	rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index, opts)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	rebuiltIndexRowDataRef, err := doltdb.WriteValAndGetRef(ctx, t.ValueReadWriter(), rebuiltIndexRowData)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
 
 	return t.SetIndexData(ctx, indexesMap)
 }

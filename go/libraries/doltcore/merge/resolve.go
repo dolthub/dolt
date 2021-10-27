@@ -168,47 +168,48 @@ func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *dol
 }
 
 func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolver) (*doltdb.Table, error) {
-	_, conflicts, err := tbl.GetConflicts(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	edit := rowData.Edit()
-
-	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		cnf, err := doltdb.ConflictFromTuple(value.(types.Tuple))
-		if err != nil {
-			return false, err
-		}
-
-		resolved, err := auto(key, cnf)
-		if err != nil {
-			return false, err
-		}
-
-		if types.IsNull(resolved) {
-			edit.Remove(key)
-		} else {
-			edit.Set(key, resolved)
-		}
-
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	rowData, err = edit.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return tbl.UpdateRows(ctx, rowData)
+	return tbl, nil
+	//_, conflicts, err := tbl.GetConflicts(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//rowData, err := tbl.GetRowData(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//edit := rowData.Edit()
+	//
+	//err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+	//	cnf, err := doltdb.ConflictFromTuple(value.(types.Tuple))
+	//	if err != nil {
+	//		return false, err
+	//	}
+	//
+	//	resolved, err := auto(key, cnf)
+	//	if err != nil {
+	//		return false, err
+	//	}
+	//
+	//	if types.IsNull(resolved) {
+	//		edit.Remove(key)
+	//	} else {
+	//		edit.Set(key, resolved)
+	//	}
+	//
+	//	return false, nil
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//rowData, err = edit.Map(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//return tbl.UpdateRows(ctx, rowData)
 }
 
 type AutoResolveStats struct {
