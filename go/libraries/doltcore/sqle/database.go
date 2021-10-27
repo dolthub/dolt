@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
@@ -218,49 +217,6 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 		Remotes:    remotes,
 		Branches:   branches,
 		Err:        retainedErr,
-	}, nil
-}
-
-// GetInitialDBStateOnBranch returns the InitialDbState for |db|, but on the
-// given branch, instead of on the default branch from the RepoStateReader.
-func GetInitialDBStateOnBranch(ctx context.Context, db SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	rsr := db.DbData().Rsr
-	ddb := db.DbData().Ddb
-
-	r := ref.NewBranchRef(branch)
-
-	headCommit, err := ddb.ResolveCommitRef(ctx, r)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	wsRef, err := ref.WorkingSetRefForHead(r)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	remotes, err := rsr.GetRemotes()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	branches, err := rsr.GetBranches()
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     db.DbData(),
-		Remotes:    remotes,
-		Branches:   branches,
 	}, nil
 }
 
