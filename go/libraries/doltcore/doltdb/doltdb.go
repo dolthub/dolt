@@ -1307,8 +1307,8 @@ func (ddb *DoltDB) SetCommitHookLogger(ctx context.Context, wr io.Writer) *DoltD
 	return ddb
 }
 
-func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, rf ref.DoltRef) error {
-	ds, err := ddb.db.GetDataset(ctx, rf.String())
+func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) error {
+	ds, err := ddb.db.GetDataset(ctx, datasetId)
 	if err != nil {
 		return err
 	}

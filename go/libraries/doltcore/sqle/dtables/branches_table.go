@@ -223,7 +223,7 @@ func (bWr branchWriter) Insert(ctx *sql.Context, r sql.Row) error {
 		return err
 	}
 
-	return bWr.bt.ddb.ExecuteCommitHooks(ctx, branchRef)
+	return bWr.bt.ddb.ExecuteCommitHooks(ctx, branchRef.String())
 }
 
 // Update the given row. Provides both the old and new rows.
