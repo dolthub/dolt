@@ -23,7 +23,17 @@ expect {
   failed { exit 1; }
 }
 expect {
-  "information_schema> " { send "DELIMITER $$ ;\r"; }
+  "information_schema> " { send "CREATE DATABASE mydb ;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "information_schema> " { send "use mydb ;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "mydb> " { send "show tables ;\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
