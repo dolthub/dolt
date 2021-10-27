@@ -194,6 +194,12 @@ type InitialDbState struct {
 	ReadReplica  *env.Remote
 	Remotes      map[string]env.Remote
 	Branches     map[string]env.BranchConfig
+
+	// If err is set, this InitialDbState is partially invalid, but may be
+	// usable to initialize a database at a revision specifier, for
+	// example. Adding this InitialDbState to a session will return this
+	// error.
+	Err          error
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -211,10 +217,12 @@ func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvi
 	}
 
 	for _, db := range dbs {
-		err := sess.AddDB(ctx, db)
+		if db.Err == nil {
+			err := sess.AddDB(ctx, db)
 
-		if err != nil {
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -1059,6 +1067,9 @@ func (sess *Session) HasDB(ctx *sql.Context, dbName string) bool {
 // AddDB adds the database given to this session. This establishes a starting root value for this session, as well as
 // other state tracking metadata.
 func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
+	if dbState.Err != nil {
+		return dbState.Err
+	}
 	db := dbState.Db
 	defineSystemVariables(db.Name())
 

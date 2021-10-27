@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -223,33 +222,12 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 }
 
 func GetInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabase, branch string) (dsess.InitialDbState, error) {
-	init, err := dsqle.GetInitialDBState(ctx, db)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	ddb := init.DbData.Ddb
-	r := ref.NewBranchRef(branch)
-
-	head, err := ddb.ResolveCommitRef(ctx, r)
+	ret, err := dsqle.GetInitialDBStateOnBranch(ctx, db, branch)
 	if err != nil {
 		err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
 		return dsess.InitialDbState{}, err
 	}
-	init.HeadCommit = head
-
-	workingSetRef, err := ref.WorkingSetRefForHead(r)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-	init.WorkingSet = ws
-
-	return init, nil
+	return ret, nil
 }
 
 func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
