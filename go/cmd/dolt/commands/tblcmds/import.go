@@ -41,7 +41,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -384,16 +383,16 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	cli.PrintErrln()
 
 	// todo(andy): remove
-	root, _ = dEnv.WorkingRoot(ctx)
-	tbl, _, _ := root.GetTable(ctx, mvOpts.tableName)
-	rows, _ := tbl.GetRowData(ctx)
-	cli.Println(fmt.Sprintf("rows: %d", rows.Count()))
-	_ = rows.IterAll(ctx, func(key, value val.Tuple) error {
-		cli.Println(key)
-		cli.Println(value)
-		cli.Println("\n")
-		return nil
-	})
+	//root, _ = dEnv.WorkingRoot(ctx)
+	//tbl, _, _ := root.GetTable(ctx, mvOpts.tableName)
+	//rows, _ := tbl.GetRowData(ctx)
+	//cli.Println(fmt.Sprintf("rows: %d", rows.Count()))
+	//_ = rows.IterAll(ctx, func(key, value val.Tuple) error {
+	//	cli.Println(key)
+	//	cli.Println(value)
+	//	cli.Println("\n")
+	//	return nil
+	//})
 
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))

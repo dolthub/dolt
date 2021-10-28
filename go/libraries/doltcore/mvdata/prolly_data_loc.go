@@ -76,12 +76,16 @@ func (pl ProllyDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverO
 	}
 	kd, vd := rows.TupleDescriptors()
 
+	nrw := prolly.NewNodeStore(prolly.ChunkStoreFromVRW(root.VRW()))
+	chunker := prolly.EmptyTreeChunkerFromMap(ctx, rows)
+
 	return &prollyWriteCloser{
 		name: pl.Name,
 		sch:  outSch,
-		rows: rows.Mutate(),
 		kd:   kd,
 		vd:   vd,
+		ch:   chunker,
+		nrw:  nrw,
 		root: root,
 	}, nil
 }
@@ -101,18 +105,21 @@ func (pl ProllyDataLocation) NewReplacingWriter(ctx context.Context, _ DataMover
 type prollyWriteCloser struct {
 	name   string
 	sch    schema.Schema
-	rows   prolly.MutableMap
 	kd, vd val.TupleDesc
+	ch     *prolly.TreeChunker
+	nrw    prolly.NodeReadWriter
 	root   *doltdb.RootValue
 }
 
 var _ DataMoverCloser = (*prollyWriteCloser)(nil)
 
 func (pw *prollyWriteCloser) Flush(ctx context.Context) (*doltdb.RootValue, error) {
-	m, err := pw.rows.Map(ctx)
+	node, err := pw.ch.Done(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	m := prolly.NewMap(node, pw.nrw, pw.kd, pw.vd)
 
 	tbl, ok, err := pw.root.GetTable(ctx, pw.name)
 	if err != nil {
@@ -136,9 +143,10 @@ func (pw *prollyWriteCloser) GetSchema() schema.Schema {
 }
 
 // WriteRow implements TableWriteCloser
-func (pw *prollyWriteCloser) WriteRow(ctx context.Context, r row.Row) error {
+func (pw *prollyWriteCloser) WriteRow(ctx context.Context, r row.Row) (err error) {
 	key, value := pw.tuplesFromRow(r)
-	return pw.rows.Put(ctx, key, value)
+	_, err = pw.ch.Append(ctx, key, value)
+	return
 }
 
 // Close implements TableWriteCloser

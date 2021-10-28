@@ -15,6 +15,8 @@
 package prolly
 
 import (
+	"context"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -47,7 +49,7 @@ func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) M
 		root:    NodeFromValue(v),
 		keyDesc: keyDescriptorFromSchema(sch),
 		valDesc: valueDescriptorFromSchema(sch),
-		nrw:     NewNodeStore(chunkStoreFromVRW(vrw)),
+		nrw:     NewNodeStore(ChunkStoreFromVRW(vrw)),
 	}
 }
 
@@ -61,7 +63,7 @@ func valueDescriptorFromSchema(sch schema.Schema) (vd val.TupleDesc) {
 	return vd
 }
 
-func chunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
+func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
 	switch x := vrw.(type) {
 	case datas.Database:
 		return datas.ChunkStoreFromDatabase(x)
@@ -69,4 +71,12 @@ func chunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
 		return x.ChunkStore()
 	}
 	panic("unknown ValueReadWriter")
+}
+
+func EmptyTreeChunkerFromMap(ctx context.Context, m Map) *TreeChunker {
+	ch, err := newEmptyTreeChunker(ctx, m.nrw, newDefaultNodeSplitter)
+	if err != nil {
+		panic(err)
+	}
+	return ch
 }
