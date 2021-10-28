@@ -77,8 +77,6 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	// init system variables
-
 	err := initPersistedSystemVars(dEnv)
 	if err != nil {
 		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())

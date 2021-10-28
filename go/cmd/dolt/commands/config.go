@@ -209,7 +209,7 @@ func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 			}
 			return 0
 		default:
-			cli.Println("error: ")
+			cli.Println("error: unknown config flag")
 			return 1
 		}
 	}
