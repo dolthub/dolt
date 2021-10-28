@@ -33,8 +33,6 @@ teardown() {
 @test "replication: push on commit" {
     cd repo1
     dolt config --local --add DOLT_REPLICATE_TO_REMOTE backup1
-    dolt config --list
-    dolt remote -v
     dolt sql -q "create table t1 (a int primary key)"
     dolt commit -am "cm"
 
@@ -70,6 +68,22 @@ teardown() {
 
     dolt config --local --add DOLT_READ_REPLICA_REMOTE remote1
     run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+}
+
+@test "replication: replicate on branch table update" {
+    cd repo1
+    dolt config --local --add DOLT_REPLICATE_TO_REMOTE backup1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "UPDATE dolt_branches SET hash = COMMIT('--author', '{user_name} <{email_address}>','-m', 'cm') WHERE name = 'main' AND hash = @@repo1_head"
+    noms ds ../bac1/.dolt
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "t1" ]] || false
