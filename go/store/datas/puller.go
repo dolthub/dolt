@@ -122,10 +122,6 @@ func NewTFPullerEvent(et PullerEventType, details *TableFileEventDetails) Puller
 // NewPuller creates a new Puller instance to do the syncing.  If a nil puller is returned without error that means
 // that there is nothing to pull and the sinkDB is already up to date.
 func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sinkDB Database, rootChunkHash hash.Hash, eventCh chan PullerEvent) (*Puller, error) {
-	if eventCh == nil {
-		panic("eventCh is required")
-	}
-
 	// Sanity Check
 	exists, err := srcDB.chunkStore().Has(ctx, rootChunkHash)
 
@@ -226,10 +222,10 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, ae *atomicerr.AtomicEr
 	fileSize := fi.Size()
 	fWithStats := iohelp.NewReaderWithStats(f, fileSize)
 	fWithStats.Start(func(stats iohelp.ReadStats) {
-		p.eventCh <- NewTFPullerEvent(UploadTableFileUpdateEvent, &TableFileEventDetails{
+		p.addEvent(NewTFPullerEvent(UploadTableFileUpdateEvent, &TableFileEventDetails{
 			CurrentFileSize: fileSize,
 			Stats:           stats,
-		})
+		}))
 	})
 	defer func() {
 		fWithStats.Stop()
@@ -253,9 +249,9 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 			continue // drain
 		}
 
-		p.eventCh <- NewTFPullerEvent(StartUploadTableFileEvent, &TableFileEventDetails{
+		p.addEvent(NewTFPullerEvent(StartUploadTableFileEvent, &TableFileEventDetails{
 			CurrentFileSize: int64(tblFile.wr.ContentLength()),
-		})
+		}))
 
 		var id string
 		id, err = tblFile.wr.Finish()
@@ -284,9 +280,9 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 			continue
 		}
 
-		p.eventCh <- NewTFPullerEvent(EndUploadTableFileEvent, &TableFileEventDetails{
+		p.addEvent(NewTFPullerEvent(EndUploadTableFileEvent, &TableFileEventDetails{
 			CurrentFileSize: int64(ttf.contentLen),
-		})
+		}))
 
 		fileIdToNumChunks[id] = ttf.numChunks
 	}
@@ -323,7 +319,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 		chunksInLevel := len(absent)
 		twDetails.ChunksInLevel = chunksInLevel
-		p.eventCh <- NewTWPullerEvent(NewLevelTWEvent, twDetails)
+		p.addEvent(NewTWPullerEvent(NewLevelTWEvent, twDetails))
 
 		var err error
 		absent, err = p.sinkDBCS.HasMany(ctx, absent)
@@ -333,7 +329,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 		}
 
 		twDetails.ChunksAlreadyHad = chunksInLevel - len(absent)
-		p.eventCh <- NewTWPullerEvent(DestDBHasTWEvent, twDetails)
+		p.addEvent(NewTWPullerEvent(DestDBHasTWEvent, twDetails))
 
 		if len(absent) > 0 {
 			leaves, absent, err = p.getCmp(ctx, twDetails, leaves, absent, completedTables)
@@ -438,7 +434,7 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 		twDetails.ChunksBuffered++
 
 		if twDetails.ChunksBuffered%100 == 0 {
-			p.eventCh <- NewTWPullerEvent(LevelUpdateTWEvent, twDetails)
+			p.addEvent(NewTWPullerEvent(LevelUpdateTWEvent, twDetails))
 		}
 
 		err = p.wr.AddCmpChunk(cmpAndRef.cmpChnk)
@@ -448,9 +444,9 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 		}
 
 		if p.wr.Size() >= p.chunksPerTF {
-			p.eventCh <- NewTFPullerEvent(TableFileClosedEvent, &TableFileEventDetails{
+			p.addEvent(NewTFPullerEvent(TableFileClosedEvent, &TableFileEventDetails{
 				CurrentFileSize: int64(p.wr.ContentLength()),
-			})
+			}))
 
 			completedTables <- FilledWriters{p.wr}
 			p.wr = nil
@@ -486,8 +482,14 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 		return nil, nil, errors.New("failed to get all chunks.")
 	}
 
-	p.eventCh <- NewTWPullerEvent(LevelDoneTWEvent, twDetails)
+	p.addEvent(NewTWPullerEvent(LevelDoneTWEvent, twDetails))
 
 	twDetails.TreeLevel = maxHeight
 	return nextLeaves, nextLevel, nil
+}
+
+func (p *Puller) addEvent(evt PullerEvent) {
+	if p.eventCh != nil {
+		p.eventCh <- evt
+	}
 }

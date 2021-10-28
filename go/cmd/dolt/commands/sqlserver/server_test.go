@@ -382,7 +382,7 @@ func TestReadReplica(t *testing.T) {
 	}
 	defer os.Chdir(cwd)
 
-	multiSetup := testcommands.NewMultiRepoTestSetup(t)
+	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
 	defer os.RemoveAll(multiSetup.Root)
 
 	multiSetup.NewDB("read_replica")
