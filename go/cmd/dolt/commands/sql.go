@@ -654,7 +654,6 @@ func GetResultFormat(format string) (resultFormat, errhand.VerboseError) {
 }
 
 func initPersistedSystemVars(dEnv *env.DoltEnv) error {
-	// init system variables
 	sql.InitSystemVariables()
 	var globals config.ReadWriteConfig
 	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
@@ -1537,14 +1536,6 @@ func newSqlEngine(
 	if err != nil {
 		return nil, err
 	}
-
-	// persisted globals
-	//sql.InitSystemVariables()
-	//persistedGlobalVars, err := sess.NewPersistedSystemVariables()
-	//if err != nil {
-	//	return nil, err
-	//}
-	//sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 
 	// TODO: this should just be the session default like it is with MySQL
 	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)

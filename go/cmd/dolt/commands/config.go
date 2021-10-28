@@ -271,7 +271,6 @@ func listOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, us
 
 	cfgTypesSl := setCfgTypes.AsSlice()
 	for _, cfgType := range cfgTypesSl {
-		//isGlobal := cfgType == globalParamName
 		if _, ok := dEnv.Config.GetConfig(newCfgElement(cfgType)); !ok {
 			cli.PrintErrln(color.RedString("Unable to read config."))
 			return 1
@@ -283,7 +282,6 @@ func listOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, us
 	}
 
 	for _, cfgType := range cfgTypesSl {
-		//isGlobal := cfgType == globalParamName
 		if cfg, ok := dEnv.Config.GetConfig(newCfgElement(cfgType)); ok {
 			cfg.Iter(func(name, val string) bool {
 				printFn(name, val)

@@ -210,24 +210,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 		}
 	}
 
-	//if dbLoadErr == nil {
-	//	// init system variables
-	//	sql.InitSystemVariables()
-	//	var globals config.ReadWriteConfig
-	//	if localConf, ok := dEnv.Config.GetConfig(LocalConfig); !ok {
-	//		//Println("Multi-db mode does not support persistable sessions")
-	//		globals = config.NewMapConfig(make(map[string]string))
-	//	} else {
-	//		globals = config.NewPrefixConfig(localConf, ServerConfigPrefix)
-	//	}
-	//	persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
-	//	if err != nil {
-	//		//Println("error: failed to load persisted global variables: %s", err.Error())
-	//		//return 1
-	//	}
-	//	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
-	//}
-
 	return dEnv
 }
 
