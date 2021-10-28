@@ -97,6 +97,39 @@ func validatePersistableSysVar(name string) (sql.SystemVariable, interface{}, er
 	return sysVar, val, nil
 }
 
+// getPersistedValue reads and converts a config value to the associated SystemVariable type
+func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error) {
+	v, err := conf.GetString(k)
+	if err != nil {
+		return nil, err
+	}
+
+	_, value, err := validatePersistableSysVar(k)
+	if err != nil {
+		return nil, err
+	}
+
+	var res interface{}
+	switch value.(type) {
+	case int, int8, int16, int32, int64:
+		res, err = strconv.ParseInt(v, 10, 64)
+	case uint, uint8, uint16, uint32, uint64:
+		res, err = strconv.ParseUint(v, 10, 64)
+	case float32, float64:
+		res, err = strconv.ParseFloat(v, 64)
+	case string:
+		return v, nil
+	default:
+		return nil, sql.ErrInvalidType.New(value)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 // setPersistedValue casts and persists a key value pair assuming thread safety
 func setPersistedValue(conf config.WritableConfig, key string, value interface{}) error {
 	switch v := value.(type) {
@@ -143,6 +176,7 @@ func NewPersistedSystemVariables(conf config.ReadableConfig) ([]sql.SystemVariab
 		if err != nil {
 			return true
 		}
+		// getPeristedVal already checked for errors
 		sysVar, _, _ = sql.SystemVariables.GetGlobal(k)
 		sysVar.Default = def
 		allVars[i] = sysVar
@@ -153,37 +187,4 @@ func NewPersistedSystemVariables(conf config.ReadableConfig) ([]sql.SystemVariab
 		return nil, err
 	}
 	return allVars, nil
-}
-
-// getPersistedValue reads and converts a config value to the associated SystemVariable type
-func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error) {
-	v, err := conf.GetString(k)
-	if err != nil {
-		return nil, err
-	}
-
-	_, value, err := validatePersistableSysVar(k)
-	if err != nil {
-		return nil, err
-	}
-
-	var res interface{}
-	switch value.(type) {
-	case int, int8, int16, int32, int64:
-		res, err = strconv.ParseInt(v, 10, 64)
-	case uint, uint8, uint16, uint32, uint64:
-		res, err = strconv.ParseUint(v, 10, 64)
-	case float32, float64:
-		res, err = strconv.ParseFloat(v, 64)
-	case string:
-		return v, nil
-	default:
-		return nil, sql.ErrInvalidType.New(value)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
 }

@@ -84,6 +84,27 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		permissions = auth.ReadPerm
 	}
 
+	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	// to the value of mysql that we support.
+	serverConf := server.Config{Protocol: "tcp"}
+
+	sql.InitSystemVariables()
+	if !serverConfig.NoDefaults() {
+		var globals config.ReadWriteConfig
+		if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
+			cli.Println("Multi-db mode does not support persistable sessions")
+			globals = config.NewMapConfig(make(map[string]string))
+		} else {
+			globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+		}
+		persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
+		if err != nil {
+			return nil, err
+		}
+		sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+		serverConf, err = serverConf.WithGlobals()
+	}
+
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
 	var mrEnv env.MultiRepoEnv
@@ -129,34 +150,13 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return nil, err
 	}
 
-	serverConf := server.Config{
-		Protocol:               "tcp",
-		Address:                hostPort,
-		Auth:                   userAuth,
-		ConnReadTimeout:        readTimeout,
-		ConnWriteTimeout:       writeTimeout,
-		MaxConnections:         serverConfig.MaxConnections(),
-		TLSConfig:              tlsConfig,
-		RequireSecureTransport: serverConfig.RequireSecureTransport(),
-		// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-		// to the value of mysql that we support.
-	}
-
-	sql.InitSystemVariables()
-	if !serverConf.NoDefaults {
-		// without an active DoltSession, so must access system variables directly
-		localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
-		if !ok {
-			return nil, config.ErrUnknownConfig
-		}
-		globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-		persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
-		if err != nil {
-			return nil, err
-		}
-		sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
-		serverConf, err = serverConf.WithGlobals()
-	}
+	serverConf.Address = hostPort
+	serverConf.Auth = userAuth
+	serverConf.ConnReadTimeout = readTimeout
+	serverConf.ConnWriteTimeout = writeTimeout
+	serverConf.MaxConnections = serverConfig.MaxConnections()
+	serverConf.TLSConfig = tlsConfig
+	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
 	mySQLServer, startError = server.NewServer(
 		serverConf,
@@ -193,7 +193,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 		tmpSqlCtx := sql.NewEmptyContext()
 
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
-		//mysqlSess := sql.NewPersistedSession(host, client, conn.ConnectionID, defaults)
 		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
 		doltDbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, doltDbs)
