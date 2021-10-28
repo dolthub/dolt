@@ -269,7 +269,7 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	outSch := inSch
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, opts)
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, opts, false)
 
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()

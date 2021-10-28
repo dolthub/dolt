@@ -151,6 +151,7 @@ const (
 	ClientEventType_TAG                              ClientEventType = 51
 	ClientEventType_GARBAGE_COLLECTION               ClientEventType = 52
 	ClientEventType_FILTER_BRANCH                    ClientEventType = 53
+	ClientEventType_DUMP							 ClientEventType = 54
 )
 
 // Enum value maps for ClientEventType.

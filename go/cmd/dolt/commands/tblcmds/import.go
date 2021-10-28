@@ -56,6 +56,7 @@ const (
 	primaryKeyParam  = "pk"
 	fileTypeParam    = "file-type"
 	delimParam       = "delim"
+	formatParam	 	 = "result-format"
 )
 
 var importDocs = cli.CommandDocumentationContent{
@@ -476,7 +477,7 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	var wr table.TableWriteCloser
 	switch impOpts.operation {
 	case CreateOp:
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
+		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts, false)
 	case ReplaceOp:
 		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
 	case UpdateOp:

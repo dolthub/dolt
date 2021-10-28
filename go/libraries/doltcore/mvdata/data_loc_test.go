@@ -201,7 +201,7 @@ func TestCreateRdWr(t *testing.T) {
 		loc := test.dl
 
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil, opts)
+		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil, opts, false)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer.", err)
