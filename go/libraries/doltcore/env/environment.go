@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -59,9 +60,12 @@ const (
 
 func getCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey); ok {
+		backupName, ok := val.(string)
+		if !ok {
+			return nil, sql.ErrInvalidSystemVariableValue.New(val)
+		}
 
-	backupName := dEnv.Config.GetStringOrDefault(doltdb.ReplicateToRemoteKey, "")
-	if backupName != "" {
 		remotes, err := dEnv.GetRemotes()
 		if err != nil {
 			return nil, err

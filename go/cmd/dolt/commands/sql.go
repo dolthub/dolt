@@ -521,7 +521,12 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		db = newDatabase(name, dEnv)
-		if remoteName := dEnv.Config.GetStringOrDefault(dsqle.DoltReadReplicaKey, ""); remoteName != "" {
+		if _, val, ok := sql.SystemVariables.GetGlobal(dsqle.DoltReadReplicaKey); ok {
+			remoteName, ok := val.(string)
+			if !ok {
+				return true, sql.ErrInvalidSystemVariableValue.New(val)
+			}
+
 			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), doltdb.TodoWorkingSetMeta())
 			if err != nil {
 				return true, err

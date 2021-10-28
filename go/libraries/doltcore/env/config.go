@@ -63,6 +63,9 @@ const (
 
 	// GlobalConfig is the user's global config portion of the ConfigHierarchy
 	GlobalConfig
+
+	// ServerConfig is the repository's persisted global variables portion of the ConfigHierarchy
+	ServerConfig
 )
 
 const (
@@ -162,7 +165,18 @@ func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string
 
 // GetConfig retrieves a specific element of the config hierarchy.
 func (dcc *DoltCliConfig) GetConfig(element DoltConfigElement) (config.ReadWriteConfig, bool) {
-	return dcc.ch.GetConfig(element.String())
+	switch element {
+	case LocalConfig, GlobalConfig:
+		return dcc.ch.GetConfig(element.String())
+	case ServerConfig:
+		conf, ok := dcc.ch.GetConfig(LocalConfig.String())
+		if !ok {
+			return nil, false
+		}
+		return config.NewPrefixConfig(conf, ServerConfigPrefix), true
+	default:
+		return nil, false
+	}
 }
 
 // GetStringOrDefault retrieves a string from the config hierarchy and returns it if available.  Otherwise it returns
