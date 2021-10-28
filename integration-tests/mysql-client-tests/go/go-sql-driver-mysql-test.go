@@ -19,8 +19,8 @@ var queries = [12]string{
 	"select dolt_checkout('-b', 'mybranch')",
 	"insert into test values (1,1)",
 	"select dolt_commit('-a', '-m', 'updated test')",
-    "select dolt_checkout('main')",
-    "select dolt_merge('mybranch')"}
+	"select dolt_checkout('main')",
+	"select dolt_merge('mybranch')"}
 
 type ResFunc func(rows *sql.Rows) error
 
