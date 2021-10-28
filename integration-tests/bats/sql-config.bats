@@ -150,6 +150,6 @@ teardown() {
     run dolt sql -q "SELECT @@GLOBAL.max_connections" -r csv
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "strconv.ParseInt: parsing \"string\": invalid syntax" ]]
+    [[ "$output" =~ "key: 'max_connections'; strconv.ParseInt: parsing \"string\": invalid syntax" ]]
     [[ "$output" =~ "151" ]]
 }

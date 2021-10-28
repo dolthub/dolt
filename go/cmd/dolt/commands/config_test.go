@@ -31,6 +31,17 @@ var localCfg = set.NewStrSet([]string{localParamName})
 var serverCfg = set.NewStrSet([]string{serverParamName})
 var multiCfg = set.NewStrSet([]string{globalParamName, localParamName})
 
+func initializeConfigs(dEnv *env.DoltEnv, element env.DoltConfigElement) {
+	switch element {
+	case env.GlobalConfig:
+		globalCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
+		globalCfg.SetStrings(map[string]string{"title": "senior dufus"})
+	case env.LocalConfig:
+		dEnv.Config.CreateLocalConfig(map[string]string{"title": "senior dufus"})
+	case env.ServerConfig:
+		dEnv.Config.CreateLocalConfig(map[string]string{"server.title": "senior dufus"})
+	}
+}
 func TestConfigAdd(t *testing.T) {
 	tests := []struct {
 		Name       string
@@ -55,14 +66,6 @@ func TestConfigAdd(t *testing.T) {
 			Name:       "global",
 			CfgSet:     globalCfg,
 			ConfigElem: env.GlobalConfig,
-			Args:       []string{"title", "senior dufus"},
-			Key:        "title",
-			Value:      "senior dufus",
-		},
-		{
-			Name:       "server",
-			CfgSet:     serverCfg,
-			ConfigElem: env.ServerConfig,
 			Args:       []string{"title", "senior dufus"},
 			Key:        "title",
 			Value:      "senior dufus",
@@ -163,13 +166,6 @@ func TestConfigGet(t *testing.T) {
 			Value:      "senior dufus",
 		},
 		{
-			Name:       "server",
-			CfgSet:     serverCfg,
-			ConfigElem: env.ServerConfig,
-			Key:        "title",
-			Value:      "senior dufus",
-		},
-		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
@@ -197,15 +193,7 @@ func TestConfigGet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			dEnv := createTestEnv()
-			switch tt.ConfigElem {
-			case env.GlobalConfig:
-				globalCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-				globalCfg.SetStrings(map[string]string{"title": "senior dufus"})
-			case env.LocalConfig:
-				dEnv.Config.CreateLocalConfig(map[string]string{"title": "senior dufus"})
-			case env.ServerConfig:
-				dEnv.Config.CreateLocalConfig(map[string]string{"server.title": "senior dufus"})
-			}
+			initializeConfigs(dEnv, tt.ConfigElem)
 
 			var resVal string
 			resCode := getOperation(dEnv, tt.CfgSet, []string{tt.Key}, func(k string, v *string) { resVal = *v })
@@ -252,13 +240,6 @@ func TestConfigUnset(t *testing.T) {
 			Value:      "senior dufus",
 		},
 		{
-			Name:       "server",
-			CfgSet:     serverCfg,
-			ConfigElem: env.ServerConfig,
-			Key:        "title",
-			Value:      "senior dufus",
-		},
-		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
@@ -286,15 +267,7 @@ func TestConfigUnset(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			dEnv := createTestEnv()
-			switch tt.ConfigElem {
-			case env.GlobalConfig:
-				globalCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-				globalCfg.SetStrings(map[string]string{"title": "senior dufus"})
-			case env.LocalConfig:
-				dEnv.Config.CreateLocalConfig(map[string]string{"title": "senior dufus"})
-			case env.ServerConfig:
-				dEnv.Config.CreateLocalConfig(map[string]string{"server.title": "senior dufus"})
-			}
+			initializeConfigs(dEnv, tt.ConfigElem)
 
 			resCode := unsetOperation(dEnv, tt.CfgSet, []string{tt.Key}, func() {})
 
@@ -343,13 +316,6 @@ func TestConfigList(t *testing.T) {
 			Values:     []string{"senior dufus"},
 		},
 		{
-			Name:       "server",
-			CfgSet:     serverCfg,
-			ConfigElem: env.ServerConfig,
-			Keys:       []string{"title"},
-			Values:     []string{"senior dufus"},
-		},
-		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
@@ -368,15 +334,7 @@ func TestConfigList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			dEnv := createTestEnv()
-			switch tt.ConfigElem {
-			case env.GlobalConfig:
-				globalCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-				globalCfg.SetStrings(map[string]string{"title": "senior dufus"})
-			case env.LocalConfig:
-				dEnv.Config.CreateLocalConfig(map[string]string{"title": "senior dufus"})
-			case env.ServerConfig:
-				dEnv.Config.CreateLocalConfig(map[string]string{"server.title": "senior dufus"})
-			}
+			initializeConfigs(dEnv, tt.ConfigElem)
 
 			var resKeys []string
 			var resVals []string

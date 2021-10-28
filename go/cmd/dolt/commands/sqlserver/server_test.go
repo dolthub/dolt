@@ -414,7 +414,6 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 	}()
 	defer sc.StopServer()
-	defer os.Unsetenv(doltdb.DoltReadReplicaKey)
 
 	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
 	defer conn.Close()

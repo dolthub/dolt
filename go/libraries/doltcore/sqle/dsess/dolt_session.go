@@ -175,7 +175,7 @@ func NewPersistedSystemVariables(conf config.ReadableConfig) ([]sql.SystemVariab
 	conf.Iter(func(k, v string) bool {
 		def, err = getPersistedValue(conf, k)
 		if err != nil {
-			err = fmt.Errorf("'%s': %w", k, err)
+			err = fmt.Errorf("key: '%s'; %w", k, err)
 			return true
 		}
 		// getPeristedVal already checked for errors

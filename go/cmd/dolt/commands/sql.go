@@ -53,7 +53,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -648,23 +647,6 @@ func GetResultFormat(format string) (resultFormat, errhand.VerboseError) {
 	default:
 		return FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
 	}
-}
-
-func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
-	sql.InitSystemVariables()
-	var globals config.ReadWriteConfig
-	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
-		cli.Println("warning: multi-db mode does not support persistable sessions")
-		globals = config.NewMapConfig(make(map[string]string))
-	} else {
-		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-	}
-	persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
-	if err != nil {
-		return err
-	}
-	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
-	return nil
 }
 
 func validateSqlArgs(apr *argparser.ArgParseResults) error {
