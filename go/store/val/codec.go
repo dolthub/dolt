@@ -380,10 +380,10 @@ func maybeGetRawComparison(types ...Type) comparisonMapping {
 
 	//var raw []int
 	//offset := 0
-	//for _, typ := range types {
+	//for _, typ := range Types {
 	//	mapping, ok := rawComparisonMap(typ.Enc)
 	//	if !ok {
-	//		// every type in |types| must be
+	//		// every type in |Types| must be
 	//		// raw-comparable to use a mapping
 	//		return nil
 	//	}

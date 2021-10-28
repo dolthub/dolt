@@ -15,7 +15,7 @@
 package val
 
 type TupleDesc struct {
-	types []Type
+	Types []Type
 	raw   comparisonMapping
 }
 
@@ -30,7 +30,7 @@ func NewTupleDescriptor(types ...Type) (td TupleDesc) {
 		}
 	}
 
-	td.types = types
+	td.Types = types
 	td.raw = maybeGetRawComparison(types...)
 	return
 }
@@ -48,7 +48,7 @@ func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
 		return compareRaw(left, right, td.raw)
 	}
 
-	for i, typ := range td.types {
+	for i, typ := range td.Types {
 		cmp = Comparison(compare(typ, left.GetField(i), right.GetField(i)))
 		if cmp != EqualCmp {
 			break
@@ -58,8 +58,8 @@ func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
 	return
 }
 
-func (td TupleDesc) count() int {
-	return len(td.types)
+func (td TupleDesc) Count() int {
+	return len(td.Types)
 }
 
 func (td TupleDesc) GetBool(i int, tup Tuple) bool {
@@ -119,17 +119,17 @@ func (td TupleDesc) GetFloat64(i int, tup Tuple) float64 {
 
 func (td TupleDesc) GetString(i int, tup Tuple) string {
 	td.expectEncoding(i, StringEnc)
-	return readString(tup.GetField(i), td.types[i].Coll)
+	return readString(tup.GetField(i), td.Types[i].Coll)
 }
 
 func (td TupleDesc) GetBytes(i int, tup Tuple) []byte {
 	td.expectEncoding(i, BytesEnc)
-	return readBytes(tup.GetField(i), td.types[i].Coll)
+	return readBytes(tup.GetField(i), td.Types[i].Coll)
 }
 
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	for _, enc := range encodings {
-		if enc == td.types[i].Enc {
+		if enc == td.Types[i].Enc {
 			return
 		}
 	}

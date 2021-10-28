@@ -16,7 +16,6 @@ package prolly
 
 import (
 	"context"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,8 +29,7 @@ func TestTreeChunker(t *testing.T) {
 }
 
 func roundTripTreeItems(t *testing.T) {
-	fields := (rand.Int() % 20) + 1
-	root, items, nrw := randomTree(t, 1000, fields)
+	root, items, nrw := randomTree(t, 1000)
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
@@ -39,7 +37,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.Equal(t, countTree(t, nrw, root), 1000)
 	validateTreeItems(t, nrw, root, items)
 
-	root, items, nrw = randomTree(t, 10_000, fields)
+	root, items, nrw = randomTree(t, 10_000)
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
@@ -47,7 +45,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.Equal(t, countTree(t, nrw, root), 10_000)
 	validateTreeItems(t, nrw, root, items)
 
-	root, items, nrw = randomTree(t, 100_000, fields)
+	root, items, nrw = randomTree(t, 100_000)
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
