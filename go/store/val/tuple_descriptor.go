@@ -14,6 +14,12 @@
 
 package val
 
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
 type TupleDesc struct {
 	Types []Type
 	raw   comparisonMapping
@@ -134,4 +140,64 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 		}
 	}
 	panic("incorrect value encoding")
+}
+
+func (td TupleDesc) Format(tup Tuple) string {
+	var sb strings.Builder
+	sb.WriteString("[ ")
+
+	seenOne := false
+	for i, typ := range td.Types {
+		if seenOne {
+			sb.WriteString(", ")
+		}
+		seenOne = true
+
+		switch typ.Enc {
+		case Int8Enc:
+			v := td.GetInt8(i, tup)
+			sb.WriteString(strconv.Itoa(int(v)))
+		case Uint8Enc:
+			v := td.GetUint8(i, tup)
+			sb.WriteString(strconv.Itoa(int(v)))
+		case Int16Enc:
+			v := td.GetInt16(i, tup)
+			sb.WriteString(strconv.Itoa(int(v)))
+		case Uint16Enc:
+			v := td.GetUint16(i, tup)
+			sb.WriteString(strconv.Itoa(int(v)))
+		case Int24Enc:
+			panic("24 bit")
+		case Uint24Enc:
+			panic("24 bit")
+		case Int32Enc:
+			v := td.GetInt32(i, tup)
+			sb.WriteString(strconv.Itoa(int(v)))
+		case Uint32Enc:
+			v := td.GetUint32(i, tup)
+			sb.WriteString(strconv.Itoa(int(v)))
+		case Int64Enc:
+			v := td.GetInt64(i, tup)
+			sb.WriteString(strconv.FormatInt(v, 10))
+		case Uint64Enc:
+			v := td.GetUint64(i, tup)
+			sb.WriteString(strconv.FormatUint(v, 10))
+		case Float32Enc:
+			v := td.GetFloat32(i, tup)
+			sb.WriteString(fmt.Sprintf("%f", v))
+		case Float64Enc:
+			v := td.GetFloat64(i, tup)
+			sb.WriteString(fmt.Sprintf("%f", v))
+		case StringEnc:
+			v := td.GetString(i, tup)
+			sb.WriteString(v)
+		case BytesEnc:
+			v := td.GetBytes(i, tup)
+			sb.Write(v)
+		default:
+			panic("unknown encoding")
+		}
+	}
+	sb.WriteString(" ]")
+	return sb.String()
 }

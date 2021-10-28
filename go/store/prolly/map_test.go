@@ -142,9 +142,9 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 		v := uint16(src.Intn(math.MaxUint16))
 		tb.PutUint16(idx, v)
 	case val.Int24Enc:
-		panic("base24")
+		panic("24 bit")
 	case val.Uint24Enc:
-		panic("base24")
+		panic("24 bit")
 	case val.Int32Enc:
 		v := int32(src.Intn(math.MaxInt32) * neg)
 		tb.PutInt32(idx, v)
