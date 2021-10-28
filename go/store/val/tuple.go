@@ -16,23 +16,19 @@ package val
 
 import (
 	"encoding/binary"
+	"math"
 
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
 const (
+	MaxTupleFields   = 4096
+	MaxTupleDataSize = math.MaxUint16
+
 	numFieldsSize ByteSize = 2
 )
 
 type Tuple []byte
-
-func TupleFromValues(pool pool.BuffPool, values ...Value) Tuple {
-	var vv [][]byte // stack alloc
-	for _, val := range values {
-		vv = append(vv, val.Val)
-	}
-	return NewTuple(pool, vv...)
-}
 
 func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	count := 0
@@ -43,6 +39,12 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 		}
 		count++
 		pos += sizeOf(v)
+	}
+	if len(values) > MaxTupleFields {
+		panic("tuple field maxIdx exceeds maximum")
+	}
+	if pos > MaxTupleDataSize {
+		panic("tuple data size exceeds maximum")
 	}
 
 	tup, offs, mask := makeTuple(pool, pos, count, len(values))

@@ -19,35 +19,14 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTreeChunker(t *testing.T) {
-	t.Run("smoke test tree chunker", func(t *testing.T) {
-		smokeTestTreeChunker(t)
-	})
 	t.Run("round trip tree items", func(t *testing.T) {
 		roundTripTreeItems(t)
 	})
-}
-
-func TestMetaTuple(t *testing.T) {
-	t.Run("round trip meta tuple fields", func(t *testing.T) {
-		for i := 0; i < 100; i++ {
-			roundTripMetaTupleFields(t)
-		}
-	})
-}
-
-func smokeTestTreeChunker(t *testing.T) {
-	fields := (rand.Int() % 20) + 1
-	root, _, _ := randomTree(t, 1000, fields)
-	assert.NotNil(t, root)
-	assert.True(t, root.nodeCount() > 0)
-	assert.True(t, root.level() > 0)
 }
 
 func roundTripTreeItems(t *testing.T) {
@@ -77,18 +56,6 @@ func roundTripTreeItems(t *testing.T) {
 	validateTreeItems(t, nrw, root, items)
 }
 
-func roundTripMetaTupleFields(t *testing.T) {
-	vals := [][]byte{{0}}
-
-	cnt := uint64(rand.Uint32() & 8096)
-	ref := hash.Hash{}
-	rand.Read(ref[:])
-
-	meta := newMetaTuple(shared, cnt, ref, vals)
-	assert.Equal(t, cnt, meta.GetCumulativeCount())
-	//assert.Equal(t, cnt, meta.GetRef())
-}
-
 func countTree(t *testing.T, nrw NodeReadWriter, nd Node) (count int) {
 	ctx := context.Background()
 	err := iterTree(ctx, nrw, nd, func(_ nodeItem) (err error) {
@@ -111,4 +78,31 @@ func validateTreeItems(t *testing.T, nrw NodeReadWriter, nd Node, expected [][2]
 	})
 	require.NoError(t, err)
 	return
+}
+
+func iterTree(ctx context.Context, nrw NodeReadWriter, nd Node, cb func(item nodeItem) error) error {
+	if nd.empty() {
+		return nil
+	}
+
+	cur, err := newCursor(ctx, nrw, nd)
+	if err != nil {
+		return err
+	}
+
+	ok := true
+	for ok {
+		curr := cur.current()
+
+		err = cb(curr)
+		if err != nil {
+			return err
+		}
+
+		ok, err = cur.advance(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return err
 }
