@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -143,9 +144,9 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 	return nil, false, errors.New("unsupported format")
 }
 
-// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
+// TNewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options, ap bool) (table.TableWriteCloser, error) {
+func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options, wr io.WriteCloser) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case CsvFile:
 		return csv.OpenCSVWriter(dl.Path, dEnv.FS, outSch, csv.NewCSVInfo())
@@ -156,8 +157,8 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMov
 	case JsonFile:
 		return json.OpenJSONWriter(dl.Path, dEnv.FS, outSch)
 	case SqlFile:
-		return sqlexport.OpenSQLExportWriter(ctx, dl.Path, dEnv.FS, root, mvOpts.SrcName(), outSch, opts, ap)
-		//return sqlexport.OpenSQLExportWriter(ctx, dl.Path, wr, root, mvOpts.SrcName(), outSch, opts)
+		//return sqlexport.OpenSQLExportWriter(ctx, dl.Path, dEnv.FS, root, mvOpts.SrcName(), outSch, opts)
+		return sqlexport.OpenSQLExportWriter(ctx, dl.Path, wr, root, mvOpts.SrcName(), outSch, opts)
 	}
 
 	panic("Invalid Data Format." + string(dl.Format))

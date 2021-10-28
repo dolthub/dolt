@@ -477,7 +477,9 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	var wr table.TableWriteCloser
 	switch impOpts.operation {
 	case CreateOp:
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts, false)
+		filePath, _ := dEnv.FS.Abs(impOpts.SrcName())
+		writer, _ := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
+		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts, writer)
 	case ReplaceOp:
 		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
 	case UpdateOp:

@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -31,8 +32,6 @@ const (
 var dumpDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Export all tables to a file.`,
 	LongDesc: `{{.EmphasisLeft}}dolt dump{{.EmphasisRight}} will export the contents of all {{.LessThan}}table{{.GreaterThan}} to {{.LessThan}}|file{{.GreaterThan}}
-
-See the help for {{.EmphasisLeft}}dolt table import{{.EmphasisRight}} as the options are the same.
 `,
 
 	Synopsis: []string{
@@ -194,7 +193,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 0
 	}
 
-	// does not initialize tableName, src
 	exOpts, verr := parseExportArgs(ap, commandStr, args)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
@@ -205,12 +203,16 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	// file exists then need -f
 	if ow {
 		return HandleVErrAndExitCode(errhand.BuildDError("%s already exists. Use -f to overwrite.", exOpts.DestName()).Build(), usage)
 	}
 
 	// CREATE NEW FILE
+	err = dEnv.FS.MkDirs(filepath.Dir(exOpts.DestName()))
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	filePath, _ := dEnv.FS.Abs(exOpts.DestName())
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -218,14 +220,14 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
 
-	cli.Printf("Tables available:\n")
+	cli.Printf("Tables exporting:\n")
 	for _, tbl := range tblNames {
 		cli.Println("\t", tbl)
 
 		exOpts.tableName = tbl
 		exOpts.src = mvdata.TableDataLocation{Name: tbl}
 
-		mover, verr := NewExportDataMover(ctx, root, dEnv, exOpts, importStatsCB)
+		mover, verr := NewExportDataMover(ctx, root, dEnv, exOpts, importStatsCB, filePath)
 
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
@@ -248,7 +250,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return 0
 }
 
-func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, exOpts *exportOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
+func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, exOpts *exportOptions, statsCB noms.StatsCB, filePath string) (*mvdata.DataMover, errhand.VerboseError) {
 	var rd table.TableReadCloser
 	var err error
 
@@ -270,8 +272,12 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, opts, exOpts.append)
+	writer, wErr := dEnv.FS.OpenForWriteAppend(filePath, os.ModePerm)
+	if wErr != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(wErr).Build()
+	}
 
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, opts, writer)
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()
 	}

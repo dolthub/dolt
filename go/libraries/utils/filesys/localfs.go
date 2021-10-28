@@ -188,9 +188,9 @@ func (fs *localFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteClos
 		return nil, err
 	}
 
-	return os.OpenFile(fp, os.O_APPEND|os.O_WRONLY, perm)
+	//return os.OpenFile(fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, perm)
 	//if -f flagged empty file is created before
-	//return os.OpenFile(fp, os.O_APPEND|os.O_WRONLY, perm)
+	return os.OpenFile(fp, os.O_APPEND|os.O_WRONLY, perm)
 }
 
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
