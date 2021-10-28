@@ -51,8 +51,7 @@ type WritableFS interface {
 	// it will be overwritten.
 	OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, error)
 
-	// OpenForWriteAppend opens a file for writing.  The file will be created if it does not exist, and if it does exist
-	// it will append to existing file.
+	// OpenForWriteAppend opens a file for writing.  The file will be created, it will append to existing file.
 	OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteCloser, error)
 
 	// WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
