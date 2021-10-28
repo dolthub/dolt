@@ -53,6 +53,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -113,6 +114,30 @@ func init() {
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemIntType(currentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
 			Default:           int64(0),
+		},
+		{
+			Name:              dsess.DoltDefaultBranchKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(dsess.DoltDefaultBranchKey),
+			Default:           "",
+		},
+		{
+			Name:              doltdb.ReplicateToRemoteKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.ReplicateToRemoteKey),
+			Default:           "",
+		},
+		{
+			Name:              doltdb.DoltReadReplicaKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.DoltReadReplicaKey),
+			Default:           "",
 		},
 	})
 }
@@ -270,6 +295,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	var currentDB string
 	if len(initialRoots) == 1 {
 		currentDB = name
+	}
+
+	err = initPersistedSystemVars(dEnv)
+	if err != nil {
+		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
 	_, continueOnError := apr.GetValue(continueFlag)
@@ -520,8 +550,13 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+		postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
+		if err != nil {
+			return true, err
+		}
+		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 		db = newDatabase(name, dEnv)
-		if _, val, ok := sql.SystemVariables.GetGlobal(dsqle.DoltReadReplicaKey); ok {
+		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok && val != "" {
 			remoteName, ok := val.(string)
 			if !ok {
 				return true, sql.ErrInvalidSystemVariableValue.New(val)
@@ -616,6 +651,24 @@ func GetResultFormat(format string) (resultFormat, errhand.VerboseError) {
 	default:
 		return FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
 	}
+}
+
+func initPersistedSystemVars(dEnv *env.DoltEnv) error {
+	// init system variables
+	sql.InitSystemVariables()
+	var globals config.ReadWriteConfig
+	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
+		cli.Println("warning: 0multi-db mode does not support persistable sessions")
+		globals = config.NewMapConfig(make(map[string]string))
+	} else {
+		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+	}
+	persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
+	if err != nil {
+		return err
+	}
+	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+	return nil
 }
 
 func validateSqlArgs(apr *argparser.ArgParseResults) error {
@@ -1486,12 +1539,12 @@ func newSqlEngine(
 	}
 
 	// persisted globals
-	sql.InitSystemVariables()
-	persistedGlobalVars, err := sess.NewPersistedSystemVariables()
-	if err != nil {
-		return nil, err
-	}
-	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+	//sql.InitSystemVariables()
+	//persistedGlobalVars, err := sess.NewPersistedSystemVariables()
+	//if err != nil {
+	//	return nil, err
+	//}
+	//sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 
 	// TODO: this should just be the session default like it is with MySQL
 	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)

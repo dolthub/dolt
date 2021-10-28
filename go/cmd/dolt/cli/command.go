@@ -211,6 +211,12 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		defer stop()
 	}
 
+	//postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
+	//if err != nil {
+	//	return 1
+	//}
+	//dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
+
 	ret := cmd.Exec(ctx, commandStr, args, dEnv)
 
 	if evt != nil {

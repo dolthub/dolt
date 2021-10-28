@@ -30,11 +30,9 @@ teardown() {
     [ ! -d "../bac1/.dolt" ] || false
 }
 
-@test "replication: push on commit" {
+@test "replication: push on cli commit" {
     cd repo1
-    dolt config --local --add DOLT_REPLICATE_TO_REMOTE backup1
-    dolt config --list
-    dolt remote -v
+    dolt config --server --add DOLT_REPLICATE_TO_REMOTE backup1
     dolt sql -q "create table t1 (a int primary key)"
     dolt commit -am "cm"
 
@@ -47,9 +45,24 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "replication: push on sql commit" {
+    cd repo1
+    dolt config --server --add DOLT_REPLICATE_TO_REMOTE backup1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "select dolt_commit('-am', 'cm')"
+
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+}
+
 @test "replication: no tags" {
     cd repo1
-    dolt config --local --add DOLT_REPLICATE_TO_REMOTE backup1
+    dolt config --server --add DOLT_REPLICATE_TO_REMOTE backup1
     dolt tag
 
     [ ! -d "../bac1/.dolt" ] || false
@@ -68,7 +81,7 @@ teardown() {
     [ "${#lines[@]}" -eq 1 ]
     [[ ! "$output" =~ "t1" ]] || false
 
-    dolt config --local --add DOLT_READ_REPLICA_REMOTE remote1
+    dolt config --server --add DOLT_READ_REPLICA_REMOTE remote1
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

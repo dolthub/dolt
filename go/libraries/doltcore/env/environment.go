@@ -19,13 +19,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -58,9 +58,9 @@ const (
 	tempTablesDir = "temptf"
 )
 
-func getCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
+func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey); ok {
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey); ok && val != "" {
 		backupName, ok := val.(string)
 		if !ok {
 			return nil, sql.ErrInvalidSystemVariableValue.New(val)
@@ -210,14 +210,23 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 		}
 	}
 
-	if dbLoadErr == nil {
-		postCommitHooks, dbLoadErr := getCommitHooks(ctx, dEnv)
-		if dbLoadErr != nil {
-			dEnv.DBLoadError = dbLoadErr
-		} else {
-			dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
-		}
-	}
+	//if dbLoadErr == nil {
+	//	// init system variables
+	//	sql.InitSystemVariables()
+	//	var globals config.ReadWriteConfig
+	//	if localConf, ok := dEnv.Config.GetConfig(LocalConfig); !ok {
+	//		//Println("Multi-db mode does not support persistable sessions")
+	//		globals = config.NewMapConfig(make(map[string]string))
+	//	} else {
+	//		globals = config.NewPrefixConfig(localConf, ServerConfigPrefix)
+	//	}
+	//	persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
+	//	if err != nil {
+	//		//Println("error: failed to load persisted global variables: %s", err.Error())
+	//		//return 1
+	//	}
+	//	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+	//}
 
 	return dEnv
 }

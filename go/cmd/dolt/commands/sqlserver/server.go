@@ -99,7 +99,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 		persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
 		if err != nil {
-			return nil, err
+			return err, nil
 		}
 		sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 		serverConf, err = serverConf.WithGlobals()

@@ -31,7 +31,7 @@ import (
 const (
 	globalParamName = "global"
 	localParamName  = "local"
-	serverParamName  = "server"
+	serverParamName = "server"
 
 	addOperationStr   = "add"
 	listOperationStr  = "list"
@@ -108,7 +108,7 @@ func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string,
 	} else {
 		switch ops.Size() {
 		case 1:
-			return processConfigCommand(dEnv, cfgTypes, cfgTypes.AsSlice()[0], apr.Args, usage)
+			return processConfigCommand(dEnv, cfgTypes, ops.AsSlice()[0], apr.Args, usage)
 		default:
 			cli.PrintErrln(color.RedString("Exactly one of the -add, -get, -unset, -list flags must be set."))
 			usage()
@@ -207,6 +207,7 @@ func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 				cli.PrintErrln(color.RedString("Unable to create repo local config file"))
 				return 1
 			}
+			return 0
 		default:
 			cli.Println("error: ")
 			return 1
@@ -234,7 +235,6 @@ func unsetOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, u
 		args[i] = strings.ToLower(a)
 	}
 
-
 	var cfgType string
 	switch setCfgTypes.Size() {
 	case 0:
@@ -242,13 +242,11 @@ func unsetOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, u
 	case 1:
 		cfgType = setCfgTypes.AsSlice()[0]
 	default:
-		cli.Println("error: cannot add to multiple configs simultaneously")
+		cli.Println("error: cannot unset from multiple configs simultaneously")
 		return 1
 	}
 
-	
-	isGlobal := setCfgTypes.Contains(globalParamName)
-	if cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
+	if cfg, ok := dEnv.Config.GetConfig(newCfgElement(cfgType)); !ok {
 		cli.PrintErrln(color.RedString("Unable to read config."))
 		return 1
 	} else {
@@ -273,8 +271,8 @@ func listOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, us
 
 	cfgTypesSl := setCfgTypes.AsSlice()
 	for _, cfgType := range cfgTypesSl {
-		isGlobal := cfgType == globalParamName
-		if _, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal)); !ok {
+		//isGlobal := cfgType == globalParamName
+		if _, ok := dEnv.Config.GetConfig(newCfgElement(cfgType)); !ok {
 			cli.PrintErrln(color.RedString("Unable to read config."))
 			return 1
 		}
@@ -285,12 +283,10 @@ func listOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, us
 	}
 
 	for _, cfgType := range cfgTypesSl {
-		isGlobal := cfgType == globalParamName
-		cfg, ok := dEnv.Config.GetConfig(newCfgElement(isGlobal))
-		if ok {
-			cfg.Iter(func(name string, val string) (stop bool) {
+		//isGlobal := cfgType == globalParamName
+		if cfg, ok := dEnv.Config.GetConfig(newCfgElement(cfgType)); ok {
+			cfg.Iter(func(name, val string) bool {
 				printFn(name, val)
-
 				return false
 			})
 		}
@@ -307,5 +303,7 @@ func newCfgElement(configFlag string) env.DoltConfigElement {
 		return env.GlobalConfig
 	case serverParamName:
 		return env.ServerConfig
+	default:
+		return env.LocalConfig
 	}
 }

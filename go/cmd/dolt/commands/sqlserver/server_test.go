@@ -26,10 +26,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 type testPerson struct {
@@ -397,14 +398,13 @@ func TestReadReplica(t *testing.T) {
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{dsqle.DoltReadReplicaKey: "remote1"})
+	config.NewPrefixConfig(localCfg, env.ServerConfigPrefix).SetStrings(map[string]string{doltdb.DoltReadReplicaKey: "remote1"})
 
 	// start server as read replica
 	sc := CreateServerController()
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
 
 	func() {
-		err = os.Setenv(dsqle.DoltReadReplicaKey, "remote1")
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 
 		go func() {
@@ -414,7 +414,7 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 	}()
 	defer sc.StopServer()
-	defer os.Unsetenv(dsqle.DoltReadReplicaKey)
+	defer os.Unsetenv(doltdb.DoltReadReplicaKey)
 
 	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
 	defer conn.Close()

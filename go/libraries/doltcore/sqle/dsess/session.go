@@ -17,7 +17,6 @@ package dsess
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"os"
 	"strings"
 
@@ -1246,30 +1245,6 @@ func defineSystemVariables(name string) {
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              sql.NewSystemStringType(StagedKey(name)),
-				Default:           "",
-			},
-			{
-				Name:              DoltDefaultBranchKey,
-				Scope:             sql.SystemVariableScope_Global,
-				Dynamic:           true,
-				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(DoltDefaultBranchKey),
-				Default:           "",
-			},
-			{
-				Name:              doltdb.ReplicateToRemoteKey,
-				Scope:             sql.SystemVariableScope_Global,
-				Dynamic:           false,
-				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(doltdb.ReplicateToRemoteKey),
-				Default:           "",
-			},
-			{
-				Name:              sqle.DoltReadReplicaKey,
-				Scope:             sql.SystemVariableScope_Global,
-				Dynamic:           false,
-				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(sqle.DoltReadReplicaKey),
 				Default:           "",
 			},
 		})
