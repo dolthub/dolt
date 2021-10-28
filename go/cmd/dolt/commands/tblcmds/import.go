@@ -56,7 +56,6 @@ const (
 	primaryKeyParam  = "pk"
 	fileTypeParam    = "file-type"
 	delimParam       = "delim"
-	formatParam	 	 = "result-format"
 )
 
 var importDocs = cli.CommandDocumentationContent{
