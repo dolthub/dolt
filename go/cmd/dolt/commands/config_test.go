@@ -46,53 +46,39 @@ func TestConfigAdd(t *testing.T) {
 	tests := []struct {
 		Name       string
 		CfgSet     *set.StrSet
-		ConfigFlag string
 		ConfigElem env.DoltConfigElement
 		Args       []string
-		Key        string
-		Value      string
 		Code       int
 	}{
 		{
 			Name:       "local",
 			CfgSet:     localCfg,
-			ConfigFlag: "local",
 			ConfigElem: env.LocalConfig,
 			Args:       []string{"title", "senior dufus"},
-			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "global",
 			CfgSet:     globalCfg,
 			ConfigElem: env.GlobalConfig,
 			Args:       []string{"title", "senior dufus"},
-			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "server",
 			CfgSet:     serverCfg,
 			ConfigElem: env.ServerConfig,
 			Args:       []string{"title", "senior dufus"},
-			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
 			Args:       []string{"title", "senior dufus"},
-			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "multi error",
 			CfgSet:     multiCfg,
 			ConfigElem: env.ServerConfig,
 			Args:       []string{"title", "senior dufus"},
-			Key:        "title",
-			Value:      "senior dufus",
 			Code:       1,
 		},
 		{
@@ -100,8 +86,6 @@ func TestConfigAdd(t *testing.T) {
 			CfgSet:     multiCfg,
 			ConfigElem: env.ServerConfig,
 			Args:       []string{},
-			Key:        "title",
-			Value:      "senior dufus",
 			Code:       1,
 		},
 		{
@@ -109,8 +93,6 @@ func TestConfigAdd(t *testing.T) {
 			CfgSet:     multiCfg,
 			ConfigElem: env.ServerConfig,
 			Args:       []string{"title"},
-			Key:        "title",
-			Value:      "senior dufus",
 			Code:       1,
 		},
 	}
@@ -124,8 +106,8 @@ func TestConfigAdd(t *testing.T) {
 				assert.Equal(t, tt.Code, resCode)
 
 			} else if cfg, ok := dEnv.Config.GetConfig(tt.ConfigElem); ok {
-				resVal := cfg.GetStringOrDefault(tt.Key, "")
-				assert.Equal(t, tt.Value, resVal)
+				resVal := cfg.GetStringOrDefault("title", "")
+				assert.Equal(t, "senior dufus", resVal)
 			} else {
 				t.Error("comparison config not found")
 			}
@@ -137,55 +119,45 @@ func TestConfigGet(t *testing.T) {
 	tests := []struct {
 		Name       string
 		CfgSet     *set.StrSet
-		ConfigFlag string
 		ConfigElem env.DoltConfigElement
 		Key        string
-		Value      string
 		Code       int
 	}{
 		{
 			Name:       "local",
 			CfgSet:     localCfg,
-			ConfigFlag: "local",
 			ConfigElem: env.LocalConfig,
 			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "global",
 			CfgSet:     globalCfg,
 			ConfigElem: env.GlobalConfig,
 			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "server",
 			CfgSet:     serverCfg,
 			ConfigElem: env.ServerConfig,
 			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
 			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "multi",
 			CfgSet:     multiCfg,
 			ConfigElem: env.LocalConfig,
 			Key:        "title",
-			Value:      "senior dufus",
-			Code:       0,
 		},
 		{
 			Name:       "missing param",
 			CfgSet:     multiCfg,
 			ConfigElem: env.ServerConfig,
 			Key:        "unknown",
-			Value:      "senior dufus",
 			Code:       1,
 		},
 	}
@@ -201,7 +173,7 @@ func TestConfigGet(t *testing.T) {
 			if tt.Code == 1 {
 				assert.Equal(t, tt.Code, resCode)
 			} else {
-				assert.Equal(t, tt.Value, resVal)
+				assert.Equal(t, "senior dufus", resVal)
 			}
 		})
 	}
@@ -211,47 +183,39 @@ func TestConfigUnset(t *testing.T) {
 	tests := []struct {
 		Name       string
 		CfgSet     *set.StrSet
-		ConfigFlag string
 		ConfigElem env.DoltConfigElement
 		Key        string
-		Value      string
 		Code       int
 	}{
 		{
 			Name:       "local",
 			CfgSet:     localCfg,
-			ConfigFlag: "local",
 			ConfigElem: env.LocalConfig,
 			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "global",
 			CfgSet:     globalCfg,
 			ConfigElem: env.GlobalConfig,
 			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "server",
 			CfgSet:     serverCfg,
 			ConfigElem: env.ServerConfig,
 			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
 			Key:        "title",
-			Value:      "senior dufus",
 		},
 		{
 			Name:       "multi",
 			CfgSet:     multiCfg,
 			ConfigElem: env.LocalConfig,
 			Key:        "title",
-			Value:      "senior dufus",
 			Code:       1,
 		},
 		{
@@ -259,7 +223,6 @@ func TestConfigUnset(t *testing.T) {
 			CfgSet:     multiCfg,
 			ConfigElem: env.ServerConfig,
 			Key:        "unknown",
-			Value:      "senior dufus",
 			Code:       1,
 		},
 	}
@@ -287,49 +250,41 @@ func TestConfigList(t *testing.T) {
 	tests := []struct {
 		Name       string
 		CfgSet     *set.StrSet
-		ConfigFlag string
 		ConfigElem env.DoltConfigElement
-		Keys       []string
-		Values     []string
-		Code       int
 	}{
 		{
 			Name:       "local",
 			CfgSet:     localCfg,
-			ConfigFlag: "local",
 			ConfigElem: env.LocalConfig,
-			Keys:       []string{"title"},
-			Values:     []string{"senior dufus"},
+
 		},
 		{
 			Name:       "global",
 			CfgSet:     globalCfg,
 			ConfigElem: env.GlobalConfig,
-			Keys:       []string{"title"},
-			Values:     []string{"senior dufus"},
+
 		},
 		{
 			Name:       "server",
 			CfgSet:     serverCfg,
 			ConfigElem: env.ServerConfig,
-			Keys:       []string{"title"},
-			Values:     []string{"senior dufus"},
+
 		},
 		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
-			Keys:       []string{"title"},
-			Values:     []string{"senior dufus"},
+
 		},
 		{
 			Name:       "multi",
 			CfgSet:     multiCfg,
 			ConfigElem: env.LocalConfig,
-			Keys:       []string{"title"},
-			Values:     []string{"senior dufus"},
 		},
 	}
+
+	keys := []string{"title"}
+	values := []string{"senior dufus"}
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
@@ -342,13 +297,9 @@ func TestConfigList(t *testing.T) {
 				resKeys = append(resKeys, k)
 				resVals = append(resVals, v)
 			})
-
-			if tt.Code == 1 {
-				assert.Equal(t, tt.Code, resCode)
-			} else {
-				assert.Equal(t, tt.Keys, resKeys)
-				assert.Equal(t, tt.Values, resVals)
-			}
+			assert.Equal(t, 0, resCode)
+			assert.Equal(t, keys, resKeys)
+			assert.Equal(t, values, resVals)
 		})
 	}
 }
