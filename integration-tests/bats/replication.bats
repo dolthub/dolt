@@ -30,19 +30,16 @@ teardown() {
     [ ! -d "../bac1/.dolt" ] || false
 }
 
-@test "replication: push on cli commit" {
+@test "replication: no push on cli commit" {
+
     cd repo1
     dolt config --server --add DOLT_REPLICATE_TO_REMOTE backup1
     dolt sql -q "create table t1 (a int primary key)"
     dolt commit -am "cm"
 
     cd ..
-    dolt clone file://./bac1 repo2
-    cd repo2
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "t1" ]] || false
+    run dolt clone file://./bac1 repo2
+    [ "$status" -eq 1 ]
 }
 
 @test "replication: push on sql commit" {

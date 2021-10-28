@@ -148,7 +148,8 @@ teardown() {
 @test "sql-config: invalid persisted system variable type errors on cli sql command" {
     echo '{"server.max_connections":"string"}' > .dolt/config.json
     run dolt sql -q "SELECT @@GLOBAL.max_connections" -r csv
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic" ]]
     [[ "$output" =~ "strconv.ParseInt: parsing \"string\": invalid syntax" ]]
+    [[ "$output" =~ "151" ]]
 }

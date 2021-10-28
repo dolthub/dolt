@@ -201,13 +201,20 @@ func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 		switch cfgType {
 		case globalParamName:
 			panic("Should not have been able to get this far without a global config.")
-		case serverParamName, localParamName:
+		case localParamName:
 			err := dEnv.Config.CreateLocalConfig(updates)
 			if err != nil {
 				cli.PrintErrln(color.RedString("Unable to create repo local config file"))
 				return 1
 			}
 			return 0
+		case serverParamName:
+			err := dEnv.Config.CreateLocalConfig(make(map[string]string))
+			cfg, ok = dEnv.Config.GetConfig(newCfgElement(cfgType))
+			if !ok || err != nil {
+				cli.PrintErrln(color.RedString("Unable to create repo local config file"))
+				return 1
+			}
 		default:
 			cli.Println("error: unknown config flag")
 			return 1

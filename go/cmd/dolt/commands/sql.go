@@ -297,11 +297,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		currentDB = name
 	}
 
-	err = initPersistedSystemVars(dEnv)
-	if err != nil {
-		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
-	}
-
 	_, continueOnError := apr.GetValue(continueFlag)
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		batchMode := apr.Contains(BatchFlag)
@@ -550,11 +545,13 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+		// only sql engines get commit hooks
 		postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
 		if err != nil {
 			return true, err
 		}
 		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
+
 		db = newDatabase(name, dEnv)
 		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok && val != "" {
 			remoteName, ok := val.(string)
@@ -653,11 +650,11 @@ func GetResultFormat(format string) (resultFormat, errhand.VerboseError) {
 	}
 }
 
-func initPersistedSystemVars(dEnv *env.DoltEnv) error {
+func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	sql.InitSystemVariables()
 	var globals config.ReadWriteConfig
 	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
-		cli.Println("warning: 0multi-db mode does not support persistable sessions")
+		cli.Println("warning: multi-db mode does not support persistable sessions")
 		globals = config.NewMapConfig(make(map[string]string))
 	} else {
 		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)

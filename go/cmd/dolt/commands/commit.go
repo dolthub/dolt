@@ -77,16 +77,6 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	err := initPersistedSystemVars(dEnv)
-	if err != nil {
-		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
-	}
-	postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
-	if err != nil {
-		return 1
-	}
-	dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
-
 	// Check if the -all param is provided. Stage all tables if so.
 	allFlag := apr.Contains(cli.AllFlag)
 
