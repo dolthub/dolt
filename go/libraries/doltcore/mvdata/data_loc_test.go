@@ -17,7 +17,6 @@ package mvdata
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"os"
 	"reflect"
 	"testing"
@@ -205,8 +204,16 @@ func TestCreateRdWr(t *testing.T) {
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 
 		filePath, _ := dEnv.FS.Abs(testSchemaFileName)
+		if err != nil {
+			t.Fatal("Unexpected error getting filepath", err)
+		}
+
 		writer, _ := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
-		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil, opts, writer)
+		if err != nil {
+			t.Fatal("Unexpected error opening file for writer.", err)
+		}
+
+		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, root, true, fakeSchema, nil, opts, writer)
 		if err != nil {
 			t.Fatal("Unexpected error creating writer.", err)
 		}

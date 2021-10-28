@@ -43,7 +43,6 @@ type exportOptions struct {
 	tableName   string
 	contOnErr   bool
 	force       bool
-	append		bool
 	format 		string
 	src         mvdata.TableDataLocation
 	dest        mvdata.DataLocation
@@ -125,7 +124,6 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 		//tableName:   tableName,
 		contOnErr:   apr.Contains(contOnErrParam),
 		force:       apr.Contains(forceParam),
-		append:		 resultFormat == "sql",
 		format:		 resultFormat,
 		//src:         tableLoc,
 		dest:        fileLoc,
@@ -152,7 +150,7 @@ func (cmd DumpCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 
 func (cmd DumpCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	//ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue exporting when row export errors are encountered.")
 	ap.SupportsString(formatParam, "r", "result_file_type", "Define the type of the output file. Valid values are sql and csv. Defaults to sql.")
@@ -183,7 +181,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root)
-
 	if err != nil {
 		errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
 	}
@@ -207,7 +204,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.BuildDError("%s already exists. Use -f to overwrite.", exOpts.DestName()).Build(), usage)
 	}
 
-	// CREATE NEW FILE
+	// create new file
 	err = dEnv.FS.MkDirs(filepath.Dir(exOpts.DestName()))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -217,8 +214,8 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
+	os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
 	cli.Printf("Tables exporting:\n")
 	for _, tbl := range tblNames {
@@ -228,15 +225,11 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		exOpts.src = mvdata.TableDataLocation{Name: tbl}
 
 		mover, verr := NewExportDataMover(ctx, root, dEnv, exOpts, importStatsCB, filePath)
-
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
 		skipped, verr := mvdata.MoveData(ctx, dEnv, mover, exOpts)
-
-		cli.PrintErrln()
-
 		if skipped > 0 {
 			cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 		}
@@ -255,7 +248,6 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	var err error
 
 	rd, srcIsSorted, err := exOpts.src.NewReader(ctx, root, dEnv.FS, exOpts.srcOptions)
-
 	if err != nil {
 		return nil, errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build()
 	}
@@ -277,7 +269,7 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(wErr).Build()
 	}
 
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, opts, writer)
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, srcIsSorted, outSch, statsCB, opts, writer)
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()
 	}

@@ -477,12 +477,19 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	switch impOpts.operation {
 	case CreateOp:
 		filePath, _ := dEnv.FS.Abs(impOpts.SrcName())
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
+		}
 		writer, _ := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts, writer)
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
+			// errhand.BuildDError("Error opening writer for %s.", impOpts.SrcName()).AddCause(err).Build()
+		}
+		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts, writer)
 	case ReplaceOp:
-		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
+		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts)
 	case UpdateOp:
-		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, rdTags, opts)
+		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, rdTags, opts)
 	default:
 		err = errors.New("invalid move operation")
 	}

@@ -274,18 +274,18 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	filePath, _ := dEnv.FS.Abs(exOpts.DestName())
+	filePath, err := dEnv.FS.Abs(exOpts.DestName())
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	writer, wErr := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
-	if wErr != nil {
-		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(wErr).Build()
+	writer, err := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
 	}
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, opts, writer)
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, srcIsSorted, outSch, statsCB, opts, writer)
 
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()
