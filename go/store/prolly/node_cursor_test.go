@@ -28,9 +28,9 @@ import (
 
 func TestNodeCursor(t *testing.T) {
 	t.Run("new cursor at item", func(t *testing.T) {
-		//testNewCursorAtItem(t, 10)
-		//testNewCursorAtItem(t, 100)
-		//testNewCursorAtItem(t, 1000)
+		testNewCursorAtItem(t, 10)
+		testNewCursorAtItem(t, 100)
+		testNewCursorAtItem(t, 1000)
 	})
 }
 
@@ -39,11 +39,10 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	assert.NotNil(t, root)
 
 	ctx := context.Background()
-	for _, kv := range items {
-		key, value := kv[0], kv[1]
-		cur, err := newCursorAtItem(ctx, nrw, root, key, searchTree)
+	for i := range items {
+		key, value := items[i][0], items[i][1]
+		cur, err := newCursorAtItem(ctx, nrw, root, key, searchTestTree)
 		require.NoError(t, err)
-
 		assert.Equal(t, key, cur.current())
 		_, err = cur.advance(ctx)
 		require.NoError(t, err)
@@ -101,14 +100,28 @@ func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeReadWriter) {
 }
 
 var keyDesc = val.NewTupleDescriptor(
-	val.Type{Enc: val.BytesEnc, Nullable: false},
+	val.Type{Enc: val.Int64Enc, Nullable: false},
 )
 var valDesc = val.NewTupleDescriptor(
-	val.Type{Enc: val.BytesEnc, Nullable: true},
-	val.Type{Enc: val.BytesEnc, Nullable: true},
-	val.Type{Enc: val.BytesEnc, Nullable: true},
-	val.Type{Enc: val.BytesEnc, Nullable: true},
+	val.Type{Enc: val.Int64Enc, Nullable: true},
+	val.Type{Enc: val.Int64Enc, Nullable: true},
+	val.Type{Enc: val.Int64Enc, Nullable: true},
+	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
+
+func searchTestTree(item nodeItem, nd Node) int {
+	card := 1
+	if nd.leafNode() {
+		card = 2
+	}
+
+	idx := sort.Search(nd.nodeCount()/card, func(i int) bool {
+		l, r := val.Tuple(item), val.Tuple(nd.getItem(i*card))
+		return keyDesc.Compare(l, r) <= 0
+	})
+
+	return idx * card
+}
 
 func randomTupleItemPairs(count int) (items [][2]nodeItem) {
 	tups := randomTuplePairs(count, keyDesc, valDesc)
@@ -122,16 +135,4 @@ func randomTupleItemPairs(count int) (items [][2]nodeItem) {
 		items[i][1] = nodeItem(tups[i][1])
 	}
 	return
-}
-
-func searchTree(item nodeItem, nd Node) (idx int) {
-	card := 1
-	if nd.leafNode() {
-		card = 2
-	}
-
-	return sort.Search(nd.nodeCount()/card, func(i int) bool {
-		l, r := val.Tuple(item), val.Tuple(nd.getItem(i*card))
-		return keyDesc.Compare(l, r) < 0
-	})
 }
