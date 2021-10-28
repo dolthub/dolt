@@ -136,7 +136,7 @@ func (tb *TupleBuilder) PutString(i int, v string) {
 	tb.desc.expectEncoding(i, StringEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.off : tb.off+sz]
-	writeString(tb.fields[i], v, tb.desc.types[i].Coll)
+	writeString(tb.fields[i], v, tb.desc.Types[i].Coll)
 	tb.off += sz
 	tb.updateMaxIdx(i)
 }
@@ -145,7 +145,7 @@ func (tb *TupleBuilder) PutBytes(i int, v []byte) {
 	tb.desc.expectEncoding(i, BytesEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.off : tb.off+sz]
-	writeBytes(tb.fields[i], v, tb.desc.types[i].Coll)
+	writeBytes(tb.fields[i], v, tb.desc.Types[i].Coll)
 	tb.off += sz
 	tb.updateMaxIdx(i)
 }
