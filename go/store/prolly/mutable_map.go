@@ -22,13 +22,13 @@ import (
 
 type MutableMap struct {
 	m       Map
-	overlay val.TupleMap
+	overlay memoryMap
 }
 
 func newMutableMap(m Map) MutableMap {
 	return MutableMap{
 		m:       m,
-		overlay: val.NewTupleMap(m.keyDesc),
+		overlay: NewTupleMap(m.keyDesc),
 	}
 }
 
@@ -41,7 +41,7 @@ func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) (err error)
 	if !ok {
 		// synchronously flush overlay
 		mut.m, err = mut.Map(ctx)
-		mut.overlay = val.NewTupleMap(mut.m.keyDesc)
+		mut.overlay = NewTupleMap(mut.m.keyDesc)
 	}
 	return
 }
@@ -67,7 +67,7 @@ type editProvider interface {
 	Close() error
 }
 
-var _ editProvider = val.KeyValueIter{}
+var _ editProvider = keyValueIter{}
 
 func applyEdits(ctx context.Context, m Map, edits editProvider) (Map, error) {
 	var err error

@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package val
+package prolly
 
-import "github.com/dolthub/dolt/go/store/skip"
+import (
+	"github.com/dolthub/dolt/go/store/skip"
+	"github.com/dolthub/dolt/go/store/val"
+)
 
-type TupleMap struct {
+type memoryMap struct {
 	list    *skip.List
-	keyDesc TupleDesc
+	keyDesc val.TupleDesc
 }
 
-func NewTupleMap(keyDesc TupleDesc, tups ...Tuple) (tm TupleMap) {
+func NewTupleMap(keyDesc val.TupleDesc, tups ...val.Tuple) (tm memoryMap) {
 	if len(tups)%2 != 0 {
 		panic("tuples must be key-value pairs")
 	}
@@ -37,54 +40,54 @@ func NewTupleMap(keyDesc TupleDesc, tups ...Tuple) (tm TupleMap) {
 	return
 }
 
-func (tm TupleMap) compare(left, right []byte) int {
-	return int(tm.keyDesc.Compare(left, right))
+func (mm memoryMap) compare(left, right []byte) int {
+	return int(mm.keyDesc.Compare(left, right))
 }
 
-func (tm TupleMap) Count() int {
-	return tm.list.Count()
+func (mm memoryMap) Count() int {
+	return mm.list.Count()
 }
 
-func (tm TupleMap) Get(key Tuple) (val Tuple, ok bool) {
-	return tm.list.Get(key)
+func (mm memoryMap) Get(key val.Tuple) (val val.Tuple, ok bool) {
+	return mm.list.Get(key)
 }
 
-func (tm TupleMap) Put(key, val Tuple) (ok bool) {
-	ok = !tm.list.Full()
+func (mm memoryMap) Put(key, val val.Tuple) (ok bool) {
+	ok = !mm.list.Full()
 	if ok {
-		tm.list.Put(key, val)
+		mm.list.Put(key, val)
 	}
 	return
 }
 
-func (tm TupleMap) Has(key Tuple) (ok bool) {
-	_, ok = tm.list.Get(key)
+func (mm memoryMap) Has(key val.Tuple) (ok bool) {
+	_, ok = mm.list.Get(key)
 	return
 }
 
-func (tm TupleMap) Iter() KeyValueIter {
-	return KeyValueIter{ListIter: tm.list.Iter()}
+func (mm memoryMap) Iter() keyValueIter {
+	return keyValueIter{ListIter: mm.list.Iter()}
 }
 
-type KeyValueIter struct {
+type keyValueIter struct {
 	*skip.ListIter
 	idx int
 }
 
-func (it KeyValueIter) Count() int {
+func (it keyValueIter) Count() int {
 	return it.ListIter.Count()
 }
 
-func (it KeyValueIter) Next() (key, val Tuple) {
+func (it keyValueIter) Next() (key, val val.Tuple) {
 	key, val = it.Next()
 	it.idx++
 	return
 }
 
-func (it KeyValueIter) Remaining() int {
+func (it keyValueIter) Remaining() int {
 	return it.Count() - it.idx
 }
 
-func (it KeyValueIter) Close() error {
+func (it keyValueIter) Close() error {
 	return nil
 }

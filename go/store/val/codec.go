@@ -32,8 +32,7 @@ type ByteSize uint16
 type Collation uint16
 
 const (
-	NullCollation      Collation = 0
-	ByteOrderCollation Collation = 1
+	ByteOrderCollation Collation = 0
 )
 
 type Encoding uint8

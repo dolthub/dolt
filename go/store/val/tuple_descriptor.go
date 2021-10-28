@@ -19,18 +19,14 @@ type TupleDesc struct {
 	raw   comparisonMapping
 }
 
-type Comparison int
-
-const (
-	GreaterCmp Comparison = 1
-	EqualCmp   Comparison = 0
-	LesserCmp  Comparison = -1
-)
-
 func NewTupleDescriptor(types ...Type) (td TupleDesc) {
+	if len(types) > MaxTupleFields {
+		panic("tuple field maxIdx exceeds maximum")
+	}
+
 	for _, typ := range types {
-		if typ.Enc == 0 || typ.Coll == 0 {
-			panic("invalid type")
+		if typ.Enc == NullEnc {
+			panic("invalid encoding")
 		}
 	}
 
@@ -39,9 +35,13 @@ func NewTupleDescriptor(types ...Type) (td TupleDesc) {
 	return
 }
 
-func (td TupleDesc) count() int {
-	return len(td.types)
-}
+type Comparison int
+
+const (
+	GreaterCmp Comparison = 1
+	EqualCmp   Comparison = 0
+	LesserCmp  Comparison = -1
+)
 
 func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
 	if td.raw != nil {
@@ -56,6 +56,10 @@ func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
 	}
 
 	return
+}
+
+func (td TupleDesc) count() int {
+	return len(td.types)
 }
 
 func (td TupleDesc) GetBool(i int, tup Tuple) bool {
