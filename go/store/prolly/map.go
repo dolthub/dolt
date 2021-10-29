@@ -73,7 +73,7 @@ func (m Map) Mutate() MutableMap {
 }
 
 func (m Map) TupleDescriptors() (val.TupleDesc, val.TupleDesc) {
-	return m.keyDesc, m.keyDesc
+	return m.keyDesc, m.valDesc
 }
 
 func (m Map) Count() uint64 {

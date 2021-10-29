@@ -53,16 +53,6 @@ func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) M
 	}
 }
 
-func keyDescriptorFromSchema(sch schema.Schema) (kd val.TupleDesc) {
-	// todo(andy)
-	return kd
-}
-
-func valueDescriptorFromSchema(sch schema.Schema) (vd val.TupleDesc) {
-	// todo(andy)
-	return vd
-}
-
 func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
 	switch x := vrw.(type) {
 	case datas.Database:
@@ -79,4 +69,49 @@ func EmptyTreeChunkerFromMap(ctx context.Context, m Map) *TreeChunker {
 		panic(err)
 	}
 	return ch
+}
+
+func keyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
+	var tt []val.Type
+	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		tt = append(tt, val.Type{
+			Enc:      encodingFromNomsKind(col.Kind),
+			Nullable: false,
+		})
+		return
+	})
+	return val.NewTupleDescriptor(tt...)
+}
+
+func valueDescriptorFromSchema(sch schema.Schema) (vd val.TupleDesc) {
+	var tt []val.Type
+	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		tt = append(tt, val.Type{
+			Enc:      encodingFromNomsKind(col.Kind),
+			Nullable: col.IsNullable(),
+		})
+		return
+	})
+	return val.NewTupleDescriptor(tt...)
+}
+
+func encodingFromNomsKind(k types.NomsKind) val.Encoding {
+	switch k {
+	case types.BoolKind:
+		return val.Int8Enc
+	case types.IntKind:
+		return val.Int64Enc
+	case types.UintKind:
+		return val.Uint64Enc
+	case types.FloatKind:
+		return val.Float64Enc
+	case types.StringKind:
+		return val.StringEnc
+	case types.BlobKind:
+		return val.BytesEnc
+	case types.InlineBlobKind:
+		return val.BytesEnc
+	default:
+		panic("unknown nomds kind")
+	}
 }

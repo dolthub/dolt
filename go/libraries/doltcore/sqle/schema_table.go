@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 var errDoltSchemasTableFormat = fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
@@ -154,21 +153,7 @@ type schemaFragment struct {
 }
 
 func getSchemaFragmentsOfType(ctx *sql.Context, tbl *doltdb.Table, fragmentType string) ([]schemaFragment, error) {
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var fragments []schemaFragment
-	err = rowData.IterAll(ctx, func(key, value val.Tuple) error {
-		// todo(andy)
-		return nil
-	})
-
-	//sch, err := tbl.GetSchema(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
+	panic("unimplemented")
 
 	//typeCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
 	//if !ok {
@@ -206,9 +191,4 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *doltdb.Table, fragmentType 
 	//	}
 	//	return false, nil
 	//})
-	if err != nil {
-		return nil, err
-	}
-
-	return fragments, nil
 }

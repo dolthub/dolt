@@ -74,7 +74,7 @@ func (pl ProllyDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverO
 	if err != nil {
 		return nil, err
 	}
-	kd, vd := rows.TupleDescriptors()
+	keyDesc, valDesc := rows.TupleDescriptors()
 
 	nrw := prolly.NewNodeStore(prolly.ChunkStoreFromVRW(root.VRW()))
 	chunker := prolly.EmptyTreeChunkerFromMap(ctx, rows)
@@ -82,8 +82,8 @@ func (pl ProllyDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverO
 	return &prollyWriteCloser{
 		name: pl.Name,
 		sch:  outSch,
-		kd:   kd,
-		vd:   vd,
+		kb:   val.NewTupleBuilder(keyDesc),
+		vb:   val.NewTupleBuilder(valDesc),
 		ch:   chunker,
 		nrw:  nrw,
 		root: root,
@@ -105,7 +105,8 @@ func (pl ProllyDataLocation) NewReplacingWriter(ctx context.Context, _ DataMover
 type prollyWriteCloser struct {
 	name   string
 	sch    schema.Schema
-	kd, vd val.TupleDesc
+	kb, vb *val.TupleBuilder
+
 	ch     *prolly.TreeChunker
 	nrw    prolly.NodeReadWriter
 	root   *doltdb.RootValue
@@ -119,7 +120,7 @@ func (pw *prollyWriteCloser) Flush(ctx context.Context) (*doltdb.RootValue, erro
 		return nil, err
 	}
 
-	m := prolly.NewMap(node, pw.nrw, pw.kd, pw.vd)
+	m := prolly.NewMap(node, pw.nrw, pw.kb.Desc, pw.vb.Desc)
 
 	tbl, ok, err := pw.root.GetTable(ctx, pw.name)
 	if err != nil {
@@ -155,58 +156,46 @@ func (pw *prollyWriteCloser) Close(ctx context.Context) error {
 }
 
 func (pw *prollyWriteCloser) tuplesFromRow(r row.Row) (key, value val.Tuple) {
-	fields := make([][]byte, pw.sch.GetAllCols().Size())
-
 	idx := 0
 	_ = pw.sch.GetPKCols().Iter(func(tag uint64, _ schema.Column) (stop bool, err error) {
 		v, ok := r.GetColVal(tag)
 		if ok {
-			fields[idx] = bytesFromValue(idx, pw.kd, v)
-		} else {
-			fields[idx] = nil
+			writeValue(pw.kb, idx, v)
 		}
 		idx++
 		return
 	})
 
-	split := idx
+	idx = 0
 	_ = pw.sch.GetNonPKCols().Iter(func(tag uint64, _ schema.Column) (stop bool, err error) {
 		v, ok := r.GetColVal(tag)
 		if ok {
-			fields[idx] = bytesFromValue(idx, pw.vd, v)
-		} else {
-			fields[idx] = nil
+			writeValue(pw.vb, idx, v)
 		}
 		idx++
 		return
 	})
 
-	key = val.NewTuple(shared, fields[:split]...)
-	value = val.NewTuple(shared, fields[split:]...)
+	key = pw.kb.Tuple(shared)
+	value = pw.vb.Tuple(shared)
 	return
 }
 
 var shared = pool.NewBuffPool()
 
-func bytesFromValue(idx int, desc val.TupleDesc, v types.Value) (buf []byte) {
+func writeValue(builder *val.TupleBuilder, idx int, v types.Value) {
 	switch tv := v.(type) {
 	case types.Bool:
-		buf = shared.Get(1)
-		desc.PutBool(buf, bool(tv))
+		builder.PutBool(idx, bool(tv))
 	case types.Int:
-		buf = shared.Get(8)
-		desc.PutInt64(buf, int64(8))
+		builder.PutInt64(idx, int64(8))
 	case types.Uint:
-		buf = shared.Get(8)
-		desc.PutUint64(buf, uint64(8))
+		builder.PutUint64(idx, uint64(8))
 	case types.Float:
-		buf = shared.Get(8)
-		desc.PutFloat64(buf, float64(8))
+		builder.PutFloat64(idx, float64(8))
 	case types.String:
-		buf = shared.Get(uint64(len(tv)))
-		desc.PutString(idx, buf, string(tv))
+		builder.PutString(idx, string(tv))
 	default:
 		panic("unknown value type")
 	}
-	return
 }
