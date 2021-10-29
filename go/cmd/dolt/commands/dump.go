@@ -25,7 +25,6 @@ import (
 
 const (
 	forceParam       = "force"
-	contOnErrParam   = "continue"
 	formatParam	 	 = "result-format"
 )
 
@@ -41,7 +40,6 @@ var dumpDocs = cli.CommandDocumentationContent{
 
 type exportOptions struct {
 	tableName   string
-	contOnErr   bool
 	force       bool
 	format 		string
 	src         mvdata.TableDataLocation
@@ -108,21 +106,30 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, dumpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() == 0 {
-		usage()
-		return nil, errhand.BuildDError("missing required argument").Build()
-	} else if apr.NArg() > 1 {
+	if apr.NArg() > 0 {
 		usage()
 		return nil, errhand.BuildDError("too many arguments").Build()
 	}
 
+	var fileName string
 	resultFormat, _ := apr.GetValue(formatParam)
 
-	fileLoc := getExportDestination(apr.Arg(0))
+	switch resultFormat {
+	case "", "sql", ".sql":
+		fileName = "doltdump.sql"
+	//case "csv", ".csv":
+		// handle CSV filetype
+		// maybe create dir 'doltdump' and put all the csv dump files into it
+	default:
+		usage()
+		return nil, errhand.BuildDError("invalid result format").Build()
+	}
+
+	//fileLoc := getExportDestination(apr.Arg(0))
+	fileLoc := getExportDestination(fileName)
 
 	return &exportOptions{
 		//tableName:   tableName,
-		contOnErr:   apr.Contains(contOnErrParam),
 		force:       apr.Contains(forceParam),
 		format:		 resultFormat,
 		//src:         tableLoc,
@@ -150,9 +157,8 @@ func (cmd DumpCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 
 func (cmd DumpCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
+	//ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
-	ap.SupportsFlag(contOnErrParam, "", "Continue exporting when row export errors are encountered.")
 	ap.SupportsString(formatParam, "r", "result_file_type", "Define the type of the output file. Valid values are sql and csv. Defaults to sql.")
 
 	return ap
@@ -236,9 +242,9 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
-
-		cli.PrintErrln(color.CyanString("Successfully exported data."))
 	}
+
+	cli.PrintErrln(color.CyanString("Successfully exported data."))
 
 	return 0
 }
@@ -276,7 +282,7 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 
 	emptyTransColl := pipeline.NewTransformCollection()
 
-	imp := &mvdata.DataMover{Rd: rd, Transforms: emptyTransColl, Wr: wr, ContOnErr: exOpts.contOnErr}
+	imp := &mvdata.DataMover{Rd: rd, Transforms: emptyTransColl, Wr: wr, ContOnErr: false}
 	rd = nil
 
 	return imp, nil

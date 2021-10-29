@@ -45,7 +45,6 @@ type CSVWriter struct {
 // OpenCSVWriter creates a file at the given path in the given filesystem and writes out rows based on the Schema,
 // and CSVFileInfo provided
 func OpenCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
-
 	return NewCSVWriter(wr, outSch, info)
 }
 
