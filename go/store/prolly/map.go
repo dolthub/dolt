@@ -106,10 +106,6 @@ func (m Map) GetIndex(ctx context.Context, idx uint64, cb KeyValueFn) (err error
 		return err
 	}
 
-	if !cur.valid() {
-		cur, _ = newCursorAtIndex(ctx, m.nrw, m.root, treeIndex)
-	}
-
 	k := val.Tuple(cur.current())
 	if _, err = cur.advance(ctx); err != nil {
 		return err
@@ -142,54 +138,59 @@ func (m Map) IterValueRange(ctx context.Context, r ValueRange, cb KeyValueFn) (e
 	panic("unimplemented")
 }
 
+// IndexRange is an inclusive range of item indexes
 type IndexRange struct {
-	start, stop uint64
+	low, high uint64
+	reverse   bool
 }
 
-func (m Map) IterIndexRange(ctx context.Context, r IndexRange, cb KeyValueFn) (err error) {
-	if r.start > m.Count() || r.stop > m.Count() {
+func (m Map) IterIndexRange(ctx context.Context, rng IndexRange, cb KeyValueFn) (err error) {
+	if rng.low > m.Count() || rng.high > m.Count() {
 		return errors.New("range out of bounds")
 	}
 
-	treeIndex := r.start * 2
+	treeIndex := rng.low * 2
+	if rng.reverse {
+		treeIndex = rng.high * 2
+	}
+
 	cur, err := newCursorAtIndex(ctx, m.nrw, m.root, treeIndex)
 	if err != nil {
 		return err
 	}
 
-	count := r.stop - r.start
-	reverse := false
-	if count < 0 {
-		count = -count
-		reverse = true
-	}
-
+	remaining := rng.high - rng.low + 1
 	var key, value val.Tuple
-	for count > 0 {
+	for remaining > 0 {
 		key = val.Tuple(cur.current())
 		if _, err = cur.advance(ctx); err != nil {
 			return err
 		}
 		value = val.Tuple(cur.current())
 
-		if reverse {
-			panic("not implemented")
+		if err = cb(key, value); err != nil {
+			return err
+		}
+
+		if rng.reverse {
+			for i := 0; i < 3; i++ {
+				if _, err = cur.retreat(ctx); err != nil {
+					return err
+				}
+			}
 		} else {
 			if _, err = cur.advance(ctx); err != nil {
 				return err
 			}
 		}
 
-		if err = cb(key, value); err != nil {
-			return err
-		}
-		count--
+		remaining--
 	}
 	return
 }
 
 func (m Map) IterAll(ctx context.Context, cb KeyValueFn) (err error) {
-	r := IndexRange{start: 0, stop: m.Count()}
+	r := IndexRange{low: 0, high: m.Count()}
 	return m.IterIndexRange(ctx, r, cb)
 }
 

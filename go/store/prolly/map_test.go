@@ -123,29 +123,12 @@ func testMapIterIndexRange(t *testing.T, count int) {
 	)
 
 	m, kvPairs := randomMap(t, count, kd, vd)
-
-	var ranges []IndexRange
-	start := uint64(0)
-	for {
-		width := (testRand.Uint64() % 15) + 1
-		stop := start + width
-
-		if stop > m.Count() {
-			stop = m.Count()
-			break
-		}
-
-		ranges = append(ranges, IndexRange{
-			start: start,
-			stop:  stop,
-		})
-
-		start = stop
-	}
+	ranges := indexRanges(m)
 
 	ctx := context.Background()
 	for _, rng := range ranges {
-		idx := rng.start
+		rng.reverse = false
+		idx := rng.low
 		err := m.IterIndexRange(ctx, rng, func(key, value val.Tuple) (err error) {
 			assert.Equal(t, kvPairs[idx][0], key)
 			assert.Equal(t, kvPairs[idx][1], value)
@@ -154,6 +137,40 @@ func testMapIterIndexRange(t *testing.T, count int) {
 		})
 		assert.NoError(t, err)
 	}
+
+	for _, rng := range ranges {
+		rng.reverse = true
+		idx := rng.high
+		err := m.IterIndexRange(ctx, rng, func(key, value val.Tuple) (err error) {
+			assert.Equal(t, kvPairs[idx][0], key)
+			assert.Equal(t, kvPairs[idx][1], value)
+			idx--
+			return
+		})
+		assert.NoError(t, err)
+	}
+}
+
+func indexRanges(m Map) (ranges []IndexRange) {
+	ok := true
+	start := uint64(0)
+	for ok {
+		width := (testRand.Uint64() % 15) + 1
+		stop := start + width
+
+		if stop >= m.Count() {
+			stop = m.Count() - 1
+			ok = false
+		}
+
+		ranges = append(ranges, IndexRange{
+			low:  start,
+			high: stop,
+		})
+
+		start = stop
+	}
+	return
 }
 
 func randomMap(t *testing.T, count int, kd, vd val.TupleDesc) (Map, [][2]val.Tuple) {
