@@ -142,6 +142,7 @@ stop_sql_server() {
     if [ ! -z "$SERVER_PID" ]; then
       kill $SERVER_PID
     fi
+    SERVER_PID=
 }
 
 # server_query connects to a running mysql server, executes a query and compares the results against what is expected.

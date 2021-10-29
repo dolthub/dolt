@@ -45,7 +45,16 @@ async function main() {
 			"describe test",
 			"select * from test",
 			"insert into test (pk, `value`) values (0,0)",
-			"select * from test"
+			"select * from test",
+			"select dolt_add('-A');",
+			"select dolt_commit('-m', 'my commit')",
+			"select COUNT(*) FROM dolt_log",
+			"select dolt_checkout('-b', 'mybranch')",
+			"insert into test (pk, `value`) values (1,1)",
+			"select dolt_commit('-a', '-m', 'my commit2')",
+			"select dolt_checkout('main')",
+			"select dolt_merge('mybranch')",
+			"select COUNT(*) FROM dolt_log",
     ];
 
     const results = [
@@ -74,7 +83,25 @@ async function main() {
 	    protocol41: true,
 	    changedRows: 0
 	},
-	[ { pk: 0, value: 0 } ]
+	[ { pk: 0, value: 0 } ],
+	[ { "dolt_add('-A')": 0 } ],
+	[],
+	[ { "COUNT(*)": 2 } ],
+	[ { "dolt_checkout('-b', 'mybranch')": 0 } ],
+	{
+		fieldCount: 0,
+		affectedRows: 1,
+		insertId: 0,
+		serverStatus: 2,
+		warningCount: 0,
+		message: '',
+		protocol41: true,
+		changedRows: 0
+	},
+	[],
+	[ { "dolt_checkout('main')": 0 } ],
+	[ { "dolt_merge('mybranch')": 1 } ],
+	[ { "COUNT(*)": 3 } ],
     ];
 
     const database = new Database(config);
@@ -84,7 +111,7 @@ async function main() {
 			return database.query(query).then(rows => {
 				const resultStr = JSON.stringify(rows);
 				const result = JSON.parse(resultStr);
-				if (resultStr !== JSON.stringify(expected) ) {
+				if (resultStr !== JSON.stringify(expected) && !(query.includes("dolt_commit"))) {
 					console.log("Query:", query);
 					console.log("Results:", result);
 					console.log("Expected:", expected);
