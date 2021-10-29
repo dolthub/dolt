@@ -30,6 +30,7 @@ teardown() {
 }
 
 @test "sql-server-config: persist invalid global variable name before server startup" {
+    skip "fix in config ux PR"
     cd repo1
     echo '{"server.unknown":"1000"}' > .dolt/config.json
     run start_sql_server repo1
@@ -39,6 +40,7 @@ teardown() {
 }
 
 @test "sql-server-config: persist invalid global variable value before server startup" {
+    skip "fix in config ux PR"
     cd repo1
     echo '{"server.max_connections":"string"}' > .dolt/config.json
     run start_sql_server repo1
