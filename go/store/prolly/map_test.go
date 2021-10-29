@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+	"io"
 	"math"
 	"math/rand"
 	"sort"
@@ -129,25 +130,35 @@ func testMapIterIndexRange(t *testing.T, count int) {
 	for _, rng := range ranges {
 		rng.reverse = false
 		idx := rng.low
-		err := m.IterIndexRange(ctx, rng, func(key, value val.Tuple) (err error) {
+		iter, err := m.IterIndexRange(ctx, rng)
+		require.NoError(t, err)
+		for {
+			key, value, err := iter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
 			assert.Equal(t, kvPairs[idx][0], key)
 			assert.Equal(t, kvPairs[idx][1], value)
 			idx++
-			return
-		})
-		assert.NoError(t, err)
+		}
 	}
 
 	for _, rng := range ranges {
 		rng.reverse = true
 		idx := rng.high
-		err := m.IterIndexRange(ctx, rng, func(key, value val.Tuple) (err error) {
+		iter, err := m.IterIndexRange(ctx, rng)
+		require.NoError(t, err)
+		for {
+			key, value, err := iter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
 			assert.Equal(t, kvPairs[idx][0], key)
 			assert.Equal(t, kvPairs[idx][1], value)
 			idx--
-			return
-		})
-		assert.NoError(t, err)
+		}
 	}
 }
 
