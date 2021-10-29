@@ -127,26 +127,27 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return
 }
 
-type ValueRange struct {
-	startKey, stopKey val.Tuple
-	inclusiveStart    bool
-	inclusiveStop     bool
-	// nil means unbounded
+func (m Map) IterAll(ctx context.Context) (MapIter, error) {
+	return m.IterIndexRange(ctx, IndexRange{low: 0, high: m.Count()-1})
 }
 
-func (m Map) IterValueRange(ctx context.Context, r ValueRange, cb KeyValueFn) (err error) {
-	panic("unimplemented")
+func (m Map) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error) {
+	start := nodeItem(rng.lowKey)
+	if rng.reverse {
+		start = nodeItem(rng.highKey)
+	}
+
+	cur, err := newCursorAtItem(ctx, m.nrw, m.root, start, m.searchNode)
+	if err != nil {
+		return nil, err
+	}
+
+	return &valueIter{rng: rng, cur: cur}, nil
 }
 
-// IndexRange is an inclusive range of item indexes
-type IndexRange struct {
-	low, high uint64
-	reverse   bool
-}
-
-func (m Map) IterIndexRange(ctx context.Context, rng IndexRange, cb KeyValueFn) (err error) {
+func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error) {
 	if rng.low > m.Count() || rng.high > m.Count() {
-		return errors.New("range out of bounds")
+		return nil, errors.New("range out of bounds")
 	}
 
 	treeIndex := rng.low * 2
@@ -156,42 +157,11 @@ func (m Map) IterIndexRange(ctx context.Context, rng IndexRange, cb KeyValueFn) 
 
 	cur, err := newCursorAtIndex(ctx, m.nrw, m.root, treeIndex)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	remaining := rng.high - rng.low + 1
-	var key, value val.Tuple
-	for remaining > 0 {
-		key = val.Tuple(cur.current())
-		if _, err = cur.advance(ctx); err != nil {
-			return err
-		}
-		value = val.Tuple(cur.current())
 
-		if err = cb(key, value); err != nil {
-			return err
-		}
-
-		if rng.reverse {
-			for i := 0; i < 3; i++ {
-				if _, err = cur.retreat(ctx); err != nil {
-					return err
-				}
-			}
-		} else {
-			if _, err = cur.advance(ctx); err != nil {
-				return err
-			}
-		}
-
-		remaining--
-	}
-	return
-}
-
-func (m Map) IterAll(ctx context.Context, cb KeyValueFn) (err error) {
-	r := IndexRange{low: 0, high: m.Count()}
-	return m.IterIndexRange(ctx, r, cb)
+	return &indexIter{rng: rng, cur: cur, rem: remaining}, nil
 }
 
 func (m Map) searchNode(query nodeItem, nd Node) int {
