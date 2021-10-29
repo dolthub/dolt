@@ -382,7 +382,7 @@ func TestReadReplica(t *testing.T) {
 	}
 	defer os.Chdir(cwd)
 
-	multiSetup := testcommands.NewMultiRepoTestSetup(t)
+	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
 	defer os.RemoveAll(multiSetup.Root)
 
 	multiSetup.NewDB("read_replica")
@@ -393,20 +393,18 @@ func TestReadReplica(t *testing.T) {
 	readReplicaDbName := multiSetup.DbNames[0]
 	sourceDbName := multiSetup.DbNames[1]
 
-	localCfg, ok := multiSetup.MrEnv[readReplicaDbName].Config.GetConfig(env.LocalConfig)
+	replicaCfg, ok := multiSetup.MrEnv[readReplicaDbName].Config.GetConfig(env.LocalConfig)
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{dsqle.DoltReadReplicaKey: "remote1"})
+	replicaCfg.SetStrings(map[string]string{dsqle.DoltReadReplicaKey: "remote1"})
 
 	// start server as read replica
 	sc := CreateServerController()
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
 
 	func() {
-		err = os.Setenv(dsqle.DoltReadReplicaKey, "remote1")
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
-
 		go func() {
 			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readReplicaDbName])
 		}()
@@ -414,7 +412,6 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 	}()
 	defer sc.StopServer()
-	defer os.Unsetenv(dsqle.DoltReadReplicaKey)
 
 	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
 	defer conn.Close()
@@ -422,7 +419,7 @@ func TestReadReplica(t *testing.T) {
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
-	t.Run("push common new commit", func(t *testing.T) {
+	t.Run("read replica pulls on read", func(t *testing.T) {
 		var res []string
 		replicatedTable := "new_table"
 		multiSetup.CreateTable(sourceDbName, replicatedTable)

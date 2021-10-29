@@ -1070,6 +1070,23 @@ SQL
     rm -rf doltsql
 }
 
+@test "sql: use syntax on shell" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    mkdir doltsql
+    cd doltsql
+    dolt init
+
+    dolt branch test
+
+    run expect $BATS_TEST_DIRNAME/sql-use.expect
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "Error" ]] || false
+    [[ ! "$output" =~ "error" ]] || false
+
+    cd ..
+    rm -rf doltsql
+}
+
 @test "sql: batch delimiter" {
     dolt sql <<SQL
 DELIMITER // ;
