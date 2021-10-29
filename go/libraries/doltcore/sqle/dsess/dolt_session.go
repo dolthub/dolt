@@ -32,7 +32,7 @@ type DoltSession struct {
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 
-func NewDoltSession(sess *Session, conf config.ReadWriteConfig) *DoltSession {
+func NewDoltSessionFromDefault(sess *Session, conf config.ReadWriteConfig) *DoltSession {
 	return &DoltSession{Session: sess, globalsConf: conf, mu: &sync.Mutex{}}
 }
 

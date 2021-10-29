@@ -148,7 +148,6 @@ type DatabaseSessionState struct {
 	WorkingSet           *doltdb.WorkingSet
 	dbData               env.DbData
 	EditSession          *editor.TableEditSession
-	Config               config.ReadWriteConfig
 	detachedHead         bool
 	readOnly             bool
 	dirty                bool
@@ -199,16 +198,33 @@ type InitialDbState struct {
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf *env.DoltCliConfig, dbs ...InitialDbState) (*DoltSession, error) {
+func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
-
 	sess := &Session{
 		Session:  sqlSess,
 		username: username,
 		email:    email,
 		dbStates: make(map[string]*DatabaseSessionState),
 		provider: pro,
+	}
+
+	for _, db := range dbs {
+		err := sess.AddDB(ctx, db)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return sess, nil
+}
+
+// NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
+func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf *env.DoltCliConfig, dbs ...InitialDbState) (*DoltSession, error) {
+	sess, err := NewSession(ctx, sqlSess, pro, conf, dbs...)
+	if err != nil {
+		return nil, err
 	}
 
 	var globals config.ReadWriteConfig
@@ -219,17 +235,7 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
 	}
 
-	dsess := NewDoltSession(sess, globals)
-
-	for _, db := range dbs {
-		err := dsess.AddDB(ctx, db)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return dsess, nil
+	return NewDoltSessionFromDefault(sess, globals), nil
 }
 
 // EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
