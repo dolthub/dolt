@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -105,6 +106,10 @@ func (m Map) GetIndex(ctx context.Context, idx uint64, cb KeyValueFn) (err error
 		return err
 	}
 
+	if !cur.valid() {
+		cur, _ = newCursorAtIndex(ctx, m.nrw, m.root, treeIndex)
+	}
+
 	k := val.Tuple(cur.current())
 	if _, err = cur.advance(ctx); err != nil {
 		return err
@@ -112,10 +117,6 @@ func (m Map) GetIndex(ctx context.Context, idx uint64, cb KeyValueFn) (err error
 	v := val.Tuple(cur.current())
 
 	return cb(k, v)
-}
-
-func (m Map) GetMany(ctx context.Context, keys []val.Tuple, cb KeyValueFn) (err error) {
-	panic("unimplemented")
 }
 
 func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
@@ -143,22 +144,11 @@ func (m Map) IterValueRange(ctx context.Context, r ValueRange, cb KeyValueFn) (e
 
 type IndexRange struct {
 	start, stop uint64
-	// -1 means unbounded
 }
 
 func (m Map) IterIndexRange(ctx context.Context, r IndexRange, cb KeyValueFn) (err error) {
-	if r.start < 0 {
-		r.start = 0
-	}
-	if r.stop < 0 {
-		r.stop = m.Count()
-	}
-
-	retreat := false
-	count := r.stop - r.start
-	if count < 0 {
-		retreat = true
-		count = -count
+	if r.start > m.Count() || r.stop > m.Count() {
+		return errors.New("range out of bounds")
 	}
 
 	treeIndex := r.start * 2
@@ -167,30 +157,33 @@ func (m Map) IterIndexRange(ctx context.Context, r IndexRange, cb KeyValueFn) (e
 		return err
 	}
 
-	for i := uint64(0); i < count; i++ {
-		k := val.Tuple(cur.current())
-		if retreat {
-			_, err = cur.retreat(ctx)
-		} else {
-			_, err = cur.advance(ctx)
-		}
-		if err != nil {
+	count := r.stop - r.start
+	reverse := false
+	if count < 0 {
+		count = -count
+		reverse = true
+	}
+
+	var key, value val.Tuple
+	for count > 0 {
+		key = val.Tuple(cur.current())
+		if _, err = cur.advance(ctx); err != nil {
 			return err
+		}
+		value = val.Tuple(cur.current())
+
+		if reverse {
+			panic("not implemented")
+		} else {
+			if _, err = cur.advance(ctx); err != nil {
+				return err
+			}
 		}
 
-		v := val.Tuple(cur.current())
-		if retreat {
-			_, err = cur.retreat(ctx)
-		} else {
-			_, err = cur.advance(ctx)
-		}
-		if err != nil {
+		if err = cb(key, value); err != nil {
 			return err
 		}
-
-		if err = cb(k, v); err != nil {
-			return err
-		}
+		count--
 	}
 	return
 }

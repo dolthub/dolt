@@ -85,41 +85,32 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item 
 }
 
 func newCursorAtIndex(ctx context.Context, nrw NodeReadWriter, nd Node, idx uint64) (cur nodeCursor, err error) {
-	cur = nodeCursor{nd: nd, parent: nil, nrw: nrw}
+	cur = nodeCursor{nd: nd, nrw: nrw}
 
-	remaining := idx
-	for lvl := nd.level(); lvl > 0; lvl-- {
-		d.PanicIfFalse(cur.idx == 0)
+	distance := idx
+	for cur.level() > 0 {
 
-		meta := metaTuple(cur.current())
-		for remaining > meta.GetCumulativeCount() {
-			remaining -= meta.GetCumulativeCount()
+		mt := metaTuple(cur.current())
+		for distance >= mt.GetCumulativeCount() {
 
-			_, err = cur.advance(ctx)
-			if err != nil {
-				return cur, err
+			if _, err = cur.advance(ctx); err != nil {
+				return nodeCursor{}, err
 			}
 
-			meta = metaTuple(cur.current())
+			distance -= mt.GetCumulativeCount()
+			mt = metaTuple(cur.current())
 		}
 
 		nd, err = fetchRef(ctx, nrw, cur.current())
 		if err != nil {
-			return cur, err
+			return nodeCursor{}, err
 		}
 
 		parent := cur
 		cur = nodeCursor{nd: nd, parent: &parent, nrw: nrw}
 	}
 
-	d.PanicIfFalse(nd.nodeCount() < int(remaining))
-	parent := cur
-	cur = nodeCursor{
-		nd:     nd,
-		idx:    int(remaining),
-		parent: &parent,
-		nrw:    nrw,
-	}
+	cur.idx = int(distance)
 	return
 }
 
