@@ -395,7 +395,7 @@ func TestReadReplica(t *testing.T) {
 	readReplicaDbName := multiSetup.DbNames[0]
 	sourceDbName := multiSetup.DbNames[1]
 
-	replicaCfg, ok := multiSetup.MrEnv[readReplicaDbName].Config.GetConfig(env.LocalConfig)
+	localCfg, ok := multiSetup.MrEnv[readReplicaDbName].Config.GetConfig(env.LocalConfig)
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
