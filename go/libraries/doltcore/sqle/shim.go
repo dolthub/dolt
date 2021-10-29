@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -39,8 +40,7 @@ type sqlRowIter struct {
 
 var _ sql.RowIter = sqlRowIter{}
 
-func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
-
+func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projections []string, partition *doltTablePartition) (sql.RowIter, error) {
 	rows := partition.rowData
 	rng := prolly.IndexRange{
 		Low:  partition.start,
@@ -54,18 +54,23 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []str
 	if err != nil {
 		return nil, err
 	}
-	kd, vd := rows.TupleDescriptors()
 
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
-	keyProj, valProj := projectionMappings(sch, projectedCols)
+
+	return rowIterFromMapIter(ctx, sch, projections, rows, iter)
+}
+
+func rowIterFromMapIter(ctx context.Context, sch schema.Schema, projs []string, m prolly.Map, iter prolly.MapIter) (sql.RowIter, error) {
+	kd, vd := m.TupleDescriptors()
+	keyProj, valProj := projectionMappings(sch, projs)
 
 	return sqlRowIter{
 		ctx:     ctx,
 		iter:    iter,
-		rowLen:  len(projectedCols),
+		rowLen:  len(projs),
 		keyDesc: kd,
 		valDesc: vd,
 		keyProj: keyProj,
@@ -73,12 +78,12 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []str
 	}, nil
 }
 
-func projectionMappings(sch schema.Schema, projectedCols []string) (keyMap, valMap []int) {
+func projectionMappings(sch schema.Schema, projs []string) (keyMap, valMap []int) {
 	keyMap = make([]int, sch.GetPKCols().Size())
 	for idx := range keyMap {
 		keyMap[idx] = -1
 		idxCol := sch.GetPKCols().GetAtIndex(idx)
-		for j, proj := range projectedCols {
+		for j, proj := range projs {
 			if strings.ToLower(idxCol.Name) == strings.ToLower(proj) {
 				keyMap[idx] = j
 				break
@@ -90,7 +95,7 @@ func projectionMappings(sch schema.Schema, projectedCols []string) (keyMap, valM
 	for idx := range valMap {
 		valMap[idx] = -1
 		idxCol := sch.GetNonPKCols().GetAtIndex(idx)
-		for j, proj := range projectedCols {
+		for j, proj := range projs {
 			if strings.ToLower(idxCol.Name) == strings.ToLower(proj) {
 				valMap[idx] = j
 				break
@@ -127,4 +132,16 @@ func (it sqlRowIter) Next() (sql.Row, error) {
 
 func (it sqlRowIter) Close(ctx *sql.Context) error {
 	return nil
+}
+
+var shared = pool.NewBuffPool()
+
+func tupleFromSqlValues(bld *val.TupleBuilder, vals ...interface{}) val.Tuple {
+	if len(vals) != bld.Desc.Count() {
+		panic("column mismatch")
+	}
+	for i, v := range vals {
+		bld.PutField(i, v)
+	}
+	return bld.Tuple(shared)
 }

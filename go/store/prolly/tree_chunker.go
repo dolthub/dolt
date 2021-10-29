@@ -309,7 +309,7 @@ func (sc *TreeChunker) Done(ctx context.Context) (Node, error) {
 	// to find the root of the resulting tree.
 	if sc.parent != nil && sc.parent.anyPending() {
 		if len(sc.current) > 0 {
-			// If there are items in |current| at this point, they represent the final items of the Node which occurred
+			// If there are items in |current| at this Point, they represent the final items of the Node which occurred
 			// beyond the previous *explicit* chunk boundary. The end of input of a Node is considered an *implicit*
 			// boundary.
 			err := sc.handleChunkBoundary(ctx)
@@ -321,7 +321,7 @@ func (sc *TreeChunker) Done(ctx context.Context) (Node, error) {
 		return sc.parent.Done(ctx)
 	}
 
-	// At this point, we know this nodeSplitter contains, in |current| every item at this level of the resulting tree.
+	// At this Point, we know this nodeSplitter contains, in |current| every item at this level of the resulting tree.
 	// To see this, consider that there are two ways a nodeSplitter can enter items into its |current|:
 	//  (1) as the result of resume() with the cursor on anything other than the first item in the Node, and
 	//  (2) as a result of a child nodeSplitter hitting an explicit chunk boundary during either Append() or finalize().

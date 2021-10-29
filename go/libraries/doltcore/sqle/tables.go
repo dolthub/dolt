@@ -41,6 +41,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -182,101 +183,47 @@ func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 // GetIndexes implements sql.IndexedTable
 func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	// todo(andy)
-	return nil, nil
-	//
-	//tbl, err := t.doltTable(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//sch, err := tbl.GetSchema(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//rowData, err := tbl.GetRowData(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//var sqlIndexes []sql.Index
-	//cols := sch.GetPKCols().GetColumns()
-	//
-	//if len(cols) > 0 {
-	//	sqlIndexes = append(sqlIndexes, &doltIndex{
-	//		cols:         cols,
-	//		db:           t.db,
-	//		id:           "PRIMARY",
-	//		indexRowData: rowData,
-	//		indexSch:     sch,
-	//		table:        tbl,
-	//		tableData:    rowData,
-	//		tableName:    t.Name(),
-	//		tableSch:     sch,
-	//		unique:       true,
-	//		generated:    false,
-	//	})
-	//	for i := 1; i < len(cols); i++ {
-	//		sqlIndexes = append(sqlIndexes, &doltIndex{
-	//			cols:         cols[:i],
-	//			db:           t.db,
-	//			id:           fmt.Sprintf("PRIMARY_PARTIAL_%d", i),
-	//			indexRowData: rowData,
-	//			indexSch:     sch,
-	//			table:        tbl,
-	//			tableData:    rowData,
-	//			tableName:    t.Name(),
-	//			tableSch:     sch,
-	//			unique:       false,
-	//			comment:      fmt.Sprintf("partial of PRIMARY multi-column index on %d column(s)", i),
-	//			generated:    true,
-	//		})
-	//	}
-	//}
-	//
-	//for _, index := range sch.Indexes().AllIndexes() {
-	//	indexRowData, err := tbl.GetIndexRowData(ctx, index.Name())
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	cols := make([]schema.Column, index.Count())
-	//	for i, tag := range index.IndexedColumnTags() {
-	//		cols[i], _ = index.GetColumn(tag)
-	//	}
-	//	sqlIndexes = append(sqlIndexes, &doltIndex{
-	//		cols:         cols,
-	//		db:           t.db,
-	//		id:           index.Name(),
-	//		indexRowData: indexRowData,
-	//		indexSch:     index.Schema(),
-	//		table:        tbl,
-	//		tableData:    rowData,
-	//		tableName:    t.Name(),
-	//		tableSch:     sch,
-	//		unique:       index.IsUnique(),
-	//		comment:      index.Comment(),
-	//		generated:    false,
-	//	})
-	//	for i := 1; i < len(cols); i++ {
-	//		sqlIndexes = append(sqlIndexes, &doltIndex{
-	//			cols:         cols[:i],
-	//			db:           t.db,
-	//			id:           fmt.Sprintf("%s_PARTIAL_%d", index.Name(), i),
-	//			indexRowData: indexRowData,
-	//			indexSch:     index.Schema(),
-	//			table:        tbl,
-	//			tableData:    rowData,
-	//			tableName:    t.Name(),
-	//			tableSch:     sch,
-	//			unique:       false,
-	//			comment:      fmt.Sprintf("prefix of %s multi-column index on %d column(s)", index.Name(), i),
-	//			generated:    true,
-	//		})
-	//	}
-	//}
-	//
-	//return sqlIndexes, nil
+	tbl, err := t.doltTable(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tblSch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var sqlIndexes []sql.Index
+
+	indexSch, err := schema.SchemaFromCols(tblSch.GetPKCols())
+	if err != nil {
+		return nil, err
+	}
+	keyDesc, _ := rows.TupleDescriptors()
+	bld := val.NewTupleBuilder(keyDesc)
+
+	sqlIndexes = append(sqlIndexes, &doltIndex{
+		id:        "PRIMARY",
+		unique:    true,
+		generated: false,
+		tableName: t.Name(),
+		db:        t.db,
+		table:     tbl,
+		indexRows: rows,
+		keyBldr:   bld,
+		indexSch:  indexSch,
+		tableRows: rows,
+		tableSch:  tblSch,
+	})
+
+	// todo(andy) partial and secondary indexes
+
+	return sqlIndexes, nil
 }
 
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
@@ -1457,7 +1404,7 @@ func createIndexForTable(
 		}
 	} else { // set the index row data and get a new root with the updated table
 		// todo(andy)
-		//indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
+		//indexRows, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
 		//if err != nil {
 		//	return nil, err
 		//}

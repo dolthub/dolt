@@ -136,18 +136,17 @@ func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, er
 			cols[i], _ = index.GetColumn(tag)
 		}
 		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           db,
-			id:           index.Name(),
-			indexRowData: prolly.NewEmptyMap(db.sch),
-			indexSch:     index.Schema(),
-			table:        nil,
-			tableData:    prolly.NewEmptyMap(db.sch),
-			tableName:    db.tableName,
-			tableSch:     db.sch,
-			unique:       index.IsUnique(),
-			comment:      index.Comment(),
-			generated:    false,
+			db:        db,
+			id:        index.Name(),
+			indexRows: prolly.NewEmptyMap(db.sch),
+			indexSch:  index.Schema(),
+			table:     nil,
+			tableRows: prolly.NewEmptyMap(db.sch),
+			tableName: db.tableName,
+			tableSch:  db.sch,
+			unique:    index.IsUnique(),
+			comment:   index.Comment(),
+			generated: false,
 		})
 	}
 	return sqlIndexes, nil

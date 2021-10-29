@@ -197,14 +197,14 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(indexKey val.Tuple) (val.
 // processKey is called within queueRows and processes each key, sending the resulting row to the row channel.
 func (i *indexLookupRowIterAdapter) processKey(indexKey val.Tuple) (sql.Row, error) {
 	panic("unimplement")
-	//tableData := i.idx.TableData()
+	//tableRows := i.idx.TableData()
 	//
-	//pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), indexKey)
+	//pkTupleVal, err := i.indexKeyToTableKey(tableRows.Format(), indexKey)
 	//if err != nil {
 	//	return nil, err
 	//}
 	//
-	//fieldsVal, ok, err := tableData.MaybeGetTuple(i.ctx, pkTupleVal)
+	//fieldsVal, ok, err := tableRows.MaybeGetTuple(i.ctx, pkTupleVal)
 	//if err != nil {
 	//	return nil, err
 	//}

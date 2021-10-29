@@ -25,20 +25,38 @@ type MapIter interface {
 	Next(ctx context.Context) (key, value val.Tuple, err error)
 }
 
-type ValueRange struct {
+type Range struct {
 	lowKey, highKey val.Tuple
 	inclusiveLow    bool
 	inclusiveHigh   bool
 	reverse         bool
+
+	// hack
+	Point val.Tuple
 }
 
 type valueIter struct {
-	rng ValueRange
-	cur nodeCursor
+	rng  Range
+	cur  nodeCursor
+	done bool
 }
 
 func (it *valueIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	panic("unimplemented")
+	if it.rng.Point == nil {
+		panic("only point lookups are supported")
+	}
+	if it.done {
+		return nil, nil, io.EOF
+	}
+	it.done = true
+
+	key = val.Tuple(it.cur.current())
+	if _, err = it.cur.advance(ctx); err != nil {
+		return
+	}
+	value = val.Tuple(it.cur.current())
+
+	return
 }
 
 // IndexRange is an inclusive range of item indexes

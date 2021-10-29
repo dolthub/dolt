@@ -38,18 +38,20 @@ type DoltIndex interface {
 }
 
 type doltIndex struct {
-	cols         []schema.Column
-	db           sql.Database
-	id           string
-	indexRowData prolly.Map
-	indexSch     schema.Schema
-	table        *doltdb.Table
-	tableData    prolly.Map
-	tableName    string
-	tableSch     schema.Schema
-	unique       bool
-	comment      string
-	generated    bool
+	id        string
+	unique    bool
+	generated bool
+	comment   string
+	tableName string
+	table     *doltdb.Table
+	db        sql.Database
+
+	keyBldr   *val.TupleBuilder
+	indexSch  schema.Schema
+	indexRows prolly.Map
+
+	tableSch  schema.Schema
+	tableRows prolly.Map
 }
 
 //TODO: have queries using IS NULL make use of indexes
@@ -58,7 +60,7 @@ var _ DoltIndex = (*doltIndex)(nil)
 // AscendGreaterOrEqual implements sql.AscendIndex
 func (di *doltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
 	panic("unimplement")
-	//tpl, err := di.keysToTuple(keys)
+	//tpl, err := di.tupleFromKeys(keys)
 	//if err != nil {
 	//	return nil, err
 	//}
@@ -73,7 +75,7 @@ func (di *doltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql.IndexLookup,
 // AscendLessThan implements sql.AscendIndex
 func (di *doltIndex) AscendLessThan(keys ...interface{}) (sql.IndexLookup, error) {
 	panic("unimplement")
-	//tpl, err := di.keysToTuple(keys)
+	//tpl, err := di.tupleFromKeys(keys)
 	//if err != nil {
 	//	return nil, err
 	//}
@@ -89,11 +91,11 @@ func (di *doltIndex) AscendLessThan(keys ...interface{}) (sql.IndexLookup, error
 // TODO: rename this from AscendRange to BetweenRange or something
 func (di *doltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []interface{}) (sql.IndexLookup, error) {
 	panic("unimplement")
-	//greaterTpl, err := di.keysToTuple(greaterOrEqual)
+	//greaterTpl, err := di.tupleFromKeys(greaterOrEqual)
 	//if err != nil {
 	//	return nil, err
 	//}
-	//lessTpl, err := di.keysToTuple(lessThanOrEqual)
+	//lessTpl, err := di.tupleFromKeys(lessThanOrEqual)
 	//if err != nil {
 	//	return nil, err
 	//}
@@ -112,7 +114,7 @@ func (di *doltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []interface{}) 
 // DescendGreater implements sql.DescendIndex
 func (di *doltIndex) DescendGreater(keys ...interface{}) (sql.IndexLookup, error) {
 	panic("unimplement")
-	//tpl, err := di.keysToTuple(keys)
+	//tpl, err := di.tupleFromKeys(keys)
 	//if err != nil {
 	//	return nil, err
 	//}
@@ -131,7 +133,7 @@ func (di *doltIndex) DescendGreater(keys ...interface{}) (sql.IndexLookup, error
 // DescendLessOrEqual implements sql.DescendIndex
 func (di *doltIndex) DescendLessOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
 	panic("unimplement")
-	//tpl, err := di.keysToTuple(keys)
+	//tpl, err := di.tupleFromKeys(keys)
 	//if err != nil {
 	//	return nil, err
 	//}
@@ -160,8 +162,9 @@ func (di *doltIndex) Database() string {
 
 // Expressions implements sql.Index
 func (di *doltIndex) Expressions() []string {
-	strs := make([]string, len(di.cols))
-	for i, col := range di.cols {
+	cols := di.indexSch.GetAllCols().GetColumns()
+	strs := make([]string, len(cols))
+	for i, col := range cols {
 		strs[i] = di.tableName + "." + col.Name
 	}
 	return strs
@@ -169,27 +172,17 @@ func (di *doltIndex) Expressions() []string {
 
 // Get implements sql.Index
 func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
-	panic("unimplement")
-	//tpl, err := di.keysToTuple(keys)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//r, err := lookup.ClosedRange(tpl, tpl)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &doltIndexLookup{
-	//	idx: di,
-	//	ranges: []lookup.Range{
-	//		r,
-	//	},
-	//}, nil
+	tup := tupleFromSqlValues(di.keyBldr, keys...)
+	return &doltIndexLookup{
+		idx:    di,
+		ranges: []prolly.Range{{Point: tup}},
+	}, nil
 }
 
 // Not implements sql.NegateIndex
 func (di *doltIndex) Not(keys ...interface{}) (sql.IndexLookup, error) {
 	panic("unimplement")
-	//tpl, err := di.keysToTuple(keys)
+	//tpl, err := di.tupleFromKeys(keys)
 	//if err != nil {
 	//	return nil, err
 	//}
@@ -254,32 +247,12 @@ func (di *doltIndex) Table() string {
 
 // TableData returns the map of table data for this index (the map of the target table, not the index storage table)
 func (di *doltIndex) TableData() prolly.Map {
-	return di.tableData
+	return di.tableRows
 }
 
 // IndexRowData returns the map of index row data.
 func (di *doltIndex) IndexRowData() prolly.Map {
-	return di.indexRowData
-}
-
-func (di *doltIndex) keysToTuple(keys []interface{}) (val.Tuple, error) {
-	// todo(andy)
-	panic("unimplemented")
-	//nbf := di.indexRowData.Format()
-	//if len(di.cols) != len(keys) {
-	//	return types.EmptyTuple(nbf), errors.New("keys must specify all columns for an index")
-	//}
-	//var vals []types.Value
-	//for i, col := range di.cols {
-	//	// As an example, if our TypeInfo is Int8, we should not fail to create a tuple if we are returning all keys
-	//	// that have a value of less than 9001, thus we promote the TypeInfo to the widest type.
-	//	val, err := col.TypeInfo.Promote().ConvertValueToNomsValue(context.Background(), di.table.ValueReadWriter(), keys[i])
-	//	if err != nil {
-	//		return types.EmptyTuple(nbf), err
-	//	}
-	//	vals = append(vals, types.Uint(col.Tag), val)
-	//}
-	//return types.NewTuple(nbf, vals...)
+	return di.indexRows
 }
 
 func (di *doltIndex) Equals(oIdx DoltIndex) bool {

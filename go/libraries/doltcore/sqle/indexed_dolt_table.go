@@ -22,7 +22,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/prolly"
 )
@@ -75,7 +74,7 @@ func (idt *IndexedDoltTable) IsTemporary() bool {
 }
 
 type rangePartition struct {
-	partitionRange lookup.Range
+	partitionRange prolly.Range
 	keyBytes       []byte
 	rowData        prolly.Map
 }
@@ -85,13 +84,13 @@ func (rp rangePartition) Key() []byte {
 }
 
 type rangePartitionIter struct {
-	ranges  []lookup.Range
+	ranges  []prolly.Range
 	curr    int
 	mu      *sync.Mutex
 	rowData prolly.Map
 }
 
-func NewRangePartitionIter(ranges []lookup.Range, rowData prolly.Map) *rangePartitionIter {
+func NewRangePartitionIter(ranges []prolly.Range, rowData prolly.Map) *rangePartitionIter {
 	return &rangePartitionIter{
 		ranges:  ranges,
 		curr:    0,
@@ -148,7 +147,7 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
 	switch typed := part.(type) {
 	case rangePartition:
-		return t.indexLookup.RowIterForRanges(ctx, typed.rowData, []lookup.Range{typed.partitionRange}, projectedCols)
+		return t.indexLookup.RowIterForRanges(ctx, typed.rowData, projectedCols, []prolly.Range{typed.partitionRange})
 	case sqlutil.SinglePartition:
 		return t.indexLookup.RowIter(ctx, typed.RowData, projectedCols)
 	}

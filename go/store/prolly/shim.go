@@ -17,6 +17,8 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/vitess/go/vt/proto/query"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -75,7 +77,7 @@ func keyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	var tt []val.Type
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
-			Enc:      encodingFromNomsKind(col.Kind),
+			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
 			Nullable: false,
 		})
 		return
@@ -87,7 +89,7 @@ func valueDescriptorFromSchema(sch schema.Schema) (vd val.TupleDesc) {
 	var tt []val.Type
 	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
-			Enc:      encodingFromNomsKind(col.Kind),
+			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
 			Nullable: col.IsNullable(),
 		})
 		return
@@ -95,22 +97,44 @@ func valueDescriptorFromSchema(sch schema.Schema) (vd val.TupleDesc) {
 	return val.NewTupleDescriptor(tt...)
 }
 
-func encodingFromNomsKind(k types.NomsKind) val.Encoding {
-	switch k {
-	case types.BoolKind:
+func encodingFromSqlType(typ query.Type) val.Encoding {
+	switch typ {
+	case query.Type_INT8:
 		return val.Int8Enc
-	case types.IntKind:
+	case query.Type_UINT8:
+		return val.Uint8Enc
+	case query.Type_INT16:
+		return val.Int16Enc
+	case query.Type_UINT16:
+		return val.Uint16Enc
+	case query.Type_INT24:
+		panic("24 bit")
+	case query.Type_UINT24:
+		panic("24 bit")
+	case query.Type_INT32:
+		return val.Int32Enc
+	case query.Type_UINT32:
+		return val.Uint32Enc
+	case query.Type_INT64:
 		return val.Int64Enc
-	case types.UintKind:
+	case query.Type_UINT64:
 		return val.Uint64Enc
-	case types.FloatKind:
+	case query.Type_FLOAT32:
+		return val.Float32Enc
+	case query.Type_FLOAT64:
 		return val.Float64Enc
-	case types.StringKind:
+	case query.Type_BINARY:
+		return val.BytesEnc
+	case query.Type_VARBINARY:
+		return val.BytesEnc
+	case query.Type_BLOB:
+		return val.BytesEnc
+	case query.Type_CHAR:
 		return val.StringEnc
-	case types.BlobKind:
-		return val.BytesEnc
-	case types.InlineBlobKind:
-		return val.BytesEnc
+	case query.Type_VARCHAR:
+		return val.StringEnc
+	case query.Type_TEXT:
+		return val.StringEnc
 	default:
 		panic("unknown nomds kind")
 	}

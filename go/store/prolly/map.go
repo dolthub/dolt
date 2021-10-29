@@ -135,10 +135,15 @@ func (m Map) IterAll(ctx context.Context) (MapIter, error) {
 	return m.IterIndexRange(ctx, IndexRange{Low: 0, High: m.Count() - 1})
 }
 
-func (m Map) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error) {
+func (m Map) IterValueRange(ctx context.Context, rng Range) (MapIter, error) {
 	start := nodeItem(rng.lowKey)
 	if rng.reverse {
 		start = nodeItem(rng.highKey)
+	}
+
+	// hack
+	if rng.Point != nil {
+		start = nodeItem(rng.Point)
 	}
 
 	cur, err := newCursorAtItem(ctx, m.nrw, m.root, start, m.searchNode)
