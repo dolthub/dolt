@@ -178,11 +178,11 @@ func (td TupleDesc) PutFloat64(buf []byte, v float64) {
 }
 
 func (td TupleDesc) PutString(idx int, buf []byte, v string) {
-	writeString(buf, v, td.types[idx].Coll)
+	writeString(buf, v, td.Types[idx].Coll)
 }
 
 func (td TupleDesc) PutBytes(idx int, buf []byte, v []byte) {
-	writeBytes(buf, v, td.types[idx].Coll)
+	writeBytes(buf, v, td.Types[idx].Coll)
 }
 
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
