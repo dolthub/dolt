@@ -24,7 +24,7 @@
 #include "cppconn/prepared_statement.h"
 #include "cppconn/variant.h"
 
-#define QUERIES_SIZE 5
+#define QUERIES_SIZE 14
 
 std::string queries[QUERIES_SIZE] =
   {
@@ -32,10 +32,19 @@ std::string queries[QUERIES_SIZE] =
    "describe test",
    "select * from test",
    "insert into test (pk, `value`) values (0,0)",
-   "select * from test"
+   "select * from test",
+   "select dolt_add('-A');",
+   "select dolt_commit('-m', 'my commit')",
+   "select COUNT(*) FROM dolt_log",
+   "select dolt_checkout('-b', 'mybranch')",
+   "insert into test (pk, `value`) values (1,1)",
+   "select dolt_commit('-a', '-m', 'my commit2')",
+   "select dolt_checkout('main')",
+   "select dolt_merge('mybranch')",
+   "select COUNT(*) FROM dolt_log",
   };
 
-int is_update[QUERIES_SIZE] = {0,0,0,1,0};
+int is_update[QUERIES_SIZE] = {0,0,0,1,0,0,0,0,0,1,0,0,0,0};
 
 int main(int argc, char **argv) {
   std::string user = argv[1];

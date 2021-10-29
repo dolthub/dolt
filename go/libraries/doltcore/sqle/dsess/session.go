@@ -155,6 +155,11 @@ type DatabaseSessionState struct {
 	readReplica          *env.Remote
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
+
+	// Same as InitialDbState.Err, this signifies that this
+	// DatabaseSessionState is invalid. LookupDbState returning a
+	// DatabaseSessionState with Err != nil will return that err.
+	Err error
 }
 
 func (d DatabaseSessionState) GetRoots() doltdb.Roots {
@@ -196,6 +201,12 @@ type InitialDbState struct {
 	ReadReplica  *env.Remote
 	Remotes      map[string]env.Remote
 	Branches     map[string]env.BranchConfig
+
+	// If err is set, this InitialDbState is partially invalid, but may be
+	// usable to initialize a database at a revision specifier, for
+	// example. Adding this InitialDbState to a session will return this
+	// error.
+	Err error
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -246,7 +257,7 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 
 // LookupDbState returns the session state for the database named
 // TODO(zachmu) get rid of bool return param, use a not found error or similar
-func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
+func (sess *Session) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
 	dbState, ok := sess.dbStates[dbName]
 	if ok {
 		return dbState, ok, nil
@@ -254,7 +265,7 @@ func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSe
 
 	init, err := sess.provider.RevisionDbState(ctx, dbName)
 	if err != nil {
-		return nil, ok, err
+		return nil, false, err
 	}
 
 	// TODO: this could potentially add a |sess.dbStates| entry
@@ -266,9 +277,17 @@ func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSe
 	}
 	dbState, ok = sess.dbStates[dbName]
 	if !ok {
-		return nil, ok, sql.ErrDatabaseNotFound.New(dbName)
+		return nil, false, sql.ErrDatabaseNotFound.New(dbName)
 	}
-	return dbState, ok, nil
+	return dbState, true, nil
+}
+
+func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
+	s, ok, err := sess.lookupDbState(ctx, dbName)
+	if ok && s.Err != nil {
+		return nil, false, s.Err
+	}
+	return s, ok, err
 }
 
 func (sess *Session) GetDbStates() map[string]*DatabaseSessionState {
@@ -1067,7 +1086,7 @@ func (sess *Session) SetSessionVarDirectly(ctx *sql.Context, key string, value i
 
 // HasDB returns true if |sess| is tracking state for this database.
 func (sess *Session) HasDB(ctx *sql.Context, dbName string) bool {
-	_, ok, err := sess.LookupDbState(ctx, dbName)
+	_, ok, err := sess.lookupDbState(ctx, dbName)
 	return ok && err == nil
 }
 
@@ -1093,7 +1112,9 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
-	if dbState.WorkingSet != nil {
+	if dbState.Err != nil {
+		sessionState.Err = dbState.Err
+	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
 		workingRoot := dbState.WorkingSet.WorkingRoot()
 		// logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
@@ -1118,7 +1139,10 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// After setting the initial root we have no state to commit
 	sessionState.dirty = false
 
-	return sess.setSessionVarsForDb(ctx, db.Name())
+	if sessionState.Err == nil {
+		return sess.setSessionVarsForDb(ctx, db.Name())
+	}
+	return nil
 }
 
 // CreateTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing
@@ -1162,7 +1186,7 @@ func (sess *Session) BatchMode() batchMode {
 
 // setSessionVarsForDb updates the three session vars that track the value of the session root hashes
 func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error {
-	state, _, err := sess.LookupDbState(ctx, dbName)
+	state, _, err := sess.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}

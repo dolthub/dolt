@@ -241,21 +241,24 @@ func GetInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabas
 
 	head, err := ddb.ResolveCommitRef(ctx, r)
 	if err != nil {
-		err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
-		return dsess.InitialDbState{}, err
+		init.Err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
+	} else {
+		init.Err = nil
 	}
 	init.HeadCommit = head
 
-	workingSetRef, err := ref.WorkingSetRefForHead(r)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
+	if init.Err == nil {
+		workingSetRef, err := ref.WorkingSetRefForHead(r)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
 
-	ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
-	if err != nil {
-		return dsess.InitialDbState{}, err
+		ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+		init.WorkingSet = ws
 	}
-	init.WorkingSet = ws
 
 	return init, nil
 }

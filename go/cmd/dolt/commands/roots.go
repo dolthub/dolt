@@ -81,7 +81,8 @@ func (cmd RootsCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	dir := filepath.Join(dEnv.GetDoltDir(), dbfactory.DataDir)
-	itr, err := NewTableFileIter(dir, dEnv.FS)
+	oldgen := filepath.Join(dir, "oldgen")
+	itr, err := NewTableFileIter([]string{dir, oldgen}, dEnv.FS)
 
 	if err != nil {
 		return BuildVerrAndExit("Unable to read table files.", err)
@@ -162,29 +163,33 @@ type TableFileIter struct {
 	pos   int
 }
 
-func NewTableFileIter(dir string, fs filesys.Filesys) (*TableFileIter, error) {
+func NewTableFileIter(dirs []string, fs filesys.Filesys) (*TableFileIter, error) {
 	var tableFiles []fileAndTime
-	err := fs.Iter(dir, false, func(path string, size int64, isDir bool) (stop bool) {
-		if !isDir {
-			filename := filepath.Base(path)
+	for _, dir := range dirs {
+		err := fs.Iter(dir, false, func(path string, size int64, isDir bool) (stop bool) {
+			if !isDir {
+				filename := filepath.Base(path)
 
-			if len(filename) == 32 {
-				t, ok := fs.LastModified(path)
-				if !ok {
-					t = time.Now()
+				if len(filename) == 32 {
+					t, ok := fs.LastModified(path)
+					if !ok {
+						t = time.Now()
+					}
+
+					tableFiles = append(tableFiles, fileAndTime{path, t})
 				}
-
-				tableFiles = append(tableFiles, fileAndTime{path, t})
 			}
+
+			return false
+		})
+
+		if err != nil {
+			return nil, err
 		}
+	}
 
-		return false
-	})
-
-	if err != nil {
-		return nil, err
-	} else if len(tableFiles) == 0 {
-		return nil, fmt.Errorf("No table files found in '%s'", dir)
+	if len(tableFiles) == 0 {
+		return nil, fmt.Errorf("No table files found in '%v'", dirs)
 	}
 
 	sort.Slice(tableFiles, func(i, j int) bool {
