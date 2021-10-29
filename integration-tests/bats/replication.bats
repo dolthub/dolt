@@ -33,7 +33,7 @@ teardown() {
 @test "replication: no push on cli commit" {
 
     cd repo1
-    dolt config --local --add server.DOLT_REPLICATE_TO_REMOTE backup1
+    dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE backup1
     dolt sql -q "create table t1 (a int primary key)"
     dolt commit -am "cm"
 
@@ -42,9 +42,21 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
-@test "replication: push on sql commit" {
+@test "replication: no push on cli sql -q commit" {
     cd repo1
-    dolt config --local --add server.DOLT_REPLICATE_TO_REMOTE backup1
+    dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE backup1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "select dolt_commit('-am', 'cm')"
+
+    cd ..
+    run dolt clone file://./bac1 repo2
+    [ "$status" -eq 1 ]
+}
+
+@test "replication: push on cli engine commit with permissive engine mode" {
+    cd repo1
+    dolt config --local --add DOLT_ENGINE_MODE permissive
+    dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE backup1
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "select dolt_commit('-am', 'cm')"
 
@@ -57,21 +69,9 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "replication: no push on cli commit without cli setting" {
-
-    cd repo1
-    dolt config --local --add server.DOLT_REPLICATE_TO_REMOTE backup1
-    dolt sql -q "create table t1 (a int primary key)"
-    dolt commit -am "cm"
-
-    cd ..
-    run dolt clone file://./bac1 repo2
-    [ "$status" -eq 1 ]
-}
-
 @test "replication: no tags" {
     cd repo1
-    dolt config --local --add server.DOLT_REPLICATE_TO_REMOTE backup1
+    dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE backup1
     dolt tag
 
     [ ! -d "../bac1/.dolt" ] || false
@@ -90,7 +90,8 @@ teardown() {
     [ "${#lines[@]}" -eq 1 ]
     [[ ! "$output" =~ "t1" ]] || false
 
-    dolt config --local --add server.DOLT_READ_REPLICA_REMOTE remote1
+    dolt config --local --add dolt_engine_mode permissive
+    dolt config --local --add sqlserver.globals.DOLT_READ_REPLICA_REMOTE remote1
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

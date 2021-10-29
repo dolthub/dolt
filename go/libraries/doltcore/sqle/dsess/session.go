@@ -216,7 +216,7 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 		ctx.Warn(NonpersistableSessionCode, "multi-db mode does not support persistable sessions")
 		globals = config.NewMapConfig(make(map[string]string))
 	} else {
-		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
 	}
 
 	dsess := NewDoltSession(sess, globals)

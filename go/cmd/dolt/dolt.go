@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/profile"
@@ -46,7 +45,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
@@ -304,7 +302,7 @@ func runMain() int {
 	defer tempfiles.MovableTempFileProvider.Clean()
 
 	if dEnv.DoltDB != nil {
-		err := initPersistedSystemVars(dEnv)
+		err := dsess.InitPersistedSystemVars(dEnv)
 		if err != nil {
 			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 		}
@@ -392,22 +390,5 @@ func processEventsDir(args []string, dEnv *env.DoltEnv) error {
 		return nil
 	}
 
-	return nil
-}
-
-func initPersistedSystemVars(dEnv *env.DoltEnv) error {
-	sql.InitSystemVariables()
-	var globals config.ReadWriteConfig
-	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
-		cli.Println("warning: multi-db mode does not support persistable sessions")
-		globals = config.NewMapConfig(make(map[string]string))
-	} else {
-		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
-	}
-	persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
-	if err != nil {
-		return err
-	}
-	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 	return nil
 }

@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	globalParamName = "global"
-	localParamName  = "local"
+	globalParamName   = "global"
+	localParamName    = "local"
 	addOperationStr   = "add"
 	listOperationStr  = "list"
 	getOperationStr   = "get"

@@ -459,7 +459,7 @@ func TestPersist(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
 	require.True(t, ok)
-	globals := config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+	globals := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
 
 	newPersistableSession := func(ctx *sql.Context) sql.PersistableSession {
 		session := dsess.NewDoltSession(ctx.Session.(*dsess.DoltSession).Session, globals)

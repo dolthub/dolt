@@ -21,6 +21,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
@@ -189,4 +191,21 @@ func NewPersistedSystemVariables(conf config.ReadableConfig) ([]sql.SystemVariab
 		return nil, err
 	}
 	return allVars, nil
+}
+
+func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
+	sql.InitSystemVariables()
+	var globals config.ReadWriteConfig
+	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
+		cli.Println("warning: multi-db mode does not support persistable sessions")
+		globals = config.NewMapConfig(make(map[string]string))
+	} else {
+		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
+	}
+	persistedGlobalVars, err := NewPersistedSystemVariables(globals)
+	if err != nil {
+		return err
+	}
+	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+	return nil
 }

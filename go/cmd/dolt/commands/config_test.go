@@ -235,19 +235,16 @@ func TestConfigList(t *testing.T) {
 			Name:       "local",
 			CfgSet:     localCfg,
 			ConfigElem: env.LocalConfig,
-
 		},
 		{
 			Name:       "global",
 			CfgSet:     globalCfg,
 			ConfigElem: env.GlobalConfig,
-
 		},
 		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
-
 		},
 		{
 			Name:       "multi",

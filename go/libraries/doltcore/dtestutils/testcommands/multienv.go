@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -105,8 +107,9 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 	}
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	cfg.SetStrings(map[string]string{
-		env.UserNameKey:  name,
-		env.UserEmailKey: email,
+		env.UserNameKey:         name,
+		env.UserEmailKey:        email,
+		commands.DoltEngineMode: commands.PermissiveEngineMode,
 	})
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email, defaultBranch)
 	if err != nil {

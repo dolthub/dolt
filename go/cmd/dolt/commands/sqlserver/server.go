@@ -37,7 +37,6 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -88,21 +87,11 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	// to the value of mysql that we support.
 	serverConf := server.Config{Protocol: "tcp"}
 
-	sql.InitSystemVariables()
 	if !serverConfig.NoDefaults() {
-		var globals config.ReadWriteConfig
-		if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
-			cli.Println("Multi-db mode does not support persistable sessions")
-			globals = config.NewMapConfig(make(map[string]string))
-		} else {
-			globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+		serverConf, startError = serverConf.NewConfig()
+		if startError != nil {
+			return
 		}
-		persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
-		if err != nil {
-			return err, nil
-		}
-		sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
-		serverConf, err = serverConf.WithGlobals()
 	}
 
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
@@ -124,7 +113,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 	}
 
-	dbs, err := commands.CollectDBs(ctx, mrEnv)
+	dbs, err := commands.CollectDBs(ctx, mrEnv, commands.ServerEngineMode)
 	if err != nil {
 		return err, nil
 	}
@@ -193,7 +182,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 		tmpSqlCtx := sql.NewEmptyContext()
 
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
-		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
+		mysqlSess := sql.NewBaseSessionWithClientServer(host, client, conn.ConnectionID)
 		doltDbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, doltDbs)
 		if err != nil {
