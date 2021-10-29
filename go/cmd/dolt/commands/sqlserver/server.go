@@ -102,7 +102,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 			return nil, err
 		}
 		sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
-		serverConf, err = serverConf.WithGlobals()
+		serverConf, err = serverConf.NewConfig()
 	}
 
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
@@ -193,7 +193,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 		tmpSqlCtx := sql.NewEmptyContext()
 
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
-		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
+		mysqlSess := sql.NewBaseSessionWithClientServer(host, client, conn.ConnectionID)
 		doltDbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, doltDbs)
 		if err != nil {
