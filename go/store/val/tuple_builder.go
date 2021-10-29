@@ -17,7 +17,7 @@ package val
 import "github.com/dolthub/dolt/go/store/pool"
 
 type TupleBuilder struct {
-	desc TupleDesc
+	Desc TupleDesc
 
 	buf [MaxTupleDataSize]byte
 	off ByteSize
@@ -28,7 +28,7 @@ type TupleBuilder struct {
 
 func NewTupleBuilder(desc TupleDesc) *TupleBuilder {
 	return &TupleBuilder{
-		desc:   desc,
+		Desc:   desc,
 		maxIdx: -1,
 	}
 }
@@ -45,7 +45,7 @@ func (tb *TupleBuilder) Recycle() {
 }
 
 func (tb *TupleBuilder) PutBool(i int, v bool) {
-	tb.desc.expectEncoding(i, Int8Enc)
+	tb.Desc.expectEncoding(i, Int8Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+1]
 	writeBool(tb.fields[i], v)
 	tb.off += 1
@@ -53,7 +53,7 @@ func (tb *TupleBuilder) PutBool(i int, v bool) {
 }
 
 func (tb *TupleBuilder) PutInt8(i int, v int8) {
-	tb.desc.expectEncoding(i, Int8Enc)
+	tb.Desc.expectEncoding(i, Int8Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+1]
 	writeInt8(tb.fields[i], v)
 	tb.off += 1
@@ -61,7 +61,7 @@ func (tb *TupleBuilder) PutInt8(i int, v int8) {
 }
 
 func (tb *TupleBuilder) PutUint8(i int, v uint8) {
-	tb.desc.expectEncoding(i, Uint8Enc)
+	tb.Desc.expectEncoding(i, Uint8Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+1]
 	writeUint8(tb.fields[i], v)
 	tb.off += 1
@@ -69,7 +69,7 @@ func (tb *TupleBuilder) PutUint8(i int, v uint8) {
 }
 
 func (tb *TupleBuilder) PutInt16(i int, v int16) {
-	tb.desc.expectEncoding(i, Int16Enc)
+	tb.Desc.expectEncoding(i, Int16Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+2]
 	writeInt16(tb.fields[i], v)
 	tb.off += 2
@@ -77,7 +77,7 @@ func (tb *TupleBuilder) PutInt16(i int, v int16) {
 }
 
 func (tb *TupleBuilder) PutUint16(i int, v uint16) {
-	tb.desc.expectEncoding(i, Uint16Enc)
+	tb.Desc.expectEncoding(i, Uint16Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+2]
 	writeUint16(tb.fields[i], v)
 	tb.off += 2
@@ -85,7 +85,7 @@ func (tb *TupleBuilder) PutUint16(i int, v uint16) {
 }
 
 func (tb *TupleBuilder) PutInt32(i int, v int32) {
-	tb.desc.expectEncoding(i, Int32Enc)
+	tb.Desc.expectEncoding(i, Int32Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+4]
 	writeInt32(tb.fields[i], v)
 	tb.off += 4
@@ -93,7 +93,7 @@ func (tb *TupleBuilder) PutInt32(i int, v int32) {
 }
 
 func (tb *TupleBuilder) PutUint32(i int, v uint32) {
-	tb.desc.expectEncoding(i, Uint32Enc)
+	tb.Desc.expectEncoding(i, Uint32Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+4]
 	writeUint32(tb.fields[i], v)
 	tb.off += 4
@@ -101,7 +101,7 @@ func (tb *TupleBuilder) PutUint32(i int, v uint32) {
 }
 
 func (tb *TupleBuilder) PutInt64(i int, v int64) {
-	tb.desc.expectEncoding(i, Int64Enc)
+	tb.Desc.expectEncoding(i, Int64Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+8]
 	writeInt64(tb.fields[i], v)
 	tb.off += 8
@@ -109,7 +109,7 @@ func (tb *TupleBuilder) PutInt64(i int, v int64) {
 }
 
 func (tb *TupleBuilder) PutUint64(i int, v uint64) {
-	tb.desc.expectEncoding(i, Uint64Enc)
+	tb.Desc.expectEncoding(i, Uint64Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+8]
 	writeUint64(tb.fields[i], v)
 	tb.off += 8
@@ -117,7 +117,7 @@ func (tb *TupleBuilder) PutUint64(i int, v uint64) {
 }
 
 func (tb *TupleBuilder) PutFloat32(i int, v float32) {
-	tb.desc.expectEncoding(i, Float32Enc)
+	tb.Desc.expectEncoding(i, Float32Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+4]
 	writeFloat32(tb.fields[i], v)
 	tb.off += 4
@@ -125,7 +125,7 @@ func (tb *TupleBuilder) PutFloat32(i int, v float32) {
 }
 
 func (tb *TupleBuilder) PutFloat64(i int, v float64) {
-	tb.desc.expectEncoding(i, Float64Enc)
+	tb.Desc.expectEncoding(i, Float64Enc)
 	tb.fields[i] = tb.buf[tb.off : tb.off+8]
 	writeFloat64(tb.fields[i], v)
 	tb.off += 8
@@ -133,19 +133,19 @@ func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 }
 
 func (tb *TupleBuilder) PutString(i int, v string) {
-	tb.desc.expectEncoding(i, StringEnc)
+	tb.Desc.expectEncoding(i, StringEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.off : tb.off+sz]
-	writeString(tb.fields[i], v, tb.desc.Types[i].Coll)
+	writeString(tb.fields[i], v, tb.Desc.Types[i].Coll)
 	tb.off += sz
 	tb.updateMaxIdx(i)
 }
 
 func (tb *TupleBuilder) PutBytes(i int, v []byte) {
-	tb.desc.expectEncoding(i, BytesEnc)
+	tb.Desc.expectEncoding(i, BytesEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.off : tb.off+sz]
-	writeBytes(tb.fields[i], v, tb.desc.Types[i].Coll)
+	writeBytes(tb.fields[i], v, tb.Desc.Types[i].Coll)
 	tb.off += sz
 	tb.updateMaxIdx(i)
 }

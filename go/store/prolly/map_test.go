@@ -27,31 +27,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var testRand = rand.New(rand.NewSource(0))
+
 func TestMap(t *testing.T) {
 	t.Run("get item from map", func(t *testing.T) {
-		testMapGetItem(t, 10)
-		testMapGetItem(t, 100)
-		testMapGetItem(t, 1000)
-		testMapGetItem(t, 10_000)
+		testMapGet(t, 10)
+		testMapGet(t, 100)
+		testMapGet(t, 1000)
+		testMapGet(t, 10_000)
+	})
+	t.Run("get from map at index", func(t *testing.T) {
+		testMapGetIndex(t, 10)
+		testMapGetIndex(t, 100)
+		testMapGetIndex(t, 1000)
+		testMapGetIndex(t, 10_000)
+	})
+	//t.Run("get value range from map", func(t *testing.T) {
+	//	testMapIterValueRange(t, 10)
+	//	testMapIterValueRange(t, 100)
+	//	testMapIterValueRange(t, 1000)
+	//	testMapIterValueRange(t, 10_000)
+	//})
+	t.Run("get index range from map", func(t *testing.T) {
+		testMapIterIndexRange(t, 10)
+		testMapIterIndexRange(t, 100)
+		testMapIterIndexRange(t, 1000)
+		testMapIterIndexRange(t, 10_000)
 	})
 }
 
-func testMapGetItem(t *testing.T, count int) {
-	ctx := context.Background()
-	m, items := randomMap(t, count)
-
-	for _, kv := range items {
-		err := m.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
-			assert.NotNil(t, kv[0])
-			assert.Equal(t, kv[0], key)
-			assert.Equal(t, kv[1], val)
-			return
-		})
-		require.NoError(t, err)
-	}
-}
-
-func randomMap(t *testing.T, count int) (Map, [][2]val.Tuple) {
+func testMapGet(t *testing.T, count int) {
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Int64Enc, Nullable: false},
 	)
@@ -61,10 +66,97 @@ func randomMap(t *testing.T, count int) (Map, [][2]val.Tuple) {
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 	)
 
-	return randomMapFromDescriptors(t, count, kd, vd)
+	ctx := context.Background()
+	m, kvPairs := randomMap(t, count, kd, vd)
+
+	for _, kv := range kvPairs {
+		ok, err := m.Has(ctx, kv[0])
+		require.True(t, ok)
+		require.NoError(t, err)
+		err = m.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
+			assert.NotNil(t, kv[0])
+			assert.Equal(t, kv[0], key)
+			assert.Equal(t, kv[1], val)
+			return
+		})
+		require.NoError(t, err)
+	}
 }
 
-func randomMapFromDescriptors(t *testing.T, count int, kd, vd val.TupleDesc) (Map, [][2]val.Tuple) {
+func testMapGetIndex(t *testing.T, count int) {
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	)
+
+	ctx := context.Background()
+	m, kvPairs := randomMap(t, count, kd, vd)
+
+	for idx, kv := range kvPairs {
+		err := m.GetIndex(ctx, uint64(idx), func(key, val val.Tuple) (err error) {
+			assert.NotNil(t, kv[0])
+			assert.Equal(t, kv[0], key)
+			assert.Equal(t, kv[1], val)
+			return
+		})
+		require.NoError(t, err)
+	}
+}
+
+func testMapIterValueRange(t *testing.T, count int) {
+	assert.Equal(t, count, count)
+}
+
+func testMapIterIndexRange(t *testing.T, count int) {
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	)
+
+	m, kvPairs := randomMap(t, count, kd, vd)
+
+	var ranges []IndexRange
+	start := uint64(0)
+	for {
+		width := (testRand.Uint64() % 15) + 1
+		stop := start + width
+
+		if stop > m.Count() {
+			stop = m.Count()
+			break
+		}
+
+		ranges = append(ranges, IndexRange{
+			start: start,
+			stop:  stop,
+		})
+
+		start = stop
+	}
+
+	ctx := context.Background()
+	for _, rng := range ranges {
+		idx := rng.start
+		err := m.IterIndexRange(ctx, rng, func(key, value val.Tuple) (err error) {
+			assert.Equal(t, kvPairs[idx][0], key)
+			assert.Equal(t, kvPairs[idx][1], value)
+			idx++
+			return
+		})
+		assert.NoError(t, err)
+	}
+}
+
+func randomMap(t *testing.T, count int, kd, vd val.TupleDesc) (Map, [][2]val.Tuple) {
 	ctx := context.Background()
 	nrw := newTestNRW()
 	chunker, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)
@@ -89,10 +181,13 @@ func randomMapFromDescriptors(t *testing.T, count int, kd, vd val.TupleDesc) (Ma
 }
 
 func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val.Tuple) {
+	keyBuilder := val.NewTupleBuilder(keyDesc)
+	valBuilder := val.NewTupleBuilder(valDesc)
+
 	items = make([][2]val.Tuple, count/2)
 	for i := range items {
-		items[i][0] = randomTuple(keyDesc)
-		items[i][1] = randomTuple(valDesc)
+		items[i][0] = randomTuple(keyBuilder)
+		items[i][1] = randomTuple(valBuilder)
 	}
 
 	sort.Slice(items, func(i, j int) bool {
@@ -110,64 +205,61 @@ func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val
 	return
 }
 
-func randomTuple(desc val.TupleDesc) (tup val.Tuple) {
-	tb := val.NewTupleBuilder(desc)
-	for i, typ := range desc.Types {
+func randomTuple(tb *val.TupleBuilder) (tup val.Tuple) {
+	for i, typ := range tb.Desc.Types {
 		randomField(tb, i, typ)
 	}
-	return tb.Tuple(shared)
+	return tb.Tuple(sharedPool)
 }
-
-var src = rand.New(rand.NewSource(0))
 
 func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 	// todo(andy): add NULLs
 
 	neg := -1
-	if src.Int()%2 == 1 {
+	if testRand.Int()%2 == 1 {
 		neg = 1
 	}
 
 	switch typ.Enc {
 	case val.Int8Enc:
-		v := int8(src.Intn(math.MaxInt8) * neg)
+		v := int8(testRand.Intn(math.MaxInt8) * neg)
 		tb.PutInt8(idx, v)
 	case val.Uint8Enc:
-		v := uint8(src.Intn(math.MaxUint8))
+		v := uint8(testRand.Intn(math.MaxUint8))
 		tb.PutUint8(idx, v)
 	case val.Int16Enc:
-		v := int16(src.Intn(math.MaxInt16) * neg)
+		v := int16(testRand.Intn(math.MaxInt16) * neg)
 		tb.PutInt16(idx, v)
 	case val.Uint16Enc:
-		v := uint16(src.Intn(math.MaxUint16))
+		v := uint16(testRand.Intn(math.MaxUint16))
 		tb.PutUint16(idx, v)
 	case val.Int24Enc:
 		panic("24 bit")
 	case val.Uint24Enc:
 		panic("24 bit")
 	case val.Int32Enc:
-		v := int32(src.Intn(math.MaxInt32) * neg)
+		v := int32(testRand.Intn(math.MaxInt32) * neg)
 		tb.PutInt32(idx, v)
 	case val.Uint32Enc:
-		v := uint32(src.Intn(math.MaxUint32))
+		v := uint32(testRand.Intn(math.MaxUint32))
 		tb.PutUint32(idx, v)
 	case val.Int64Enc:
-		v := int64(src.Intn(math.MaxInt64) * neg)
+		v := int64(testRand.Intn(math.MaxInt64) * neg)
 		tb.PutInt64(idx, v)
 	case val.Uint64Enc:
-		v := uint64(src.Uint64())
+		v := uint64(testRand.Uint64())
 		tb.PutUint64(idx, v)
 	case val.Float32Enc:
-		tb.PutFloat32(idx, src.Float32())
+		tb.PutFloat32(idx, testRand.Float32())
 	case val.Float64Enc:
-		tb.PutFloat64(idx, src.Float64())
+		tb.PutFloat64(idx, testRand.Float64())
 	case val.StringEnc:
-		buf := make([]byte, (src.Int63()%40)+10)
-		src.Read(buf)
+		buf := make([]byte, (testRand.Int63()%40)+10)
+		testRand.Read(buf)
 		tb.PutString(idx, string(buf))
 	case val.BytesEnc:
-		buf := make([]byte, (src.Int63()%40)+10)
-		src.Read(buf)
+		buf := make([]byte, (testRand.Int63()%40)+10)
+		testRand.Read(buf)
 		tb.PutBytes(idx, buf)
 	default:
 		panic("unknown encoding")

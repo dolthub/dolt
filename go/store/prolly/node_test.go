@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -41,10 +40,8 @@ func TestRoundTripNodeItems(t *testing.T) {
 }
 
 func newLeafNode(items []nodeItem) Node {
-	return makeProllyNode(shared, 0, items...)
+	return makeProllyNode(sharedPool, 0, items...)
 }
-
-var shared = pool.NewBuffPool()
 
 func randomNodeItems(t *testing.T, count int) (items []nodeItem) {
 	items = make([]nodeItem, count)

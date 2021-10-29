@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 
@@ -46,9 +47,16 @@ func (mt metaTuple) GetCumulativeCount() uint64 {
 }
 
 func (mt metaTuple) GetRef() hash.Hash {
-	ref := val.Tuple(mt).GetField(metaTupleRefIdx)
+	tup := val.Tuple(mt)
+	ref := tup.GetField(metaTupleRefIdx)
 	if len(ref) != metaTupleRefSize {
-		panic("incorrect number of bytes for meta tuple ref")
+		s := val.NewTupleDescriptor(
+			val.Type{Enc: val.Int64Enc},
+			val.Type{Enc: val.BytesEnc},
+			val.Type{Enc: val.BytesEnc},
+		).Format(tup)
+		c := tup.Count()
+		panic(fmt.Sprintf("incorrect number of bytes for meta tuple ref (%d, %s)", c, s))
 	}
 	return hash.New(ref)
 }
