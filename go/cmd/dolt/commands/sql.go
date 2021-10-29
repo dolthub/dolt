@@ -1497,11 +1497,14 @@ func newSqlContext(sess *dsess.Session, cat sql.Catalog) func(ctx context.Contex
 			sql.WithSession(sess),
 			sql.WithTracer(tracing.Tracer(ctx)))
 
-		seenOne := false
-		for _, db := range dsqle.DbsAsDSQLDBs(cat.AllDatabases()) {
-			if !seenOne {
+		// If the session was already updated with a database then continue using it in the new session. Otherwise grab
+		// the first one.
+		if sessionDB := sess.GetCurrentDatabase(); sessionDB != "" {
+			sqlCtx.SetCurrentDatabase(sessionDB)
+		} else {
+			for _, db := range dsqle.DbsAsDSQLDBs(cat.AllDatabases()) {
 				sqlCtx.SetCurrentDatabase(db.Name())
-				seenOne = true
+				break
 			}
 		}
 
