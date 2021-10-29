@@ -63,14 +63,10 @@ const (
 
 	// GlobalConfig is the user's global config portion of the ConfigHierarchy
 	GlobalConfig
-
-	// ServerConfig is the repository's persisted global variables portion of the ConfigHierarchy
-	ServerConfig
 )
 
 const (
 	// ServerConfigPrefix is config namespace accessible by the SQL engine (ex: server.key)
-	// TODO fix the config UX and remove the prefix config shunt
 	ServerConfigPrefix = "server"
 )
 
@@ -168,12 +164,6 @@ func (dcc *DoltCliConfig) GetConfig(element DoltConfigElement) (config.ReadWrite
 	switch element {
 	case LocalConfig, GlobalConfig:
 		return dcc.ch.GetConfig(element.String())
-	case ServerConfig:
-		conf, ok := dcc.ch.GetConfig(LocalConfig.String())
-		if !ok {
-			return nil, false
-		}
-		return config.NewPrefixConfig(conf, ServerConfigPrefix), true
 	default:
 		return nil, false
 	}

@@ -13,49 +13,6 @@ teardown() {
     rm -rf "$BATS_TMPDIR/config-test$$"
 }
 
-@test "sql-config: persist global variable with config server command" {
-    dolt config --server --add max_connections "1000"
-    run cat .dolt/config.json
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "\"server.max_connections\":\"1000\"" ]]
-}
-
-@test "sql-config: remove global variable with config server command" {
-    dolt config --server --add max_connections "1000"
-    dolt config --server --unset max_connections
-    run cat .dolt/config.json
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "\"server.max_connections\":\"1000\"" ]]
-}
-
-@test "sql-config: list server variables" {
-    dolt config --server --add max_connections "1000"
-    run dolt config --server --list
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "max_connections = 1000" ]]
-}
-
-@test "sql-config: list all with server variables" {
-    dolt config --server --add max_connections "1000"
-    run dolt config --list
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "server.max_connections = 1000" ]]
-}
-
-@test "sql-config: persist global variable with config command" {
-    dolt config --local --add server.max_connections "1000"
-    run cat .dolt/config.json
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "\"server.max_connections\":\"1000\"" ]]
-}
-
-@test "sql-config: get persisted global var with config command" {
-    echo '{"server.max_connections":"1000"}' > .dolt/config.json
-    run dolt config --local --get server.max_connections
-    [ "$status" -eq 0 ]
-    [ "$output" = "1000" ]
-}
-
 @test "sql-config: query persisted variable with cli engine" {
     echo '{"server.max_connections":"1000"}' > .dolt/config.json
     run dolt sql -q "SELECT @@GLOBAL.max_connections" -r csv

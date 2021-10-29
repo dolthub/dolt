@@ -31,8 +31,6 @@ import (
 const (
 	globalParamName = "global"
 	localParamName  = "local"
-	serverParamName = "server"
-
 	addOperationStr   = "add"
 	listOperationStr  = "list"
 	getOperationStr   = "get"
@@ -84,7 +82,6 @@ func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")
-	ap.SupportsFlag(serverParamName, "", "User repository server config.")
 	ap.SupportsFlag(addOperationStr, "", "Set the value of one or more config parameters")
 	ap.SupportsFlag(listOperationStr, "", "List the values of all config parameters.")
 	ap.SupportsFlag(getOperationStr, "", "Get the value of one or more config parameters.")
@@ -99,7 +96,7 @@ func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName, serverParamName}, true)
+	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName}, true)
 	ops := apr.FlagsEqualTo([]string{addOperationStr, listOperationStr, getOperationStr, unsetOperationStr}, true)
 
 	if cfgTypes.Size() > 1 {
@@ -154,7 +151,7 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 	}
 
 	if setCfgTypes.Size() == 0 {
-		cfgTypesSl = []string{localParamName, globalParamName, serverParamName}
+		cfgTypesSl = []string{localParamName, globalParamName}
 	}
 
 	for _, cfgType := range cfgTypesSl {
@@ -208,13 +205,6 @@ func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 				return 1
 			}
 			return 0
-		case serverParamName:
-			err := dEnv.Config.CreateLocalConfig(make(map[string]string))
-			cfg, ok = dEnv.Config.GetConfig(newCfgElement(cfgType))
-			if !ok || err != nil {
-				cli.PrintErrln(color.RedString("Unable to create repo local config file"))
-				return 1
-			}
 		default:
 			cli.Println("error: unknown config flag")
 			return 1
@@ -306,8 +296,6 @@ func newCfgElement(configFlag string) env.DoltConfigElement {
 		return env.LocalConfig
 	case globalParamName:
 		return env.GlobalConfig
-	case serverParamName:
-		return env.ServerConfig
 	default:
 		return env.LocalConfig
 	}

@@ -28,7 +28,6 @@ import (
 
 var globalCfg = set.NewStrSet([]string{globalParamName})
 var localCfg = set.NewStrSet([]string{localParamName})
-var serverCfg = set.NewStrSet([]string{serverParamName})
 var multiCfg = set.NewStrSet([]string{globalParamName, localParamName})
 
 func initializeConfigs(dEnv *env.DoltEnv, element env.DoltConfigElement) {
@@ -38,8 +37,6 @@ func initializeConfigs(dEnv *env.DoltEnv, element env.DoltConfigElement) {
 		globalCfg.SetStrings(map[string]string{"title": "senior dufus"})
 	case env.LocalConfig:
 		dEnv.Config.CreateLocalConfig(map[string]string{"title": "senior dufus"})
-	case env.ServerConfig:
-		dEnv.Config.CreateLocalConfig(map[string]string{"server.title": "senior dufus"})
 	}
 }
 func TestConfigAdd(t *testing.T) {
@@ -63,12 +60,6 @@ func TestConfigAdd(t *testing.T) {
 			Args:       []string{"title", "senior dufus"},
 		},
 		{
-			Name:       "server",
-			CfgSet:     serverCfg,
-			ConfigElem: env.ServerConfig,
-			Args:       []string{"title", "senior dufus"},
-		},
-		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
@@ -77,21 +68,21 @@ func TestConfigAdd(t *testing.T) {
 		{
 			Name:       "multi error",
 			CfgSet:     multiCfg,
-			ConfigElem: env.ServerConfig,
+			ConfigElem: env.LocalConfig,
 			Args:       []string{"title", "senior dufus"},
 			Code:       1,
 		},
 		{
 			Name:       "no args",
 			CfgSet:     multiCfg,
-			ConfigElem: env.ServerConfig,
+			ConfigElem: env.LocalConfig,
 			Args:       []string{},
 			Code:       1,
 		},
 		{
 			Name:       "odd args",
 			CfgSet:     multiCfg,
-			ConfigElem: env.ServerConfig,
+			ConfigElem: env.LocalConfig,
 			Args:       []string{"title"},
 			Code:       1,
 		},
@@ -136,12 +127,6 @@ func TestConfigGet(t *testing.T) {
 			Key:        "title",
 		},
 		{
-			Name:       "server",
-			CfgSet:     serverCfg,
-			ConfigElem: env.ServerConfig,
-			Key:        "title",
-		},
-		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
@@ -156,7 +141,7 @@ func TestConfigGet(t *testing.T) {
 		{
 			Name:       "missing param",
 			CfgSet:     multiCfg,
-			ConfigElem: env.ServerConfig,
+			ConfigElem: env.LocalConfig,
 			Key:        "unknown",
 			Code:       1,
 		},
@@ -200,12 +185,6 @@ func TestConfigUnset(t *testing.T) {
 			Key:        "title",
 		},
 		{
-			Name:       "server",
-			CfgSet:     serverCfg,
-			ConfigElem: env.ServerConfig,
-			Key:        "title",
-		},
-		{
 			Name:       "default",
 			CfgSet:     &set.StrSet{},
 			ConfigElem: env.LocalConfig,
@@ -221,7 +200,7 @@ func TestConfigUnset(t *testing.T) {
 		{
 			Name:       "missing param",
 			CfgSet:     multiCfg,
-			ConfigElem: env.ServerConfig,
+			ConfigElem: env.LocalConfig,
 			Key:        "unknown",
 			Code:       1,
 		},
@@ -262,12 +241,6 @@ func TestConfigList(t *testing.T) {
 			Name:       "global",
 			CfgSet:     globalCfg,
 			ConfigElem: env.GlobalConfig,
-
-		},
-		{
-			Name:       "server",
-			CfgSet:     serverCfg,
-			ConfigElem: env.ServerConfig,
 
 		},
 		{
