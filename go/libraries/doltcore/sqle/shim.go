@@ -16,25 +16,31 @@ package sqle
 
 import (
 	"context"
-	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 type sqlRowIter struct {
-	ctx     context.Context
-	iter    prolly.MapIter
+	ctx  context.Context
+	iter prolly.MapIter
+
+	rowLen  int
 	keyDesc val.TupleDesc
+	keyProj []int
 	valDesc val.TupleDesc
+	valProj []int
 }
 
 var _ sql.RowIter = sqlRowIter{}
 
 func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
+
 	rows := partition.rowData
 	rng := prolly.IndexRange{
 		Low:  partition.start,
@@ -48,19 +54,51 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []str
 	if err != nil {
 		return nil, err
 	}
-
 	kd, vd := rows.TupleDescriptors()
 
-	if len(projectedCols) != (kd.Count() + vd.Count()) {
-		panic("projection")
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
 	}
+	keyProj, valProj := projectionMappings(sch, projectedCols)
 
 	return sqlRowIter{
 		ctx:     ctx,
 		iter:    iter,
+		rowLen:  len(projectedCols),
 		keyDesc: kd,
 		valDesc: vd,
+		keyProj: keyProj,
+		valProj: valProj,
 	}, nil
+}
+
+func projectionMappings(sch schema.Schema, projectedCols []string) (keyMap, valMap []int) {
+	keyMap = make([]int, sch.GetPKCols().Size())
+	for idx := range keyMap {
+		keyMap[idx] = -1
+		idxCol := sch.GetPKCols().GetAtIndex(idx)
+		for j, proj := range projectedCols {
+			if strings.ToLower(idxCol.Name) == strings.ToLower(proj) {
+				keyMap[idx] = j
+				break
+			}
+		}
+	}
+
+	valMap = make([]int, sch.GetNonPKCols().Size())
+	for idx := range valMap {
+		valMap[idx] = -1
+		idxCol := sch.GetNonPKCols().GetAtIndex(idx)
+		for j, proj := range projectedCols {
+			if strings.ToLower(idxCol.Name) == strings.ToLower(proj) {
+				valMap[idx] = j
+				break
+			}
+		}
+	}
+
+	return
 }
 
 func (it sqlRowIter) Next() (sql.Row, error) {
@@ -68,18 +106,20 @@ func (it sqlRowIter) Next() (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	kc := key.Count()
 
-	k, v := it.keyDesc.Format(key), it.valDesc.Format(value)
-	fmt.Println(k, v)
+	row := make(sql.Row, it.rowLen)
 
-	row := make(sql.Row, kc+value.Count())
-	for i := range row {
-		if i < key.Count() {
-			row[i] = it.keyDesc.GetField(i, key)
-		} else {
-			row[i] = it.valDesc.GetField(i-kc, value)
+	for keyIdx, rowIdx := range it.keyProj {
+		if rowIdx == -1 {
+			continue
 		}
+		row[rowIdx] = it.keyDesc.GetField(keyIdx, key)
+	}
+	for valIdx, rowIdx := range it.valProj {
+		if rowIdx == -1 {
+			continue
+		}
+		row[rowIdx] = it.valDesc.GetField(valIdx, value)
 	}
 
 	return row, nil
