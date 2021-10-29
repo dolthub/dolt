@@ -22,8 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var _ sql.RowIter = (*keylessRowIter)(nil)
@@ -82,49 +80,6 @@ func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, part
 
 func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
 	panic("unimplement")
-}
-
-func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
-	mapIter, err := iterForPartition(ctx, partition)
-	if err != nil {
-		return nil, err
-	}
-
-	cols, tagToSqlColIdx, err := getTagToResColIdx(ctx, tbl, projectedCols)
-	if err != nil {
-		return nil, err
-	}
-
-	conv := NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, cols, len(cols))
-	return NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
-}
-
-func iterForPartition(ctx context.Context, partition *doltTablePartition) (types.MapTupleIterator, error) {
-	panic("unimplement")
-	//rowData := partition.rowData
-	//if partition.end == NoUpperBound {
-	//	return rowData.RangeIterator(ctx, 0, rowData.Len())
-	//} else {
-	//	return partition.IteratorForPartition(ctx, rowData)
-	//}
-}
-
-func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []string) ([]schema.Column, map[uint64]int, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	cols := sch.GetAllCols().GetColumns()
-	tagToSqlColIdx := make(map[uint64]int)
-
-	resultColSet := set.NewCaseInsensitiveStrSet(projectedCols)
-	for i, col := range cols {
-		if len(projectedCols) == 0 || resultColSet.Contains(col.Name) {
-			tagToSqlColIdx[col.Tag] = i
-		}
-	}
-	return cols, tagToSqlColIdx, nil
 }
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.

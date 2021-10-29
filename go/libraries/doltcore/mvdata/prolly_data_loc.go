@@ -16,6 +16,7 @@ package mvdata
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -107,9 +108,9 @@ type prollyWriteCloser struct {
 	sch    schema.Schema
 	kb, vb *val.TupleBuilder
 
-	ch     *prolly.TreeChunker
-	nrw    prolly.NodeReadWriter
-	root   *doltdb.RootValue
+	ch   *prolly.TreeChunker
+	nrw  prolly.NodeReadWriter
+	root *doltdb.RootValue
 }
 
 var _ DataMoverCloser = (*prollyWriteCloser)(nil)
@@ -146,6 +147,10 @@ func (pw *prollyWriteCloser) GetSchema() schema.Schema {
 // WriteRow implements TableWriteCloser
 func (pw *prollyWriteCloser) WriteRow(ctx context.Context, r row.Row) (err error) {
 	key, value := pw.tuplesFromRow(r)
+
+	k, v := pw.kb.Desc.Format(key), pw.vb.Desc.Format(value)
+	fmt.Println(k, v)
+
 	_, err = pw.ch.Append(ctx, key, value)
 	return
 }
@@ -188,11 +193,11 @@ func writeValue(builder *val.TupleBuilder, idx int, v types.Value) {
 	case types.Bool:
 		builder.PutBool(idx, bool(tv))
 	case types.Int:
-		builder.PutInt64(idx, int64(8))
+		builder.PutInt64(idx, int64(tv))
 	case types.Uint:
-		builder.PutUint64(idx, uint64(8))
+		builder.PutUint64(idx, uint64(tv))
 	case types.Float:
-		builder.PutFloat64(idx, float64(8))
+		builder.PutFloat64(idx, float64(tv))
 	case types.String:
 		builder.PutString(idx, string(tv))
 	default:

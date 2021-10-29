@@ -133,56 +133,39 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) []byte {
 	return readBytes(tup.GetField(i), td.Types[i].Coll)
 }
 
-func (td TupleDesc) PutBool(buf []byte, v bool) {
-	writeBool(buf, v)
-}
-
-func (td TupleDesc) PutInt8(buf []byte, v int8) {
-	writeInt8(buf, v)
-}
-
-func (td TupleDesc) PutUint8(buf []byte, v uint8) {
-	writeUint8(buf, v)
-}
-
-func (td TupleDesc) PutInt16(buf []byte, v int16) {
-	writeInt16(buf, v)
-}
-
-func (td TupleDesc) PutUint16(buf []byte, v uint16) {
-	writeUint16(buf, v)
-}
-
-func (td TupleDesc) PutInt32(buf []byte, v int32) {
-	writeInt32(buf, v)
-}
-
-func (td TupleDesc) PutUint32(buf []byte, v uint32) {
-	writeUint32(buf, v)
-}
-
-func (td TupleDesc) PutInt64(buf []byte, v int64) {
-	writeInt64(buf, v)
-}
-
-func (td TupleDesc) PutUint64(buf []byte, v uint64) {
-	writeUint64(buf, v)
-}
-
-func (td TupleDesc) PutFloat32(buf []byte, v float32) {
-	writeFloat32(buf, v)
-}
-
-func (td TupleDesc) PutFloat64(buf []byte, v float64) {
-	writeFloat64(buf, v)
-}
-
-func (td TupleDesc) PutString(idx int, buf []byte, v string) {
-	writeString(buf, v, td.Types[idx].Coll)
-}
-
-func (td TupleDesc) PutBytes(idx int, buf []byte, v []byte) {
-	writeBytes(buf, v, td.Types[idx].Coll)
+func (td TupleDesc) GetField(i int, tup Tuple) interface{} {
+	switch td.Types[i].Enc {
+	case Int8Enc:
+		return td.GetInt8(i, tup)
+	case Uint8Enc:
+		return td.GetUint8(i, tup)
+	case Int16Enc:
+		return td.GetInt16(i, tup)
+	case Uint16Enc:
+		return td.GetUint16(i, tup)
+	case Int24Enc:
+		panic("24 bit")
+	case Uint24Enc:
+		panic("24 bit")
+	case Int32Enc:
+		return td.GetInt32(i, tup)
+	case Uint32Enc:
+		return td.GetUint32(i, tup)
+	case Int64Enc:
+		return td.GetInt64(i, tup)
+	case Uint64Enc:
+		return td.GetUint64(i, tup)
+	case Float32Enc:
+		return td.GetFloat32(i, tup)
+	case Float64Enc:
+		return td.GetFloat64(i, tup)
+	case StringEnc:
+		return td.GetString(i, tup)
+	case BytesEnc:
+		return td.GetBytes(i, tup)
+	default:
+		panic("unknown encoding")
+	}
 }
 
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {

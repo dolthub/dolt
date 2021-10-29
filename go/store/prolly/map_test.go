@@ -128,8 +128,8 @@ func testMapIterIndexRange(t *testing.T, count int) {
 
 	ctx := context.Background()
 	for _, rng := range ranges {
-		rng.reverse = false
-		idx := rng.low
+		rng.Reverse = false
+		idx := rng.Low
 		iter, err := m.IterIndexRange(ctx, rng)
 		require.NoError(t, err)
 		for {
@@ -145,8 +145,8 @@ func testMapIterIndexRange(t *testing.T, count int) {
 	}
 
 	for _, rng := range ranges {
-		rng.reverse = true
-		idx := rng.high
+		rng.Reverse = true
+		idx := rng.High
 		iter, err := m.IterIndexRange(ctx, rng)
 		require.NoError(t, err)
 		for {
@@ -175,8 +175,8 @@ func indexRanges(m Map) (ranges []IndexRange) {
 		}
 
 		ranges = append(ranges, IndexRange{
-			low:  start,
-			high: stop,
+			Low:  start,
+			High: stop,
 		})
 
 		start = stop

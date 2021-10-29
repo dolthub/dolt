@@ -43,8 +43,8 @@ func (it *valueIter) Next(ctx context.Context) (key, value val.Tuple, err error)
 
 // IndexRange is an inclusive range of item indexes
 type IndexRange struct {
-	low, high uint64
-	reverse   bool
+	Low, High uint64
+	Reverse   bool
 }
 
 type indexIter struct {
@@ -64,7 +64,7 @@ func (it *indexIter) Next(ctx context.Context) (key, value val.Tuple, err error)
 	}
 	value = val.Tuple(it.cur.current())
 
-	if it.rng.reverse {
+	if it.rng.Reverse {
 		for i := 0; i < 3; i++ {
 			if _, err = it.cur.retreat(ctx); err != nil {
 				return nil, nil, err

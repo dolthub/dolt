@@ -132,7 +132,7 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 }
 
 func (m Map) IterAll(ctx context.Context) (MapIter, error) {
-	return m.IterIndexRange(ctx, IndexRange{low: 0, high: m.Count()-1})
+	return m.IterIndexRange(ctx, IndexRange{Low: 0, High: m.Count() - 1})
 }
 
 func (m Map) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error) {
@@ -150,20 +150,20 @@ func (m Map) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error
 }
 
 func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error) {
-	if rng.low > m.Count() || rng.high > m.Count() {
+	if rng.Low > m.Count() || rng.High > m.Count() {
 		return nil, errors.New("range out of bounds")
 	}
 
-	treeIndex := rng.low * 2
-	if rng.reverse {
-		treeIndex = rng.high * 2
+	treeIndex := rng.Low * 2
+	if rng.Reverse {
+		treeIndex = rng.High * 2
 	}
 
 	cur, err := newCursorAtIndex(ctx, m.nrw, m.root, treeIndex)
 	if err != nil {
 		return nil, err
 	}
-	remaining := rng.high - rng.low + 1
+	remaining := rng.High - rng.Low + 1
 
 	return &indexIter{rng: rng, cur: cur, rem: remaining}, nil
 }
