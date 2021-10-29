@@ -26,7 +26,16 @@ public class MySQLConnectorTest {
 		 "describe test",
 		 "select * from test",
 		 "insert into test (pk, `value`) values (0,0)",
-		 "select * from test"
+		 "select * from test",
+		 "select dolt_add('-A')",
+		 "select dolt_commit('-m', 'my commit')",
+		 "select COUNT(*) FROM dolt_log",
+		 "select dolt_checkout('-b', 'mybranch')",
+		 "insert into test (pk, `value`) values (1,1)",
+		 "select dolt_commit('-a', '-m', 'my commit2')",
+		 "select dolt_checkout('main')",
+		 "select dolt_merge('mybranch')",
+		 "select COUNT(*) FROM dolt_log",
 	    };
 
 	    // Only test the first row, column pair for now
@@ -35,7 +44,16 @@ public class MySQLConnectorTest {
 		"pk",
 		null,
 		"1",
-		"0"
+		"0",
+		"0",
+		"0",
+		"2",
+		"0",
+		"1",
+		"1",
+		"0",
+		"1",
+		"3"
 	    };
 
 	    for (int i = 0; i < queries.length; i++) { 
@@ -45,7 +63,7 @@ public class MySQLConnectorTest {
 		    ResultSet rs = st.getResultSet();
 		    if (rs.next()) {
 			String result = rs.getString(1);
-			if ( !expected.equals(result) ) {
+			if (!expected.equals(result) && !(query.contains("dolt_commit"))) {
 			    System.out.println("Query: \n" + query);
 			    System.out.println("Expected:\n" + expected);
 			    System.out.println("Result:\n" + result);

@@ -55,3 +55,24 @@ if (!isTRUE(all.equal(want, got))) {
     print(rows)
     quit(1)
 }
+
+dolt_queries = list("SELECT DOLT_ADD('-A')",
+                    "select dolt_commit('-m', 'my commit')",
+                    "select dolt_checkout('-b', 'mybranch')",
+                    "insert into test (pk, `value`) values (2,2)",
+                     "select dolt_commit('-a', '-m', 'my commit2')",
+                     "select dolt_checkout('main')",
+                     "select dolt_merge('mybranch')")
+
+for(i in 1:length(dolt_queries)) {
+    q = dolt_queries[[i]]
+    dbExecute(conn, q)
+}
+
+count <- dbGetQuery(conn, "select COUNT(*) as c from dolt_log")
+want <- data.frame(c = c(3))
+ret <- all.equal(count, want)
+if (!ret) {
+    print("Number of commits is incorrect")
+    quit(1)
+}
