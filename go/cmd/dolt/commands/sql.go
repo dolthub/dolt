@@ -1529,7 +1529,7 @@ func newSqlEngine(
 	}
 
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
-	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
+	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
 	if err != nil {
 		return nil, err
 	}

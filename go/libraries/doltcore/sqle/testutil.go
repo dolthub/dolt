@@ -98,7 +98,7 @@ func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, stateme
 // NewTestSQLCtx returns a new *sql.Context with a default DoltSession, a new IndexRegistry, and a new ViewRegistry
 func NewTestSQLCtx(ctx context.Context) *sql.Context {
 	session := dsess.DefaultSession()
-	dsess := dsess.NewDoltSession(session, config2.NewMapConfig(make(map[string]string)))
+	dsess := dsess.NewDoltSessionFromDefault(session, config2.NewMapConfig(make(map[string]string)))
 	sqlCtx := sql.NewContext(
 		ctx,
 		sql.WithSession(dsess),

@@ -455,17 +455,16 @@ func TestAddDropPks(t *testing.T) {
 
 func TestPersist(t *testing.T) {
 	harness := newDoltHarness(t)
-
 	dEnv := dtestutils.CreateTestEnv()
 	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
 	require.True(t, ok)
 	globals := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
-
 	newPersistableSession := func(ctx *sql.Context) sql.PersistableSession {
-		session := dsess.NewDoltSession(ctx.Session.(*dsess.DoltSession).Session, globals)
+		session := dsess.NewDoltSessionFromDefault(ctx.Session.(*dsess.DoltSession).Session, globals)
 		err := session.RemoveAllPersistedGlobals()
 		require.NoError(t, err)
 		return session
 	}
+
 	enginetest.TestPersist(t, harness, newPersistableSession)
 }
