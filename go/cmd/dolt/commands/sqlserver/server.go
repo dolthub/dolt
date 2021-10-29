@@ -88,7 +88,6 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	// to the value of mysql that we support.
 	serverConf := server.Config{Protocol: "tcp"}
 
-	sql.InitSystemVariables()
 	if !serverConfig.NoDefaults() {
 		var globals config.ReadWriteConfig
 		if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
