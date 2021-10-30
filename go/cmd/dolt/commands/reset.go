@@ -35,20 +35,19 @@ const (
 
 var resetDocContent = cli.CommandDocumentationContent{
 	ShortDesc: "Resets staged tables to their HEAD state",
-	LongDesc: `Sets the state of a table in the staging area to be that table's value at HEAD
-
-{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}"
-	This form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. (It does not affect the working tree or
-	the current branch.)
-
-	This means that {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} is the opposite of {{.EmphasisLeft}}dolt add <tables>{{.EmphasisRight}}.
-
-	After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the
-	contents out of the staged tables to the working tables.
-
-dolt reset .
-	This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}`,
-
+	LongDesc: "Sets the state of a table in the staging area to be that table's value at HEAD\n\n" +
+		"{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}" +
+		"\n\n" +
+		"This form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. " +
+		"It does not affect the working tree or the current branch." +
+		"\n\n" +
+		"This means that {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} is the opposite of {{.EmphasisLeft}}dolt add <tables>{{.EmphasisRight}}." +
+		"\n\n" +
+		"After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the contents out of the staged tables to the working tables." +
+		"\n\n" +
+		"{{.EmphasisLeft}}dolt reset .{{.EmphasisRight}}" +
+		"\n\n" +
+		"This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}",
 	Synopsis: []string{
 		"{{.LessThan}}tables{{.GreaterThan}}...",
 		"[--hard | --soft]",

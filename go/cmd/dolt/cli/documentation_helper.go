@@ -25,25 +25,20 @@ import (
 
 type commandDocumentForMarkdown struct {
 	Command             string
-	CommandAndShortDesc string
+	ShortDesc string
 	Synopsis            string
 	Description         string
 	Options             string
 }
 
-var cmdMdDocTempl = `## Command
-{{.CommandAndShortDesc}}
-
-### Synopsis
-{{.Synopsis}}
-
-### Description
-{{.Description}}
-
-### Options
-{{.Options}}
-
-`
+var cmdMdDocTempl = "## `{{.Command}}`\n\n" +
+	"{{.ShortDesc}}\n\n" +
+	"### Synopsis\n\n" +
+	"{{.Synopsis}}\n\n" +
+	"### Description\n\n" +
+	"{{.Description}}\n\n" +
+	"### Options\n\n" +
+	"{{.Options}}\n\n"
 
 func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 
@@ -124,11 +119,11 @@ func (cmdDoc CommandDocumentation) cmdDocToCmdDocMd(options string) (commandDocu
 	}
 
 	return commandDocumentForMarkdown{
-		Command:             cmdDoc.CommandStr,
-		CommandAndShortDesc: fmt.Sprintf("`%s` - %s\n\n", cmdDoc.CommandStr, cmdDoc.GetShortDesc()),
-		Synopsis:            transformSynopsisToMarkdown(cmdDoc.CommandStr, synopsis),
-		Description:         longDesc,
-		Options:             options,
+		Command:     cmdDoc.CommandStr,
+		ShortDesc:   cmdDoc.GetShortDesc(),
+		Synopsis:    transformSynopsisToMarkdown(cmdDoc.CommandStr, synopsis),
+		Description: longDesc,
+		Options:     options,
 	}, nil
 }
 
@@ -199,16 +194,16 @@ func transformSynopsisToMarkdown(commandStr string, synopsis []string) string {
 	if len(synopsis) == 0 {
 		return ""
 	}
-	synopsisStr := fmt.Sprintf("%s %s<br />\n", commandStr, synopsis[0])
+	synopsisStr := fmt.Sprintf("%s %s\n", commandStr, synopsis[0])
 	if len(synopsis) > 1 {
 		temp := make([]string, len(synopsis)-1)
 		for i, el := range synopsis[1:] {
-			temp[i] = fmt.Sprintf("\t\t\t%s %s<br />\n", commandStr, el)
+			temp[i] = fmt.Sprintf("%s %s\n", commandStr, el)
 		}
 		synopsisStr += strings.Join(temp, "")
 	}
 
-	markdown := "```bash\n%s\n```"
+	markdown := "```bash\n%s```"
 	return fmt.Sprintf(markdown, synopsisStr)
 }
 

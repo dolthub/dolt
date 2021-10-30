@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -46,6 +47,17 @@ const (
 	maxConnectionsFlag   = "max-connections"
 )
 
+func indentLines(s string) string {
+	sb := strings.Builder{}
+	lines := strings.Split(s, "\n")
+	for _, line := range lines {
+			sb.WriteRune('\t')
+			sb.WriteString(line)
+			sb.WriteRune('\n')
+	}
+	return sb.String()
+}
+
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
 	LongDesc: "By default, starts a MySQL-compatible server on the dolt database in the current directory. " +
@@ -55,7 +67,7 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 		"the server directly on the command line. If {{.EmphasisLeft}}--config <file>{{.EmphasisRight}} is provided all" +
 		" other command line arguments are ignored.\n\nThis is an example yaml configuration file showing all supported" +
 		" items and their default values:\n\n" +
-		serverConfigAsYAMLConfig(DefaultServerConfig()).String() + "\n\n" + `
+		indentLines(serverConfigAsYAMLConfig(DefaultServerConfig()).String()) + "\n\n" + `
 SUPPORTED CONFIG FILE FIELDS:
 
 		{{.EmphasisLeft}}vlog_level{{.EmphasisRight}} - Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.

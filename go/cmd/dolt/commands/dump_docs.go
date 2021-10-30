@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 const (
@@ -68,7 +67,7 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	fileStr := apr.GetValueOrDefault(fileParamName, ".")
+	fileStr := apr.GetValueOrDefault(fileParamName, "cli.md")
 
 	exists, _ := dEnv.FS.Exists(fileStr)
 	if exists {
@@ -77,7 +76,13 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 		return 1
 	}
 
-	err := cmd.dumpDocs(dEnv, fileStr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
+	wr, err := dEnv.FS.OpenForWrite(fileStr, os.ModePerm)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
+	err = cmd.dumpDocs(wr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to dump docs.").AddCause(err).Build()
@@ -89,13 +94,7 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 	return 0
 }
 
-func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, fileStr, cmdStr string, subCommands []cli.Command) error {
-
-	wr, err := dEnv.FS.OpenForWrite(fileStr, os.ModePerm)
-	if err != nil {
-		return err
-	}
-
+func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.Command) error {
 	for _, curr := range subCommands {
 		var hidden bool
 		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
@@ -104,7 +103,7 @@ func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, fileStr, cmdStr string, subC
 
 		if !hidden {
 			if subCmdHandler, ok := curr.(cli.SubCommandHandler); ok {
-				err := cmd.dumpDocs(dEnv, fileStr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
+				err := cmd.dumpDocs(wr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
 
 				if err != nil {
 					return err
@@ -128,5 +127,6 @@ func CreateMarkdown(wr io.Writer, cmdDoc cli.CommandDocumentation) error {
 	if err != nil {
 		return err
 	}
-	return iohelp.WriteIfNoErr(wr, []byte(markdownDoc), err)
+	_, err = wr.Write([]byte(markdownDoc))
+	return err
 }
