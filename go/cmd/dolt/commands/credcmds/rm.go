@@ -16,6 +16,7 @@ package credcmds
 
 import (
 	"context"
+	"io"
 
 	"github.com/fatih/color"
 
@@ -25,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var rmDocs = cli.CommandDocumentationContent{
@@ -47,9 +47,9 @@ func (cmd RmCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd RmCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, rmDocs, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, rmDocs, ap))
 }
 
 func (cmd RmCmd) createArgParser() *argparser.ArgParser {

@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/fatih/color"
@@ -28,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var tagDocs = cli.CommandDocumentationContent{
@@ -62,9 +62,9 @@ func (cmd TagCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd TagCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd TagCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
 }
 
 func (cmd TagCmd) createArgParser() *argparser.ArgParser {

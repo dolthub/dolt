@@ -16,6 +16,7 @@ package cvcmds
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -56,7 +56,7 @@ func (cmd VerifyConstraintsCmd) Description() string {
 	return "Command to verify that the constraints on the given table(s) are satisfied."
 }
 
-func (cmd VerifyConstraintsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd VerifyConstraintsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
 }
 

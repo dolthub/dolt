@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 
 	"github.com/fatih/color"
@@ -107,9 +108,9 @@ func (cmd SqlServerCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SqlServerCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SqlServerCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.CreateArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 }
 
 func (cmd SqlServerCmd) CreateArgParser() *argparser.ArgParser {

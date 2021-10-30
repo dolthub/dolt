@@ -17,6 +17,7 @@ package credcmds
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"google.golang.org/grpc"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var checkShortDesc = "Check authenticating with a credential keypair against a doltremoteapi."
@@ -55,9 +55,9 @@ func (cmd CheckCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CheckCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd CheckCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, checkDocs, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, checkDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement

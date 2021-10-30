@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -24,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var fetchDocs = cli.CommandDocumentationContent{
@@ -59,9 +59,9 @@ func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd FetchCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateFetchArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 }
 
 // Exec executes the command

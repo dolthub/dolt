@@ -31,20 +31,16 @@ type commandDocumentForMarkdown struct {
 	Options             string
 }
 
-var cmdMdDocTempl = `---
-title: {{.Command}}
----
-
-## Command
+var cmdMdDocTempl = `## Command
 {{.CommandAndShortDesc}}
 
-## Synopsis
+### Synopsis
 {{.Synopsis}}
 
-## Description
+### Description
 {{.Description}}
 
-## Options
+### Options
 {{.Options}}
 
 `
@@ -69,7 +65,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 			options += outputStr
 		}
 
-		// Iterate accross supported options, templating each one of them
+		// Iterate across supported options, templating each one of them
 		for _, supOpt := range cmdDoc.ArgParser.Supported {
 			templatedDesc, err := templateDocStringHelper(supOpt.Desc, MarkdownFormat)
 			if err != nil {
@@ -130,7 +126,7 @@ func (cmdDoc CommandDocumentation) cmdDocToCmdDocMd(options string) (commandDocu
 	return commandDocumentForMarkdown{
 		Command:             cmdDoc.CommandStr,
 		CommandAndShortDesc: fmt.Sprintf("`%s` - %s\n\n", cmdDoc.CommandStr, cmdDoc.GetShortDesc()),
-		Synopsis:            transformSynopsisToHtml(cmdDoc.CommandStr, synopsis),
+		Synopsis:            transformSynopsisToMarkdown(cmdDoc.CommandStr, synopsis),
 		Description:         longDesc,
 		Options:             options,
 	}, nil
@@ -199,7 +195,7 @@ var CliFormat = docFormat{"<", ">", "<b>", "</b>"}
 // Special format for the synopsis which is rendered inside raw HTML in markdown
 var SynopsisMarkdownFormat = docFormat{"&lt;", "&gt;", "`", "`"}
 
-func transformSynopsisToHtml(commandStr string, synopsis []string) string {
+func transformSynopsisToMarkdown(commandStr string, synopsis []string) string {
 	if len(synopsis) == 0 {
 		return ""
 	}
@@ -212,18 +208,8 @@ func transformSynopsisToHtml(commandStr string, synopsis []string) string {
 		synopsisStr += strings.Join(temp, "")
 	}
 
-	html := `
-<div class="gatsby-highlight" data-language="text">
-	<pre class="language-text">
-		<code class="language-text">
-			%s
-  		</code>
-	</pre>
-</div>
-
-`
-
-	return fmt.Sprintf(html, synopsisStr)
+	markdown := "```bash\n%s\n```"
+	return fmt.Sprintf(markdown, synopsisStr)
 }
 
 type argument struct {

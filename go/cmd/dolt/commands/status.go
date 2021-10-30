@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -23,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var statusDocs = cli.CommandDocumentationContent{
@@ -45,9 +45,9 @@ func (cmd StatusCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd StatusCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd StatusCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, statusDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, statusDocs, ap))
 }
 
 func (cmd StatusCmd) createArgParser() *argparser.ArgParser {

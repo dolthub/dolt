@@ -17,20 +17,18 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 const (
-	dirParamName = "dir"
+	fileParamName = "file"
 )
 
 type DumpDocsCmd struct {
@@ -59,32 +57,27 @@ func (cmd *DumpDocsCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd *DumpDocsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd *DumpDocsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
 }
 
 // Exec executes the command
 func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(dirParamName, "", "dir", "The directory where the md files should be dumped")
+	ap.SupportsString(fileParamName, "", "file", "The file to write CLI docs to")
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	dirStr := apr.GetValueOrDefault(dirParamName, ".")
+	fileStr := apr.GetValueOrDefault(fileParamName, ".")
 
-	exists, isDir := dEnv.FS.Exists(dirStr)
-
-	if !exists {
-		cli.PrintErrln(dirStr + " does not exist.")
-		usage()
-		return 1
-	} else if !isDir {
-		cli.PrintErrln(dirStr + " is a file, not a directory.")
+	exists, _ := dEnv.FS.Exists(fileStr)
+	if exists {
+		cli.PrintErrln(fileStr + " exists")
 		usage()
 		return 1
 	}
 
-	err := cmd.dumpDocs(dEnv, dirStr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
+	err := cmd.dumpDocs(dEnv, fileStr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to dump docs.").AddCause(err).Build()
@@ -96,7 +89,13 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 	return 0
 }
 
-func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, dirStr, cmdStr string, subCommands []cli.Command) error {
+func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, fileStr, cmdStr string, subCommands []cli.Command) error {
+
+	wr, err := dEnv.FS.OpenForWrite(fileStr, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
 	for _, curr := range subCommands {
 		var hidden bool
 		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
@@ -105,18 +104,14 @@ func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, dirStr, cmdStr string, subCo
 
 		if !hidden {
 			if subCmdHandler, ok := curr.(cli.SubCommandHandler); ok {
-				err := cmd.dumpDocs(dEnv, dirStr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
+				err := cmd.dumpDocs(dEnv, fileStr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
 
 				if err != nil {
 					return err
 				}
 			} else {
 				currCmdStr := fmt.Sprintf("%s %s", cmdStr, curr.Name())
-				filename := strings.ReplaceAll(currCmdStr, " ", "-")
-
-				absPath := filepath.Join(dirStr, filename+".md")
-
-				err := curr.CreateMarkdown(dEnv.FS, absPath, currCmdStr)
+				err := curr.CreateMarkdown(wr, currCmdStr)
 
 				if err != nil {
 					return err
@@ -128,12 +123,8 @@ func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, dirStr, cmdStr string, subCo
 	return nil
 }
 
-func CreateMarkdown(fs filesys.Filesys, path string, cmdDoc cli.CommandDocumentation) error {
+func CreateMarkdown(wr io.Writer, cmdDoc cli.CommandDocumentation) error {
 	markdownDoc, err := cmdDoc.CmdDocToMd()
-	if err != nil {
-		return err
-	}
-	wr, err := fs.OpenForWrite(path, os.ModePerm)
 	if err != nil {
 		return err
 	}

@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"strings"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var backupDocs = cli.CommandDocumentationContent{
@@ -96,9 +96,9 @@ func (cmd BackupCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd BackupCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd BackupCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, backupDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, backupDocs, ap))
 }
 
 func (cmd BackupCmd) createArgParser() *argparser.ArgParser {

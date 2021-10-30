@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 
@@ -25,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var revertDocs = cli.CommandDocumentationContent{
@@ -57,9 +57,9 @@ func (cmd RevertCmd) Description() string {
 }
 
 // CreateMarkdown implements the interface cli.Command.
-func (cmd RevertCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd RevertCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := argparser.NewArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, revertDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, revertDocs, ap))
 }
 
 // Exec implements the interface cli.Command.

@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	"io"
 
 	"github.com/fatih/color"
 
@@ -29,7 +30,6 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var tblSchemaDocs = cli.CommandDocumentationContent{
@@ -57,9 +57,9 @@ func (cmd ShowCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ShowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ShowCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
 }
 
 func (cmd ShowCmd) createArgParser() *argparser.ArgParser {

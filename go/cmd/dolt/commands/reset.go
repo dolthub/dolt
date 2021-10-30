@@ -17,9 +17,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
-
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -69,9 +68,9 @@ func (cmd ResetCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ResetCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateResetArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
 }
 
 // Exec executes the command
