@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var revertDocs = cli.CommandDocumentationContent{
@@ -58,7 +57,7 @@ func (cmd RevertCmd) Description() string {
 
 // CreateMarkdown implements the interface cli.Command.
 func (cmd RevertCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := argparser.NewArgParser()
+	ap := cli.CreateRevertArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, revertDocs, ap))
 }
 

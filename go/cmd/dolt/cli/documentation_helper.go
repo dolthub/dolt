@@ -37,7 +37,7 @@ var cmdMdDocTempl = "## `{{.Command}}`\n\n" +
 	"{{.Synopsis}}\n\n" +
 	"### Description\n\n" +
 	"{{.Description}}\n\n" +
-	"### Options\n\n" +
+	"### Arguments and options\n\n" +
 	"{{.Options}}\n\n"
 
 func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
@@ -217,7 +217,7 @@ func templateArgument(supportedArg argument) (string, error) {
 	if supportedArg.Description == "" {
 		formatString = "`<{{.Name}}>`\n\n"
 	} else {
-		formatString = "`<{{.Name}}>`:\n\n{{.Description}}\n\n"
+		formatString = "`<{{.Name}}>`: {{.Description}}\n\n"
 	}
 
 	templ, err := template.New("argString").Parse(formatString)
