@@ -51,9 +51,9 @@ func indentLines(s string) string {
 	sb := strings.Builder{}
 	lines := strings.Split(s, "\n")
 	for _, line := range lines {
-			sb.WriteRune('\t')
-			sb.WriteString(line)
-			sb.WriteRune('\n')
+		sb.WriteRune('\t')
+		sb.WriteString(line)
+		sb.WriteRune('\n')
 	}
 	return sb.String()
 }
