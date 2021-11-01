@@ -64,8 +64,12 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projections []strin
 }
 
 func rowIterFromMapIter(ctx context.Context, sch schema.Schema, projs []string, m prolly.Map, iter prolly.MapIter) (sql.RowIter, error) {
-	kd, vd := m.TupleDescriptors()
+	if projs == nil {
+		projs = sch.GetAllCols().GetColumnNames()
+	}
 	keyProj, valProj := projectionMappings(sch, projs)
+
+	kd, vd := m.TupleDescriptors()
 
 	return sqlRowIter{
 		ctx:     ctx,
