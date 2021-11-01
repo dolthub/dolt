@@ -40,6 +40,7 @@ func (ns NodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	ns.cache.insert(c)
 
 	return c.Data(), err
 }
