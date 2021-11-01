@@ -53,7 +53,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
@@ -175,9 +174,9 @@ func (cmd SqlCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SqlCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 }
 
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {

@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -84,9 +84,9 @@ func (cmd BranchCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd BranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd BranchCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
 }
 
 func (cmd BranchCmd) createArgParser() *argparser.ArgParser {

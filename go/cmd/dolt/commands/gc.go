@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/fatih/color"
 
@@ -71,9 +72,9 @@ func (cmd GarbageCollectionCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd GarbageCollectionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd GarbageCollectionCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, gcDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, gcDocs, ap))
 }
 
 func (cmd GarbageCollectionCmd) createArgParser() *argparser.ArgParser {

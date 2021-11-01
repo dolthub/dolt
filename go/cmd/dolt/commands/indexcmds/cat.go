@@ -17,6 +17,7 @@ package indexcmds
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/fatih/color"
@@ -35,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -71,7 +71,7 @@ func (cmd CatCmd) Description() string {
 	return "Internal debugging command to display the contents of an index."
 }
 
-func (cmd CatCmd) CreateMarkdown(filesys.Filesys, string, string) error {
+func (cmd CatCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 
