@@ -101,7 +101,7 @@ Andy Anderson,27,
 		t.Fatal("Could not open writer for CSVWriter", err)
 	}
 
-	csvWr, err := OpenCSVWriter(writer, rowSch, info)
+	csvWr, err := NewCSVWriter(writer, rowSch, info)
 
 	if err != nil {
 		t.Fatal("Could not open CSVWriter", err)
@@ -141,7 +141,7 @@ Andy Anderson|27|
 	if err != nil {
 		t.Fatal("Could not open writer for CSVWriter", err)
 	}
-	csvWr, err := OpenCSVWriter(writer, rowSch, info)
+	csvWr, err := NewCSVWriter(writer, rowSch, info)
 
 	if err != nil {
 		t.Fatal("Could not open CSVWriter", err)
