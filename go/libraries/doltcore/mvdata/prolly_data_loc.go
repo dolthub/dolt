@@ -17,7 +17,6 @@ package mvdata
 import (
 	"context"
 	"fmt"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -189,18 +188,37 @@ func (pw *prollyWriteCloser) tuplesFromRow(r row.Row) (key, value val.Tuple) {
 var shared = pool.NewBuffPool()
 
 func writeValue(builder *val.TupleBuilder, idx int, v types.Value) {
-	switch tv := v.(type) {
-	case types.Bool:
-		builder.PutBool(idx, bool(tv))
-	case types.Int:
-		builder.PutInt64(idx, int64(tv))
-	case types.Uint:
-		builder.PutUint64(idx, uint64(tv))
-	case types.Float:
-		builder.PutFloat64(idx, float64(tv))
-	case types.String:
-		builder.PutString(idx, string(tv))
+	enc := builder.Desc.Types[idx].Enc
+	switch enc {
+	case val.Int8Enc:
+		builder.PutInt8(idx, int8(v.(types.Int)))
+	case val.Uint8Enc:
+		builder.PutUint8(idx, uint8(v.(types.Uint)))
+	case val.Int16Enc:
+		builder.PutInt16(idx, int16(v.(types.Int)))
+	case val.Uint16Enc:
+		builder.PutUint16(idx, uint16(v.(types.Uint)))
+	case val.Int24Enc:
+		panic("24 bit")
+	case val.Uint24Enc:
+		panic("24 bit")
+	case val.Int32Enc:
+		builder.PutInt32(idx, int32(v.(types.Int)))
+	case val.Uint32Enc:
+		builder.PutUint32(idx, uint32(v.(types.Uint)))
+	case val.Int64Enc:
+		builder.PutInt64(idx, int64(v.(types.Int)))
+	case val.Uint64Enc:
+		builder.PutUint64(idx, uint64(v.(types.Uint)))
+	case val.Float32Enc:
+		builder.PutFloat32(idx, float32(v.(types.Float)))
+	case val.Float64Enc:
+		builder.PutFloat64(idx, float64(v.(types.Float)))
+	case val.BytesEnc:
+		builder.PutBytes(idx, []byte(v.(types.InlineBlob)))
+	case val.StringEnc:
+		builder.PutString(idx, string(v.(types.String)))
 	default:
-		panic("unknown value type")
+		panic("unknown encoding")
 	}
 }
