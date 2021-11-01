@@ -16,13 +16,13 @@ package indexcmds
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var rebuildDocs = cli.CommandDocumentationContent{
@@ -46,7 +46,7 @@ func (cmd RebuildCmd) Description() string {
 	return "Internal debugging command to rebuild the contents of an index."
 }
 
-func (cmd RebuildCmd) CreateMarkdown(filesys.Filesys, string, string) error {
+func (cmd RebuildCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 

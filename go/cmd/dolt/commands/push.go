@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -33,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -66,9 +66,9 @@ func (cmd PushCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd PushCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, pushDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 }
 
 func (cmd PushCmd) createArgParser() *argparser.ArgParser {

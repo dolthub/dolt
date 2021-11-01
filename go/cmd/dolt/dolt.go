@@ -49,7 +49,7 @@ import (
 )
 
 const (
-	Version = "0.32.0"
+	Version = "0.32.2"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -57,33 +57,32 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.InitCmd{},
 	commands.StatusCmd{},
 	commands.AddCmd{},
+	commands.DiffCmd{},
 	commands.ResetCmd{},
 	commands.CommitCmd{},
 	commands.SqlCmd{VersionStr: Version},
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{},
 	commands.LogCmd{},
-	commands.DiffCmd{},
-	commands.BlameCmd{},
-	commands.MergeCmd{},
 	commands.BranchCmd{},
-	commands.TagCmd{},
 	commands.CheckoutCmd{},
+	commands.MergeCmd{},
+	cnfcmds.Commands,
+	commands.RevertCmd{},
+	commands.CloneCmd{},
+	commands.FetchCmd{},
+	commands.PullCmd{},
+	commands.PushCmd{},
+	commands.ConfigCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
-	commands.PushCmd{},
-	commands.PullCmd{},
-	commands.FetchCmd{},
-	commands.CloneCmd{},
-	commands.RevertCmd{},
-	credcmds.Commands,
 	commands.LoginCmd{},
-	commands.VersionCmd{VersionStr: Version},
-	commands.ConfigCmd{},
+	credcmds.Commands,
 	commands.LsCmd{},
 	schcmds.Commands,
 	tblcmds.Commands,
-	cnfcmds.Commands,
+	commands.TagCmd{},
+	commands.BlameCmd{},
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
 	dumpDocsCommand,
@@ -94,7 +93,9 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.FilterBranchCmd{},
 	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
-	commands.DumpCmd{},
+	commands.VersionCmd{VersionStr: Version},
+  commands.DumpCmd{},
+
 })
 
 func init() {

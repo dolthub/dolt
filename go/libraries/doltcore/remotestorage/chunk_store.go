@@ -696,8 +696,8 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 
 		// send a request to the remote api to determine which chunks the remote api already has
 		req := &remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: currByteSl}
-		resp, err := dcs.csClient.HasChunks(ctx, req)
-
+		var resp *remotesapi.HasChunksResponse
+		resp, err = dcs.csClient.HasChunks(ctx, req)
 		if err != nil {
 			err = NewRpcError(err, "HasChunks", dcs.host, req)
 			return true

@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -88,9 +88,9 @@ func (cmd BlameCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd BlameCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd BlameCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, blameDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, blameDocs, ap))
 }
 
 func (cmd BlameCmd) createArgParser() *argparser.ArgParser {

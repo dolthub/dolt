@@ -16,11 +16,11 @@ package cnfcmds
 
 import (
 	"context"
+	"io"
 	"strings"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -80,9 +80,9 @@ func (cmd ResolveCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ResolveCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ResolveCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
 }
 
 // EventType returns the type of the event to log

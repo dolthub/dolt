@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"io"
 	"path"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -25,8 +26,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
+)
+
+const (
+	dirParamName = "dir"
 )
 
 var readTablesDocs = cli.CommandDocumentationContent{
@@ -54,9 +58,9 @@ func (cmd ReadTablesCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ReadTablesCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ReadTablesCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement

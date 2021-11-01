@@ -38,7 +38,7 @@ type DoltMergeFunc struct {
 	expression.NaryExpression
 }
 
-const DoltConflictWarningCode int = 1105 // Since this our own custom warning we'll use 1105, the code for an unknown error
+const DoltMergeWarningCode int = 1105 // Since this our own custom warning we'll use 1105, the code for an unknown error
 
 const (
 	hasConflicts int = 0
@@ -147,9 +147,17 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 		return ws, noConflicts, fmt.Errorf("failed to get dbData")
 	}
 
-	if canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
-		return ws, noConflicts, err
-	} else if canFF {
+	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
+	if err != nil {
+		switch err {
+		case doltdb.ErrIsAhead, doltdb.ErrUpToDate:
+			ctx.Warn(DoltMergeWarningCode, err.Error())
+		default:
+			return ws, noConflicts, err
+		}
+	}
+
+	if canFF {
 		if spec.Noff {
 			ws, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData)
 			if err == doltdb.ErrUnresolvedConflicts {
@@ -160,7 +168,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 					return ws, hasConflicts, wsErr
 				}
 
-				ctx.Warn(DoltConflictWarningCode, err.Error())
+				ctx.Warn(DoltMergeWarningCode, err.Error())
 
 				// Return 0 indicating there are conflicts
 				return ws, hasConflicts, nil
@@ -188,7 +196,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.Session, roots doltdb.Roo
 			return ws, hasConflicts, wsErr
 		}
 
-		ctx.Warn(DoltConflictWarningCode, err.Error())
+		ctx.Warn(DoltMergeWarningCode, err.Error())
 
 		return ws, hasConflicts, nil
 	} else if err != nil {

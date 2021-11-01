@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -182,9 +183,9 @@ func (cmd ExportCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ExportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 }
 
 func (cmd ExportCmd) createArgParser() *argparser.ArgParser {

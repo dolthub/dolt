@@ -32,5 +32,18 @@ defmodule SmokeTest do
     {:ok, result} = MyXQL.query(pid, "SELECT * FROM test")
     myTestFunc(result.num_rows, 1)
     myTestFunc(result.rows, [[0,0]])
+
+    {:ok, _} = MyXQL.query(pid, "select dolt_add('-A');")
+    {:ok, _} = MyXQL.query(pid, "select dolt_commit('-m', 'my commit')")
+    {:ok, _} = MyXQL.query(pid, "select COUNT(*) FROM dolt_log")
+    {:ok, _} = MyXQL.query(pid, "select dolt_checkout('-b', 'mybranch')")
+    {:ok, _} = MyXQL.query(pid, "insert into test (pk, `value`) values (1,1)")
+    {:ok, _} = MyXQL.query(pid, "select dolt_commit('-a', '-m', 'my commit2')")
+    {:ok, _} = MyXQL.query(pid, "select dolt_checkout('main')")
+    {:ok, _} = MyXQL.query(pid, "select dolt_merge('mybranch')")
+
+    {:ok, result} = MyXQL.query(pid, "select COUNT(*) FROM dolt_log")
+    myTestFunc(result.num_rows, 1)
+    myTestFunc(result.rows, [[3]])
   end
 end

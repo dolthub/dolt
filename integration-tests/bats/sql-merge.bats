@@ -592,6 +592,19 @@ SQL
     [[ "$output" =~ "| 1        |" ]] || false
 }
 
+@test "sql-merge: up-to-date branch does not error" {
+    dolt commit -am "commit all changes"
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+SELECT DOLT_CHECKOUT('main');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'a commit');
+SELECT DOLT_MERGE('feature-branch');
+SHOW WARNINGS;
+SQL
+   [ $status -eq 0 ]
+   [[ "$output" =~ "current fast forward from a to b. a is ahead of b already" ]] || false
+}
 
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-

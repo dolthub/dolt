@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
@@ -67,9 +66,9 @@ func (cmd SqlClientCmd) Description() string {
 	return "Starts a built-in MySQL client."
 }
 
-func (cmd SqlClientCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SqlClientCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
 }
 
 func (cmd SqlClientCmd) createArgParser() *argparser.ArgParser {

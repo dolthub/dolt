@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var importDocs = cli.CommandDocumentationContent{
@@ -65,9 +64,9 @@ func (cmd ImportCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ImportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, importDocs, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, importDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
