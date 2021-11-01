@@ -29,6 +29,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	dirParamName = "dir"
+)
+
 var readTablesDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Fetch table(s) at a specific commit into a new dolt repo",
 	LongDesc: "A shallow clone operation will retrieve the state of table(s) from a remote repository at a given commit. " +
@@ -72,7 +76,7 @@ func (cmd ReadTablesCmd) createArgParser() *argparser.ArgParser {
 		{"commit", "Branch or commit hash representing a point in time to retrieve tables from"},
 		{"table", " Optional tables to retrieve.  If omitted, all tables are retrieved."},
 	}
-	ap.SupportsString(fileParamName, "d", "directory", "directory to create and put retrieved table data.")
+	ap.SupportsString(dirParamName, "d", "directory", "directory to create and put retrieved table data.")
 	return ap
 }
 
