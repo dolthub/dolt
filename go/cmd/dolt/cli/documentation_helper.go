@@ -24,11 +24,11 @@ import (
 )
 
 type commandDocumentForMarkdown struct {
-	Command             string
-	ShortDesc string
-	Synopsis            string
-	Description         string
-	Options             string
+	Command     string
+	ShortDesc   string
+	Synopsis    string
+	Description string
+	Options     string
 }
 
 var cmdMdDocTempl = "## `{{.Command}}`\n\n" +
