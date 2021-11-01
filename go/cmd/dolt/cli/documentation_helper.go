@@ -24,30 +24,21 @@ import (
 )
 
 type commandDocumentForMarkdown struct {
-	Command             string
-	CommandAndShortDesc string
-	Synopsis            string
-	Description         string
-	Options             string
+	Command     string
+	ShortDesc   string
+	Synopsis    string
+	Description string
+	Options     string
 }
 
-var cmdMdDocTempl = `---
-title: {{.Command}}
----
-
-## Command
-{{.CommandAndShortDesc}}
-
-## Synopsis
-{{.Synopsis}}
-
-## Description
-{{.Description}}
-
-## Options
-{{.Options}}
-
-`
+var cmdMdDocTempl = "## `{{.Command}}`\n\n" +
+	"{{.ShortDesc}}\n\n" +
+	"### Synopsis\n\n" +
+	"{{.Synopsis}}\n\n" +
+	"### Description\n\n" +
+	"{{.Description}}\n\n" +
+	"### Arguments and options\n\n" +
+	"{{.Options}}\n\n"
 
 func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 
@@ -69,7 +60,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 			options += outputStr
 		}
 
-		// Iterate accross supported options, templating each one of them
+		// Iterate across supported options, templating each one of them
 		for _, supOpt := range cmdDoc.ArgParser.Supported {
 			templatedDesc, err := templateDocStringHelper(supOpt.Desc, MarkdownFormat)
 			if err != nil {
@@ -128,11 +119,11 @@ func (cmdDoc CommandDocumentation) cmdDocToCmdDocMd(options string) (commandDocu
 	}
 
 	return commandDocumentForMarkdown{
-		Command:             cmdDoc.CommandStr,
-		CommandAndShortDesc: fmt.Sprintf("`%s` - %s\n\n", cmdDoc.CommandStr, cmdDoc.GetShortDesc()),
-		Synopsis:            transformSynopsisToHtml(cmdDoc.CommandStr, synopsis),
-		Description:         longDesc,
-		Options:             options,
+		Command:     cmdDoc.CommandStr,
+		ShortDesc:   cmdDoc.GetShortDesc(),
+		Synopsis:    transformSynopsisToMarkdown(cmdDoc.CommandStr, synopsis),
+		Description: longDesc,
+		Options:     options,
 	}, nil
 }
 
@@ -199,31 +190,21 @@ var CliFormat = docFormat{"<", ">", "<b>", "</b>"}
 // Special format for the synopsis which is rendered inside raw HTML in markdown
 var SynopsisMarkdownFormat = docFormat{"&lt;", "&gt;", "`", "`"}
 
-func transformSynopsisToHtml(commandStr string, synopsis []string) string {
+func transformSynopsisToMarkdown(commandStr string, synopsis []string) string {
 	if len(synopsis) == 0 {
 		return ""
 	}
-	synopsisStr := fmt.Sprintf("%s %s<br />\n", commandStr, synopsis[0])
+	synopsisStr := fmt.Sprintf("%s %s\n", commandStr, synopsis[0])
 	if len(synopsis) > 1 {
 		temp := make([]string, len(synopsis)-1)
 		for i, el := range synopsis[1:] {
-			temp[i] = fmt.Sprintf("\t\t\t%s %s<br />\n", commandStr, el)
+			temp[i] = fmt.Sprintf("%s %s\n", commandStr, el)
 		}
 		synopsisStr += strings.Join(temp, "")
 	}
 
-	html := `
-<div class="gatsby-highlight" data-language="text">
-	<pre class="language-text">
-		<code class="language-text">
-			%s
-  		</code>
-	</pre>
-</div>
-
-`
-
-	return fmt.Sprintf(html, synopsisStr)
+	markdown := "```bash\n%s```"
+	return fmt.Sprintf(markdown, synopsisStr)
 }
 
 type argument struct {
@@ -236,7 +217,7 @@ func templateArgument(supportedArg argument) (string, error) {
 	if supportedArg.Description == "" {
 		formatString = "`<{{.Name}}>`\n\n"
 	} else {
-		formatString = "`<{{.Name}}>`:\n\n{{.Description}}\n\n"
+		formatString = "`<{{.Name}}>`: {{.Description}}\n\n"
 	}
 
 	templ, err := template.New("argString").Parse(formatString)

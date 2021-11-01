@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
@@ -66,9 +65,9 @@ func (cmd CommitCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd CommitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateCommitArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 }
 
 // Exec executes the command

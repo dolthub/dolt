@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -121,9 +120,9 @@ func (cmd LogCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LogCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd LogCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := createLogArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, logDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, logDocs, ap))
 }
 
 func createLogArgParser() *argparser.ArgParser {

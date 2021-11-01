@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -26,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var ErrInvalidPort = errors.New("invalid port")
@@ -84,9 +84,9 @@ func (cmd RemoteCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RemoteCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd RemoteCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
 }
 
 func (cmd RemoteCmd) createArgParser() *argparser.ArgParser {

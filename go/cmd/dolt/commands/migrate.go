@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/fatih/color"
 	"google.golang.org/grpc/codes"
@@ -33,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -58,7 +58,7 @@ func (cmd MigrateCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MigrateCmd) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
+func (cmd MigrateCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 

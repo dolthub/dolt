@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var mergeDocs = cli.CommandDocumentationContent{
@@ -63,9 +63,9 @@ func (cmd MergeCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd MergeCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateMergeArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 }
 
 // EventType returns the type of the event to log

@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"io"
 	"strings"
 
 	"github.com/fatih/color"
@@ -24,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -74,9 +74,9 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ConfigCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ConfigCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 }
 
 func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {

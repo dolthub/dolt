@@ -16,6 +16,7 @@ package cli
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -26,7 +27,6 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/events"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
@@ -64,7 +64,7 @@ type Command interface {
 	// Exec executes the command
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
 	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
+	CreateMarkdown(writer io.Writer, commandStr string) error
 }
 
 // SignalCommand is an extension of Command that allows commands to install their own signal handlers, rather than use
@@ -147,7 +147,7 @@ func (hc SubCommandHandler) RequiresRepo() bool {
 	return false
 }
 
-func (hc SubCommandHandler) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
+func (hc SubCommandHandler) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 
