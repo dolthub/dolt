@@ -27,12 +27,12 @@ type Map struct {
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 	// todo(andy): do we need a metaTuple descriptor?
-	nrw NodeReadWriter
+	nrw NodeStore
 }
 
 type KeyValueFn func(key, value val.Tuple) error
 
-func NewMap(node Node, nrw NodeReadWriter, keyDesc, valDesc val.TupleDesc) Map {
+func NewMap(node Node, nrw NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	return Map{
 		root:    node,
 		keyDesc: keyDesc,
@@ -41,7 +41,7 @@ func NewMap(node Node, nrw NodeReadWriter, keyDesc, valDesc val.TupleDesc) Map {
 	}
 }
 
-func MakeNewMap(ctx context.Context, nrw NodeReadWriter, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
+func MakeNewMap(ctx context.Context, nrw NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
 	m := NewMap(nil, nrw, keyDesc, valDesc)
 
 	ch, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)

@@ -26,14 +26,14 @@ type nodeCursor struct {
 	nd     Node
 	idx    int
 	parent *nodeCursor
-	nrw    NodeReadWriter
+	nrw    NodeStore
 }
 
 type cursorFn func(cur *nodeCursor) error
 
 type searchFn func(item nodeItem, nd Node) (idx int)
 
-func newCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur *nodeCursor, err error) {
+func newCursor(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.nd.leafNode() {
 		nd, err = fetchRef(ctx, nrw, cur.current())
@@ -47,7 +47,7 @@ func newCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur *nodeCurso
 	return
 }
 
-func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
+func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
 	cur = nodeCursor{nd: nd, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
@@ -67,7 +67,7 @@ func newCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item node
 }
 
 // todo(andy): this is a temporary function to optimize memory usage
-func newLeafCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
+func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
 	cur = nodeCursor{nd: nd, parent: nil, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
@@ -84,7 +84,7 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item 
 	return cur, nil
 }
 
-func newCursorAtIndex(ctx context.Context, nrw NodeReadWriter, nd Node, idx uint64) (cur nodeCursor, err error) {
+func newCursorAtIndex(ctx context.Context, nrw NodeStore, nd Node, idx uint64) (cur nodeCursor, err error) {
 	cur = nodeCursor{nd: nd, nrw: nrw}
 
 	distance := idx

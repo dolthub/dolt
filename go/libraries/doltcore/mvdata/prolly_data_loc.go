@@ -109,7 +109,7 @@ type prollyWriteCloser struct {
 	kb, vb *val.TupleBuilder
 
 	ch   *prolly.TreeChunker
-	nrw  prolly.NodeReadWriter
+	nrw  prolly.NodeStore
 	root *doltdb.RootValue
 }
 

@@ -29,14 +29,14 @@ type treeCursor []nodeCursor2
 type nodeCursor2 struct {
 	nd  Node
 	idx int
-	nrw NodeReadWriter
+	nrw NodeStore
 }
 
 type compareFn func(left, right nodeItem) int
 
 type treeCursorFn func(cur treeCursor) error
 
-func newTreeCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur treeCursor, err error) {
+func newTreeCursor(ctx context.Context, nrw NodeStore, nd Node) (cur treeCursor, err error) {
 	cur = make(treeCursor, nd.level()+1)
 
 	lvl := nd.level()
@@ -62,7 +62,7 @@ var curPool = sync.Pool{
 	},
 }
 
-func newTreeCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, cmp compareFn, cb treeCursorFn) (err error) {
+func newTreeCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, cmp compareFn, cb treeCursorFn) (err error) {
 	arr := curPool.Get().([]nodeCursor2)
 	defer func() { curPool.Put(arr) }()
 
@@ -143,11 +143,11 @@ func (cur treeCursor) level() uint64 {
 	return uint64(cur[tip].nd.level())
 }
 
-func (cur treeCursor) nrw() NodeReadWriter {
+func (cur treeCursor) nrw() NodeStore {
 	return cur[tip].nrw
 }
 
-func (cur treeCursor) seek(ctx context.Context, nrw NodeReadWriter, item nodeItem, cb compareFn) (err error) {
+func (cur treeCursor) seek(ctx context.Context, nrw NodeStore, item nodeItem, cb compareFn) (err error) {
 	inBounds := true
 	if cur.parent().valid() {
 		inBounds = cb(item, cur.firstItem()) >= 0 || cb(item, cur.lastItem()) <= 0

@@ -78,12 +78,12 @@ func testTreeCursor(t *testing.T, count int) {
 	}
 }
 
-func newTestNRW() NodeReadWriter {
+func newTestNRW() NodeStore {
 	ts := &chunks.TestStorage{}
 	return NewNodeStore(ts.NewView())
 }
 
-func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeReadWriter) {
+func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeStore) {
 	ctx := context.Background()
 	nrw := newTestNRW()
 	chunker, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)

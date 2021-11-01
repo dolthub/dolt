@@ -54,7 +54,7 @@ func roundTripTreeItems(t *testing.T) {
 	validateTreeItems(t, nrw, root, items)
 }
 
-func countTree(t *testing.T, nrw NodeReadWriter, nd Node) (count int) {
+func countTree(t *testing.T, nrw NodeStore, nd Node) (count int) {
 	ctx := context.Background()
 	err := iterTree(ctx, nrw, nd, func(_ nodeItem) (err error) {
 		count++
@@ -64,7 +64,7 @@ func countTree(t *testing.T, nrw NodeReadWriter, nd Node) (count int) {
 	return
 }
 
-func validateTreeItems(t *testing.T, nrw NodeReadWriter, nd Node, expected [][2]nodeItem) {
+func validateTreeItems(t *testing.T, nrw NodeStore, nd Node, expected [][2]nodeItem) {
 	i := 0
 	ctx := context.Background()
 	err := iterTree(ctx, nrw, nd, func(actual nodeItem) (err error) {
@@ -78,7 +78,7 @@ func validateTreeItems(t *testing.T, nrw NodeReadWriter, nd Node, expected [][2]
 	return
 }
 
-func iterTree(ctx context.Context, nrw NodeReadWriter, nd Node, cb func(item nodeItem) error) error {
+func iterTree(ctx context.Context, nrw NodeStore, nd Node, cb func(item nodeItem) error) error {
 	if nd.empty() {
 		return nil
 	}

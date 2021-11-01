@@ -142,7 +142,7 @@ func generateProllyBench(size uint64) prollyBench {
 
 var shared = pool.NewBuffPool()
 
-func newTestNRW() prolly.NodeReadWriter {
+func newTestNRW() prolly.NodeStore {
 	ts := &chunks.TestStorage{}
 	return prolly.NewNodeStore(ts.NewView())
 }
