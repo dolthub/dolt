@@ -194,7 +194,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	if len(tblNames) == 0 {
-		cli.Println("No tables to export\n")
+		cli.Println("No tables to export.")
 		return 0
 	}
 
