@@ -203,19 +203,19 @@ func TestCreateRdWr(t *testing.T) {
 
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 
-		filePath, err := dEnv.FS.Abs(testSchemaFileName)
-		if err != nil {
-			t.Fatal("Unexpected error getting filepath", err)
+		filePath, fpErr := dEnv.FS.Abs(testSchemaFileName)
+		if fpErr != nil {
+			t.Fatal("Unexpected error getting filepath", fpErr)
 		}
 
-		writer, _ := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
-		if err != nil {
-			t.Fatal("Unexpected error opening file for writer.", err)
+		writer, wrErr := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
+		if wrErr != nil {
+			t.Fatal("Unexpected error opening file for writer.", wrErr)
 		}
 
-		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, root, true, fakeSchema, nil, opts, writer)
-		if err != nil {
-			t.Fatal("Unexpected error creating writer.", err)
+		wr, wErr := loc.NewCreatingWriter(context.Background(), mvOpts, root, true, fakeSchema, nil, opts, writer)
+		if wErr != nil {
+			t.Fatal("Unexpected error creating writer.", wErr)
 		}
 
 		actualWrT := reflect.TypeOf(wr).Elem()

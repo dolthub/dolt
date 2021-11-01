@@ -73,7 +73,7 @@ func (m tableOptions) DestName() string {
 	return m.dest.String()
 }
 
-func (m dumpOptions) DestName() string {
+func (m dumpOptions) DumpDestName() string {
 	if t, tblDest := m.dest.(mvdata.TableDataLocation); tblDest {
 		return t.Name
 	}
@@ -227,16 +227,16 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	if ow {
-		return HandleVErrAndExitCode(errhand.BuildDError("%s already exists. Use -f to overwrite.", dumpOpts.DestName()).Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError("%s already exists. Use -f to overwrite.", dumpOpts.DumpDestName()).Build(), usage)
 	}
 
 	// create new file
-	err = dEnv.FS.MkDirs(filepath.Dir(dumpOpts.DestName()))
+	err = dEnv.FS.MkDirs(filepath.Dir(dumpOpts.DumpDestName()))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	filePath, err := dEnv.FS.Abs(dumpOpts.DestName())
+	filePath, err := dEnv.FS.Abs(dumpOpts.DumpDestName())
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

@@ -484,7 +484,6 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 		writer, err := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
-			// errhand.BuildDError("Error opening writer for %s.", impOpts.SrcName()).AddCause(err).Build()
 		}
 		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts, writer)
 	case ReplaceOp:
