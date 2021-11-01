@@ -290,7 +290,7 @@ func listOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, us
 	return 0
 }
 
-func newCfgElement(configFlag string) env.DoltConfigElement {
+func newCfgElement(configFlag string) env.ConfigScope {
 	switch configFlag {
 	case localParamName:
 		return env.LocalConfig

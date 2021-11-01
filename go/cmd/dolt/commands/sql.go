@@ -101,18 +101,6 @@ const (
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
 
-type EngineMode int
-
-const (
-	ServerEngineMode = iota
-	CliEngineMode
-)
-
-const (
-	DoltEngineMode       = "dolt_engine_mode"
-	PermissiveEngineMode = "permissive"
-)
-
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
 func init() {
@@ -409,7 +397,7 @@ func execShell(
 	readOnly bool,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -435,7 +423,7 @@ func execBatch(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -481,7 +469,7 @@ func execMultiStatements(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -520,7 +508,7 @@ func execQuery(
 	query string,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -551,25 +539,19 @@ func execQuery(
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv, engineMode EngineMode) ([]dsqle.SqlDatabase, error) {
+func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
 	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		if dEnv.Config.GetStringOrDefault(DoltEngineMode, "") == PermissiveEngineMode {
-			engineMode = ServerEngineMode
+		postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
+		if err != nil {
+			return true, err
 		}
-
-		if engineMode == ServerEngineMode {
-			postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
-			if err != nil {
-				return true, err
-			}
-			dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
-		}
+		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 
 		db = newDatabase(name, dEnv)
 
-		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok && val != "" && engineMode == ServerEngineMode {
+		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok && val != "" {
 			remoteName, ok := val.(string)
 			if !ok {
 				return true, sql.ErrInvalidSystemVariableValue.New(val)

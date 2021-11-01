@@ -21,8 +21,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TODO: wrap a map config and verify set and get
-
 var ConfigVals = map[string]string{
 	"scopeA.k1": "v1",
 	"scopeA.k2": "v2",

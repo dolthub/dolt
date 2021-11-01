@@ -35,8 +35,22 @@ type DoltSession struct {
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 
-func NewDoltSessionFromDefault(sess *Session, conf config.ReadWriteConfig) *DoltSession {
-	return &DoltSession{Session: sess, globalsConf: conf, mu: &sync.Mutex{}}
+// NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
+func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf *env.DoltCliConfig, dbs ...InitialDbState) (*DoltSession, error) {
+	sess, err := NewSession(ctx, sqlSess, pro, conf, dbs...)
+	if err != nil {
+		return nil, err
+	}
+
+	var globals config.ReadWriteConfig
+	if localConf, ok := conf.GetConfig(env.LocalConfig); !ok {
+		ctx.Warn(NonpersistableSessionCode, "configured mode does not support persistable sessions; SET PERSIST will not write to file")
+		globals = config.NewMapConfig(make(map[string]string))
+	} else {
+		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
+	}
+
+	return sess.NewDoltSession(globals), nil
 }
 
 // PersistGlobal implements sql.PersistableSession
@@ -83,9 +97,9 @@ func (s *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 	return getPersistedValue(s.globalsConf, k)
 }
 
-// NewPersistedSystemVariables returns a list of System Variables associated with the session
-func (s *DoltSession) NewPersistedSystemVariables() ([]sql.SystemVariable, error) {
-	return NewPersistedSystemVariables(s.globalsConf)
+// SystemVariablesInConfig returns a list of System Variables associated with the session
+func (s *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
+	return SystemVariablesInConfig(s.globalsConf)
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic
@@ -167,8 +181,8 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 	}
 }
 
-// NewPersistedSystemVariables returns system variables from the persisted config
-func NewPersistedSystemVariables(conf config.ReadableConfig) ([]sql.SystemVariable, error) {
+// SystemVariablesInConfig returns system variables from the persisted config
+func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, error) {
 	allVars := make([]sql.SystemVariable, conf.Size())
 	i := 0
 	var err error
@@ -193,7 +207,12 @@ func NewPersistedSystemVariables(conf config.ReadableConfig) ([]sql.SystemVariab
 	return allVars, nil
 }
 
+var initMu = sync.Mutex{}
+
 func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
+	initMu.Lock()
+	defer initMu.Unlock()
+
 	sql.InitSystemVariables()
 	var globals config.ReadWriteConfig
 	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
@@ -202,7 +221,7 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	} else {
 		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
 	}
-	persistedGlobalVars, err := NewPersistedSystemVariables(globals)
+	persistedGlobalVars, err := SystemVariablesInConfig(globals)
 	if err != nil {
 		return err
 	}

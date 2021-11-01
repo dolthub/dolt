@@ -54,12 +54,12 @@ const (
 var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
 var GlobalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
 
-// DoltConfigElement is an enum representing the elements that make up the ConfigHierarchy
-type DoltConfigElement int
+// ConfigScope is an enum representing the elements that make up the ConfigHierarchy
+type ConfigScope int
 
 const (
 	// LocalConfig is the repository's local config portion of the ConfigHierarchy
-	LocalConfig DoltConfigElement = iota
+	LocalConfig ConfigScope = iota
 
 	// GlobalConfig is the user's global config portion of the ConfigHierarchy
 	GlobalConfig
@@ -72,7 +72,7 @@ const (
 
 // String gives the string name of an element that was used when it was added to the ConfigHierarchy, which is the
 // same name that is used to retrieve that element of the string hierarchy.
-func (ce DoltConfigElement) String() string {
+func (ce ConfigScope) String() string {
 	switch ce {
 	case LocalConfig:
 		return localConfigName
@@ -160,7 +160,7 @@ func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string
 }
 
 // GetConfig retrieves a specific element of the config hierarchy.
-func (dcc *DoltCliConfig) GetConfig(element DoltConfigElement) (config.ReadWriteConfig, bool) {
+func (dcc *DoltCliConfig) GetConfig(element ConfigScope) (config.ReadWriteConfig, bool) {
 	switch element {
 	case LocalConfig, GlobalConfig:
 		return dcc.ch.GetConfig(element.String())

@@ -27,15 +27,15 @@ import (
 func TestDoltSessionInit(t *testing.T) {
 	sess := DefaultSession()
 	conf := config.NewMapConfig(make(map[string]string))
-	dsess := NewDoltSessionFromDefault(sess, conf)
+	dsess := sess.NewDoltSession(conf)
 	assert.Equal(t, conf, dsess.globalsConf)
 }
 
 func TestNewPersistedSystemVariables(t *testing.T) {
 	sess := DefaultSession()
 	conf := config.NewMapConfig(map[string]string{"max_connections": "1000"})
-	dsess := NewDoltSessionFromDefault(sess, conf)
-	sysVars, err := dsess.NewPersistedSystemVariables()
+	dsess := sess.NewDoltSession(conf)
+	sysVars, err := dsess.SystemVariablesInConfig()
 	assert.NoError(t, err)
 
 	maxConRes := sysVars[0]

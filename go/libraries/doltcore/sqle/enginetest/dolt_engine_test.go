@@ -460,7 +460,7 @@ func TestPersist(t *testing.T) {
 	require.True(t, ok)
 	globals := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
 	newPersistableSession := func(ctx *sql.Context) sql.PersistableSession {
-		session := dsess.NewDoltSessionFromDefault(ctx.Session.(*dsess.DoltSession).Session, globals)
+		session := ctx.Session.(*dsess.DoltSession).Session.NewDoltSession(globals)
 		err := session.RemoveAllPersistedGlobals()
 		require.NoError(t, err)
 		return session
