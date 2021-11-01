@@ -116,10 +116,10 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 
 	switch resultFormat {
 	case "", "sql", ".sql":
-		fileName = "doltdump.sql"
-	//case "csv", ".csv":
-		// handle CSV filetype
-		// maybe create dir 'doltdump' and put all the csv dump files into it
+		fileName = "dumps/doltdump.sql"
+	case "csv", ".csv":
+		//handle CSV filetype
+		//maybe create dir 'doltdump' and put all the csv dump files into it
 	default:
 		usage()
 		return nil, errhand.BuildDError("invalid result format").Build()
@@ -223,9 +223,9 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
-	cli.Printf("Tables exporting:\n")
+	//cli.Printf("Tables exporting:\n")
 	for _, tbl := range tblNames {
-		cli.Println("\t", tbl)
+		//cli.Println("\t", tbl)
 
 		exOpts.tableName = tbl
 		exOpts.src = mvdata.TableDataLocation{Name: tbl}
