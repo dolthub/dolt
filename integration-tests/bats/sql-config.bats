@@ -13,7 +13,7 @@ teardown() {
 }
 
 @test "sql-config: query persisted variable with cli engine" {
-    echo '{"sqlserver.globals.max_connections":"1000"}' > .dolt/config.json
+    echo '{"sqlserver.global.max_connections":"1000"}' > .dolt/config.json
     run dolt sql -q "SELECT @@GLOBAL.max_connections" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -25,7 +25,7 @@ teardown() {
     dolt sql -q "SET PERSIST max_connections = 1000"
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "sqlserver.globals.max_connections = 1000" ]]
+    [[ "$output" =~ "sqlserver.global.max_connections = 1000" ]]
 }
 
 @test "sql-config: set persist multiple global variables with cli engine" {
@@ -33,15 +33,15 @@ teardown() {
     dolt sql -q "SET PERSIST auto_increment_increment = 2"
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "sqlserver.globals.auto_increment_increment = 2" ]] || false
-    [[ "${lines[1]}" =~ "sqlserver.globals.max_connections = 1000" ]] || false
+    [[ "${lines[0]}" =~ "sqlserver.global.auto_increment_increment = 2" ]] || false
+    [[ "${lines[1]}" =~ "sqlserver.global.max_connections = 1000" ]] || false
 }
 
 @test "sql-config: persist only global variable with cli engine" {
     dolt sql -q "SET PERSIST_ONLY max_connections = 1000"
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "sqlserver.globals.max_connections = 1000" ]]
+    [[ "$output" =~ "sqlserver.global.max_connections = 1000" ]]
 }
 
 
@@ -53,7 +53,7 @@ teardown() {
 
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "sqlserver.globals.max_connections = 1000" ]]
+    [[ ! "$output" =~ "sqlserver.global.max_connections = 1000" ]]
 }
 
 @test "sql-config: remove all persisted variables with cli engine" {
@@ -65,8 +65,8 @@ teardown() {
 
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "sqlserver.globals.max_connections = 1000" ]]
-    [[ ! "$output" =~ "sqlserver.globals.auto_increment_increment = 2" ]]
+    [[ ! "$output" =~ "sqlserver.global.max_connections = 1000" ]]
+    [[ ! "$output" =~ "sqlserver.global.auto_increment_increment = 2" ]]
 }
 
 @test "sql-config: persist dolt specific global variable" {
@@ -76,7 +76,7 @@ teardown() {
     dolt sql -q "SET PERSIST_ONLY repo1_head = 1000"
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "sqlserver.globals.repo1_head = 1000" ]]
+    [[ "$output" =~ "sqlserver.global.repo1_head = 1000" ]]
 }
 
 @test "sql-config: persist invalid variable name" {
@@ -94,7 +94,7 @@ teardown() {
 }
 
 @test "sql-config: invalid persisted system variable name errors on cli sql command" {
-    echo '{"sqlserver.globals..unknown":"1000"}' > .dolt/config.json
+    echo '{"sqlserver.global..unknown":"1000"}' > .dolt/config.json
     run dolt sql -q "SELECT @@GLOBAL.unknown" -r csv
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]]
@@ -102,7 +102,7 @@ teardown() {
 }
 
 @test "sql-config: invalid persisted system variable type errors on cli sql command" {
-    echo '{"sqlserver.globals..max_connections":"string"}' > .dolt/config.json
+    echo '{"sqlserver.global..max_connections":"string"}' > .dolt/config.json
     run dolt sql -q "SELECT @@GLOBAL.max_connections" -r csv
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "panic" ]]

@@ -402,7 +402,7 @@ func initPersistedSystemVars(dEnv *env.DoltEnv) error {
 		cli.Println("warning: multi-db mode does not support persistable sessions")
 		globals = config.NewMapConfig(make(map[string]string))
 	} else {
-		globals = config.NewPrefixConfig(localConf, env.ServerConfigPrefix)
+		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
 	}
 	persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
 	if err != nil {

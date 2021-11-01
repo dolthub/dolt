@@ -22,7 +22,7 @@ teardown() {
 
 @test "sql-server-config: persist global variable before server startup" {
     cd repo1
-    echo '{"sqlserver.globals.max_connections":"1000"}' > .dolt/config.json
+    echo '{"sqlserver.global.max_connections":"1000"}' > .dolt/config.json
     start_sql_server repo1
 
     server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n1000"
@@ -31,7 +31,7 @@ teardown() {
 
 @test "sql-server-config: invalid persisted global variable name throws warning on server startup, but does not crash" {
     cd repo1
-    echo '{"sqlserver.globals.unknown":"1000"}' > .dolt/config.json
+    echo '{"sqlserver.global.unknown":"1000"}' > .dolt/config.json
     start_sql_server repo1
 }
 
@@ -50,7 +50,7 @@ teardown() {
 
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "sqlserver.globals.max_connections = 1000" ]] || false
+    [[ "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
 }
 
 @test "sql-server-config: persist only global variable during server session" {
@@ -63,7 +63,7 @@ teardown() {
 
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "sqlserver.globals.max_connections = 7777" ]] || false
+    [[ "$output" =~ "sqlserver.global.max_connections = 7777" ]] || false
 }
 
 @test "sql-server-config: persist invalid global variable name during server session" {
@@ -94,7 +94,7 @@ teardown() {
 
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "sqlserver.globals.max_connections = 1000" ]] || false
+    [[ ! "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
 }
 
 @test "sql-server-config: reset all persisted variables" {
@@ -108,6 +108,6 @@ teardown() {
 
     run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "sqlserver.globals.max_connections = 1000" ]] || false
-    [[ ! "$output" =~ "sqlserver.globals.auto_increment_increment = 1000" ]] || false
+    [[ ! "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
+    [[ ! "$output" =~ "sqlserver.global.auto_increment_increment = 1000" ]] || false
 }
