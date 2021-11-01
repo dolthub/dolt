@@ -8,6 +8,8 @@ setup() {
     mkdir $REPO_NAME
     cd $REPO_NAME
 
+    dolt init
+
     dolt sql -q "CREATE TABLE mysqldump_table(pk int)"
     dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext)"
@@ -36,9 +38,9 @@ teardown() {
     run dolt dump
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
-    [ -f dumps/doltdump.sql ]
+    [ -f doltdump.sql ]
 
-    run grep INSERT dumps/doltdump.sql
+    run grep INSERT doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
 
@@ -60,6 +62,8 @@ teardown() {
 
     run dolt dump
     [ "$status" -eq 0 ]
+
+    mv doltdump.sql dumps/doltdump.sql
     [ -f dumps/doltdump.sql ]
 
     cd dumps
@@ -78,5 +82,7 @@ teardown() {
     dolt diff --summary main dolt_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]]
+
+    cd ..
 }
 

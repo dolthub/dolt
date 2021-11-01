@@ -116,7 +116,7 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 
 	switch resultFormat {
 	case "", "sql", ".sql":
-		fileName = "dumps/doltdump.sql"
+		fileName = "doltdump.sql"
 	case "csv", ".csv":
 		//handle CSV filetype
 		//maybe create dir 'doltdump' and put all the csv dump files into it
