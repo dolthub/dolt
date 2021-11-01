@@ -3,7 +3,10 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -19,13 +22,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/fatih/color"
-	"os"
 )
 
 const (
-	forceParam       = "force"
-	formatParam	 	 = "result-format"
+	forceParam  = "force"
+	formatParam = "result-format"
 )
 
 var dumpDocs = cli.CommandDocumentationContent{
@@ -39,12 +40,12 @@ var dumpDocs = cli.CommandDocumentationContent{
 }
 
 type exportOptions struct {
-	tableName   string
-	force       bool
-	format 		string
-	src         mvdata.TableDataLocation
-	dest        mvdata.DataLocation
-	srcOptions  interface{}
+	tableName  string
+	force      bool
+	format     string
+	src        mvdata.TableDataLocation
+	dest       mvdata.DataLocation
+	srcOptions interface{}
 }
 
 func (m exportOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
@@ -130,10 +131,10 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 
 	return &exportOptions{
 		//tableName:   tableName,
-		force:       apr.Contains(forceParam),
-		format:		 resultFormat,
+		force:  apr.Contains(forceParam),
+		format: resultFormat,
 		//src:         tableLoc,
-		dest:        fileLoc,
+		dest: fileLoc,
 	}, nil
 }
 

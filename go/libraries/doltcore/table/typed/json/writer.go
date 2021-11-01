@@ -19,8 +19,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"io"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
