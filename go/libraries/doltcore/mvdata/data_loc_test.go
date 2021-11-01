@@ -239,7 +239,7 @@ func TestCreateRdWr(t *testing.T) {
 		rd, _, err := loc.NewReader(context.Background(), root, dEnv.FS, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})
 
 		if err != nil {
-			t.Fatal("Unexpected error creating writer", err)
+			t.Fatal("Unexpected error creating reader", err)
 		}
 
 		actualRdT := reflect.TypeOf(rd).Elem()

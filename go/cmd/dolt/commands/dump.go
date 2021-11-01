@@ -218,7 +218,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	filePath, _ := dEnv.FS.Abs(exOpts.DestName())
+	filePath, err := dEnv.FS.Abs(exOpts.DestName())
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
