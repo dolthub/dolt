@@ -16,13 +16,13 @@ package commands
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -50,7 +50,7 @@ func (cmd VersionCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd VersionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd VersionCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
 }
 

@@ -53,7 +53,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
@@ -102,6 +101,18 @@ const (
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
 
+type EngineMode int
+
+const (
+	ServerEngineMode = iota
+	CliEngineMode
+)
+
+const (
+	DoltEngineMode       = "dolt_engine_mode"
+	PermissiveEngineMode = "permissive"
+)
+
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
 func init() {
@@ -113,6 +124,30 @@ func init() {
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemIntType(currentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
 			Default:           int64(0),
+		},
+		{
+			Name:              dsess.DoltDefaultBranchKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(dsess.DoltDefaultBranchKey),
+			Default:           "",
+		},
+		{
+			Name:              doltdb.ReplicateToRemoteKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.ReplicateToRemoteKey),
+			Default:           "",
+		},
+		{
+			Name:              doltdb.DoltReadReplicaKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.DoltReadReplicaKey),
+			Default:           "",
 		},
 	})
 }
@@ -139,9 +174,9 @@ func (cmd SqlCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SqlCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 }
 
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
@@ -374,7 +409,7 @@ func execShell(
 	readOnly bool,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -400,7 +435,7 @@ func execBatch(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -446,7 +481,7 @@ func execMultiStatements(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -485,7 +520,7 @@ func execQuery(
 	query string,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -516,12 +551,30 @@ func execQuery(
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
+func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv, engineMode EngineMode) ([]dsqle.SqlDatabase, error) {
 	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+		if dEnv.Config.GetStringOrDefault(DoltEngineMode, "") == PermissiveEngineMode {
+			engineMode = ServerEngineMode
+		}
+
+		if engineMode == ServerEngineMode {
+			postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
+			if err != nil {
+				return true, err
+			}
+			dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
+		}
+
 		db = newDatabase(name, dEnv)
-		if remoteName := dEnv.Config.GetStringOrDefault(dsqle.DoltReadReplicaKey, ""); remoteName != "" {
+
+		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok && val != "" && engineMode == ServerEngineMode {
+			remoteName, ok := val.(string)
+			if !ok {
+				return true, sql.ErrInvalidSystemVariableValue.New(val)
+			}
+
 			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), doltdb.TodoWorkingSetMeta())
 			if err != nil {
 				return true, err
@@ -1475,18 +1528,10 @@ func newSqlEngine(
 	}
 
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
-	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
+	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
 	if err != nil {
 		return nil, err
 	}
-
-	// persisted globals
-	sql.InitSystemVariables()
-	persistedGlobalVars, err := sess.NewPersistedSystemVariables()
-	if err != nil {
-		return nil, err
-	}
-	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 
 	// TODO: this should just be the session default like it is with MySQL
 	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)
@@ -1509,11 +1554,14 @@ func newSqlContext(sess *dsess.DoltSession, cat sql.Catalog) func(ctx context.Co
 			sql.WithSession(sess),
 			sql.WithTracer(tracing.Tracer(ctx)))
 
-		seenOne := false
-		for _, db := range dsqle.DbsAsDSQLDBs(cat.AllDatabases()) {
-			if !seenOne {
+		// If the session was already updated with a database then continue using it in the new session. Otherwise grab
+		// the first one.
+		if sessionDB := sess.GetCurrentDatabase(); sessionDB != "" {
+			sqlCtx.SetCurrentDatabase(sessionDB)
+		} else {
+			for _, db := range dsqle.DbsAsDSQLDBs(cat.AllDatabases()) {
 				sqlCtx.SetCurrentDatabase(db.Name())
-				seenOne = true
+				break
 			}
 		}
 

@@ -16,8 +16,7 @@ package credcmds
 
 import (
 	"context"
-
-	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -27,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 var newDocs = cli.CommandDocumentationContent{
@@ -51,9 +50,9 @@ func (cmd NewCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd NewCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd NewCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, newDocs, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, newDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement

@@ -26,10 +26,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 type testPerson struct {
@@ -382,7 +384,7 @@ func TestReadReplica(t *testing.T) {
 	}
 	defer os.Chdir(cwd)
 
-	multiSetup := testcommands.NewMultiRepoTestSetup(t)
+	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
 	defer os.RemoveAll(multiSetup.Root)
 
 	multiSetup.NewDB("read_replica")
@@ -397,16 +399,15 @@ func TestReadReplica(t *testing.T) {
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{dsqle.DoltReadReplicaKey: "remote1"})
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{doltdb.DoltReadReplicaKey: "remote1"})
+	dsess.InitPersistedSystemVars(multiSetup.MrEnv[readReplicaDbName])
 
 	// start server as read replica
 	sc := CreateServerController()
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
 
 	func() {
-		err = os.Setenv(dsqle.DoltReadReplicaKey, "remote1")
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
-
 		go func() {
 			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readReplicaDbName])
 		}()
@@ -414,7 +415,6 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 	}()
 	defer sc.StopServer()
-	defer os.Unsetenv(dsqle.DoltReadReplicaKey)
 
 	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
 	defer conn.Close()
@@ -422,7 +422,7 @@ func TestReadReplica(t *testing.T) {
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
-	t.Run("push common new commit", func(t *testing.T) {
+	t.Run("read replica pulls on read", func(t *testing.T) {
 		var res []string
 		replicatedTable := "new_table"
 		multiSetup.CreateTable(sourceDbName, replicatedTable)

@@ -43,8 +43,6 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names mus
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
-const DoltReadReplicaKey = "dolt_read_replica_remote"
-
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
@@ -180,14 +178,23 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
+	var retainedErr error
+
 	headCommit, err := ddb.Resolve(ctx, rsr.CWBHeadSpec(), rsr.CWBHeadRef())
+	if err == doltdb.ErrBranchNotFound {
+		retainedErr = err
+		err = nil
+	}
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
 
-	ws, err := env.WorkingSet(ctx, ddb, rsr)
-	if err != nil {
-		return dsess.InitialDbState{}, err
+	var ws *doltdb.WorkingSet
+	if retainedErr == nil {
+		ws, err = env.WorkingSet(ctx, ddb, rsr)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
 	}
 
 	remotes, err := rsr.GetRemotes()
@@ -207,6 +214,7 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 		DbData:     db.DbData(),
 		Remotes:    remotes,
 		Branches:   branches,
+		Err:        retainedErr,
 	}, nil
 }
 

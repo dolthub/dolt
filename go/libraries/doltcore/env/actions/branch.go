@@ -314,11 +314,14 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 	}
 
 	roots, err := dEnv.Roots(ctx)
+	if errors.Is(err, doltdb.ErrBranchNotFound) {
+		roots, err = dEnv.RecoveryRoots(ctx)
+	}
 	if err != nil {
 		return err
 	}
 
-	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv)
+	unstagedDocs, err := GetUnstagedDocsFromRoots(ctx, dEnv, roots)
 	if err != nil {
 		return err
 	}

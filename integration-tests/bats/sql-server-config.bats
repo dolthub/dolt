@@ -22,41 +22,35 @@ teardown() {
 
 @test "sql-server-config: persist global variable before server startup" {
     cd repo1
-    echo '{"server.max_connections":"1000"}' > .dolt/config.json
+    echo '{"sqlserver.global.max_connections":"1000"}' > .dolt/config.json
     start_sql_server repo1
 
     server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n1000"
 
 }
 
-@test "sql-server-config: persist invalid global variable name before server startup" {
+@test "sql-server-config: invalid persisted global variable name throws warning on server startup, but does not crash" {
     cd repo1
-    echo '{"server.unknown":"1000"}' > .dolt/config.json
-    run start_sql_server repo1
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "Unknown system variable 'unknown'" ]]
+    echo '{"sqlserver.global.unknown":"1000"}' > .dolt/config.json
+    start_sql_server repo1
 }
 
-@test "sql-server-config: persist invalid global variable value before server startup" {
+@test "sql-server-config: invalid persisted global variable value throws warning on server startup, but does not crash" {
     cd repo1
     echo '{"server.max_connections":"string"}' > .dolt/config.json
-    run start_sql_server repo1
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "strconv.ParseInt: parsing \"string\": invalid syntax" ]]
+    start_sql_server repo1
 }
 
-@test "sql-server-config: persist global variable during server session" {
+@test "sql-server-config: persisted global variable in server" {
     cd repo1
     start_sql_server repo1
 
     insert_query repo1 1 "SET @@PERSIST.max_connections = 1000"
     server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n1000"
 
-    run cat .dolt/config.json
+    run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\"server.max_connections\":\"1000\"" ]]
+    [[ "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
 }
 
 @test "sql-server-config: persist only global variable during server session" {
@@ -67,9 +61,9 @@ teardown() {
     insert_query repo1 1 "SET PERSIST_ONLY max_connections = 7777"
     server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n1000"
 
-    run cat .dolt/config.json
+    run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\"server.max_connections\":\"7777\"" ]]
+    [[ "$output" =~ "sqlserver.global.max_connections = 7777" ]] || false
 }
 
 @test "sql-server-config: persist invalid global variable name during server session" {
@@ -78,7 +72,7 @@ teardown() {
     run insert_query repo1 1 "SET @@PERSIST.unknown = 1000"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "Unknown system variable 'unknown'" ]]
+    [[ "$output" =~ "Unknown system variable 'unknown'" ]] || false
 }
 
 @test "sql-server-config: persist invalid global variable value during server session" {
@@ -87,7 +81,7 @@ teardown() {
     run insert_query repo1 1 "SET @@PERSIST.max_connections = 'string'"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "Variable 'max_connections' can't be set to the value of 'string'" ]]
+    [[ "$output" =~ "Variable 'max_connections' can't be set to the value of 'string'" ]] || false
 }
 
 @test "sql-server-config: reset persisted variable" {
@@ -98,9 +92,9 @@ teardown() {
     insert_query repo1 1 "SET @@PERSIST.max_connections = 1000"
     insert_query repo1 1 "RESET @@PERSIST.max_connections"
 
-    run cat .dolt/config.json
+    run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "\"server.max_connections\":\"1000\"" ]]
+    [[ ! "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
 }
 
 @test "sql-server-config: reset all persisted variables" {
@@ -112,7 +106,8 @@ teardown() {
     insert_query repo1 1 "SET @@PERSIST.auto_increment_increment = 1000"
     insert_query repo1 1 "RESET PERSIST"
 
-    run cat .dolt/config.json
+    run dolt config --local --list
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "\"server.max_connections\":\"1000\"" ]]
+    [[ ! "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
+    [[ ! "$output" =~ "sqlserver.global.auto_increment_increment = 1000" ]] || false
 }

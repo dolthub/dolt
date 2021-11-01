@@ -16,6 +16,7 @@ package cli
 
 import (
 	"context"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -23,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -54,7 +54,7 @@ func (cmd *trackedCommand) Description() string {
 	return cmd.description
 }
 
-func (cmd *trackedCommand) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd *trackedCommand) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
 }
 

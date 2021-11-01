@@ -3,7 +3,7 @@
 #include <memory.h>
 #include <mysql.h>
 
-#define QUERIES_SIZE 5
+#define QUERIES_SIZE 14
 
 char *queries[QUERIES_SIZE] =
   {
@@ -11,7 +11,16 @@ char *queries[QUERIES_SIZE] =
    "describe test",
    "select * from test",
    "insert into test (pk, `value`) values (0,0)",
-   "select * from test"
+   "select * from test",
+   "select dolt_add('-A');",
+   "select dolt_commit('-m', 'my commit')",
+   "select COUNT(*) FROM dolt_log",
+   "select dolt_checkout('-b', 'mybranch')",
+   "insert into test (pk, `value`) values (10,10)",
+   "select dolt_commit('-a', '-m', 'my commit2')",
+   "select dolt_checkout('main')",
+   "select dolt_merge('mybranch')",
+   "select COUNT(*) FROM dolt_log",
   };
 
 typedef struct statement_t {

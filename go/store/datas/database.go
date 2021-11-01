@@ -178,6 +178,9 @@ type Database interface {
 	// to a commit hook executed at the datas layer
 	SetCommitHookLogger(context.Context, io.Writer) *database
 
+	// ExecuteCommitHooks calls each database hook with the given Dataset
+	ExecuteCommitHooks(context.Context, Dataset)
+
 	// NomsRoot returns the hash of the toplevel noms dataset map
 	NomsRoot(context.Context) (hash.Hash, error)
 

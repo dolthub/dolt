@@ -25,6 +25,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -57,11 +58,14 @@ const (
 	tempTablesDir = "temptf"
 )
 
-func getCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
+func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey); ok && val != "" {
+		backupName, ok := val.(string)
+		if !ok {
+			return nil, sql.ErrInvalidSystemVariableValue.New(val)
+		}
 
-	backupName := dEnv.Config.GetStringOrDefault(doltdb.ReplicateToRemoteKey, "")
-	if backupName != "" {
 		remotes, err := dEnv.GetRemotes()
 		if err != nil {
 			return nil, err
@@ -203,15 +207,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			}
 		} else if err != nil {
 			dEnv.RSLoadErr = err
-		}
-	}
-
-	if dbLoadErr == nil {
-		postCommitHooks, dbLoadErr := getCommitHooks(ctx, dEnv)
-		if dbLoadErr != nil {
-			dEnv.DBLoadError = dbLoadErr
-		} else {
-			dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 		}
 	}
 
@@ -520,6 +515,33 @@ func (dEnv *DoltEnv) Roots(ctx context.Context) (doltdb.Roots, error) {
 	}
 
 	headRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return doltdb.Roots{
+		Head:    headRoot,
+		Working: ws.WorkingRoot(),
+		Staged:  ws.StagedRoot(),
+	}, nil
+}
+
+// RecoveryRoots returns the roots for this environment in the case that the
+// currently checked out branch has been deleted or HEAD has been updated in a
+// non-principled way to point to a branch that does not exist. This is used by
+// `dolt checkout`, in particular, to go forward with a `dolt checkout` of an
+// existing branch in the degraded state where the current branch was deleted.
+func (dEnv *DoltEnv) RecoveryRoots(ctx context.Context) (doltdb.Roots, error) {
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	headRoot, err := dEnv.HeadRoot(ctx)
+	if err == doltdb.ErrBranchNotFound {
+		headRoot = ws.StagedRoot()
+		err = nil
+	}
 	if err != nil {
 		return doltdb.Roots{}, err
 	}

@@ -66,9 +66,8 @@ const (
 )
 
 const (
-	// ServerConfigPrefix is config namespace accessible by the SQL engine (ex: server.key)
-	// TODO fix the config UX and remove the prefix config shunt
-	ServerConfigPrefix = "server"
+	// SqlServerGlobalsPrefix is config namespace accessible by the SQL engine (ex: sqlserver.global.key)
+	SqlServerGlobalsPrefix = "sqlserver.global"
 )
 
 // String gives the string name of an element that was used when it was added to the ConfigHierarchy, which is the
@@ -162,7 +161,12 @@ func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string
 
 // GetConfig retrieves a specific element of the config hierarchy.
 func (dcc *DoltCliConfig) GetConfig(element DoltConfigElement) (config.ReadWriteConfig, bool) {
-	return dcc.ch.GetConfig(element.String())
+	switch element {
+	case LocalConfig, GlobalConfig:
+		return dcc.ch.GetConfig(element.String())
+	default:
+		return nil, false
+	}
 }
 
 // GetStringOrDefault retrieves a string from the config hierarchy and returns it if available.  Otherwise it returns
