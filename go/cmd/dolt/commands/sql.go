@@ -113,6 +113,30 @@ func init() {
 			Type:              sql.NewSystemIntType(currentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
 			Default:           int64(0),
 		},
+		{
+			Name:              dsess.DoltDefaultBranchKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(dsess.DoltDefaultBranchKey),
+			Default:           "",
+		},
+		{
+			Name:              doltdb.ReplicateToRemoteKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.ReplicateToRemoteKey),
+			Default:           "",
+		},
+		{
+			Name:              doltdb.DoltReadReplicaKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.DoltReadReplicaKey),
+			Default:           "",
+		},
 	})
 }
 
@@ -403,6 +427,7 @@ func execBatch(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -518,8 +543,20 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+		postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
+		if err != nil {
+			return true, err
+		}
+		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
+
 		db = newDatabase(name, dEnv)
-		if remoteName := dEnv.Config.GetStringOrDefault(dsqle.DoltReadReplicaKey, ""); remoteName != "" {
+
+		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok && val != "" {
+			remoteName, ok := val.(string)
+			if !ok {
+				return true, sql.ErrInvalidSystemVariableValue.New(val)
+			}
+
 			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), doltdb.TodoWorkingSetMeta())
 			if err != nil {
 				return true, err
@@ -1415,7 +1452,7 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 
 type sqlEngine struct {
 	dbs            map[string]dsqle.SqlDatabase
-	sess           *dsess.Session
+	sess           *dsess.DoltSession
 	contextFactory func(ctx context.Context) (*sql.Context, error)
 	engine         *sqle.Engine
 	resultFormat   resultFormat
@@ -1473,7 +1510,10 @@ func newSqlEngine(
 	}
 
 	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
-	sess, err := dsess.NewSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
+	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: this should just be the session default like it is with MySQL
 	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)
@@ -1490,7 +1530,7 @@ func newSqlEngine(
 	}, nil
 }
 
-func newSqlContext(sess *dsess.Session, cat sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
+func newSqlContext(sess *dsess.DoltSession, cat sql.Catalog) func(ctx context.Context) (*sql.Context, error) {
 	return func(ctx context.Context) (*sql.Context, error) {
 		sqlCtx := sql.NewContext(ctx,
 			sql.WithSession(sess),

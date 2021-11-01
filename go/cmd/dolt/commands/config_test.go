@@ -19,6 +19,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -26,7 +28,251 @@ import (
 
 var globalCfg = set.NewStrSet([]string{globalParamName})
 var localCfg = set.NewStrSet([]string{localParamName})
+var multiCfg = set.NewStrSet([]string{globalParamName, localParamName})
 
+func initializeConfigs(dEnv *env.DoltEnv, element env.ConfigScope) {
+	switch element {
+	case env.GlobalConfig:
+		globalCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
+		globalCfg.SetStrings(map[string]string{"title": "senior dufus"})
+	case env.LocalConfig:
+		dEnv.Config.CreateLocalConfig(map[string]string{"title": "senior dufus"})
+	}
+}
+func TestConfigAdd(t *testing.T) {
+	tests := []struct {
+		Name   string
+		CfgSet *set.StrSet
+		Scope  env.ConfigScope
+		Args   []string
+		Code   int
+	}{
+		{
+			Name:   "local",
+			CfgSet: localCfg,
+			Scope:  env.LocalConfig,
+			Args:   []string{"title", "senior dufus"},
+		},
+		{
+			Name:   "global",
+			CfgSet: globalCfg,
+			Scope:  env.GlobalConfig,
+			Args:   []string{"title", "senior dufus"},
+		},
+		{
+			Name:   "default",
+			CfgSet: &set.StrSet{},
+			Scope:  env.LocalConfig,
+			Args:   []string{"title", "senior dufus"},
+		},
+		{
+			Name:   "multi error",
+			CfgSet: multiCfg,
+			Scope:  env.LocalConfig,
+			Args:   []string{"title", "senior dufus"},
+			Code:   1,
+		},
+		{
+			Name:   "no args",
+			CfgSet: multiCfg,
+			Scope:  env.LocalConfig,
+			Args:   []string{},
+			Code:   1,
+		},
+		{
+			Name:   "odd args",
+			CfgSet: multiCfg,
+			Scope:  env.LocalConfig,
+			Args:   []string{"title"},
+			Code:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			dEnv := createTestEnv()
+			resCode := addOperation(dEnv, tt.CfgSet, tt.Args, func() {})
+
+			if tt.Code == 1 {
+				assert.Equal(t, tt.Code, resCode)
+
+			} else if cfg, ok := dEnv.Config.GetConfig(tt.Scope); ok {
+				resVal := cfg.GetStringOrDefault("title", "")
+				assert.Equal(t, "senior dufus", resVal)
+			} else {
+				t.Error("comparison config not found")
+			}
+		})
+	}
+}
+
+func TestConfigGet(t *testing.T) {
+	tests := []struct {
+		Name       string
+		CfgSet     *set.StrSet
+		ConfigElem env.ConfigScope
+		Key        string
+		Code       int
+	}{
+		{
+			Name:       "local",
+			CfgSet:     localCfg,
+			ConfigElem: env.LocalConfig,
+			Key:        "title",
+		},
+		{
+			Name:       "global",
+			CfgSet:     globalCfg,
+			ConfigElem: env.GlobalConfig,
+			Key:        "title",
+		},
+		{
+			Name:       "default",
+			CfgSet:     &set.StrSet{},
+			ConfigElem: env.LocalConfig,
+			Key:        "title",
+		},
+		{
+			Name:       "multi",
+			CfgSet:     multiCfg,
+			ConfigElem: env.LocalConfig,
+			Key:        "title",
+		},
+		{
+			Name:       "missing param",
+			CfgSet:     multiCfg,
+			ConfigElem: env.LocalConfig,
+			Key:        "unknown",
+			Code:       1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			dEnv := createTestEnv()
+			initializeConfigs(dEnv, tt.ConfigElem)
+
+			var resVal string
+			resCode := getOperation(dEnv, tt.CfgSet, []string{tt.Key}, func(k string, v *string) { resVal = *v })
+
+			if tt.Code == 1 {
+				assert.Equal(t, tt.Code, resCode)
+			} else {
+				assert.Equal(t, "senior dufus", resVal)
+			}
+		})
+	}
+}
+
+func TestConfigUnset(t *testing.T) {
+	tests := []struct {
+		Name       string
+		CfgSet     *set.StrSet
+		ConfigElem env.ConfigScope
+		Key        string
+		Code       int
+	}{
+		{
+			Name:       "local",
+			CfgSet:     localCfg,
+			ConfigElem: env.LocalConfig,
+			Key:        "title",
+		},
+		{
+			Name:       "global",
+			CfgSet:     globalCfg,
+			ConfigElem: env.GlobalConfig,
+			Key:        "title",
+		},
+		{
+			Name:       "default",
+			CfgSet:     &set.StrSet{},
+			ConfigElem: env.LocalConfig,
+			Key:        "title",
+		},
+		{
+			Name:       "multi",
+			CfgSet:     multiCfg,
+			ConfigElem: env.LocalConfig,
+			Key:        "title",
+			Code:       1,
+		},
+		{
+			Name:       "missing param",
+			CfgSet:     multiCfg,
+			ConfigElem: env.LocalConfig,
+			Key:        "unknown",
+			Code:       1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			dEnv := createTestEnv()
+			initializeConfigs(dEnv, tt.ConfigElem)
+
+			resCode := unsetOperation(dEnv, tt.CfgSet, []string{tt.Key}, func() {})
+
+			if tt.Code == 1 {
+				assert.Equal(t, tt.Code, resCode)
+			} else if cfg, ok := dEnv.Config.GetConfig(tt.ConfigElem); ok {
+				_, err := cfg.GetString(tt.Key)
+				assert.Error(t, err)
+			} else {
+				t.Error("comparison config not found")
+			}
+		})
+	}
+}
+
+func TestConfigList(t *testing.T) {
+	tests := []struct {
+		Name       string
+		CfgSet     *set.StrSet
+		ConfigElem env.ConfigScope
+	}{
+		{
+			Name:       "local",
+			CfgSet:     localCfg,
+			ConfigElem: env.LocalConfig,
+		},
+		{
+			Name:       "global",
+			CfgSet:     globalCfg,
+			ConfigElem: env.GlobalConfig,
+		},
+		{
+			Name:       "default",
+			CfgSet:     &set.StrSet{},
+			ConfigElem: env.LocalConfig,
+		},
+		{
+			Name:       "multi",
+			CfgSet:     multiCfg,
+			ConfigElem: env.LocalConfig,
+		},
+	}
+
+	keys := []string{"title"}
+	values := []string{"senior dufus"}
+
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			dEnv := createTestEnv()
+			initializeConfigs(dEnv, tt.ConfigElem)
+
+			var resKeys []string
+			var resVals []string
+			resCode := listOperation(dEnv, tt.CfgSet, []string{}, func() {}, func(k, v string) {
+				resKeys = append(resKeys, k)
+				resVals = append(resVals, v)
+			})
+			assert.Equal(t, 0, resCode)
+			assert.Equal(t, keys, resKeys)
+			assert.Equal(t, values, resVals)
+		})
+	}
+}
 func TestConfig(t *testing.T) {
 	ctx := context.TODO()
 	dEnv := createTestEnv()

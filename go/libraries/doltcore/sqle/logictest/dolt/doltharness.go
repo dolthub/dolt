@@ -50,7 +50,7 @@ const (
 type DoltHarness struct {
 	Version string
 	engine  *sqle.Engine
-	sess    *dsess.Session
+	sess    *dsess.DoltSession
 }
 
 func (h *DoltHarness) EngineStr() string {
@@ -133,11 +133,8 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	h.sess = dsess.DefaultSession()
-
-	ctx := sql.NewContext(
-		context.Background(),
-		sql.WithSession(h.sess))
+	ctx := dsql.NewTestSQLCtx(context.Background())
+	h.sess = ctx.Session.(*dsess.DoltSession)
 
 	dbs := h.engine.Analyzer.Catalog.AllDatabases()
 	dsqlDBs := make([]dsql.Database, len(dbs))

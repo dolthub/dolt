@@ -83,6 +83,15 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		permissions = auth.ReadPerm
 	}
 
+	serverConf := server.Config{Protocol: "tcp"}
+
+	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
+		serverConf, startError = serverConf.NewConfig()
+		if startError != nil {
+			return
+		}
+	}
+
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
 	var mrEnv env.MultiRepoEnv
@@ -128,19 +137,18 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return nil, err
 	}
 
+	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	// to the value of mysql that we support.
+	serverConf.Address = hostPort
+	serverConf.Auth = userAuth
+	serverConf.ConnReadTimeout = readTimeout
+	serverConf.ConnWriteTimeout = writeTimeout
+	serverConf.MaxConnections = serverConfig.MaxConnections()
+	serverConf.TLSConfig = tlsConfig
+	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
+
 	mySQLServer, startError = server.NewServer(
-		server.Config{
-			Protocol:               "tcp",
-			Address:                hostPort,
-			Auth:                   userAuth,
-			ConnReadTimeout:        readTimeout,
-			ConnWriteTimeout:       writeTimeout,
-			MaxConnections:         serverConfig.MaxConnections(),
-			TLSConfig:              tlsConfig,
-			RequireSecureTransport: serverConfig.RequireSecureTransport(),
-			// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-			// to the value of mysql that we support.
-		},
+		serverConf,
 		sqlEngine,
 		newSessionBuilder(sqlEngine, dEnv.Config, pro, mrEnv, serverConfig.AutoCommit()),
 	)
@@ -174,14 +182,14 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 		tmpSqlCtx := sql.NewEmptyContext()
 
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
-		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
+		mysqlSess := sql.NewBaseSessionWithClientServer(host, client, conn.ConnectionID)
 		doltDbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, doltDbs)
 		if err != nil {
 			return nil, err
 		}
 
-		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, pro, dConf, dbStates...)
+		doltSess, err := dsess.NewDoltSession(tmpSqlCtx, mysqlSess, pro, dConf, dbStates...)
 		if err != nil {
 			return nil, err
 		}

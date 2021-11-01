@@ -40,7 +40,7 @@ const (
 type DoltHarness struct {
 	t                    *testing.T
 	env                  *env.DoltEnv
-	session              *dsess.Session
+	session              *dsess.DoltSession
 	databases            []sqle.Database
 	databaseGlobalStates []globalstate.GlobalState
 	parallelism          int
@@ -58,7 +58,7 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
 	pro := sqle.NewDoltDatabaseProvider(dEnv.Config)
-	session, err := dsess.NewSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, dEnv.Config)
+	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, dEnv.Config)
 	require.NoError(t, err)
 	return &DoltHarness{
 		t:              t,
@@ -127,13 +127,13 @@ func (d *DoltHarness) NewContext() *sql.Context {
 func (d *DoltHarness) NewSession() *sql.Context {
 	states := make([]dsess.InitialDbState, len(d.databases))
 	for i, db := range d.databases {
-		states[i] = getDbState(d.t, db, d.env, d.databaseGlobalStates[i])
+		states[i] = getDbState(d.t, db, d.env)
 	}
 	dbs := dsqleDBsAsSqlDBs(d.databases)
 	pro := d.NewDatabaseProvider(dbs...)
 
 	var err error
-	d.session, err = dsess.NewSession(
+	d.session, err = dsess.NewDoltSession(
 		enginetest.NewContext(d),
 		enginetest.NewBaseSession(),
 		pro.(dsess.RevisionDatabaseProvider),
@@ -196,7 +196,7 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	return sqle.NewDoltDatabaseProvider(d.env.Config, dbs...)
 }
 
-func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv, globalState globalstate.GlobalState) dsess.InitialDbState {
+func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
 	ctx := context.Background()
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()

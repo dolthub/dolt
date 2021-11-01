@@ -58,6 +58,8 @@ func intPtr(n int) *int {
 type BehaviorYAMLConfig struct {
 	ReadOnly   *bool `yaml:"read_only"`
 	AutoCommit *bool
+	// PersistenceBehavior regulates loading persisted system variable configuration.
+	PersistenceBehavior *string `yaml:"persistence_behavior"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -110,9 +112,13 @@ func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 
 func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 	return YAMLConfig{
-		LogLevelStr:    strPtr(string(cfg.LogLevel())),
-		BehaviorConfig: BehaviorYAMLConfig{boolPtr(cfg.ReadOnly()), boolPtr(cfg.AutoCommit())},
-		UserConfig:     UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
+		LogLevelStr: strPtr(string(cfg.LogLevel())),
+		BehaviorConfig: BehaviorYAMLConfig{
+			boolPtr(cfg.ReadOnly()),
+			boolPtr(cfg.AutoCommit()),
+			strPtr(cfg.PersistenceBehavior()),
+		},
+		UserConfig: UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
 		ListenerConfig: ListenerYAMLConfig{
 			strPtr(cfg.Host()),
 			intPtr(cfg.Port()),
@@ -289,4 +295,11 @@ func (cfg YAMLConfig) RequireSecureTransport() bool {
 		return false
 	}
 	return *cfg.ListenerConfig.RequireSecureTransport
+}
+
+func (cfg YAMLConfig) PersistenceBehavior() string {
+	if cfg.BehaviorConfig.PersistenceBehavior == nil {
+		return loadPerisistentGlobals
+	}
+	return *cfg.BehaviorConfig.PersistenceBehavior
 }
