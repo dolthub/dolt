@@ -17,8 +17,6 @@ package sqlexport
 import (
 	"context"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -29,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
@@ -47,16 +44,7 @@ type SqlExportWriter struct {
 }
 
 // OpenSQLExportWriter returns a new SqlWriter for the table given writing to a file with the path given.
-func OpenSQLExportWriter(ctx context.Context, path string, fs filesys.WritableFS, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
-	err := fs.MkDirs(filepath.Dir(path))
-	if err != nil {
-		return nil, err
-	}
-
-	wr, err := fs.OpenForWrite(path, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
+func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
 
 	allSchemas, err := root.GetAllSchemas(ctx)
 	if err != nil {
