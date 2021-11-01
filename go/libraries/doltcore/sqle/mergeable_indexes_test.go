@@ -32,7 +32,7 @@ import (
 // they're converted into a format that Noms understands to verify that they were handled correctly. Lastly, we ensure
 // that the final output is as expected.
 func TestMergeableIndexes(t *testing.T) {
-	engine, denv, db, indexTuples, initialRoot := setupMergeableIndexes(t, "test", `INSERT INTO test VALUES
+	engine, denv, db, indexTuples, initialRoot := setupIndexes(t, "test", `INSERT INTO test VALUES
 		(-3, NULL, NULL),
 		(-2, NULL, NULL),
 		(-1, NULL, NULL),
@@ -1395,7 +1395,7 @@ func TestMergeableIndexes(t *testing.T) {
 // ranges may be incorrect.
 // TODO: disassociate NULL ranges from value ranges and fix the intermediate ranges (finalRanges).
 func TestMergeableIndexesNulls(t *testing.T) {
-	engine, denv, db, indexTuples, initialRoot := setupMergeableIndexes(t, "test", `INSERT INTO test VALUES
+	engine, denv, db, indexTuples, initialRoot := setupIndexes(t, "test", `INSERT INTO test VALUES
 		(0, 10, 20),
 		(1, 11, 21),
 		(2, NULL, NULL),
