@@ -5,11 +5,11 @@ import (
 )
 
 const (
-	DefaultBranchKey          = "dolt_default_branch"
-	ReplicateToRemoteKey  = "dolt_replicate_to_remote"
+	DefaultBranchKey         = "dolt_default_branch"
+	ReplicateToRemoteKey     = "dolt_replicate_to_remote"
 	ReadReplicaKey           = "dolt_read_replica_remote"
 	SkipReplicationErrorsKey = "dolt_skip_replication_errors"
-	CurrentBatchModeKey = "batch_mode"
+	CurrentBatchModeKey      = "batch_mode"
 )
 
 func AddDoltSystemVariables() {

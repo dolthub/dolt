@@ -513,6 +513,7 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 			return true, err
 		}
 		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
+		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.CliErr)
 
 		db = newDatabase(name, dEnv)
 

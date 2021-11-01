@@ -134,6 +134,8 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 		res, err = strconv.ParseUint(v, 10, 64)
 	case float32, float64:
 		res, err = strconv.ParseFloat(v, 64)
+	case bool:
+		res, err = strconv.ParseBool(v)
 	case string:
 		return v, nil
 	default:
@@ -213,7 +215,6 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	initMu.Lock()
 	defer initMu.Unlock()
 
-	sql.InitSystemVariables()
 	var globals config.ReadWriteConfig
 	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
 		cli.Println("warning: multi-db mode does not support persistable sessions")

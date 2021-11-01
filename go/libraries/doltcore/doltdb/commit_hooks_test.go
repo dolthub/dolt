@@ -153,7 +153,7 @@ func TestPushOnWriteHook(t *testing.T) {
 func TestLogHook(t *testing.T) {
 	msg := []byte("hello")
 	var err error
-	t.Run("new log hook", func (t *testing.T) {
+	t.Run("new log hook", func(t *testing.T) {
 		ctx := context.Background()
 		hook := NewLogHook(msg)
 		var buffer = &bytes.Buffer{}

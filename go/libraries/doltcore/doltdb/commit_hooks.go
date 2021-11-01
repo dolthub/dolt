@@ -98,8 +98,8 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 }
 
 type LogHook struct {
-	msg    []byte
-	outf   io.Writer
+	msg  []byte
+	outf io.Writer
 }
 
 var _ datas.CommitHook = &LogHook{}

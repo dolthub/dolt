@@ -19,14 +19,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/go-mysql-server/sql"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -40,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -1290,7 +1290,7 @@ func getPushOnWriteHook(ctx context.Context, dEnv *DoltEnv) (*doltdb.PushOnWrite
 	}
 	rem, ok := remotes[backupName]
 	if !ok {
-		return nil, ErrRemoteNotFound
+		return nil, fmt.Errorf("%w: '%s'", ErrRemoteNotFound, backupName)
 	}
 	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
 
@@ -1303,18 +1303,11 @@ func getPushOnWriteHook(ctx context.Context, dEnv *DoltEnv) (*doltdb.PushOnWrite
 
 func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
-	_, val, ok := sql.SystemVariables.GetGlobal(doltdb.SkipReplicationErrorsKey)
-	if !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(doltdb.SkipReplicationErrorsKey)
-	}
-
 	var skipErrors bool
-	if val == int8(1) {
-		skipErrors = true
-	}
-	//skipErrors, ok := val.(bool)
-	if !ok {
-		return nil, sql.ErrInvalidSystemVariableValue.New(val)
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.SkipReplicationErrorsKey); !ok {
+		return nil, sql.ErrUnknownSystemVariable.New(doltdb.SkipReplicationErrorsKey)
+	} else if v, ok := val.(bool); ok {
+		skipErrors = v
 	}
 
 	var hook datas.CommitHook
@@ -1325,9 +1318,9 @@ func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, err
 	case err == nil:
 		postCommitHooks = append(postCommitHooks, hook)
 	case skipErrors:
-		postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(fmt.Sprintf("error on startup: %s", err.Error()))))
+		postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(fmt.Sprintf("failure loading hook; %s\n", err.Error()))))
 	default:
-		return nil, err
+		return nil, fmt.Errorf("failure loading hook; %w", err)
 	}
 
 	return postCommitHooks, nil
