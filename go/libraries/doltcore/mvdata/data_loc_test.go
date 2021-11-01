@@ -203,7 +203,7 @@ func TestCreateRdWr(t *testing.T) {
 
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 
-		filePath, _ := dEnv.FS.Abs(testSchemaFileName)
+		filePath, err := dEnv.FS.Abs(testSchemaFileName)
 		if err != nil {
 			t.Fatal("Unexpected error getting filepath", err)
 		}

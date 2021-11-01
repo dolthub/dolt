@@ -42,12 +42,6 @@ type CSVWriter struct {
 	useCRLF bool // True to use \r\n as the line terminator
 }
 
-// OpenCSVWriter creates a file at the given path in the given filesystem and writes out rows based on the Schema,
-// and CSVFileInfo provided
-func OpenCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
-	return NewCSVWriter(wr, outSch, info)
-}
-
 // NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
 func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
 

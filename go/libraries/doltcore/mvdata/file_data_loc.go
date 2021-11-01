@@ -148,13 +148,13 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options, wr io.WriteCloser) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case CsvFile:
-		return csv.OpenCSVWriter(wr, outSch, csv.NewCSVInfo())
+		return csv.NewCSVWriter(wr, outSch, csv.NewCSVInfo())
 	case PsvFile:
-		return csv.OpenCSVWriter(wr, outSch, csv.NewCSVInfo().SetDelim("|"))
+		return csv.NewCSVWriter(wr, outSch, csv.NewCSVInfo().SetDelim("|"))
 	case XlsxFile:
 		panic("writing to xlsx files is not supported yet")
 	case JsonFile:
-		return json.OpenJSONWriter(wr, outSch)
+		return json.NewJSONWriter(wr, outSch)
 	case SqlFile:
 		return sqlexport.OpenSQLExportWriter(ctx, wr, root, mvOpts.SrcName(), outSch, opts)
 	}

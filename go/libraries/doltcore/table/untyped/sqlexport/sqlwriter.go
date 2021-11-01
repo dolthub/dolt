@@ -43,7 +43,7 @@ type SqlExportWriter struct {
 	editOpts        editor.Options
 }
 
-// OpenSQLExportWriter returns a new SqlWriter for the table given writing to a file with the path given.
+// OpenSQLExportWriter returns a new SqlWriter for the table with the writer given.
 func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
 
 	allSchemas, err := root.GetAllSchemas(ctx)

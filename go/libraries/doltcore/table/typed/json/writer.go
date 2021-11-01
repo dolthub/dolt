@@ -41,10 +41,6 @@ type JSONWriter struct {
 	rowsWritten int
 }
 
-func OpenJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*JSONWriter, error) {
-	return NewJSONWriter(wr, outSch)
-}
-
 func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*JSONWriter, error) {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
 	err := iohelp.WriteAll(bwr, []byte(jsonHeader))
