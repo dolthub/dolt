@@ -4,20 +4,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-
-const (
-	EngineModeKey        = "dolt_engine_mode"
-	PermissiveEngineMode = "permissive"
-	StrictEngineMode     = "strict"
-)
-
-type EngineMode int
-
-const (
-	ServerEngineMode = iota
-	CliEngineMode
-)
-
 const (
 	DefaultBranchKey          = "dolt_default_branch"
 	ReplicateToRemoteKey  = "dolt_replicate_to_remote"
@@ -67,14 +53,6 @@ func AddDoltSystemVariables() {
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(SkipReplicationErrorsKey),
 			Default:           false,
-		},
-		{
-			Name:              EngineModeKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(EngineModeKey),
-			Default:           StrictEngineMode,
 		},
 	})
 }

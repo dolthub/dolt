@@ -30,7 +30,7 @@ log_level: info
 behavior:
     read_only: false
     autocommit: true
-    no_defaults: false
+    persistence_behavior: load
 
 user:
     name: root

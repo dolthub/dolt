@@ -33,7 +33,7 @@ type PersistTest struct {
 	// The name of this test. Names should be unique and descriptive.
 	Name string
 	// The insert query to run
-	PersitQuery string
+	PersistQuery string
 	// The insert query to run
 	SelectQuery string
 	// The schema of the result of the query, nil if an error is expected
@@ -72,14 +72,14 @@ func TestExecutePersist(t *testing.T) {
 	var persistTests = []PersistTest{
 		{
 			Name:           "SET PERSIST a system variable",
-			PersitQuery:    "SET PERSIST max_connections = 1000;",
+			PersistQuery:   "SET PERSIST max_connections = 1000;",
 			ExpectedConfig: map[string]string{"max_connections": "1000"},
 			SelectQuery:    "SELECT @@GLOBAL.max_connections",
 			ExpectedRows:   ToSqlRows(MaxConnSchema, NewMaxConnRow(1000)),
 		},
 		{
 			Name:           "PERSIST ONLY a system variable",
-			PersitQuery:    "SET PERSIST_ONLY max_connections = 1000;",
+			PersistQuery:   "SET PERSIST_ONLY max_connections = 1000;",
 			ExpectedConfig: map[string]string{"max_connections": "1000"},
 			SelectQuery:    "SELECT @@GLOBAL.max_connections",
 			ExpectedRows:   ToSqlRows(MaxConnSchema, NewMaxConnRow(151)),
@@ -106,7 +106,7 @@ func testPersistQuery(t *testing.T, test PersistTest) {
 
 	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(t, context.Background(), dEnv, root, test.PersitQuery)
+	root, err = executeModify(t, context.Background(), dEnv, root, test.PersistQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return

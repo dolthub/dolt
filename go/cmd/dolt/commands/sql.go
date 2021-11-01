@@ -53,7 +53,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
@@ -128,9 +127,9 @@ func (cmd SqlCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SqlCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 }
 
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
@@ -363,7 +362,7 @@ func execShell(
 	readOnly bool,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, doltdb.CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -389,7 +388,7 @@ func execBatch(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, doltdb.CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -435,7 +434,7 @@ func execMultiStatements(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, doltdb.CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -474,7 +473,7 @@ func execQuery(
 	query string,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, doltdb.CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -505,25 +504,19 @@ func execQuery(
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv, engineMode doltdb.EngineMode) ([]dsqle.SqlDatabase, error) {
+func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
 	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		if dEnv.Config.GetStringOrDefault(doltdb.EngineModeKey, "") == doltdb.PermissiveEngineMode {
-			engineMode = doltdb.ServerEngineMode
+		postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
+		if err != nil {
+			return true, err
 		}
-
-		if engineMode == doltdb.ServerEngineMode {
-			postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
-			if err != nil {
-				return true, err
-			}
-			dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
-		}
+		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 
 		db = newDatabase(name, dEnv)
 
-		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReadReplicaKey); ok && val != "" && engineMode == doltdb.ServerEngineMode {
+		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReadReplicaKey); ok && val != "" {
 			remoteName, ok := val.(string)
 			if !ok {
 				return true, sql.ErrInvalidSystemVariableValue.New(val)

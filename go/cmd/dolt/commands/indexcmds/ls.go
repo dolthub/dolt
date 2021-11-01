@@ -17,6 +17,7 @@ package indexcmds
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -24,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var lsDocs = cli.CommandDocumentationContent{
@@ -46,7 +46,7 @@ func (cmd LsCmd) Description() string {
 	return "Internal debugging command to display the list of indexes."
 }
 
-func (cmd LsCmd) CreateMarkdown(filesys.Filesys, string, string) error {
+func (cmd LsCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 

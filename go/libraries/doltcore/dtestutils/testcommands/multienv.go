@@ -109,9 +109,8 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 	}
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	cfg.SetStrings(map[string]string{
-		env.UserNameKey:         name,
-		env.UserEmailKey:        email,
-		doltdb.EngineModeKey: doltdb.PermissiveEngineMode,
+		env.UserNameKey:  name,
+		env.UserEmailKey: email,
 	})
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email, defaultBranch)
 	if err != nil {

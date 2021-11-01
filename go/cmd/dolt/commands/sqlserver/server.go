@@ -84,11 +84,9 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		permissions = auth.ReadPerm
 	}
 
-	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-	// to the value of mysql that we support.
 	serverConf := server.Config{Protocol: "tcp"}
 
-	if !serverConfig.NoDefaults() {
+	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
 		serverConf, startError = serverConf.NewConfig()
 		if startError != nil {
 			return
@@ -114,7 +112,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 	}
 
-	dbs, err := commands.CollectDBs(ctx, mrEnv, doltdb.ServerEngineMode)
+	dbs, err := commands.CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return err, nil
 	}
@@ -140,6 +138,8 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return nil, err
 	}
 
+	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	// to the value of mysql that we support.
 	serverConf.Address = hostPort
 	serverConf.Auth = userAuth
 	serverConf.ConnReadTimeout = readTimeout

@@ -41,7 +41,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -79,9 +78,9 @@ func (cmd FilterBranchCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd FilterBranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd FilterBranchCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
 }
 
 func (cmd FilterBranchCmd) createArgParser() *argparser.ArgParser {
@@ -235,7 +234,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 // we set manually with the one at the working set of the HEAD being rebased.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
 func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *sqlEngine, error) {
-	sess := dsess.NewDoltSessionFromDefault(dsess.DefaultSession(), config.NewMapConfig(make(map[string]string)))
+	sess := dsess.DefaultSession().NewDoltSession(config.NewMapConfig(make(map[string]string)))
 
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(sess),

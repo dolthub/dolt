@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/profile"
@@ -46,13 +45,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
-	Version = "0.32.1"
+	Version = "0.32.2"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -60,33 +58,32 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.InitCmd{},
 	commands.StatusCmd{},
 	commands.AddCmd{},
+	commands.DiffCmd{},
 	commands.ResetCmd{},
 	commands.CommitCmd{},
 	commands.SqlCmd{VersionStr: Version},
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{},
 	commands.LogCmd{},
-	commands.DiffCmd{},
-	commands.BlameCmd{},
-	commands.MergeCmd{},
 	commands.BranchCmd{},
-	commands.TagCmd{},
 	commands.CheckoutCmd{},
+	commands.MergeCmd{},
+	cnfcmds.Commands,
+	commands.RevertCmd{},
+	commands.CloneCmd{},
+	commands.FetchCmd{},
+	commands.PullCmd{},
+	commands.PushCmd{},
+	commands.ConfigCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
-	commands.PushCmd{},
-	commands.PullCmd{},
-	commands.FetchCmd{},
-	commands.CloneCmd{},
-	commands.RevertCmd{},
-	credcmds.Commands,
 	commands.LoginCmd{},
-	commands.VersionCmd{VersionStr: Version},
-	commands.ConfigCmd{},
+	credcmds.Commands,
 	commands.LsCmd{},
 	schcmds.Commands,
 	tblcmds.Commands,
-	cnfcmds.Commands,
+	commands.TagCmd{},
+	commands.BlameCmd{},
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
 	dumpDocsCommand,
@@ -97,6 +94,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.FilterBranchCmd{},
 	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
+	commands.VersionCmd{VersionStr: Version},
 })
 
 func init() {
@@ -392,22 +390,5 @@ func processEventsDir(args []string, dEnv *env.DoltEnv) error {
 		return nil
 	}
 
-	return nil
-}
-
-func initPersistedSystemVars(dEnv *env.DoltEnv) error {
-	sql.InitSystemVariables()
-	var globals config.ReadWriteConfig
-	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
-		cli.Println("warning: multi-db mode does not support persistable sessions")
-		globals = config.NewMapConfig(make(map[string]string))
-	} else {
-		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
-	}
-	persistedGlobalVars, err := dsess.NewPersistedSystemVariables(globals)
-	if err != nil {
-		return err
-	}
-	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 	return nil
 }

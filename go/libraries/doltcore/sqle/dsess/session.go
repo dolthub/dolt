@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -228,24 +229,6 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 	}
 
 	return sess, nil
-}
-
-// NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf *env.DoltCliConfig, dbs ...InitialDbState) (*DoltSession, error) {
-	sess, err := NewSession(ctx, sqlSess, pro, conf, dbs...)
-	if err != nil {
-		return nil, err
-	}
-
-	var globals config.ReadWriteConfig
-	if localConf, ok := conf.GetConfig(env.LocalConfig); !ok {
-		ctx.Warn(NonpersistableSessionCode, "multi-db mode does not support persistable sessions")
-		globals = config.NewMapConfig(make(map[string]string))
-	} else {
-		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
-	}
-
-	return NewDoltSessionFromDefault(sess, globals), nil
 }
 
 // EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
@@ -1238,6 +1221,11 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	}
 
 	return nil
+}
+
+// NewDoltSession creates a persistable DoltSession with the given config arg
+func (sess *Session) NewDoltSession(conf config.ReadWriteConfig) *DoltSession {
+	return &DoltSession{Session: sess, globalsConf: conf, mu: &sync.Mutex{}}
 }
 
 // defineSystemVariables defines dolt-session variables in the engine as necessary

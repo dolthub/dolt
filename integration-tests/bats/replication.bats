@@ -22,102 +22,87 @@ teardown() {
     cd $BATS_TMPDIR
 }
 
-#@test "replication: default no replication" {
-    #cd repo1
-    #dolt sql -q "create table t1 (a int primary key)"
-    #dolt commit -am "cm"
+@test "replication: default no replication" {
+    cd repo1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt commit -am "cm"
 
-    #[ ! -d "../bac1/.dolt" ] || false
-#}
+    [ ! -d "../bac1/.dolt" ] || false
+}
 
-#@test "replication: no push on cli commit" {
+@test "replication: no push on cli commit" {
 
-    #cd repo1
-    #dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE backup1
-    #dolt sql -q "create table t1 (a int primary key)"
-    #dolt commit -am "cm"
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE backup1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt commit -am "cm"
 
-    #cd ..
-    #run dolt clone file://./bac1 repo2
-    #[ "$status" -eq 1 ]
-#}
+    cd ..
+    run dolt clone file://./bac1 repo2
+    [ "$status" -eq 1 ]
+}
 
-#@test "replication: no push on cli sql -q commit" {
-    #cd repo1
-    #dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE backup1
-    #dolt sql -q "create table t1 (a int primary key)"
-    #dolt sql -q "select dolt_commit('-am', 'cm')"
+@test "replication: push on cli engine commit" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE backup1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "select dolt_commit('-am', 'cm')"
 
-    #cd ..
-    #run dolt clone file://./bac1 repo2
-    #[ "$status" -eq 1 ]
-#}
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+}
 
-#@test "replication: push on cli engine commit with permissive engine mode" {
-    #cd repo1
-    #dolt config --local --add DOLT_ENGINE_MODE permissive
-    #dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE backup1
-    #dolt sql -q "create table t1 (a int primary key)"
-    #dolt sql -q "select dolt_commit('-am', 'cm')"
+@test "replication: no tags" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE backup1
+    dolt tag
 
-    #cd ..
-    #dolt clone file://./bac1 repo2
-    #cd repo2
-    #run dolt ls
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 2 ]
-    #[[ "$output" =~ "t1" ]] || false
-#}
+    [ ! -d "../bac1/.dolt" ] || false
+}
 
-#@test "replication: no tags" {
-    #cd repo1
-    #dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE backup1
-    #dolt tag
+@test "replication: pull on read" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt commit -am "new commit"
+    dolt push origin main
 
-    #[ ! -d "../bac1/.dolt" ] || false
-#}
+    cd ../repo1
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ ! "$output" =~ "t1" ]] || false
 
-#@test "replication: pull on read" {
-    #dolt clone file://./rem1 repo2
-    #cd repo2
-    #dolt sql -q "create table t1 (a int primary key)"
-    #dolt commit -am "new commit"
-    #dolt push origin main
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE remote1
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+}
 
-    #cd ../repo1
-    #run dolt sql -q "show tables" -r csv
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 1 ]
-    #[[ ! "$output" =~ "t1" ]] || false
+@test "replication: replicate on branch table update" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE backup1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "UPDATE dolt_branches SET hash = COMMIT('--author', '{user_name} <{email_address}>','-m', 'cm') WHERE name = 'main' AND hash = @@repo1_head"
 
-    #dolt config --local --add dolt_engine_mode permissive
-    #dolt config --local --add sqlserver.globals.DOLT_READ_REPLICA_REMOTE remote1
-    #run dolt sql -q "show tables" -r csv
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 2 ]
-    #[[ "$output" =~ "t1" ]] || false
-#}
-
-#@test "replication: replicate on branch table update" {
-    #cd repo1
-    #dolt config --local --add dolt_engine_mode permissive
-    #dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE backup1
-    #dolt sql -q "create table t1 (a int primary key)"
-    #dolt sql -q "UPDATE dolt_branches SET hash = COMMIT('--author', '{user_name} <{email_address}>','-m', 'cm') WHERE name = 'main' AND hash = @@repo1_head"
-
-    #cd ..
-    #dolt clone file://./bac1 repo2
-    #cd repo2
-    #run dolt ls
-    #[ "$status" -eq 0 ]
-    #[ "${#lines[@]}" -eq 2 ]
-    #[[ "$output" =~ "t1" ]] || false
-#}
+    cd ..
+    dolt clone file://./bac1 repo2
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+}
 
 @test "replication: error if no remote" {
     cd repo1
-    dolt config --local --add sqlserver.globals.dolt_engine_mode permissive
-    dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE unknown
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE unknown
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "select dolt_commit('-am', 'cm')"
     [ "$status" -eq 0 ]
@@ -127,9 +112,8 @@ teardown() {
 
 @test "replication: replicate quiet replication warnings" {
     cd repo1
-    dolt config --local --add sqlserver.globals.dolt_skip_replication_errors 1
-    dolt config --local --add sqlserver.globals.dolt_engine_mode permissive
-    dolt config --local --add sqlserver.globals.DOLT_REPLICATE_TO_REMOTE unknown
+    dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE unknown
     dolt sql -q "create table t1 (a int primary key)"
     dolt sql -q "select dolt_commit('-am', 'cm')"
     [ "$status" -eq 0 ]

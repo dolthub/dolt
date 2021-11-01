@@ -30,7 +30,7 @@ var globalCfg = set.NewStrSet([]string{globalParamName})
 var localCfg = set.NewStrSet([]string{localParamName})
 var multiCfg = set.NewStrSet([]string{globalParamName, localParamName})
 
-func initializeConfigs(dEnv *env.DoltEnv, element env.DoltConfigElement) {
+func initializeConfigs(dEnv *env.DoltEnv, element env.ConfigScope) {
 	switch element {
 	case env.GlobalConfig:
 		globalCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
@@ -41,50 +41,50 @@ func initializeConfigs(dEnv *env.DoltEnv, element env.DoltConfigElement) {
 }
 func TestConfigAdd(t *testing.T) {
 	tests := []struct {
-		Name       string
-		CfgSet     *set.StrSet
-		ConfigElem env.DoltConfigElement
-		Args       []string
-		Code       int
+		Name   string
+		CfgSet *set.StrSet
+		Scope  env.ConfigScope
+		Args   []string
+		Code   int
 	}{
 		{
-			Name:       "local",
-			CfgSet:     localCfg,
-			ConfigElem: env.LocalConfig,
-			Args:       []string{"title", "senior dufus"},
+			Name:   "local",
+			CfgSet: localCfg,
+			Scope:  env.LocalConfig,
+			Args:   []string{"title", "senior dufus"},
 		},
 		{
-			Name:       "global",
-			CfgSet:     globalCfg,
-			ConfigElem: env.GlobalConfig,
-			Args:       []string{"title", "senior dufus"},
+			Name:   "global",
+			CfgSet: globalCfg,
+			Scope:  env.GlobalConfig,
+			Args:   []string{"title", "senior dufus"},
 		},
 		{
-			Name:       "default",
-			CfgSet:     &set.StrSet{},
-			ConfigElem: env.LocalConfig,
-			Args:       []string{"title", "senior dufus"},
+			Name:   "default",
+			CfgSet: &set.StrSet{},
+			Scope:  env.LocalConfig,
+			Args:   []string{"title", "senior dufus"},
 		},
 		{
-			Name:       "multi error",
-			CfgSet:     multiCfg,
-			ConfigElem: env.LocalConfig,
-			Args:       []string{"title", "senior dufus"},
-			Code:       1,
+			Name:   "multi error",
+			CfgSet: multiCfg,
+			Scope:  env.LocalConfig,
+			Args:   []string{"title", "senior dufus"},
+			Code:   1,
 		},
 		{
-			Name:       "no args",
-			CfgSet:     multiCfg,
-			ConfigElem: env.LocalConfig,
-			Args:       []string{},
-			Code:       1,
+			Name:   "no args",
+			CfgSet: multiCfg,
+			Scope:  env.LocalConfig,
+			Args:   []string{},
+			Code:   1,
 		},
 		{
-			Name:       "odd args",
-			CfgSet:     multiCfg,
-			ConfigElem: env.LocalConfig,
-			Args:       []string{"title"},
-			Code:       1,
+			Name:   "odd args",
+			CfgSet: multiCfg,
+			Scope:  env.LocalConfig,
+			Args:   []string{"title"},
+			Code:   1,
 		},
 	}
 
@@ -96,7 +96,7 @@ func TestConfigAdd(t *testing.T) {
 			if tt.Code == 1 {
 				assert.Equal(t, tt.Code, resCode)
 
-			} else if cfg, ok := dEnv.Config.GetConfig(tt.ConfigElem); ok {
+			} else if cfg, ok := dEnv.Config.GetConfig(tt.Scope); ok {
 				resVal := cfg.GetStringOrDefault("title", "")
 				assert.Equal(t, "senior dufus", resVal)
 			} else {
@@ -110,7 +110,7 @@ func TestConfigGet(t *testing.T) {
 	tests := []struct {
 		Name       string
 		CfgSet     *set.StrSet
-		ConfigElem env.DoltConfigElement
+		ConfigElem env.ConfigScope
 		Key        string
 		Code       int
 	}{
@@ -168,7 +168,7 @@ func TestConfigUnset(t *testing.T) {
 	tests := []struct {
 		Name       string
 		CfgSet     *set.StrSet
-		ConfigElem env.DoltConfigElement
+		ConfigElem env.ConfigScope
 		Key        string
 		Code       int
 	}{
@@ -229,7 +229,7 @@ func TestConfigList(t *testing.T) {
 	tests := []struct {
 		Name       string
 		CfgSet     *set.StrSet
-		ConfigElem env.DoltConfigElement
+		ConfigElem env.ConfigScope
 	}{
 		{
 			Name:       "local",

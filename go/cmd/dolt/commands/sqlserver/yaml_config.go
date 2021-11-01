@@ -58,8 +58,8 @@ func intPtr(n int) *int {
 type BehaviorYAMLConfig struct {
 	ReadOnly   *bool `yaml:"read_only"`
 	AutoCommit *bool
-	// NoDefaults disables loading persisted system variable configuration.
-	NoDefaults *bool `yaml:"no_defaults"`
+	// PersistenceBehavior regulates loading persisted system variable configuration.
+	PersistenceBehavior *string `yaml:"persistence_behavior"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -116,7 +116,7 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 		BehaviorConfig: BehaviorYAMLConfig{
 			boolPtr(cfg.ReadOnly()),
 			boolPtr(cfg.AutoCommit()),
-			boolPtr(cfg.NoDefaults()),
+			strPtr(cfg.PersistenceBehavior()),
 		},
 		UserConfig: UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
 		ListenerConfig: ListenerYAMLConfig{
@@ -297,9 +297,9 @@ func (cfg YAMLConfig) RequireSecureTransport() bool {
 	return *cfg.ListenerConfig.RequireSecureTransport
 }
 
-func (cfg YAMLConfig) NoDefaults() bool {
-	if cfg.BehaviorConfig.NoDefaults == nil {
-		return false
+func (cfg YAMLConfig) PersistenceBehavior() string {
+	if cfg.BehaviorConfig.PersistenceBehavior == nil {
+		return loadPerisistentGlobals
 	}
-	return *cfg.BehaviorConfig.NoDefaults
+	return *cfg.BehaviorConfig.PersistenceBehavior
 }

@@ -18,7 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -31,20 +33,31 @@ import (
 )
 
 const (
-	hostFlag             = "host"
-	portFlag             = "port"
-	userFlag             = "user"
-	passwordFlag         = "password"
-	timeoutFlag          = "timeout"
-	readonlyFlag         = "readonly"
-	logLevelFlag         = "loglevel"
-	multiDBDirFlag       = "multi-db-dir"
-	noAutoCommitFlag     = "no-auto-commit"
-	configFileFlag       = "config"
-	queryParallelismFlag = "query-parallelism"
-	maxConnectionsFlag   = "max-connections"
-	noDefaultsFlag       = "no-defaults"
+	hostFlag                = "host"
+	portFlag                = "port"
+	userFlag                = "user"
+	passwordFlag            = "password"
+	timeoutFlag             = "timeout"
+	readonlyFlag            = "readonly"
+	logLevelFlag            = "loglevel"
+	multiDBDirFlag          = "multi-db-dir"
+	noAutoCommitFlag        = "no-auto-commit"
+	configFileFlag          = "config"
+	queryParallelismFlag    = "query-parallelism"
+	maxConnectionsFlag      = "max-connections"
+	persistenceBehaviorFlag = "persistence-behavior"
 )
+
+func indentLines(s string) string {
+	sb := strings.Builder{}
+	lines := strings.Split(s, "\n")
+	for _, line := range lines {
+		sb.WriteRune('\t')
+		sb.WriteString(line)
+		sb.WriteRune('\n')
+	}
+	return sb.String()
+}
 
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
@@ -55,7 +68,7 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 		"the server directly on the command line. If {{.EmphasisLeft}}--config <file>{{.EmphasisRight}} is provided all" +
 		" other command line arguments are ignored.\n\nThis is an example yaml configuration file showing all supported" +
 		" items and their default values:\n\n" +
-		serverConfigAsYAMLConfig(DefaultServerConfig()).String() + "\n\n" + `
+		indentLines(serverConfigAsYAMLConfig(DefaultServerConfig()).String()) + "\n\n" + `
 SUPPORTED CONFIG FILE FIELDS:
 
 		{{.EmphasisLeft}}vlog_level{{.EmphasisRight}} - Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
@@ -108,9 +121,9 @@ func (cmd SqlServerCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SqlServerCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SqlServerCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.CreateArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 }
 
 func (cmd SqlServerCmd) CreateArgParser() *argparser.ArgParser {
@@ -129,7 +142,7 @@ func (cmd SqlServerCmd) CreateArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(noAutoCommitFlag, "", "When provided sessions will not automatically commit their changes to the working set. Anything not manually committed will be lost.")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
-	ap.SupportsInt(noDefaultsFlag, "", "no-defaults", fmt.Sprintf("Autoload persisted server configuration (default `%t`)", serverConfig.NoDefaults()))
+	ap.SupportsInt(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
 
 	return ap
 }
@@ -252,7 +265,9 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
-	serverConfig.noDefaults = !apr.Contains(noDefaultsFlag)
+	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
+		serverConfig.withPersistenceBehavior(persistenceBehavior)
+	}
 
 	return serverConfig, nil
 }

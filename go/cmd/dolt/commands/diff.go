@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"reflect"
 	"sort"
 	"strconv"
@@ -44,7 +45,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -132,9 +132,9 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd DiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd DiffCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, diffDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 }
 
 func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
