@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	forceParam  = "force"
+	forceParam = "force"
 )
 
 var dumpDocs = cli.CommandDocumentationContent{
@@ -44,13 +44,13 @@ overwritten.
 }
 
 type dumpOptions struct {
-	format     string
-	dest       mvdata.DataLocation
+	format string
+	dest   mvdata.DataLocation
 }
 
 type tableOptions struct {
 	tableName  string
-	src 	   mvdata.TableDataLocation
+	src        mvdata.TableDataLocation
 	dest       mvdata.DataLocation
 	srcOptions interface{}
 }
@@ -143,15 +143,15 @@ func getDumpArgs(apr *argparser.ArgParseResults) (*dumpOptions, errhand.VerboseE
 
 	return &dumpOptions{
 		format: resultFormat,
-		dest: fileLoc,
+		dest:   fileLoc,
 	}, nil
 }
 
 func getTableArgs(tblName string, destination mvdata.DataLocation) (*tableOptions, errhand.VerboseError) {
 	return &tableOptions{
 		tableName: tblName,
-		src: mvdata.TableDataLocation{Name: tblName},
-		dest: destination,
+		src:       mvdata.TableDataLocation{Name: tblName},
+		dest:      destination,
 	}, nil
 }
 
@@ -219,7 +219,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	force:=apr.Contains(forceParam)
+	force := apr.Contains(forceParam)
 
 	ow, err := checkOverwrite(ctx, root, dEnv.FS, force, dumpOpts.dest)
 	if err != nil {
@@ -249,7 +249,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
-
 
 		mover, verr := NewDumpDataMover(ctx, root, dEnv, tblOpts, importStatsCB, filePath)
 		if verr != nil {
@@ -283,7 +282,7 @@ func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 	// close on err exit
 	defer func() {
 		if rd != nil {
-			rErr:= rd.Close(ctx)
+			rErr := rd.Close(ctx)
 			if rErr != nil {
 				retErr = errhand.BuildDError("Error closing reader for %s.", tblOpts.SrcName()).AddCause(rErr).Build()
 			}
