@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -151,9 +152,9 @@ func (cmd DumpCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the help text for the command at the given path
-func (cmd DumpCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd DumpCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 }
 
 func (cmd DumpCmd) createArgParser() *argparser.ArgParser {
