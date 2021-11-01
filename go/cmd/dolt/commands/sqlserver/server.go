@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"net"
 	"strconv"
 	"time"
@@ -113,7 +114,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 	}
 
-	dbs, err := commands.CollectDBs(ctx, mrEnv, commands.ServerEngineMode)
+	dbs, err := commands.CollectDBs(ctx, mrEnv, doltdb.ServerEngineMode)
 	if err != nil {
 		return err, nil
 	}
@@ -214,7 +215,7 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 		var init dsess.InitialDbState
 		var err error
 
-		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DoltDefaultBranchKey)
+		_, val, ok := sql.SystemVariables.GetGlobal(doltdb.DefaultBranchKey)
 		if ok && val != "" {
 			init, err = GetInitialDBStateWithDefaultBranch(ctx, db, val.(string))
 		} else {

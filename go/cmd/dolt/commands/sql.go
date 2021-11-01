@@ -65,8 +65,6 @@ const (
 	invalidBatchMode batchMode = iota
 	insertBatchMode
 	deleteBatchMode
-
-	currentBatchModeKey = "batch_mode"
 )
 
 var sqlDocs = cli.CommandDocumentationContent{
@@ -102,55 +100,10 @@ const (
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
 
-type EngineMode int
-
-const (
-	ServerEngineMode = iota
-	CliEngineMode
-)
-
-const (
-	DoltEngineMode       = "dolt_engine_mode"
-	PermissiveEngineMode = "permissive"
-)
-
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
 func init() {
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
-			Name:              currentBatchModeKey,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemIntType(currentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
-			Default:           int64(0),
-		},
-		{
-			Name:              dsess.DoltDefaultBranchKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.DoltDefaultBranchKey),
-			Default:           "",
-		},
-		{
-			Name:              doltdb.ReplicateToRemoteKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(doltdb.ReplicateToRemoteKey),
-			Default:           "",
-		},
-		{
-			Name:              doltdb.DoltReadReplicaKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(doltdb.DoltReadReplicaKey),
-			Default:           "",
-		},
-	})
+	doltdb.AddDoltSystemVariables()
 }
 
 type SqlCmd struct {
@@ -410,7 +363,7 @@ func execShell(
 	readOnly bool,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv, doltdb.CliEngineMode)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -436,7 +389,7 @@ func execBatch(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv, doltdb.CliEngineMode)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -482,7 +435,7 @@ func execMultiStatements(
 	batchInput io.Reader,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv, doltdb.CliEngineMode)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -521,7 +474,7 @@ func execQuery(
 	query string,
 	format resultFormat,
 ) errhand.VerboseError {
-	dbs, err := CollectDBs(ctx, mrEnv, CliEngineMode)
+	dbs, err := CollectDBs(ctx, mrEnv, doltdb.CliEngineMode)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -552,15 +505,15 @@ func execQuery(
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv, engineMode EngineMode) ([]dsqle.SqlDatabase, error) {
+func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv, engineMode doltdb.EngineMode) ([]dsqle.SqlDatabase, error) {
 	dbs := make([]dsqle.SqlDatabase, 0, len(mrEnv))
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		if dEnv.Config.GetStringOrDefault(DoltEngineMode, "") == PermissiveEngineMode {
-			engineMode = ServerEngineMode
+		if dEnv.Config.GetStringOrDefault(doltdb.EngineModeKey, "") == doltdb.PermissiveEngineMode {
+			engineMode = doltdb.ServerEngineMode
 		}
 
-		if engineMode == ServerEngineMode {
+		if engineMode == doltdb.ServerEngineMode {
 			postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
 			if err != nil {
 				return true, err
@@ -570,7 +523,7 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv, engineMode EngineMo
 
 		db = newDatabase(name, dEnv)
 
-		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok && val != "" && engineMode == ServerEngineMode {
+		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReadReplicaKey); ok && val != "" && engineMode == doltdb.ServerEngineMode {
 			remoteName, ok := val.(string)
 			if !ok {
 				return true, sql.ErrInvalidSystemVariableValue.New(val)
@@ -1202,7 +1155,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 	}
 
 	currentBatchMode := invalidBatchMode
-	if v, err := ctx.GetSessionVariable(ctx, currentBatchModeKey); err == nil {
+	if v, err := ctx.GetSessionVariable(ctx, doltdb.CurrentBatchModeKey); err == nil {
 		currentBatchMode = batchMode(v.(int64))
 	} else {
 		return err
@@ -1222,7 +1175,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 		}
 	}
 
-	err = ctx.SetSessionVariable(ctx, currentBatchModeKey, int64(newBatchMode))
+	err = ctx.SetSessionVariable(ctx, doltdb.CurrentBatchModeKey, int64(newBatchMode))
 	if err != nil {
 		return err
 	}

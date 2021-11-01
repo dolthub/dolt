@@ -19,13 +19,14 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/go-mysql-server/sql"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -39,7 +40,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -57,37 +57,6 @@ const (
 
 	tempTablesDir = "temptf"
 )
-
-func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
-	postCommitHooks := make([]datas.CommitHook, 0)
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey); ok && val != "" {
-		backupName, ok := val.(string)
-		if !ok {
-			return nil, sql.ErrInvalidSystemVariableValue.New(val)
-		}
-
-		remotes, err := dEnv.GetRemotes()
-		if err != nil {
-			return nil, err
-		}
-		rem, ok := remotes[backupName]
-		if !ok {
-			return nil, ErrRemoteNotFound
-		}
-		ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
-
-		if err != nil {
-			return nil, err
-		}
-		replicateHook := doltdb.NewReplicateHook(ddb, dEnv.TempTableFilesDir())
-		if err != nil {
-			return nil, err
-		}
-		postCommitHooks = append(postCommitHooks, replicateHook)
-	}
-
-	return postCommitHooks, nil
-}
 
 var zeroHashStr = (hash.Hash{}).String()
 
@@ -1301,4 +1270,65 @@ func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
 
 func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), dEnv.TempTableFilesDir())
+}
+
+func getPushOnWriteHook(ctx context.Context, dEnv *DoltEnv) (*doltdb.PushOnWriteHook, error) {
+	_, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey)
+	if !ok {
+		return nil, sql.ErrUnknownSystemVariable.New(doltdb.SkipReplicationErrorsKey)
+	} else if val == "" {
+		return nil, nil
+	}
+	backupName, ok := val.(string)
+	if !ok {
+		return nil, sql.ErrInvalidSystemVariableValue.New(val)
+	}
+
+	remotes, err := dEnv.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+	rem, ok := remotes[backupName]
+	if !ok {
+		return nil, ErrRemoteNotFound
+	}
+	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
+
+	if err != nil {
+		return nil, err
+	}
+	pushHook := doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir())
+	return pushHook, nil
+}
+
+func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
+	postCommitHooks := make([]datas.CommitHook, 0)
+	_, val, ok := sql.SystemVariables.GetGlobal(doltdb.SkipReplicationErrorsKey)
+	if !ok {
+		return nil, sql.ErrUnknownSystemVariable.New(doltdb.SkipReplicationErrorsKey)
+	}
+
+	var skipErrors bool
+	if val == int8(1) {
+		skipErrors = true
+	}
+	//skipErrors, ok := val.(bool)
+	if !ok {
+		return nil, sql.ErrInvalidSystemVariableValue.New(val)
+	}
+
+	var hook datas.CommitHook
+	var err error
+
+	hook, err = getPushOnWriteHook(ctx, dEnv)
+	switch {
+	case err == nil:
+		postCommitHooks = append(postCommitHooks, hook)
+	case skipErrors:
+		postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(fmt.Sprintf("error on startup: %s", err.Error()))))
+	default:
+		return nil, err
+	}
+
+	return postCommitHooks, nil
 }

@@ -399,7 +399,7 @@ func TestReadReplica(t *testing.T) {
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
-	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{doltdb.DoltReadReplicaKey: "remote1"})
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{doltdb.ReadReplicaKey: "remote1"})
 	dsess.InitPersistedSystemVars(multiSetup.MrEnv[readReplicaDbName])
 
 	// start server as read replica

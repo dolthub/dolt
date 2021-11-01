@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"github.com/dolthub/go-mysql-server/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -269,4 +270,19 @@ func TestBestEffortDelete(t *testing.T) {
 	if !isCWDEmpty(dEnv) {
 		t.Error("Dir should be empty after delete.")
 	}
+}
+
+func TestCommitHooksNoErrors(t *testing.T) {
+	dEnv, _ := createTestEnv(true, true)
+	doltdb.AddDoltSystemVariables()
+	sql.SystemVariables.SetGlobal(doltdb.SkipReplicationErrorsKey, true)
+	sql.SystemVariables.SetGlobal(doltdb.ReplicateToRemoteKey, "unknown")
+	hooks, err := GetCommitHooks(context.Background(), dEnv)
+	assert.NoError(t, err)
+	switch h := hooks[0].(type) {
+	case *doltdb.LogHook:
+	default:
+		t.Errorf("expected LogHook, found: %s", h)
+	}
+
 }
