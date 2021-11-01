@@ -213,7 +213,6 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	initMu.Lock()
 	defer initMu.Unlock()
 
-	sql.InitSystemVariables()
 	var globals config.ReadWriteConfig
 	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
 		cli.Println("warning: multi-db mode does not support persistable sessions")
