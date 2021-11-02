@@ -25,22 +25,8 @@ setup_configs() {
   useradd -r -m -d /var/lib/doltdb dolt
   cd /var/lib/doltdb
 
-  # TODO: Switch to defaults
-  echo "Enter an email associated with your user (leave empty for default)"
-  read -r email
-
-  if [ -z "$email" ]
-  then
-    email="dolt-user@dolt.com"
-  fi
-
-  echo "Enter a username associated with your user (leave empty for default)"
-  read -r username
-
-  if [ -z "$username" ]
-  then
-    username="Dolt Server Account"
-  fi
+  read -e -p "Enter an email associated with your user: " -i "dolt-user@dolt.com" email
+  read -e -p "Enter a username associated with your user: " -i "Dolt Server Account" username
 
   sudo -u dolt dolt config --global --add user.email $email
   sudo -u dolt dolt config --global --add user.name $username
@@ -50,17 +36,12 @@ setup_configs() {
 database_configuration() {
   echo "Setting up the dolt database..."
 
-  echo "Input the name of your database (leave empty for default)"
-  read -r db_name
+  read -e -p "Input the name of your database: " -i "doltdb" db_name
+  local db_dir="databases/$db_name"
 
-  if [ -z "$db_name" ]
-  then
-    db_name="my_db"
-  fi
-
-  db_dir="databases/$db_name"
   cd /var/lib/doltdb
   sudo -u dolt mkdir -p $db_dir
+
   cd $db_dir
   sudo -u dolt dolt init
 }
@@ -101,14 +82,16 @@ WantedBy=multi-user.target
 [Service]
 User=dolt
 Group=dolt
-ExecStart=/usr/local/bin/dolt sql-server -u root
+ExecStart=/usr/local/bin/dolt sql-server --config=dolt_config.yaml
 WorkingDirectory=/var/lib/doltdb/databases/$db_name
 KillSignal=SIGTERM
 SendSIGKILL=no
 EOF
+
   sudo chown root:root doltdb.service
   sudo chmod 644 doltdb.service
   sudo mv doltdb.service /etc/systemd/system
+  sudo cp dolt_config.yaml /var/lib/doltdb/databases/$db_name
 
   sudo systemctl daemon-reload
   sudo systemctl enable doltdb.service
