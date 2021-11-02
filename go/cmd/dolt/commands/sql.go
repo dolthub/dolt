@@ -102,7 +102,40 @@ const (
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
 func init() {
-	doltdb.AddDoltSystemVariables()
+	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+		{
+			Name:              doltdb.CurrentBatchModeKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemIntType(doltdb.CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
+			Default:           int64(0),
+		},
+		{
+			Name:              doltdb.DefaultBranchKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.DefaultBranchKey),
+			Default:           "",
+		},
+		{
+			Name:              doltdb.ReplicateToRemoteKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.ReplicateToRemoteKey),
+			Default:           "",
+		},
+		{
+			Name:              doltdb.ReadReplicaKey,
+			Scope:             sql.SystemVariableScope_Global,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.ReadReplicaKey),
+			Default:           "",
+		},
+	})
 }
 
 type SqlCmd struct {
@@ -513,7 +546,6 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 			return true, err
 		}
 		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
-		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.CliErr)
 
 		db = newDatabase(name, dEnv)
 

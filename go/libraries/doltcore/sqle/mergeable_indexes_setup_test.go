@@ -35,7 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *env.DoltEnv, *testMergeableIndexDb, []*indexTuple, *doltdb.RootValue) {
+func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *env.DoltEnv, *testIndexDb, []*indexTuple, *doltdb.RootValue) {
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -94,22 +94,22 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 		cols: idxv2v1Cols,
 	}
 
-	mergeableDb := &testMergeableIndexDb{
+	tiDb := &testIndexDb{
 		t:        t,
 		tbl:      tbl,
 		editOpts: opts,
 	}
-	pro := NewDoltDatabaseProvider(dEnv.Config, mergeableDb)
+	pro := NewDoltDatabaseProvider(dEnv.Config, tiDb)
 	engine = sqle.NewDefault(pro)
 
 	// Get an updated root to use for the rest of the test
 	ctx := sql.NewEmptyContext()
 	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, dEnv.Config, getDbState(t, db, dEnv))
 	require.NoError(t, err)
-	roots, ok := sess.GetRoots(ctx, mergeableDb.Name())
+	roots, ok := sess.GetRoots(ctx, tiDb.Name())
 	require.True(t, ok)
 
-	return engine, dEnv, mergeableDb, []*indexTuple{
+	return engine, dEnv, tiDb, []*indexTuple{
 		idxv1ToTuple,
 		idxv2v1ToTuple,
 		{
@@ -119,25 +119,25 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	}, roots.Working
 }
 
-// Database made to test mergeable indexes while using the full SQL engine.
-type testMergeableIndexDb struct {
+// Database made to test indexes while using the full SQL engine.
+type testIndexDb struct {
 	t           *testing.T
 	tbl         *AlterableDoltTable
 	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
 	editOpts    editor.Options
 }
 
-func (db *testMergeableIndexDb) EditOptions() editor.Options {
+func (db *testIndexDb) EditOptions() editor.Options {
 	return db.editOpts
 }
 
-func (db *testMergeableIndexDb) Name() string {
+func (db *testIndexDb) Name() string {
 	return "dolt"
 }
 
-func (db *testMergeableIndexDb) GetTableInsensitive(_ *sql.Context, tblName string) (sql.Table, bool, error) {
+func (db *testIndexDb) GetTableInsensitive(_ *sql.Context, tblName string) (sql.Table, bool, error) {
 	if strings.ToLower(tblName) == strings.ToLower(db.tbl.tableName) {
-		return &testMergeableIndexTable{
+		return &testIndexTable{
 			AlterableDoltTable: db.tbl,
 			t:                  db.t,
 			finalRanges:        db.finalRanges,
@@ -145,27 +145,27 @@ func (db *testMergeableIndexDb) GetTableInsensitive(_ *sql.Context, tblName stri
 	}
 	return nil, false, nil
 }
-func (db *testMergeableIndexDb) GetTableNames(_ *sql.Context) ([]string, error) {
+func (db *testIndexDb) GetTableNames(_ *sql.Context) ([]string, error) {
 	return []string{db.tbl.tableName}, nil
 }
 
-// Table made to test mergeable indexes by intercepting specific index-related functions.
-type testMergeableIndexTable struct {
+// Table made to test indexes by intercepting specific index-related functions.
+type testIndexTable struct {
 	*AlterableDoltTable
 	t           *testing.T
-	il          *testMergeableIndexLookup
+	il          *testIndexLookup
 	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
 }
 
-var _ sql.IndexedTable = (*testMergeableIndexTable)(nil)
+var _ sql.IndexedTable = (*testIndexTable)(nil)
 
-func (tbl *testMergeableIndexTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+func (tbl *testIndexTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	indexes, err := tbl.AlterableDoltTable.GetIndexes(ctx)
 	if err != nil {
 		return nil, err
 	}
 	for i, index := range indexes {
-		indexes[i] = &testMergeableDoltIndex{
+		indexes[i] = &testIndex{
 			doltIndex:   index.(*doltIndex),
 			t:           tbl.t,
 			finalRanges: tbl.finalRanges,
@@ -174,10 +174,10 @@ func (tbl *testMergeableIndexTable) GetIndexes(ctx *sql.Context) ([]sql.Index, e
 	return indexes, nil
 }
 
-func (tbl *testMergeableIndexTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	il, ok := lookup.(*testMergeableIndexLookup)
+func (tbl *testIndexTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	il, ok := lookup.(*testIndexLookup)
 	require.True(tbl.t, ok)
-	return &testMergeableIndexTable{
+	return &testIndexTable{
 		AlterableDoltTable: tbl.AlterableDoltTable,
 		t:                  tbl.t,
 		il:                 il,
@@ -185,137 +185,57 @@ func (tbl *testMergeableIndexTable) WithIndexLookup(lookup sql.IndexLookup) sql.
 	}
 }
 
-type testProjectedMergableIndexTable struct {
-	*testMergeableIndexTable
+type testProjectedIndexTable struct {
+	*testIndexTable
 	cols []string
 }
 
-func (tbl *testMergeableIndexTable) WithProjection(colNames []string) sql.Table {
-	return &testProjectedMergableIndexTable{tbl, colNames}
+func (tbl *testIndexTable) WithProjection(colNames []string) sql.Table {
+	return &testProjectedIndexTable{tbl, colNames}
 }
 
-func (tbl *testMergeableIndexTable) Partitions(_ *sql.Context) (sql.PartitionIter, error) {
+func (tbl *testIndexTable) Partitions(_ *sql.Context) (sql.PartitionIter, error) {
 	rowData := tbl.il.IndexRowData()
 	return sqlutil.NewSinglePartitionIter(rowData), nil
 }
 
-func (tbl *testMergeableIndexTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (tbl *testIndexTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	return tbl.il.RowIter(ctx, part.(sqlutil.SinglePartition).RowData)
 }
 
-// Index made to test mergeable indexes by intercepting all calls that return lookups and returning modified lookups.
-type testMergeableDoltIndex struct {
+// Index made to test indexes by intercepting all calls that return index builders and returning modified builders.
+type testIndex struct {
 	*doltIndex
 	t           *testing.T
 	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
 }
 
-func (di *testMergeableDoltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
-	indexLookup, err := di.doltIndex.Get(keys...)
-	return &testMergeableIndexLookup{
+var _ sql.Index = (*testIndex)(nil)
+
+func (di *testIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+	indexLookup, err := di.doltIndex.NewLookup(ctx, ranges...)
+	return &testIndexLookup{
 		doltIndexLookup: indexLookup.(*doltIndexLookup),
-		t:               di.t,
-		finalRanges:     di.finalRanges,
-	}, err
-}
-func (di *testMergeableDoltIndex) Not(keys ...interface{}) (sql.IndexLookup, error) {
-	indexLookup, err := di.doltIndex.Not(keys...)
-	return &testMergeableIndexLookup{
-		doltIndexLookup: indexLookup.(*doltIndexLookup),
-		t:               di.t,
-		finalRanges:     di.finalRanges,
-	}, err
-}
-func (di *testMergeableDoltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
-	indexLookup, err := di.doltIndex.AscendGreaterOrEqual(keys...)
-	return &testMergeableIndexLookup{
-		doltIndexLookup: indexLookup.(*doltIndexLookup),
-		t:               di.t,
-		finalRanges:     di.finalRanges,
-	}, err
-}
-func (di *testMergeableDoltIndex) AscendLessThan(keys ...interface{}) (sql.IndexLookup, error) {
-	indexLookup, err := di.doltIndex.AscendLessThan(keys...)
-	return &testMergeableIndexLookup{
-		doltIndexLookup: indexLookup.(*doltIndexLookup),
-		t:               di.t,
-		finalRanges:     di.finalRanges,
-	}, err
-}
-func (di *testMergeableDoltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []interface{}) (sql.IndexLookup, error) {
-	indexLookup, err := di.doltIndex.AscendRange(greaterOrEqual, lessThanOrEqual)
-	return &testMergeableIndexLookup{
-		doltIndexLookup: indexLookup.(*doltIndexLookup),
-		t:               di.t,
-		finalRanges:     di.finalRanges,
-	}, err
-}
-func (di *testMergeableDoltIndex) DescendGreater(keys ...interface{}) (sql.IndexLookup, error) {
-	indexLookup, err := di.doltIndex.DescendGreater(keys...)
-	return &testMergeableIndexLookup{
-		doltIndexLookup: indexLookup.(*doltIndexLookup),
-		t:               di.t,
-		finalRanges:     di.finalRanges,
-	}, err
-}
-func (di *testMergeableDoltIndex) DescendLessOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
-	indexLookup, err := di.doltIndex.DescendLessOrEqual(keys...)
-	return &testMergeableIndexLookup{
-		doltIndexLookup: indexLookup.(*doltIndexLookup),
-		t:               di.t,
-		finalRanges:     di.finalRanges,
-	}, err
-}
-func (di *testMergeableDoltIndex) DescendRange(lessOrEqual, greaterOrEqual []interface{}) (sql.IndexLookup, error) {
-	indexLookup, err := di.doltIndex.DescendRange(lessOrEqual, greaterOrEqual)
-	return &testMergeableIndexLookup{
-		doltIndexLookup: indexLookup.(*doltIndexLookup),
+		testIdx:         di,
 		t:               di.t,
 		finalRanges:     di.finalRanges,
 	}, err
 }
 
-// Lookup made to test mergeable indexes by intercepting the lookup functions and adding tracking for testing.
-type testMergeableIndexLookup struct {
+// Lookup made to test indexes by intercepting the lookup functions and adding tracking for testing.
+type testIndexLookup struct {
 	*doltIndexLookup
+	testIdx     *testIndex
 	t           *testing.T
 	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
 }
 
-func (il *testMergeableIndexLookup) IsMergeable(indexLookup sql.IndexLookup) bool {
-	return il.doltIndexLookup.IsMergeable(indexLookup.(*testMergeableIndexLookup).doltIndexLookup)
+var _ sql.IndexLookup = (*testIndexLookup)(nil)
+
+func (il *testIndexLookup) Index() sql.Index {
+	return il.testIdx
 }
-func (il *testMergeableIndexLookup) Intersection(indexLookups ...sql.IndexLookup) (sql.IndexLookup, error) {
-	newLookups := make([]sql.IndexLookup, len(indexLookups))
-	for i, otherIl := range indexLookups {
-		newLookups[i] = otherIl.(*testMergeableIndexLookup).doltIndexLookup
-	}
-	intersectedIl, err := il.doltIndexLookup.Intersection(newLookups...)
-	if err != nil {
-		return nil, err
-	}
-	return &testMergeableIndexLookup{
-		doltIndexLookup: intersectedIl.(*doltIndexLookup),
-		t:               il.t,
-		finalRanges:     il.finalRanges,
-	}, nil
-}
-func (il *testMergeableIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.IndexLookup, error) {
-	newLookups := make([]sql.IndexLookup, len(indexLookups))
-	for i, otherIl := range indexLookups {
-		newLookups[i] = otherIl.(*testMergeableIndexLookup).doltIndexLookup
-	}
-	unionedIl, err := il.doltIndexLookup.Union(newLookups...)
-	if err != nil {
-		return nil, err
-	}
-	return &testMergeableIndexLookup{
-		doltIndexLookup: unionedIl.(*doltIndexLookup),
-		t:               il.t,
-		finalRanges:     il.finalRanges,
-	}, nil
-}
-func (il *testMergeableIndexLookup) RowIter(ctx *sql.Context, rowData types.Map) (sql.RowIter, error) {
+func (il *testIndexLookup) RowIter(ctx *sql.Context, rowData types.Map) (sql.RowIter, error) {
 	il.finalRanges(il.ranges) // this is where the ranges turn into noms.ReadRanges, so we return the final slice here
 	return il.doltIndexLookup.RowIter(ctx, rowData, nil)
 }

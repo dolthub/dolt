@@ -34,6 +34,17 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type indexComp int
+
+const (
+	indexComp_Eq = iota
+	indexComp_NEq
+	indexComp_Gt
+	indexComp_GtE
+	indexComp_Lt
+	indexComp_LtE
+)
+
 type doltIndexTestCase struct {
 	indexName    string
 	keys         []interface{}
@@ -284,7 +295,7 @@ func TestDoltIndexEqual(t *testing.T) {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
-			testDoltIndex(t, test.keys, test.expectedRows, index.Get)
+			testDoltIndex(t, test.keys, test.expectedRows, index, indexComp_Eq)
 		})
 	}
 }
@@ -415,7 +426,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
-			testDoltIndex(t, test.keys, test.expectedRows, index.DescendGreater)
+			testDoltIndex(t, test.keys, test.expectedRows, index, indexComp_Gt)
 		})
 	}
 }
@@ -552,7 +563,7 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
-			testDoltIndex(t, test.keys, test.expectedRows, index.AscendGreaterOrEqual)
+			testDoltIndex(t, test.keys, test.expectedRows, index, indexComp_GtE)
 		})
 	}
 }
@@ -683,7 +694,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
-			testDoltIndex(t, test.keys, test.expectedRows, index.AscendLessThan)
+			testDoltIndex(t, test.keys, test.expectedRows, index, indexComp_Lt)
 		})
 	}
 }
@@ -820,7 +831,7 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 		t.Run(fmt.Sprintf("%s|%v", test.indexName, test.keys), func(t *testing.T) {
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
-			testDoltIndex(t, test.keys, test.expectedRows, index.DescendLessOrEqual)
+			testDoltIndex(t, test.keys, test.expectedRows, index, indexComp_LtE)
 		})
 	}
 }
@@ -984,35 +995,26 @@ func TestDoltIndexBetween(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s|%v%v", test.indexName, test.greaterThanOrEqual, test.lessThanOrEqual), func(t *testing.T) {
+			ctx := NewTestSQLCtx(context.Background())
 			index, ok := indexMap[test.indexName]
 			require.True(t, ok)
 
 			expectedRows := convertSqlRowToInt64(test.expectedRows)
 
-			indexLookup, err := index.AscendRange(test.greaterThanOrEqual, test.lessThanOrEqual)
+			exprs := index.Expressions()
+			sqlIndex := sql.NewIndexBuilder(ctx, index)
+			for i := range test.greaterThanOrEqual {
+				sqlIndex = sqlIndex.GreaterOrEqual(ctx, exprs[i], test.greaterThanOrEqual[i]).LessOrEqual(ctx, exprs[i], test.lessThanOrEqual[i])
+			}
+			indexLookup, err := sqlIndex.Build(ctx)
 			require.NoError(t, err)
 			dil, ok := indexLookup.(*doltIndexLookup)
 			require.True(t, ok)
-			indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()), dil.IndexRowData(), nil)
+			indexIter, err := dil.RowIter(ctx, dil.IndexRowData(), nil)
 			require.NoError(t, err)
 
 			var readRows []sql.Row
 			var nextRow sql.Row
-			for nextRow, err = indexIter.Next(); err == nil; nextRow, err = indexIter.Next() {
-				readRows = append(readRows, nextRow)
-			}
-			require.Equal(t, io.EOF, err)
-
-			requireUnorderedRowsEqual(t, expectedRows, readRows)
-
-			indexLookup, err = index.DescendRange(test.lessThanOrEqual, test.greaterThanOrEqual)
-			require.NoError(t, err)
-			dil, ok = indexLookup.(*doltIndexLookup)
-			require.True(t, ok)
-			indexIter, err = dil.RowIter(NewTestSQLCtx(context.Background()), dil.IndexRowData(), nil)
-			require.NoError(t, err)
-
-			readRows = nil
 			for nextRow, err = indexIter.Next(); err == nil; nextRow, err = indexIter.Next() {
 				readRows = append(readRows, nextRow)
 			}
@@ -1202,12 +1204,33 @@ func requireUnorderedRowsEqual(t *testing.T, rows1, rows2 []sql.Row) {
 	require.Equal(t, rows1, rows2)
 }
 
-func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, indexLookupFn func(keys ...interface{}) (sql.IndexLookup, error)) {
-	indexLookup, err := indexLookupFn(keys...)
+func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, index sql.Index, cmp indexComp) {
+	ctx := NewTestSQLCtx(context.Background())
+	exprs := index.Expressions()
+	builder := sql.NewIndexBuilder(sql.NewEmptyContext(), index)
+	for i, key := range keys {
+		switch cmp {
+		case indexComp_Eq:
+			builder = builder.Equals(ctx, exprs[i], key)
+		case indexComp_NEq:
+			builder = builder.NotEquals(ctx, exprs[i], key)
+		case indexComp_Gt:
+			builder = builder.GreaterThan(ctx, exprs[i], key)
+		case indexComp_GtE:
+			builder = builder.GreaterOrEqual(ctx, exprs[i], key)
+		case indexComp_Lt:
+			builder = builder.LessThan(ctx, exprs[i], key)
+		case indexComp_LtE:
+			builder = builder.LessOrEqual(ctx, exprs[i], key)
+		default:
+			panic("should not be hit")
+		}
+	}
+	indexLookup, err := builder.Build(ctx)
 	require.NoError(t, err)
 	dil, ok := indexLookup.(*doltIndexLookup)
 	require.True(t, ok)
-	indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()), dil.IndexRowData(), nil)
+	indexIter, err := dil.RowIter(ctx, dil.IndexRowData(), nil)
 	require.NoError(t, err)
 
 	var readRows []sql.Row

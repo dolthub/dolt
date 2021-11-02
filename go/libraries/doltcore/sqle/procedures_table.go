@@ -166,7 +166,7 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 			doltdb.SchemasTableName)
 	}
 
-	indexLookup, err := fragNameIndex.Get(name)
+	indexLookup, err := sql.NewIndexBuilder(ctx, fragNameIndex).Equals(ctx, fragNameIndex.Expressions()[0], name).Build(ctx)
 	if err != nil {
 		return sql.StoredProcedureDetails{}, false, err
 	}

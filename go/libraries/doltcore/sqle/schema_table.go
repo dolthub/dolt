@@ -210,7 +210,8 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		return nil, false, noSchemaIndexDefined
 	}
 
-	indexLookup, err := fragNameIndex.Get(fragType, name)
+	exprs := fragNameIndex.Expressions()
+	indexLookup, err := sql.NewIndexBuilder(ctx, fragNameIndex).Equals(ctx, exprs[0], fragType).Equals(ctx, exprs[1], name).Build(ctx)
 	if err != nil {
 		return nil, false, err
 	}
