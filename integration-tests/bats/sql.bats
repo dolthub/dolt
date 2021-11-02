@@ -554,6 +554,46 @@ SQL
     [[ "$output" =~ table_a ]] || false
 }
 
+@test "sql: create new database" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout main
+    
+    dolt sql --disable-batch <<SQL
+CREATE DATABASE test1;
+USE test1;
+CREATE TABLE table_a(x int primary key);
+insert into table_a values (1), (2);
+SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
+SQL
+
+    cd test1
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ table_a ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "created table_a" ]] || false
+
+    cd ../
+    dolt sql -q "create database test2"
+    [ -d "test2" ]
+
+    touch existing_file
+    mkdir existing_dir
+
+    run dolt sql -q "create database existing_file"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "exists" ]] || false
+
+    run dolt sql -q "create database existing_dir"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "exists" ]] || false
+}
+
 @test "sql: set head ref session var" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
