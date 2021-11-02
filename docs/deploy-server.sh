@@ -22,7 +22,22 @@ install_dolt() {
 setup_configs() {
    # Set up the dolt user along with core dolt configurations
   echo "Setting up Configurations..."
-  useradd -r -m -d /var/lib/doltdb dolt
+
+  # Check if the user "dolt" already exists. If it exists double check that it is okay to continue
+  if id -u "dolt" &> /dev/null; then
+    echo "The user dolt already exists"
+    read -r -p "Do you want to continue adding privileges to the existing user dolt? " response
+
+    response=${response,,} # tolower
+    if ! ([[ $response =~ ^(yes|y| ) ]] || [[ -z $response ]]); then
+      exit 1
+    fi
+
+  else
+    # add the user if `dolt` doesn't exist
+    useradd -r -m -d /var/lib/doltdb dolt
+  fi
+
   cd /var/lib/doltdb
 
   read -e -p "Enter an email associated with your user: " -i "dolt-user@dolt.com" email
@@ -36,7 +51,7 @@ setup_configs() {
 database_configuration() {
   echo "Setting up the dolt database..."
 
-  read -e -p "Input the name of your database: " -i "doltdb" db_name
+  read -e -p "Input the name of your database: " -i "mydb" db_name
   local db_dir="databases/$db_name"
 
   cd /var/lib/doltdb
