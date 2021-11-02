@@ -38,7 +38,7 @@ func TestMemberSet(t *testing.T) {
 }
 
 func testMemberSet(t *testing.T, count int) {
-	memSet := makeMemberSet(maskPool, count)
+	memSet := makeNullMask(maskPool, count)
 
 	for i := 0; i < count; i++ {
 		assert.False(t, memSet.present(i))
@@ -61,7 +61,7 @@ func testMemberSet(t *testing.T, count int) {
 }
 
 func testCountPrefix(t *testing.T, count int) {
-	memSet := makeMemberSet(maskPool, count)
+	memSet := makeNullMask(maskPool, count)
 
 	for i := 0; i < count; i++ {
 		assert.Equal(t, i, memSet.countPrefix(i))
@@ -74,7 +74,7 @@ func testCountPrefix(t *testing.T, count int) {
 }
 
 func testCountSuffix(t *testing.T, count int) {
-	memSet := makeMemberSet(maskPool, count)
+	memSet := makeNullMask(maskPool, count)
 
 	c := 0
 	for i := count - 1; i >= 0; i-- {

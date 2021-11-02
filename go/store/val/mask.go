@@ -16,11 +16,11 @@ package val
 
 import "github.com/dolthub/dolt/go/store/pool"
 
-// A nullMask is a bit-array encoding a NULL bitmask.
-//  NULLs are encoded as 0, non-NULLs as 1.
+// nullMask is a bit-array encoding a NULL bitmask.
+// NULLs are encoded as 0, non-NULLs as 1.
 type nullMask []byte
 
-func makeMemberSet(pool pool.BuffPool, count int) nullMask {
+func makeNullMask(pool pool.BuffPool, count int) nullMask {
 	sz := uint64(maskSize(count))
 	return pool.Get(sz)
 }

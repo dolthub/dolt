@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	MaxTupleFields   = 4096
-	MaxTupleDataSize = math.MaxUint16
+	MaxTupleFields            = 4096
+	MaxTupleDataSize ByteSize = math.MaxUint16
 
 	numFieldsSize ByteSize = 2
 )
@@ -152,11 +152,6 @@ func (tup Tuple) GetField(i int) []byte {
 	}
 
 	return tup[start:stop]
-}
-
-// todo(andy): unclear if we want to expose this
-func (tup Tuple) Count() int {
-	return tup.fieldCount()
 }
 
 func (tup Tuple) size() ByteSize {

@@ -227,6 +227,7 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
+// GetField reads the value from the ith field of the Tuple as an interface{}.
 func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 	var ok bool
 	switch td.Types[i].Enc {
@@ -276,6 +277,7 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	panic("incorrect value encoding")
 }
 
+// Format prints a Tuple as a string.
 func (td TupleDesc) Format(tup Tuple) string {
 	var sb strings.Builder
 	sb.WriteString("[ ")

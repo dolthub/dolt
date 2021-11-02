@@ -162,7 +162,7 @@ func roundTripBools(t *testing.T) {
 }
 
 func roundTripInts(t *testing.T) {
-	buf := make([]byte, 1)
+	buf := make([]byte, int8Size)
 	integers := []int64{-1, 0, -1, math.MaxInt8, math.MinInt8}
 	for _, value := range integers {
 		exp := int8(value)
@@ -171,7 +171,7 @@ func roundTripInts(t *testing.T) {
 		zero(buf)
 	}
 
-	buf = make([]byte, 2)
+	buf = make([]byte, int16Size)
 	integers = append(integers, math.MaxInt16, math.MaxInt16)
 	for _, value := range integers {
 		exp := int16(value)
@@ -180,7 +180,7 @@ func roundTripInts(t *testing.T) {
 		zero(buf)
 	}
 
-	buf = make([]byte, 4)
+	buf = make([]byte, int32Size)
 	integers = append(integers, math.MaxInt32, math.MaxInt32)
 	for _, value := range integers {
 		exp := int32(value)
@@ -189,7 +189,7 @@ func roundTripInts(t *testing.T) {
 		zero(buf)
 	}
 
-	buf = make([]byte, 8)
+	buf = make([]byte, int64Size)
 	integers = append(integers, math.MaxInt64, math.MaxInt64)
 	for _, value := range integers {
 		exp := int64(value)
@@ -200,7 +200,7 @@ func roundTripInts(t *testing.T) {
 }
 
 func roundTripUints(t *testing.T) {
-	buf := make([]byte, 1)
+	buf := make([]byte, uint8Size)
 	uintegers := []uint64{0, 1, math.MaxUint8}
 	for _, value := range uintegers {
 		exp := uint8(value)
@@ -209,7 +209,7 @@ func roundTripUints(t *testing.T) {
 		zero(buf)
 	}
 
-	buf = make([]byte, 2)
+	buf = make([]byte, uint16Size)
 	uintegers = append(uintegers, math.MaxUint16)
 	for _, value := range uintegers {
 		exp := uint16(value)
@@ -218,7 +218,7 @@ func roundTripUints(t *testing.T) {
 		zero(buf)
 	}
 
-	buf = make([]byte, 4)
+	buf = make([]byte, uint32Size)
 	uintegers = append(uintegers, math.MaxUint32)
 	for _, value := range uintegers {
 		exp := uint32(value)
@@ -227,7 +227,7 @@ func roundTripUints(t *testing.T) {
 		zero(buf)
 	}
 
-	buf = make([]byte, 8)
+	buf = make([]byte, uint64Size)
 	uintegers = append(uintegers, math.MaxUint64)
 	for _, value := range uintegers {
 		exp := uint64(value)
@@ -238,7 +238,7 @@ func roundTripUints(t *testing.T) {
 }
 
 func roundTripFloats(t *testing.T) {
-	buf := make([]byte, 4)
+	buf := make([]byte, float32Size)
 	floats := []float64{-1, 0, 1, math.MaxFloat32, math.SmallestNonzeroFloat32}
 	for _, value := range floats {
 		exp := float32(value)
@@ -247,7 +247,7 @@ func roundTripFloats(t *testing.T) {
 		zero(buf)
 	}
 
-	buf = make([]byte, 8)
+	buf = make([]byte, float64Size)
 	floats = append(floats, math.MaxFloat64, math.SmallestNonzeroFloat64)
 	for _, value := range floats {
 		exp := float64(value)
