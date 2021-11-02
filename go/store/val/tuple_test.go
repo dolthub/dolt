@@ -26,6 +26,10 @@ import (
 
 var shared = pool.NewBuffPool()
 
+func TestNULL(t *testing.T) {
+	assert.True(t, NULL == nil)
+}
+
 func TestNewTuple(t *testing.T) {
 	t.Run("test tuple round trip", func(t *testing.T) {
 		roundTripBytes(t)

@@ -28,6 +28,51 @@ const (
 	numFieldsSize ByteSize = 2
 )
 
+var NULL []byte = nil
+
+// Tuples are byte slices containing field values and a footer. Tuples only
+//   contain Values for non-null Fields. Value i contains the data for ith non-
+//   null Field. Values for are packed contiguously from the front of the Tuple.
+//   The footer contains offset, a null mask, and a field count. Offsets enable
+//   random access to Values. The null mask enables null-compaction for Values.
+//
+//   Tuples read and write Values as byte slices, (de)serialization is delegated
+//   to Tuple Descriptors which know a Tuple's schema and associated encodings.
+//   When reading and writing Values, NULLs are encoded as nil byte slices. Note
+//   that these are not the same as zero-length byte slices. An empty string may
+//   be encoded as a zero-length byte slice and will be distinct from a NULL
+//   string both logically and semantically.
+//
+//   Tuple:
+//   +---------+---------+-----+---------+---------+-----------+-------------+
+//   | Value 0 | Value 1 | ... | Value K | Offsets | Null Mask | Field Count |
+//   +---------+---------+-----+---------+---------+-----------+-------------+
+//
+//   Offsets:
+//     The offset array contains a uint16 for each non-null field after field 0.
+//     Offset i encodes the distance to the ith Value from the front of the Tuple.
+//     The size of the offset array is 2*(K-1) bytes, where K is the number of
+//     Values in the Tuple.
+//   +----------+----------+-----+----------+
+//   | Offset 1 | Offset 2 | ... | Offset K |
+//   +----------+----------+-----+----------+
+//
+//   Null Mask:
+//     The null mask is a bit array encoding null or non-null for each field in
+//     the Tuple. Nulls are encoded as 0, non-nulls are encoded as 1. The size
+//     of the bit array is math.Ceil(N/8) bytes, where N is the number of Fields
+//     in the Tuple
+//   +------------+-------------+-----+
+//   | Bits 0 - 7 | Bits 8 - 15 | ... |
+//   +------------+-------------+-----+
+//
+//   Field Count:
+//		The field count is a uint16 containing the number of fields in the Tuple,
+//      it is stored in 2 bytes.
+//   +----------------------+
+//   | Field Count (uint16) |
+//   +----------------------+
+
 type Tuple []byte
 
 func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
@@ -80,22 +125,26 @@ func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tupl
 	return
 }
 
+// GetField returns the value for field |i|.
 func (tup Tuple) GetField(i int) []byte {
 	if i < 0 {
 		// supports negative indexing
 		i = tup.fieldCount() + i
 	}
 
+	// first check if the field is NULL
 	if !tup.mask().present(i) {
-		return nil // NULL
+		return NULL
 	}
 
-	offs, bufStop := tup.offsets()
+	// translate from field index to value
+	// index to compensate for NULL fields
 	i = tup.fieldToValue(i)
 
-	start := offs.Get(i)
-
+	offs, bufStop := tup.offsets()
+	var start = offs.Get(i)
 	var stop ByteSize
+
 	if offs.IsLastIndex(i) {
 		stop = bufStop
 	} else {
@@ -105,6 +154,7 @@ func (tup Tuple) GetField(i int) []byte {
 	return tup[start:stop]
 }
 
+// todo(andy): unclear if we want to expose this
 func (tup Tuple) Count() int {
 	return tup.fieldCount()
 }
