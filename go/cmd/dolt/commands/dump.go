@@ -270,7 +270,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 // NewDumpDataMover returns dataMover with tableOptions given including source table and destination file info
-func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, statsCB noms.StatsCB, filePath string) (retDataMover *mvdata.DataMover, retErr errhand.VerboseError) {
+func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, statsCB noms.StatsCB, filePath string) (*mvdata.DataMover, errhand.VerboseError) {
 	var rd table.TableReadCloser
 	var err error
 
@@ -282,10 +282,7 @@ func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 	// close on err exit
 	defer func() {
 		if rd != nil {
-			rErr := rd.Close(ctx)
-			if rErr != nil {
-				retErr = errhand.BuildDError("Error closing reader for %s.", tblOpts.SrcName()).AddCause(rErr).Build()
-			}
+			rd.Close(ctx)
 		}
 	}()
 
