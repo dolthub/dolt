@@ -1102,3 +1102,79 @@ while True:
 
     server_query repo1 1 "show tables" "Table\ntest"
 }
+
+@test "sql-server: create database with no starting repo" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir no_dolt && cd no_dolt
+    start_sql_server
+    
+    server_query "" 1 "create database test1"
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    server_query "test1" 1 "create table a(x int)"
+    server_query "test1" 1 "insert into a values (1), (2)"
+    # not bothering to check the results of the commit here
+    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
+
+    server_query "" 1 "create database test2"
+    server_query "test2" 1 "create table b(x int)"
+    server_query "test2" 1 "insert into b values (1), (2)"
+    # not bothering to check the results of the commit here
+    run server_query "test2" 1 "select dolt_commit('-a', '-m', 'new table b')"
+
+    cd test1
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table a" ]] || false
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "a" ]] || false
+
+    cd ../test2
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table b" ]] || false
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b" ]] || false
+}
+
+@test "sql-server: create database with existing repo" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server
+    
+    server_query "" 1 "create database test1"
+    server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1"
+    server_query "test1" 1 "create table a(x int)"
+    server_query "test1" 1 "insert into a values (1), (2)"
+    # not bothering to check the results of the commit here
+    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
+
+    server_query "" 1 "create database test2"
+    server_query "test2" 1 "create table b(x int)"
+    server_query "test2" 1 "insert into b values (1), (2)"
+    # not bothering to check the results of the commit here
+    run server_query "test2" 1 "select dolt_commit('-a', '-m', 'new table b')"
+
+    cd test1
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table a" ]] || false
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "a" ]] || false
+
+    cd ../test2
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table b" ]] || false
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b" ]] || false
+}
