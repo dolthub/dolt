@@ -64,8 +64,6 @@ teardown() {
     # Give the server a chance to start
     sleep 1
 
-    export MYSQL_PWD=""
-
     mkdir dumps
     run mysqldump $REPO_NAME -P $PORT -h 0.0.0.0 -u $USER > dumps/mysqldump.sql
     [ "$status" -eq 0 ]
@@ -175,7 +173,7 @@ teardown() {
     run dolt sql < doltdump.sql
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "UPDATE keyless SET c0 = 9 WHERE c0 = 2;"
+    run dolt sql -q "UPDATE keyless SET c0 = 4 WHERE c0 = 2;"
     [ $status -eq 0 ]
 
     run dolt sql -q "SELECT * FROM keyless ORDER BY c0;" -r csv
@@ -183,6 +181,6 @@ teardown() {
     [[ "${lines[1]}" = "0,0" ]] || false
     [[ "${lines[2]}" = "1,1" ]] || false
     [[ "${lines[3]}" = "1,1" ]] || false
-    [[ "${lines[4]}" = "9,2" ]] || false
+    [[ "${lines[4]}" = "4,2" ]] || false
 
 }
