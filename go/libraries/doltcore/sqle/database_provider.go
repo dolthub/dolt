@@ -20,8 +20,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -31,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -43,8 +43,8 @@ type DoltDatabaseProvider struct {
 	mu        *sync.RWMutex
 
 	dataRootDir string
-	fs filesys.Filesys
-	cfg config.ReadableConfig
+	fs          filesys.Filesys
+	cfg         config.ReadableConfig
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
