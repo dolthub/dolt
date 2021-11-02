@@ -202,7 +202,6 @@ func TestCreateRdWr(t *testing.T) {
 
 		loc := test.dl
 
-
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 
 		fileName := strings.Split(loc.String(), ":")
