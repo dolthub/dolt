@@ -30,6 +30,7 @@ type TupleDesc struct {
 	raw rawCmp
 }
 
+// NewTupleDescriptor returns a TupleDesc from a slice of Types.
 func NewTupleDescriptor(types ...Type) (td TupleDesc) {
 	if len(types) > MaxTupleFields {
 		panic("tuple field maxIdx exceeds maximum")
@@ -54,6 +55,7 @@ const (
 	LesserCmp  Comparison = -1
 )
 
+// Compare returns the Comaparison of |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
 	if td.raw != nil {
 		return compareRaw(left, right, td.raw)
@@ -69,108 +71,200 @@ func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
 	return
 }
 
+// Count returns the number of fields in the TupleDesc.
 func (td TupleDesc) Count() int {
 	return len(td.Types)
 }
 
-func (td TupleDesc) GetBool(i int, tup Tuple) bool {
-	td.expectEncoding(i, Int8Enc)
-	return readBool(tup.GetField(i))
+// IsNull returns true if the ith field of the Tuple is NULL.
+func (td TupleDesc) IsNull(i int, tup Tuple) bool {
+	b := tup.GetField(i)
+	return b == nil
 }
 
-func (td TupleDesc) GetInt8(i int, tup Tuple) int8 {
+// GetBool reads a bool from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetBool(i int, tup Tuple) (v bool, ok bool) {
 	td.expectEncoding(i, Int8Enc)
-	return readInt8(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readBool(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetUint8(i int, tup Tuple) uint8 {
+// GetInt8 reads an int8 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetInt8(i int, tup Tuple) (v int8, ok bool) {
+	td.expectEncoding(i, Int8Enc)
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readInt8(b), true
+	}
+	return
+}
+
+// GetUint8 reads a uint8 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetUint8(i int, tup Tuple) (v uint8, ok bool) {
 	td.expectEncoding(i, Uint8Enc)
-	return readUint8(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readUint8(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetInt16(i int, tup Tuple) int16 {
+// GetInt16 reads an int16 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetInt16(i int, tup Tuple) (v int16, ok bool) {
 	td.expectEncoding(i, Int16Enc)
-	return readInt16(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readInt16(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetUint16(i int, tup Tuple) uint16 {
+// GetUint16 reads a uint16 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetUint16(i int, tup Tuple) (v uint16, ok bool) {
 	td.expectEncoding(i, Uint16Enc)
-	return readUint16(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readUint16(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetInt32(i int, tup Tuple) int32 {
+// GetInt32 reads an int32 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetInt32(i int, tup Tuple) (v int32, ok bool) {
 	td.expectEncoding(i, Int32Enc)
-	return readInt32(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readInt32(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetUint32(i int, tup Tuple) uint32 {
+// GetUint32 reads a uint32 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetUint32(i int, tup Tuple) (v uint32, ok bool) {
 	td.expectEncoding(i, Uint32Enc)
-	return readUint32(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readUint32(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetInt64(i int, tup Tuple) int64 {
+// GetInt64 reads an int64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetInt64(i int, tup Tuple) (v int64, ok bool) {
 	td.expectEncoding(i, Int64Enc)
-	return readInt64(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readInt64(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetUint64(i int, tup Tuple) uint64 {
+// GetUint64 reads a uint64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetUint64(i int, tup Tuple) (v uint64, ok bool) {
 	td.expectEncoding(i, Uint64Enc)
-	return readUint64(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readUint64(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetFloat32(i int, tup Tuple) float32 {
+// GetFloat32 reads a float32 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetFloat32(i int, tup Tuple) (v float32, ok bool) {
 	td.expectEncoding(i, Float32Enc)
-	return readFloat32(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readFloat32(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetFloat64(i int, tup Tuple) float64 {
+// GetFloat64 reads a float64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetFloat64(i int, tup Tuple) (v float64, ok bool) {
 	td.expectEncoding(i, Float64Enc)
-	return readFloat64(tup.GetField(i))
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = readFloat64(b), true
+	}
+	return
 }
 
-func (td TupleDesc) GetString(i int, tup Tuple) string {
+// GetString reads a string from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetString(i int, tup Tuple) (v string, ok bool) {
 	td.expectEncoding(i, StringEnc)
-	return readString(tup.GetField(i), td.Types[i].Coll)
+	b := tup.GetField(i)
+	if b != nil {
+		v = readString(b, td.Types[i].Coll)
+		ok = true
+	}
+	return
 }
 
-func (td TupleDesc) GetBytes(i int, tup Tuple) []byte {
+// GetBytes reads a []byte from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
 	td.expectEncoding(i, BytesEnc)
-	return readBytes(tup.GetField(i), td.Types[i].Coll)
+	b := tup.GetField(i)
+	if b != nil {
+		v = readBytes(b, td.Types[i].Coll)
+		ok = true
+	}
+	return
 }
 
-func (td TupleDesc) GetField(i int, tup Tuple) interface{} {
+func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
+	var ok bool
 	switch td.Types[i].Enc {
 	case Int8Enc:
-		return td.GetInt8(i, tup)
+		v, ok = td.GetInt8(i, tup)
 	case Uint8Enc:
-		return td.GetUint8(i, tup)
+		v, ok = td.GetUint8(i, tup)
 	case Int16Enc:
-		return td.GetInt16(i, tup)
+		v, ok = td.GetInt16(i, tup)
 	case Uint16Enc:
-		return td.GetUint16(i, tup)
+		v, ok = td.GetUint16(i, tup)
 	case Int24Enc:
 		panic("24 bit")
 	case Uint24Enc:
 		panic("24 bit")
 	case Int32Enc:
-		return td.GetInt32(i, tup)
+		v, ok = td.GetInt32(i, tup)
 	case Uint32Enc:
-		return td.GetUint32(i, tup)
+		v, ok = td.GetUint32(i, tup)
 	case Int64Enc:
-		return td.GetInt64(i, tup)
+		v, ok = td.GetInt64(i, tup)
 	case Uint64Enc:
-		return td.GetUint64(i, tup)
+		v, ok = td.GetUint64(i, tup)
 	case Float32Enc:
-		return td.GetFloat32(i, tup)
+		v, ok = td.GetFloat32(i, tup)
 	case Float64Enc:
-		return td.GetFloat64(i, tup)
+		v, ok = td.GetFloat64(i, tup)
 	case StringEnc:
-		return td.GetString(i, tup)
+		v, ok = td.GetString(i, tup)
 	case BytesEnc:
-		return td.GetBytes(i, tup)
+		v, ok = td.GetBytes(i, tup)
 	default:
 		panic("unknown encoding")
 	}
+	if !ok {
+		return NULL
+	}
+	return v
 }
 
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
@@ -193,46 +287,51 @@ func (td TupleDesc) Format(tup Tuple) string {
 		}
 		seenOne = true
 
+		if td.IsNull(i, tup) {
+			sb.WriteString("NULL")
+			continue
+		}
+
 		switch typ.Enc {
 		case Int8Enc:
-			v := td.GetInt8(i, tup)
+			v, _ := td.GetInt8(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))
 		case Uint8Enc:
-			v := td.GetUint8(i, tup)
+			v, _ := td.GetUint8(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))
 		case Int16Enc:
-			v := td.GetInt16(i, tup)
+			v, _ := td.GetInt16(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))
 		case Uint16Enc:
-			v := td.GetUint16(i, tup)
+			v, _ := td.GetUint16(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))
 		case Int24Enc:
 			panic("24 bit")
 		case Uint24Enc:
 			panic("24 bit")
 		case Int32Enc:
-			v := td.GetInt32(i, tup)
+			v, _ := td.GetInt32(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))
 		case Uint32Enc:
-			v := td.GetUint32(i, tup)
+			v, _ := td.GetUint32(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))
 		case Int64Enc:
-			v := td.GetInt64(i, tup)
+			v, _ := td.GetInt64(i, tup)
 			sb.WriteString(strconv.FormatInt(v, 10))
 		case Uint64Enc:
-			v := td.GetUint64(i, tup)
+			v, _ := td.GetUint64(i, tup)
 			sb.WriteString(strconv.FormatUint(v, 10))
 		case Float32Enc:
-			v := td.GetFloat32(i, tup)
+			v, _ := td.GetFloat32(i, tup)
 			sb.WriteString(fmt.Sprintf("%f", v))
 		case Float64Enc:
-			v := td.GetFloat64(i, tup)
+			v, _ := td.GetFloat64(i, tup)
 			sb.WriteString(fmt.Sprintf("%f", v))
 		case StringEnc:
-			v := td.GetString(i, tup)
+			v, _ := td.GetString(i, tup)
 			sb.WriteString(v)
 		case BytesEnc:
-			v := td.GetBytes(i, tup)
+			v, _ := td.GetBytes(i, tup)
 			sb.Write(v)
 		default:
 			panic("unknown encoding")

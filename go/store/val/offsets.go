@@ -19,7 +19,7 @@ import "encoding/binary"
 type Offsets []byte
 
 // OffsetsSize returns the number of bytes needed to
-// store |count| offests.
+// store |fieldCount| offsets.
 func OffsetsSize(count int) ByteSize {
 	if count == 0 {
 		return 0

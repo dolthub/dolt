@@ -33,7 +33,7 @@ var NULL []byte = nil
 // Tuples are byte slices containing field values and a footer. Tuples only
 //   contain Values for non-NULL Fields. Value i contains the data for ith non-
 //   NULL Field. Values for are packed contiguously from the front of the Tuple.
-//   The footer contains offset, a NULL mask, and a field count. Offsets enable
+//   The footer contains offset, a NULL mask, and a field fieldCount. Offsets enable
 //   random access to Values. The NULL mask enables NULL-compaction for Values.
 //
 //   Tuples read and write Values as byte slices, (de)serialization is delegated
@@ -67,7 +67,7 @@ var NULL []byte = nil
 //   +------------+-------------+-----+
 //
 //   Field Count:
-//		The field count is a uint16 containing the number of fields in the Tuple,
+//		The field fieldCount is a uint16 containing the number of fields in the Tuple,
 //      it is stored in 2 bytes.
 //   +----------------------+
 //   | Field Count (uint16) |
