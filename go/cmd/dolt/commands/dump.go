@@ -243,6 +243,7 @@ func getDumpDestination(path string) mvdata.DataLocation {
 
 	return destLoc
 }
+
 // getDumpArgs returns dumpOptions of result format and dest file location corresponding to the input parameters
 func getDumpArgs(apr *argparser.ArgParseResults) (*dumpOptions, errhand.VerboseError) {
 
@@ -273,7 +274,7 @@ func getDumpArgs(apr *argparser.ArgParseResults) (*dumpOptions, errhand.VerboseE
 
 // newTableArgs returns tableOptions of table name and src table location and dest file location
 // corresponding to the input parameters
-func newTableArgs(tblName string, destination mvdata.DataLocation) (*tableOptions) {
+func newTableArgs(tblName string, destination mvdata.DataLocation) *tableOptions {
 	return &tableOptions{
 		tableName: tblName,
 		src:       mvdata.TableDataLocation{Name: tblName},
