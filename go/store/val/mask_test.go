@@ -88,7 +88,7 @@ func testCountSuffix(t *testing.T, count int) {
 	assert.Equal(t, expected, memSet.countSuffix(0))
 }
 
-func setRandom(ms memberSet, len int) (count int) {
+func setRandom(ms nullMask, len int) (count int) {
 
 	for i := 0; i < len; i++ {
 		if rand.Int()%2 == 1 {

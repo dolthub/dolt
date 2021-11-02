@@ -22,7 +22,12 @@ import (
 
 type TupleDesc struct {
 	Types []Type
-	raw   comparisonMapping
+
+	// Under certain conditions, Tuple comparisons can be
+	// optimized by directly comparing Tuples as byte slices,
+	// rather than accessing and deserializing each field.
+	// See definition of rawCmp for more information.
+	raw rawCmp
 }
 
 func NewTupleDescriptor(types ...Type) (td TupleDesc) {

@@ -17,7 +17,6 @@ package val
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math"
 )
 
@@ -37,7 +36,7 @@ const (
 
 type Encoding uint8
 
-// Fixed Width Encodings
+// Constant Size Encodings
 const (
 	NullEnc    Encoding = 0
 	Int8Enc    Encoding = 1
@@ -53,39 +52,37 @@ const (
 	Float32Enc Encoding = 11
 	Float64Enc Encoding = 12
 
-	// TimeEnc    Encoding = 13
-	// TimestampEnc
-	// DateEnc
-	// TimeEnc
-	// DatetimeEnc
-	// YearEnc
+	// TODO
+	//  TimeEnc
+	//  TimestampEnc
+	//  DateEnc
+	//  TimeEnc
+	//  DatetimeEnc
+	//  YearEnc
 
 	sentinel Encoding = 127
 )
 
-// Variable Width Encodings
+// Variable Size Encodings
 const (
 	StringEnc Encoding = 128
 	BytesEnc  Encoding = 129
 
-	// DecimalEnc
-	// BitEnc
-	// CharEnc
-	// VarCharEnc
-	// TextEnc
-	// BinaryEnc
-	// VarBinaryEnc
-	// BlobEnc
-	// JSONEnc
-	// EnumEnc
-	// SetEnc
-	// ExpressionEnc
-	// GeometryEnc
+	// TODO
+	//  DecimalEnc
+	//  BitEnc
+	//  CharEnc
+	//  VarCharEnc
+	//  TextEnc
+	//  BinaryEnc
+	//  VarBinaryEnc
+	//  BlobEnc
+	//  JSONEnc
+	//  EnumEnc
+	//  SetEnc
+	//  ExpressionEnc
+	//  GeometryEnc
 )
-
-func FixedWidth(t Encoding) bool {
-	return t >= sentinel
-}
 
 func readBool(val []byte) bool {
 	return val[0] == 1
@@ -195,42 +192,54 @@ func writeBytes(buf, val []byte, coll Collation) {
 	copy(buf, val)
 }
 
-func compare(typ Type, left, right []byte) (cmp int) {
-	// todo(andy): handle NULLs
+func compare(typ Type, left, right []byte) int {
+	// order NULLs last
+	if left == nil {
+		if right == nil {
+			return 0
+		} else {
+			return 1
+		}
+	} else if right == nil {
+		if left == nil {
+			return 0
+		} else {
+			return -1
+		}
+	}
 
 	switch typ.Enc {
 	case Int8Enc:
-		cmp = compareInt8(readInt8(left), readInt8(right))
+		return compareInt8(readInt8(left), readInt8(right))
 	case Uint8Enc:
-		cmp = compareUint8(readUint8(left), readUint8(right))
+		return compareUint8(readUint8(left), readUint8(right))
 	case Int16Enc:
-		cmp = compareInt16(readInt16(left), readInt16(right))
+		return compareInt16(readInt16(left), readInt16(right))
 	case Uint16Enc:
-		cmp = compareUint16(readUint16(left), readUint16(right))
+		return compareUint16(readUint16(left), readUint16(right))
 	case Int24Enc:
-		panic("unimplemented")
+		panic("24 bit")
 	case Uint24Enc:
-		panic("unimplemented")
+		panic("24 bit")
 	case Int32Enc:
-		cmp = compareInt32(readInt32(left), readInt32(right))
+		return compareInt32(readInt32(left), readInt32(right))
 	case Uint32Enc:
-		cmp = compareUint32(readUint32(left), readUint32(right))
+		return compareUint32(readUint32(left), readUint32(right))
 	case Int64Enc:
-		cmp = compareInt64(readInt64(left), readInt64(right))
+		return compareInt64(readInt64(left), readInt64(right))
 	case Uint64Enc:
-		cmp = compareUint64(readUint64(left), readUint64(right))
+		return compareUint64(readUint64(left), readUint64(right))
 	case Float32Enc:
-		cmp = compareFloat32(readFloat32(left), readFloat32(right))
+		return compareFloat32(readFloat32(left), readFloat32(right))
 	case Float64Enc:
-		cmp = compareFloat64(readFloat64(left), readFloat64(right))
+		return compareFloat64(readFloat64(left), readFloat64(right))
 	case StringEnc:
-		cmp = compareString(readString(left, typ.Coll), readString(right, typ.Coll), typ.Coll)
+		return compareString(readString(left, typ.Coll), readString(right, typ.Coll), typ.Coll)
 	case BytesEnc:
-		cmp = compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
+		return compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
 	default:
-		panic(fmt.Sprintf("unknown encoding %d", typ.Enc))
+		panic("unknown encoding")
 	}
-	return
 }
 
 // false is less that true
@@ -354,10 +363,18 @@ func compareBytes(l, r []byte, coll Collation) int {
 	return bytes.Compare(l, r)
 }
 
-type comparisonMapping []int
+// rawCmp is an array of indexes used to perform raw Tuple comparisons.
+// Under certain conditions, Tuple comparisons can be optimized by
+// directly comparing Tuples as byte slices, rather than accessing
+// and deserializing each field.
+// If each of these conditions is met, raw comparisons can be used:
+//   (1) All fields in the Tuple must be non-nullable.
+//   (2) All fields in the Tuple must be of constant size
+//  	  (eg Ints, Uints, Floats, Time types, etc.)
+//
+type rawCmp []int
 
-// compareRaw compares Tuples without accessing and decoding fields.
-func compareRaw(left, right Tuple, mapping comparisonMapping) Comparison {
+func compareRaw(left, right Tuple, mapping rawCmp) Comparison {
 	var l, r byte
 	for _, idx := range mapping {
 		l, r = left[idx], right[idx]
@@ -367,37 +384,35 @@ func compareRaw(left, right Tuple, mapping comparisonMapping) Comparison {
 	}
 	if l > r {
 		return 1
-	}
-	if l < r {
+	} else if l < r {
 		return -1
 	}
 	return 0
 }
 
-func maybeGetRawComparison(types ...Type) comparisonMapping {
-	// todo(andy): add back
-	return nil
+func maybeGetRawComparison(types ...Type) rawCmp {
+	var raw []int
+	offset := 0
+	for _, typ := range types {
+		if typ.Nullable {
+			return nil
+		}
 
-	//var raw []int
-	//offset := 0
-	//for _, typ := range Types {
-	//	mapping, ok := rawComparisonMap(typ.Enc)
-	//	if !ok {
-	//		// every type in |Types| must be
-	//		// raw-comparable to use a mapping
-	//		return nil
-	//	}
-	//	for i := range mapping {
-	//		mapping[i] += offset
-	//	}
-	//	raw = append(raw, mapping...)
-	//	offset += len(mapping)
-	//}
-	//return raw
+		mapping, ok := rawComparisonForEncoding(typ.Enc)
+		if !ok {
+			return nil
+		}
+
+		for i := range mapping {
+			mapping[i] += offset
+		}
+		raw = append(raw, mapping...)
+		offset += len(mapping)
+	}
+	return raw
 }
 
-func rawComparisonMap(enc Encoding) (mapping []int, ok bool) {
-	// todo(andy): add fixed width char and byte encodings
+func rawComparisonForEncoding(enc Encoding) (mapping []int, ok bool) {
 	lookup := map[Encoding][]int{
 		Int8Enc:   {0},
 		Uint8Enc:  {0},

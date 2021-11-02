@@ -31,10 +31,10 @@ const (
 var NULL []byte = nil
 
 // Tuples are byte slices containing field values and a footer. Tuples only
-//   contain Values for non-null Fields. Value i contains the data for ith non-
-//   null Field. Values for are packed contiguously from the front of the Tuple.
-//   The footer contains offset, a null mask, and a field count. Offsets enable
-//   random access to Values. The null mask enables null-compaction for Values.
+//   contain Values for non-NULL Fields. Value i contains the data for ith non-
+//   NULL Field. Values for are packed contiguously from the front of the Tuple.
+//   The footer contains offset, a NULL mask, and a field count. Offsets enable
+//   random access to Values. The NULL mask enables NULL-compaction for Values.
 //
 //   Tuples read and write Values as byte slices, (de)serialization is delegated
 //   to Tuple Descriptors which know a Tuple's schema and associated encodings.
@@ -45,11 +45,11 @@ var NULL []byte = nil
 //
 //   Tuple:
 //   +---------+---------+-----+---------+---------+-----------+-------------+
-//   | Value 0 | Value 1 | ... | Value K | Offsets | Null Mask | Field Count |
+//   | Value 0 | Value 1 | ... | Value K | Offsets | NULL Mask | Field Count |
 //   +---------+---------+-----+---------+---------+-----------+-------------+
 //
 //   Offsets:
-//     The offset array contains a uint16 for each non-null field after field 0.
+//     The offset array contains a uint16 for each non-NULL field after field 0.
 //     Offset i encodes the distance to the ith Value from the front of the Tuple.
 //     The size of the offset array is 2*(K-1) bytes, where K is the number of
 //     Values in the Tuple.
@@ -57,9 +57,9 @@ var NULL []byte = nil
 //   | Offset 1 | Offset 2 | ... | Offset K |
 //   +----------+----------+-----+----------+
 //
-//   Null Mask:
-//     The null mask is a bit array encoding null or non-null for each field in
-//     the Tuple. Nulls are encoded as 0, non-nulls are encoded as 1. The size
+//   NULL Mask:
+//     The NULL mask is a bit array encoding NULL or non-NULL for each field in
+//     the Tuple. NULLs are encoded as 0, non-NULLs are encoded as 1. The size
 //     of the bit array is math.Ceil(N/8) bytes, where N is the number of Fields
 //     in the Tuple
 //   +------------+-------------+-----+
@@ -111,7 +111,7 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	return tup
 }
 
-func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tuple, offs Offsets, ms memberSet) {
+func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tuple, offs Offsets, ms nullMask) {
 	offSz := OffsetsSize(values)
 	maskSz := maskSize(fields)
 	countSz := numFieldsSize
@@ -120,7 +120,7 @@ func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tupl
 
 	writeFieldCount(tup, fields)
 	offs = Offsets(tup[bufSz : bufSz+offSz])
-	ms = memberSet(tup[bufSz+offSz : bufSz+offSz+maskSz])
+	ms = nullMask(tup[bufSz+offSz : bufSz+offSz+maskSz])
 
 	return
 }
@@ -172,14 +172,14 @@ func (tup Tuple) valueCount() int {
 	return tup.mask().count()
 }
 
-func (tup Tuple) mask() memberSet {
+func (tup Tuple) mask() nullMask {
 	stop := tup.size() - numFieldsSize
 	start := stop - maskSize(tup.fieldCount())
 	if start > tup.size() || stop > tup.size() {
 		cnt := tup.fieldCount()
 		maskSize(cnt)
 	}
-	return memberSet(tup[start:stop])
+	return nullMask(tup[start:stop])
 }
 
 func (tup Tuple) fieldToValue(i int) int {

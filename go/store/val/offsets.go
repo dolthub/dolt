@@ -18,6 +18,8 @@ import "encoding/binary"
 
 type Offsets []byte
 
+// OffsetsSize returns the number of bytes needed to
+// store |count| offests.
 func OffsetsSize(count int) ByteSize {
 	if count == 0 {
 		return 0
@@ -25,27 +27,31 @@ func OffsetsSize(count int) ByteSize {
 	return ByteSize((count - 1) * 2)
 }
 
-func (sl Offsets) Count() int {
-	return (len(sl) / 2) + 1
+// Count returns the number of offsets stored in |sl|.
+func (os Offsets) Count() int {
+	return (len(os) / 2) + 1
 }
 
-func (sl Offsets) Get(i int) ByteSize {
+// Get returns the ith offset.
+func (os Offsets) Get(i int) ByteSize {
 	if i == 0 {
 		return 0
 	}
 	start := (i - 1) * 2
-	off := binary.LittleEndian.Uint16(sl[start : start+2])
+	off := binary.LittleEndian.Uint16(os[start : start+2])
 	return ByteSize(off)
 }
 
-func (sl Offsets) Put(i int, off ByteSize) {
+// Put writes offset |off| at index |i|.
+func (os Offsets) Put(i int, off ByteSize) {
 	if i == 0 {
 		return
 	}
 	start := (i - 1) * 2
-	binary.LittleEndian.PutUint16(sl[start:start+2], uint16(off))
+	binary.LittleEndian.PutUint16(os[start:start+2], uint16(off))
 }
 
-func (sl Offsets) IsLastIndex(i int) bool {
-	return len(sl) == i*2
+// IsLastIndex returns true if |i| is the last index in |sl|.
+func (os Offsets) IsLastIndex(i int) bool {
+	return len(os) == i*2
 }

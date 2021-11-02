@@ -16,9 +16,11 @@ package val
 
 import "github.com/dolthub/dolt/go/store/pool"
 
-type memberSet []byte
+// A nullMask is a bit-array encoding a NULL bitmask.
+//  NULLs are encoded as 0, non-NULLs as 1.
+type nullMask []byte
 
-func makeMemberSet(pool pool.BuffPool, count int) memberSet {
+func makeMemberSet(pool pool.BuffPool, count int) nullMask {
 	sz := uint64(maskSize(count))
 	return pool.Get(sz)
 }
@@ -28,46 +30,49 @@ func maskSize(count int) ByteSize {
 	return ByteSize((count + 7) / 8)
 }
 
-func (ms memberSet) size() ByteSize {
-	return ByteSize(len(ms))
+// size returns the byte size of |nm|
+func (nm nullMask) size() ByteSize {
+	return ByteSize(len(nm))
 }
 
-func (ms memberSet) set(i int) {
-	ms[i/8] |= uint8(1) << (i % 8)
+// set flips bit |i| to 1
+func (nm nullMask) set(i int) {
+	nm[i/8] |= uint8(1) << (i % 8)
 }
 
-func (ms memberSet) unset(i int) {
-	ms[i/8] &= ^(uint8(1) << (i % 8))
+// set flips bit |i| to 0
+func (nm nullMask) unset(i int) {
+	nm[i/8] &= ^(uint8(1) << (i % 8))
 }
 
 // present returns true if the |i|th member is non-null.
-func (ms memberSet) present(i int) bool {
+func (nm nullMask) present(i int) bool {
 	query := uint8(1) << (i % 8)
-	return query&ms[i/8] == query
+	return query&nm[i/8] == query
 }
 
 // count returns the number of members present
-func (ms memberSet) count() (n int) {
-	for _, b := range ms {
+func (nm nullMask) count() (n int) {
+	for _, b := range nm {
 		n += countBitsSet(b)
 	}
 	return
 }
 
 // countPrefix returns the count of the members at or before |i|.
-func (ms memberSet) countPrefix(i int) (n int) {
-	for _, b := range ms[:i/8] {
+func (nm nullMask) countPrefix(i int) (n int) {
+	for _, b := range nm[:i/8] {
 		n += countBitsSet(b)
 	}
-	n += countBitsSet(ms[i/8] & prefixMask(i%8))
+	n += countBitsSet(nm[i/8] & prefixMask(i%8))
 	return
 }
 
 // countSuffix returns the count of the members at or after |i|.
-func (ms memberSet) countSuffix(i int) (n int) {
-	n += countBitsSet(ms[i/8] & suffixMask(i%8))
-	for i := int(i/8) + 1; i < len(ms); i++ {
-		n += countBitsSet(ms[i])
+func (nm nullMask) countSuffix(i int) (n int) {
+	n += countBitsSet(nm[i/8] & suffixMask(i%8))
+	for i := int(i/8) + 1; i < len(nm); i++ {
+		n += countBitsSet(nm[i])
 	}
 	return
 }
