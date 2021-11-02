@@ -162,7 +162,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			backups[n] = r
 		}
 		dEnv.RepoState.Backups = backups
-
 	}
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {

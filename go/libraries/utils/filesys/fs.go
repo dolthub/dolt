@@ -93,6 +93,9 @@ type Filesys interface {
 	ReadableFS
 	WritableFS
 	WalkableFS
+
+	// WithWorkingDir returns a copy of this Filesys with the given working directory
+	WithWorkingDir(path string) (Filesys, error)
 }
 
 func UnmarshalJSONFile(fs ReadableFS, path string, dest interface{}) error {

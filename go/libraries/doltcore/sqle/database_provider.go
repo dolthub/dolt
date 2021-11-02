@@ -16,9 +16,12 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -39,6 +42,8 @@ type DoltDatabaseProvider struct {
 	functions map[string]sql.Function
 	mu        *sync.RWMutex
 
+	dataRootDir string
+	fs filesys.Filesys
 	cfg config.ReadableConfig
 }
 
@@ -130,28 +135,51 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Throw warning to users that this is a temporary database that does not persist after the session exits.
-	ctx.Warn(createDbWC, "CREATE DATABASE creates an inmemory database that does not persist after the server exits. Dolt currently only supports a single disk backed database created by `dolt init`")
+	exists, isDir := p.fs.Exists(name)
+	if exists && isDir {
+		return sql.ErrDatabaseExists.New(name)
+	} else if exists {
+		return fmt.Errorf("Cannot create DB, file exists at %s", name)
+	}
 
-	mem, err := env.NewMemoryDbData(ctx, p.cfg)
+	err := p.fs.MkDirs(name)
 	if err != nil {
 		return err
 	}
+
+	newFs, err := p.fs.WithWorkingDir(name)
+	if err != nil {
+		return err
+	}
+
+	// TODO: unbreak this
+	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, "TODO")
+	err = newEnv.InitRepo(ctx, types.Format_Default, "test", "test@test.com", "main")
+	if err != nil {
+		return err
+	}
+
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
 		return err
 	}
+
 	opts := editor.Options{
+		Deaf: newEnv.DbEaFactory(),
+		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
 		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
-		Deaf: editor.NewDbEaFactory(
-			mem.Rsw.TempTableFilesDir(),
-			mem.Ddb.ValueReadWriter()),
 	}
 
-	db := NewDatabase(name, mem, opts)
+	db := NewDatabase(name, newEnv.DbData(), opts)
 	p.databases[strings.ToLower(db.Name())] = db
 
-	return nil
+	dsess := dsess.DSessFromSess(ctx.Session)
+	dbstate, err := GetInitialDBState(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	return dsess.AddDB(ctx, dbstate)
 }
 
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
