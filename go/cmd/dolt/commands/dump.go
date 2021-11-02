@@ -57,6 +57,108 @@ overwritten.
 	},
 }
 
+type DumpCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd DumpCmd) Name() string {
+	return "dump"
+}
+
+// Description returns a description of the command
+func (cmd DumpCmd) Description() string {
+	return "Export all tables in the working set into a file."
+}
+
+// CreateMarkdown creates a markdown file containing the help text for the command at the given path
+func (cmd DumpCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cmd.createArgParser()
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+}
+
+func (cmd DumpCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
+	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Valid values are sql and csv. Defaults to sql.")
+
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd DumpCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_DUMP
+}
+
+// Exec executes the command
+func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, dumpDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	dumpOpts, verr := getDumpArgs(apr)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	root, verr := GetWorkingWithVErr(dEnv)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	force := apr.Contains(forceParam)
+
+	ow, err := checkOverwrite(ctx, root, dEnv.FS, force, dumpOpts.dest)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if ow {
+		return HandleVErrAndExitCode(errhand.BuildDError("%s already exists. Use -f to overwrite.", dumpOpts.DumpDestName()).Build(), usage)
+	}
+
+	// create new file
+	err = dEnv.FS.MkDirs(filepath.Dir(dumpOpts.DumpDestName()))
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	filePath, err := dEnv.FS.Abs(dumpOpts.DumpDestName())
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+
+	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root)
+	if err != nil {
+		errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
+	}
+	if len(tblNames) == 0 {
+		cli.Println("No tables to export.")
+		return 0
+	}
+
+	for _, tbl := range tblNames {
+
+		tblOpts := newTableArgs(tbl, dumpOpts.dest)
+
+		mover, verr := NewDumpDataMover(ctx, root, dEnv, tblOpts, importStatsCB, filePath)
+		if verr != nil {
+			return HandleVErrAndExitCode(verr, usage)
+		}
+
+		skipped, verr := mvdata.MoveData(ctx, dEnv, mover, tblOpts)
+		if skipped > 0 {
+			cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
+		}
+		if verr != nil {
+			return HandleVErrAndExitCode(verr, usage)
+		}
+	}
+
+	cli.PrintErrln(color.CyanString("Successfully exported data."))
+
+	return 0
+}
+
 type dumpOptions struct {
 	format string
 	dest   mvdata.DataLocation
@@ -97,6 +199,8 @@ func (m dumpOptions) DumpDestName() string {
 	return m.dest.String()
 }
 
+// checkOverwrite returns TRUE if the file exists and force flag not given and
+// FALSE if the file is stream data / file does not exist / file exists and force flag is given
 func checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, force bool, dest mvdata.DataLocation) (bool, error) {
 	if _, isStream := dest.(mvdata.StreamDataLocation); isStream {
 		return false, nil
@@ -107,9 +211,15 @@ func checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.Read
 	return false, nil
 }
 
-// getExportDestination returns an export destination corresponding to the input parameters
-func getExportDestination(path string) mvdata.DataLocation {
+func importStatsCB(stats types.AppliedEditStats) {
+	noEffect := stats.NonExistentDeletes + stats.SameVal
+	total := noEffect + stats.Modifications + stats.Additions
+	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
+	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
+}
 
+// getDumpDestination returns a dump destination corresponding to the input parameters
+func getDumpDestination(path string) mvdata.DataLocation {
 	destLoc := mvdata.NewDataLocation(path, "")
 
 	switch val := destLoc.(type) {
@@ -133,7 +243,7 @@ func getExportDestination(path string) mvdata.DataLocation {
 
 	return destLoc
 }
-
+// getDumpArgs returns dumpOptions of result format and dest file location corresponding to the input parameters
 func getDumpArgs(apr *argparser.ArgParseResults) (*dumpOptions, errhand.VerboseError) {
 
 	if apr.NArg() > 0 {
@@ -148,12 +258,12 @@ func getDumpArgs(apr *argparser.ArgParseResults) (*dumpOptions, errhand.VerboseE
 		fileName = "doltdump.sql"
 	case "csv", ".csv":
 		//handle CSV filetype
-		//maybe create dir 'doltdump' and put all the csv dump files into it
+		//maybe create dir 'doltdump' and put all the csv dump files in it
 	default:
 		return nil, errhand.BuildDError("invalid result format").SetPrintUsage().Build()
 	}
 
-	fileLoc := getExportDestination(fileName)
+	fileLoc := getDumpDestination(fileName)
 
 	return &dumpOptions{
 		format: resultFormat,
@@ -161,130 +271,18 @@ func getDumpArgs(apr *argparser.ArgParseResults) (*dumpOptions, errhand.VerboseE
 	}, nil
 }
 
-func getTableArgs(tblName string, destination mvdata.DataLocation) (*tableOptions, errhand.VerboseError) {
+// newTableArgs returns tableOptions of table name and src table location and dest file location
+// corresponding to the input parameters
+func newTableArgs(tblName string, destination mvdata.DataLocation) (*tableOptions) {
 	return &tableOptions{
 		tableName: tblName,
 		src:       mvdata.TableDataLocation{Name: tblName},
 		dest:      destination,
-	}, nil
+	}
 }
 
-type DumpCmd struct{}
-
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
-func (cmd DumpCmd) Name() string {
-	return "dump"
-}
-
-// Description returns a description of the command
-func (cmd DumpCmd) Description() string {
-	return "Export all tables in the working set into a file."
-}
-
-// CreateMarkdown creates a markdown file containing the help text for the command at the given path
-func (cmd DumpCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
-}
-
-func (cmd DumpCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
-	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Valid values are sql and csv. Defaults to sql.")
-
-	return ap
-}
-
-func importStatsCB(stats types.AppliedEditStats) {
-	noEffect := stats.NonExistentDeletes + stats.SameVal
-	total := noEffect + stats.Modifications + stats.Additions
-	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
-	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
-}
-
-// EventType returns the type of the event to log
-func (cmd DumpCmd) EventType() eventsapi.ClientEventType {
-	return eventsapi.ClientEventType_DUMP
-}
-
-// Exec executes the command
-func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, dumpDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
-
-	root, verr := GetWorkingWithVErr(dEnv)
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
-	}
-
-	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root)
-	if err != nil {
-		errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
-	}
-
-	if len(tblNames) == 0 {
-		cli.Println("No tables to export.")
-		return 0
-	}
-
-	dumpOpts, verr := getDumpArgs(apr)
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
-	}
-
-	force := apr.Contains(forceParam)
-
-	ow, err := checkOverwrite(ctx, root, dEnv.FS, force, dumpOpts.dest)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	if ow {
-		return HandleVErrAndExitCode(errhand.BuildDError("%s already exists. Use -f to overwrite.", dumpOpts.DumpDestName()).Build(), usage)
-	}
-
-	// create new file
-	err = dEnv.FS.MkDirs(filepath.Dir(dumpOpts.DumpDestName()))
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	filePath, err := dEnv.FS.Abs(dumpOpts.DumpDestName())
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
-
-	for _, tbl := range tblNames {
-
-		tblOpts, verr := getTableArgs(tbl, dumpOpts.dest)
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
-		mover, verr := NewDumpDataMover(ctx, root, dEnv, tblOpts, importStatsCB, filePath)
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
-		skipped, verr := mvdata.MoveData(ctx, dEnv, mover, tblOpts)
-		if skipped > 0 {
-			cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
-		}
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
-		}
-	}
-
-	cli.PrintErrln(color.CyanString("Successfully exported data."))
-
-	return 0
-}
-
-// NewDumpDataMover returns dataMover with tableOptions given including source table and destination file info
-func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, statsCB noms.StatsCB, filePath string) (*mvdata.DataMover, errhand.VerboseError) {
+// NewDumpDataMover returns dataMover with tableOptions given source table and destination file info
+func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, statsCB noms.StatsCB, filePath string) (retDataMover *mvdata.DataMover, retErr errhand.VerboseError) {
 	var rd table.TableReadCloser
 	var err error
 
@@ -296,7 +294,10 @@ func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 	// close on err exit
 	defer func() {
 		if rd != nil {
-			rd.Close(ctx)
+			rErr := rd.Close(ctx)
+			if rErr != nil {
+				retErr = errhand.BuildDError("Could not close reader for %s.", tblOpts.SrcName()).AddCause(rErr).Build()
+			}
 		}
 	}()
 
