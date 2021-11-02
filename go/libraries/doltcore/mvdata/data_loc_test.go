@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -201,9 +202,11 @@ func TestCreateRdWr(t *testing.T) {
 
 		loc := test.dl
 
+
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 
-		filePath, fpErr := dEnv.FS.Abs(testSchemaFileName)
+		fileName := strings.Split(loc.String(), ":")
+		filePath, fpErr := dEnv.FS.Abs(fileName[1])
 		if fpErr != nil {
 			t.Fatal("Unexpected error getting filepath", fpErr)
 		}
