@@ -1141,6 +1141,24 @@ while True:
     [[ "$output" =~ "b" ]] || false
 }
 
+@test "sql-server: create database errors" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir no_dolt && cd no_dolt
+    mkdir dir_exists
+    touch file_exists
+    start_sql_server
+    
+    server_query "" 1 "create database test1"
+
+    # Error on creation, already exists
+    server_query "" 1 "create database test1" "" "exists"
+
+    # Files / dirs in the way
+    server_query "" 1 "create database dir_exists" "" "exists"
+    server_query "" 1 "create database file_exists" "" "exists"        
+}
+
 @test "sql-server: create database with existing repo" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
