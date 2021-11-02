@@ -107,6 +107,10 @@ func SetStrings(c WritableConfig, updates map[string]string) error {
 	return c.SetStrings(updates)
 }
 
+func SetString(c WritableConfig, key string, val string) error {
+	return c.SetStrings(map[string]string{key: val})
+}
+
 // SetInt sets a value in the WritableConfig for a given key to the string converted value of an integer
 func SetInt(c WritableConfig, key string, val int64) error {
 	s := strconv.FormatInt(val, 10)

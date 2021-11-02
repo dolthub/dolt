@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -301,6 +302,10 @@ func runMain() int {
 	defer tempfiles.MovableTempFileProvider.Clean()
 
 	if dEnv.DoltDB != nil {
+		err := dsess.InitPersistedSystemVars(dEnv)
+		if err != nil {
+			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
+		}
 		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.OutStream)
 	}
 

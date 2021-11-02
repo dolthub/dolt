@@ -25,6 +25,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -57,11 +58,14 @@ const (
 	tempTablesDir = "temptf"
 )
 
-func getCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
+func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey); ok && val != "" {
+		backupName, ok := val.(string)
+		if !ok {
+			return nil, sql.ErrInvalidSystemVariableValue.New(val)
+		}
 
-	backupName := dEnv.Config.GetStringOrDefault(doltdb.ReplicateToRemoteKey, "")
-	if backupName != "" {
 		remotes, err := dEnv.GetRemotes()
 		if err != nil {
 			return nil, err
@@ -202,15 +206,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			}
 		} else if err != nil {
 			dEnv.RSLoadErr = err
-		}
-	}
-
-	if dbLoadErr == nil {
-		postCommitHooks, dbLoadErr := getCommitHooks(ctx, dEnv)
-		if dbLoadErr != nil {
-			dEnv.DBLoadError = dbLoadErr
-		} else {
-			dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 		}
 	}
 

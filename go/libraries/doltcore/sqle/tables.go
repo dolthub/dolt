@@ -213,22 +213,6 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 			unique:       true,
 			generated:    false,
 		})
-		for i := 1; i < len(cols); i++ {
-			sqlIndexes = append(sqlIndexes, &doltIndex{
-				cols:         cols[:i],
-				db:           t.db,
-				id:           fmt.Sprintf("PRIMARY_PARTIAL_%d", i),
-				indexRowData: rowData,
-				indexSch:     sch,
-				table:        tbl,
-				tableData:    rowData,
-				tableName:    t.Name(),
-				tableSch:     sch,
-				unique:       false,
-				comment:      fmt.Sprintf("partial of PRIMARY multi-column index on %d column(s)", i),
-				generated:    true,
-			})
-		}
 	}
 
 	for _, index := range sch.Indexes().AllIndexes() {
@@ -254,22 +238,6 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 			comment:      index.Comment(),
 			generated:    false,
 		})
-		for i := 1; i < len(cols); i++ {
-			sqlIndexes = append(sqlIndexes, &doltIndex{
-				cols:         cols[:i],
-				db:           t.db,
-				id:           fmt.Sprintf("%s_PARTIAL_%d", index.Name(), i),
-				indexRowData: indexRowData,
-				indexSch:     index.Schema(),
-				table:        tbl,
-				tableData:    rowData,
-				tableName:    t.Name(),
-				tableSch:     sch,
-				unique:       false,
-				comment:      fmt.Sprintf("prefix of %s multi-column index on %d column(s)", index.Name(), i),
-				generated:    true,
-			})
-		}
 	}
 
 	return sqlIndexes, nil
@@ -510,7 +478,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, e
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
-	if sess.BatchMode == dsess.Batched {
+	if sess.BatchMode() == dsess.Batched {
 		if t.ed != nil {
 			return t.ed, nil
 		}

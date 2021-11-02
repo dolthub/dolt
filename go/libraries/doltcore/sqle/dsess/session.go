@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -45,6 +46,8 @@ const (
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
 	DoltDefaultBranchKey          = "dolt_default_branch"
 )
+
+const NonpersistableSessionCode = 1105 // default
 
 var transactionMergeStomp = false
 
@@ -132,10 +135,9 @@ func IsWorkingKey(key string) (bool, string) {
 // Session is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type Session struct {
 	sql.Session
-	BatchMode batchMode
-	Username  string
-	Email     string
-	Config    config.ReadableConfig
+	batchMode batchMode
+	username  string
+	email     string
 	dbStates  map[string]*DatabaseSessionState
 	provider  RevisionDatabaseProvider
 }
@@ -181,8 +183,8 @@ var _ sql.Session = &Session{}
 func DefaultSession() *Session {
 	sess := &Session{
 		Session:  sql.NewBaseSession(),
-		Username: "",
-		Email:    "",
+		username: "",
+		email:    "",
 		dbStates: make(map[string]*DatabaseSessionState),
 		provider: emptyRevisionDatabaseProvider{},
 	}
@@ -208,15 +210,13 @@ type InitialDbState struct {
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvider, conf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
+func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
-
 	sess := &Session{
 		Session:  sqlSess,
-		Username: username,
-		Email:    email,
-		Config:   conf,
+		username: username,
+		email:    email,
 		dbStates: make(map[string]*DatabaseSessionState),
 		provider: pro,
 	}
@@ -236,12 +236,12 @@ func NewSession(ctx *sql.Context, sqlSess sql.Session, pro RevisionDatabaseProvi
 // Sessions operating in batched mode don't flush any edit buffers except when told to do so explicitly, or when a
 // transaction commits. Disable @@autocommit to prevent edit buffers from being flushed prematurely in this mode.
 func (sess *Session) EnableBatchedMode() {
-	sess.BatchMode = Batched
+	sess.batchMode = Batched
 }
 
 // DSessFromSess retrieves a dolt session from a standard sql.Session
-func DSessFromSess(sess sql.Session) *Session {
-	return sess.(*Session)
+func DSessFromSess(sess sql.Session) *DoltSession {
+	return sess.(*DoltSession)
 }
 
 // LookupDbState returns the session state for the database named
@@ -277,6 +277,10 @@ func (sess *Session) LookupDbState(ctx *sql.Context, dbName string) (*DatabaseSe
 		return nil, false, s.Err
 	}
 	return s, ok, err
+}
+
+func (sess *Session) GetDbStates() map[string]*DatabaseSessionState {
+	return sess.dbStates
 }
 
 // Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally
@@ -364,7 +368,7 @@ func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSet
 // CommitTransaction commits the in-progress transaction for the database named. Depending on session settings, this
 // may write only a new working set, or may additionally create a new dolt commit for the current HEAD.
 func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if sess.BatchMode == Batched {
+	if sess.BatchMode() == Batched {
 		err := sess.Flush(ctx, dbName)
 		if err != nil {
 			return err
@@ -397,8 +401,8 @@ func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.T
 			Date:       ctx.QueryTime(),
 			AllowEmpty: false,
 			Force:      false,
-			Name:       sess.Username,
-			Email:      sess.Email,
+			Name:       sess.Username(),
+			Email:      sess.Email(),
 		})
 		if err != nil {
 			return err
@@ -1157,6 +1161,18 @@ func (sess *Session) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, e
 	return dbState.WorkingSet.Ref().ToHeadRef()
 }
 
+func (sess *Session) Username() string {
+	return sess.username
+}
+
+func (sess *Session) Email() string {
+	return sess.email
+}
+
+func (sess *Session) BatchMode() batchMode {
+	return sess.batchMode
+}
+
 // setSessionVarsForDb updates the three session vars that track the value of the session root hashes
 func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error {
 	state, _, err := sess.lookupDbState(ctx, dbName)
@@ -1208,6 +1224,11 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 	return nil
 }
 
+// NewDoltSession creates a persistable DoltSession with the given config arg
+func (sess *Session) NewDoltSession(conf config.ReadWriteConfig) *DoltSession {
+	return &DoltSession{Session: sess, globalsConf: conf, mu: &sync.Mutex{}}
+}
+
 // defineSystemVariables defines dolt-session variables in the engine as necessary
 func defineSystemVariables(name string) {
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
@@ -1242,14 +1263,6 @@ func defineSystemVariables(name string) {
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              sql.NewSystemStringType(StagedKey(name)),
-				Default:           "",
-			},
-			{
-				Name:              DoltDefaultBranchKey,
-				Scope:             sql.SystemVariableScope_Global,
-				Dynamic:           true,
-				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(DoltDefaultBranchKey),
 				Default:           "",
 			},
 		})

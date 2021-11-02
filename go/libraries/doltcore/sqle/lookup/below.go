@@ -20,7 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// Above represents the position immediately below the contained key.
+// Below represents the position immediately below the contained key.
 type Below struct {
 	key types.Tuple
 }

@@ -23,6 +23,8 @@ const (
 	namespaceSep = "::"
 )
 
+var ErrUnknownConfig = errors.New("config not found")
+
 // ConfigHierarchy is a hierarchical read-only configuration store.  When a key is looked up in the ConfigHierarchy it
 // will go through its configs in order and will return the first value for a given key that is found.  Configs are
 // iterated in order, so the configurations added first have the highest priority.

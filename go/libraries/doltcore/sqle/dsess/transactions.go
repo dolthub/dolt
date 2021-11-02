@@ -364,8 +364,8 @@ func (tx *DoltTransaction) ClearSavepoint(name string) *doltdb.RootValue {
 func (tx DoltTransaction) getWorkingSetMeta(ctx *sql.Context) *doltdb.WorkingSetMeta {
 	sess := DSessFromSess(ctx.Session)
 	return &doltdb.WorkingSetMeta{
-		User:        sess.Username,
-		Email:       sess.Email,
+		User:        sess.Username(),
+		Email:       sess.Email(),
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: "sql transaction",
 	}

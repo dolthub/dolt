@@ -43,8 +43,6 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names mus
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
-const DoltReadReplicaKey = "dolt_read_replica_remote"
-
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
@@ -354,7 +352,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}), db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess.Session, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}), db.drw), true
 	}
 	if found {
 		return dt, found, nil
@@ -789,7 +787,7 @@ func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sq
 	return db.createTempDoltTable(ctx, tableName, tempTableRootValue, doltSch, sess)
 }
 
-func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema, dsess *dsess.Session) error {
+func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema, dsess *dsess.DoltSession) error {
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
