@@ -95,7 +95,11 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	var err error
 
 	if apr.Contains(sqlClientDualFlag) {
-		if !dEnv.HasDoltDir() {
+		if !dEnv.Valid() {
+			if !cli.CheckEnvIsValid(dEnv) {
+				return 2
+			}
+
 			cli.PrintErrln(color.RedString("--dual flag requires running within a dolt database directory"))
 			cli.PrintErrln(err.Error())
 			return 1
