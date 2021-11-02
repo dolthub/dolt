@@ -85,45 +85,56 @@ const (
 )
 
 func readBool(val []byte) bool {
+	expectSize(val, 1)
 	return val[0] == 1
 }
 func readInt8(val []byte) int8 {
+	expectSize(val, 1)
 	return int8(val[0])
 }
 
 func readUint8(val []byte) uint8 {
+	expectSize(val, 1)
 	return val[0]
 }
 
 func readInt16(val []byte) int16 {
+	expectSize(val, 2)
 	return int16(binary.LittleEndian.Uint16(val))
 }
 
 func readUint16(val []byte) uint16 {
+	expectSize(val, 2)
 	return binary.LittleEndian.Uint16(val)
 }
 
 func readInt32(val []byte) int32 {
+	expectSize(val, 4)
 	return int32(binary.LittleEndian.Uint32(val))
 }
 
 func readUint32(val []byte) uint32 {
+	expectSize(val, 4)
 	return binary.LittleEndian.Uint32(val)
 }
 
 func readInt64(val []byte) int64 {
+	expectSize(val, 8)
 	return int64(binary.LittleEndian.Uint64(val))
 }
 
 func readUint64(val []byte) uint64 {
+	expectSize(val, 8)
 	return binary.LittleEndian.Uint64(val)
 }
 
 func readFloat32(val []byte) float32 {
+	expectSize(val, 4)
 	return math.Float32frombits(readUint32(val))
 }
 
 func readFloat64(val []byte) float64 {
+	expectSize(val, 8)
 	return math.Float64frombits(readUint64(val))
 }
 
@@ -137,6 +148,7 @@ func readBytes(val []byte, coll Collation) []byte {
 }
 
 func writeBool(buf []byte, val bool) {
+	expectSize(buf, 1)
 	if val {
 		buf[0] = byte(1)
 	} else {
@@ -145,51 +157,69 @@ func writeBool(buf []byte, val bool) {
 }
 
 func writeInt8(buf []byte, val int8) {
+	expectSize(buf, 1)
 	buf[0] = byte(val)
 }
 
 func writeUint8(buf []byte, val uint8) {
+	expectSize(buf, 1)
 	buf[0] = byte(val)
 }
 
 func writeInt16(buf []byte, val int16) {
+	expectSize(buf, 2)
 	binary.LittleEndian.PutUint16(buf, uint16(val))
 }
 
 func writeUint16(buf []byte, val uint16) {
+	expectSize(buf, 2)
 	binary.LittleEndian.PutUint16(buf, val)
 }
 
 func writeInt32(buf []byte, val int32) {
+	expectSize(buf, 4)
 	binary.LittleEndian.PutUint32(buf, uint32(val))
 }
 
 func writeUint32(buf []byte, val uint32) {
+	expectSize(buf, 4)
 	binary.LittleEndian.PutUint32(buf, val)
 }
 
 func writeInt64(buf []byte, val int64) {
+	expectSize(buf, 8)
 	binary.LittleEndian.PutUint64(buf, uint64(val))
 }
 
 func writeUint64(buf []byte, val uint64) {
+	expectSize(buf, 8)
 	binary.LittleEndian.PutUint64(buf, val)
 }
 
 func writeFloat32(buf []byte, val float32) {
+	expectSize(buf, 4)
 	binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
 }
 
 func writeFloat64(buf []byte, val float64) {
+	expectSize(buf, 8)
 	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
 }
 
 func writeString(buf []byte, val string, coll Collation) {
+	expectSize(buf, len(val))
 	copy(buf, val)
 }
 
 func writeBytes(buf, val []byte, coll Collation) {
+	expectSize(buf, len(val))
 	copy(buf, val)
+}
+
+func expectSize(buf []byte, sz int) {
+	if len(buf) != sz {
+		panic("byte slice is not of expected size")
+	}
 }
 
 func compare(typ Type, left, right []byte) int {
