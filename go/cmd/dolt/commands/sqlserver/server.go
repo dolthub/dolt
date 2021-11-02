@@ -96,11 +96,21 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	var mrEnv env.MultiRepoEnv
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
+	var dbs []dsqle.SqlDatabase
+
 	if len(dbNamesAndPaths) == 0 {
-		var err error
-		mrEnv, err = env.DoltEnvAsMultiEnv(dEnv)
-		if err != nil {
-			return err, nil
+		if dEnv.Valid() {
+			var err error
+			mrEnv, err = env.DoltEnvAsMultiEnv(dEnv)
+			if err != nil {
+				return err, nil
+			}
+			dbs, err = commands.CollectDBs(ctx, mrEnv)
+			if err != nil {
+				return err, nil
+			}
+		} else {
+			// no valid dolt env means no DBs at startup
 		}
 	} else {
 		var err error
@@ -109,12 +119,12 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		if err != nil {
 			return err, nil
 		}
+		dbs, err = commands.CollectDBs(ctx, mrEnv)
+		if err != nil {
+			return err, nil
+		}
 	}
 
-	dbs, err := commands.CollectDBs(ctx, mrEnv)
-	if err != nil {
-		return err, nil
-	}
 	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
 	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, all...)
 

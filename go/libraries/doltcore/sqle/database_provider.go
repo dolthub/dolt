@@ -153,10 +153,12 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 
-	// TODO: unbreak this
-	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, "TODO")
 	dsess := dsess.DSessFromSess(ctx.Session)
-	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), "main")
+	branch := env.GetDefaultInitBranch(p.cfg)
+
+	// TODO: fill in version appropriately
+	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, "TODO")
+	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), branch)
 	if err != nil {
 		return err
 	}
