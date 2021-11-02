@@ -1482,7 +1482,7 @@ func newSqlEngine(
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, all...)
 
 	engine := sqle.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
 

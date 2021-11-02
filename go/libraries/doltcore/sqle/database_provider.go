@@ -55,7 +55,7 @@ var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 const createDbWC = 1105 // 1105 represents an unknown error.
 
 // NewDoltDatabaseProvider returns a provider for the databases given
-func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Database) DoltDatabaseProvider {
+func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
@@ -70,6 +70,7 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Data
 		databases: dbs,
 		functions: funcs,
 		mu:        &sync.RWMutex{},
+		fs:        fs,
 		cfg:       config,
 	}
 }
@@ -154,7 +155,8 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 
 	// TODO: unbreak this
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, "TODO")
-	err = newEnv.InitRepo(ctx, types.Format_Default, "test", "test@test.com", "main")
+	dsess := dsess.DSessFromSess(ctx.Session)
+	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), "main")
 	if err != nil {
 		return err
 	}
@@ -173,7 +175,6 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	db := NewDatabase(name, newEnv.DbData(), opts)
 	p.databases[strings.ToLower(db.Name())] = db
 
-	dsess := dsess.DSessFromSess(ctx.Session)
 	dbstate, err := GetInitialDBState(ctx, db)
 	if err != nil {
 		return err

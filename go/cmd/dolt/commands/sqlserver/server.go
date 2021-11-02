@@ -116,7 +116,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return err, nil
 	}
 	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, all...)
 
 	a := analyzer.NewBuilder(pro).WithParallelism(serverConfig.QueryParallelism()).Build()
 	sqlEngine := sqle.New(a, nil)

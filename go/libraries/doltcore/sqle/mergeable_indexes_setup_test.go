@@ -99,7 +99,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 		tbl:      tbl,
 		editOpts: opts,
 	}
-	pro := NewDoltDatabaseProvider(dEnv.Config, tiDb)
+	pro := NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, tiDb)
 	engine = sqle.NewDefault(pro)
 
 	// Get an updated root to use for the rest of the test
