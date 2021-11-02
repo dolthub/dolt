@@ -128,7 +128,7 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 }
 
 func (m Map) IterAll(ctx context.Context) (MapIter, error) {
-	return m.IterIndexRange(ctx, IndexRange{low: 0, high: m.Count()-1})
+	return m.IterIndexRange(ctx, IndexRange{low: 0, high: m.Count() - 1})
 }
 
 func (m Map) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error) {

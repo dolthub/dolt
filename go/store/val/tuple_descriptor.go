@@ -133,6 +133,41 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) []byte {
 	return readBytes(tup.GetField(i), td.Types[i].Coll)
 }
 
+func (td TupleDesc) GetField(i int, tup Tuple) interface{} {
+	switch td.Types[i].Enc {
+	case Int8Enc:
+		return td.GetInt8(i, tup)
+	case Uint8Enc:
+		return td.GetUint8(i, tup)
+	case Int16Enc:
+		return td.GetInt16(i, tup)
+	case Uint16Enc:
+		return td.GetUint16(i, tup)
+	case Int24Enc:
+		panic("24 bit")
+	case Uint24Enc:
+		panic("24 bit")
+	case Int32Enc:
+		return td.GetInt32(i, tup)
+	case Uint32Enc:
+		return td.GetUint32(i, tup)
+	case Int64Enc:
+		return td.GetInt64(i, tup)
+	case Uint64Enc:
+		return td.GetUint64(i, tup)
+	case Float32Enc:
+		return td.GetFloat32(i, tup)
+	case Float64Enc:
+		return td.GetFloat64(i, tup)
+	case StringEnc:
+		return td.GetString(i, tup)
+	case BytesEnc:
+		return td.GetBytes(i, tup)
+	default:
+		panic("unknown encoding")
+	}
+}
+
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	for _, enc := range encodings {
 		if enc == td.Types[i].Enc {

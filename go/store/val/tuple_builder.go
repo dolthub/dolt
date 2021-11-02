@@ -150,8 +150,67 @@ func (tb *TupleBuilder) PutBytes(i int, v []byte) {
 	tb.updateMaxIdx(i)
 }
 
+func (tb *TupleBuilder) PutField(i int, v interface{}) {
+	switch tb.Desc.Types[i].Enc {
+	case Int8Enc:
+		tb.PutInt8(i, int8(convInt(v)))
+	case Uint8Enc:
+		tb.PutUint8(i, uint8(convInt(v)))
+	case Int16Enc:
+		tb.PutInt16(i, int16(convInt(v)))
+	case Uint16Enc:
+		tb.PutUint16(i, uint16(convInt(v)))
+	case Int24Enc:
+		panic("24 bit")
+	case Uint24Enc:
+		panic("24 bit")
+	case Int32Enc:
+		tb.PutInt32(i, int32(convInt(v)))
+	case Uint32Enc:
+		tb.PutUint32(i, uint32(convInt(v)))
+	case Int64Enc:
+		tb.PutInt64(i, int64(convInt(v)))
+	case Uint64Enc:
+		tb.PutUint64(i, uint64(convInt(v)))
+	case Float32Enc:
+		tb.PutFloat32(i, v.(float32))
+	case Float64Enc:
+		tb.PutFloat64(i, v.(float64))
+	case StringEnc:
+		tb.PutString(i, v.(string))
+	case BytesEnc:
+		tb.PutBytes(i, v.([]byte))
+	default:
+		panic("unknown encoding")
+	}
+}
+
 func (tb *TupleBuilder) updateMaxIdx(i int) {
 	if tb.maxIdx < i {
 		tb.maxIdx = i
+	}
+}
+
+// todo(andy): make this suck less
+func convInt(v interface{}) int {
+	switch i := v.(type) {
+	case int8:
+		return int(i)
+	case uint8:
+		return int(i)
+	case int16:
+		return int(i)
+	case uint16:
+		return int(i)
+	case int32:
+		return int(i)
+	case uint32:
+		return int(i)
+	case int64:
+		return int(i)
+	case uint64:
+		return int(i)
+	default:
+		panic("impossible conversion")
 	}
 }
