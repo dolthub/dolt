@@ -96,14 +96,21 @@ EOF
   sudo systemctl daemon-reload
   sudo systemctl enable doltdb.service
   sudo systemctl start doltdb
+}
 
-  echo "Server start successful..."
+validate_status() {
+  if systemctl --state=active | grep "doltdb.service"; then
+    echo "Sever successfully started..."
+  else
+    echo "ERROR: Server did not start properly..."
+  fi
 }
 
 install_dolt
 setup_configs
 database_configuration
 start_server
+validate_status
 }
 
 
