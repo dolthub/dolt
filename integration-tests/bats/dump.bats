@@ -46,6 +46,12 @@ teardown() {
 }
 
 @test "dump: dolt dump and mysqldump compatibility" {
+    REPO_NAME="dolt_repo_$$"
+    mkdir $REPO_NAME
+    cd $REPO_NAME
+
+    dolt init
+
     dolt sql -q "CREATE TABLE mysqldump_table(pk int);"
     dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
@@ -89,7 +95,10 @@ teardown() {
     [[ "$output" = "" ]]
 
     cd ..
+    cd ..
+    kill $(lsof -t -i:$PORT)
     kill $SERVER_PID
+    rm -rf $REPO_NAME
 }
 
 @test "dump: dolt dump with Indexes" {
