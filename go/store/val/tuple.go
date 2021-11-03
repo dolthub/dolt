@@ -32,12 +32,12 @@ var NULL []byte = nil
 
 // Tuples are byte slices containing field values and a footer. Tuples only
 //   contain Values for non-NULL Fields. Value i contains the data for ith non-
-//   NULL Field. Values for are packed contiguously from the front of the Tuple.
-//   The footer contains offset, a NULL mask, and a field fieldCount. Offsets enable
+//   NULL Field. Values are packed contiguously from the front of the Tuple. The
+//   footer contains offset, a NULL mask, and a field count. Offsets enable
 //   random access to Values. The NULL mask enables NULL-compaction for Values.
 //
 //   Tuples read and write Values as byte slices, (de)serialization is delegated
-//   to Tuple Descriptors which know a Tuple's schema and associated encodings.
+//   to Tuple Descriptors, which know a Tuple's schema and associated encodings.
 //   When reading and writing Values, NULLs are encoded as nil byte slices. Note
 //   that these are not the same as zero-length byte slices. An empty string may
 //   be encoded as a zero-length byte slice and will be distinct from a NULL
