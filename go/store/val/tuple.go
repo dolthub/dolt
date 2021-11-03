@@ -76,8 +76,8 @@ var NULL []byte = nil
 type Tuple []byte
 
 func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
-	count := 0
-	pos := ByteSize(0)
+	var count int
+	var pos ByteSize
 	for _, v := range values {
 		if isNull(v) {
 			continue
