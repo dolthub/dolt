@@ -31,7 +31,7 @@ type TupleDesc struct {
 	raw rawCmp
 }
 
-type TupleCompare func(left, right Tuple) int
+type TupleCompare func(left, right Tuple, desc TupleDesc) int
 
 // NewTupleDescriptor returns a TupleDesc from a slice of Types.
 func NewTupleDescriptor(cmp TupleCompare, types ...Type) (td TupleDesc) {
@@ -56,7 +56,7 @@ func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
 	if td.raw != nil {
 		return compareRaw(left, right, td.raw)
 	} else {
-		return td.cmp(left, right)
+		return td.cmp(left, right, td)
 	}
 }
 
