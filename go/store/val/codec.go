@@ -419,6 +419,19 @@ func compareBytes(l, r []byte, coll Collation) int {
 //
 type rawCmp []int
 
+var rawCmpLookup = map[Encoding]rawCmp{
+	Int8Enc:   {0},
+	Uint8Enc:  {0},
+	Int16Enc:  {1, 0},
+	Uint16Enc: {1, 0},
+	Int24Enc:  {2, 1, 0},
+	Uint24Enc: {2, 1, 0},
+	Int32Enc:  {3, 2, 1, 0},
+	Uint32Enc: {3, 2, 1, 0},
+	Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},
+	Uint64Enc: {7, 6, 5, 4, 3, 2, 1, 0},
+}
+
 func compareRaw(left, right Tuple, mapping rawCmp) Comparison {
 	var l, r byte
 	for _, idx := range mapping {
@@ -443,7 +456,7 @@ func maybeGetRawComparison(types ...Type) rawCmp {
 			return nil
 		}
 
-		mapping, ok := rawComparisonForEncoding(typ.Enc)
+		mapping, ok := rawCmpLookup[typ.Enc]
 		if !ok {
 			return nil
 		}
@@ -455,22 +468,4 @@ func maybeGetRawComparison(types ...Type) rawCmp {
 		offset += len(mapping)
 	}
 	return raw
-}
-
-func rawComparisonForEncoding(enc Encoding) (mapping []int, ok bool) {
-	lookup := map[Encoding][]int{
-		Int8Enc:   {0},
-		Uint8Enc:  {0},
-		Int16Enc:  {1, 0},
-		Uint16Enc: {1, 0},
-		Int24Enc:  {2, 1, 0},
-		Uint24Enc: {2, 1, 0},
-		Int32Enc:  {3, 2, 1, 0},
-		Uint32Enc: {3, 2, 1, 0},
-		Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},
-		Uint64Enc: {7, 6, 5, 4, 3, 2, 1, 0},
-	}
-
-	mapping, ok = lookup[enc]
-	return
 }

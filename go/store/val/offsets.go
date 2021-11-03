@@ -32,8 +32,20 @@ func (os Offsets) Count() int {
 	return (len(os) / 2) + 1
 }
 
-// Get returns the ith offset.
-func (os Offsets) Get(i int) ByteSize {
+// GetBounds returns the ith offset. |last| is the byte position
+// of the _end_ of the last element.
+func (os Offsets) GetBounds(i int, last ByteSize) (start, stop ByteSize) {
+	start = os.getOffset(i)
+	if os.isLastIndex(i) {
+		stop = last
+	} else {
+		stop = os.getOffset(i + 1)
+	}
+	return
+}
+
+// getOffset gets the byte position of the _start_ of element |i|.
+func (os Offsets) getOffset(i int) ByteSize {
 	if i == 0 {
 		return 0
 	}
@@ -42,7 +54,7 @@ func (os Offsets) Get(i int) ByteSize {
 	return ByteSize(off)
 }
 
-// Put writes offset |off| at index |i|.
+// Put writes offset |pos| at index |i|.
 func (os Offsets) Put(i int, off ByteSize) {
 	if i == 0 {
 		return
@@ -51,7 +63,7 @@ func (os Offsets) Put(i int, off ByteSize) {
 	binary.LittleEndian.PutUint16(os[start:start+2], uint16(off))
 }
 
-// IsLastIndex returns true if |i| is the last index in |sl|.
-func (os Offsets) IsLastIndex(i int) bool {
+// isLastIndex returns true if |i| is the last index in |sl|.
+func (os Offsets) isLastIndex(i int) bool {
 	return len(os) == i*2
 }
