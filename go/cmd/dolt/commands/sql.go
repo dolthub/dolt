@@ -102,40 +102,7 @@ const (
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
 func init() {
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
-			Name:              doltdb.CurrentBatchModeKey,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemIntType(doltdb.CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
-			Default:           int64(0),
-		},
-		{
-			Name:              doltdb.DefaultBranchKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(doltdb.DefaultBranchKey),
-			Default:           "",
-		},
-		{
-			Name:              doltdb.ReplicateToRemoteKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(doltdb.ReplicateToRemoteKey),
-			Default:           "",
-		},
-		{
-			Name:              doltdb.ReadReplicaKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(doltdb.ReadReplicaKey),
-			Default:           "",
-		},
-	})
+	doltdb.AddDoltSystemVariables()
 }
 
 type SqlCmd struct {
@@ -399,6 +366,7 @@ func execShell(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -471,6 +439,7 @@ func execMultiStatements(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -497,6 +466,38 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData(), opts)
 }
 
+func newReplicaDatabase(ctx context.Context, name string, remoteName interface{}, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
+	var skipErrors bool
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.SkipReplicationErrorsKey); !ok {
+		return dsqle.ReadReplicaDatabase{}, sql.ErrUnknownSystemVariable.New(doltdb.SkipReplicationErrorsKey)
+	} else if val == int8(1) {
+		skipErrors = true
+	}
+
+	remote, ok := remoteName.(string)
+	if !ok && !skipErrors {
+		return dsqle.ReadReplicaDatabase{}, sql.ErrInvalidSystemVariableValue.New(doltdb.ReadReplicaRemoteKey)
+
+	}
+
+	opts := editor.Options{
+		Deaf: dEnv.DbEaFactory(),
+	}
+
+	db := dsqle.NewDatabase(name, dEnv.DbData(), opts)
+
+	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remote, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
+	if err != nil {
+		err = fmt.Errorf("%w from remote '%s'; %s", dsqle.ErrFailedToLoadReplicaDB, remote, err.Error())
+		if !skipErrors {
+			return dsqle.ReadReplicaDatabase{}, err
+		}
+		cli.Println(err)
+		return dsqle.ReadReplicaDatabase{Database: db}, nil
+	}
+	return rrd, nil
+}
+
 func execQuery(
 	ctx context.Context,
 	dEnv *env.DoltEnv,
@@ -510,6 +511,7 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -549,13 +551,8 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 
 		db = newDatabase(name, dEnv)
 
-		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReadReplicaKey); ok && val != "" {
-			remoteName, ok := val.(string)
-			if !ok {
-				return true, sql.ErrInvalidSystemVariableValue.New(val)
-			}
-
-			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), doltdb.TodoWorkingSetMeta())
+		if _, remote, ok := sql.SystemVariables.GetGlobal(doltdb.ReadReplicaRemoteKey); ok && remote != "" {
+			db, err = newReplicaDatabase(ctx, name, remote, dEnv)
 			if err != nil {
 				return true, err
 			}
@@ -1511,6 +1508,10 @@ func newSqlEngine(
 	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, dEnv.Config, dbStates...)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, db := range dbs {
+		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}
 
 	// TODO: this should just be the session default like it is with MySQL

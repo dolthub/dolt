@@ -66,6 +66,8 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 		case ReadReplicaDatabase, Database:
 			dsqlDBs = append(dsqlDBs, v)
 		default:
+			// max: esoteric analyzer errors happen if we silently drop databases
+			panic("this should be impossible")
 		}
 	}
 	return dsqlDBs

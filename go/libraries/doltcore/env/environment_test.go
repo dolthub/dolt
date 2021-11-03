@@ -279,10 +279,13 @@ func TestCommitHooksNoErrors(t *testing.T) {
 	sql.SystemVariables.SetGlobal(doltdb.ReplicateToRemoteKey, "unknown")
 	hooks, err := GetCommitHooks(context.Background(), dEnv)
 	assert.NoError(t, err)
-	switch h := hooks[0].(type) {
-	case *doltdb.LogHook:
-	default:
-		t.Errorf("expected LogHook, found: %s", h)
+	if len(hooks) < 1 {
+		t.Error("failed to produce noop hook")
+	} else {
+		switch h := hooks[0].(type) {
+		case *doltdb.LogHook:
+		default:
+			t.Errorf("expected LogHook, found: %s", h)
+		}
 	}
-
 }

@@ -26,10 +26,10 @@ import (
 type PushOnWriteHook struct {
 	destDB datas.Database
 	tmpDir string
-	outf   io.Writer
+	out    io.Writer
 }
 
-var _ datas.CommitHook = &PushOnWriteHook{}
+var _ datas.CommitHook = (*PushOnWriteHook)(nil)
 
 // NewPushOnWriteHook creates a ReplicateHook, parameterizaed by the backup database
 // and a local tempfile for pushing
@@ -44,15 +44,15 @@ func (rh *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db dat
 
 // HandleError implements datas.CommitHook
 func (rh *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
-	if rh.outf != nil {
-		rh.outf.Write([]byte(err.Error()))
+	if rh.out != nil {
+		rh.out.Write([]byte(err.Error()))
 	}
 	return nil
 }
 
 // SetLogger implements datas.CommitHook
 func (rh *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	rh.outf = wr
+	rh.out = wr
 	return nil
 }
 
@@ -98,11 +98,11 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 }
 
 type LogHook struct {
-	msg  []byte
-	outf io.Writer
+	msg []byte
+	out io.Writer
 }
 
-var _ datas.CommitHook = &LogHook{}
+var _ datas.CommitHook = (*LogHook)(nil)
 
 // NewLogHook creates a NoopHook that writes
 func NewLogHook(msg []byte) *LogHook {
@@ -111,8 +111,8 @@ func NewLogHook(msg []byte) *LogHook {
 
 // Execute implements datas.CommitHook, writes message to log channel
 func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	if lh.outf != nil {
-		_, err := lh.outf.Write(lh.msg)
+	if lh.out != nil {
+		_, err := lh.out.Write(lh.msg)
 		return err
 	}
 	return nil
@@ -120,14 +120,14 @@ func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Datab
 
 // HandleError implements datas.CommitHook
 func (lh *LogHook) HandleError(ctx context.Context, err error) error {
-	if lh.outf != nil {
-		lh.outf.Write([]byte(err.Error()))
+	if lh.out != nil {
+		lh.out.Write([]byte(err.Error()))
 	}
 	return nil
 }
 
 // SetLogger implements datas.CommitHook
 func (lh *LogHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	lh.outf = wr
+	lh.out = wr
 	return nil
 }

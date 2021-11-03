@@ -7,7 +7,7 @@ import (
 const (
 	DefaultBranchKey         = "dolt_default_branch"
 	ReplicateToRemoteKey     = "dolt_replicate_to_remote"
-	ReadReplicaKey           = "dolt_read_replica_remote"
+	ReadReplicaRemoteKey     = "dolt_read_replica_remote"
 	SkipReplicationErrorsKey = "dolt_skip_replication_errors"
 	CurrentBatchModeKey      = "batch_mode"
 )
@@ -39,11 +39,11 @@ func AddDoltSystemVariables() {
 			Default:           "",
 		},
 		{
-			Name:              ReadReplicaKey,
+			Name:              ReadReplicaRemoteKey,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(ReadReplicaKey),
+			Type:              sql.NewSystemStringType(ReadReplicaRemoteKey),
 			Default:           "",
 		},
 		{

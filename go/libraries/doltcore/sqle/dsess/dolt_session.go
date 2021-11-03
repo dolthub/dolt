@@ -136,6 +136,13 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 		res, err = strconv.ParseFloat(v, 64)
 	case bool:
 		res, err = strconv.ParseBool(v)
+		switch res {
+		case true:
+			res = int8(1)
+		case false:
+			res = int8(0)
+		}
+
 	case string:
 		return v, nil
 	default:

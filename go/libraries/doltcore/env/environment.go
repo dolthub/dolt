@@ -1306,21 +1306,19 @@ func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, err
 	var skipErrors bool
 	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.SkipReplicationErrorsKey); !ok {
 		return nil, sql.ErrUnknownSystemVariable.New(doltdb.SkipReplicationErrorsKey)
-	} else if v, ok := val.(bool); ok {
-		skipErrors = v
+	} else if val == int8(1) {
+		skipErrors = true
 	}
 
-	var hook datas.CommitHook
-	var err error
-
-	hook, err = getPushOnWriteHook(ctx, dEnv)
-	switch {
-	case err == nil:
+	if hook, err := getPushOnWriteHook(ctx, dEnv); err != nil {
+		err = fmt.Errorf("failure loading hook; %w", err)
+		if skipErrors {
+			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
+		} else {
+			return nil, err
+		}
+	} else if hook != nil {
 		postCommitHooks = append(postCommitHooks, hook)
-	case skipErrors:
-		postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(fmt.Sprintf("failure loading hook; %s\n", err.Error()))))
-	default:
-		return nil, fmt.Errorf("failure loading hook; %w", err)
 	}
 
 	return postCommitHooks, nil
