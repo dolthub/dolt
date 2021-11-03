@@ -1163,6 +1163,9 @@ func (db *database) PostCommitHooks() []CommitHook {
 func (db *database) ExecuteCommitHooks(ctx context.Context, ds Dataset) {
 	var err error
 	for _, hook := range db.postCommitHooks {
+		if hook == nil {
+			continue
+		}
 		err = hook.Execute(ctx, ds, db)
 		if err != nil {
 			hook.HandleError(ctx, err)

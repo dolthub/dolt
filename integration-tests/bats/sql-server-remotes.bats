@@ -20,7 +20,7 @@ teardown() {
     teardown_common
 }
 
-@test "sql-server: sql-push --set-remote within session" {
+@test "sql-server-remotes: sql-push --set-remote within session" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     mkdir rem1
@@ -39,7 +39,7 @@ teardown() {
     server_query repo1 1 "select dolt_push() as p" "p\n1"
 }
 
-@test "sql-server: replicate to backup after sql-session commit" {
+@test "sql-server-remotes: replicate to backup after sql-session commit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     mkdir bac1
@@ -67,7 +67,7 @@ teardown() {
     [[ "${lines[3]}" =~ "2" ]]
 }
 
-@test "sql-server: read-replica pulls new commits on read" {
+@test "sql-server-remotes: read-replica pulls new commits on read" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     mkdir remote1
@@ -93,47 +93,47 @@ teardown() {
     server_query repo1 1 "show tables" "Table\ntest"
 }
 
-@test "sql-server: replica remote not found error" {
+@test "sql-server-remotes: replica remote not found error" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
-    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE remote1
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE unknown
 
     run dolt sql-server
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "remote not found: 'remote1'" ]] || false
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
-@test "sql-server: quiet replica warnings" {
+@test "sql-server-remotes: quiet replica warnings" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_skip_replication_errors true
-    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE remote1
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE unknown
     start_sql_server repo1
 
     run server_query repo1 1 "show tables" "Table\n"
 }
 
-@test "sql-server: replication source remote not found error" {
+@test "sql-server-remotes: replication source remote not found error" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
-    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
 
     run dolt sql-server
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "remote not found: 'remote1'" ]] || false
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
-@test "sql-server: quiet replication source warnings" {
+@test "sql-server-remotes: quiet replication source warnings" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_skip_replication_errors true
-    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
     start_sql_server repo1
 
     server_query repo1 1 "show tables" "Table\n"

@@ -466,6 +466,9 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData(), opts)
 }
 
+// create a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
+// skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
+// that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName interface{}, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
 	var skipErrors bool
 	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.SkipReplicationErrorsKey); !ok {
@@ -477,7 +480,6 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName interface{}
 	remote, ok := remoteName.(string)
 	if !ok && !skipErrors {
 		return dsqle.ReadReplicaDatabase{}, sql.ErrInvalidSystemVariableValue.New(doltdb.ReadReplicaRemoteKey)
-
 	}
 
 	opts := editor.Options{
@@ -511,7 +513,6 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-
 	se, err := newSqlEngine(ctx, dEnv, roots, readOnly, format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -1510,6 +1511,7 @@ func newSqlEngine(
 		return nil, err
 	}
 
+	// this is overwritten only for server sessions
 	for _, db := range dbs {
 		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}

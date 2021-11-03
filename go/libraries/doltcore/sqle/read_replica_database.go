@@ -49,20 +49,22 @@ var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
 
+var EmptyReadReplica = ReadReplicaDatabase{}
+
 func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string) (ReadReplicaDatabase, error) {
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
-		return ReadReplicaDatabase{Database: db}, err
+		return EmptyReadReplica, err
 	}
 
 	remote, ok := remotes[remoteName]
 	if !ok {
-		return ReadReplicaDatabase{Database: db}, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
+		return EmptyReadReplica, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
 	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default)
 	if err != nil {
-		return ReadReplicaDatabase{Database: db}, err
+		return EmptyReadReplica, err
 	}
 
 	headRef := rsr.CWBHeadRef()
@@ -79,7 +81,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		}
 	}
 	if !foundRef {
-		return ReadReplicaDatabase{Database: db}, env.ErrInvalidRefSpecRemote
+		return EmptyReadReplica, env.ErrInvalidRefSpecRemote
 	}
 
 	return ReadReplicaDatabase{

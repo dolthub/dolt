@@ -122,3 +122,23 @@ teardown() {
     [[ "$output" =~ "failure loading hook; remote not found: 'unknown'" ]] || false
     [[ "$output" =~ "dolt_commit('-am', 'cm')" ]] || false
 }
+
+@test "replication: replica sink bad source no errors with standard commands" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE unknown
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "remote not found: 'unknown'" ]] || false
+}
+
+@test "replication: replica sink errors" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE unknown
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]]
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+}
+
