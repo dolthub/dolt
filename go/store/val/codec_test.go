@@ -25,92 +25,92 @@ func TestCompare(t *testing.T) {
 	tests := []struct {
 		typ  Type
 		l, r []byte
-		cmp  Comparison
+		cmp  int
 	}{
 		// ints
 		{
 			typ: Type{Enc: Int64Enc},
 			l:   encInt(0), r: encInt(0),
-			cmp: EqualCmp,
+			cmp: 0,
 		},
 		{
 			typ: Type{Enc: Int64Enc},
 			l:   encInt(-1), r: encInt(0),
-			cmp: LesserCmp,
+			cmp: -1,
 		},
 		{
 			typ: Type{Enc: Int64Enc},
 			l:   encInt(1), r: encInt(0),
-			cmp: GreaterCmp,
+			cmp: 1,
 		},
 		// uints
 		{
 			typ: Type{Enc: Uint64Enc},
 			l:   encUint(0), r: encUint(0),
-			cmp: EqualCmp,
+			cmp: 0,
 		},
 		{
 			typ: Type{Enc: Uint64Enc},
 			l:   encUint(0), r: encUint(1),
-			cmp: LesserCmp,
+			cmp: -1,
 		},
 		{
 			typ: Type{Enc: Uint64Enc},
 			l:   encUint(1), r: encUint(0),
-			cmp: GreaterCmp,
+			cmp: 1,
 		},
 		// floats
 		{
 			typ: Type{Enc: Float64Enc},
 			l:   encFloat(0), r: encFloat(0),
-			cmp: EqualCmp,
+			cmp: 0,
 		},
 		{
 			typ: Type{Enc: Float64Enc},
 			l:   encFloat(-1), r: encFloat(0),
-			cmp: LesserCmp,
+			cmp: -1,
 		},
 		{
 			typ: Type{Enc: Float64Enc},
 			l:   encFloat(1), r: encFloat(0),
-			cmp: GreaterCmp,
+			cmp: 1,
 		},
 		// strings
 		{
 			typ: Type{Enc: StringEnc},
 			l:   encStr(""), r: encStr(""),
-			cmp: EqualCmp,
+			cmp: 0,
 		},
 		{
 			typ: Type{Enc: StringEnc},
 			l:   encStr(""), r: encStr("a"),
-			cmp: LesserCmp,
+			cmp: -1,
 		},
 		{
 			typ: Type{Enc: StringEnc},
 			l:   encStr("a"), r: encStr(""),
-			cmp: GreaterCmp,
+			cmp: 1,
 		},
 		{
 			typ: Type{Enc: StringEnc},
 			l:   encStr("a"), r: encStr("a"),
-			cmp: EqualCmp,
+			cmp: 0,
 		},
 		{
 			typ: Type{Enc: StringEnc},
 			l:   encStr("a"), r: encStr("b"),
-			cmp: LesserCmp,
+			cmp: -1,
 		},
 		{
 			typ: Type{Enc: StringEnc},
 			l:   encStr("b"), r: encStr("a"),
-			cmp: GreaterCmp,
+			cmp: 1,
 		},
 	}
 
 	for _, test := range tests {
 		act := compare(test.typ, test.l, test.r)
-		assert.Equal(t, test.cmp, Comparison(act))
+		assert.Equal(t, test.cmp, act)
 	}
 }
 

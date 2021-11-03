@@ -30,7 +30,7 @@ func NewTupleBuilder(desc TupleDesc) *TupleBuilder {
 }
 
 // Tuple materializes a Tuple from the fields written to the TupleBuilder.
-func (tb *TupleBuilder) Tuple(pool pool.BuffPool) (tup Tuple) {
+func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 	for i, typ := range tb.Desc.Types {
 		if !typ.Nullable && tb.fields[i] == nil {
 			panic("cannot write NULL to non-NULL field")

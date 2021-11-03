@@ -432,7 +432,7 @@ var rawCmpLookup = map[Encoding]rawCmp{
 	Uint64Enc: {7, 6, 5, 4, 3, 2, 1, 0},
 }
 
-func compareRaw(left, right Tuple, mapping rawCmp) Comparison {
+func compareRaw(left, right Tuple, mapping rawCmp) int {
 	var l, r byte
 	for _, idx := range mapping {
 		l, r = left[idx], right[idx]
