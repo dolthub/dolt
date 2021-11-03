@@ -38,6 +38,7 @@ setup_no_dolt_init() {
     
     # remove directory if exists
     # reruns recycle pids
+    REPO_NAME="dolt_repo_$$"
     rm -rf "dolt-repo-$$"
 
     # Append the directory name with the pid of the calling process so
