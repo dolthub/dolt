@@ -45,7 +45,34 @@ teardown() {
 
 }
 
+@test "dump: compare tables in database with importing from doltdump.sql " {
+    dolt branch new_branch
+
+    dolt sql -q "CREATE TABLE mysqldump_table(pk int);"
+    dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+
+    dolt add .
+    dolt commit -m "create tables"
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [ -f doltdump.sql ]
+
+    dolt checkout new_branch
+    dolt sql < doltdump.sql
+    dolt add .
+    dolt commit --allow-empty -m "create tables from doltdump"
+
+    run dolt diff --summary main new_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]]
+}
+
+
 @test "dump: dolt dump and mysqldump compatibility" {
+    skip "mysqldump not working on Windows"
     REPO_NAME="dolt_repo_$$"
     mkdir $REPO_NAME
     cd $REPO_NAME
@@ -96,7 +123,6 @@ teardown() {
 
     cd ..
     cd ..
-    kill $(lsof -t -i:$PORT)
     kill $SERVER_PID
     rm -rf $REPO_NAME
 }
@@ -124,7 +150,7 @@ teardown() {
 }
 
 @test "dump: dolt dump with foreign key and import" {
-    skip "dolt dump foreign key option for import NOT implemented "
+    skip "dolt dump foreign key option for import NOT implemented"
     dolt sql -q "CREATE TABLE mysqldump_table(pk int);"
     dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
@@ -157,7 +183,6 @@ teardown() {
 }
 
 @test "dump: dolt dump with keyless tables" {
-
     dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
     dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
     dolt sql -q "ALTER TABLE keyless ADD INDEX (c1);"
