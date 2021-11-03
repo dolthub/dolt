@@ -103,13 +103,13 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
 
-	mrEnv, err := DoltEnvAsMultiEnv(dEnv)
+	mrEnv, err := DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv, 1)
 
-	for k, v := range mrEnv {
-		assert.Equal(t, "test_name_123", k)
-		assert.Equal(t, dEnv, v)
+	for _, e := range mrEnv.envs {
+		assert.Equal(t, "test_name_123", e.name)
+		assert.Equal(t, dEnv, e.env)
 	}
 }
 
@@ -141,8 +141,8 @@ func TestLoadMultiEnv(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, name := range names {
-		_, ok := mrEnv[name]
-		assert.True(t, ok)
+		e := mrEnv.GetEnv(name)
+		assert.NotNil(t, e)
 	}
 }
 
@@ -167,7 +167,7 @@ func TestLoadMultiEnvFromDir(t *testing.T) {
 		dbName := dirNameToDBName[dirName]
 		_, ok := envs[dirName]
 		require.True(t, ok)
-		_, ok = mrEnv[dbName]
-		require.True(t, ok)
+		e := mrEnv.GetEnv(dbName)
+		require.NotNil(t, e)
 	}
 }

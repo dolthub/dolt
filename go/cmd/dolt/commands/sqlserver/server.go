@@ -101,7 +101,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	if len(dbNamesAndPaths) == 0 {
 		if dEnv.Valid() {
 			var err error
-			mrEnv, err = env.DoltEnvAsMultiEnv(dEnv)
+			mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
 			if err != nil {
 				return err, nil
 			}
