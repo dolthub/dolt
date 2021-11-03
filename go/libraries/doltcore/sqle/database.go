@@ -65,9 +65,10 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 		switch v := sqlDb.(type) {
 		case ReadReplicaDatabase, Database:
 			dsqlDBs = append(dsqlDBs, v)
+		case ReadOnlyDatabase, *UserSpaceDatabase:
 		default:
 			// max: esoteric analyzer errors happen if we silently drop databases
-			panic("this should be impossible")
+			panic("cannot cast to SqlDatabase")
 		}
 	}
 	return dsqlDBs

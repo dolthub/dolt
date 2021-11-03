@@ -35,7 +35,7 @@ teardown() {
 
     server_query repo1 1 "select dolt_push('--set-upstream', 'origin', 'main') as p" "p\n1"
 
-    skip "In-memory branch doesn't track upstream correctly"
+    skip "In-memory branch doesn't track upstream"
     server_query repo1 1 "select dolt_push() as p" "p\n1"
 }
 
