@@ -178,6 +178,19 @@ func (fs *localFS) OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, er
 	return os.OpenFile(fp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
 }
 
+// OpenForWriteAppend opens a file for writing. The file will be created if it does not exist, and it will
+// append only to that new file. If file exists, it will append to existing file.
+func (fs *localFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteCloser, error) {
+	var err error
+	fp, err = fs.Abs(fp)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return os.OpenFile(fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, perm)
+}
+
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 // and if it does exist it will be overwritten.
 func (fs *localFS) WriteFile(fp string, data []byte) error {

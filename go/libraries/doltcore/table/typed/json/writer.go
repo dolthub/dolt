@@ -20,14 +20,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
-	"path/filepath"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -42,22 +39,6 @@ type JSONWriter struct {
 	bWr         *bufio.Writer
 	sch         schema.Schema
 	rowsWritten int
-}
-
-func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema) (*JSONWriter, error) {
-	err := fs.MkDirs(filepath.Dir(path))
-
-	if err != nil {
-		return nil, err
-	}
-
-	wr, err := fs.OpenForWrite(path, os.ModePerm)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewJSONWriter(wr, outSch)
 }
 
 func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*JSONWriter, error) {

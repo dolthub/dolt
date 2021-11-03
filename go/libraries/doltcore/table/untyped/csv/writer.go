@@ -19,8 +19,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -29,7 +27,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // writeBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all
@@ -43,24 +40,6 @@ type CSVWriter struct {
 	info    *CSVFileInfo
 	sch     schema.Schema
 	useCRLF bool // True to use \r\n as the line terminator
-}
-
-// OpenCSVWriter creates a file at the given path in the given filesystem and writes out rows based on the Schema,
-// and CSVFileInfo provided
-func OpenCSVWriter(path string, fs filesys.WritableFS, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
-	err := fs.MkDirs(filepath.Dir(path))
-
-	if err != nil {
-		return nil, err
-	}
-
-	wr, err := fs.OpenForWrite(path, os.ModePerm)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewCSVWriter(wr, outSch, info)
 }
 
 // NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
