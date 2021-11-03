@@ -17,6 +17,7 @@ package dsess
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -128,7 +129,16 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 
 	var res interface{}
 	switch value.(type) {
-	case int, int8, int16, int32, int64:
+	case int8:
+		switch strings.ToLower(v) {
+		case "on", "true", "1":
+			return int8(1), nil
+		case "off", "false", "0":
+			return int8(0), nil
+		default:
+			res, err = strconv.ParseInt(v, 10, 8)
+		}
+	case int, int16, int32, int64:
 		res, err = strconv.ParseInt(v, 10, 64)
 	case uint, uint8, uint16, uint32, uint64:
 		res, err = strconv.ParseUint(v, 10, 64)
@@ -142,7 +152,6 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 		case false:
 			res = int8(0)
 		}
-
 	case string:
 		return v, nil
 	default:
@@ -185,6 +194,12 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 		return config.SetFloat(conf, key, v)
 	case string:
 		return config.SetString(conf, key, v)
+	case bool:
+		if v {
+			return config.SetInt(conf, key, int64(1))
+
+		}
+		return config.SetInt(conf, key, int64(0))
 	default:
 		return sql.ErrInvalidType.New(v)
 	}

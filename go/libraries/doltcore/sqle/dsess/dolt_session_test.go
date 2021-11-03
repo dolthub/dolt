@@ -137,6 +137,16 @@ func TestSetPersistedValue(t *testing.T) {
 			Value: "7",
 		},
 		{
+			Name:        "bool",
+			Value:       true,
+			ExpectedRes: "1",
+		},
+		{
+			Name:        "bool",
+			Value:       false,
+			ExpectedRes: "0",
+		},
+		{
 			Value: complex64(7),
 			Err:   sql.ErrInvalidType,
 		},
@@ -160,30 +170,65 @@ func TestSetPersistedValue(t *testing.T) {
 func TestGetPersistedValue(t *testing.T) {
 	tests := []struct {
 		Name        string
+		Value       string
 		ExpectedRes interface{}
 		Err         *errors.Kind
 	}{
 		{
 			Name:        "long_query_time",
+			Value:       "7",
 			ExpectedRes: float64(7),
 		},
 		{
 			Name:        "tls_ciphersuites",
+			Value:       "7",
 			ExpectedRes: "7",
 		},
 		{
 			Name:        "max_connections",
+			Value:       "7",
 			ExpectedRes: int64(7),
 		},
 		{
 			Name:        "tmp_table_size",
+			Value:       "7",
 			ExpectedRes: uint64(7),
+		},
+		{
+			Name:        "activate_all_roles_on_login",
+			Value:       "true",
+			ExpectedRes: int8(1),
+		},
+		{
+			Name:        "activate_all_roles_on_login",
+			Value:       "on",
+			ExpectedRes: int8(1),
+		},
+		{
+			Name:        "activate_all_roles_on_login",
+			Value:       "1",
+			ExpectedRes: int8(1),
+		},
+		{
+			Name:        "activate_all_roles_on_login",
+			Value:       "false",
+			ExpectedRes: int8(0),
+		},
+		{
+			Name:        "activate_all_roles_on_login",
+			Value:       "off",
+			ExpectedRes: int8(0),
+		},
+		{
+			Name:        "activate_all_roles_on_login",
+			Value:       "0",
+			ExpectedRes: int8(0),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			conf := config.NewMapConfig(map[string]string{tt.Name: "7"})
+			conf := config.NewMapConfig(map[string]string{tt.Name: tt.Value})
 			if val, err := getPersistedValue(conf, tt.Name); tt.Err != nil {
 				assert.True(t, tt.Err.Is(err))
 			} else {

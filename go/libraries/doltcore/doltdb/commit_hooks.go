@@ -104,7 +104,7 @@ type LogHook struct {
 
 var _ datas.CommitHook = (*LogHook)(nil)
 
-// NewLogHook creates a NoopHook that writes
+// NewLogHook is a noop that logs to a writer when invoked
 func NewLogHook(msg []byte) *LogHook {
 	return &LogHook{msg: msg}
 }
