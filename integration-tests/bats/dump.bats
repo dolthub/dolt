@@ -45,13 +45,15 @@ teardown() {
 
 }
 
-@test "dump: compare tables in database with importing from doltdump.sql " {
+@test "dump: compare tables in database with tables imported from doltdump.sql " {
     dolt branch new_branch
 
     dolt sql -q "CREATE TABLE mysqldump_table(pk int);"
     dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
 
     dolt add .
     dolt commit -m "create tables"
@@ -67,64 +69,7 @@ teardown() {
 
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
-    [[ "$output" = "" ]]
-}
-
-
-@test "dump: dolt dump and mysqldump compatibility" {
-    skip "mysqldump not working on Windows"
-    REPO_NAME="dolt_repo_$$"
-    mkdir $REPO_NAME
-    cd $REPO_NAME
-
-    dolt init
-
-    dolt sql -q "CREATE TABLE mysqldump_table(pk int);"
-    dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-
-    let PORT="$$ % (65536-1024) + 1024"
-    USER="dolt"
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
-    SERVER_PID=$!
-    # Give the server a chance to start
-    sleep 1
-
-    export MYSQL_PWD=""
-
-    mkdir dumps
-    run mysqldump $REPO_NAME -P $PORT -h 0.0.0.0 -u $USER > dumps/mysqldump.sql
-    [ "$status" -eq 0 ]
-    [ -f dumps/mysqldump.sql ]
-
-    run dolt dump
-    [ "$status" -eq 0 ]
-
-    mv doltdump.sql dumps/doltdump.sql
-    [ -f dumps/doltdump.sql ]
-
-    cd dumps
-    dolt init
-    dolt branch dolt_branch
-
-    dolt sql < mysqldump.sql
-    dolt add .
-    dolt commit --allow-empty -m "create tables from mysqldump"
-
-    dolt checkout dolt_branch
-    dolt sql < doltdump.sql
-    dolt add .
-    dolt commit --allow-empty -m "create tables from doltdump"
-
-    run dolt diff --summary main dolt_branch
-    [ "$status" -eq 0 ]
-    [[ "$output" = "" ]]
-
-    cd ..
-    cd ..
-    kill $SERVER_PID
-    rm -rf $REPO_NAME
+    [[ "$output" = "" ]] || false
 }
 
 @test "dump: dolt dump with Indexes" {
