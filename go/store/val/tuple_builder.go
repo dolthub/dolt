@@ -20,7 +20,7 @@ type TupleBuilder struct {
 	Desc TupleDesc
 
 	buf [MaxTupleDataSize]byte
-	off ByteSize
+	pos ByteSize
 
 	fields [MaxTupleFields][]byte
 }
@@ -45,117 +45,113 @@ func (tb *TupleBuilder) Tuple(pool pool.BuffPool) (tup Tuple) {
 
 // Recycle resets the TupleBuilder so it can build a new Tuple.
 func (tb *TupleBuilder) Recycle() {
-	tb.off = 0
-}
-
-// PutNull writes a NULL to the ith field of the Tuple being built.
-func (tb *TupleBuilder) PutNull(i int, v bool) {
+	tb.pos = 0
 }
 
 // PutBool writes a bool to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutBool(i int, v bool) {
 	tb.Desc.expectEncoding(i, Int8Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+1]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int8Size]
 	writeBool(tb.fields[i], v)
-	tb.off += 1
+	tb.pos += int8Size
 }
 
 // PutInt8 writes an int8 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutInt8(i int, v int8) {
 	tb.Desc.expectEncoding(i, Int8Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+1]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int8Size]
 	writeInt8(tb.fields[i], v)
-	tb.off += 1
+	tb.pos += int8Size
 }
 
 // PutUint8 writes a uint8 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutUint8(i int, v uint8) {
 	tb.Desc.expectEncoding(i, Uint8Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+1]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint8Size]
 	writeUint8(tb.fields[i], v)
-	tb.off += 1
+	tb.pos += uint8Size
 }
 
 // PutInt16 writes an int16 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutInt16(i int, v int16) {
 	tb.Desc.expectEncoding(i, Int16Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+2]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int16Size]
 	writeInt16(tb.fields[i], v)
-	tb.off += 2
+	tb.pos += int16Size
 }
 
 // PutUint16 writes a uint16 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutUint16(i int, v uint16) {
 	tb.Desc.expectEncoding(i, Uint16Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+2]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint16Size]
 	writeUint16(tb.fields[i], v)
-	tb.off += 2
+	tb.pos += uint16Size
 }
 
 // PutInt32 writes an int32 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutInt32(i int, v int32) {
 	tb.Desc.expectEncoding(i, Int32Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+4]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int32Size]
 	writeInt32(tb.fields[i], v)
-	tb.off += 4
+	tb.pos += int32Size
 }
 
 // PutUint32 writes a uint32 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutUint32(i int, v uint32) {
 	tb.Desc.expectEncoding(i, Uint32Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+4]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint32Size]
 	writeUint32(tb.fields[i], v)
-	tb.off += 4
+	tb.pos += uint32Size
 }
 
 // PutInt64 writes an int64 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutInt64(i int, v int64) {
 	tb.Desc.expectEncoding(i, Int64Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+8]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64Size]
 	writeInt64(tb.fields[i], v)
-	tb.off += 8
+	tb.pos += int64Size
 }
 
 // PutUint64 writes a uint64 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutUint64(i int, v uint64) {
 	tb.Desc.expectEncoding(i, Uint64Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+8]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint64Size]
 	writeUint64(tb.fields[i], v)
-	tb.off += 8
+	tb.pos += uint64Size
 }
 
 // PutFloat32 writes a float32 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutFloat32(i int, v float32) {
 	tb.Desc.expectEncoding(i, Float32Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+4]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+float32Size]
 	writeFloat32(tb.fields[i], v)
-	tb.off += 4
+	tb.pos += float32Size
 }
 
 // PutFloat64 writes a float64 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 	tb.Desc.expectEncoding(i, Float64Enc)
-	tb.fields[i] = tb.buf[tb.off : tb.off+8]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+float64Size]
 	writeFloat64(tb.fields[i], v)
-	tb.off += 8
+	tb.pos += float64Size
 }
 
 // PutString writes a string to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutString(i int, v string) {
 	tb.Desc.expectEncoding(i, StringEnc)
 	sz := ByteSize(len(v))
-	tb.fields[i] = tb.buf[tb.off : tb.off+sz]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeString(tb.fields[i], v, tb.Desc.Types[i].Coll)
-	tb.off += sz
+	tb.pos += sz
 }
 
 // PutBytes writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutBytes(i int, v []byte) {
 	tb.Desc.expectEncoding(i, BytesEnc)
 	sz := ByteSize(len(v))
-	tb.fields[i] = tb.buf[tb.off : tb.off+sz]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeBytes(tb.fields[i], v, tb.Desc.Types[i].Coll)
-	tb.off += sz
+	tb.pos += sz
 }
 
 // PutField writes an interface{} to the ith field of the Tuple being built.
