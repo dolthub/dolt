@@ -155,6 +155,7 @@ type DatabaseSessionState struct {
 	readReplica          *env.Remote
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
+	tmpdir string
 
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
@@ -1091,6 +1092,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
+	sessionState.tmpdir = dbState.DbData.Rsw.TempTableFilesDir()
 	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
