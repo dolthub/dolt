@@ -32,6 +32,7 @@ type TableEditSession struct {
 
 	root       *doltdb.RootValue
 	tables     map[string]*sessionedTableEditor
+	tf         *types.TupleFactory
 	writeMutex *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
 }
 
@@ -55,10 +56,15 @@ func TestEditorOptions(vrw types.ValueReadWriter) Options {
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
 func CreateTableEditSession(root *doltdb.RootValue, opts Options) *TableEditSession {
+	tf := types.NewTupleFactory(tfApproxCapacity)
+	if root != nil {
+		tf.Reset(root.VRW().Format())
+	}
 	return &TableEditSession{
 		Opts:       opts,
 		root:       root,
 		tables:     make(map[string]*sessionedTableEditor),
+		tf:         tf,
 		writeMutex: &sync.RWMutex{},
 	}
 }
@@ -70,6 +76,13 @@ func (tes *TableEditSession) GetTableEditor(ctx context.Context, tableName strin
 	defer tes.writeMutex.Unlock()
 
 	return tes.getTableEditor(ctx, tableName, tableSch)
+}
+
+// Returns the TupleFactory this edit session uses. If consumers of this
+// session need to create tuples scoped to this session, they might be able to
+// do it more efficiently by using this TupleFactory.
+func (tes *TableEditSession) TupleFactory() *types.TupleFactory {
+	return tes.tf
 }
 
 // Flush returns an updated root with all of the changed tables.
@@ -153,6 +166,9 @@ func (tes *TableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 	}
 
 	tes.root = newRoot
+	if tes.root != nil {
+		tes.tf.Reset(tes.root.VRW().Format())
+	}
 	return newRoot, nil
 }
 
@@ -198,7 +214,7 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		}
 	}
 
-	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName, tes.Opts)
+	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName, tes.Opts, tes.tf)
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +274,9 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		return err
 	}
 	tes.root = root
+	if tes.root != nil {
+		tes.tf.Reset(tes.root.VRW().Format())
+	}
 
 	for tableName, localTableEditor := range tes.tables {
 		t, ok, err := root.GetTable(ctx, tableName)
@@ -275,7 +294,7 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		if err != nil {
 			return err
 		}
-		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName, tes.Opts)
+		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName, tes.Opts, tes.tf)
 		if err != nil {
 			return err
 		}

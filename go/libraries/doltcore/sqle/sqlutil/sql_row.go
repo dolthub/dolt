@@ -94,7 +94,7 @@ func SqlRowToDoltRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, 
 
 // DoltKeyValueAndMappingFromSqlRow converts a sql.Row to key and value tuples and keeps a mapping from tag to value that
 // can be used to speed up index key generation for foreign key checks.
-func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, types.Tuple, map[uint64]types.Value, error) {
+func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema, tf *types.TupleFactory) (types.Tuple, types.Tuple, map[uint64]types.Value, error) {
 	allCols := doltSchema.GetAllCols()
 	nonPKCols := doltSchema.GetNonPKCols()
 
@@ -155,14 +155,13 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 
 	nonPKVals = nonPKVals[:nonPKIdx]
 
-	nbf := vrw.Format()
-	keyTuple, err := types.NewTuple(nbf, pkVals...)
+	keyTuple, err := tf.Create(pkVals...)
 
 	if err != nil {
 		return types.Tuple{}, types.Tuple{}, nil, err
 	}
 
-	valTuple, err := types.NewTuple(nbf, nonPKVals...)
+	valTuple, err := tf.Create(nonPKVals...)
 
 	if err != nil {
 		return types.Tuple{}, types.Tuple{}, nil, err
@@ -173,7 +172,7 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 
 // DoltKeyValueAndMappingFromSqlRow converts a sql.Row to key tuple and keeps a mapping from tag to value that
 // can be used to speed up index key generation for foreign key checks.
-func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, map[uint64]types.Value, error) {
+func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema, tf *types.TupleFactory) (types.Tuple, map[uint64]types.Value, error) {
 	allCols := doltSchema.GetAllCols()
 	pkCols := doltSchema.GetPKCols()
 
@@ -219,8 +218,7 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 		return types.Tuple{}, nil, errors.New("not all pk columns have a value")
 	}
 
-	nbf := vrw.Format()
-	keyTuple, err := types.NewTuple(nbf, pkVals...)
+	keyTuple, err := tf.Create(pkVals...)
 
 	if err != nil {
 		return types.Tuple{}, nil, err

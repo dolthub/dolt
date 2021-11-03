@@ -273,6 +273,7 @@ type TupleFactory struct {
 	nbf            *NomsBinFormat
 	biggestTuple   int
 	approxCapacity int
+	mu             sync.Mutex
 
 	pos    int
 	buffer []byte
@@ -305,6 +306,8 @@ func (tf *TupleFactory) newBuffer() {
 
 // Create creates a new Tuple using the TupleFactory
 func (tf *TupleFactory) Create(values ...Value) (Tuple, error) {
+	tf.mu.Lock()
+	defer tf.mu.Unlock()
 	remaining := len(tf.buffer) - tf.pos
 	// somewhat wasteful, but it's costly if there isn't enough room to store a tuple in the tf's buffer so make it a rare case
 	if remaining < tf.biggestTuple {

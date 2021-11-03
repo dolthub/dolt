@@ -36,10 +36,6 @@ import (
 
 const tfApproxCapacity = 64
 
-var tupleFactories = &sync.Pool{New: func() interface{} {
-	return types.NewTupleFactory(tfApproxCapacity)
-}}
-
 var (
 	tableEditorMaxOps uint64 = 256 * 1024
 	ErrDuplicateKey          = errors.New("duplicate key error")
@@ -80,11 +76,11 @@ type TableEditor interface {
 	Close(ctx context.Context) error
 }
 
-func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, opts Options) (TableEditor, error) {
+func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, opts Options, tf *types.TupleFactory) (TableEditor, error) {
 	if schema.IsKeyless(tableSch) {
-		return newKeylessTableEditor(ctx, t, tableSch, name, opts)
+		return newKeylessTableEditor(ctx, t, tableSch, name, opts, tf)
 	}
-	return newPkTableEditor(ctx, t, tableSch, name, opts)
+	return newPkTableEditor(ctx, t, tableSch, name, opts, tf)
 }
 
 // pkTableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
@@ -116,10 +112,7 @@ type pkTableEditor struct {
 	writeMutex *sync.Mutex
 }
 
-func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, opts Options) (*pkTableEditor, error) {
-	tf := tupleFactories.Get().(*types.TupleFactory)
-	tf.Reset(t.Format())
-
+func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string, opts Options, tf *types.TupleFactory) (*pkTableEditor, error) {
 	te := &pkTableEditor{
 		t:          t,
 		tSch:       tableSch,
@@ -809,10 +802,6 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 func (te *pkTableEditor) Close(ctx context.Context) error {
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
-	defer func() {
-		tupleFactories.Put(te.tf)
-		te.tf = nil
-	}()
 
 	if te.cvEditor != nil {
 		te.cvEditor.Close(ctx)

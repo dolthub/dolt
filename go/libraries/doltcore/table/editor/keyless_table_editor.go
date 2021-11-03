@@ -40,6 +40,7 @@ type keylessTableEditor struct {
 	indexEds []*IndexEditor
 	cvEditor *types.MapEditor
 	dirty    bool
+	tf       *types.TupleFactory
 
 	eg *errgroup.Group
 	mu *sync.Mutex
@@ -116,7 +117,7 @@ func (acc keylessEditAcc) getRowDelta(key types.Tuple) (rowDelta, error) {
 	return vd, nil
 }
 
-func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, name string, opts Options) (TableEditor, error) {
+func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, name string, opts Options, tf *types.TupleFactory) (TableEditor, error) {
 	acc := keylessEditAcc{
 		deltas: make(map[hash.Hash]rowDelta),
 		nbf:    tbl.Format(),
@@ -130,6 +131,7 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 		name:     name,
 		acc:      acc,
 		indexEds: make([]*IndexEditor, sch.Indexes().Count()),
+		tf:       tf,
 		dirty:    false,
 		eg:       eg,
 		mu:       &sync.Mutex{},
@@ -176,7 +178,7 @@ func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple,
 		return err
 	}
 
-	val, err := types.NewTuple(kte.tbl.Format(), tplVals...)
+	val, err := kte.tf.Create(tplVals...)
 	if err != nil {
 		return err
 	}
@@ -360,14 +362,14 @@ func (kte *keylessTableEditor) flush(ctx context.Context) error {
 	}
 
 	kte.eg.Go(func() (err error) {
-		kte.tbl, err = applyEdits(ctx, tbl, acc, kte.indexEds, nil)
+		kte.tbl, err = applyEdits(ctx, tbl, acc, kte.indexEds, kte.tf, nil)
 		return err
 	})
 
 	return nil
 }
 
-func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, errFunc PKDuplicateErrFunc) (_ *doltdb.Table, retErr error) {
+func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, tf *types.TupleFactory, errFunc PKDuplicateErrFunc) (_ *doltdb.Table, retErr error) {
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -438,7 +440,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 				if err != nil {
 					return nil, err
 				}
-				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index(), nil)
+				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index(), tf)
 				if err != nil {
 					return nil, err
 				}

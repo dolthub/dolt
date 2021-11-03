@@ -50,7 +50,7 @@ func TestKeylessTableEditorConcurrency(t *testing.T) {
 
 	opts := TestEditorOptions(db)
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
+		tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts, types.NewTupleFactory(64))
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -159,7 +159,7 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
-	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
+	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts, types.NewTupleFactory(64))
 	require.NoError(t, err)
 	for i := 0; i < tableEditorConcurrencyFinalCount*2; i++ {
 		dRow, err := row.New(format, tableSch, row.TaggedValues{
@@ -174,7 +174,7 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
+		tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts, types.NewTupleFactory(64))
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -268,7 +268,7 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
-	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
+	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts, types.NewTupleFactory(64))
 	require.NoError(t, err)
 
 	for i := 0; i < 20; i++ {
@@ -351,7 +351,7 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
-	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
+	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts, types.NewTupleFactory(64))
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -452,7 +452,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)
-	tableEditor, err := newKeylessTableEditor(ctx, table, tableSch, tableName, opts)
+	tableEditor, err := newKeylessTableEditor(ctx, table, tableSch, tableName, opts, types.NewTupleFactory(64))
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -611,7 +611,7 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)
-	tableEditor, err := newKeylessTableEditor(ctx, table, tableSch, tableName, opts)
+	tableEditor, err := newKeylessTableEditor(ctx, table, tableSch, tableName, opts, types.NewTupleFactory(64))
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {

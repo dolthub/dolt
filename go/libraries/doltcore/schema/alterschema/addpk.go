@@ -124,7 +124,9 @@ func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *do
 	}
 
 	// Create the table editor and insert all of the new data into it
-	tableEditor, err := editor.NewTableEditor(ctx, newTable, newSchema, name, opts)
+	tf := types.NewTupleFactory(64)
+	tf.Reset(nbf)
+	tableEditor, err := editor.NewTableEditor(ctx, newTable, newSchema, name, opts, tf)
 	if err != nil {
 		return nil, err
 	}
