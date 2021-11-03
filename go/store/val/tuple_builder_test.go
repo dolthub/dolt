@@ -60,7 +60,7 @@ func smokeTestTupleBuilder(t *testing.T) {
 	tb.PutString(10, "123")
 	tb.PutBytes(11, []byte("abc"))
 
-	tup := tb.Tuple(testPool)
+	tup := tb.Build(testPool)
 	i8, ok := desc.GetInt8(0, tup)
 	assert.True(t, ok)
 	assert.Equal(t, int8(math.MaxInt8), i8)
@@ -142,7 +142,7 @@ func testRoundTripInts(t *testing.T) {
 		for idx, value := range test.data {
 			bld.PutInt64(idx, value)
 		}
-		tup := bld.Tuple(testPool)
+		tup := bld.Build(testPool)
 
 		// verify
 		n := test.desc.Count()

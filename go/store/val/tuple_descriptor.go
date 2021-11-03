@@ -47,23 +47,15 @@ func NewTupleDescriptor(types ...Type) (td TupleDesc) {
 	return
 }
 
-type Comparison int
-
-const (
-	GreaterCmp Comparison = 1
-	EqualCmp   Comparison = 0
-	LesserCmp  Comparison = -1
-)
-
 // Compare returns the Comaparison of |left| and |right|.
-func (td TupleDesc) Compare(left, right Tuple) (cmp Comparison) {
+func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
 	if td.raw != nil {
 		return compareRaw(left, right, td.raw)
 	}
 
 	for i, typ := range td.Types {
-		cmp = Comparison(compare(typ, left.GetField(i), right.GetField(i)))
-		if cmp != EqualCmp {
+		cmp = compare(typ, left.GetField(i), right.GetField(i))
+		if cmp != 0 {
 			break
 		}
 	}
