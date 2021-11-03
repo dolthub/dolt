@@ -155,7 +155,7 @@ type DatabaseSessionState struct {
 	readReplica          *env.Remote
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
-	tmpTablesDir               string
+	tmpTablesDir         string
 
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
