@@ -32,6 +32,7 @@ func TestTupleBuilder(t *testing.T) {
 
 func smokeTestTupleBuilder(t *testing.T) {
 	desc := NewTupleDescriptor(
+		testCompare,
 		Type{Enc: Int8Enc},
 		Type{Enc: Int16Enc},
 		Type{Enc: Int32Enc},
@@ -107,13 +108,13 @@ func testRoundTripInts(t *testing.T) {
 		data map[int]int64
 	}{
 		{
-			desc: NewTupleDescriptor(typ),
+			desc: NewTupleDescriptor(testCompare, typ),
 			data: map[int]int64{
 				0: 0,
 			},
 		},
 		{
-			desc: NewTupleDescriptor(typ, typ, typ),
+			desc: NewTupleDescriptor(testCompare, typ, typ, typ),
 			data: map[int]int64{
 				0: 0,
 				1: 1,
@@ -121,13 +122,13 @@ func testRoundTripInts(t *testing.T) {
 			},
 		},
 		{
-			desc: NewTupleDescriptor(typ),
+			desc: NewTupleDescriptor(testCompare, typ),
 			data: map[int]int64{
 				// 0: NULL,
 			},
 		},
 		{
-			desc: NewTupleDescriptor(typ, typ, typ),
+			desc: NewTupleDescriptor(testCompare, typ, typ, typ),
 			data: map[int]int64{
 				// 0: NULL,
 				// 1: NULL,
@@ -160,3 +161,15 @@ func testRoundTripInts(t *testing.T) {
 		}
 	}
 }
+
+func testCompare(left, right Tuple, desc TupleDesc) (cmp int) {
+	for i, typ := range desc.Types {
+		cmp = compare(typ, left.GetField(i), right.GetField(i))
+		if cmp != 0 {
+			break
+		}
+	}
+	return
+}
+
+var _ TupleCompare = testCompare
