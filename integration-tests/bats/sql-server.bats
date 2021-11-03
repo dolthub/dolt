@@ -1103,7 +1103,7 @@ while True:
     server_query repo1 1 "show tables" "Table\ntest"
 }
 
-@test "sql-server: fetch uses db tmpdir in different working directory" {
+@test "sql-server: fetch uses database tempdir from different working directory" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     mkdir remote1

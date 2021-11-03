@@ -154,7 +154,7 @@ func (s SessionStateAdapter) RemoveBackup(ctx context.Context, name string) erro
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() string {
-	return s.session.GetDbStates()[s.dbName].tmpdir
+	return s.session.GetDbStates()[s.dbName].tmpTablesDir
 }
 
 func mustAbs(path ...string) string {
