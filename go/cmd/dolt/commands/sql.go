@@ -466,7 +466,7 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData(), opts)
 }
 
-// create a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
+// newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
 // skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
 // that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName interface{}, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {

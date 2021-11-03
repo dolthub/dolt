@@ -66,7 +66,7 @@ func AddDoltSystemVariables() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(SkipReplicationErrorsKey),
-			Default:           false,
+			Default:           int8(0),
 		},
 	})
 }
