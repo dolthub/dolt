@@ -579,6 +579,14 @@ SQL
     [[ "$output" =~ "created table_a" ]] || false
 
     cd ../
+    run dolt sql --disable-batch <<SQL
+use test1;
+show tables;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "table_a" ]] || false
+    
     dolt sql -q "create database test2"
     [ -d "test2" ]
 

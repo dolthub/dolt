@@ -208,7 +208,22 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	args = apr.Args
+	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
+	var currentDb string
+	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
+		currentDb = name
+		return true, nil
+	})
 
 	format := FormatTabular
 	if formatSr, ok := apr.GetValue(FormatFlag); ok {
@@ -218,41 +233,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 		}
 	}
-
-	var mrEnv *env.MultiRepoEnv
-	multiDir, multiDbMode := apr.GetValue(multiDBDirFlag)
-	if multiDbMode {
-		if apr.NArg() > 0 {
-			return HandleVErrAndExitCode(errhand.BuildDError("Specifying a commit is not compatible with the --multi-db-dir flag.").SetPrintUsage().Build(), usage)
-		}
-
-		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.FS, multiDir, cmd.VersionStr)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	} else {
-		if !cli.CheckEnvIsValid(dEnv) {
-			return 2
-		}
-
-		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	}
-
-	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	var name string
-
-	var currentDB string
-	if len(initialRoots) == 1 {
-		currentDB = name
-	}
-
 	_, continueOnError := apr.GetValue(continueFlag)
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		batchMode := apr.Contains(BatchFlag)
@@ -280,19 +260,19 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 			if saveName != "" {
 				saveMessage := apr.GetValueOrDefault(messageFlag, "")
-				newRoot, verr := saveQuery(ctx, initialRoots[currentDB], query, saveName, saveMessage)
+				newRoot, verr := saveQuery(ctx, initialRoots[currentDb], query, saveName, saveMessage)
 				if verr != nil {
 					return HandleVErrAndExitCode(verr, usage)
 				}
 
-				verr = UpdateWorkingWithVErr(mrEnv.GetEnv(currentDB), newRoot)
+				verr = UpdateWorkingWithVErr(mrEnv.GetEnv(currentDb), newRoot)
 				if verr != nil {
 					return HandleVErrAndExitCode(verr, usage)
 				}
 			}
 		}
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDB], savedQueryName)
+		sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -304,7 +284,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else if apr.Contains(listSavedFlag) {
-		hasQC, err := initialRoots[currentDB].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
+		hasQC, err := initialRoots[currentDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
 		if err != nil {
 			verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
@@ -353,6 +333,29 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	return 0
+}
+
+func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cmd SqlCmd) (*env.MultiRepoEnv, errhand.VerboseError) {
+	var mrEnv *env.MultiRepoEnv
+	var err error
+	multiDir, multiDbMode := apr.GetValue(multiDBDirFlag)
+	if multiDbMode {
+		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.FS, multiDir, cmd.VersionStr)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+	} else {
+		if !cli.CheckEnvIsValid(dEnv) {
+			return nil, errhand.BuildDError("Invalid working directory").Build()
+		}
+
+		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+	}
+
+	return mrEnv, nil
 }
 
 func execShell(
