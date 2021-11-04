@@ -1280,7 +1280,7 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 		puller, err := datas.NewPuller(ctx, tempDir, defaultChunksPerTF, srcDB.db, ddb.db, stRef.TargetHash(), pullerEventCh)
 
 		if err == datas.ErrDBUpToDate {
-			return nil
+			return datas.ErrDBUpToDate
 		} else if err != nil {
 			return err
 		}

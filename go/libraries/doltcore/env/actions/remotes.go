@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"sync"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -352,6 +353,11 @@ func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote
 	wg, progChan, pullerEventCh := progStarter(newCtx)
 	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
 	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	if err == nil {
+		cli.Println()
+	} else if err == datas.ErrDBUpToDate {
+		err = nil
+	}
 
 	if err != nil {
 		return nil, err

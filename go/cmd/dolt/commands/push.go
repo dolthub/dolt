@@ -303,7 +303,6 @@ func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan 
 	close(pullerEventCh)
 	wg.Wait()
 
-	cli.Println()
 }
 
 func bytesPerSec(bytes uint64, start time.Time) string {
