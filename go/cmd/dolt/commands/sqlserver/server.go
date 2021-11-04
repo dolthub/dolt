@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/server"
@@ -38,6 +37,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
