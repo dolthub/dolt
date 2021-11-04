@@ -146,6 +146,22 @@ func (mr *MultiRepoTestSetup) NewRemote(remoteName string) {
 	mr.Remotes[remoteName] = rem
 }
 
+func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
+	dEnv := mr.MrEnv[dbName]
+	err := actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(), branchName, "head", false)
+	if err != nil {
+		mr.Errhand(err)
+	}
+}
+
+func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
+	dEnv := mr.MrEnv[dbName]
+	err := actions.CheckoutBranch(context.Background(), dEnv, branchName)
+	if err != nil {
+		mr.Errhand(err)
+	}
+}
+
 func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	ctx := context.Background()
 	cloneDir := filepath.Join(mr.Root, dbName)
@@ -286,7 +302,7 @@ func (mr *MultiRepoTestSetup) StageAll(dbName string) {
 	}
 }
 
-func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName string) {
+func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string) {
 	ctx := context.Background()
 	dEnv, ok := mr.MrEnv[dbName]
 	if !ok {
@@ -294,11 +310,11 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName string) {
 	}
 
 	ap := cli.CreatePushArgParser()
-	apr, err := ap.Parse([]string{remoteName, defaultBranch})
+	apr, err := ap.Parse([]string{remoteName, branchName})
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
-	opts, err := env.NewParseOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, false, false)
+	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, false, false)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}

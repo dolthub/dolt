@@ -75,14 +75,10 @@ func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, err
 			return nil, ErrRemoteNotFound
 		}
 		ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
-
 		if err != nil {
 			return nil, err
 		}
 		replicateHook := doltdb.NewReplicateHook(ddb, dEnv.TempTableFilesDir())
-		if err != nil {
-			return nil, err
-		}
 		postCommitHooks = append(postCommitHooks, replicateHook)
 	}
 
