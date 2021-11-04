@@ -27,6 +27,7 @@ import (
 	"syscall"
 
 	"github.com/abiosoft/readline"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
@@ -258,17 +259,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if multiStatementMode {
-			verr := execMultiStatements(ctx, dEnv.Config, dEnv.FS, continueOnError, mrEnv, os.Stdin, format)
+			verr := execMultiStatements(ctx, continueOnError, mrEnv, os.Stdin, format)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(ctx, dEnv.Config, dEnv.FS, continueOnError, mrEnv, os.Stdin, format)
+			verr := execBatch(ctx, continueOnError, mrEnv, os.Stdin, format)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execShell(ctx, dEnv.Config, dEnv.FS, mrEnv, format)
+			verr := execShell(ctx, mrEnv, format)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -291,7 +292,7 @@ func listSavedQueriesMode(ctx context.Context, initialRoots map[string]*doltdb.R
 	}
 
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return HandleVErrAndExitCode(execQuery(ctx, dEnv.Config, dEnv.FS, mrEnv, query, format), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format), usage)
 }
 
 func savedQueryMode(ctx context.Context, initialRoots map[string]*doltdb.RootValue, currentDb string, savedQueryName string, usage cli.UsagePrinter, dEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, format resultFormat) int {
@@ -302,7 +303,7 @@ func savedQueryMode(ctx context.Context, initialRoots map[string]*doltdb.RootVal
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return HandleVErrAndExitCode(execQuery(ctx, dEnv.Config, dEnv.FS, mrEnv, sq.Query, format), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format), usage)
 }
 
 func queryMode(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, query string, continueOnError bool, mrEnv *env.MultiRepoEnv, format resultFormat, usage cli.UsagePrinter, initialRoots map[string]*doltdb.RootValue, currentDb string) int {
@@ -311,18 +312,18 @@ func queryMode(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	if multiStatementMode {
 		batchInput := strings.NewReader(query)
-		verr := execMultiStatements(ctx, dEnv.Config, dEnv.FS, continueOnError, mrEnv, batchInput, format)
+		verr := execMultiStatements(ctx, continueOnError, mrEnv, batchInput, format)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, dEnv.Config, dEnv.FS, continueOnError, mrEnv, batchInput, format)
+		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else {
-		verr := execQuery(ctx, dEnv.Config, dEnv.FS, mrEnv, query, format)
+		verr := execQuery(ctx, mrEnv, query, format)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -371,8 +372,6 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 
 func execShell(
 		ctx context.Context,
-		config *env.DoltCliConfig,
-		fs filesys.Filesys,
 		mrEnv *env.MultiRepoEnv,
 		format resultFormat,
 ) errhand.VerboseError {
@@ -380,7 +379,7 @@ func execShell(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	se, err := newSqlEngine(ctx, config, fs, format, dbs...)
+	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv.FileSystem(), format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -394,8 +393,6 @@ func execShell(
 
 func execBatch(
 		ctx context.Context,
-		config *env.DoltCliConfig,
-		fs filesys.Filesys,
 		continueOnErr bool,
 		mrEnv *env.MultiRepoEnv,
 		batchInput io.Reader,
@@ -406,7 +403,7 @@ func execBatch(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	se, err := newSqlEngine(ctx, config, fs, format, dbs...)
+	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv.FileSystem(), format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -439,8 +436,6 @@ func execBatch(
 
 func execMultiStatements(
 		ctx context.Context,
-		config *env.DoltCliConfig,
-		fs filesys.Filesys,
 		continueOnErr bool,
 		mrEnv *env.MultiRepoEnv,
 		batchInput io.Reader,
@@ -450,7 +445,7 @@ func execMultiStatements(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	se, err := newSqlEngine(ctx, config, fs, format, dbs...)
+	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv.FileSystem(), format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -478,8 +473,6 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 
 func execQuery(
 		ctx context.Context,
-		config *env.DoltCliConfig,
-		fs filesys.Filesys,
 		mrEnv *env.MultiRepoEnv,
 		query string,
 		format resultFormat,
@@ -488,7 +481,7 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	se, err := newSqlEngine(ctx, config, fs, format, dbs...)
+	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv.FileSystem(), format, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1439,7 +1432,7 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 // sqlEngine packages up the context necessary to run sql queries against sqle.
 func newSqlEngine(
 		ctx context.Context,
-		config *env.DoltCliConfig,
+		config config.ReadWriteConfig,
 		fs filesys.Filesys,
 		format resultFormat,
 		dbs ...dsqle.SqlDatabase,

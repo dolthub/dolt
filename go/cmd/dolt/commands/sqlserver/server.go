@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/server"
@@ -199,7 +200,13 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 			return nil, err
 		}
 
-		doltSess, err := dsess.NewDoltSession(tmpSqlCtx, mysqlSess, pro, dConf, dbStates...)
+		localConfig, ok := dConf.GetConfig(env.LocalConfig)
+		if !ok {
+			logrus.Warn("No local config available, config persistence disabled")
+			localConfig = config.NewEmptyMapConfig()
+		}
+
+		doltSess, err := dsess.NewDoltSession(tmpSqlCtx, mysqlSess, pro, localConfig, dbStates...)
 		if err != nil {
 			return nil, err
 		}

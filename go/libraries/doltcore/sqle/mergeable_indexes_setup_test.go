@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -104,7 +105,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 
 	// Get an updated root to use for the rest of the test
 	ctx := sql.NewEmptyContext()
-	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, dEnv.Config, getDbState(t, db, dEnv))
+	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, config.NewEmptyMapConfig(), getDbState(t, db, dEnv))
 	require.NoError(t, err)
 	roots, ok := sess.GetRoots(ctx, tiDb.Name())
 	require.True(t, ok)

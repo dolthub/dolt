@@ -36,20 +36,13 @@ var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf *env.DoltCliConfig, dbs ...InitialDbState) (*DoltSession, error) {
+func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf config.ReadWriteConfig, dbs ...InitialDbState) (*DoltSession, error) {
 	sess, err := NewSession(ctx, sqlSess, pro, conf, dbs...)
 	if err != nil {
 		return nil, err
 	}
 
-	var globals config.ReadWriteConfig
-	if localConf, ok := conf.GetConfig(env.LocalConfig); !ok {
-		ctx.Warn(NonpersistableSessionCode, "configured mode does not support persistable sessions; SET PERSIST will not write to file")
-		globals = config.NewMapConfig(make(map[string]string))
-	} else {
-		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
-	}
-
+	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
 	return sess.NewDoltSession(globals), nil
 }
 

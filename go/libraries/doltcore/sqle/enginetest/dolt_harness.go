@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -58,7 +59,13 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
 	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS)
-	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, dEnv.Config)
+
+	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
+	if !ok {
+		localConfig = config.NewEmptyMapConfig()
+	}
+
+	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, localConfig)
 	require.NoError(t, err)
 	return &DoltHarness{
 		t:              t,
@@ -132,12 +139,17 @@ func (d *DoltHarness) NewSession() *sql.Context {
 	dbs := dsqleDBsAsSqlDBs(d.databases)
 	pro := d.NewDatabaseProvider(dbs...)
 
+	localConfig, ok := d.env.Config.GetConfig(env.LocalConfig)
+	if !ok {
+		localConfig = config.NewEmptyMapConfig()
+	}
+
 	var err error
 	d.session, err = dsess.NewDoltSession(
 		enginetest.NewContext(d),
 		enginetest.NewBaseSession(),
 		pro.(dsess.RevisionDatabaseProvider),
-		d.env.Config,
+		localConfig,
 		states...,
 	)
 	require.NoError(d.t, err)
