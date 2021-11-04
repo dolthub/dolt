@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -25,6 +26,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
+
+var ErrSessionNotPeristable = errors.New("session is not persistable")
 
 type DoltSession struct {
 	*Session
@@ -55,6 +58,10 @@ func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionData
 
 // PersistGlobal implements sql.PersistableSession
 func (s *DoltSession) PersistGlobal(sysVarName string, value interface{}) error {
+	if s.globalsConf == nil {
+		return ErrSessionNotPeristable
+	}
+
 	sysVar, _, err := validatePersistableSysVar(sysVarName)
 	if err != nil {
 		return err
@@ -67,6 +74,10 @@ func (s *DoltSession) PersistGlobal(sysVarName string, value interface{}) error 
 
 // RemovePersistedGlobal implements sql.PersistableSession
 func (s *DoltSession) RemovePersistedGlobal(sysVarName string) error {
+	if s.globalsConf == nil {
+		return ErrSessionNotPeristable
+	}
+
 	sysVar, _, err := validatePersistableSysVar(sysVarName)
 	if err != nil {
 		return err
@@ -79,6 +90,10 @@ func (s *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 
 // RemoveAllPersistedGlobals implements sql.PersistableSession
 func (s *DoltSession) RemoveAllPersistedGlobals() error {
+	if s.globalsConf == nil {
+		return ErrSessionNotPeristable
+	}
+
 	allVars := make([]string, s.globalsConf.Size())
 	i := 0
 	s.globalsConf.Iter(func(k, v string) bool {
@@ -94,11 +109,19 @@ func (s *DoltSession) RemoveAllPersistedGlobals() error {
 
 // RemoveAllPersistedGlobals implements sql.PersistableSession
 func (s *DoltSession) GetPersistedValue(k string) (interface{}, error) {
+	if s.globalsConf == nil {
+		return nil, ErrSessionNotPeristable
+	}
+
 	return getPersistedValue(s.globalsConf, k)
 }
 
 // SystemVariablesInConfig returns a list of System Variables associated with the session
 func (s *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
+	if s.globalsConf == nil {
+		return nil, ErrSessionNotPeristable
+	}
+
 	return SystemVariablesInConfig(s.globalsConf)
 }
 
