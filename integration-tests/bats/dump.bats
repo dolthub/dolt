@@ -10,9 +10,9 @@ teardown() {
     teardown_common
 }
 
-@test "dump: dolt dump SQL export with multiple tables" {
-    dolt sql -q "CREATE TABLE mysqldump_table(pk int);"
-    dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
+@test "dump: SQL type - dolt dump with multiple tables" {
+    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
     dolt sql -q "create table enums (a varchar(10) primary key, b enum('one','two','three'))"
@@ -42,14 +42,13 @@ teardown() {
     run dolt sql < doltdump.sql
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows inserted: 6 Rows updated: 0 Rows deleted: 0" ]] || false
-
 }
 
-@test "dump: compare tables in database with tables imported from doltdump.sql " {
+@test "dump: SQL type - compare tables in database with tables imported file " {
     dolt branch new_branch
 
-    dolt sql -q "CREATE TABLE mysqldump_table(pk int);"
-    dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
+    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
     dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
@@ -72,9 +71,9 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "dump: dolt dump with Indexes" {
-    dolt sql -q "CREATE TABLE mysqldump_table(pk int);"
-    dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
+@test "dump: SQL type - dolt dump with Indexes" {
+    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
     dolt sql -q "CREATE TABLE onepk (pk1 BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT);"
@@ -94,10 +93,10 @@ teardown() {
     [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
 }
 
-@test "dump: dolt dump with foreign key and import" {
+@test "dump: SQL type - dolt dump with foreign key and import" {
     skip "dolt dump foreign key option for import NOT implemented"
-    dolt sql -q "CREATE TABLE mysqldump_table(pk int);"
-    dolt sql -q "INSERT INTO mysqldump_table VALUES (1);"
+    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
     dolt sql -q "CREATE TABLE parent (id int PRIMARY KEY, pv1 int, pv2 int, INDEX v1 (pv1), INDEX v2 (pv2));"
@@ -114,7 +113,7 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "dump: dolt dump with views/trigger" {
+@test "dump: SQL type - dolt dump with views/trigger" {
     skip "dolt dump views/trigger NOT implemented"
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
     dolt sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;"
@@ -127,7 +126,11 @@ teardown() {
     dolt sql -q "INSERT INTO a VALUES (2);"
 }
 
-@test "dump: dolt dump with keyless tables" {
+@test "dump: SQL type - dolt dump with keyless tables" {
+    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
     dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
     dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
     dolt sql -q "ALTER TABLE keyless ADD INDEX (c1);"
@@ -155,5 +158,129 @@ teardown() {
     [[ "${lines[2]}" = "1,1" ]] || false
     [[ "${lines[3]}" = "1,1" ]] || false
     [[ "${lines[4]}" = "4,2" ]] || false
+}
 
+@test "dump: SQL type - dolt dump with empty tables" {
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
+
+    dolt add .
+    dolt commit -m "create tables"
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [ -f doltdump.sql ]
+
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+
+    run dolt sql < doltdump.sql
+    [ "$status" -eq 0 ]
+
+    run grep CREATE doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+
+    run grep INSERT doltdump.sql
+    [ "$status" -eq 1 ]
+    [ "${#lines[@]}" -eq 0 ]
+}
+
+@test "dump: CSV type - dolt dump with multiple tables and check -f flag" {
+    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+    dolt sql -q "create table enums (a varchar(10) primary key, b enum('one','two','three'))"
+    dolt sql -q "insert into enums values ('abc', 'one'), ('def', 'two')"
+
+    run dolt dump -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump/new_table.csv ]
+    [ -f doltdump/warehouse.csv ]
+    [ -f doltdump/enums.csv ]
+
+    run dolt dump -r csv
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "new_table.csv already exists" ]] ||
+    [[ "$output" =~ "warehouse.csv already exists" ]] ||
+    [[ "$output" =~ "enums.csv already exists" ]] || false
+
+    run dolt dump -f -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump/new_table.csv ]
+    [ -f doltdump/warehouse.csv ]
+    [ -f doltdump/enums.csv ]
+}
+
+@test "dump: CSV type - compare tables in database with tables imported from corresponding files " {
+    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+
+    dolt add .
+    dolt commit -m "create tables"
+
+    dolt branch new_branch
+
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
+
+    dolt add .
+    dolt commit -m "insert to tables"
+
+    run dolt dump -r csv
+    [ "$status" -eq 0 ]
+    [ -f doltdump/new_table.csv ]
+    [ -f doltdump/warehouse.csv ]
+    [ -f doltdump/keyless.csv ]
+
+    dolt checkout new_branch
+
+    dolt table import -r new_table doltdump/new_table.csv
+    dolt table import -r warehouse doltdump/warehouse.csv
+    dolt table import -r keyless doltdump/keyless.csv
+    dolt add .
+    dolt commit --allow-empty -m "create tables from doltdump"
+
+    run dolt diff --summary main new_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "dump: CSV type - dolt dump with empty tables" {
+    dolt branch new_branch
+
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
+
+    dolt add .
+    dolt commit -m "create tables"
+
+    run dolt dump -r csv
+    [ "$status" -eq 0 ]
+    [ -f doltdump/warehouse.csv ]
+    [ -f doltdump/keyless.csv ]
+    [ -f doltdump/test.csv ]
+
+    dolt checkout new_branch
+
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
+
+    dolt table import -r warehouse doltdump/warehouse.csv
+    dolt table import -r keyless doltdump/keyless.csv
+    dolt table import -r test doltdump/test.csv
+
+    dolt add .
+    dolt commit --allow-empty -m "create tables from doltdump"
+
+    run dolt diff --summary main new_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
 }

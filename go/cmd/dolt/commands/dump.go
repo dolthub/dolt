@@ -94,10 +94,12 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, dumpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	dumpOpts, verr := getDumpArgs(apr)
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+	if apr.NArg() > 0 {
+		return HandleVErrAndExitCode(errhand.BuildDError("too many arguments").SetPrintUsage().Build(), usage)
 	}
+
+	var fileName string
+	resultFormat, _ := apr.GetValue(FormatFlag)
 
 	root, verr := GetWorkingWithVErr(dEnv)
 	if verr != nil {
@@ -105,27 +107,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	force := apr.Contains(forceParam)
-
-	ow, err := checkOverwrite(ctx, root, dEnv.FS, force, dumpOpts.dest)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if ow {
-		return HandleVErrAndExitCode(errhand.BuildDError("%s already exists. Use -f to overwrite.", dumpOpts.DumpDestName()).Build(), usage)
-	}
-
-	// create new file
-	err = dEnv.FS.MkDirs(filepath.Dir(dumpOpts.DumpDestName()))
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	filePath, err := dEnv.FS.Abs(dumpOpts.DumpDestName())
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
 	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root)
 	if err != nil {
@@ -136,22 +117,44 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 0
 	}
 
-	for _, tbl := range tblNames {
-
-		tblOpts := newTableArgs(tbl, dumpOpts.dest)
-
-		mover, verr := NewDumpDataMover(ctx, root, dEnv, tblOpts, importStatsCB, filePath)
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
+	switch resultFormat {
+	case "", "sql", ".sql":
+		fileName = "doltdump.sql"
+		dumpOpts, err := getDumpArgs(fileName, resultFormat)
+		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fileName)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 
-		skipped, verr := mvdata.MoveData(ctx, dEnv, mover, tblOpts)
-		if skipped > 0 {
-			cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
+		for _, tbl := range tblNames {
+			tblOpts := newTableArgs(tbl, dumpOpts.dest)
+
+			mErr := dumpTable(ctx, root, dEnv, tblOpts, fPath)
+			if mErr != nil {
+				return HandleVErrAndExitCode(mErr, usage)
+			}
 		}
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
+	case "csv", ".csv":
+		fileName = "doltdump/"
+		for _, tbl := range tblNames {
+			fileName = "doltdump/" + tbl + ".csv"
+			dumpOpts, err := getDumpArgs(fileName, resultFormat)
+
+			fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fileName)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+
+			tblOpts := newTableArgs(tbl, dumpOpts.dest)
+
+			mErr := dumpTable(ctx, root, dEnv, tblOpts, fPath)
+			if mErr != nil {
+				return HandleVErrAndExitCode(mErr, usage)
+			}
 		}
+
+	default:
+		return HandleVErrAndExitCode(errhand.BuildDError("invalid result format").SetPrintUsage().Build(), usage)
 	}
 
 	cli.PrintErrln(color.CyanString("Successfully exported data."))
@@ -197,6 +200,50 @@ func (m dumpOptions) DumpDestName() string {
 		return f.Path
 	}
 	return m.dest.String()
+}
+
+// dumpTable dumps table in file given specific table and file location info
+func dumpTable(ctx context.Context, root * doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, filePath string) errhand.VerboseError {
+	mover, verr := NewDumpDataMover(ctx, root, dEnv, tblOpts, importStatsCB, filePath)
+	if verr != nil {
+		return verr
+	}
+
+	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, tblOpts)
+	if skipped > 0 {
+		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
+	}
+	if verr != nil {
+		return verr
+	}
+
+	return nil
+}
+
+// checkAndCreateOpenDestFile returns filePath to created dest file after checking for any existing file and handles it
+func checkAndCreateOpenDestFile(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, dumpOpts *dumpOptions, fileName string) (string, errhand.VerboseError) {
+	ow, err := checkOverwrite(ctx, root, dEnv.FS, force, dumpOpts.dest)
+	if err != nil {
+		return "", errhand.VerboseErrorFromError(err)
+	}
+	if ow {
+		return "", errhand.BuildDError("%s already exists. Use -f to overwrite.", fileName).Build()
+	}
+
+	// create new file
+	err = dEnv.FS.MkDirs(filepath.Dir(dumpOpts.DumpDestName()))
+	if err != nil {
+		return "", errhand.VerboseErrorFromError(err)
+	}
+
+	filePath, err := dEnv.FS.Abs(fileName)
+	if err != nil {
+		return "", errhand.VerboseErrorFromError(err)
+	}
+
+	os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+
+	return filePath, nil
 }
 
 // checkOverwrite returns TRUE if the file exists and force flag not given and
@@ -245,29 +292,11 @@ func getDumpDestination(path string) mvdata.DataLocation {
 }
 
 // getDumpArgs returns dumpOptions of result format and dest file location corresponding to the input parameters
-func getDumpArgs(apr *argparser.ArgParseResults) (*dumpOptions, errhand.VerboseError) {
-
-	if apr.NArg() > 0 {
-		return nil, errhand.BuildDError("too many arguments").SetPrintUsage().Build()
-	}
-
-	var fileName string
-	resultFormat, _ := apr.GetValue(FormatFlag)
-
-	switch resultFormat {
-	case "", "sql", ".sql":
-		fileName = "doltdump.sql"
-	case "csv", ".csv":
-		//handle CSV filetype
-		//maybe create dir 'doltdump' and put all the csv dump files in it
-	default:
-		return nil, errhand.BuildDError("invalid result format").SetPrintUsage().Build()
-	}
-
+func getDumpArgs(fileName string, rf string) (*dumpOptions, errhand.VerboseError) {
 	fileLoc := getDumpDestination(fileName)
 
 	return &dumpOptions{
-		format: resultFormat,
+		format: rf,
 		dest:   fileLoc,
 	}, nil
 }
@@ -324,3 +353,4 @@ func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 
 	return imp, nil
 }
+Z
