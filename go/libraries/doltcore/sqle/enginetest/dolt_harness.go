@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -57,7 +58,7 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
-	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS)
+	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS).WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
 
@@ -198,7 +199,7 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 }
 
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
-	return sqle.NewDoltDatabaseProvider(d.env.Config, d.env.FS, dbs...)
+	return sqle.NewDoltDatabaseProvider(d.env.Config, d.env.FS, dbs...).WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
 func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.InitialDbState {

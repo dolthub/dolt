@@ -45,6 +45,8 @@ type DoltDatabaseProvider struct {
 	dataRootDir string
 	fs          filesys.Filesys
 	cfg         config.ReadableConfig
+
+	dbFactoryUrl string
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
@@ -67,11 +69,12 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, d
 	}
 
 	return DoltDatabaseProvider{
-		databases: dbs,
-		functions: funcs,
-		mu:        &sync.RWMutex{},
-		fs:        fs,
-		cfg:       config,
+		databases:    dbs,
+		functions:    funcs,
+		mu:           &sync.RWMutex{},
+		fs:           fs,
+		cfg:          config,
+		dbFactoryUrl: doltdb.LocalDirDoltDB,
 	}
 }
 
@@ -83,6 +86,14 @@ func (p DoltDatabaseProvider) WithFunctions(fns []sql.Function) DoltDatabaseProv
 	}
 
 	p.functions = funcs
+	return p
+}
+
+// WithDbFactoryUrl returns a copy of this provider with the DbFactoryUrl set as provided.
+// The URL is used when creating new databases.
+// See doltdb.InMemDoltDB, doltdb.LocalDirDoltDB
+func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider {
+	p.dbFactoryUrl = url
 	return p
 }
 
@@ -157,7 +168,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	branch := env.GetDefaultInitBranch(p.cfg)
 
 	// TODO: fill in version appropriately
-	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, "TODO")
+	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), branch)
 	if err != nil {
 		return err
