@@ -189,10 +189,7 @@ func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error
 	}
 
 	// TODO: revisit this, callers should specify which config they want to use in a multi-DB environment
-	localCfg, ok := dEnv.Config.GetConfig(LocalConfig)
-	if !ok {
-		return nil, fmt.Errorf("Couldn't load local config")
-	}
+	localCfg := dEnv.Config.WriteableConfig()
 
 	mrEnv := &MultiRepoEnv{
 		envs: make([]NamedEnv, 0),
@@ -256,10 +253,7 @@ func LoadMultiEnv(
 	}
 
 	// TODO: revisit this, callers should specify which config they want to use in a multi-DB environment
-	localCfg, ok := cfg.GetConfig(LocalConfig)
-	if !ok {
-		return nil, fmt.Errorf("Couldn't load local config")
-	}
+	localCfg := cfg.WriteableConfig()
 
 	mrEnv := &MultiRepoEnv{
 		envs: make([]NamedEnv, 0),
