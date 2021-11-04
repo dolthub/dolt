@@ -20,7 +20,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -60,10 +59,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
 	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS)
 
-	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
-	if !ok {
-		localConfig = config.NewEmptyMapConfig()
-	}
+	localConfig := dEnv.Config.WriteableConfig()
 
 	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, localConfig)
 	require.NoError(t, err)
@@ -139,10 +135,7 @@ func (d *DoltHarness) NewSession() *sql.Context {
 	dbs := dsqleDBsAsSqlDBs(d.databases)
 	pro := d.NewDatabaseProvider(dbs...)
 
-	localConfig, ok := d.env.Config.GetConfig(env.LocalConfig)
-	if !ok {
-		localConfig = config.NewEmptyMapConfig()
-	}
+	localConfig := d.env.Config.WriteableConfig()
 
 	var err error
 	d.session, err = dsess.NewDoltSession(
