@@ -1196,3 +1196,37 @@ while True:
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 }
+    
+@test "sql-server: fetch uses database tempdir from different working directory" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir remote1
+    cd repo2
+    dolt remote add remote1 file://../remote1
+    dolt push -u remote1 main
+
+    cd ..
+    rm -rf repo1
+    dolt clone file://./remote1 repo1
+    cd repo1
+    dolt remote add remote1 file://../remote1
+
+    cd ../repo2
+    dolt sql -q "create table test (a int)"
+    dolt commit -am "new commit"
+    dolt push -u remote1 main
+
+    cd ../repo1
+    REPO_PATH=$(pwd)
+    cd ..
+
+    echo "
+databases:
+  - name: repo1
+    path: $REPO_PATH
+" > server.yaml
+
+    start_sql_server_with_config repo1 server.yaml
+
+    server_query repo1 1 "select dolt_fetch() as f" "f\n1"
+}

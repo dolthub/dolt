@@ -567,5 +567,17 @@ SQL
     run dolt sql -q "select * from c where val = 2" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "2,2" ]] || false
+}
 
+@test "primary-key-changes: can't add a primary key on a column containing NULLs" {
+    dolt sql -q "create table t (pk int, c1 int)"
+    dolt sql -q "insert into t values (NULL, NULL)"
+    run dolt sql -q "alter table t add primary key(pk)"
+    skip "This should fail on some sort of constraint error"
+    [ $status -eq 1 ]
+
+    # This is the current failure mode
+    run dolt sql -q "update t set c1=1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "received nil" ]] || false
 }
