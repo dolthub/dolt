@@ -237,7 +237,7 @@ func randomTuple(tb *val.TupleBuilder) (tup val.Tuple) {
 	for i, typ := range tb.Desc.Types {
 		randomField(tb, i, typ)
 	}
-	return tb.Tuple(sharedPool)
+	return tb.Build(sharedPool)
 }
 
 func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {

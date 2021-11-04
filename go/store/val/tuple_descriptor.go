@@ -33,8 +33,24 @@ type TupleDesc struct {
 
 type TupleCompare func(left, right Tuple, desc TupleDesc) int
 
+func defaultCompare(left, right Tuple, desc TupleDesc) (cmp int) {
+	for i, typ := range desc.Types {
+		cmp = compare(typ, left.GetField(i), right.GetField(i))
+		if cmp != 0 {
+			break
+		}
+	}
+	return
+}
+
+var _ TupleCompare = defaultCompare
+
+func NewTupleDescriptor(types ...Type) TupleDesc {
+	return NewTupleDescriptorWithComparator(defaultCompare, types...)
+}
+
 // NewTupleDescriptor returns a TupleDesc from a slice of Types.
-func NewTupleDescriptor(cmp TupleCompare, types ...Type) (td TupleDesc) {
+func NewTupleDescriptorWithComparator(cmp TupleCompare, types ...Type) (td TupleDesc) {
 	if len(types) > MaxTupleFields {
 		panic("tuple field maxIdx exceeds maximum")
 	}

@@ -78,16 +78,7 @@ func cumulativeCountFromItem(level uint64, item nodeItem) uint64 {
 
 func (nd Node) getItem(i int) nodeItem {
 	offs, itemStop := nd.offsets()
-
-	start := offs.Get(i)
-
-	var stop val.ByteSize
-	if offs.IsLastIndex(i) {
-		stop = itemStop
-	} else {
-		stop = offs.Get(i + 1)
-	}
-
+	start, stop := offs.GetBounds(i, itemStop)
 	return nodeItem(nd[start:stop])
 }
 

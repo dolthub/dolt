@@ -151,6 +151,10 @@ func (tup Tuple) size() ByteSize {
 	return ByteSize(len(tup))
 }
 
+func (tup Tuple) Count() int {
+	return tup.fieldCount()
+}
+
 func (tup Tuple) fieldCount() int {
 	sl := tup[tup.size()-numFieldsSize:]
 	return int(binary.LittleEndian.Uint16(sl))
