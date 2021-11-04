@@ -23,6 +23,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -41,6 +42,8 @@ type EnvNameAndPath struct {
 // MultiRepoEnv is a type used to store multiple environments which can be retrieved by name
 type MultiRepoEnv struct {
 	envs []NamedEnv
+	fs filesys.Filesys
+	cfg config.ReadWriteConfig
 }
 
 type NamedEnv struct {
@@ -176,9 +179,18 @@ func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error
 		}
 	}
 
+	// TODO: revisit this, callers should specify which config they want to use in a multi-DB environment
+	localCfg, ok := dEnv.Config.GetConfig(LocalConfig)
+	if !ok {
+		return nil, fmt.Errorf("Couldn't load local config")
+	}
+
 	mrEnv := &MultiRepoEnv{
 		envs: make([]NamedEnv, 0),
+		fs: dEnv.FS,
+		cfg: localCfg,
 	}
+
 	mrEnv.AddEnv(dbName, dEnv)
 
 	// If there are other directories in the same root, try to load them as additional databases
@@ -207,7 +219,13 @@ func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error
 
 // LoadMultiEnv takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
 // MultiRepoEnv
-func LoadMultiEnv(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string, envNamesAndPaths ...EnvNameAndPath) (*MultiRepoEnv, error) {
+func LoadMultiEnv(
+		ctx context.Context,
+		hdp HomeDirProvider,
+		fs filesys.Filesys,
+		version string,
+		envNamesAndPaths ...EnvNameAndPath,
+) (*MultiRepoEnv, error) {
 	nameToPath := make(map[string]string)
 	for _, nameAndPath := range envNamesAndPaths {
 		existingPath, ok := nameToPath[nameAndPath.Name]
@@ -223,8 +241,21 @@ func LoadMultiEnv(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, 
 		nameToPath[nameAndPath.Name] = nameAndPath.Path
 	}
 
+	cfg, err := LoadDoltCliConfig(hdp, fs)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: revisit this, callers should specify which config they want to use in a multi-DB environment
+	localCfg, ok := cfg.GetConfig(LocalConfig)
+	if !ok {
+		return nil, fmt.Errorf("Couldn't load local config")
+	}
+
 	mrEnv := &MultiRepoEnv{
 		envs: make([]NamedEnv, 0),
+		fs:   fs,
+		cfg:  localCfg,
 	}
 
 	for name, path := range nameToPath {

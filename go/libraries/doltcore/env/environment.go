@@ -132,7 +132,7 @@ type DoltEnv struct {
 
 // Load loads the DoltEnv for the current directory of the cli
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string) *DoltEnv {
-	config, cfgErr := loadDoltCliConfig(hdp, fs)
+	config, cfgErr := LoadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
 	docs, docsErr := doltdocs.LoadDocs(fs)

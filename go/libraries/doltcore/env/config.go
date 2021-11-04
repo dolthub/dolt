@@ -93,7 +93,7 @@ type DoltCliConfig struct {
 
 var _ config.ReadableConfig = &DoltCliConfig{}
 
-func loadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
+func LoadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
 	ch := config.NewConfigHierarchy()
 
 	gPath, err := getGlobalCfgPath(hdp)
