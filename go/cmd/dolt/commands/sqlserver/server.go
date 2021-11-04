@@ -95,7 +95,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
-	var mrEnv env.MultiRepoEnv
+	var mrEnv *env.MultiRepoEnv
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 	var dbs []dsqle.SqlDatabase
 
@@ -161,7 +161,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	mySQLServer, startError = server.NewServer(
 		serverConf,
 		sqlEngine,
-		newSessionBuilder(sqlEngine, dEnv.Config, pro, mrEnv, serverConfig.AutoCommit()),
+		newSessionBuilder(sqlEngine, mrEnv.Config(), pro, serverConfig.AutoCommit()),
 	)
 
 	if startError != nil {
@@ -188,7 +188,7 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsqle.DoltDatabaseProvider, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
+func newSessionBuilder(sqlEngine *sqle.Engine, dConf config.ReadWriteConfig, pro dsqle.DoltDatabaseProvider, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 
@@ -200,13 +200,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 			return nil, err
 		}
 
-		localConfig, ok := dConf.GetConfig(env.LocalConfig)
-		if !ok {
-			logrus.Warn("No local config available, config persistence disabled")
-			localConfig = config.NewEmptyMapConfig()
-		}
-
-		doltSess, err := dsess.NewDoltSession(tmpSqlCtx, mysqlSess, pro, localConfig, dbStates...)
+		doltSess, err := dsess.NewDoltSession(tmpSqlCtx, mysqlSess, pro, dConf, dbStates...)
 		if err != nil {
 			return nil, err
 		}
