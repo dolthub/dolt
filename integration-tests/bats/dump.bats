@@ -12,7 +12,7 @@ teardown() {
 
 @test "dump: no tables" {
     run dolt dump
-    ["$status" -eq 0]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables to export." ]] || false
 }
 
