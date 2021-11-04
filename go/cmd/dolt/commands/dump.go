@@ -203,7 +203,7 @@ func (m dumpOptions) DumpDestName() string {
 }
 
 // dumpTable dumps table in file given specific table and file location info
-func dumpTable(ctx context.Context, root * doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, filePath string) errhand.VerboseError {
+func dumpTable(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, filePath string) errhand.VerboseError {
 	mover, verr := NewDumpDataMover(ctx, root, dEnv, tblOpts, importStatsCB, filePath)
 	if verr != nil {
 		return verr
