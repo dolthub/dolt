@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -155,8 +154,7 @@ func (s SessionStateAdapter) RemoveBackup(ctx context.Context, name string) erro
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() string {
-	//todo: save tempfile in dbState on server startup?
-	return mustAbs(dbfactory.DoltDir, "temptf")
+	return s.session.GetDbStates()[s.dbName].tmpTablesDir
 }
 
 func mustAbs(path ...string) string {
