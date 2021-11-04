@@ -30,6 +30,64 @@ const (
 	maxNodeDataSize = uint64(math.MaxUint16)
 )
 
+// Node is a node in a prolly tree. Nodes are byte slices containing node items and
+//   a footer. The footer contains offsets, an item count for the node, a cumulative
+//   item count for the subtree rooted at this node, and this node's tree level.
+//   Prolly trees are organized like a B+ Tree without linked leaf nodes. Internal
+//   Nodes contain only keys and child pointers ("metaKeys" and "metaValues"). Leaf
+//   Nodes contain keys and values. The offsets array enables random acces to items
+//   with in a Node. The cumulative count field allows seeking into the tree by an
+//   item's index number.
+//
+//   Node:
+//     Items in a node are packed contiguously from the front of the byte slice.
+//     For internal Nodes, metaKeys and metaValues are stored in alternating order
+//     as separate items. MetaValues contain a chunk ref that can be resolved to a
+//     child node using a NodeStore. MetaKeys store the largest key Tuple within
+//     the subtree rooted at that child Node.
+//   +--------+--------+-----+--------+--------+
+//   | Item 0 | Item 1 | ... | Item N | Footer |
+//   +--------+--------+--------------+--------+
+//
+//   Footer:
+//   +---------------+------------------+------------+------------+
+//   | Offsets Array | Cumulative Count | Node Count | Tree Level |
+//   +---------------+------------------+------------+------------+
+//
+//   Offsets Array:
+//     The offset array contains a uint16 for each node item after item 0. Offset i
+//     encodes the byte distance from the front of the node to the beginning of the
+//     ith item in the node. The offsets array for N items is 2*(N-1) bytes.
+//   +----------+----------+-----+----------+
+//   | Offset 1 | Offset 2 | ... | Offset N |
+//   +----------+----------+-----+----------+
+//
+//   Cumulative Count:
+//      The cumulative count is the total number of items in the subtree rooted at
+//      this node. For leaf nodes, cumulative count is the same as node count.
+//   +---------------------------+
+//   | Cumulative Count (uint48) |
+//   +---------------------------+
+//
+//   Node Count:
+//      Node count is the number of items in this node.
+//   +---------------------+
+//   | Node Count (uint16) |
+//   +---------------------+
+//
+//   Tree Level:
+//      Tree Level is the height of this node within the tree. Leaf nodes are
+//      level 0, the first level of internal nodes is level 1.
+//   +--------------------+
+//   | Tree Level (uint8) |
+//   +--------------------+
+//
+//   Note: the current Node implementation is oriented toward implementing Map
+//   semantics. However, Node could easily be modified to support Set semantics,
+//   or other collections.
+//
+type Node []byte
+
 type nodeItem []byte
 
 func (i nodeItem) size() val.ByteSize {
@@ -46,9 +104,7 @@ func (p nodePair) value() nodeItem {
 	return p[1]
 }
 
-type Node []byte
-
-func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd Node) {
+func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (node Node) {
 	var sz uint64
 	for _, item := range items {
 		sz += uint64(item.size())
@@ -57,7 +113,7 @@ func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd Nod
 	count := len(items)
 
 	if sz > maxNodeDataSize {
-		panic("items exceeded max chunk size")
+		panic("items exceeded max chunk data size")
 	}
 
 	pos := val.ByteSize(sz)
@@ -66,25 +122,25 @@ func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd Nod
 	pos += nodeCountSize
 	pos += treeLevelSize
 
-	nd = pool.Get(uint64(pos))
+	node = pool.Get(uint64(pos))
 
-	c := cumulativeCountFromItems(level, items)
-	writeCumulativeCount(nd, c)
-	writeItemCount(nd, count)
-	writeTreeLevel(nd, level)
+	cc := countCumulativeItems(level, items)
+	writeCumulativeCount(node, cc)
+	writeItemCount(node, count)
+	writeTreeLevel(node, level)
 
 	pos = 0
-	offs, _ := nd.offsets()
+	offs, _ := node.offsets()
 	for i, item := range items {
-		copy(nd[pos:pos+item.size()], item)
+		copy(node[pos:pos+item.size()], item)
 		offs.Put(i, pos)
 		pos += item.size()
 	}
 
-	return nd
+	return node
 }
 
-func cumulativeCountFromItems(level uint64, items []nodeItem) (c uint64) {
+func countCumulativeItems(level uint64, items []nodeItem) (c uint64) {
 	if level == 0 {
 		return uint64(len(items))
 	}
@@ -114,6 +170,7 @@ func (nd Node) size() val.ByteSize {
 	return val.ByteSize(len(nd))
 }
 
+// todo(andy): move (de)serialization to val/codec.go
 func (nd Node) level() int {
 	return int(nd[nd.size()-treeLevelSize])
 }
