@@ -233,73 +233,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 		}
 	}
+
 	_, continueOnError := apr.GetValue(continueFlag)
+
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		batchMode := apr.Contains(BatchFlag)
-		multiStatementMode := apr.Contains(disableBatchFlag)
-
-		if multiStatementMode {
-			batchInput := strings.NewReader(query)
-			verr := execMultiStatements(ctx, dEnv, continueOnError, mrEnv, batchInput, format)
-			if verr != nil {
-				return HandleVErrAndExitCode(verr, usage)
-			}
-		} else if batchMode {
-			batchInput := strings.NewReader(query)
-			verr := execBatch(ctx, dEnv, continueOnError, mrEnv, batchInput, format)
-			if verr != nil {
-				return HandleVErrAndExitCode(verr, usage)
-			}
-		} else {
-			verr := execQuery(ctx, dEnv, mrEnv, query, format)
-			if verr != nil {
-				return HandleVErrAndExitCode(verr, usage)
-			}
-
-			saveName := apr.GetValueOrDefault(saveFlag, "")
-
-			if saveName != "" {
-				saveMessage := apr.GetValueOrDefault(messageFlag, "")
-				newRoot, verr := saveQuery(ctx, initialRoots[currentDb], query, saveName, saveMessage)
-				if verr != nil {
-					return HandleVErrAndExitCode(verr, usage)
-				}
-
-				verr = UpdateWorkingWithVErr(mrEnv.GetEnv(currentDb), newRoot)
-				if verr != nil {
-					return HandleVErrAndExitCode(verr, usage)
-				}
-			}
-		}
+		return queryMode(ctx, dEnv, apr, query, continueOnError, mrEnv, format, usage, initialRoots, currentDb)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
-
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-
-		cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-		verr := execQuery(ctx, dEnv, mrEnv, sq.Query, format)
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
-		}
+		return savedQueryMode(ctx, initialRoots, currentDb, savedQueryName, usage, dEnv, mrEnv, format)
 	} else if apr.Contains(listSavedFlag) {
-		hasQC, err := initialRoots[currentDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
-
-		if err != nil {
-			verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
-		if !hasQC {
-			return 0
-		}
-
-		query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-		verr := execQuery(ctx, dEnv, mrEnv, query, format)
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
-		}
+		return listSavedQueriesMode(ctx, initialRoots, currentDb, usage, dEnv, mrEnv, format)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		runInBatchMode := true
@@ -326,6 +268,83 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 		} else {
 			verr := execShell(ctx, dEnv, mrEnv, format)
+			if verr != nil {
+				return HandleVErrAndExitCode(verr, usage)
+			}
+		}
+	}
+
+	return 0
+}
+
+func listSavedQueriesMode(ctx context.Context, initialRoots map[string]*doltdb.RootValue, currentDb string, usage cli.UsagePrinter, dEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, format resultFormat) int {
+	hasQC, err := initialRoots[currentDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
+
+	if err != nil {
+		verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	if !hasQC {
+		return 0
+	}
+
+	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
+	verr := execQuery(ctx, dEnv, mrEnv, query, format)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+	return 0
+}
+
+func savedQueryMode(ctx context.Context, initialRoots map[string]*doltdb.RootValue, currentDb string, savedQueryName string, usage cli.UsagePrinter, dEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, format resultFormat) int {
+	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
+
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
+	verr := execQuery(ctx, dEnv, mrEnv, sq.Query, format)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	return 0
+}
+
+func queryMode(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, query string, continueOnError bool, mrEnv *env.MultiRepoEnv, format resultFormat, usage cli.UsagePrinter, initialRoots map[string]*doltdb.RootValue, currentDb string) int {
+	batchMode := apr.Contains(BatchFlag)
+	multiStatementMode := apr.Contains(disableBatchFlag)
+
+	if multiStatementMode {
+		batchInput := strings.NewReader(query)
+		verr := execMultiStatements(ctx, dEnv, continueOnError, mrEnv, batchInput, format)
+		if verr != nil {
+			return HandleVErrAndExitCode(verr, usage)
+		}
+	} else if batchMode {
+		batchInput := strings.NewReader(query)
+		verr := execBatch(ctx, dEnv, continueOnError, mrEnv, batchInput, format)
+		if verr != nil {
+			return HandleVErrAndExitCode(verr, usage)
+		}
+	} else {
+		verr := execQuery(ctx, dEnv, mrEnv, query, format)
+		if verr != nil {
+			return HandleVErrAndExitCode(verr, usage)
+		}
+
+		saveName := apr.GetValueOrDefault(saveFlag, "")
+
+		if saveName != "" {
+			saveMessage := apr.GetValueOrDefault(messageFlag, "")
+			newRoot, verr := saveQuery(ctx, initialRoots[currentDb], query, saveName, saveMessage)
+			if verr != nil {
+				return HandleVErrAndExitCode(verr, usage)
+			}
+
+			verr = UpdateWorkingWithVErr(mrEnv.GetEnv(currentDb), newRoot)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -1451,9 +1470,6 @@ func newSqlEngine(
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
 
-		// TODO: this doesn't consider the roots provided as a param, which may not be the HEAD of the branch
-		//  To fix this, we need to pass a commit here as a separate param, and install a read-only database on it
-		//  since it isn't a current HEAD.
 		dbState, err := dsqle.GetInitialDBState(ctx, db)
 		if err != nil {
 			return nil, err
