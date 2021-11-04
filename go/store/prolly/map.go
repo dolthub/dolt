@@ -26,7 +26,7 @@ type Map struct {
 	root    Node
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
-	// todo(andy): do we need a metaTuple descriptor?
+	// todo(andy): do we need a metaValue descriptor?
 	ns NodeStore
 }
 
@@ -82,14 +82,11 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 		return err
 	}
 
-	var k, v val.Tuple
-	if m.compareKeys(key, val.Tuple(cur.current())) == 0 {
-		k = val.Tuple(cur.current())
-		if _, err = cur.advance(ctx); err != nil {
-			return err
-		}
+	pair := cur.currentPair()
+	k, v := val.Tuple(pair.key()), val.Tuple(pair.value())
 
-		v = val.Tuple(cur.current())
+	if m.compareKeys(key, k) != 0 {
+		k, v = nil, nil
 	}
 
 	return cb(k, v)
@@ -106,24 +103,21 @@ func (m Map) GetIndex(ctx context.Context, idx uint64, cb KeyValueFn) (err error
 		return err
 	}
 
-	k := val.Tuple(cur.current())
-	if _, err = cur.advance(ctx); err != nil {
-		return err
-	}
-	v := val.Tuple(cur.current())
+	pair := cur.currentPair()
+	k, v := val.Tuple(pair.key()), val.Tuple(pair.value())
 
 	return cb(k, v)
 }
 
 func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	query := nodeItem(key)
-
-	cur, err := newLeafCursorAtItem(ctx, m.ns, m.root, query, m.searchNode)
+	cur, err := newLeafCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
 	if err != nil {
 		return false, err
 	}
 
-	ok = m.compareItems(query, cur.current()) == 0
+	k := val.Tuple(cur.currentPair().key())
+
+	ok = m.compareKeys(key, k) == 0
 	return
 }
 
@@ -165,22 +159,13 @@ func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error
 }
 
 func (m Map) searchNode(query nodeItem, nd Node) int {
-	var card int
-	if nd.level() == 0 {
-		// leaf nodes
-		card = 2
-	} else {
-		// internal nodes
-		card = 1
-	}
-
-	n := nd.nodeCount() / card
+	n := nd.nodeCount() / stride
 	// Define f(-1) == false and f(n) == true.
 	// Invariant: f(i-1) == false, f(j) == true.
 	i, j := 0, n
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
-		less := m.compareItems(query, nd.getItem(h*card)) <= 0
+		less := m.compareItems(query, nd.getItem(h*stride)) <= 0
 		// i ≤ h < j
 		if !less {
 			i = h + 1 // preserves f(i-1) == false
@@ -190,7 +175,7 @@ func (m Map) searchNode(query nodeItem, nd Node) int {
 	}
 	// i == j, f(i-1) == false, and
 	// f(j) (= f(i)) == true  =>  answer is i.
-	return i * card
+	return i * stride
 }
 
 func (m Map) compareItems(left, right nodeItem) int {

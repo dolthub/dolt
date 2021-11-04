@@ -27,7 +27,7 @@ const (
 	nodeCountSize       = val.ByteSize(2)
 	treeLevelSize       = val.ByteSize(1)
 
-	maxNodeDataSize = val.ByteSize(math.MaxUint16)
+	maxNodeDataSize = uint64(math.MaxUint16)
 )
 
 type nodeItem []byte
@@ -36,17 +36,31 @@ func (i nodeItem) size() val.ByteSize {
 	return val.ByteSize(len(i))
 }
 
+type nodePair [2]nodeItem
+
+func (p nodePair) key() nodeItem {
+	return p[0]
+}
+
+func (p nodePair) value() nodeItem {
+	return p[1]
+}
+
 type Node []byte
 
 func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd Node) {
-	var cumulativeCount uint64
-	var pos val.ByteSize
+	var sz uint64
 	for _, item := range items {
-		pos += item.size()
-		cumulativeCount += cumulativeCountFromItem(level, item)
+		sz += uint64(item.size())
+
 	}
 	count := len(items)
 
+	if sz > maxNodeDataSize {
+		panic("items exceeded max chunk size")
+	}
+
+	pos := val.ByteSize(sz)
 	pos += val.OffsetsSize(count)
 	pos += cumulativeCountSize
 	pos += nodeCountSize
@@ -54,7 +68,8 @@ func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd Nod
 
 	nd = pool.Get(uint64(pos))
 
-	writeCumulativeCount(nd, cumulativeCount)
+	c := cumulativeCountFromItems(level, items)
+	writeCumulativeCount(nd, c)
 	writeItemCount(nd, count)
 	writeTreeLevel(nd, level)
 
@@ -69,17 +84,30 @@ func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (nd Nod
 	return nd
 }
 
-func cumulativeCountFromItem(level uint64, item nodeItem) uint64 {
+func cumulativeCountFromItems(level uint64, items []nodeItem) (c uint64) {
 	if level == 0 {
-		return 1
+		return uint64(len(items))
 	}
-	return metaTuple(item).GetCumulativeCount()
+
+	for i := 1; i < len(items); i += 2 {
+		c += metaValue(items[i]).GetCumulativeCount()
+	}
+	return c
 }
 
 func (nd Node) getItem(i int) nodeItem {
 	offs, itemStop := nd.offsets()
 	start, stop := offs.GetBounds(i, itemStop)
 	return nodeItem(nd[start:stop])
+}
+
+func (nd Node) getPair(i int) (p nodePair) {
+	offs, itemStop := nd.offsets()
+	start, stop := offs.GetBounds(i, itemStop)
+	p[0] = nodeItem(nd[start:stop])
+	start, stop = offs.GetBounds(i+1, itemStop)
+	p[1] = nodeItem(nd[start:stop])
+	return
 }
 
 func (nd Node) size() val.ByteSize {

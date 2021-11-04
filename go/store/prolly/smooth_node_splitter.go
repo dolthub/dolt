@@ -25,7 +25,7 @@ const (
 
 // *smoothNodeSplitter is a nodeSplitter designed to constrain the output
 // chunk size distribution. *smoothNodeSplitter matches against different patterns
-// depending on the size of the current chunk being hashed. The larger the current
+// depending on the size of the currentPair chunk being hashed. The larger the currentPair
 // chunk, the easier the pattern gets. The result is a chunk size distribution
 // that is closer to a binomial distribution, rather than geometric.
 type smoothNodeSplitter struct {

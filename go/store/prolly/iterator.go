@@ -58,22 +58,16 @@ func (it *indexIter) Next(ctx context.Context) (key, value val.Tuple, err error)
 		return nil, nil, io.EOF
 	}
 
-	key = val.Tuple(it.cur.current())
-	if _, err = it.cur.advance(ctx); err != nil {
-		return nil, nil, err
-	}
-	value = val.Tuple(it.cur.current())
+	pair := it.cur.currentPair()
+	key, value = val.Tuple(pair.key()), val.Tuple(pair.value())
 
 	if it.rng.reverse {
-		for i := 0; i < 3; i++ {
-			if _, err = it.cur.retreat(ctx); err != nil {
-				return nil, nil, err
-			}
-		}
+		_, err = it.cur.retreat(ctx)
 	} else {
-		if _, err = it.cur.advance(ctx); err != nil {
-			return nil, nil, err
-		}
+		_, err = it.cur.advance(ctx)
+	}
+	if err != nil {
+		return nil, nil, err
 	}
 
 	it.rem--

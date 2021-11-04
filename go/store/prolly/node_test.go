@@ -20,8 +20,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestRoundTripNodeItems(t *testing.T) {
@@ -54,9 +52,9 @@ func randomNodeItems(t *testing.T, count int) (items []nodeItem) {
 	return
 }
 
-func sumSize(items []nodeItem) (sz val.ByteSize) {
+func sumSize(items []nodeItem) (sz uint64) {
 	for _, item := range items {
-		sz += val.ByteSize(len(item))
+		sz += uint64(len(item))
 	}
 	return
 }

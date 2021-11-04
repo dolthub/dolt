@@ -43,39 +43,13 @@ func testNewCursorAtItem(t *testing.T, count int) {
 		key, value := items[i][0], items[i][1]
 		cur, err := newCursorAtItem(ctx, ns, root, key, searchTestTree)
 		require.NoError(t, err)
-		assert.Equal(t, key, cur.current())
-		_, err = cur.advance(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, value, cur.current())
+
+		pair := cur.currentPair()
+		assert.Equal(t, key, pair.key())
+		assert.Equal(t, value, pair.value())
 	}
 
 	validateTreeItems(t, ns, root, items)
-}
-
-func TestTreeCursor(t *testing.T) {
-	t.Run("tree cursor", func(t *testing.T) {
-		testTreeCursor(t, 10)
-		testTreeCursor(t, 100)
-		testTreeCursor(t, 1000)
-	})
-}
-
-func testTreeCursor(t *testing.T, count int) {
-	root, items, ns := randomTree(t, count)
-	assert.NotNil(t, root)
-
-	ctx := context.Background()
-	tc, err := newTreeCursor(ctx, ns, root)
-	require.NoError(t, err)
-	for _, item := range items {
-		assert.Equal(t, item[0], tc.current())
-		_, err = tc.advance(ctx)
-		require.NoError(t, err)
-
-		assert.Equal(t, item[1], tc.current())
-		_, err = tc.advance(ctx)
-		require.NoError(t, err)
-	}
 }
 
 func newTestNodeStore() NodeStore {
@@ -110,17 +84,11 @@ var valDesc = val.NewTupleDescriptor(
 )
 
 func searchTestTree(item nodeItem, nd Node) int {
-	card := 1
-	if nd.leafNode() {
-		card = 2
-	}
-
-	idx := sort.Search(nd.nodeCount()/card, func(i int) bool {
-		l, r := val.Tuple(item), val.Tuple(nd.getItem(i*card))
+	idx := sort.Search(nd.nodeCount()/stride, func(i int) bool {
+		l, r := val.Tuple(item), val.Tuple(nd.getItem(i*stride))
 		return keyDesc.Compare(l, r) <= 0
 	})
-
-	return idx * card
+	return idx * stride
 }
 
 func randomTupleItemPairs(count int) (items [][2]nodeItem) {

@@ -143,14 +143,15 @@ func mapCursorAtKey(ctx context.Context, m Map, key val.Tuple) (*nodeCursor, err
 }
 
 func getKeyValue(ctx context.Context, cur *nodeCursor) (key, value val.Tuple, err error) {
-	key = val.Tuple(cur.current())
-
-	if _, err = cur.advance(ctx); err != nil {
-		return nil, nil, err
-	}
-
-	value = val.Tuple(cur.current())
-	return
+	panic("asdf")
+	//key = val.Tuple(cur.currentPair())
+	//
+	//if _, err = cur.advance(ctx); err != nil {
+	//	return nil, nil, err
+	//}
+	//
+	//value = val.Tuple(cur.currentPair())
+	//return
 }
 
 func compareKeys(m Map, left, right val.Tuple) int {

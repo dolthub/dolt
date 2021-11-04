@@ -44,7 +44,7 @@ type nodeSplitter interface {
 	// boundary to be crossed.
 	CrossedBoundary() bool
 
-	// Reset clears the current byte buffer and resets the state of the splitter.
+	// Reset clears the currentPair byte buffer and resets the state of the splitter.
 	Reset()
 }
 

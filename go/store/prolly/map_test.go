@@ -72,12 +72,17 @@ func testMapGet(t *testing.T, count int) {
 
 	for _, kv := range kvPairs {
 		ok, err := m.Has(ctx, kv[0])
-		require.True(t, ok)
+		assert.True(t, ok)
 		require.NoError(t, err)
 		err = m.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, kv[0])
-			assert.Equal(t, kv[0], key)
-			assert.Equal(t, kv[1], val)
+			if !assert.Equal(t, kv[0], key) {
+				m.Has(ctx, kv[0])
+				assert.Equal(t, kv[0], key)
+			}
+			if !assert.Equal(t, kv[1], val) {
+				assert.Equal(t, kv[1], val)
+			}
 			return
 		})
 		require.NoError(t, err)

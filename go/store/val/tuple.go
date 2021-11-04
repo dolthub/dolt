@@ -111,6 +111,12 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	return tup
 }
 
+func CloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
+	buf := pool.Get(uint64(len(tup)))
+	copy(buf, tup)
+	return buf
+}
+
 func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tuple, offs Offsets, ms memberMask) {
 	offSz := OffsetsSize(values)
 	maskSz := maskSize(fields)
