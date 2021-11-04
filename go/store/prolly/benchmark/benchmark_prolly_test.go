@@ -111,7 +111,7 @@ func benchmarkTypesMap(b *testing.B, size, iters uint64) {
 
 func generateProllyBench(size uint64) prollyBench {
 	ctx := context.Background()
-	nrw := newTestNRW()
+	ns := newTestNodeStore()
 
 	kd := val.NewTupleDescriptor(
 		val.Type{Coll: val.ByteOrderCollation, Nullable: false},
@@ -132,7 +132,7 @@ func generateProllyBench(size uint64) prollyBench {
 		tt = append(tt, tups[i][0], tups[i][1])
 	}
 
-	m, err := prolly.MakeNewMap(ctx, nrw, kd, vd, tt...)
+	m, err := prolly.MakeNewMap(ctx, ns, kd, vd, tt...)
 	if err != nil {
 		panic(err)
 	}
@@ -142,7 +142,7 @@ func generateProllyBench(size uint64) prollyBench {
 
 var shared = pool.NewBuffPool()
 
-func newTestNRW() prolly.NodeReadWriter {
+func newTestNodeStore() prolly.NodeStore {
 	ts := &chunks.TestStorage{}
 	return prolly.NewNodeStore(ts.NewView())
 }

@@ -34,14 +34,14 @@ type treeChunker struct {
 	splitter nodeSplitter
 	newSplit newSplitterFn
 
-	nrw NodeReadWriter
+	ns NodeStore
 }
 
-func newEmptyTreeChunker(ctx context.Context, nrw NodeReadWriter, newSplit newSplitterFn) (*treeChunker, error) {
-	return newTreeChunker(ctx, nil, uint64(0), nrw, newSplit)
+func newEmptyTreeChunker(ctx context.Context, ns NodeStore, newSplit newSplitterFn) (*treeChunker, error) {
+	return newTreeChunker(ctx, nil, uint64(0), ns, newSplit)
 }
 
-func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, nrw NodeReadWriter, newSplit newSplitterFn) (*treeChunker, error) {
+func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, ns NodeStore, newSplit newSplitterFn) (*treeChunker, error) {
 	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
@@ -52,7 +52,7 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, nrw Node
 		parent:   nil,
 		newSplit: newSplit,
 		splitter: newSplit(byte(level % 256)),
-		nrw:      nrw,
+		ns:       ns,
 	}
 
 	if cur != nil {
@@ -232,7 +232,7 @@ func (sc *treeChunker) createParent(ctx context.Context) (err error) {
 		parent = sc.cur.parent
 	}
 
-	sc.parent, err = newTreeChunker(ctx, parent, sc.level+1, sc.nrw, sc.newSplit)
+	sc.parent, err = newTreeChunker(ctx, parent, sc.level+1, sc.ns, sc.newSplit)
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func (sc *treeChunker) createParent(ctx context.Context) (err error) {
 // clears the current items, then returns the new Node and a metaTuple that
 // points to it. The Node is always eagerly written.
 func (sc *treeChunker) createNode(ctx context.Context) (Node, nodeItem, error) {
-	nd, meta, err := writeNewNode(ctx, sc.nrw, sc.level, sc.current...)
+	nd, meta, err := writeNewNode(ctx, sc.ns, sc.level, sc.current...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -354,7 +354,7 @@ func (sc *treeChunker) Done(ctx context.Context) (Node, error) {
 
 	mt := sc.current[0]
 	for {
-		child, err := fetchRef(ctx, sc.nrw, mt)
+		child, err := fetchRef(ctx, sc.ns, mt)
 		if err != nil {
 			return nil, err
 		}

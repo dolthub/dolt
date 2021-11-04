@@ -29,27 +29,27 @@ type treeCursor []nodeCursor2
 type nodeCursor2 struct {
 	nd  Node
 	idx int
-	nrw NodeReadWriter
+	ns  NodeStore
 }
 
 type compareFn func(left, right nodeItem) int
 
 type treeCursorFn func(cur treeCursor) error
 
-func newTreeCursor(ctx context.Context, nrw NodeReadWriter, nd Node) (cur treeCursor, err error) {
+func newTreeCursor(ctx context.Context, ns NodeStore, nd Node) (cur treeCursor, err error) {
 	cur = make(treeCursor, nd.level()+1)
 
 	lvl := nd.level()
-	cur[lvl] = nodeCursor2{nd: nd, nrw: nrw}
+	cur[lvl] = nodeCursor2{nd: nd, ns: ns}
 	lvl--
 
 	for lvl >= 0 {
-		nd, err = fetchRef(ctx, nrw, cur[lvl:].parent().current())
+		nd, err = fetchRef(ctx, ns, cur[lvl:].parent().current())
 		if err != nil {
 			return nil, err
 		}
 
-		cur[lvl] = nodeCursor2{nd: nd, nrw: nrw}
+		cur[lvl] = nodeCursor2{nd: nd, ns: ns}
 		lvl--
 	}
 
@@ -62,31 +62,31 @@ var curPool = sync.Pool{
 	},
 }
 
-func newTreeCursorAtItem(ctx context.Context, nrw NodeReadWriter, nd Node, item nodeItem, cmp compareFn, cb treeCursorFn) (err error) {
+func newTreeCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item nodeItem, cmp compareFn, cb treeCursorFn) (err error) {
 	arr := curPool.Get().([]nodeCursor2)
 	defer func() { curPool.Put(arr) }()
 
 	lvl := nd.level()
 	cur := treeCursor(arr[:lvl+1])
 
-	cur[lvl] = nodeCursor2{nd: nd, nrw: nrw}
+	cur[lvl] = nodeCursor2{nd: nd, ns: ns}
 	lvl--
 
-	err = cur[lvl:].seek(ctx, nrw, item, cmp)
+	err = cur[lvl:].seek(ctx, ns, item, cmp)
 	if err != nil {
 		return err
 	}
 
 	for lvl >= 0 {
-		nd, err = fetchRef(ctx, nrw, cur[lvl:].parent().current())
+		nd, err = fetchRef(ctx, ns, cur[lvl:].parent().current())
 		if err != nil {
 			return err
 		}
 
-		cur[lvl] = nodeCursor2{nd: nd, nrw: nrw}
+		cur[lvl] = nodeCursor2{nd: nd, ns: ns}
 		lvl--
 
-		err = cur[lvl:].seek(ctx, nrw, item, cmp)
+		err = cur[lvl:].seek(ctx, ns, item, cmp)
 		if err != nil {
 			return err
 		}
@@ -143,11 +143,11 @@ func (cur treeCursor) level() uint64 {
 	return uint64(cur[tip].nd.level())
 }
 
-func (cur treeCursor) nrw() NodeReadWriter {
-	return cur[tip].nrw
+func (cur treeCursor) ns() NodeStore {
+	return cur[tip].ns
 }
 
-func (cur treeCursor) seek(ctx context.Context, nrw NodeReadWriter, item nodeItem, cb compareFn) (err error) {
+func (cur treeCursor) seek(ctx context.Context, ns NodeStore, item nodeItem, cb compareFn) (err error) {
 	inBounds := true
 	if cur.parent().valid() {
 		inBounds = cb(item, cur.firstItem()) >= 0 || cb(item, cur.lastItem()) <= 0
@@ -155,12 +155,12 @@ func (cur treeCursor) seek(ctx context.Context, nrw NodeReadWriter, item nodeIte
 
 	if !inBounds {
 		// |item| is outside the bounds of |cur.nd|, search up the tree
-		err = cur.parent().seek(ctx, nrw, item, cb)
+		err = cur.parent().seek(ctx, ns, item, cb)
 		if err != nil {
 			return err
 		}
 
-		cur[tip].nd, err = fetchRef(ctx, nrw, cur.parent().current())
+		cur[tip].nd, err = fetchRef(ctx, ns, cur.parent().current())
 		if err != nil {
 			return err
 		}
@@ -298,7 +298,7 @@ func (cur treeCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBef
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur treeCursor) fetchNode(ctx context.Context) (err error) {
 	d.PanicIfFalse(cur.parent().valid())
-	cur[tip].nd, err = fetchRef(ctx, cur.nrw(), cur.parent().current())
+	cur[tip].nd, err = fetchRef(ctx, cur.ns(), cur.parent().current())
 	cur[tip].idx = -1 // caller must set
 	return err
 }

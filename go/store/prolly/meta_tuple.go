@@ -17,8 +17,6 @@ package prolly
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/chunks"
-
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
@@ -51,20 +49,20 @@ func (mt metaTuple) GetRef() hash.Hash {
 	return hash.New(ref)
 }
 
-func fetchRef(ctx context.Context, nrw NodeReadWriter, item nodeItem) (Node, error) {
-	return nrw.Read(ctx, metaTuple(item).GetRef())
+func fetchRef(ctx context.Context, ns NodeStore, item nodeItem) (Node, error) {
+	return ns.Read(ctx, metaTuple(item).GetRef())
 }
 
-func writeNewNode(ctx context.Context, nrw NodeReadWriter, level uint64, items ...nodeItem) (Node, metaTuple, error) {
-	nd := makeProllyNode(nrw.Pool(), level, items...)
+func writeNewNode(ctx context.Context, ns NodeStore, level uint64, items ...nodeItem) (Node, metaTuple, error) {
+	nd := makeProllyNode(ns.Pool(), level, items...)
 
-	ref, err := nrw.Write(ctx, nd)
+	ref, err := ns.Write(ctx, nd)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	fields := metaTupleFields(level, items...)
-	meta := newMetaTuple(nrw.Pool(), nd.cumulativeCount(), ref, fields)
+	meta := newMetaTuple(ns.Pool(), nd.cumulativeCount(), ref, fields)
 
 	return nd, meta, nil
 }
@@ -87,38 +85,4 @@ func metaTupleFields(level uint64, items ...nodeItem) (fields [][]byte) {
 		fields = append(fields, key.GetField(i))
 	}
 	return
-}
-
-type NodeReadWriter interface { // todo(andy): fun name
-	Read(ctx context.Context, ref hash.Hash) (Node, error)
-	Write(ctx context.Context, nd Node) (hash.Hash, error)
-	Pool() pool.BuffPool
-}
-
-type nodeStore struct {
-	store chunks.ChunkStore
-	bp    pool.BuffPool
-}
-
-var _ NodeReadWriter = nodeStore{}
-
-var sharedPool = pool.NewBuffPool()
-
-func NewNodeStore(cs chunks.ChunkStore) NodeReadWriter {
-	return nodeStore{store: cs, bp: sharedPool}
-}
-
-func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
-	c, err := ns.store.Get(ctx, ref)
-	return c.Data(), err
-}
-
-func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
-	c := chunks.NewChunk(nd)
-	err := ns.store.Put(ctx, c)
-	return c.Hash(), err
-}
-
-func (ns nodeStore) Pool() pool.BuffPool {
-	return ns.bp
 }

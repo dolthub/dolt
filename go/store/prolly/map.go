@@ -27,24 +27,24 @@ type Map struct {
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 	// todo(andy): do we need a metaTuple descriptor?
-	nrw NodeReadWriter
+	ns NodeStore
 }
 
 type KeyValueFn func(key, value val.Tuple) error
 
-func NewMap(node Node, nrw NodeReadWriter, keyDesc, valDesc val.TupleDesc) Map {
+func NewMap(node Node, ns NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	return Map{
 		root:    node,
 		keyDesc: keyDesc,
 		valDesc: valDesc,
-		nrw:     nrw,
+		ns:      ns,
 	}
 }
 
-func MakeNewMap(ctx context.Context, nrw NodeReadWriter, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
-	m := NewMap(nil, nrw, keyDesc, valDesc)
+func MakeNewMap(ctx context.Context, ns NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
+	m := NewMap(nil, ns, keyDesc, valDesc)
 
-	ch, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)
+	ch, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	if err != nil {
 		return Map{}, err
 	}
@@ -77,7 +77,7 @@ func (m Map) Count() uint64 {
 }
 
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
-	cur, err := newLeafCursorAtItem(ctx, m.nrw, m.root, nodeItem(key), m.searchNode)
+	cur, err := newLeafCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (m Map) GetIndex(ctx context.Context, idx uint64, cb KeyValueFn) (err error
 	}
 
 	treeIndex := idx * 2
-	cur, err := newCursorAtIndex(ctx, m.nrw, m.root, treeIndex)
+	cur, err := newCursorAtIndex(ctx, m.ns, m.root, treeIndex)
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func (m Map) GetIndex(ctx context.Context, idx uint64, cb KeyValueFn) (err error
 func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	query := nodeItem(key)
 
-	cur, err := newLeafCursorAtItem(ctx, m.nrw, m.root, query, m.searchNode)
+	cur, err := newLeafCursorAtItem(ctx, m.ns, m.root, query, m.searchNode)
 	if err != nil {
 		return false, err
 	}
@@ -137,7 +137,7 @@ func (m Map) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error
 		start = nodeItem(rng.highKey)
 	}
 
-	cur, err := newCursorAtItem(ctx, m.nrw, m.root, start, m.searchNode)
+	cur, err := newCursorAtItem(ctx, m.ns, m.root, start, m.searchNode)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error
 		treeIndex = rng.high * 2
 	}
 
-	cur, err := newCursorAtIndex(ctx, m.nrw, m.root, treeIndex)
+	cur, err := newCursorAtIndex(ctx, m.ns, m.root, treeIndex)
 	if err != nil {
 		return nil, err
 	}

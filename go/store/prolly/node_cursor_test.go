@@ -35,13 +35,13 @@ func TestNodeCursor(t *testing.T) {
 }
 
 func testNewCursorAtItem(t *testing.T, count int) {
-	root, items, nrw := randomTree(t, count)
+	root, items, ns := randomTree(t, count)
 	assert.NotNil(t, root)
 
 	ctx := context.Background()
 	for i := range items {
 		key, value := items[i][0], items[i][1]
-		cur, err := newCursorAtItem(ctx, nrw, root, key, searchTestTree)
+		cur, err := newCursorAtItem(ctx, ns, root, key, searchTestTree)
 		require.NoError(t, err)
 		assert.Equal(t, key, cur.current())
 		_, err = cur.advance(ctx)
@@ -49,7 +49,7 @@ func testNewCursorAtItem(t *testing.T, count int) {
 		assert.Equal(t, value, cur.current())
 	}
 
-	validateTreeItems(t, nrw, root, items)
+	validateTreeItems(t, ns, root, items)
 }
 
 func TestTreeCursor(t *testing.T) {
@@ -61,11 +61,11 @@ func TestTreeCursor(t *testing.T) {
 }
 
 func testTreeCursor(t *testing.T, count int) {
-	root, items, nrw := randomTree(t, count)
+	root, items, ns := randomTree(t, count)
 	assert.NotNil(t, root)
 
 	ctx := context.Background()
-	tc, err := newTreeCursor(ctx, nrw, root)
+	tc, err := newTreeCursor(ctx, ns, root)
 	require.NoError(t, err)
 	for _, item := range items {
 		assert.Equal(t, item[0], tc.current())
@@ -78,15 +78,15 @@ func testTreeCursor(t *testing.T, count int) {
 	}
 }
 
-func newTestNRW() NodeReadWriter {
+func newTestNodeStore() NodeStore {
 	ts := &chunks.TestStorage{}
 	return NewNodeStore(ts.NewView())
 }
 
-func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeReadWriter) {
+func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeStore) {
 	ctx := context.Background()
-	nrw := newTestNRW()
-	chunker, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)
+	ns := newTestNodeStore()
+	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	require.NoError(t, err)
 
 	items := randomTupleItemPairs(count)
@@ -96,7 +96,7 @@ func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeReadWriter) {
 	}
 	nd, err := chunker.Done(ctx)
 	assert.NoError(t, err)
-	return nd, items, nrw
+	return nd, items, ns
 }
 
 var keyDesc = val.NewTupleDescriptor(

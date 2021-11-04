@@ -82,7 +82,7 @@ func applyEdits(ctx context.Context, m Map, edits editProvider) (Map, error) {
 		return m, err
 	}
 
-	ch, err := newTreeChunker(ctx, cur, 0, m.nrw, newDefaultNodeSplitter)
+	ch, err := newTreeChunker(ctx, cur, 0, m.ns, newDefaultNodeSplitter)
 	if err != nil {
 		return m, err
 	}
@@ -138,7 +138,7 @@ func applyEdits(ctx context.Context, m Map, edits editProvider) (Map, error) {
 }
 
 func mapCursorAtKey(ctx context.Context, m Map, key val.Tuple) (*nodeCursor, error) {
-	cur, err := newCursorAtItem(ctx, m.nrw, m.root, nodeItem(key), m.searchNode)
+	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
 	return &cur, err
 }
 

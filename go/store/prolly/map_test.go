@@ -186,8 +186,8 @@ func indexRanges(m Map) (ranges []IndexRange) {
 
 func randomMap(t *testing.T, count int, kd, vd val.TupleDesc) (Map, [][2]val.Tuple) {
 	ctx := context.Background()
-	nrw := newTestNRW()
-	chunker, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)
+	ns := newTestNodeStore()
+	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	require.NoError(t, err)
 
 	items := randomTuplePairs(count, kd, vd)
@@ -202,7 +202,7 @@ func randomMap(t *testing.T, count int, kd, vd val.TupleDesc) (Map, [][2]val.Tup
 		root:    root,
 		keyDesc: kd,
 		valDesc: vd,
-		nrw:     nrw,
+		ns:      ns,
 	}
 
 	return m, items
