@@ -10,6 +10,12 @@ teardown() {
     teardown_common
 }
 
+@test "dump: no tables" {
+    run dolt dump
+    ["$status" -eq 0]
+    [[ "$output" =~ "No tables to export." ]] || false
+}
+
 @test "dump: SQL type - dolt dump with multiple tables" {
     dolt sql -q "CREATE TABLE new_table(pk int);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
@@ -197,22 +203,31 @@ teardown() {
     run dolt dump -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump/enums.csv ]
     [ -f doltdump/new_table.csv ]
     [ -f doltdump/warehouse.csv ]
-    [ -f doltdump/enums.csv ]
 
     run dolt dump -r csv
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "new_table.csv already exists" ]] ||
-    [[ "$output" =~ "warehouse.csv already exists" ]] ||
     [[ "$output" =~ "enums.csv already exists" ]] || false
+
+    rm doltdump/enums.csv
+    run dolt dump -r csv
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "new_table.csv already exists" ]] || false
+
+    rm doltdump/enums.csv
+    rm doltdump/new_table.csv
+    run dolt dump -r csv
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "warehouse.csv already exists" ]] || false
 
     run dolt dump -f -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump/enums.csv ]
     [ -f doltdump/new_table.csv ]
     [ -f doltdump/warehouse.csv ]
-    [ -f doltdump/enums.csv ]
 }
 
 @test "dump: CSV type - compare tables in database with tables imported from corresponding files " {
@@ -234,9 +249,9 @@ teardown() {
 
     run dolt dump -r csv
     [ "$status" -eq 0 ]
+    [ -f doltdump/keyless.csv ]
     [ -f doltdump/new_table.csv ]
     [ -f doltdump/warehouse.csv ]
-    [ -f doltdump/keyless.csv ]
 
     dolt checkout new_branch
 
@@ -263,9 +278,9 @@ teardown() {
 
     run dolt dump -r csv
     [ "$status" -eq 0 ]
-    [ -f doltdump/warehouse.csv ]
     [ -f doltdump/keyless.csv ]
     [ -f doltdump/test.csv ]
+    [ -f doltdump/warehouse.csv ]
 
     dolt checkout new_branch
 

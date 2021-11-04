@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
@@ -98,6 +97,8 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.BuildDError("too many arguments").SetPrintUsage().Build(), usage)
 	}
 
+	// TODO: make the file name and directory name configurable as command line options
+
 	var fileName string
 	resultFormat, _ := apr.GetValue(FormatFlag)
 
@@ -120,7 +121,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	switch resultFormat {
 	case "", "sql", ".sql":
 		fileName = "doltdump.sql"
-		dumpOpts, err := getDumpArgs(fileName, resultFormat)
+		dumpOpts := getDumpOptions(fileName, resultFormat)
 		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fileName)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -129,16 +130,15 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		for _, tbl := range tblNames {
 			tblOpts := newTableArgs(tbl, dumpOpts.dest)
 
-			mErr := dumpTable(ctx, root, dEnv, tblOpts, fPath)
-			if mErr != nil {
-				return HandleVErrAndExitCode(mErr, usage)
+			err = dumpTable(ctx, root, dEnv, tblOpts, fPath)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
 			}
 		}
 	case "csv", ".csv":
-		fileName = "doltdump/"
 		for _, tbl := range tblNames {
 			fileName = "doltdump/" + tbl + ".csv"
-			dumpOpts, err := getDumpArgs(fileName, resultFormat)
+			dumpOpts := getDumpOptions(fileName, resultFormat)
 
 			fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fileName)
 			if err != nil {
@@ -147,9 +147,9 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 			tblOpts := newTableArgs(tbl, dumpOpts.dest)
 
-			mErr := dumpTable(ctx, root, dEnv, tblOpts, fPath)
-			if mErr != nil {
-				return HandleVErrAndExitCode(mErr, usage)
+			err = dumpTable(ctx, root, dEnv, tblOpts, fPath)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
 			}
 		}
 
@@ -210,11 +210,11 @@ func dumpTable(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, t
 	}
 
 	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, tblOpts)
-	if skipped > 0 {
-		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
-	}
 	if verr != nil {
 		return verr
+	}
+	if skipped > 0 {
+		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 	}
 
 	return nil
@@ -274,7 +274,7 @@ func getDumpDestination(path string) mvdata.DataLocation {
 		if val.Format == mvdata.InvalidDataFormat {
 			cli.PrintErrln(
 				color.RedString("Could not infer type file '%s'\n", path),
-				"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
+				"File extensions should match supported file types, or should be explicitly defined via the result-format parameter")
 			return nil
 		}
 
@@ -292,13 +292,13 @@ func getDumpDestination(path string) mvdata.DataLocation {
 }
 
 // getDumpArgs returns dumpOptions of result format and dest file location corresponding to the input parameters
-func getDumpArgs(fileName string, rf string) (*dumpOptions, errhand.VerboseError) {
+func getDumpOptions(fileName string, rf string) *dumpOptions {
 	fileLoc := getDumpDestination(fileName)
 
 	return &dumpOptions{
 		format: rf,
 		dest:   fileLoc,
-	}, nil
+	}
 }
 
 // newTableArgs returns tableOptions of table name and src table location and dest file location
@@ -313,7 +313,6 @@ func newTableArgs(tblName string, destination mvdata.DataLocation) *tableOptions
 
 // NewDumpDataMover returns dataMover with tableOptions given source table and destination file info
 func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, statsCB noms.StatsCB, filePath string) (retDataMover *mvdata.DataMover, retErr errhand.VerboseError) {
-	var rd table.TableReadCloser
 	var err error
 
 	rd, srcIsSorted, err := tblOpts.src.NewReader(ctx, root, dEnv.FS, tblOpts.srcOptions)
@@ -336,9 +335,9 @@ func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 
-	writer, wErr := dEnv.FS.OpenForWriteAppend(filePath, os.ModePerm)
-	if wErr != nil {
-		return nil, errhand.BuildDError("Error opening writer for %s.", tblOpts.DestName()).AddCause(wErr).Build()
+	writer, err := dEnv.FS.OpenForWriteAppend(filePath, os.ModePerm)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", tblOpts.DestName()).AddCause(err).Build()
 	}
 
 	wr, err := tblOpts.dest.NewCreatingWriter(ctx, tblOpts, root, srcIsSorted, outSch, statsCB, opts, writer)
