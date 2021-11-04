@@ -16,6 +16,7 @@ package csv
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -91,7 +92,16 @@ Andy Anderson,27,
 	rows := getSampleRows()
 
 	fs := filesys.NewInMemFS(nil, nil, root)
-	csvWr, err := OpenCSVWriter(path, fs, rowSch, info)
+	filePath, err := fs.Abs(path)
+	if err != nil {
+		t.Fatal("Could not open create filepath for CSVWriter", err)
+	}
+	writer, err := fs.OpenForWrite(filePath, os.ModePerm)
+	if err != nil {
+		t.Fatal("Could not open writer for CSVWriter", err)
+	}
+
+	csvWr, err := NewCSVWriter(writer, rowSch, info)
 
 	if err != nil {
 		t.Fatal("Could not open CSVWriter", err)
@@ -123,7 +133,15 @@ Andy Anderson|27|
 	rows := getSampleRows()
 
 	fs := filesys.NewInMemFS(nil, nil, root)
-	csvWr, err := OpenCSVWriter(path, fs, rowSch, info)
+	filePath, err := fs.Abs(path)
+	if err != nil {
+		t.Fatal("Could not open create filepath for CSVWriter", err)
+	}
+	writer, err := fs.OpenForWrite(filePath, os.ModePerm)
+	if err != nil {
+		t.Fatal("Could not open writer for CSVWriter", err)
+	}
+	csvWr, err := NewCSVWriter(writer, rowSch, info)
 
 	if err != nil {
 		t.Fatal("Could not open CSVWriter", err)

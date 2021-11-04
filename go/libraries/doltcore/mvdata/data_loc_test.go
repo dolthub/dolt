@@ -17,7 +17,9 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -201,10 +203,20 @@ func TestCreateRdWr(t *testing.T) {
 		loc := test.dl
 
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil, opts)
 
-		if err != nil {
-			t.Fatal("Unexpected error creating writer.", err)
+		filePath, fpErr := dEnv.FS.Abs(strings.Split(loc.String(), ":")[1])
+		if fpErr != nil {
+			t.Fatal("Unexpected error getting filepath", fpErr)
+		}
+
+		writer, wrErr := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
+		if wrErr != nil {
+			t.Fatal("Unexpected error opening file for writer.", wrErr)
+		}
+
+		wr, wErr := loc.NewCreatingWriter(context.Background(), mvOpts, root, true, fakeSchema, nil, opts, writer)
+		if wErr != nil {
+			t.Fatal("Unexpected error creating writer.", wErr)
 		}
 
 		actualWrT := reflect.TypeOf(wr).Elem()
@@ -228,7 +240,7 @@ func TestCreateRdWr(t *testing.T) {
 		rd, _, err := loc.NewReader(context.Background(), root, dEnv.FS, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})
 
 		if err != nil {
-			t.Fatal("Unexpected error creating writer", err)
+			t.Fatal("Unexpected error creating reader", err)
 		}
 
 		actualRdT := reflect.TypeOf(rd).Elem()

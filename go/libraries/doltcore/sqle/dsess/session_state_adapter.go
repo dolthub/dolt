@@ -17,14 +17,12 @@ package dsess
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // SessionStateAdapter is an adapter for env.RepoStateReader in SQL contexts, getting information about the repo state
@@ -155,12 +153,4 @@ func (s SessionStateAdapter) RemoveBackup(ctx context.Context, name string) erro
 
 func (s SessionStateAdapter) TempTableFilesDir() string {
 	return s.session.GetDbStates()[s.dbName].tmpTablesDir
-}
-
-func mustAbs(path ...string) string {
-	absPath, err := filesys.LocalFS.Abs(filepath.Join(path...))
-	if err != nil {
-		panic(err)
-	}
-	return absPath
 }

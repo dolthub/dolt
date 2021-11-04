@@ -477,11 +477,19 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	var wr table.TableWriteCloser
 	switch impOpts.operation {
 	case CreateOp:
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
+		filePath, err := dEnv.FS.Abs(impOpts.DestName())
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
+		}
+		writer, err := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
+		}
+		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts, writer)
 	case ReplaceOp:
-		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, opts)
+		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts)
 	case UpdateOp:
-		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, rdTags, opts)
+		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, rdTags, opts)
 	default:
 		err = errors.New("invalid move operation")
 	}
