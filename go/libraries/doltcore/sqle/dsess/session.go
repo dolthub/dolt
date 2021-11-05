@@ -101,11 +101,11 @@ func init() {
 			Default:           int8(0),
 		},
 		{
-			Name:              doltdb.ReplicateHeadsMode,
+			Name:              doltdb.ReplicateHeadsStrategy,
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(doltdb.ReplicateHeadsMode),
+			Type:              sql.NewSystemStringType(doltdb.ReplicateHeadsStrategy),
 			Default:           "one",
 		},
 	})
