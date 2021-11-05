@@ -137,13 +137,13 @@ func TestSetPersistedValue(t *testing.T) {
 			Value: "7",
 		},
 		{
-			Name:        "bool",
-			Value:       true,
+			Name:  "bool",
+			Value: true,
 			Err:   sql.ErrInvalidType,
 		},
 		{
-			Name:        "bool",
-			Value:       false,
+			Name:  "bool",
+			Value: false,
 			Err:   sql.ErrInvalidType,
 		},
 		{
@@ -195,13 +195,13 @@ func TestGetPersistedValue(t *testing.T) {
 			ExpectedRes: uint64(7),
 		},
 		{
-			Name:        "activate_all_roles_on_login",
-			Value:       "true",
+			Name:  "activate_all_roles_on_login",
+			Value: "true",
 			Err:   true,
 		},
 		{
-			Name:        "activate_all_roles_on_login",
-			Value:       "on",
+			Name:  "activate_all_roles_on_login",
+			Value: "on",
 			Err:   true,
 		},
 		{
@@ -210,13 +210,13 @@ func TestGetPersistedValue(t *testing.T) {
 			ExpectedRes: int8(1),
 		},
 		{
-			Name:        "activate_all_roles_on_login",
-			Value:       "false",
+			Name:  "activate_all_roles_on_login",
+			Value: "false",
 			Err:   true,
 		},
 		{
-			Name:        "activate_all_roles_on_login",
-			Value:       "off",
+			Name:  "activate_all_roles_on_login",
+			Value: "off",
 			Err:   true,
 		},
 		{
