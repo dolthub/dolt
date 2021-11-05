@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -279,6 +280,14 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 	}
 
 	branchRef := ref.NewBranchRef(branch)
+
+	// check whether remote branch exists before creating local tracking branch
+	_, err := actions.FetchRemoteBranch(ctx, destDb.tmpDir, destDb.remote, destDb.srcDB, destDb.DbData().Ddb, branchRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	if err != nil {
+		return err
+	}
+
+	// TODO is localBranches var really necessary? we're not going to call this that often
 	if _, ok := destDb.localBranches[branch]; !ok {
 		cs, _ := doltdb.NewCommitSpec(destDb.headRef.String())
 		cm, err := destDb.ddb.Resolve(ctx, cs, nil)
@@ -289,13 +298,16 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 		if err != nil {
 			return err
 		}
+		destDb.localBranches[branch] = branchRef
 	}
 
-	destDb, err := destDb.SetHeadRef(branchRef)
+	// update ReadReplicaRemote with new HEAD and remote tracking branch
+	destDb, err = destDb.SetHeadRef(branchRef)
 	if err != nil {
 		return err
 	}
 
+	// we have already fetched, bt need to formalize the working set update
 	err = destDb.PullFromReplica(ctx)
 	if err != nil {
 		return err
