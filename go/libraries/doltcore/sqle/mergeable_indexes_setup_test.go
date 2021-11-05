@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -99,12 +100,12 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 		tbl:      tbl,
 		editOpts: opts,
 	}
-	pro := NewDoltDatabaseProvider(dEnv.Config, tiDb)
+	pro := NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, tiDb)
 	engine = sqle.NewDefault(pro)
 
 	// Get an updated root to use for the rest of the test
 	ctx := sql.NewEmptyContext()
-	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, dEnv.Config, getDbState(t, db, dEnv))
+	sess, err := dsess.NewDoltSession(ctx, ctx.Session.(*sql.BaseSession), pro, config.NewEmptyMapConfig(), getDbState(t, db, dEnv))
 	require.NoError(t, err)
 	roots, ok := sess.GetRoots(ctx, tiDb.Name())
 	require.True(t, ok)

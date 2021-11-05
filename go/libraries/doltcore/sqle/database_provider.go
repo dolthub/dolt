@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -28,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -39,7 +42,11 @@ type DoltDatabaseProvider struct {
 	functions map[string]sql.Function
 	mu        *sync.RWMutex
 
-	cfg config.ReadableConfig
+	dataRootDir string
+	fs          filesys.Filesys
+	cfg         config.ReadableConfig
+
+	dbFactoryUrl string
 }
 
 var _ sql.DatabaseProvider = DoltDatabaseProvider{}
@@ -50,7 +57,7 @@ var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 const createDbWC = 1105 // 1105 represents an unknown error.
 
 // NewDoltDatabaseProvider returns a provider for the databases given
-func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Database) DoltDatabaseProvider {
+func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
@@ -62,10 +69,12 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, databases ...sql.Data
 	}
 
 	return DoltDatabaseProvider{
-		databases: dbs,
-		functions: funcs,
-		mu:        &sync.RWMutex{},
-		cfg:       config,
+		databases:    dbs,
+		functions:    funcs,
+		mu:           &sync.RWMutex{},
+		fs:           fs,
+		cfg:          config,
+		dbFactoryUrl: doltdb.LocalDirDoltDB,
 	}
 }
 
@@ -77,6 +86,14 @@ func (p DoltDatabaseProvider) WithFunctions(fns []sql.Function) DoltDatabaseProv
 	}
 
 	p.functions = funcs
+	return p
+}
+
+// WithDbFactoryUrl returns a copy of this provider with the DbFactoryUrl set as provided.
+// The URL is used when creating new databases.
+// See doltdb.InMemDoltDB, doltdb.LocalDirDoltDB
+func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider {
+	p.dbFactoryUrl = url
 	return p
 }
 
@@ -130,28 +147,53 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Throw warning to users that this is a temporary database that does not persist after the session exits.
-	ctx.Warn(createDbWC, "CREATE DATABASE creates an inmemory database that does not persist after the server exits. Dolt currently only supports a single disk backed database created by `dolt init`")
+	exists, isDir := p.fs.Exists(name)
+	if exists && isDir {
+		return sql.ErrDatabaseExists.New(name)
+	} else if exists {
+		return fmt.Errorf("Cannot create DB, file exists at %s", name)
+	}
 
-	mem, err := env.NewMemoryDbData(ctx, p.cfg)
+	err := p.fs.MkDirs(name)
 	if err != nil {
 		return err
 	}
+
+	newFs, err := p.fs.WithWorkingDir(name)
+	if err != nil {
+		return err
+	}
+
+	dsess := dsess.DSessFromSess(ctx.Session)
+	branch := env.GetDefaultInitBranch(p.cfg)
+
+	// TODO: fill in version appropriately
+	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), branch)
+	if err != nil {
+		return err
+	}
+
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
 		return err
 	}
+
 	opts := editor.Options{
+		Deaf: newEnv.DbEaFactory(),
+		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
 		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
-		Deaf: editor.NewDbEaFactory(
-			mem.Rsw.TempTableFilesDir(),
-			mem.Ddb.ValueReadWriter()),
 	}
 
-	db := NewDatabase(name, mem, opts)
+	db := NewDatabase(name, newEnv.DbData(), opts)
 	p.databases[strings.ToLower(db.Name())] = db
 
-	return nil
+	dbstate, err := GetInitialDBState(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	return dsess.AddDB(ctx, dbstate)
 }
 
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
