@@ -643,6 +643,9 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test1" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
+
+    # We have to end in a valid dolt database directory for teardown to succeed
+    cd ..
 }
 
 @test "sql: set head ref session var" {
