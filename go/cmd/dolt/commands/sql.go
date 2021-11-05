@@ -27,8 +27,6 @@ import (
 	"syscall"
 
 	"github.com/abiosoft/readline"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -55,6 +53,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
@@ -371,9 +371,9 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 }
 
 func execShell(
-		ctx context.Context,
-		mrEnv *env.MultiRepoEnv,
-		format resultFormat,
+	ctx context.Context,
+	mrEnv *env.MultiRepoEnv,
+	format resultFormat,
 ) errhand.VerboseError {
 	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
@@ -392,11 +392,11 @@ func execShell(
 }
 
 func execBatch(
-		ctx context.Context,
-		continueOnErr bool,
-		mrEnv *env.MultiRepoEnv,
-		batchInput io.Reader,
-		format resultFormat,
+	ctx context.Context,
+	continueOnErr bool,
+	mrEnv *env.MultiRepoEnv,
+	batchInput io.Reader,
+	format resultFormat,
 ) errhand.VerboseError {
 	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
@@ -435,11 +435,11 @@ func execBatch(
 }
 
 func execMultiStatements(
-		ctx context.Context,
-		continueOnErr bool,
-		mrEnv *env.MultiRepoEnv,
-		batchInput io.Reader,
-		format resultFormat,
+	ctx context.Context,
+	continueOnErr bool,
+	mrEnv *env.MultiRepoEnv,
+	batchInput io.Reader,
+	format resultFormat,
 ) errhand.VerboseError {
 	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
@@ -472,10 +472,10 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 }
 
 func execQuery(
-		ctx context.Context,
-		mrEnv *env.MultiRepoEnv,
-		query string,
-		format resultFormat,
+	ctx context.Context,
+	mrEnv *env.MultiRepoEnv,
+	query string,
+	format resultFormat,
 ) errhand.VerboseError {
 	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
@@ -1431,11 +1431,11 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
 func newSqlEngine(
-		ctx context.Context,
-		config config.ReadWriteConfig,
-		fs filesys.Filesys,
-		format resultFormat,
-		dbs ...dsqle.SqlDatabase,
+	ctx context.Context,
+	config config.ReadWriteConfig,
+	fs filesys.Filesys,
+	format resultFormat,
+	dbs ...dsqle.SqlDatabase,
 ) (*sqlEngine, error) {
 	au := new(auth.None)
 

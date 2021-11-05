@@ -42,13 +42,13 @@ type EnvNameAndPath struct {
 // MultiRepoEnv is a type used to store multiple environments which can be retrieved by name
 type MultiRepoEnv struct {
 	envs []NamedEnv
-	fs filesys.Filesys
-	cfg config.ReadWriteConfig
+	fs   filesys.Filesys
+	cfg  config.ReadWriteConfig
 }
 
 type NamedEnv struct {
 	name string
-	env *DoltEnv
+	env  *DoltEnv
 }
 
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
@@ -193,8 +193,8 @@ func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error
 
 	mrEnv := &MultiRepoEnv{
 		envs: make([]NamedEnv, 0),
-		fs: dEnv.FS,
-		cfg: localCfg,
+		fs:   dEnv.FS,
+		cfg:  localCfg,
 	}
 
 	mrEnv.AddEnv(dbName, dEnv)
@@ -264,11 +264,11 @@ func MultiEnvForDirectory(
 // LoadMultiEnv takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
 // MultiRepoEnv
 func LoadMultiEnv(
-		ctx context.Context,
-		hdp HomeDirProvider,
-		fs filesys.Filesys,
-		version string,
-		envNamesAndPaths ...EnvNameAndPath,
+	ctx context.Context,
+	hdp HomeDirProvider,
+	fs filesys.Filesys,
+	version string,
+	envNamesAndPaths ...EnvNameAndPath,
 ) (*MultiRepoEnv, error) {
 	nameToPath := make(map[string]string)
 	for _, nameAndPath := range envNamesAndPaths {
