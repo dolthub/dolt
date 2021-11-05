@@ -223,6 +223,44 @@ func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error
 	return mrEnv, nil
 }
 
+// MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
+func MultiEnvForDirectory(
+		ctx context.Context,
+		config config.ReadWriteConfig,
+		fs filesys.Filesys,
+		version string,
+) (*MultiRepoEnv, error) {
+	mrEnv := &MultiRepoEnv{
+		envs: make([]NamedEnv, 0),
+		fs: fs,
+		cfg: config,
+	}
+
+	// If there are other directories in the directory, try to load them as additional databases
+	fs.Iter(".", false, func(path string, size int64, isDir bool) (stop bool) {
+		if !isDir {
+			return false
+		}
+
+		dir := filepath.Base(path)
+
+		newFs, err := fs.WithWorkingDir(dir)
+		if err != nil {
+			return false
+		}
+
+		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
+		if newEnv.Valid() {
+			mrEnv.AddEnv(dirToDBName(dir), newEnv)
+		}
+
+		return false
+	})
+
+	return mrEnv, nil
+}
+
+
 // LoadMultiEnv takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
 // MultiRepoEnv
 func LoadMultiEnv(

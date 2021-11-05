@@ -1139,6 +1139,13 @@ while True:
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
+
+    cd ..
+    
+    # make sure the databases exist on restart
+    stop_sql_server
+    start_sql_server
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2"
 }
 
 @test "sql-server: create database errors" {
@@ -1195,6 +1202,12 @@ while True:
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
+
+    cd ../
+    # make sure the databases exist on restart
+    stop_sql_server
+    start_sql_server
+    server_query "" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1\ntest2"
 }
     
 @test "sql-server: fetch uses database tempdir from different working directory" {
