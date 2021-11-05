@@ -477,21 +477,21 @@ SQL
     dolt commit -m 'add more values to branch 1.'
     dolt push --set-upstream origin branch1
 
-    # CHANGE 2: add more data to branch1
+    # CHANGE 2: add more data to branch2
     dolt checkout -b branch2 remotes/origin/branch2
     dolt sql -q 'insert into test (id) values (103), (104), (105);'
     dolt add .
     dolt commit -m 'add more values to branch 2.'
     dolt push --set-upstream origin branch2
 
-    # CHANGE 3: create_remote_branch "branch-three"
+    # CHANGE 3: create_remote_branch "branch3"
     dolt checkout -b branch3
     dolt sql -q 'insert into test (id) values (7), (8), (9);'
     dolt add .
     dolt commit -m 'add some values to branch 3.'
     dolt push --set-upstream origin branch3
 
-    # CHANGE 4: create_remote_branch "branch-four"
+    # CHANGE 4: create_remote_branch "branch4"
     dolt checkout -b branch4
     dolt sql -q 'insert into test (id) values (10), (11), (12);'
     dolt add .
