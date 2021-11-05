@@ -177,7 +177,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	serverConfig, err := GetServerConfig(dEnv, apr, true)
+	serverConfig, err := GetServerConfig(dEnv, apr)
 
 	if err != nil {
 		if serverController != nil {
@@ -205,14 +205,14 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	return 0
 }
 
-func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requiresRepo bool) (ServerConfig, error) {
+func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
 		return getYAMLServerConfig(dEnv.FS, cfgFile)
 	}
-	return getCommandLineServerConfig(dEnv, apr, requiresRepo)
+	return getCommandLineServerConfig(dEnv, apr)
 }
 
-func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, requiresRepo bool) (ServerConfig, error) {
+func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	serverConfig := DefaultServerConfig()
 
 	if host, ok := apr.GetValue(hostFlag); ok {
@@ -250,10 +250,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		}
 
 		serverConfig.withDBNamesAndPaths(dbNamesAndPaths)
-	} else if requiresRepo {
-		if !cli.CheckEnvIsValid(dEnv) {
-			return nil, errors.New("not a valid dolt directory")
-		}
 	}
 
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {

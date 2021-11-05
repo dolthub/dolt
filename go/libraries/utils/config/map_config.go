@@ -30,6 +30,10 @@ func NewMapConfig(properties map[string]string) *MapConfig {
 	return &MapConfig{properties}
 }
 
+func NewEmptyMapConfig() *MapConfig {
+	return &MapConfig{make(map[string]string)}
+}
+
 // GetString retrieves a value for a given key.
 func (mc *MapConfig) GetString(k string) (string, error) {
 	if val, ok := mc.properties[k]; ok {

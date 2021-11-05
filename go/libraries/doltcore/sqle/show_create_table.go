@@ -35,7 +35,7 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Conte
 		sql.WithTracer(tracing.Tracer(ctx)))
 
 	var cfg config.ReadableConfig = nil
-	pro := NewDoltDatabaseProvider(cfg, sqlDb)
+	pro := NewDoltDatabaseProvider(cfg, nil, sqlDb)
 	engine := sqle.NewDefault(pro)
 	sqlCtx.SetCurrentDatabase(sqlDb.Name())
 	return sqlCtx, engine, sess

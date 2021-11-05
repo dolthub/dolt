@@ -140,7 +140,7 @@ func IsWorkingKey(key string) (bool, string) {
 	return false, ""
 }
 
-// Session is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
+// Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type Session struct {
 	sql.Session
 	batchMode batchMode

@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -57,8 +58,11 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
-	pro := sqle.NewDoltDatabaseProvider(dEnv.Config)
-	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, dEnv.Config)
+	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS).WithDbFactoryUrl(doltdb.InMemDoltDB)
+
+	localConfig := dEnv.Config.WriteableConfig()
+
+	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, localConfig)
 	require.NoError(t, err)
 	return &DoltHarness{
 		t:              t,
@@ -132,12 +136,14 @@ func (d *DoltHarness) NewSession() *sql.Context {
 	dbs := dsqleDBsAsSqlDBs(d.databases)
 	pro := d.NewDatabaseProvider(dbs...)
 
+	localConfig := d.env.Config.WriteableConfig()
+
 	var err error
 	d.session, err = dsess.NewDoltSession(
 		enginetest.NewContext(d),
 		enginetest.NewBaseSession(),
 		pro.(dsess.RevisionDatabaseProvider),
-		d.env.Config,
+		localConfig,
 		states...,
 	)
 	require.NoError(d.t, err)
@@ -193,7 +199,7 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 }
 
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
-	return sqle.NewDoltDatabaseProvider(d.env.Config, dbs...)
+	return sqle.NewDoltDatabaseProvider(d.env.Config, d.env.FS, dbs...).WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
 func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
