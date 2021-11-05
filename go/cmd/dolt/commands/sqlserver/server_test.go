@@ -396,7 +396,7 @@ func TestReadReplica(t *testing.T) {
 	readReplicaDbName := multiSetup.DbNames[0]
 	sourceDbName := multiSetup.DbNames[1]
 
-	localCfg, ok := multiSetup.MrEnv[readReplicaDbName].Config.GetConfig(env.LocalConfig)
+	localCfg, ok := multiSetup.MrEnv.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
@@ -410,7 +410,7 @@ func TestReadReplica(t *testing.T) {
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 		go func() {
-			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readReplicaDbName])
+			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
 		}()
 		err = sc.WaitForStart()
 		require.NoError(t, err)

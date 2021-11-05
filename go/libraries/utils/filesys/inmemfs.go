@@ -87,6 +87,8 @@ type InMemFS struct {
 	objs   map[string]memObj
 }
 
+var _ Filesys = (*InMemFS)(nil)
+
 // EmptyInMemFS creates an empty InMemFS instance
 func EmptyInMemFS(workingDir string) *InMemFS {
 	return NewInMemFS([]string{}, map[string][]byte{}, workingDir)
@@ -133,6 +135,17 @@ func NewInMemFS(dirs []string, files map[string][]byte, cwd string) *InMemFS {
 	}
 
 	return fs
+}
+
+// WithWorkingDir returns a copy of this file system with the current working dir set to the path given
+func (fs InMemFS) WithWorkingDir(path string) (Filesys, error) {
+	abs, err := fs.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	fs.cwd = abs
+	return &fs, nil
 }
 
 func (fs *InMemFS) getAbsPath(path string) string {
