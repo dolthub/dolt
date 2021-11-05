@@ -15,7 +15,6 @@
 package val
 
 import (
-	"encoding/binary"
 	"math"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -111,6 +110,12 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	return tup
 }
 
+func CloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
+	buf := pool.Get(uint64(len(tup)))
+	copy(buf, tup)
+	return buf
+}
+
 func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tuple, offs Offsets, ms memberMask) {
 	offSz := OffsetsSize(values)
 	maskSz := maskSize(fields)
@@ -127,11 +132,6 @@ func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tupl
 
 // GetField returns the value for field |i|.
 func (tup Tuple) GetField(i int) []byte {
-	if i < 0 {
-		// supports negative indexing
-		i = tup.fieldCount() + i
-	}
-
 	// first check if the field is NULL
 	if !tup.mask().present(i) {
 		return NULL
@@ -151,9 +151,13 @@ func (tup Tuple) size() ByteSize {
 	return ByteSize(len(tup))
 }
 
+func (tup Tuple) Count() int {
+	return tup.fieldCount()
+}
+
 func (tup Tuple) fieldCount() int {
 	sl := tup[tup.size()-numFieldsSize:]
-	return int(binary.LittleEndian.Uint16(sl))
+	return int(ReadUint16(sl))
 }
 
 func (tup Tuple) valueCount() int {
@@ -187,5 +191,6 @@ func sizeOf(val []byte) ByteSize {
 }
 
 func writeFieldCount(tup Tuple, count int) {
-	binary.LittleEndian.PutUint16(tup[len(tup)-int(numFieldsSize):], uint16(count))
+	sl := tup[len(tup)-int(numFieldsSize):]
+	WriteUint16(sl, uint16(count))
 }

@@ -32,7 +32,6 @@ func TestTupleBuilder(t *testing.T) {
 
 func smokeTestTupleBuilder(t *testing.T) {
 	desc := NewTupleDescriptor(
-		testCompare,
 		Type{Enc: Int8Enc},
 		Type{Enc: Int16Enc},
 		Type{Enc: Int32Enc},
@@ -108,13 +107,13 @@ func testRoundTripInts(t *testing.T) {
 		data map[int]int64
 	}{
 		{
-			desc: NewTupleDescriptor(testCompare, typ),
+			desc: NewTupleDescriptor(typ),
 			data: map[int]int64{
 				0: 0,
 			},
 		},
 		{
-			desc: NewTupleDescriptor(testCompare, typ, typ, typ),
+			desc: NewTupleDescriptor(typ, typ, typ),
 			data: map[int]int64{
 				0: 0,
 				1: 1,
@@ -122,13 +121,13 @@ func testRoundTripInts(t *testing.T) {
 			},
 		},
 		{
-			desc: NewTupleDescriptor(testCompare, typ),
+			desc: NewTupleDescriptor(typ),
 			data: map[int]int64{
 				// 0: NULL,
 			},
 		},
 		{
-			desc: NewTupleDescriptor(testCompare, typ, typ, typ),
+			desc: NewTupleDescriptor(typ, typ, typ),
 			data: map[int]int64{
 				// 0: NULL,
 				// 1: NULL,
