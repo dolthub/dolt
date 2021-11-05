@@ -76,12 +76,14 @@ var sqlDocs = cli.CommandDocumentationContent{
 
 By default, {{.EmphasisLeft}}-q{{.EmphasisRight}} executes a single statement. To execute multiple SQL statements separated by semicolons, use {{.EmphasisLeft}}-b{{.EmphasisRight}} to enable batch mode. Queries can be saved with {{.EmphasisLeft}}-s{{.EmphasisRight}}. Alternatively {{.EmphasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name. Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update script. 
 
-By default this command uses the dolt data repository in the current working directory as the one and only database. Running with {{.EmphasisLeft}}--multi-db-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
+By default this command uses the dolt data repository in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created are placed in the current directory as well. Running with {{.EmphasisLeft}}--multi-db-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
 
 	Synopsis: []string{
+		"",
+		"< script.sql",
 		"[--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r {{.LessThan}}result format{{.GreaterThan}}]",
-		"-q {{.LessThan}}query;query{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] -s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}} [-b] [{{.LessThan}}commit{{.GreaterThan}}]",
-		"-q {{.LessThan}}query;query{{.GreaterThan}} --multi-db-dir {{.LessThan}}directory{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-b]",
+		"-q {{.LessThan}}query{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}] [-b]",
+		"-q {{.LessThan}}query{{.GreaterThan}} --multi-db-dir {{.LessThan}}directory{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-b]",
 		"-x {{.LessThan}}name{{.GreaterThan}}",
 		"--list-saved",
 	},
@@ -239,11 +241,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(ctx, apr, query, continueOnError, mrEnv, format, usage, initialRoots, currentDb)
+		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(ctx, initialRoots, currentDb, savedQueryName, usage, dEnv, mrEnv, format)
+		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, currentDb, format, usage)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueriesMode(ctx, initialRoots, currentDb, usage, dEnv, mrEnv, format)
+		return listSavedQueriesMode(ctx, mrEnv, initialRoots, currentDb, format, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		runInBatchMode := true
@@ -279,7 +281,14 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return 0
 }
 
-func listSavedQueriesMode(ctx context.Context, initialRoots map[string]*doltdb.RootValue, currentDb string, usage cli.UsagePrinter, dEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, format resultFormat) int {
+func listSavedQueriesMode(
+		ctx context.Context,
+		mrEnv *env.MultiRepoEnv,
+		initialRoots map[string]*doltdb.RootValue,
+		currentDb string,
+		format resultFormat,
+		usage cli.UsagePrinter,
+) int {
 	hasQC, err := initialRoots[currentDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
 	if err != nil {
@@ -295,7 +304,15 @@ func listSavedQueriesMode(ctx context.Context, initialRoots map[string]*doltdb.R
 	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, currentDb), usage)
 }
 
-func savedQueryMode(ctx context.Context, initialRoots map[string]*doltdb.RootValue, currentDb string, savedQueryName string, usage cli.UsagePrinter, dEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, format resultFormat) int {
+func savedQueryMode(
+		ctx context.Context,
+		mrEnv *env.MultiRepoEnv,
+		initialRoots map[string]*doltdb.RootValue,
+		savedQueryName string,
+		currentDb string,
+		format resultFormat,
+		usage cli.UsagePrinter,
+) int {
 	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
 
 	if err != nil {
@@ -308,17 +325,17 @@ func savedQueryMode(ctx context.Context, initialRoots map[string]*doltdb.RootVal
 
 func queryMode(
 		ctx context.Context,
+		mrEnv *env.MultiRepoEnv,
+		initialRoots map[string]*doltdb.RootValue,
 		apr *argparser.ArgParseResults,
 		query string,
-		continueOnError bool,
-		mrEnv *env.MultiRepoEnv,
+		currentDb string,
 		format resultFormat,
 		usage cli.UsagePrinter,
-		initialRoots map[string]*doltdb.RootValue,
-		currentDb string,
 ) int {
 	batchMode := apr.Contains(BatchFlag)
 	multiStatementMode := apr.Contains(disableBatchFlag)
+	_, continueOnError := apr.GetValue(continueFlag)
 
 	if multiStatementMode {
 		batchInput := strings.NewReader(query)
@@ -357,6 +374,7 @@ func queryMode(
 	return 0
 }
 
+// getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
 func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cmd SqlCmd) (*env.MultiRepoEnv, errhand.VerboseError) {
 	var mrEnv *env.MultiRepoEnv
 	var err error
