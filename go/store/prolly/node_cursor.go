@@ -25,7 +25,6 @@ const (
 )
 
 // nodeCursor explores a tree of Node items.
-// todo(andy): refactor as slice
 type nodeCursor struct {
 	nd     Node
 	idx    int

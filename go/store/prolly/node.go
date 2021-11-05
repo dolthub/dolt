@@ -169,7 +169,6 @@ func (nd Node) size() val.ByteSize {
 	return val.ByteSize(len(nd))
 }
 
-// todo(andy): move (de)serialization to val/codec.go
 func (nd Node) level() int {
 	sl := nd[nd.size()-treeLevelSize:]
 	return int(val.ReadUint8(sl))

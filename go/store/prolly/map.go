@@ -26,8 +26,7 @@ type Map struct {
 	root    Node
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
-	// todo(andy): do we need a metaValue descriptor?
-	ns NodeStore
+	ns      NodeStore
 }
 
 type KeyValueFn func(key, value val.Tuple) error
@@ -127,21 +126,6 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 // IterAll returns a MapIterator that iterates over the entire Map.
 func (m Map) IterAll(ctx context.Context) (MapIter, error) {
 	return m.IterIndexRange(ctx, IndexRange{low: 0, high: m.Count() - 1})
-}
-
-// IterValueRange returns a MapIterator that iterates over an ValueRange.
-func (m Map) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error) {
-	start := nodeItem(rng.lowKey)
-	if rng.reverse {
-		start = nodeItem(rng.highKey)
-	}
-
-	cur, err := newCursorAtItem(ctx, m.ns, m.root, start, m.searchNode)
-	if err != nil {
-		return nil, err
-	}
-
-	return &valueIter{rng: rng, cur: cur}, nil
 }
 
 // IterIndexRange returns a MapIterator that iterates over an IndexRange.

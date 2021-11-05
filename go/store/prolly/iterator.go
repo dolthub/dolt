@@ -25,22 +25,6 @@ type MapIter interface {
 	Next(ctx context.Context) (key, value val.Tuple, err error)
 }
 
-type ValueRange struct {
-	lowKey, highKey val.Tuple
-	inclusiveLow    bool
-	inclusiveHigh   bool
-	reverse         bool
-}
-
-type valueIter struct {
-	rng ValueRange
-	cur nodeCursor
-}
-
-func (it *valueIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	panic("unimplemented")
-}
-
 // IndexRange is an inclusive range of item indexes
 type IndexRange struct {
 	low, high uint64
