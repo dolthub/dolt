@@ -149,7 +149,7 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 	if remoteOK && len(args) == 1 {
 		refSpecStr := args[0]
 
-		refSpecStr, err = DisambiguateRefSpecStr(ctx, ddb, refSpecStr)
+		refSpecStr, err = disambiguateRefSpecStr(ctx, ddb, refSpecStr)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +162,7 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 		remoteName = args[0]
 		refSpecStr := args[1]
 
-		refSpecStr, err = DisambiguateRefSpecStr(ctx, ddb, refSpecStr)
+		refSpecStr, err = disambiguateRefSpecStr(ctx, ddb, refSpecStr)
 		if err != nil {
 			return nil, err
 		}
@@ -314,7 +314,7 @@ func ParseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error)
 
 // if possible, convert refs to full spec names. prefer branches over tags.
 // eg "main" -> "refs/heads/main", "v1" -> "refs/tags/v1"
-func DisambiguateRefSpecStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr string) (string, error) {
+func disambiguateRefSpecStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr string) (string, error) {
 	brachRefs, err := ddb.GetBranches(ctx)
 
 	if err != nil {
