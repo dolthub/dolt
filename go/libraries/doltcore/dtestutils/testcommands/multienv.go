@@ -148,7 +148,7 @@ func (mr *MultiRepoTestSetup) NewRemote(remoteName string) {
 }
 
 func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
-	dEnv := mr.MrEnv[dbName]
+	dEnv := mr.MrEnv.GetEnv(dbName)
 	err := actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(), branchName, "head", false)
 	if err != nil {
 		mr.Errhand(err)
@@ -156,7 +156,7 @@ func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
 }
 
 func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
-	dEnv := mr.MrEnv[dbName]
+	dEnv := mr.MrEnv.GetEnv(dbName)
 	err := actions.CheckoutBranch(context.Background(), dEnv, branchName)
 	if err != nil {
 		mr.Errhand(err)

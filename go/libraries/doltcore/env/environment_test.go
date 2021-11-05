@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -268,5 +269,23 @@ func TestBestEffortDelete(t *testing.T) {
 
 	if !isCWDEmpty(dEnv) {
 		t.Error("Dir should be empty after delete.")
+	}
+}
+
+func TestCommitHooksNoErrors(t *testing.T) {
+	dEnv, _ := createTestEnv(true, true)
+	AddDoltSystemVariables()
+	sql.SystemVariables.SetGlobal(SkipReplicationErrorsKey, true)
+	sql.SystemVariables.SetGlobal(ReplicateToRemoteKey, "unknown")
+	hooks, err := GetCommitHooks(context.Background(), dEnv)
+	assert.NoError(t, err)
+	if len(hooks) < 1 {
+		t.Error("failed to produce noop hook")
+	} else {
+		switch h := hooks[0].(type) {
+		case *doltdb.LogHook:
+		default:
+			t.Errorf("expected LogHook, found: %s", h)
+		}
 	}
 }

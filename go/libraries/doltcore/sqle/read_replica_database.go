@@ -16,6 +16,8 @@ package sqle
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -45,9 +47,11 @@ var _ sql.TriggerDatabase = &ReadReplicaDatabase{}
 var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
 var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
+var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
+
 var EmptyReadReplica = ReadReplicaDatabase{}
 
-func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string, meta *doltdb.WorkingSetMeta) (ReadReplicaDatabase, error) {
+func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string) (ReadReplicaDatabase, error) {
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
 		return EmptyReadReplica, err
@@ -55,7 +59,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 
 	remote, ok := remotes[remoteName]
 	if !ok {
-		return EmptyReadReplica, env.ErrRemoteNotFound
+		return EmptyReadReplica, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
 	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default)
@@ -91,30 +95,32 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 }
 
 func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	err := rrd.pullFromReplica(ctx)
-	if err != nil {
-		return nil, err
+	if rrd.srcDB != nil {
+		err := rrd.pullFromReplica(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ctx.GetLogger().Warn("replication failure; dolt_replication_remote value is misconfigured")
 	}
 	return rrd.Database.StartTransaction(ctx, tCharacteristic)
 }
 
 func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateHeadsStrategy); ok {
-		switch val {
-		case doltdb.ReplicateHeads_MANY:
-			err := fetchBranches(ctx, rrd)
-			if err != nil {
-				return err
-			}
-			return fetchRef(ctx, rrd, rrd.headRef)
-		case doltdb.ReplicateHeads_ONE:
-			return fetchRef(ctx, rrd, rrd.headRef)
-		default:
-			return fetchRef(ctx, rrd, rrd.headRef)
-		}
-	} else {
-		return sql.ErrUnknownSystemVariable.New(doltdb.ReplicateHeadsStrategy)
+	_, val, ok := sql.SystemVariables.GetGlobal(env.ReplicateHeadsStrategy)
+	if !ok {
+		return sql.ErrUnknownSystemVariable.New(env.ReplicateHeadsStrategy)
 	}
+	switch val {
+	case env.ReplicateHeads_MANY:
+		err := fetchBranches(ctx, rrd)
+		if err != nil {
+			return err
+		}
+	case env.ReplicateHeads_ONE:
+	default:
+	}
+	return fetchRef(ctx, rrd, rrd.headRef)
 }
 
 func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, head ref.DoltRef) error {

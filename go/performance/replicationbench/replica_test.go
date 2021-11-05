@@ -28,7 +28,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
@@ -120,7 +119,7 @@ func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg 
 	if !ok {
 		b.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{doltdb.ReplicateToRemoteKey: "remote1"})
+	localCfg.SetStrings(map[string]string{env.ReplicateToRemoteKey: "remote1"})
 
 	yaml := []byte(fmt.Sprintf(`
 log_level: warning

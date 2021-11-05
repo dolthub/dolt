@@ -58,33 +58,6 @@ const (
 	tempTablesDir = "temptf"
 )
 
-func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
-	postCommitHooks := make([]datas.CommitHook, 0)
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey); ok && val != "" {
-		backupName, ok := val.(string)
-		if !ok {
-			return nil, sql.ErrInvalidSystemVariableValue.New(val)
-		}
-
-		remotes, err := dEnv.GetRemotes()
-		if err != nil {
-			return nil, err
-		}
-		rem, ok := remotes[backupName]
-		if !ok {
-			return nil, ErrRemoteNotFound
-		}
-		ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
-		if err != nil {
-			return nil, err
-		}
-		replicateHook := doltdb.NewReplicateHook(ddb, dEnv.TempTableFilesDir())
-		postCommitHooks = append(postCommitHooks, replicateHook)
-	}
-
-	return postCommitHooks, nil
-}
-
 var zeroHashStr = (hash.Hash{}).String()
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
@@ -1303,3 +1276,84 @@ func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
 func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), dEnv.TempTableFilesDir())
 }
+
+func getPushOnWriteHook(ctx context.Context, dEnv *DoltEnv) (*doltdb.PushOnWriteHook, error) {
+	_, val, ok := sql.SystemVariables.GetGlobal(ReplicateToRemoteKey)
+	if !ok {
+		return nil, sql.ErrUnknownSystemVariable.New(SkipReplicationErrorsKey)
+	} else if val == "" {
+		return nil, nil
+	}
+	remoteName, ok := val.(string)
+	if !ok {
+		return nil, sql.ErrInvalidSystemVariableValue.New(val)
+	}
+
+	remotes, err := dEnv.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+	rem, ok := remotes[remoteName]
+	if !ok {
+		return nil, fmt.Errorf("%w: '%s'", ErrRemoteNotFound, remoteName)
+	}
+	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
+
+	if err != nil {
+		return nil, err
+	}
+	pushHook := doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir())
+	return pushHook, nil
+}
+
+// GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
+// replace misconfigured hooks with doltdb.LogHook instances that prints a warning when trying to execute.
+func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
+	postCommitHooks := make([]datas.CommitHook, 0)
+	var skipErrors bool
+	if _, val, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrorsKey); !ok {
+		return nil, sql.ErrUnknownSystemVariable.New(SkipReplicationErrorsKey)
+	} else if val == int8(1) {
+		skipErrors = true
+	}
+
+	if hook, err := getPushOnWriteHook(ctx, dEnv); err != nil {
+		err = fmt.Errorf("failure loading hook; %w", err)
+		if skipErrors {
+			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
+		} else {
+			return nil, err
+		}
+	} else if hook != nil {
+		postCommitHooks = append(postCommitHooks, hook)
+	}
+
+	return postCommitHooks, nil
+}
+
+//func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
+//	postCommitHooks := make([]datas.CommitHook, 0)
+//	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey); ok && val != "" {
+//		backupName, ok := val.(string)
+//		if !ok {
+//			return nil, sql.ErrInvalidSystemVariableValue.New(val)
+//		}
+//
+//		remotes, err := dEnv.GetRemotes()
+//		if err != nil {
+//			return nil, err
+//		}
+//		rem, ok := remotes[backupName]
+//		if !ok {
+//			return nil, ErrRemoteNotFound
+//		}
+//		ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
+//		if err != nil {
+//			return nil, err
+//		}
+//		replicateHook := doltdb.NewReplicateHook(ddb, dEnv.TempTableFilesDir())
+//		postCommitHooks = append(postCommitHooks, replicateHook)
+//	}
+//
+//	return postCommitHooks, nil
+//}

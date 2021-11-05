@@ -66,8 +66,6 @@ const (
 	invalidBatchMode batchMode = iota
 	insertBatchMode
 	deleteBatchMode
-
-	currentBatchModeKey = "batch_mode"
 )
 
 var sqlDocs = cli.CommandDocumentationContent{
@@ -108,40 +106,7 @@ const (
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
 func init() {
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
-			Name:              currentBatchModeKey,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemIntType(currentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
-			Default:           int64(0),
-		},
-		{
-			Name:              dsess.DoltDefaultBranchKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(dsess.DoltDefaultBranchKey),
-			Default:           "",
-		},
-		{
-			Name:              doltdb.ReplicateToRemoteKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(doltdb.ReplicateToRemoteKey),
-			Default:           "",
-		},
-		{
-			Name:              doltdb.DoltReadReplicaKey,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemStringType(doltdb.DoltReadReplicaKey),
-			Default:           "",
-		},
-	})
+	env.AddDoltSystemVariables()
 }
 
 type SqlCmd struct {
@@ -502,6 +467,35 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData(), opts)
 }
 
+// newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
+// skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
+// that will log warnings when attempting to perform replica commands.
+func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
+	var skipErrors bool
+	if _, val, ok := sql.SystemVariables.GetGlobal(env.SkipReplicationErrorsKey); !ok {
+		return dsqle.ReadReplicaDatabase{}, sql.ErrUnknownSystemVariable.New(env.SkipReplicationErrorsKey)
+	} else if val == int8(1) {
+		skipErrors = true
+	}
+
+	opts := editor.Options{
+		Deaf: dEnv.DbEaFactory(),
+	}
+
+	db := dsqle.NewDatabase(name, dEnv.DbData(), opts)
+
+	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
+	if err != nil {
+		err = fmt.Errorf("%w from remote '%s'; %s", dsqle.ErrFailedToLoadReplicaDB, remoteName, err.Error())
+		if !skipErrors {
+			return dsqle.ReadReplicaDatabase{}, err
+		}
+		cli.Println(err)
+		return dsqle.ReadReplicaDatabase{Database: db}, nil
+	}
+	return rrd, nil
+}
+
 func execQuery(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
@@ -552,13 +546,12 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsqle.SqlDataba
 
 		db = newDatabase(name, dEnv)
 
-		if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok && val != "" {
-			remoteName, ok := val.(string)
+		if _, remote, ok := sql.SystemVariables.GetGlobal(env.ReadReplicaRemoteKey); ok && remote != "" {
+			remoteName, ok := remote.(string)
 			if !ok {
-				return true, sql.ErrInvalidSystemVariableValue.New(val)
+				return true, sql.ErrInvalidSystemVariableValue.New(remote)
 			}
-
-			db, err = dsqle.NewReadReplicaDatabase(ctx, db.(dsqle.Database), remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir(), doltdb.TodoWorkingSetMeta())
+			db, err = newReplicaDatabase(ctx, name, remoteName, dEnv)
 			if err != nil {
 				return true, err
 			}
@@ -1184,7 +1177,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 	}
 
 	currentBatchMode := invalidBatchMode
-	if v, err := ctx.GetSessionVariable(ctx, currentBatchModeKey); err == nil {
+	if v, err := ctx.GetSessionVariable(ctx, env.CurrentBatchModeKey); err == nil {
 		currentBatchMode = batchMode(v.(int64))
 	} else {
 		return err
@@ -1204,7 +1197,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 		}
 	}
 
-	err = ctx.SetSessionVariable(ctx, currentBatchModeKey, int64(newBatchMode))
+	err = ctx.SetSessionVariable(ctx, env.CurrentBatchModeKey, int64(newBatchMode))
 	if err != nil {
 		return err
 	}
@@ -1505,6 +1498,11 @@ func newSqlEngine(
 	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, config, dbStates...)
 	if err != nil {
 		return nil, err
+	}
+
+	// this is overwritten only for server sessions
+	for _, db := range dbs {
+		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}
 
 	// TODO: this should just be the session default like it is with MySQL

@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -400,8 +399,8 @@ func TestReadReplica(t *testing.T) {
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
-	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{doltdb.DoltReadReplicaKey: "remote1", doltdb.ReplicateHeadsStrategy: "many"})
-	dsess.InitPersistedSystemVars(multiSetup.MrEnv[readReplicaDbName])
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{env.DoltReadReplicaKey: "remote1", env.ReplicateHeadsStrategy: "many"})
+	dsess.InitPersistedSystemVars(multiSetup.MrEnv.GetEnv(readReplicaDbName))
 
 	// start server as read replica
 	sc := CreateServerController()

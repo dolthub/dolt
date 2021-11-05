@@ -144,3 +144,45 @@ teardown() {
     cd repo2
     dolt fetch origin new_feature
 }
+
+@test "replication: no remote error" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE unknown
+    run dolt sql -q "create table t1 (a int primary key)"
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "failure loading hook; remote not found: 'unknown'" ]] || false
+}
+
+@test "replication: quiet replication warnings" {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE unknown
+    run dolt sql -q "create table t1 (a int primary key)"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "remote not found" ]] || false
+
+    run dolt sql -q "select dolt_commit('-am', 'cm')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "failure loading hook; remote not found: 'unknown'" ]] || false
+    [[ "$output" =~ "dolt_commit('-am', 'cm')" ]] || false
+}
+
+@test "replication: replica sink bad source no errors with standard commands" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE unknown
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "remote not found: 'unknown'" ]] || false
+}
+
+@test "replication: replica sink errors" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE unknown
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]]
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+}
