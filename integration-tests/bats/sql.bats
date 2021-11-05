@@ -616,12 +616,9 @@ SQL
 }
 
 @test "sql: run outside a dolt directory" {
-    skip "Doesn't work yet"
-
     mkdir new && cd new
-    dolt sql
 
-        dolt sql --disable-batch <<SQL
+    dolt sql --disable-batch <<SQL
 CREATE DATABASE test1;
 USE test1;
 CREATE TABLE table_a(x int primary key);
