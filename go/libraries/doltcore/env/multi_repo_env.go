@@ -225,15 +225,15 @@ func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given
 func MultiEnvForDirectory(
-		ctx context.Context,
-		config config.ReadWriteConfig,
-		fs filesys.Filesys,
-		version string,
+	ctx context.Context,
+	config config.ReadWriteConfig,
+	fs filesys.Filesys,
+	version string,
 ) (*MultiRepoEnv, error) {
 	mrEnv := &MultiRepoEnv{
 		envs: make([]NamedEnv, 0),
-		fs: fs,
-		cfg: config,
+		fs:   fs,
+		cfg:  config,
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
@@ -259,7 +259,6 @@ func MultiEnvForDirectory(
 
 	return mrEnv, nil
 }
-
 
 // LoadMultiEnv takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
 // MultiRepoEnv
