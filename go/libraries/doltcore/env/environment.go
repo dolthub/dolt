@@ -1273,13 +1273,13 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 }
 
 func getPushOnWriteHook(ctx context.Context, dEnv *DoltEnv) (*doltdb.PushOnWriteHook, error) {
-	_, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey)
+	_, val, ok := sql.SystemVariables.GetGlobal(ReplicateToRemoteKey)
 	if !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(doltdb.SkipReplicationErrorsKey)
+		return nil, sql.ErrUnknownSystemVariable.New(SkipReplicationErrorsKey)
 	} else if val == "" {
 		return nil, nil
 	}
-	backupName, ok := val.(string)
+	remoteName, ok := val.(string)
 	if !ok {
 		return nil, sql.ErrInvalidSystemVariableValue.New(val)
 	}
@@ -1288,9 +1288,9 @@ func getPushOnWriteHook(ctx context.Context, dEnv *DoltEnv) (*doltdb.PushOnWrite
 	if err != nil {
 		return nil, err
 	}
-	rem, ok := remotes[backupName]
+	rem, ok := remotes[remoteName]
 	if !ok {
-		return nil, fmt.Errorf("%w: '%s'", ErrRemoteNotFound, backupName)
+		return nil, fmt.Errorf("%w: '%s'", ErrRemoteNotFound, remoteName)
 	}
 	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
 
@@ -1306,8 +1306,8 @@ func getPushOnWriteHook(ctx context.Context, dEnv *DoltEnv) (*doltdb.PushOnWrite
 func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
 	var skipErrors bool
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.SkipReplicationErrorsKey); !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(doltdb.SkipReplicationErrorsKey)
+	if _, val, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrorsKey); !ok {
+		return nil, sql.ErrUnknownSystemVariable.New(SkipReplicationErrorsKey)
 	} else if val == int8(1) {
 		skipErrors = true
 	}

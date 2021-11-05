@@ -111,7 +111,7 @@ teardown() {
 
 @test "replication: quiet replication warnings" {
     cd repo1
-    dolt config --local --add sqlserver.global.dolt_skip_replication_errors true
+    dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
     dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE unknown
     run dolt sql -q "create table t1 (a int primary key)"
     [ "$status" -eq 0 ]

@@ -139,12 +139,12 @@ func TestSetPersistedValue(t *testing.T) {
 		{
 			Name:        "bool",
 			Value:       true,
-			ExpectedRes: "1",
+			Err:   sql.ErrInvalidType,
 		},
 		{
 			Name:        "bool",
 			Value:       false,
-			ExpectedRes: "0",
+			Err:   sql.ErrInvalidType,
 		},
 		{
 			Value: complex64(7),
@@ -172,7 +172,7 @@ func TestGetPersistedValue(t *testing.T) {
 		Name        string
 		Value       string
 		ExpectedRes interface{}
-		Err         *errors.Kind
+		Err         bool
 	}{
 		{
 			Name:        "long_query_time",
@@ -197,12 +197,12 @@ func TestGetPersistedValue(t *testing.T) {
 		{
 			Name:        "activate_all_roles_on_login",
 			Value:       "true",
-			ExpectedRes: int8(1),
+			Err:   true,
 		},
 		{
 			Name:        "activate_all_roles_on_login",
 			Value:       "on",
-			ExpectedRes: int8(1),
+			Err:   true,
 		},
 		{
 			Name:        "activate_all_roles_on_login",
@@ -212,12 +212,12 @@ func TestGetPersistedValue(t *testing.T) {
 		{
 			Name:        "activate_all_roles_on_login",
 			Value:       "false",
-			ExpectedRes: int8(0),
+			Err:   true,
 		},
 		{
 			Name:        "activate_all_roles_on_login",
 			Value:       "off",
-			ExpectedRes: int8(0),
+			Err:   true,
 		},
 		{
 			Name:        "activate_all_roles_on_login",
@@ -229,8 +229,8 @@ func TestGetPersistedValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			conf := config.NewMapConfig(map[string]string{tt.Name: tt.Value})
-			if val, err := getPersistedValue(conf, tt.Name); tt.Err != nil {
-				assert.True(t, tt.Err.Is(err))
+			if val, err := getPersistedValue(conf, tt.Name); tt.Err {
+				assert.Error(t, err)
 			} else {
 				assert.Equal(t, tt.ExpectedRes, val)
 			}

@@ -67,7 +67,7 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 			dsqlDBs = append(dsqlDBs, v)
 		case ReadOnlyDatabase, *UserSpaceDatabase:
 		default:
-			// max: esoteric analyzer errors happen if we silently drop databases
+			// esoteric analyzer errors occur if we silently drop databases, usually caused by pointer receivers
 			panic("cannot cast to SqlDatabase")
 		}
 	}

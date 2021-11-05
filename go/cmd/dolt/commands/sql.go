@@ -102,7 +102,7 @@ const (
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
 func init() {
-	doltdb.AddDoltSystemVariables()
+	env.AddDoltSystemVariables()
 }
 
 type SqlCmd struct {
@@ -469,17 +469,12 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 // newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
 // skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
 // that will log warnings when attempting to perform replica commands.
-func newReplicaDatabase(ctx context.Context, name string, remoteName interface{}, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
+func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
 	var skipErrors bool
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.SkipReplicationErrorsKey); !ok {
-		return dsqle.ReadReplicaDatabase{}, sql.ErrUnknownSystemVariable.New(doltdb.SkipReplicationErrorsKey)
+	if _, val, ok := sql.SystemVariables.GetGlobal(env.SkipReplicationErrorsKey); !ok {
+		return dsqle.ReadReplicaDatabase{}, sql.ErrUnknownSystemVariable.New(env.SkipReplicationErrorsKey)
 	} else if val == int8(1) {
 		skipErrors = true
-	}
-
-	remote, ok := remoteName.(string)
-	if !ok && !skipErrors {
-		return dsqle.ReadReplicaDatabase{}, sql.ErrInvalidSystemVariableValue.New(doltdb.ReadReplicaRemoteKey)
 	}
 
 	opts := editor.Options{
@@ -488,9 +483,9 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName interface{}
 
 	db := dsqle.NewDatabase(name, dEnv.DbData(), opts)
 
-	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remote, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
+	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
 	if err != nil {
-		err = fmt.Errorf("%w from remote '%s'; %s", dsqle.ErrFailedToLoadReplicaDB, remote, err.Error())
+		err = fmt.Errorf("%w from remote '%s'; %s", dsqle.ErrFailedToLoadReplicaDB, remoteName, err.Error())
 		if !skipErrors {
 			return dsqle.ReadReplicaDatabase{}, err
 		}
@@ -552,8 +547,12 @@ func CollectDBs(ctx context.Context, mrEnv env.MultiRepoEnv) ([]dsqle.SqlDatabas
 
 		db = newDatabase(name, dEnv)
 
-		if _, remote, ok := sql.SystemVariables.GetGlobal(doltdb.ReadReplicaRemoteKey); ok && remote != "" {
-			db, err = newReplicaDatabase(ctx, name, remote, dEnv)
+		if _, remote, ok := sql.SystemVariables.GetGlobal(env.ReadReplicaRemoteKey); ok && remote != "" {
+			remoteName, ok := remote.(string)
+			if !ok {
+				return true, sql.ErrInvalidSystemVariableValue.New(remote)
+			}
+			db, err = newReplicaDatabase(ctx, name, remoteName, dEnv)
 			if err != nil {
 				return true, err
 			}
@@ -1179,7 +1178,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 	}
 
 	currentBatchMode := invalidBatchMode
-	if v, err := ctx.GetSessionVariable(ctx, doltdb.CurrentBatchModeKey); err == nil {
+	if v, err := ctx.GetSessionVariable(ctx, env.CurrentBatchModeKey); err == nil {
 		currentBatchMode = batchMode(v.(int64))
 	} else {
 		return err
@@ -1199,7 +1198,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 		}
 	}
 
-	err = ctx.SetSessionVariable(ctx, doltdb.CurrentBatchModeKey, int64(newBatchMode))
+	err = ctx.SetSessionVariable(ctx, env.CurrentBatchModeKey, int64(newBatchMode))
 	if err != nil {
 		return err
 	}

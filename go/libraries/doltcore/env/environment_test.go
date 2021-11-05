@@ -274,9 +274,9 @@ func TestBestEffortDelete(t *testing.T) {
 
 func TestCommitHooksNoErrors(t *testing.T) {
 	dEnv, _ := createTestEnv(true, true)
-	doltdb.AddDoltSystemVariables()
-	sql.SystemVariables.SetGlobal(doltdb.SkipReplicationErrorsKey, true)
-	sql.SystemVariables.SetGlobal(doltdb.ReplicateToRemoteKey, "unknown")
+	AddDoltSystemVariables()
+	sql.SystemVariables.SetGlobal(SkipReplicationErrorsKey, true)
+	sql.SystemVariables.SetGlobal(ReplicateToRemoteKey, "unknown")
 	hooks, err := GetCommitHooks(context.Background(), dEnv)
 	assert.NoError(t, err)
 	if len(hooks) < 1 {

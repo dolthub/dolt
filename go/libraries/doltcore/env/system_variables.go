@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package env
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"

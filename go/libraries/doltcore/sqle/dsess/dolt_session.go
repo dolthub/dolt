@@ -17,7 +17,6 @@ package dsess
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -130,14 +129,9 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 	var res interface{}
 	switch value.(type) {
 	case int8:
-		switch strings.ToLower(v) {
-		case "on", "true", "1":
-			return int8(1), nil
-		case "off", "false", "0":
-			return int8(0), nil
-		default:
-			res, err = strconv.ParseInt(v, 10, 8)
-		}
+		var tmp int64
+		tmp, err = strconv.ParseInt(v, 10, 8)
+		res = int8(tmp)
 	case int, int16, int32, int64:
 		res, err = strconv.ParseInt(v, 10, 64)
 	case uint, uint8, uint16, uint32, uint64:
@@ -145,13 +139,7 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 	case float32, float64:
 		res, err = strconv.ParseFloat(v, 64)
 	case bool:
-		res, err = strconv.ParseBool(v)
-		switch res {
-		case true:
-			res = int8(1)
-		case false:
-			res = int8(0)
-		}
+		return nil, sql.ErrInvalidType.New(value)
 	case string:
 		return v, nil
 	default:
@@ -195,11 +183,7 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 	case string:
 		return config.SetString(conf, key, v)
 	case bool:
-		if v {
-			return config.SetInt(conf, key, int64(1))
-
-		}
-		return config.SetInt(conf, key, int64(0))
+		return sql.ErrInvalidType.New(v)
 	default:
 		return sql.ErrInvalidType.New(v)
 	}

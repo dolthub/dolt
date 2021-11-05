@@ -32,7 +32,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -215,7 +214,7 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 		var init dsess.InitialDbState
 		var err error
 
-		_, val, ok := sql.SystemVariables.GetGlobal(doltdb.DefaultBranchKey)
+		_, val, ok := sql.SystemVariables.GetGlobal(env.DefaultBranchKey)
 		if ok && val != "" {
 			init, err = GetInitialDBStateWithDefaultBranch(ctx, db, val.(string))
 		} else {
