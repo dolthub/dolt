@@ -132,7 +132,7 @@ func generateProllyBench(size uint64) prollyBench {
 		tt = append(tt, tups[i][0], tups[i][1])
 	}
 
-	m, err := prolly.MakeNewMap(ctx, ns, kd, vd, tt...)
+	m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd, tt...)
 	if err != nil {
 		panic(err)
 	}
