@@ -33,6 +33,7 @@ type ReadReplicaDatabase struct {
 	remoteTrackRef ref.DoltRef
 	remote         env.Remote
 	srcDB          *doltdb.DoltDB
+	localBranches  map[string]ref.DoltRef
 	tmpDir         string
 }
 
@@ -48,7 +49,8 @@ var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
-var ErrFailedToCastToReplicaDb  = errors.New("failed to cast to ReadReplicaDatabase")
+var ErrFailedToCastToReplicaDb = errors.New("failed to cast to ReadReplicaDatabase")
+var ErrCannotCreateReplicaRevisionDbForCommit = errors.New("cannot create replica revision db for commit")
 
 func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string, meta *doltdb.WorkingSetMeta) (ReadReplicaDatabase, error) {
 	remotes, err := rsr.GetRemotes()
@@ -67,7 +69,70 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 	}
 
 	headRef := rsr.CWBHeadRef()
-	refSpecs, err := env.GetRefSpecs(rsr, remoteName)
+	rtRef, err := remoteTrackingRef(db.rsr, headRef, remoteName)
+	if err != nil {
+		return EmptyReadReplica, err
+	}
+
+	branches, err := db.ddb.GetBranches(ctx)
+	localBranches := make(map[string]ref.DoltRef, len(branches))
+	for _, br := range branches {
+		localBranches[br.String()] = br
+	}
+
+	return ReadReplicaDatabase{
+		Database:       db,
+		headRef:        headRef,
+		remoteTrackRef: rtRef,
+		remote:         remote,
+		tmpDir:         tmpDir,
+		srcDB:          srcDB,
+		localBranches:  localBranches,
+	}, nil
+}
+
+func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
+	err := rrd.PullFromReplica(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return rrd.Database.StartTransaction(ctx, tCharacteristic)
+}
+
+func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) (ReadReplicaDatabase, error) {
+	rtRef, err := remoteTrackingRef(rrd.rsr, head, rrd.remote.Name)
+	if err != nil {
+		return rrd, err
+	}
+	rrd.remoteTrackRef = rtRef
+	rrd.headRef = head
+	return rrd, nil
+}
+
+func (rrd ReadReplicaDatabase) PullFromReplica(ctx context.Context) error {
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateHeadsStrategy); ok {
+		switch val {
+		case doltdb.ReplicateHeads_MANY:
+			err := fetchBranches(ctx, rrd)
+			if err != nil {
+				return err
+			}
+			return fetchHead(ctx, rrd)
+		case doltdb.ReplicateHeads_ONE:
+			return fetchHead(ctx, rrd)
+		default:
+			return fetchHead(ctx, rrd)
+		}
+	} else {
+		return sql.ErrUnknownSystemVariable.New(doltdb.ReplicateHeadsStrategy)
+	}
+}
+
+func remoteTrackingRef(rsr env.RepoStateReader, headRef ref.DoltRef, remote string) (ref.DoltRef, error) {
+	refSpecs, err := env.GetRefSpecs(rsr, remote)
+	if err != nil {
+		return nil, err
+	}
 
 	var remoteTrackRef ref.DoltRef
 	var foundRef bool
@@ -80,57 +145,18 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		}
 	}
 	if !foundRef {
-		return EmptyReadReplica, env.ErrInvalidRefSpecRemote
+		return nil, env.ErrInvalidRefSpecRemote
 	}
-
-	return ReadReplicaDatabase{
-		Database:       db,
-		headRef:        headRef,
-		remoteTrackRef: remoteTrackRef,
-		remote:         remote,
-		tmpDir:         tmpDir,
-		srcDB:          srcDB,
-	}, nil
+	return remoteTrackRef, nil
 }
 
-func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	err := rrd.PullFromReplica(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return rrd.Database.StartTransaction(ctx, tCharacteristic)
-}
-
-func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) {
-	rrd.headRef = head
-}
-
-func (rrd ReadReplicaDatabase) PullFromReplica(ctx context.Context) error {
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateHeadsStrategy); ok {
-		switch val {
-		case doltdb.ReplicateHeads_MANY:
-			err := fetchBranches(ctx, rrd)
-			if err != nil {
-				return err
-			}
-			return fetchRef(ctx, rrd, rrd.headRef)
-		case doltdb.ReplicateHeads_ONE:
-			return fetchRef(ctx, rrd, rrd.headRef)
-		default:
-			return fetchRef(ctx, rrd, rrd.headRef)
-		}
-	} else {
-		return sql.ErrUnknownSystemVariable.New(doltdb.ReplicateHeadsStrategy)
-	}
-}
-
-func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, head ref.DoltRef) error {
+func fetchHead(ctx context.Context, rrd ReadReplicaDatabase) error {
 	ddb := rrd.Database.DbData().Ddb
 	err := rrd.srcDB.Rebase(ctx)
 	if err != nil {
 		return err
 	}
-	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, head, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, rrd.headRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
@@ -171,7 +197,7 @@ func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, head ref.DoltRef) error
 	return nil
 }
 
-func fetchBranches(ctx *sql.Context, rrd ReadReplicaDatabase) error {
+func fetchBranches(ctx context.Context, rrd ReadReplicaDatabase) error {
 	err := rrd.srcDB.Rebase(ctx)
 	if err != nil {
 		return err

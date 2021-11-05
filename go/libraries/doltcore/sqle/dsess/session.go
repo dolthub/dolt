@@ -925,7 +925,7 @@ func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Com
 		return nil, err
 	}
 	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+		return nil, sql.ErrDatabaseNotFound.New("get head")
 	}
 
 	return dbState.headCommit, nil
@@ -1021,7 +1021,7 @@ func (sess *Session) setWorkingSessionVar(ctx *sql.Context, value interface{}, d
 		return err
 	}
 	if !ok {
-		return sql.ErrDatabaseNotFound.New(dbName)
+		return sql.ErrDatabaseNotFound.New("set working sess")
 	}
 
 	root, err := dbState.dbData.Ddb.ReadRootValue(ctx, hash.Parse(valStr))
@@ -1040,7 +1040,7 @@ func (sess *Session) setHeadSessionVar(ctx *sql.Context, value interface{}, dbNa
 		return err
 	}
 	if !ok {
-		return sql.ErrDatabaseNotFound.New(dbName)
+		return sql.ErrDatabaseNotFound.New("set head")
 	}
 
 	valStr, isStr := value.(string)

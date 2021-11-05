@@ -175,12 +175,20 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 	if !ok {
 		return nil, dsess.InitialDbState{}, false, nil
 	}
-	srcDb, ok := candidate.(Database)
+
+	srcDb, ok := candidate.(SqlDatabase)
 	if !ok {
 		return nil, dsess.InitialDbState{}, false, nil
 	}
 
-	if isBranch(ctx, srcDb.ddb, revSpec) {
+	if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
+		err := switchAndFetchReplicaHead(ctx, revSpec, replicaDb)
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
+		}
+	}
+
+	if isBranch(ctx, srcDb.DbData().Ddb, revSpec) {
 		// if the requested revision is a br we can
 		// write to it, otherwise make read-only
 		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
@@ -191,26 +199,30 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 	}
 
 	if doltdb.IsValidCommitHash(revSpec) {
-		db, init, err := dbRevisionForCommit(ctx, srcDb, revSpec)
+		srcDb, ok = srcDb.(Database)
+		if !ok {
+			return nil, dsess.InitialDbState{}, false, ErrCannotCreateReplicaRevisionDbForCommit
+		}
+		db, init, err := dbRevisionForCommit(ctx, srcDb.(Database), revSpec)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
 		}
 		return db, init, true, nil
 	}
 
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok {
-		err := switchAndFetchReplicaHead(ctx, val, candidate)
-		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
-		}
-		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
-		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
-		}
-		return db, init, true, nil
-	} else {
-		return nil, dsess.InitialDbState{}, false, sql.ErrUnknownSystemVariable.New(doltdb.DoltReadReplicaKey)
-	}
+	//if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok {
+	//	err := switchAndFetchReplicaHead(ctx, val, candidate)
+	//	if err != nil {
+	//		return nil, dsess.InitialDbState{}, false, err
+	//	}
+	//	db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
+	//	if err != nil {
+	//		return nil, dsess.InitialDbState{}, false, err
+	//	}
+	//	return db, init, true, nil
+	//} else {
+	//	return nil, dsess.InitialDbState{}, false, sql.ErrUnknownSystemVariable.New(doltdb.DoltReadReplicaKey)
+	//}
 
 	return nil, dsess.InitialDbState{}, false, nil
 }
@@ -234,21 +246,35 @@ func (p DoltDatabaseProvider) Function(name string) (sql.Function, error) {
 	return fn, nil
 }
 
-func switchAndFetchReplicaHead(ctx context.Context, head interface{}, db sql.Database) error {
+func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Database) error {
 	destDb, ok := db.(ReadReplicaDatabase)
 	if !ok {
 		return ErrFailedToCastToReplicaDb
 	}
-	branch, ok := head.(string)
-	if !ok {
-		return sql.ErrInvalidSystemVariableValue.New(head)
-	}
-	destDb.SetHeadRef(ref.NewBranchRef(branch))
 
-	err := destDb.PullFromReplica(ctx)
+	branchRef := ref.NewBranchRef(branch)
+	if _, ok := destDb.localBranches[branch]; !ok {
+		cs, _ := doltdb.NewCommitSpec(destDb.headRef.String())
+		cm, err := destDb.ddb.Resolve(ctx, cs, nil)
+		if err != nil {
+			return err
+		}
+		err = destDb.ddb.NewBranchAtCommit(ctx, branchRef, cm)
+		if err != nil {
+			return err
+		}
+	}
+
+	destDb, err := destDb.SetHeadRef(branchRef)
 	if err != nil {
 		return err
 	}
+
+	err = destDb.PullFromReplica(ctx)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -267,9 +293,9 @@ func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {
 	return false
 }
 
-func dbRevisionForBranch(ctx context.Context, srcDb Database, revSpec string) (Database, dsess.InitialDbState, error) {
+func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, dsess.InitialDbState, error) {
 	branch := ref.NewBranchRef(revSpec)
-	cm, err := srcDb.ddb.ResolveCommitRef(ctx, branch)
+	cm, err := srcDb.DbData().Ddb.ResolveCommitRef(ctx, branch)
 	if err != nil {
 		return Database{}, dsess.InitialDbState{}, err
 	}
@@ -279,7 +305,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb Database, revSpec string) (D
 		return Database{}, dsess.InitialDbState{}, err
 	}
 
-	ws, err := srcDb.ddb.ResolveWorkingSet(ctx, wsRef)
+	ws, err := srcDb.DbData().Ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return Database{}, dsess.InitialDbState{}, err
 	}
@@ -288,25 +314,49 @@ func dbRevisionForBranch(ctx context.Context, srcDb Database, revSpec string) (D
 
 	static := staticRepoState{
 		branch:          branch,
-		RepoStateWriter: srcDb.rsw,
-		RepoStateReader: srcDb.rsr,
-		DocsReadWriter:  srcDb.drw,
+		RepoStateWriter: srcDb.DbData().Rsw,
+		RepoStateReader: srcDb.DbData().Rsr,
+		DocsReadWriter:  srcDb.DbData().Drw,
 	}
-	db := Database{
-		name:     dbName,
-		ddb:      srcDb.ddb,
-		rsw:      static,
-		rsr:      static,
-		drw:      static,
-		gs:       srcDb.gs,
-		editOpts: srcDb.editOpts,
+
+	var db SqlDatabase
+
+	switch v := srcDb.(type) {
+	case Database:
+		db = Database{
+			name:     dbName,
+			ddb:      v.DbData().Ddb,
+			rsw:      static,
+			rsr:      static,
+			drw:      static,
+			gs:       v.gs,
+			editOpts: v.editOpts,
+		}
+	case ReadReplicaDatabase:
+		db = ReadReplicaDatabase{
+			Database: Database{
+				name:     dbName,
+				ddb:      v.DbData().Ddb,
+				rsw:      static,
+				rsr:      static,
+				drw:      static,
+				gs:       v.gs,
+				editOpts: v.editOpts,
+			},
+			headRef:        v.headRef,
+			remoteTrackRef: v.remoteTrackRef,
+			remote:         v.remote,
+			srcDB:          v.srcDB,
+			tmpDir:         v.tmpDir,
+		}
 	}
+
 	init := dsess.InitialDbState{
 		Db:         db,
 		HeadCommit: cm,
 		WorkingSet: ws,
 		DbData: env.DbData{
-			Ddb: srcDb.ddb,
+			Ddb: srcDb.DbData().Ddb,
 			Rsw: static,
 			Rsr: static,
 			Drw: static,
@@ -322,7 +372,7 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
 	}
 
-	cm, err := srcDb.ddb.Resolve(ctx, spec, srcDb.rsr.CWBHeadRef())
+	cm, err := srcDb.DbData().Ddb.Resolve(ctx, spec, srcDb.DbData().Rsr.CWBHeadRef())
 	if err != nil {
 		return ReadOnlyDatabase{}, dsess.InitialDbState{}, err
 	}
@@ -330,10 +380,10 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 	name := srcDb.Name() + dbRevisionDelimiter + revSpec
 	db := ReadOnlyDatabase{Database: Database{
 		name:     name,
-		ddb:      srcDb.ddb,
-		rsw:      srcDb.rsw,
-		rsr:      srcDb.rsr,
-		drw:      srcDb.drw,
+		ddb:      srcDb.DbData().Ddb,
+		rsw:      srcDb.DbData().Rsw,
+		rsr:      srcDb.DbData().Rsr,
+		drw:      srcDb.DbData().Drw,
 		gs:       nil,
 		editOpts: srcDb.editOpts,
 	}}
@@ -343,10 +393,10 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		ReadOnly:     true,
 		DetachedHead: true,
 		DbData: env.DbData{
-			Ddb: srcDb.ddb,
-			Rsw: srcDb.rsw,
-			Rsr: srcDb.rsr,
-			Drw: srcDb.drw,
+			Ddb: srcDb.DbData().Ddb,
+			Rsw: srcDb.DbData().Rsw,
+			Rsr: srcDb.DbData().Rsr,
+			Drw: srcDb.DbData().Drw,
 		},
 	}
 

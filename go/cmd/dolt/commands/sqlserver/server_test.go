@@ -417,12 +417,6 @@ func TestReadReplica(t *testing.T) {
 	}()
 	defer sc.StopServer()
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
-	defer conn.Close()
-
-	require.NoError(t, err)
-	sess := conn.NewSession(nil)
-
 	replicatedTable := "new_table"
 	multiSetup.CreateTable(sourceDbName, replicatedTable)
 	multiSetup.StageAll(sourceDbName)
@@ -430,37 +424,54 @@ func TestReadReplica(t *testing.T) {
 	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
 
 	t.Run("read replica pulls on read", func(t *testing.T) {
+		conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
+		defer conn.Close()
+		require.NoError(t, err)
+		sess := conn.NewSession(nil)
+
 		var res []string
 		q := sess.SelectBySql("show tables")
-		_, err := q.LoadContext(context.Background(), &res)
+		_, err = q.LoadContext(context.Background(), &res)
 		assert.NoError(t, err)
 		assert.ElementsMatch(t, res, []string{replicatedTable})
 	})
 
-	//t.Run("read replica fetches missing branch", func(t *testing.T) {
-	//	var res []string
-	//
-	//	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName+"/feature", nil)
-	//	defer conn.Close()
-	//
-	//	require.NoError(t, err)
-	//	sess := conn.NewSession(nil)
-	//	q := sess.SelectBySql("show tables")
-	//	_, err = q.LoadContext(context.Background(), &res)
-	//
-	//	assert.NoError(t, err)
-	//	assert.ElementsMatch(t, res, []string{replicatedTable})
-	//})
-
-	t.Run("read replica pulls all branches", func(t *testing.T) {
-		var res []int
-		newBranch := "feature"
+	t.Run("read replica fetches missing branch", func(t *testing.T) {
+		newBranch := "feature-1"
 		multiSetup.NewBranch(sourceDbName, newBranch)
 		multiSetup.CheckoutBranch(sourceDbName, newBranch)
 		multiSetup.PushToRemote(sourceDbName, "remote1", newBranch)
 
+		connStr := ConnectionString(serverConfig) + readReplicaDbName + "/" + newBranch
+		conn, err := dbr.Open("mysql", connStr, nil)
+		defer conn.Close()
+		require.NoError(t, err)
+		sess := conn.NewSession(nil)
+
+		var res []string
+
+		q := sess.SelectBySql("show tables")
+		_, err = q.LoadContext(context.Background(), &res)
+
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, res, []string{replicatedTable})
+	})
+
+	t.Run("read replica pulls all branches", func(t *testing.T) {
+		conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
+		defer conn.Close()
+		require.NoError(t, err)
+		sess := conn.NewSession(nil)
+
+		newBranch := "feature-2"
+		multiSetup.NewBranch(sourceDbName, newBranch)
+		multiSetup.CheckoutBranch(sourceDbName, newBranch)
+		multiSetup.PushToRemote(sourceDbName, "remote1", newBranch)
+
+		var res []int
+
 		q := sess.SelectBySql(fmt.Sprintf("select dolt_checkout('%s')", newBranch))
-		_, err := q.LoadContext(context.Background(), &res)
+		_, err = q.LoadContext(context.Background(), &res)
 		assert.NoError(t, err)
 		assert.ElementsMatch(t, res, []int{0})
 	})
