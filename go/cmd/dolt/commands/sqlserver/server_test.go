@@ -422,17 +422,33 @@ func TestReadReplica(t *testing.T) {
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
+	replicatedTable := "new_table"
+	multiSetup.CreateTable(sourceDbName, replicatedTable)
+	multiSetup.StageAll(sourceDbName)
+	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
+	multiSetup.PushToRemote(sourceDbName, "remote1")
+
 	t.Run("read replica pulls on read", func(t *testing.T) {
 		var res []string
-		replicatedTable := "new_table"
-		multiSetup.CreateTable(sourceDbName, replicatedTable)
-		multiSetup.StageAll(sourceDbName)
-		_ = multiSetup.CommitWithWorkingSet(sourceDbName)
-		multiSetup.PushToRemote(sourceDbName, "remote1")
 
 		q := sess.SelectBySql("show tables")
 		_, err := q.LoadContext(context.Background(), &res)
 		assert.NoError(t, err)
 		assert.ElementsMatch(t, res, []string{replicatedTable})
 	})
+
+	//t.Run("read replica fetches missing branch", func(t *testing.T) {
+	//	var res []string
+	//
+	//	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName+"/feature", nil)
+	//	defer conn.Close()
+	//
+	//	require.NoError(t, err)
+	//	sess := conn.NewSession(nil)
+	//	q := sess.SelectBySql("show tables")
+	//	_, err = q.LoadContext(context.Background(), &res)
+	//
+	//	assert.NoError(t, err)
+	//	assert.ElementsMatch(t, res, []string{replicatedTable})
+	//})
 }

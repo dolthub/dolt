@@ -198,6 +198,20 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 		return db, init, true, nil
 	}
 
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok {
+		err := switchAndFetchReplicaHead(ctx, val, candidate)
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
+		}
+		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
+		}
+		return db, init, true, nil
+	} else {
+		return nil, dsess.InitialDbState{}, false, sql.ErrUnknownSystemVariable.New(doltdb.DoltReadReplicaKey)
+	}
+
 	return nil, dsess.InitialDbState{}, false, nil
 }
 
@@ -218,6 +232,24 @@ func (p DoltDatabaseProvider) Function(name string) (sql.Function, error) {
 		return nil, sql.ErrFunctionNotFound.New(name)
 	}
 	return fn, nil
+}
+
+func switchAndFetchReplicaHead(ctx context.Context, head interface{}, db sql.Database) error {
+	destDb, ok := db.(ReadReplicaDatabase)
+	if !ok {
+		return ErrFailedToCastToReplicaDb
+	}
+	branch, ok := head.(string)
+	if !ok {
+		return sql.ErrInvalidSystemVariableValue.New(head)
+	}
+	destDb.SetHeadRef(ref.NewBranchRef(branch))
+
+	err := destDb.PullFromReplica(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {

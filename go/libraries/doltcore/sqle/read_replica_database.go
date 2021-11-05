@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -46,6 +47,8 @@ var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
 var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
 var EmptyReadReplica = ReadReplicaDatabase{}
+
+var ErrFailedToCastToReplicaDb  = errors.New("failed to cast to ReadReplicaDatabase")
 
 func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string, meta *doltdb.WorkingSetMeta) (ReadReplicaDatabase, error) {
 	remotes, err := rsr.GetRemotes()
@@ -91,14 +94,18 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 }
 
 func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	err := rrd.pullFromReplica(ctx)
+	err := rrd.PullFromReplica(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return rrd.Database.StartTransaction(ctx, tCharacteristic)
 }
 
-func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
+func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) {
+	rrd.headRef = head
+}
+
+func (rrd ReadReplicaDatabase) PullFromReplica(ctx context.Context) error {
 	ddb := rrd.Database.DbData().Ddb
 	err := rrd.srcDB.Rebase(ctx)
 	if err != nil {
