@@ -156,8 +156,15 @@ func getRepoRootDir(path, pathSeparator string) string {
 	return name
 }
 
-// DoltEnvAsMultiEnv returns a MultiRepoEnv which wraps the DoltEnv and names it based on the directory DoltEnv refers to
+// DoltEnvAsMultiEnv returns a MultiRepoEnv which wraps the DoltEnv and names it based on the directory DoltEnv refers
+// to. If the env given doesn't contain a valid dolt database, creates a MultiEnvRepo from any databases found in the
+// directory at the root of the filesystem and returns that.
 func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error) {
+	if !dEnv.Valid() {
+		cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
+		return MultiEnvForDirectory(ctx, cfg, dEnv.FS, dEnv.Version)
+	}
+
 	dbName := "dolt"
 
 	if dEnv.RSLoadErr != nil {

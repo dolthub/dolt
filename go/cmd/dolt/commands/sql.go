@@ -385,10 +385,6 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	} else {
-		if !cli.CheckEnvIsValid(dEnv) {
-			return nil, errhand.BuildDError("Invalid working directory").Build()
-		}
-
 		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
