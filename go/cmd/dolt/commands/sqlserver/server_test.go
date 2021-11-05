@@ -401,7 +401,7 @@ func TestReadReplica(t *testing.T) {
 		t.Fatal("local config does not exist")
 	}
 	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{doltdb.DoltReadReplicaKey: "remote1", doltdb.ReplicateHeadsStrategy: "many"})
-	dsess.InitPersistedSystemVars(multiSetup.MrEnv[readReplicaDbName])
+	dsess.InitPersistedSystemVars(multiSetup.MrEnv.GetEnv(readReplicaDbName))
 
 	// start server as read replica
 	sc := CreateServerController()
@@ -432,27 +432,6 @@ func TestReadReplica(t *testing.T) {
 		var res []string
 		q := sess.SelectBySql("show tables")
 		_, err = q.LoadContext(context.Background(), &res)
-		assert.NoError(t, err)
-		assert.ElementsMatch(t, res, []string{replicatedTable})
-	})
-
-	t.Run("read replica fetches missing branch", func(t *testing.T) {
-		newBranch := "feature-1"
-		multiSetup.NewBranch(sourceDbName, newBranch)
-		multiSetup.CheckoutBranch(sourceDbName, newBranch)
-		multiSetup.PushToRemote(sourceDbName, "remote1", newBranch)
-
-		connStr := ConnectionString(serverConfig) + readReplicaDbName + "/" + newBranch
-		conn, err := dbr.Open("mysql", connStr, nil)
-		defer conn.Close()
-		require.NoError(t, err)
-		sess := conn.NewSession(nil)
-
-		var res []string
-
-		q := sess.SelectBySql("show tables")
-		_, err = q.LoadContext(context.Background(), &res)
-
 		assert.NoError(t, err)
 		assert.ElementsMatch(t, res, []string{replicatedTable})
 	})

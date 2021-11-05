@@ -231,8 +231,6 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 	}
 
 	if isBranch(ctx, srcDb.DbData().Ddb, revSpec) {
-		// if the requested revision is a br we can
-		// write to it, otherwise make read-only
 		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
@@ -251,20 +249,6 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 		}
 		return db, init, true, nil
 	}
-
-	//if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.DoltReadReplicaKey); ok {
-	//	err := switchAndFetchReplicaHead(ctx, val, candidate)
-	//	if err != nil {
-	//		return nil, dsess.InitialDbState{}, false, err
-	//	}
-	//	db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
-	//	if err != nil {
-	//		return nil, dsess.InitialDbState{}, false, err
-	//	}
-	//	return db, init, true, nil
-	//} else {
-	//	return nil, dsess.InitialDbState{}, false, sql.ErrUnknownSystemVariable.New(doltdb.DoltReadReplicaKey)
-	//}
 
 	return nil, dsess.InitialDbState{}, false, nil
 }
@@ -367,7 +351,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 	case Database:
 		db = Database{
 			name:     dbName,
-			ddb:      v.DbData().Ddb,
+			ddb:      v.ddb,
 			rsw:      static,
 			rsr:      static,
 			drw:      static,
@@ -378,7 +362,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 		db = ReadReplicaDatabase{
 			Database: Database{
 				name:     dbName,
-				ddb:      v.DbData().Ddb,
+				ddb:      v.ddb,
 				rsw:      static,
 				rsr:      static,
 				drw:      static,
