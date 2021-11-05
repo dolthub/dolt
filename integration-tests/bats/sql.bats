@@ -596,6 +596,13 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt_repo" ]] || false
 
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo" ]] || false
+    [[ "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "test2" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+
     touch existing_file
     mkdir existing_dir
 
@@ -606,6 +613,39 @@ SQL
     run dolt sql -q "create database existing_dir"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "exists" ]] || false
+}
+
+@test "sql: run outside a dolt directory" {
+    skip "Doesn't work yet"
+
+    mkdir new && cd new
+    dolt sql
+
+        dolt sql --disable-batch <<SQL
+CREATE DATABASE test1;
+USE test1;
+CREATE TABLE table_a(x int primary key);
+insert into table_a values (1), (2);
+SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
+SQL
+
+    cd test1
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ table_a ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "created table_a" ]] || false
+
+    cd ../
+    
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
 }
 
 @test "sql: set head ref session var" {
