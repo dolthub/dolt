@@ -107,8 +107,9 @@ teardown() {
     dolt push origin new_feature
 
     cd ../repo1
-    dolt config --local --add sqlserver.global.DOLT_REPLICATE_HEADS_MODE many
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_HEADS_STRATEGY many
     dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE remote1
+    dolt config --list
     dolt sql -q "show tables"
     dolt checkout new_feature
 }
@@ -122,7 +123,7 @@ teardown() {
     dolt push origin v1
 
     cd ../repo1
-    dolt config --local --add sqlserver.global.DOLT_REPLICATE_HEADS_MODE many
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_HEADS_STRATEGY many
     dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE remote1
     dolt sql -q "START TRANSACTION"
     run dolt tag
