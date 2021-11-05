@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -389,7 +390,7 @@ func TestReadReplica(t *testing.T) {
 
 	multiSetup.NewDB("read_replica")
 	multiSetup.NewRemote("remote1")
-	multiSetup.PushToRemote("read_replica", "remote1")
+	multiSetup.PushToRemote("read_replica", "remote1", "main")
 	multiSetup.CloneDB("remote1", "source_db")
 
 	readReplicaDbName := multiSetup.DbNames[0]
@@ -399,7 +400,7 @@ func TestReadReplica(t *testing.T) {
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
-	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{doltdb.DoltReadReplicaKey: "remote1"})
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{doltdb.DoltReadReplicaKey: "remote1", doltdb.ReplicateHeadsStrategy: "many"})
 	dsess.InitPersistedSystemVars(multiSetup.MrEnv[readReplicaDbName])
 
 	// start server as read replica
@@ -426,11 +427,10 @@ func TestReadReplica(t *testing.T) {
 	multiSetup.CreateTable(sourceDbName, replicatedTable)
 	multiSetup.StageAll(sourceDbName)
 	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
-	multiSetup.PushToRemote(sourceDbName, "remote1")
+	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
 
 	t.Run("read replica pulls on read", func(t *testing.T) {
 		var res []string
-
 		q := sess.SelectBySql("show tables")
 		_, err := q.LoadContext(context.Background(), &res)
 		assert.NoError(t, err)
@@ -451,4 +451,17 @@ func TestReadReplica(t *testing.T) {
 	//	assert.NoError(t, err)
 	//	assert.ElementsMatch(t, res, []string{replicatedTable})
 	//})
+
+	t.Run("read replica pulls all branches", func(t *testing.T) {
+		var res []int
+		newBranch := "feature"
+		multiSetup.NewBranch(sourceDbName, newBranch)
+		multiSetup.CheckoutBranch(sourceDbName, newBranch)
+		multiSetup.PushToRemote(sourceDbName, "remote1", newBranch)
+
+		q := sess.SelectBySql(fmt.Sprintf("select dolt_checkout('%s')", newBranch))
+		_, err := q.LoadContext(context.Background(), &res)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, res, []int{0})
+	})
 }

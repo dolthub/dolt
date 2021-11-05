@@ -100,6 +100,14 @@ func init() {
 			Type:              sql.NewSystemBoolType(ForceTransactionCommit),
 			Default:           int8(0),
 		},
+		{
+			Name:              doltdb.ReplicateHeadsStrategy,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(doltdb.ReplicateHeadsStrategy),
+			Default:           "one",
+		},
 	})
 
 	_, ok := os.LookupEnv(TransactionMergeStompEnvKey)

@@ -106,12 +106,31 @@ func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) {
 }
 
 func (rrd ReadReplicaDatabase) PullFromReplica(ctx context.Context) error {
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateHeadsStrategy); ok {
+		switch val {
+		case doltdb.ReplicateHeads_MANY:
+			err := fetchBranches(ctx, rrd)
+			if err != nil {
+				return err
+			}
+			return fetchRef(ctx, rrd, rrd.headRef)
+		case doltdb.ReplicateHeads_ONE:
+			return fetchRef(ctx, rrd, rrd.headRef)
+		default:
+			return fetchRef(ctx, rrd, rrd.headRef)
+		}
+	} else {
+		return sql.ErrUnknownSystemVariable.New(doltdb.ReplicateHeadsStrategy)
+	}
+}
+
+func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, head ref.DoltRef) error {
 	ddb := rrd.Database.DbData().Ddb
 	err := rrd.srcDB.Rebase(ctx)
 	if err != nil {
 		return err
 	}
-	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, rrd.headRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, head, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
@@ -148,6 +167,32 @@ func (rrd ReadReplicaDatabase) PullFromReplica(ctx context.Context) error {
 		return err
 	}
 	rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+
+	return nil
+}
+
+func fetchBranches(ctx *sql.Context, rrd ReadReplicaDatabase) error {
+	err := rrd.srcDB.Rebase(ctx)
+	if err != nil {
+		return err
+	}
+
+	refs, err := rrd.srcDB.GetBranches(ctx)
+	if err != nil {
+		return err
+	}
+
+	args := make([]string, 0, len(refs))
+	for _, r := range refs {
+		args = append(args, r.GetPath())
+	}
+	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, args)
+
+	updateMode := ref.FastForwardOnly
+	err = actions.FetchRefSpecs(ctx, rrd.DbData(), refSpecs, rrd.remote, updateMode, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

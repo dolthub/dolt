@@ -99,3 +99,48 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "t1" ]] || false
 }
+
+@test "replication: replica pull many heads mode pulls branches" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt branch new_feature
+    dolt push origin new_feature
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_HEADS_STRATEGY many
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE remote1
+    dolt config --list
+    dolt sql -q "show tables"
+    dolt checkout new_feature
+}
+
+@test "replication: replica pull many heads mode pulls tags" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt checkout -b new_feature
+    dolt tag v1
+    dolt push origin new_feature
+    dolt push origin v1
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_HEADS_STRATEGY many
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE remote1
+    dolt sql -q "START TRANSACTION"
+    run dolt tag
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" =~ "v1" ]] || false
+}
+
+@test "replication: source pushes feature head" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_REPLICATE_TO_REMOTE remote1
+    dolt checkout -b new_feature
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "select dolt_commit('-am', 'cm')"
+
+    cd ..
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt fetch origin new_feature
+}

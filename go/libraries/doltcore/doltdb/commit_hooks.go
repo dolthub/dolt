@@ -24,8 +24,14 @@ import (
 )
 
 const (
-	ReplicateToRemoteKey = "dolt_replicate_to_remote"
-	DoltReadReplicaKey   = "dolt_read_replica_remote"
+	ReplicateToRemoteKey   = "dolt_replicate_to_remote"
+	DoltReadReplicaKey     = "dolt_read_replica_remote"
+	ReplicateHeadsStrategy = "dolt_replicate_heads_strategy"
+)
+
+const (
+	ReplicateHeads_ONE  = "one"
+	ReplicateHeads_MANY = "many"
 )
 
 type ReplicateHook struct {
@@ -83,10 +89,6 @@ func replicate(ctx context.Context, destDB, srcDB datas.Database, tempTableDir s
 	}
 
 	err = puller.Pull(ctx)
-	if err != nil {
-		return err
-	}
-
 	if err != nil {
 		return err
 	}
