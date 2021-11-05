@@ -29,7 +29,7 @@ SQL
     [[ "$output" =~ "1" ]] || false
 
     run dolt sql -q "SHOW DATABASES"
-    [[ ! "$output" =~ "mydb" ]] || false
+    [[ "$output" =~ "mydb" ]] || false
 }
 
 @test "sql-create-database: create database that already exists throws an error" {
@@ -144,7 +144,7 @@ SQL
     [[ "$output" =~ "1" ]] || false
 
     run dolt sql -q "SHOW DATABASES"
-    [[ ! "$output" =~ "mydb" ]] || false
+    [[ "$output" =~ "mydb" ]] || false
 }
 
 @test "sql-create-database: use for non existing database throws an error" {

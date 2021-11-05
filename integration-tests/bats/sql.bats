@@ -590,6 +590,12 @@ SQL
     dolt sql -q "create database test2"
     [ -d "test2" ]
 
+    # the current db should always be the one that the SQL command was
+    # run in, not any nested dbs
+    run dolt sql -q "select database()"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo" ]] || false
+
     touch existing_file
     mkdir existing_dir
 
