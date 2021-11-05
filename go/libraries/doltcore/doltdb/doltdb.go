@@ -1278,10 +1278,7 @@ func (ddb *DoltDB) PushChunksForRefHash(ctx context.Context, tempDir string, src
 func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, stRef types.Ref, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
 		puller, err := datas.NewPuller(ctx, tempDir, defaultChunksPerTF, srcDB.db, ddb.db, stRef.TargetHash(), pullerEventCh)
-
-		if err == datas.ErrDBUpToDate {
-			return datas.ErrDBUpToDate
-		} else if err != nil {
+		if err != nil {
 			return err
 		}
 
