@@ -282,12 +282,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func listSavedQueriesMode(
-		ctx context.Context,
-		mrEnv *env.MultiRepoEnv,
-		initialRoots map[string]*doltdb.RootValue,
-		currentDb string,
-		format resultFormat,
-		usage cli.UsagePrinter,
+	ctx context.Context,
+	mrEnv *env.MultiRepoEnv,
+	initialRoots map[string]*doltdb.RootValue,
+	currentDb string,
+	format resultFormat,
+	usage cli.UsagePrinter,
 ) int {
 	hasQC, err := initialRoots[currentDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
@@ -305,13 +305,13 @@ func listSavedQueriesMode(
 }
 
 func savedQueryMode(
-		ctx context.Context,
-		mrEnv *env.MultiRepoEnv,
-		initialRoots map[string]*doltdb.RootValue,
-		savedQueryName string,
-		currentDb string,
-		format resultFormat,
-		usage cli.UsagePrinter,
+	ctx context.Context,
+	mrEnv *env.MultiRepoEnv,
+	initialRoots map[string]*doltdb.RootValue,
+	savedQueryName string,
+	currentDb string,
+	format resultFormat,
+	usage cli.UsagePrinter,
 ) int {
 	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
 
@@ -324,14 +324,14 @@ func savedQueryMode(
 }
 
 func queryMode(
-		ctx context.Context,
-		mrEnv *env.MultiRepoEnv,
-		initialRoots map[string]*doltdb.RootValue,
-		apr *argparser.ArgParseResults,
-		query string,
-		currentDb string,
-		format resultFormat,
-		usage cli.UsagePrinter,
+	ctx context.Context,
+	mrEnv *env.MultiRepoEnv,
+	initialRoots map[string]*doltdb.RootValue,
+	apr *argparser.ArgParseResults,
+	query string,
+	currentDb string,
+	format resultFormat,
+	usage cli.UsagePrinter,
 ) int {
 	batchMode := apr.Contains(BatchFlag)
 	multiStatementMode := apr.Contains(disableBatchFlag)
@@ -402,7 +402,7 @@ func execShell(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	format resultFormat,
-		initialDb string,
+	initialDb string,
 ) errhand.VerboseError {
 	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
