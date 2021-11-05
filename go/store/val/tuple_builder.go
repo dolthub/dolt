@@ -60,7 +60,7 @@ func (tb *TupleBuilder) PutBool(i int, v bool) {
 func (tb *TupleBuilder) PutInt8(i int, v int8) {
 	tb.Desc.expectEncoding(i, Int8Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+int8Size]
-	writeInt8(tb.fields[i], v)
+	WriteInt8(tb.fields[i], v)
 	tb.pos += int8Size
 }
 
@@ -68,7 +68,7 @@ func (tb *TupleBuilder) PutInt8(i int, v int8) {
 func (tb *TupleBuilder) PutUint8(i int, v uint8) {
 	tb.Desc.expectEncoding(i, Uint8Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint8Size]
-	writeUint8(tb.fields[i], v)
+	WriteUint8(tb.fields[i], v)
 	tb.pos += uint8Size
 }
 
@@ -76,7 +76,7 @@ func (tb *TupleBuilder) PutUint8(i int, v uint8) {
 func (tb *TupleBuilder) PutInt16(i int, v int16) {
 	tb.Desc.expectEncoding(i, Int16Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+int16Size]
-	writeInt16(tb.fields[i], v)
+	WriteInt16(tb.fields[i], v)
 	tb.pos += int16Size
 }
 
@@ -84,7 +84,7 @@ func (tb *TupleBuilder) PutInt16(i int, v int16) {
 func (tb *TupleBuilder) PutUint16(i int, v uint16) {
 	tb.Desc.expectEncoding(i, Uint16Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint16Size]
-	writeUint16(tb.fields[i], v)
+	WriteUint16(tb.fields[i], v)
 	tb.pos += uint16Size
 }
 
@@ -92,7 +92,7 @@ func (tb *TupleBuilder) PutUint16(i int, v uint16) {
 func (tb *TupleBuilder) PutInt32(i int, v int32) {
 	tb.Desc.expectEncoding(i, Int32Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+int32Size]
-	writeInt32(tb.fields[i], v)
+	WriteInt32(tb.fields[i], v)
 	tb.pos += int32Size
 }
 
@@ -100,7 +100,7 @@ func (tb *TupleBuilder) PutInt32(i int, v int32) {
 func (tb *TupleBuilder) PutUint32(i int, v uint32) {
 	tb.Desc.expectEncoding(i, Uint32Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint32Size]
-	writeUint32(tb.fields[i], v)
+	WriteUint32(tb.fields[i], v)
 	tb.pos += uint32Size
 }
 
@@ -108,7 +108,7 @@ func (tb *TupleBuilder) PutUint32(i int, v uint32) {
 func (tb *TupleBuilder) PutInt64(i int, v int64) {
 	tb.Desc.expectEncoding(i, Int64Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64Size]
-	writeInt64(tb.fields[i], v)
+	WriteInt64(tb.fields[i], v)
 	tb.pos += int64Size
 }
 
@@ -116,7 +116,7 @@ func (tb *TupleBuilder) PutInt64(i int, v int64) {
 func (tb *TupleBuilder) PutUint64(i int, v uint64) {
 	tb.Desc.expectEncoding(i, Uint64Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint64Size]
-	writeUint64(tb.fields[i], v)
+	WriteUint64(tb.fields[i], v)
 	tb.pos += uint64Size
 }
 
@@ -124,7 +124,7 @@ func (tb *TupleBuilder) PutUint64(i int, v uint64) {
 func (tb *TupleBuilder) PutFloat32(i int, v float32) {
 	tb.Desc.expectEncoding(i, Float32Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+float32Size]
-	writeFloat32(tb.fields[i], v)
+	WriteFloat32(tb.fields[i], v)
 	tb.pos += float32Size
 }
 
@@ -132,7 +132,7 @@ func (tb *TupleBuilder) PutFloat32(i int, v float32) {
 func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 	tb.Desc.expectEncoding(i, Float64Enc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+float64Size]
-	writeFloat64(tb.fields[i], v)
+	WriteFloat64(tb.fields[i], v)
 	tb.pos += float64Size
 }
 

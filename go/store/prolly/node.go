@@ -15,7 +15,6 @@
 package prolly
 
 import (
-	"encoding/binary"
 	"math"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -172,20 +171,21 @@ func (nd Node) size() val.ByteSize {
 
 // todo(andy): move (de)serialization to val/codec.go
 func (nd Node) level() int {
-	return int(nd[nd.size()-treeLevelSize])
+	sl := nd[nd.size()-treeLevelSize:]
+	return int(val.ReadUint8(sl))
 }
 
 func (nd Node) nodeCount() int {
 	stop := nd.size() - treeLevelSize
 	start := stop - nodeCountSize
-	return int(binary.LittleEndian.Uint16(nd[start:stop]))
+	return int(val.ReadUint16(nd[start:stop]))
 }
 
 func (nd Node) cumulativeCount() uint64 {
 	stop := nd.size() - treeLevelSize - nodeCountSize
 	start := stop - cumulativeCountSize
 	buf := nd[start:stop]
-	return readUint48(buf)
+	return val.ReadUint48(buf)
 }
 
 func (nd Node) offsets() (offs val.Offsets, itemStop val.ByteSize) {
@@ -209,39 +209,11 @@ func writeTreeLevel(nd Node, level uint64) {
 func writeItemCount(nd Node, count int) {
 	stop := nd.size() - treeLevelSize
 	start := stop - nodeCountSize
-	binary.LittleEndian.PutUint16(nd[start:stop], uint16(count))
+	val.WriteUint16(nd[start:stop], uint16(count))
 }
 
 func writeCumulativeCount(nd Node, count uint64) {
 	stop := nd.size() - treeLevelSize - nodeCountSize
 	start := stop - cumulativeCountSize
-	writeUint48(nd[start:stop], count)
-}
-
-const (
-	uint48Size = 6
-	uint48Max  = uint64(1<<48 - 1)
-)
-
-func writeUint48(dest []byte, u uint64) {
-	if len(dest) != uint48Size {
-		panic("incorrect number of bytes for uint48")
-	}
-	if u > uint48Max {
-		panic("uint is greater than max uint")
-	}
-
-	var tmp [8]byte
-	binary.LittleEndian.PutUint64(tmp[:], u)
-	copy(dest, tmp[:uint48Size])
-}
-
-func readUint48(src []byte) (u uint64) {
-	if len(src) != uint48Size {
-		panic("incorrect number of bytes for uint48")
-	}
-	var tmp [8]byte
-	copy(tmp[:uint48Size], src)
-	u = binary.LittleEndian.Uint64(tmp[:])
-	return
+	val.WriteUint48(nd[start:stop], count)
 }

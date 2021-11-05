@@ -55,13 +55,13 @@ type metaValue val.Tuple
 
 func newMetaValue(pool pool.BuffPool, count uint64, ref hash.Hash) metaValue {
 	var cnt [6]byte
-	writeUint48(cnt[:], count)
+	val.WriteUint48(cnt[:], count)
 	return metaValue(val.NewTuple(pool, cnt[:], ref[:]))
 }
 
 func (mt metaValue) GetCumulativeCount() uint64 {
 	cnt := val.Tuple(mt).GetField(metaValueCountIdx)
-	return readUint48(cnt)
+	return val.ReadUint48(cnt)
 }
 
 func (mt metaValue) GetRef() hash.Hash {

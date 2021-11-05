@@ -154,7 +154,7 @@ func generateProllyTuples(size uint64) [][2]val.Tuple {
 	for i := range tups {
 		// key
 		var k [8]byte
-		binary.LittleEndian.PutUint64(k[:], uint64(i))
+		val.WriteUint64(k[:], uint64(i))
 		tups[i][0] = val.NewTuple(shared, k[:])
 
 		// val

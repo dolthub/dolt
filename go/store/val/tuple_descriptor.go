@@ -93,7 +93,7 @@ func (td TupleDesc) GetBool(i int, tup Tuple) (v bool, ok bool) {
 	td.expectEncoding(i, Int8Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readBool(b), true
+		v, ok = ReadBool(b), true
 	}
 	return
 }
@@ -104,7 +104,7 @@ func (td TupleDesc) GetInt8(i int, tup Tuple) (v int8, ok bool) {
 	td.expectEncoding(i, Int8Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readInt8(b), true
+		v, ok = ReadInt8(b), true
 	}
 	return
 }
@@ -115,7 +115,7 @@ func (td TupleDesc) GetUint8(i int, tup Tuple) (v uint8, ok bool) {
 	td.expectEncoding(i, Uint8Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readUint8(b), true
+		v, ok = ReadUint8(b), true
 	}
 	return
 }
@@ -126,7 +126,7 @@ func (td TupleDesc) GetInt16(i int, tup Tuple) (v int16, ok bool) {
 	td.expectEncoding(i, Int16Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readInt16(b), true
+		v, ok = ReadInt16(b), true
 	}
 	return
 }
@@ -137,7 +137,7 @@ func (td TupleDesc) GetUint16(i int, tup Tuple) (v uint16, ok bool) {
 	td.expectEncoding(i, Uint16Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readUint16(b), true
+		v, ok = ReadUint16(b), true
 	}
 	return
 }
@@ -148,7 +148,7 @@ func (td TupleDesc) GetInt32(i int, tup Tuple) (v int32, ok bool) {
 	td.expectEncoding(i, Int32Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readInt32(b), true
+		v, ok = ReadInt32(b), true
 	}
 	return
 }
@@ -159,7 +159,7 @@ func (td TupleDesc) GetUint32(i int, tup Tuple) (v uint32, ok bool) {
 	td.expectEncoding(i, Uint32Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readUint32(b), true
+		v, ok = ReadUint32(b), true
 	}
 	return
 }
@@ -170,7 +170,7 @@ func (td TupleDesc) GetInt64(i int, tup Tuple) (v int64, ok bool) {
 	td.expectEncoding(i, Int64Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readInt64(b), true
+		v, ok = ReadInt64(b), true
 	}
 	return
 }
@@ -181,7 +181,7 @@ func (td TupleDesc) GetUint64(i int, tup Tuple) (v uint64, ok bool) {
 	td.expectEncoding(i, Uint64Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readUint64(b), true
+		v, ok = ReadUint64(b), true
 	}
 	return
 }
@@ -192,7 +192,7 @@ func (td TupleDesc) GetFloat32(i int, tup Tuple) (v float32, ok bool) {
 	td.expectEncoding(i, Float32Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readFloat32(b), true
+		v, ok = ReadFloat32(b), true
 	}
 	return
 }
@@ -203,7 +203,7 @@ func (td TupleDesc) GetFloat64(i int, tup Tuple) (v float64, ok bool) {
 	td.expectEncoding(i, Float64Enc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = readFloat64(b), true
+		v, ok = ReadFloat64(b), true
 	}
 	return
 }
@@ -214,7 +214,7 @@ func (td TupleDesc) GetString(i int, tup Tuple) (v string, ok bool) {
 	td.expectEncoding(i, StringEnc)
 	b := tup.GetField(i)
 	if b != nil {
-		v = readString(b, td.Types[i].Coll)
+		v = ReadString(b, td.Types[i].Coll)
 		ok = true
 	}
 	return

@@ -37,6 +37,8 @@ const (
 	uint24Size  ByteSize = 3
 	int32Size   ByteSize = 4
 	uint32Size  ByteSize = 4
+	int48Size   ByteSize = 6
+	uint48Size  ByteSize = 6
 	int64Size   ByteSize = 8
 	uint64Size  ByteSize = 8
 	float32Size ByteSize = 4
@@ -99,61 +101,69 @@ const (
 	//  GeometryEnc
 )
 
-func readBool(val []byte) bool {
+func ReadBool(val []byte) bool {
 	expectSize(val, int8Size)
 	return val[0] == 1
 }
-func readInt8(val []byte) int8 {
+func ReadInt8(val []byte) int8 {
 	expectSize(val, int8Size)
 	return int8(val[0])
 }
 
-func readUint8(val []byte) uint8 {
+func ReadUint8(val []byte) uint8 {
 	expectSize(val, uint8Size)
 	return val[0]
 }
 
-func readInt16(val []byte) int16 {
+func ReadInt16(val []byte) int16 {
 	expectSize(val, int16Size)
 	return int16(binary.LittleEndian.Uint16(val))
 }
 
-func readUint16(val []byte) uint16 {
+func ReadUint16(val []byte) uint16 {
 	expectSize(val, uint16Size)
 	return binary.LittleEndian.Uint16(val)
 }
 
-func readInt32(val []byte) int32 {
+func ReadInt32(val []byte) int32 {
 	expectSize(val, int32Size)
 	return int32(binary.LittleEndian.Uint32(val))
 }
 
-func readUint32(val []byte) uint32 {
+func ReadUint32(val []byte) uint32 {
 	expectSize(val, uint32Size)
 	return binary.LittleEndian.Uint32(val)
 }
 
-func readInt64(val []byte) int64 {
+func ReadUint48(val []byte) (u uint64) {
+	expectSize(val, uint48Size)
+	var tmp [8]byte
+	copy(tmp[:uint48Size], val)
+	u = binary.LittleEndian.Uint64(tmp[:])
+	return
+}
+
+func ReadInt64(val []byte) int64 {
 	expectSize(val, int64Size)
 	return int64(binary.LittleEndian.Uint64(val))
 }
 
-func readUint64(val []byte) uint64 {
+func ReadUint64(val []byte) uint64 {
 	expectSize(val, uint64Size)
 	return binary.LittleEndian.Uint64(val)
 }
 
-func readFloat32(val []byte) float32 {
+func ReadFloat32(val []byte) float32 {
 	expectSize(val, float32Size)
-	return math.Float32frombits(readUint32(val))
+	return math.Float32frombits(ReadUint32(val))
 }
 
-func readFloat64(val []byte) float64 {
+func ReadFloat64(val []byte) float64 {
 	expectSize(val, float64Size)
-	return math.Float64frombits(readUint64(val))
+	return math.Float64frombits(ReadUint64(val))
 }
 
-func readString(val []byte, coll Collation) string {
+func ReadString(val []byte, coll Collation) string {
 	// todo(andy): fix allocation
 	return string(val)
 }
@@ -171,52 +181,64 @@ func writeBool(buf []byte, val bool) {
 	}
 }
 
-func writeInt8(buf []byte, val int8) {
+func WriteInt8(buf []byte, val int8) {
 	expectSize(buf, int8Size)
 	buf[0] = byte(val)
 }
 
-func writeUint8(buf []byte, val uint8) {
+func WriteUint8(buf []byte, val uint8) {
 	expectSize(buf, uint8Size)
 	buf[0] = byte(val)
 }
 
-func writeInt16(buf []byte, val int16) {
+func WriteInt16(buf []byte, val int16) {
 	expectSize(buf, int16Size)
 	binary.LittleEndian.PutUint16(buf, uint16(val))
 }
 
-func writeUint16(buf []byte, val uint16) {
+func WriteUint16(buf []byte, val uint16) {
 	expectSize(buf, uint16Size)
 	binary.LittleEndian.PutUint16(buf, val)
 }
 
-func writeInt32(buf []byte, val int32) {
+func WriteInt32(buf []byte, val int32) {
 	expectSize(buf, int32Size)
 	binary.LittleEndian.PutUint32(buf, uint32(val))
 }
 
-func writeUint32(buf []byte, val uint32) {
+func WriteUint32(buf []byte, val uint32) {
 	expectSize(buf, uint32Size)
 	binary.LittleEndian.PutUint32(buf, val)
 }
 
-func writeInt64(buf []byte, val int64) {
+func WriteUint48(buf []byte, u uint64) {
+	const maxUint48 = uint64(1<<48 - 1)
+
+	expectSize(buf, uint48Size)
+	if u > maxUint48 {
+		panic("uint is greater than max uint48")
+	}
+	var tmp [8]byte
+	binary.LittleEndian.PutUint64(tmp[:], u)
+	copy(buf, tmp[:uint48Size])
+}
+
+func WriteInt64(buf []byte, val int64) {
 	expectSize(buf, int64Size)
 	binary.LittleEndian.PutUint64(buf, uint64(val))
 }
 
-func writeUint64(buf []byte, val uint64) {
+func WriteUint64(buf []byte, val uint64) {
 	expectSize(buf, uint64Size)
 	binary.LittleEndian.PutUint64(buf, val)
 }
 
-func writeFloat32(buf []byte, val float32) {
+func WriteFloat32(buf []byte, val float32) {
 	expectSize(buf, float32Size)
 	binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
 }
 
-func writeFloat64(buf []byte, val float64) {
+func WriteFloat64(buf []byte, val float64) {
 	expectSize(buf, float64Size)
 	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
 }
@@ -255,31 +277,31 @@ func compare(typ Type, left, right []byte) int {
 
 	switch typ.Enc {
 	case Int8Enc:
-		return compareInt8(readInt8(left), readInt8(right))
+		return compareInt8(ReadInt8(left), ReadInt8(right))
 	case Uint8Enc:
-		return compareUint8(readUint8(left), readUint8(right))
+		return compareUint8(ReadUint8(left), ReadUint8(right))
 	case Int16Enc:
-		return compareInt16(readInt16(left), readInt16(right))
+		return compareInt16(ReadInt16(left), ReadInt16(right))
 	case Uint16Enc:
-		return compareUint16(readUint16(left), readUint16(right))
+		return compareUint16(ReadUint16(left), ReadUint16(right))
 	case Int24Enc:
 		panic("24 bit")
 	case Uint24Enc:
 		panic("24 bit")
 	case Int32Enc:
-		return compareInt32(readInt32(left), readInt32(right))
+		return compareInt32(ReadInt32(left), ReadInt32(right))
 	case Uint32Enc:
-		return compareUint32(readUint32(left), readUint32(right))
+		return compareUint32(ReadUint32(left), ReadUint32(right))
 	case Int64Enc:
-		return compareInt64(readInt64(left), readInt64(right))
+		return compareInt64(ReadInt64(left), ReadInt64(right))
 	case Uint64Enc:
-		return compareUint64(readUint64(left), readUint64(right))
+		return compareUint64(ReadUint64(left), ReadUint64(right))
 	case Float32Enc:
-		return compareFloat32(readFloat32(left), readFloat32(right))
+		return compareFloat32(ReadFloat32(left), ReadFloat32(right))
 	case Float64Enc:
-		return compareFloat64(readFloat64(left), readFloat64(right))
+		return compareFloat64(ReadFloat64(left), ReadFloat64(right))
 	case StringEnc:
-		return compareString(readString(left, typ.Coll), readString(right, typ.Coll), typ.Coll)
+		return compareString(ReadString(left, typ.Coll), ReadString(right, typ.Coll), typ.Coll)
 	case BytesEnc:
 		return compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
 	default:
