@@ -72,6 +72,17 @@ func (fs *localFS) Exists(path string) (exists bool, isDir bool) {
 	return true, stat.IsDir()
 }
 
+// WithWorkingDir returns a copy of this file system with a new working dir as given.
+func (fs localFS) WithWorkingDir(path string) (Filesys, error) {
+	abs, err := fs.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	fs.cwd = abs
+	return &fs, nil
+}
+
 var errStopMarker = errors.New("stop")
 
 // Iter iterates over the files and subdirectories within a given directory (Optionally recursively.
