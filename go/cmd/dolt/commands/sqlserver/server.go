@@ -37,6 +37,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -94,13 +95,25 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
-	var mrEnv env.MultiRepoEnv
+	var mrEnv *env.MultiRepoEnv
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
+
 	if len(dbNamesAndPaths) == 0 {
-		var err error
-		mrEnv, err = env.DoltEnvAsMultiEnv(dEnv)
-		if err != nil {
-			return err, nil
+		if dEnv.Valid() {
+			// Running in a dolt dir
+			var err error
+			mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
+			if err != nil {
+				return err, nil
+			}
+		} else {
+			// Running outside a dolt dir
+			var err error
+			cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
+			mrEnv, err = env.MultiEnvForDirectory(ctx, cfg, dEnv.FS, version)
+			if err != nil {
+				return err, nil
+			}
 		}
 	} else {
 		var err error
@@ -115,8 +128,9 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	if err != nil {
 		return err, nil
 	}
+
 	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, all...)
 
 	a := analyzer.NewBuilder(pro).WithParallelism(serverConfig.QueryParallelism()).Build()
 	sqlEngine := sqle.New(a, nil)
@@ -150,7 +164,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	mySQLServer, startError = server.NewServer(
 		serverConf,
 		sqlEngine,
-		newSessionBuilder(sqlEngine, dEnv.Config, pro, mrEnv, serverConfig.AutoCommit()),
+		newSessionBuilder(sqlEngine, mrEnv.Config(), pro, serverConfig.AutoCommit()),
 	)
 
 	if startError != nil {
@@ -177,7 +191,7 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsqle.DoltDatabaseProvider, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
+func newSessionBuilder(sqlEngine *sqle.Engine, dConf config.ReadWriteConfig, pro dsqle.DoltDatabaseProvider, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 

@@ -93,7 +93,7 @@ type DoltCliConfig struct {
 
 var _ config.ReadableConfig = &DoltCliConfig{}
 
-func loadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
+func LoadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
 	ch := config.NewConfigHierarchy()
 
 	gPath, err := getGlobalCfgPath(hdp)
@@ -221,4 +221,34 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	}
 
 	return name, email, nil
+}
+
+// writeableLocalDoltCliConfig is an extension to DoltCliConfig that reads values from the hierarchy but writes to
+// local config.
+type writeableLocalDoltCliConfig struct {
+	*DoltCliConfig
+}
+
+// WriteableConfig returns a ReadWriteConfig reading from this config hierarchy. The config will read from the hierarchy
+// and write to the local config.
+func (dcc *DoltCliConfig) WriteableConfig() config.ReadWriteConfig {
+	return writeableLocalDoltCliConfig{dcc}
+}
+
+func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {
+	localCfg, ok := w.GetConfig(LocalConfig)
+	if !ok {
+		return errors.New("no local config found")
+	}
+
+	return localCfg.SetStrings(updates)
+}
+
+func (w writeableLocalDoltCliConfig) Unset(params []string) error {
+	localCfg, ok := w.GetConfig(LocalConfig)
+	if !ok {
+		return errors.New("no local config found")
+	}
+
+	return localCfg.Unset(params)
 }

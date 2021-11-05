@@ -8,7 +8,23 @@ on:
         required: true
 
 jobs:
+  format-version:
+    runs-on: ubuntu-18.04
+    outputs:
+      version: ${{ steps.format_version.outputs.version }}
+    steps:
+      - name: Format Input
+        id: format_version
+        run: |
+          version="${{ github.event.inputs.version }}"
+          if [[ $version == v* ]];
+          then
+            version="${version:1}"
+          fi
+          echo "::set-output name=version::$version"
+
   create-release:
+    needs: format-version
     name: Create release
     runs-on: ubuntu-18.04
     outputs:
@@ -20,10 +36,10 @@ jobs:
         run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
-          NEW_VERSION: ${{ github.event.inputs.version }}
+          NEW_VERSION: ${{ needs.format-version.outputs.version }}
       - uses: EndBug/add-and-commit@v7
         with:
-          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', github.event.inputs.version) }}
+          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
           add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           cwd: "."
       - name: Build Binaries
@@ -38,8 +54,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          release_name: ${{ github.event.inputs.version }}
+          tag_name: v${{ needs.format-version.outputs.version }}
+          release_name: ${{ needs.format-version.outputs.version }}
           draft: false
           prerelease: false
           commitish: ${{ steps.build_binaries.outputs.commitish }}
@@ -85,7 +101,7 @@ jobs:
           asset_content_type: text/plain
 
   create-windows-msi:
-    needs: create-release
+    needs: [format-version, create-release]
     runs-on: ubuntu-18.04
     steps:
       - name: Trigger Upload MSI
@@ -94,10 +110,10 @@ jobs:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: upload-msi
           repository: dolthub/windows-msi-creator
-          client-payload: '{"tag": "${{ github.event.inputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}", "actor": "${{ github.actor }}"}'
+          client-payload: '{"tag": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}", "actor": "${{ github.actor }}"}'
 
   create-release-notes:
-    needs: create-release
+    needs: [format-version, create-release]
     runs-on: ubuntu-18.04
     steps:
       - name: Trigger Release Notes
@@ -105,10 +121,10 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-notes
-          client-payload: '{"version": "${{ github.event.inputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}"}'
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}"}'
 
   homebrew-bump:
-    needs: create-release
+    needs: [format-version, create-release]
     runs-on: ubuntu-18.04
     steps:
       - name: Trigger Bump Homebrew
@@ -116,10 +132,10 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: bump-homebrew
-          client-payload: '{"version": "${{ github.event.inputs.version }}"}'
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}"}'
 
   trigger-performance-benchmark-email:
-    needs: create-release
+    needs: [format-version, create-release]
     runs-on: ubuntu-18.04
     steps:
       - name: Trigger Performance Benchmarks
@@ -127,4 +143,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-dolt
-          client-payload: '{"version": "${{ github.event.inputs.version }}", "actor": "${{ github.actor }}"}'
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "actor": "${{ github.actor }}"}'

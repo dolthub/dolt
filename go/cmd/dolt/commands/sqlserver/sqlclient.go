@@ -95,7 +95,17 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	var err error
 
 	if apr.Contains(sqlClientDualFlag) {
-		serverConfig, err = GetServerConfig(dEnv, apr, true)
+		if !dEnv.Valid() {
+			if !cli.CheckEnvIsValid(dEnv) {
+				return 2
+			}
+
+			cli.PrintErrln(color.RedString("--dual flag requires running within a dolt database directory"))
+			cli.PrintErrln(err.Error())
+			return 1
+		}
+
+		serverConfig, err = GetServerConfig(dEnv, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())
@@ -113,7 +123,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			return 1
 		}
 	} else {
-		serverConfig, err = GetServerConfig(dEnv, apr, false)
+		serverConfig, err = GetServerConfig(dEnv, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())

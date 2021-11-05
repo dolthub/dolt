@@ -101,7 +101,7 @@ type DoltEnv struct {
 
 // Load loads the DoltEnv for the current directory of the cli
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string) *DoltEnv {
-	config, cfgErr := loadDoltCliConfig(hdp, fs)
+	config, cfgErr := LoadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
 	docs, docsErr := doltdocs.LoadDocs(fs)
@@ -135,7 +135,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			backups[n] = r
 		}
 		dEnv.RepoState.Backups = backups
-
 	}
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
@@ -184,6 +183,12 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {
 	return GetStringOrDefault(cfg, InitBranchName, DefaultInitBranch)
+}
+
+// Valid returns whether this environment has been properly initialized. This is useful because although every command
+// gets a DoltEnv, not all of them require it, and we allow invalid dolt envs to be passed around for this reason.
+func (dEnv *DoltEnv) Valid() bool {
+	return dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.

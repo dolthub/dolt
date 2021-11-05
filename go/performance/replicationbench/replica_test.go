@@ -115,7 +115,7 @@ func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg 
 
 	writerName := multiSetup.DbNames[0]
 
-	localCfg, ok := multiSetup.MrEnv[writerName].Config.GetConfig(env.LocalConfig)
+	localCfg, ok := multiSetup.MrEnv.GetEnv(writerName).Config.GetConfig(env.LocalConfig)
 	if !ok {
 		b.Fatal("local config does not exist")
 	}
@@ -148,7 +148,7 @@ listener:
 		b.Fatal(err)
 	}
 
-	return multiSetup.MrEnv[writerName], cfg
+	return multiSetup.MrEnv.GetEnv(writerName), cfg
 }
 
 func getProfFile(b *testing.B) *os.File {

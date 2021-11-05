@@ -131,7 +131,7 @@ func IsWorkingKey(key string) (bool, string) {
 	return false, ""
 }
 
-// Session is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
+// Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type Session struct {
 	sql.Session
 	batchMode batchMode
@@ -154,6 +154,7 @@ type DatabaseSessionState struct {
 	readReplica          *env.Remote
 	TempTableRoot        *doltdb.RootValue
 	TempTableEditSession *editor.TableEditSession
+	tmpTablesDir         string
 
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
@@ -1090,6 +1091,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
+	sessionState.tmpTablesDir = dbState.DbData.Rsw.TempTableFilesDir()
 	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
