@@ -506,10 +506,11 @@ SQL
     run dolt fetch
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
-    [[ "${lines[0]}" != "\n" ]] || false
-    [[ "${lines[1]}" != "\n" ]] || false
-    [[ "${lines[2]}" != "\n" ]] || false
-    [[ "${lines[3]}" != "\n" ]] || false
+    [ "${lines[0]}" != "" ]
+    [ "${lines[1]}" != "" ]
+    [ "${lines[2]}" != "" ]
+    [ "${lines[3]}" != "" ]
+
 }
 
 @test "remotes: fetch output with up-to-date branches" {
@@ -557,7 +558,7 @@ SQL
     cd test-repo
     run dolt fetch
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
+    [ "$output" = "" ]
 }
 
 @test "remotes: dolt fetch with docs" {
