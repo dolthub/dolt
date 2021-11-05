@@ -99,21 +99,21 @@ func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristi
 }
 
 func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateHeadsMode); ok {
+	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateHeadsStrategy); ok {
 		switch val {
 		case doltdb.ReplicateHeads_MANY:
 			err := fetchBranches(ctx, rrd)
 			if err != nil {
 				return err
 			}
-			return fetchBranches(ctx, rrd)
+			return fetchRef(ctx, rrd, rrd.headRef)
 		case doltdb.ReplicateHeads_ONE:
 			return fetchRef(ctx, rrd, rrd.headRef)
 		default:
 			return fetchRef(ctx, rrd, rrd.headRef)
 		}
 	} else {
-		return sql.ErrUnknownSystemVariable.New(doltdb.ReplicateHeadsMode)
+		return sql.ErrUnknownSystemVariable.New(doltdb.ReplicateHeadsStrategy)
 	}
 }
 

@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	ReplicateToRemoteKey = "dolt_replicate_to_remote"
-	DoltReadReplicaKey   = "dolt_read_replica_remote"
-	ReplicateHeadsMode   = "dolt_replicate_heads_mode"
+	ReplicateToRemoteKey   = "dolt_replicate_to_remote"
+	DoltReadReplicaKey     = "dolt_read_replica_remote"
+	ReplicateHeadsStrategy = "dolt_replicate_heads_strategy"
 )
 
 const (
