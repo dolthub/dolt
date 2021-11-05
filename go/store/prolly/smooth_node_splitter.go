@@ -66,9 +66,11 @@ func newSmoothRollingHasher(salt byte) *smoothNodeSplitter {
 	}
 }
 
-func (sns *smoothNodeSplitter) Append(item nodeItem) (err error) {
-	for _, byt := range item {
-		_ = sns.hashByte(byt)
+func (sns *smoothNodeSplitter) Append(items ...nodeItem) (err error) {
+	for _, it := range items {
+		for _, byt := range it {
+			_ = sns.hashByte(byt)
+		}
 	}
 	return nil
 }

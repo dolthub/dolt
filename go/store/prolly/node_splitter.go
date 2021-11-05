@@ -38,7 +38,7 @@ type nodeSplitter interface {
 	// function that uses |bw| to serialize sequenceItems. Splitter's make chunk
 	// boundary decisions based on the contents of the byte buffer |bw.buff|. Upon
 	// return, callers can use |CrossedBoundary| to see if a chunk boundary has crossed.
-	Append(item nodeItem) error
+	Append(items ...nodeItem) error
 
 	// CrossedBoundary returns true if the provided sequenceItems have caused a chunk
 	// boundary to be crossed.
@@ -108,9 +108,11 @@ func newRollingHasher(salt byte) *rollingHasher {
 	return rv
 }
 
-func (rv *rollingHasher) Append(item nodeItem) (err error) {
-	for _, byt := range item {
-		_ = rv.hashByte(byt)
+func (rv *rollingHasher) Append(items ...nodeItem) (err error) {
+	for _, it := range items {
+		for _, byt := range it {
+			_ = rv.hashByte(byt)
+		}
 	}
 	return nil
 }

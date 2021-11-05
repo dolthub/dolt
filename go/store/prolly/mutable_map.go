@@ -70,71 +70,72 @@ type editProvider interface {
 var _ editProvider = keyValueIter{}
 
 func applyEdits(ctx context.Context, m Map, edits editProvider) (Map, error) {
-	var err error
-	if edits.Count() == 0 {
-		return m, err
-	}
-
-	key, value := edits.Next()
-
-	cur, err := mapCursorAtKey(ctx, m, key)
-	if err != nil {
-		return m, err
-	}
-
-	ch, err := newTreeChunker(ctx, cur, 0, m.ns, newDefaultNodeSplitter)
-	if err != nil {
-		return m, err
-	}
-
-	for key != nil {
-
-		var oldValue val.Tuple
-		if cur.valid() {
-			k, v, err := getKeyValue(ctx, cur)
-			if err != nil {
-				return m, err
-			}
-			if compareValues(m, key, k) == 0 {
-				oldValue = v
-			}
-		}
-
-		if oldValue == nil && value == nil {
-			continue // already non-present
-		}
-		if oldValue != nil && compareValues(m, value, oldValue) == 0 {
-			continue // same value
-		}
-
-		err = ch.advanceTo(ctx, cur)
-		if err != nil {
-			return m, err
-		}
-
-		if oldValue != nil {
-			// stats.Modifications++
-			if err = ch.Skip(ctx); err != nil {
-				return m, err
-			}
-		} // else stats.Additions++
-
-		if value != nil {
-			_, err = ch.Append(ctx, nodeItem(key), nodeItem(value))
-			if err != nil {
-				continue
-			}
-		}
-
-		key, value = edits.Next()
-	}
-
-	m.root, err = ch.Done(ctx)
-	if err != nil {
-		return m, err
-	}
-
-	return m, nil
+	panic("unimplemented")
+	//var err error
+	//if edits.Count() == 0 {
+	//	return m, err
+	//}
+	//
+	//key, value := edits.Next()
+	//
+	//cur, err := mapCursorAtKey(ctx, m, key)
+	//if err != nil {
+	//	return m, err
+	//}
+	//
+	//ch, err := newTreeChunker(ctx, cur, 0, m.ns, newDefaultNodeSplitter)
+	//if err != nil {
+	//	return m, err
+	//}
+	//
+	//for key != nil {
+	//
+	//	var oldValue val.Tuple
+	//	if cur.valid() {
+	//		k, v, err := getKeyValue(ctx, cur)
+	//		if err != nil {
+	//			return m, err
+	//		}
+	//		if compareValues(m, key, k) == 0 {
+	//			oldValue = v
+	//		}
+	//	}
+	//
+	//	if oldValue == nil && value == nil {
+	//		continue // already non-present
+	//	}
+	//	if oldValue != nil && compareValues(m, value, oldValue) == 0 {
+	//		continue // same value
+	//	}
+	//
+	//	err = ch.advanceTo(ctx, cur)
+	//	if err != nil {
+	//		return m, err
+	//	}
+	//
+	//	if oldValue != nil {
+	//		// stats.Modifications++
+	//		if err = ch.Skip(ctx); err != nil {
+	//			return m, err
+	//		}
+	//	} // else stats.Additions++
+	//
+	//	if value != nil {
+	//		_, err = ch.Append(ctx, nodeItem(key), nodeItem(value))
+	//		if err != nil {
+	//			continue
+	//		}
+	//	}
+	//
+	//	key, value = edits.Next()
+	//}
+	//
+	//m.root, err = ch.Done(ctx)
+	//if err != nil {
+	//	return m, err
+	//}
+	//
+	//return m, nil
 }
 
 func mapCursorAtKey(ctx context.Context, m Map, key val.Tuple) (*nodeCursor, error) {

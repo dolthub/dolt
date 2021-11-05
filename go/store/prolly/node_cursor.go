@@ -17,8 +17,6 @@ package prolly
 import (
 	"context"
 	"sort"
-
-	"github.com/dolthub/dolt/go/store/d"
 )
 
 const (
@@ -33,8 +31,6 @@ type nodeCursor struct {
 	idx    int
 	parent *nodeCursor
 	nrw    NodeStore
-
-	// todo(andy): cache node count
 }
 
 type compareFn func(left, right nodeItem) int
@@ -132,9 +128,6 @@ func (cur *nodeCursor) valid() bool {
 
 // currentPair returns the item at the currentPair cursor position
 func (cur *nodeCursor) currentPair() nodePair {
-	if !cur.valid() {
-		d.PanicIfFalse(cur.valid())
-	}
 	return cur.nd.getPair(cur.idx)
 }
 
@@ -210,21 +203,34 @@ func (cur *nodeCursor) search(item nodeItem, cb compareFn) int {
 }
 
 func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
-	return cur.advanceMaybeAllowPastEnd(ctx, true)
+	ok, err := cur.advanceInBounds(ctx)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		cur.idx = cur.nd.nodeCount()
+	}
+
+	return ok, nil
 }
 
-func (cur *nodeCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPastEnd bool) (bool, error) {
-	if cur.idx < cur.nd.nodeCount()-stride {
+func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
+	lastIdx := cur.nd.nodeCount() - stride
+
+	if cur.idx < lastIdx {
 		cur.idx += stride
 		return true, nil
 	}
 
 	if cur.idx == cur.nd.nodeCount() {
+		// |cur| is already out of bounds
 		return false, nil
 	}
 
+	assertTrue(cur.idx == lastIdx)
+
 	if cur.parent != nil {
-		ok, err := cur.parent.advanceMaybeAllowPastEnd(ctx, false)
+		ok, err := cur.parent.advanceInBounds(ctx)
 
 		if err != nil {
 			return false, err
@@ -240,33 +246,41 @@ func (cur *nodeCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPastEn
 			cur.skipToNodeStart()
 			return true, nil
 		}
-	}
-
-	if allowPastEnd {
-		cur.idx += stride
+		// if not |ok|, then every parent, grandparent, etc.,
+		// failed to advanceInBounds(): we're past the end
+		// of the prolly tree.
 	}
 
 	return false, nil
 }
 
 func (cur *nodeCursor) retreat(ctx context.Context) (bool, error) {
-	return cur.retreatMaybeAllowBeforeStart(ctx, true)
+	ok, err := cur.retreatInBounds(ctx)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		cur.idx = -stride
+	}
+
+	return ok, nil
 }
 
-func (cur *nodeCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBeforeStart bool) (bool, error) {
+func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 	if cur.idx > 0 {
 		cur.idx -= stride
 		return true, nil
 	}
 
 	if cur.idx == -stride {
+		// |cur| is already out of bounds
 		return false, nil
 	}
 
-	d.PanicIfFalse(0 == cur.idx)
+	assertTrue(cur.idx == 0)
 
 	if cur.parent != nil {
-		ok, err := cur.parent.retreatMaybeAllowBeforeStart(ctx, false)
+		ok, err := cur.parent.retreatInBounds(ctx)
 
 		if err != nil {
 			return false, err
@@ -281,10 +295,9 @@ func (cur *nodeCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBe
 			cur.skipToNodeEnd()
 			return true, nil
 		}
-	}
-
-	if allowBeforeStart {
-		cur.idx -= stride
+		// if not |ok|, then every parent, grandparent, etc.,
+		// failed to retreatInBounds(): we're before the start
+		// of the prolly tree.
 	}
 
 	return false, nil
@@ -293,7 +306,7 @@ func (cur *nodeCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBe
 // fetchNode loads the Node that the cursor index points to.
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *nodeCursor) fetchNode(ctx context.Context) (err error) {
-	d.PanicIfFalse(cur.parent != nil)
+	assertTrue(cur.parent != nil)
 	mv := metaValue(cur.parent.currentPair().value())
 	cur.nd, err = fetchChild(ctx, cur.nrw, mv)
 	cur.idx = -1 // caller must set
@@ -307,6 +320,12 @@ func (cur *nodeCursor) compare(other *nodeCursor) int {
 			return p
 		}
 	}
-	d.PanicIfFalse(cur.nd.nodeCount() == other.nd.nodeCount())
+	assertTrue(cur.nd.nodeCount() == other.nd.nodeCount())
 	return cur.idx - other.idx
+}
+
+func assertTrue(b bool) {
+	if !b {
+		panic("assertion failed")
+	}
 }
