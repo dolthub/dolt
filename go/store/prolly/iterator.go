@@ -21,7 +21,10 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// MapIter is an iterator over a prolly tree Map.
 type MapIter interface {
+	// Next returns the next key-value pair from the iterator.
+	// If the iterator is exhausted, io.EOF is returned.
 	Next(ctx context.Context) (key, value val.Tuple, err error)
 }
 
@@ -37,6 +40,7 @@ type indexIter struct {
 	rem uint64
 }
 
+// Next implements MapIter
 func (it *indexIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
 	if it.rem == 0 {
 		return nil, nil, io.EOF

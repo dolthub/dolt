@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// Map is a prolly tree implementing map semantics.
 type Map struct {
 	root    Node
 	keyDesc val.TupleDesc
@@ -41,7 +42,7 @@ func NewMap(node Node, ns NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	}
 }
 
-// NewMapFromTuples creates a prolly tree Map from slice of sorted Tuples.
+// NewMapFromTuples creates a prolly tree Map from a slice of sorted Tuples.
 func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
 	m := NewMap(nil, ns, keyDesc, valDesc)
 
@@ -148,7 +149,7 @@ func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error
 	return &indexIter{rng: rng, cur: cur, rem: remaining}, nil
 }
 
-// searchNode is a searchFn for a Map, adapted from search.Sort.
+// searchNode is a searchFn for a Map, adapted from sort.Search.
 func (m Map) searchNode(query nodeItem, nd Node) int {
 	n := nd.nodeCount() / stride
 	// Define f(-1) == false and f(n) == true.
