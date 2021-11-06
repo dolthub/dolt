@@ -107,17 +107,17 @@ func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristi
 }
 
 func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
-	_, val, ok := sql.SystemVariables.GetGlobal(env.ReplicateHeadsStrategy)
+	_, val, ok := sql.SystemVariables.GetGlobal(ReplicateHeadsStrategy)
 	if !ok {
-		return sql.ErrUnknownSystemVariable.New(env.ReplicateHeadsStrategy)
+		return sql.ErrUnknownSystemVariable.New(ReplicateHeadsStrategy)
 	}
 	switch val {
-	case env.ReplicateHeads_MANY:
+	case ReplicateHeads_MANY:
 		err := fetchBranches(ctx, rrd)
 		if err != nil {
 			return err
 		}
-	case env.ReplicateHeads_ONE:
+	case ReplicateHeads_ONE:
 	default:
 	}
 	return fetchRef(ctx, rrd, rrd.headRef)

@@ -16,6 +16,9 @@ package commands
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/go-mysql-server/sql"
 	"testing"
 
 	"github.com/google/uuid"
@@ -557,5 +560,23 @@ func TestDelete(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCommitHooksNoErrors(t *testing.T) {
+	dEnv := dtestutils.CreateEnvWithSeedData(t)
+	sqle.AddDoltSystemVariables()
+	sql.SystemVariables.SetGlobal(sqle.SkipReplicationErrorsKey, true)
+	sql.SystemVariables.SetGlobal(sqle.ReplicateToRemoteKey, "unknown")
+	hooks, err := GetCommitHooks(context.Background(), dEnv)
+	assert.NoError(t, err)
+	if len(hooks) < 1 {
+		t.Error("failed to produce noop hook")
+	} else {
+		switch h := hooks[0].(type) {
+		case *doltdb.LogHook:
+		default:
+			t.Errorf("expected LogHook, found: %s", h)
+		}
 	}
 }

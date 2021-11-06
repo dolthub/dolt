@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
 	"io"
 	"os"
 	"os/signal"
@@ -106,7 +108,7 @@ const (
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
 
 func init() {
-	env.AddDoltSystemVariables()
+	dsqle.AddDoltSystemVariables()
 }
 
 type SqlCmd struct {
@@ -472,8 +474,8 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 // that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
 	var skipErrors bool
-	if _, val, ok := sql.SystemVariables.GetGlobal(env.SkipReplicationErrorsKey); !ok {
-		return dsqle.ReadReplicaDatabase{}, sql.ErrUnknownSystemVariable.New(env.SkipReplicationErrorsKey)
+	if _, val, ok := sql.SystemVariables.GetGlobal(dsqle.SkipReplicationErrorsKey); !ok {
+		return dsqle.ReadReplicaDatabase{}, sql.ErrUnknownSystemVariable.New(dsqle.SkipReplicationErrorsKey)
 	} else if val == int8(1) {
 		skipErrors = true
 	}
@@ -532,13 +534,67 @@ func execQuery(
 	return nil
 }
 
+func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnWriteHook, error) {
+	_, val, ok := sql.SystemVariables.GetGlobal(dsqle.ReplicateToRemoteKey)
+	if !ok {
+		return nil, sql.ErrUnknownSystemVariable.New(dsqle.SkipReplicationErrorsKey)
+	} else if val == "" {
+		return nil, nil
+	}
+	remoteName, ok := val.(string)
+	if !ok {
+		return nil, sql.ErrInvalidSystemVariableValue.New(val)
+	}
+
+	remotes, err := dEnv.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+	rem, ok := remotes[remoteName]
+	if !ok {
+		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
+	}
+	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
+
+	if err != nil {
+		return nil, err
+	}
+	pushHook := doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir())
+	return pushHook, nil
+}
+
+// GetCommitHooks creates a list of hooks to execute on database commit. If dsqle.SkipReplicationErrorsKey is set,
+// replace misconfigured hooks with doltdb.LogHook instances that prints a warning when trying to execute.
+func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv) ([]datas.CommitHook, error) {
+	postCommitHooks := make([]datas.CommitHook, 0)
+	var skipErrors bool
+	if _, val, ok := sql.SystemVariables.GetGlobal(dsqle.SkipReplicationErrorsKey); !ok {
+		return nil, sql.ErrUnknownSystemVariable.New(dsqle.SkipReplicationErrorsKey)
+	} else if val == int8(1) {
+		skipErrors = true
+	}
+
+	if hook, err := getPushOnWriteHook(ctx, dEnv); err != nil {
+		err = fmt.Errorf("failure loading hook; %w", err)
+		if skipErrors {
+			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
+		} else {
+			return nil, err
+		}
+	} else if hook != nil {
+		postCommitHooks = append(postCommitHooks, hook)
+	}
+
+	return postCommitHooks, nil
+}
+
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
 func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
 	var dbs []dsqle.SqlDatabase
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		postCommitHooks, err := env.GetCommitHooks(ctx, dEnv)
+		postCommitHooks, err := GetCommitHooks(ctx, dEnv)
 		if err != nil {
 			return true, err
 		}
@@ -546,7 +602,7 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsqle.SqlDataba
 
 		db = newDatabase(name, dEnv)
 
-		if _, remote, ok := sql.SystemVariables.GetGlobal(env.ReadReplicaRemoteKey); ok && remote != "" {
+		if _, remote, ok := sql.SystemVariables.GetGlobal(dsqle.ReadReplicaRemoteKey); ok && remote != "" {
 			remoteName, ok := remote.(string)
 			if !ok {
 				return true, sql.ErrInvalidSystemVariableValue.New(remote)
@@ -1177,7 +1233,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 	}
 
 	currentBatchMode := invalidBatchMode
-	if v, err := ctx.GetSessionVariable(ctx, env.CurrentBatchModeKey); err == nil {
+	if v, err := ctx.GetSessionVariable(ctx, dsqle.CurrentBatchModeKey); err == nil {
 		currentBatchMode = batchMode(v.(int64))
 	} else {
 		return err
@@ -1197,7 +1253,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 		}
 	}
 
-	err = ctx.SetSessionVariable(ctx, env.CurrentBatchModeKey, int64(newBatchMode))
+	err = ctx.SetSessionVariable(ctx, dsqle.CurrentBatchModeKey, int64(newBatchMode))
 	if err != nil {
 		return err
 	}
