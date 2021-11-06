@@ -30,6 +30,7 @@ import (
 	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 type query string
@@ -119,7 +120,7 @@ func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg 
 	if !ok {
 		b.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{env.ReplicateToRemoteKey: "remote1"})
+	localCfg.SetStrings(map[string]string{sqle.ReplicateToRemoteKey: "remote1"})
 
 	yaml := []byte(fmt.Sprintf(`
 log_level: warning
