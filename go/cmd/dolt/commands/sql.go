@@ -541,6 +541,7 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnW
 	} else if val == "" {
 		return nil, nil
 	}
+
 	remoteName, ok := val.(string)
 	if !ok {
 		return nil, sql.ErrInvalidSystemVariableValue.New(val)
@@ -550,20 +551,22 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnW
 	if err != nil {
 		return nil, err
 	}
+
 	rem, ok := remotes[remoteName]
 	if !ok {
 		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
-	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
 
+	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
 	if err != nil {
 		return nil, err
 	}
+
 	pushHook := doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir())
 	return pushHook, nil
 }
 
-// GetCommitHooks creates a list of hooks to execute on database commit. If dsqle.SkipReplicationErrorsKey is set,
+// GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
 // replace misconfigured hooks with doltdb.LogHook instances that prints a warning when trying to execute.
 func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
