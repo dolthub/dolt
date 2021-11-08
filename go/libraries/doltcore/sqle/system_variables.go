@@ -28,11 +28,6 @@ const (
 	CurrentBatchModeKey      = "batch_mode"
 )
 
-const (
-	ReplicateHeads_ONE  = "one"
-	ReplicateHeads_MANY = "many"
-)
-
 func AddDoltSystemVariables() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{
