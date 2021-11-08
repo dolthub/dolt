@@ -107,7 +107,7 @@ func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristi
 			ctx.GetLogger().Warn(err.Error())
 		}
 	} else {
-		ctx.GetLogger().Warn("replication failure; dolt_replication_remote value is misconfigured")
+		ctx.GetLogger().Warn("replication failed; dolt_replication_remote value is misconfigured")
 	}
 	return rrd.Database.StartTransaction(ctx, tCharacteristic)
 }
@@ -132,7 +132,7 @@ func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
 			return sql.ErrInvalidSystemVariableValue.New(heads)
 		}
 		branches := parseBranches(heads)
-		err := fetchBranches(ctx, rrd, branches)
+		err := pullBranches(ctx, rrd, branches)
 		if err != nil {
 			return err
 		}
@@ -152,7 +152,7 @@ func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
 			allBranches = append(allBranches, r.GetPath())
 		}
 
-		err = fetchBranches(ctx, rrd, allBranches)
+		err = pullBranches(ctx, rrd, allBranches)
 		if err != nil {
 			return err
 		}
@@ -162,29 +162,46 @@ func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
 	return nil
 }
 
-func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
-	rtRef, err := remoteTrackingRef(rrd.rsr, headRef, rrd.remote.Name)
+func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) error {
+	err := rrd.srcDB.Rebase(ctx)
 	if err != nil {
 		return err
 	}
 
-	ddb := rrd.Database.DbData().Ddb
-	err = rrd.srcDB.Rebase(ctx)
+	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
 	if err != nil {
 		return err
 	}
 
-	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, headRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	for i, refSpec := range refSpecs {
+		branch := ref.NewBranchRef(branches[i])
+		rtRef := refSpec.DestRef(branch)
+		err := pullRef(ctx, rrd, branch, rtRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = actions.FetchFollowTags(ctx, rrd.rsw.TempTableFilesDir(), rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
 
-	err = ddb.FastForward(ctx, rtRef, srcDBCommit)
+	return nil
+}
+
+func pullRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
+	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
 
-	err = ddb.FastForward(ctx, rrd.headRef, srcDBCommit)
+	err = rrd.ddb.FastForward(ctx, rtRef, srcDBCommit)
+	if err != nil {
+		return err
+	}
+
+	err = rrd.ddb.FastForward(ctx, rrd.headRef, srcDBCommit)
 	if err != nil {
 		return err
 	}
@@ -194,7 +211,7 @@ func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.Dolt
 		return err
 	}
 
-	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
 	if err != nil {
 		return err
 	}
@@ -213,52 +230,6 @@ func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.Dolt
 	rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
 
 	return nil
-}
-
-func fetchBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) error {
-	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
-	if err != nil {
-		return err
-	}
-
-	for i, refSpec := range refSpecs {
-		branch := ref.NewBranchRef(branches[i])
-		rtRef := refSpec.DestRef(branch)
-		err := fetchRef(ctx, rrd, branch, rtRef)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = actions.FetchFollowTags(ctx, rrd.rsw.TempTableFilesDir(), rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// TODO: this is circuitous, can make more direct
-func remoteTrackingRef(rsr env.RepoStateReader, headRef ref.DoltRef, remoteName string) (ref.DoltRef, error) {
-	refSpecs, err := env.GetRefSpecs(rsr, remoteName)
-	if err != nil {
-		return nil, err
-	}
-
-	var remoteTrackRef ref.DoltRef
-	var foundRef bool
-	for _, refSpec := range refSpecs {
-		trackRef := refSpec.DestRef(headRef)
-		if trackRef != nil {
-			remoteTrackRef = trackRef
-			foundRef = true
-			break
-		}
-	}
-	if !foundRef {
-		return nil, env.ErrInvalidRefSpecRemote
-	}
-	return remoteTrackRef, nil
 }
 
 func parseBranches(arg string) []string {
