@@ -429,6 +429,93 @@ SQL
     [[ "$output" =~ "remotes/test-remote/poop" ]] || false
 }
 
+@test "remotes: fetch output" {
+    # create main remote branch
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt sql -q 'create table test (id int primary key);'
+    dolt add .
+    dolt commit -m 'create test table.'
+    dolt push origin main:main
+
+    # create remote branch "branch1"
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values to branch 1.'
+    dolt push --set-upstream origin branch1
+
+    # create remote branch "branch2"
+    dolt checkout -b branch2
+    dolt sql -q 'insert into test (id) values (4), (5), (6);'
+    dolt add .
+    dolt commit -m 'add some values to branch 2.'
+    dolt push --set-upstream origin branch2
+
+    # create first clone
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    cd ../..
+
+    # create second clone
+    cd "dolt-repo-clones"
+    dolt clone http://localhost:50051/test-org/test-repo test-repo2
+    cd test-repo2
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    # CHANGE 1: add more data to branch1
+    dolt checkout -b branch1 remotes/origin/branch1
+    dolt sql -q 'insert into test (id) values (100), (101), (102);'
+    dolt add .
+    dolt commit -m 'add more values to branch 1.'
+    dolt push --set-upstream origin branch1
+
+    # CHANGE 2: add more data to branch2
+    dolt checkout -b branch2 remotes/origin/branch2
+    dolt sql -q 'insert into test (id) values (103), (104), (105);'
+    dolt add .
+    dolt commit -m 'add more values to branch 2.'
+    dolt push --set-upstream origin branch2
+
+    # CHANGE 3: create remote branch "branch3"
+    dolt checkout -b branch3
+    dolt sql -q 'insert into test (id) values (7), (8), (9);'
+    dolt add .
+    dolt commit -m 'add some values to branch 3.'
+    dolt push --set-upstream origin branch3
+
+    # CHANGE 4: create remote branch "branch4"
+    dolt checkout -b branch4
+    dolt sql -q 'insert into test (id) values (10), (11), (12);'
+    dolt add .
+    dolt commit -m 'add some values to  branch 4.'
+    dolt push --set-upstream origin branch4
+
+    cd ..
+    cd test-repo
+    run dolt fetch
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [ "${lines[0]}" != "" ]
+    [ "${lines[1]}" != "" ]
+    [ "${lines[2]}" != "" ]
+    [ "${lines[3]}" != "" ]
+
+    run dolt fetch
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
 @test "remotes: dolt fetch with docs" {
     # Initial commit of docs on remote
     echo "initial-license" > LICENSE.md
@@ -457,7 +544,7 @@ SQL
     run cat README.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial-readme" ]] || false
-    # Change the docs 
+    # Change the docs
     echo "dolt-repo-clones-license" > LICENSE.md
     echo "dolt-repo-clones-readme" > README.md
     dolt add .

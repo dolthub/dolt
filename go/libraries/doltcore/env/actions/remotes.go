@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -258,7 +260,7 @@ func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltd
 	return destDB.PullChunks(ctx, tempTablesDir, srcDB, stRef, progChan, pullerEventCh)
 }
 
-// FetchCommit takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
+// FetchTag takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
 func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, srcDBTag *doltdb.Tag, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	stRef, err := srcDBTag.GetStRef()
 
@@ -274,7 +276,7 @@ func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- dat
 	return srcDB.Clone(ctx, destDB, eventCh)
 }
 
-// fetchFollowTags fetches all tags from the source DB whose commits have already
+// FetchFollowTags fetches all tags from the source DB whose commits have already
 // been fetched into the destination DB.
 // todo: potentially too expensive to iterate over all srcDB tags
 func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, progStarter ProgStarter, progStopper ProgStopper) error {
@@ -313,6 +315,11 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 		wg, progChan, pullerEventCh := progStarter(newCtx)
 		err = FetchTag(ctx, tempTableDir, srcDB, destDB, tag, progChan, pullerEventCh)
 		progStopper(cancelFunc, wg, progChan, pullerEventCh)
+		if err == nil {
+			cli.Println()
+		} else if err == datas.ErrDBUpToDate {
+			err = nil
+		}
 
 		if err != nil {
 			return true, err
@@ -352,6 +359,11 @@ func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote
 	wg, progChan, pullerEventCh := progStarter(newCtx)
 	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
 	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	if err == nil {
+		cli.Println()
+	} else if err == datas.ErrDBUpToDate {
+		err = nil
+	}
 
 	if err != nil {
 		return nil, err

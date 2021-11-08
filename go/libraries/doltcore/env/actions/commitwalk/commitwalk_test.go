@@ -231,6 +231,9 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 		}
 	}()
 	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, stref, p1, p2)
+	if err == datas.ErrDBUpToDate {
+		err = nil
+	}
 	require.NoError(t, err)
 	err = forkEnv.DoltDB.SetHead(context.Background(), ref.NewBranchRef(bn), stref)
 	require.NoError(t, err)
