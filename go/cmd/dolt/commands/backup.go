@@ -88,7 +88,7 @@ func (cmd BackupCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd BackupCmd) Description() string {
-	return "Manage set of tracked repositories."
+	return "Manage a set of server backups."
 }
 
 func (cmd BackupCmd) RequiresRepo() bool {
