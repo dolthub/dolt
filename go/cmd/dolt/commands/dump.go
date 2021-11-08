@@ -318,8 +318,6 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 	default:
 		return "", errhand.BuildDError("invalid result format").SetPrintUsage().Build()
 	}
-
-	return "", nil
 }
 
 // getDumpArgs returns dumpOptions of result format and dest file location corresponding to the input parameters
