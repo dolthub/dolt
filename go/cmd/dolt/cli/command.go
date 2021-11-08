@@ -245,7 +245,7 @@ func CheckEnvIsValid(dEnv *env.DoltEnv) bool {
 	return true
 }
 
-// CheckUserNameAndEmail returns true if the user name and email are set for this environment, or prints and error and
+// CheckUserNameAndEmail returns true if the user name and email are set for this environment, or prints an error and
 // returns false if not.
 func CheckUserNameAndEmail(dEnv *env.DoltEnv) bool {
 	ok := true

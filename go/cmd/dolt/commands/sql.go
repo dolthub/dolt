@@ -212,9 +212,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	if !cli.CheckUserNameAndEmail(dEnv) {
-		return 1
-	}
+	// We need a username and password for many SQL commands, so set defaults if they don't exist
+	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
 	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
 	if verr != nil {

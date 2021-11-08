@@ -234,11 +234,24 @@ func (dcc *DoltCliConfig) WriteableConfig() config.ReadWriteConfig {
 	return writeableLocalDoltCliConfig{dcc}
 }
 
-// Returns a copy of this config with the config given as failsafes, i.e. values that will be returned as a last
-// resort if they are not found elsewhere in the config hierarchy.
-// func (dcc *DoltCliConfig) WithFailsafes(cfg config.ReadableConfig) *DoltCliConfig {
-// 	dcc.ch.
-// }
+// SetFailsafes sets the config values given as failsafes, i.e. values that will be returned as a last resort if they
+// are not found elsewhere in the config hierarchy. The "failsafe" config can be written to in order to conform to the
+// interface of ConfigHierarchy, but values will not persist beyond this session.
+// Calling SetFailsafes more than once will overwrite any previous values.
+// Should only be called after primary configuration of the config hierarchy has been completed.
+func (dcc DoltCliConfig) SetFailsafes(cfg map[string]string) {
+	existing, ok := dcc.ch.GetConfig("failsafe")
+	if !ok {
+		dcc.ch.AddConfig("failsafe", config.NewEmptyMapConfig())
+	}
+
+	_ = existing.SetStrings(cfg)
+}
+
+var DefaultFailsafeConfig = map[string]string {
+	UserEmailKey: "doltuser@dolthub.com",
+	UserNameKey: "Dolt System Account",
+}
 
 func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {
 	localCfg, ok := w.GetConfig(LocalConfig)

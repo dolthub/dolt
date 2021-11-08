@@ -49,7 +49,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	// Code is easier to work through if we assume that serverController is never nil
 	if serverController == nil {
-		serverController = CreateServerController()
+		serverController = NewServerController()
 	}
 
 	var mySQLServer *server.Server

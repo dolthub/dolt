@@ -50,7 +50,7 @@ func (mc *MapConfig) GetStringOrDefault(key, defStr string) string {
 	return defStr
 }
 
-// SetString sets the values for a map of updates.
+// SetStrings sets the values for a map of updates.
 func (mc *MapConfig) SetStrings(updates map[string]string) error {
 	for k, v := range updates {
 		mc.properties[k] = v

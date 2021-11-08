@@ -113,7 +113,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 		cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-		serverController = CreateServerController()
+		serverController = NewServerController()
 		go func() {
 			_, _ = Serve(ctx, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
 		}()

@@ -163,7 +163,7 @@ func getProfFile(b *testing.B) *os.File {
 }
 
 func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, cfg srv.ServerConfig, queries []query) {
-	serverController := srv.CreateServerController()
+	serverController := srv.NewServerController()
 
 	eg, ctx := errgroup.WithContext(ctx)
 
