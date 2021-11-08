@@ -150,24 +150,17 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 		}
 	}
 
-	if setCfgTypes.Size() == 0 {
-		cfgTypesSl = []string{localParamName, globalParamName}
-	}
-
-	for _, cfgType := range cfgTypesSl {
-		cfg, ok := dEnv.Config.GetConfig(newCfgElement(cfgType))
-		if ok {
-			if val, err := cfg.GetString(args[0]); err == nil {
-				printFn(args[0], &val)
-				return 0
-			} else if err != config.ErrConfigParamNotFound {
-				cli.PrintErrln(color.RedString("Unexpected error: %s", err.Error()))
-				return 1
-			}
+	val, err := dEnv.Config.GetString(args[0])
+	if err != nil {
+		if err == config.ErrConfigParamNotFound {
+			cli.PrintErrln(color.RedString("Unexpected error: %s", err.Error()))
 		}
+		// Not found prints no error but returns status 1
+		return 1
 	}
 
-	return 1
+	printFn(args[0], &val)
+	return 0
 }
 
 func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {

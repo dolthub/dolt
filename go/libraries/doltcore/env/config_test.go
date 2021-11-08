@@ -14,7 +14,12 @@
 
 package env
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/stretchr/testify/assert"
+)
 
 const (
 	email = "bigbillieb@fake.horse"
@@ -27,26 +32,18 @@ func TestConfig(t *testing.T) {
 	lCfg, _ := dEnv.Config.GetConfig(LocalConfig)
 	gCfg, _ := dEnv.Config.GetConfig(GlobalConfig)
 
-	lCfg.SetStrings(map[string]string{UserEmailKey: email})
+	lCfg.SetStrings(map[string]string{UserEmailKey: email, UserNameKey: "local_override"})
 	gCfg.SetStrings(map[string]string{UserNameKey: name})
 
-	if dEnv.Config.GetStringOrDefault(UserEmailKey, "no") != email {
-		t.Error("Should return", email)
-	}
+	assert.Equal(t, email, dEnv.Config.GetStringOrDefault(UserEmailKey, "no"))
+	assert.Equal(t, "local_override", dEnv.Config.GetStringOrDefault(UserNameKey, "no"))
+	assert.Equal(t, "yes", dEnv.Config.GetStringOrDefault("bad_key", "yes"))
 
-	if dEnv.Config.GetStringOrDefault("bad_key", "yes") != "yes" {
-		t.Error("Should return default value of yes")
-	}
+	assert.Equal(t, email, dEnv.Config.IfEmptyUseConfig("", UserEmailKey))
+	assert.Equal(t, "not empty", dEnv.Config.IfEmptyUseConfig("not empty", UserEmailKey))
 
-	if dEnv.Config.IfEmptyUseConfig("", UserEmailKey) != email {
-		t.Error("Should return", email)
-	}
+	assert.Equal(t, "", dEnv.Config.IfEmptyUseConfig("", "missing"))
 
-	if dEnv.Config.IfEmptyUseConfig("not empty", UserEmailKey) != "not empty" {
-		t.Error("Should return default value")
-	}
-
-	if dEnv.Config.IfEmptyUseConfig("", "missing") != "" {
-		t.Error("Should return empty string")
-	}
+	_, err := dEnv.Config.GetString("missing")
+	assert.Equal(t, config.ErrConfigParamNotFound, err)
 }

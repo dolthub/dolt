@@ -96,20 +96,7 @@ var _ config.ReadableConfig = &DoltCliConfig{}
 func LoadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
 	ch := config.NewConfigHierarchy()
 
-	gPath, err := getGlobalCfgPath(hdp)
-	if err != nil {
-		return nil, err
-	}
-
 	lPath := getLocalConfigPath()
-
-	gCfg, err := ensureGlobalConfig(gPath, fs)
-	if err != nil {
-		return nil, err
-	}
-
-	ch.AddConfig(globalConfigName, gCfg)
-
 	if exists, _ := fs.Exists(lPath); exists {
 		lCfg, err := config.FromFile(lPath, fs)
 
@@ -117,6 +104,18 @@ func LoadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliCon
 			ch.AddConfig(localConfigName, lCfg)
 		}
 	}
+
+	gPath, err := getGlobalCfgPath(hdp)
+	if err != nil {
+		return nil, err
+	}
+
+	gCfg, err := ensureGlobalConfig(gPath, fs)
+	if err != nil {
+		return nil, err
+	}
+
+	ch.AddConfig(globalConfigName, gCfg)
 
 	return &DoltCliConfig{ch, ch, fs}, nil
 }
@@ -234,6 +233,12 @@ type writeableLocalDoltCliConfig struct {
 func (dcc *DoltCliConfig) WriteableConfig() config.ReadWriteConfig {
 	return writeableLocalDoltCliConfig{dcc}
 }
+
+// Returns a copy of this config with the config given as failsafes, i.e. values that will be returned as a last
+// resort if they are not found elsewhere in the config hierarchy.
+// func (dcc *DoltCliConfig) WithFailsafes(cfg config.ReadableConfig) *DoltCliConfig {
+// 	dcc.ch.
+// }
 
 func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {
 	localCfg, ok := w.GetConfig(LocalConfig)

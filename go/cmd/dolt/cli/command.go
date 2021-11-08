@@ -16,6 +16,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -242,6 +243,26 @@ func CheckEnvIsValid(dEnv *env.DoltEnv) bool {
 	}
 
 	return true
+}
+
+// CheckUserNameAndEmail returns true if the user name and email are set for this environment, or prints and error and
+// returns false if not.
+func CheckUserNameAndEmail(dEnv *env.DoltEnv) bool {
+	ok := true
+
+	_, err := dEnv.Config.GetString(env.UserEmailKey)
+	if err != nil {
+		PrintErrln(color.RedString(fmt.Sprintf("No config found for required key %s, use dolt config --add %s <your email>", env.UserEmailKey, env.UserEmailKey)))
+		ok = false
+	}
+
+	_, err = dEnv.Config.GetString(env.UserNameKey)
+	if err != nil {
+		PrintErrln(color.RedString(fmt.Sprintf("No config found for required key %s, use dolt config --add %s <your name>", env.UserNameKey, env.UserNameKey)))
+		ok = false
+	}
+
+	return ok
 }
 
 func (hc SubCommandHandler) printUsage(commandStr string) {

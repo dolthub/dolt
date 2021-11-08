@@ -212,6 +212,10 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	if !cli.CheckUserNameAndEmail(dEnv) {
+		return 1
+	}
+
 	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
