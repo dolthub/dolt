@@ -214,31 +214,20 @@ teardown() {
     server_query repo2 1 "show tables" "Table\n"
 }
 
-@test "sql-server: replica connect to missing branch with connection string fetches" {
+@test "sql-server: connect to missing branch pulls remote" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
-    mkdir remote1
-    cd repo2
-    dolt remote add remote1 file://../remote1
-    dolt push -u remote1 main
-
-    cd ..
-    rm -rf repo1
-    dolt clone file://./remote1 repo1
     cd repo1
-    dolt remote add remote1 file://../remote1
+    dolt checkout -b feature-branch
+    dolt commit -am "new commit"
+    dolt push remote1 feature-branch
 
     cd ../repo2
-    dolt checkout -b feature-branch
-    dolt sql -q "create table test (a int)"
-    dolt commit -am "new commit"
-    dolt push -u remote1 feature-branch
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    start_sql_server repo2
 
-    cd ../repo1
-    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE remote1
-    start_sql_server repo1
-
-    server_query repo1 1 "SHOW tables" "" # no tables on main
-    server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
+    server_query repo2 1 "SHOW tables" "" # no tables on main
+    server_query "repo2/feature-branch" 1 "SHOW Tables" "Table\ntest"
 }
 

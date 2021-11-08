@@ -307,8 +307,8 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 		return err
 	}
 
-	// we fetched, now formalize working set update if branch is configured to replicate
-	err = destDb.PullFromReplica(ctx)
+	// we fetched, now formalize working set update
+	err = pullBranches(ctx, destDb, []string{branch})
 	if err != nil {
 		return err
 	}
