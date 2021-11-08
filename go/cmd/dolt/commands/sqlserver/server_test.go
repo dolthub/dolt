@@ -400,7 +400,7 @@ func TestReadReplica(t *testing.T) {
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
-	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{sqle.ReadReplicaRemoteKey: "remote1", sqle.ReplicateHeadsStrategy: "many"})
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{sqle.ReadReplicaRemoteKey: "remote1", sqle.ReplicateHeadsKey: "main,feature"})
 	dsess.InitPersistedSystemVars(multiSetup.MrEnv.GetEnv(readReplicaDbName))
 
 	// start server as read replica
@@ -429,15 +429,7 @@ func TestReadReplica(t *testing.T) {
 	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
 	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
 
-	t.Run("read replica pulls on read", func(t *testing.T) {
-		var res []string
-		q := sess.SelectBySql("show tables")
-		_, err := q.LoadContext(context.Background(), &res)
-		assert.NoError(t, err)
-		assert.ElementsMatch(t, res, []string{replicatedTable})
-	})
-
-	t.Run("read replica pulls all branches", func(t *testing.T) {
+	t.Run("read replica pulls multiple branches", func(t *testing.T) {
 		var res []int
 		newBranch := "feature"
 		multiSetup.NewBranch(sourceDbName, newBranch)

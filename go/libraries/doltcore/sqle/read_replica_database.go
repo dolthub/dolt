@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -48,6 +49,7 @@ var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
 var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
+var ErrInvalidReplicateHeadSetting = errors.New("invalid replicate head setting")
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
@@ -98,7 +100,11 @@ func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristi
 	if rrd.srcDB != nil {
 		err := rrd.pullFromReplica(ctx)
 		if err != nil {
-			return nil, err
+			err = fmt.Errorf("replication failed: %w", err)
+			if !SkipReplicationWarnings() {
+				return nil, err
+			}
+			ctx.GetLogger().Warn(err.Error())
 		}
 	} else {
 		ctx.GetLogger().Warn("replication failure; dolt_replication_remote value is misconfigured")
@@ -107,34 +113,73 @@ func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristi
 }
 
 func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
-	_, val, ok := sql.SystemVariables.GetGlobal(ReplicateHeadsStrategy)
+	_, headsArg, ok := sql.SystemVariables.GetGlobal(ReplicateHeadsKey)
 	if !ok {
-		return sql.ErrUnknownSystemVariable.New(ReplicateHeadsStrategy)
+		return sql.ErrUnknownSystemVariable.New(ReplicateHeadsKey)
 	}
-	switch val {
-	case ReplicateHeads_MANY:
-		err := fetchBranches(ctx, rrd)
+
+	_, allHeads, ok := sql.SystemVariables.GetGlobal(ReplicateAllHeadsKey)
+	if !ok {
+		return sql.ErrUnknownSystemVariable.New(ReplicateAllHeadsKey)
+	}
+
+	switch {
+	case headsArg != "" && allHeads == int8(1):
+		return fmt.Errorf("%w; cannot set both 'dolt_replicate_heads' and 'dolt_replicate_all_heads'", ErrInvalidReplicateHeadSetting)
+	case headsArg != "":
+		heads, ok := headsArg.(string)
+		if !ok {
+			return sql.ErrInvalidSystemVariableValue.New(heads)
+		}
+		branches := parseBranches(heads)
+		err := fetchBranches(ctx, rrd, branches)
 		if err != nil {
 			return err
 		}
-	case ReplicateHeads_ONE:
+	case allHeads == int8(1):
+		err := rrd.srcDB.Rebase(ctx)
+		if err != nil {
+			return err
+		}
+
+		refs, err := rrd.srcDB.GetBranches(ctx)
+		if err != nil {
+			return err
+		}
+
+		allBranches := make([]string, 0, len(refs))
+		for _, r := range refs {
+			allBranches = append(allBranches, r.GetPath())
+		}
+
+		err = fetchBranches(ctx, rrd, allBranches)
+		if err != nil {
+			return err
+		}
 	default:
+		return fmt.Errorf("%w: dolt_replicate_heads not set", ErrInvalidReplicateHeadSetting)
 	}
-	return fetchRef(ctx, rrd, rrd.headRef)
+	return nil
 }
 
-func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, head ref.DoltRef) error {
-	ddb := rrd.Database.DbData().Ddb
-	err := rrd.srcDB.Rebase(ctx)
-	if err != nil {
-		return err
-	}
-	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, head, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
+	rtRef, err := remoteTrackingRef(rrd.rsr, headRef, rrd.remote.Name)
 	if err != nil {
 		return err
 	}
 
-	err = ddb.FastForward(ctx, rrd.remoteTrackRef, srcDBCommit)
+	ddb := rrd.Database.DbData().Ddb
+	err = rrd.srcDB.Rebase(ctx)
+	if err != nil {
+		return err
+	}
+
+	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, headRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	if err != nil {
+		return err
+	}
+
+	err = ddb.FastForward(ctx, rtRef, srcDBCommit)
 	if err != nil {
 		return err
 	}
@@ -160,38 +205,67 @@ func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, head ref.DoltRef) error
 	}
 
 	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-
 	h, err := ws.HashOf()
 	if err != nil {
 		return err
 	}
+
 	rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
 
 	return nil
 }
 
-func fetchBranches(ctx *sql.Context, rrd ReadReplicaDatabase) error {
-	err := rrd.srcDB.Rebase(ctx)
+func fetchBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) error {
+	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
 	if err != nil {
 		return err
 	}
 
-	refs, err := rrd.srcDB.GetBranches(ctx)
-	if err != nil {
-		return err
+	for i, refSpec := range refSpecs {
+		branch := ref.NewBranchRef(branches[i])
+		rtRef := refSpec.DestRef(branch)
+		err := fetchRef(ctx, rrd, branch, rtRef)
+		if err != nil {
+			return err
+		}
 	}
 
-	args := make([]string, 0, len(refs))
-	for _, r := range refs {
-		args = append(args, r.GetPath())
-	}
-	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, args)
-
-	updateMode := ref.FastForwardOnly
-	err = actions.FetchRefSpecs(ctx, rrd.DbData(), refSpecs, rrd.remote, updateMode, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	err = actions.FetchFollowTags(ctx, rrd.rsw.TempTableFilesDir(), rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// TODO: this is circuitous, can make more direct
+func remoteTrackingRef(rsr env.RepoStateReader, headRef ref.DoltRef, remoteName string) (ref.DoltRef, error) {
+	refSpecs, err := env.GetRefSpecs(rsr, remoteName)
+	if err != nil {
+		return nil, err
+	}
+
+	var remoteTrackRef ref.DoltRef
+	var foundRef bool
+	for _, refSpec := range refSpecs {
+		trackRef := refSpec.DestRef(headRef)
+		if trackRef != nil {
+			remoteTrackRef = trackRef
+			foundRef = true
+			break
+		}
+	}
+	if !foundRef {
+		return nil, env.ErrInvalidRefSpecRemote
+	}
+	return remoteTrackRef, nil
+}
+
+func parseBranches(arg string) []string {
+	heads := strings.Split(arg, ",")
+	branches := make([]string, 0, len(heads))
+	for _, head := range heads {
+		branches = append(branches, head)
+	}
+	return branches
 }

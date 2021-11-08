@@ -1108,7 +1108,7 @@ while True:
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
-    
+
     server_query "" 1 "create database test1"
     server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
     server_query "test1" 1 "create table a(x int)"
