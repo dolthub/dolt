@@ -39,9 +39,9 @@ import (
 )
 
 const (
-	forceParam = "force"
+	forceParam    = "force"
 	directoryFlag = "directory"
-	filenameFlag = "file-name"
+	filenameFlag  = "file-name"
 )
 
 var dumpDocs = cli.CommandDocumentationContent{
@@ -128,7 +128,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		var fileName string
 		if fnOk {
 			fileName = fn
-			if fileName[len(fileName)-4:] != ".sql"{
+			if fileName[len(fileName)-4:] != ".sql" {
 				fileName += ".sql"
 			}
 		} else {
