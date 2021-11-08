@@ -214,17 +214,19 @@ teardown() {
     [ "${#lines[@]}" -eq 3 ]
 }
 
-@test "dump: SQL type - with filename and directory name given" {
+@test "dump: SQL type - with directory name given" {
     dolt sql -q "CREATE TABLE new_table(pk int);"
-    dolt sql -q "INSERT INTO new_table VALUES (1);"
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-    dolt sql -q "create table enums (a varchar(10) primary key, b enum('one','two','three'))"
-    dolt sql -q "insert into enums values ('abc', 'one'), ('def', 'two')"
+    run dolt dump --directory dumps
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "give file name only for sql type" ]] || false
+    [ ! -f dumpfile.sql ]
+}
 
+@test "dump: SQL type - with both filename and directory name given" {
+    dolt sql -q "CREATE TABLE new_table(pk int);"
     run dolt dump --file-name dumpfile.sql --directory dumps
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "no directory name needed for .sql type" ]] || false
+    [[ "$output" =~ "cannot pass both directory and file names" ]] || false
     [ ! -f dumpfile.sql ]
 }
 
@@ -374,17 +376,11 @@ teardown() {
     [ -f dumps/warehouse.csv ]
 }
 
-@test "dump: CSV type - with filename and directory name given" {
+@test "dump: CSV type - with filename given" {
     dolt sql -q "CREATE TABLE new_table(pk int);"
-    dolt sql -q "INSERT INTO new_table VALUES (1);"
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-    dolt sql -q "create table enums (a varchar(10) primary key, b enum('one','two','three'))"
-    dolt sql -q "insert into enums values ('abc', 'one'), ('def', 'two')"
-
-    run dolt dump -r csv --directory dumps --file-name dumpfile.csv
+    run dolt dump -r .csv --file-name dumpfile.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "no filename needed for .csv" ]] || false
+    [[ "$output" =~ "give directory name only for .csv type" ]] || false
     [ ! -f dumps/enums.csv ]
     [ ! -f dumps/new_table.csv ]
     [ ! -f dumps/warehouse.csv ]
@@ -536,17 +532,11 @@ teardown() {
     [ -f dumps/warehouse.json ]
 }
 
-@test "dump: JSON type - with filename and directory name given" {
+@test "dump: JSON type - with filename name given" {
     dolt sql -q "CREATE TABLE new_table(pk int);"
-    dolt sql -q "INSERT INTO new_table VALUES (1);"
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-    dolt sql -q "create table enums (a varchar(10) primary key, b enum('one','two','three'))"
-    dolt sql -q "insert into enums values ('abc', 'one'), ('def', 'two')"
-
-    run dolt dump -r json --directory dumps --file-name dumpfile.json
+    run dolt dump -r json --file-name dumpfile.json
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "no filename needed for .json" ]] || false
+    [[ "$output" =~ "give directory name only for json type" ]] || false
     [ ! -f dumps/enums.json ]
     [ ! -f dumps/new_table.json ]
     [ ! -f dumps/warehouse.json ]
