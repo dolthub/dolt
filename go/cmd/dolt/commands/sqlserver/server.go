@@ -213,8 +213,8 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf config.ReadWriteConfig, pro
 			return nil, err
 		}
 
-		dbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
-		for _, db := range dbs {
+		//dbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
+		for _, db := range doltDbs {
 			db.DbData().Ddb.SetCommitHookLogger(ctx, doltSess.GetLogger().Logger.Out)
 		}
 

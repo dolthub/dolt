@@ -417,12 +417,6 @@ func TestReadReplica(t *testing.T) {
 	}()
 	defer sc.StopServer()
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
-	defer conn.Close()
-
-	require.NoError(t, err)
-	sess := conn.NewSession(nil)
-
 	replicatedTable := "new_table"
 	multiSetup.CreateTable(sourceDbName, replicatedTable)
 	multiSetup.StageAll(sourceDbName)
@@ -430,14 +424,20 @@ func TestReadReplica(t *testing.T) {
 	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
 
 	t.Run("read replica pulls multiple branches", func(t *testing.T) {
-		var res []int
+		conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
+		defer conn.Close()
+		require.NoError(t, err)
+		sess := conn.NewSession(nil)
+
 		newBranch := "feature"
 		multiSetup.NewBranch(sourceDbName, newBranch)
 		multiSetup.CheckoutBranch(sourceDbName, newBranch)
 		multiSetup.PushToRemote(sourceDbName, "remote1", newBranch)
 
+		var res []int
+
 		q := sess.SelectBySql(fmt.Sprintf("select dolt_checkout('%s')", newBranch))
-		_, err := q.LoadContext(context.Background(), &res)
+		_, err = q.LoadContext(context.Background(), &res)
 		assert.NoError(t, err)
 		assert.ElementsMatch(t, res, []int{0})
 	})

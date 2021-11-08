@@ -31,10 +31,11 @@ import (
 
 type ReadReplicaDatabase struct {
 	Database
-	headRef        ref.DoltRef
 	remoteTrackRef ref.DoltRef
 	remote         env.Remote
 	srcDB          *doltdb.DoltDB
+	localBranches  map[string]ref.DoltRef
+	headRef        ref.DoltRef
 	tmpDir         string
 }
 
@@ -50,6 +51,8 @@ var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
 var ErrInvalidReplicateHeadSetting = errors.New("invalid replicate head setting")
+var ErrFailedToCastToReplicaDb = errors.New("failed to cast to ReadReplicaDatabase")
+var ErrCannotCreateReplicaRevisionDbForCommit = errors.New("cannot create replica revision db for commit")
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
@@ -69,36 +72,25 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, err
 	}
 
-	headRef := rsr.CWBHeadRef()
-	refSpecs, err := env.GetRefSpecs(rsr, remoteName)
-
-	var remoteTrackRef ref.DoltRef
-	var foundRef bool
-	for _, refSpec := range refSpecs {
-		trackRef := refSpec.DestRef(headRef)
-		if trackRef != nil {
-			remoteTrackRef = trackRef
-			foundRef = true
-			break
-		}
-	}
-	if !foundRef {
-		return EmptyReadReplica, env.ErrInvalidRefSpecRemote
+	branches, err := db.ddb.GetBranches(ctx)
+	localBranches := make(map[string]ref.DoltRef, len(branches))
+	for _, br := range branches {
+		localBranches[br.String()] = br
 	}
 
 	return ReadReplicaDatabase{
-		Database:       db,
-		headRef:        headRef,
-		remoteTrackRef: remoteTrackRef,
-		remote:         remote,
-		tmpDir:         tmpDir,
-		srcDB:          srcDB,
+		Database:      db,
+		remote:        remote,
+		tmpDir:        tmpDir,
+		srcDB:         srcDB,
+		localBranches: localBranches,
+		headRef:       rsr.CWBHeadRef(),
 	}, nil
 }
 
 func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if rrd.srcDB != nil {
-		err := rrd.pullFromReplica(ctx)
+		err := rrd.PullFromReplica(ctx)
 		if err != nil {
 			err = fmt.Errorf("replication failed: %w", err)
 			if !SkipReplicationWarnings() {
@@ -112,7 +104,7 @@ func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristi
 	return rrd.Database.StartTransaction(ctx, tCharacteristic)
 }
 
-func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
+func (rrd ReadReplicaDatabase) PullFromReplica(ctx context.Context) error {
 	_, headsArg, ok := sql.SystemVariables.GetGlobal(ReplicateHeadsKey)
 	if !ok {
 		return sql.ErrUnknownSystemVariable.New(ReplicateHeadsKey)
@@ -162,7 +154,17 @@ func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
 	return nil
 }
 
-func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) error {
+func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) (ReadReplicaDatabase, error) {
+	//rtRef, err := remoteTrackingRef(rrd.rsr, head, rrd.remote.Name)
+	//if err != nil {
+	//	return rrd, err
+	//}
+	//rrd.remoteTrackRef = rtRef
+	rrd.headRef = head
+	return rrd, nil
+}
+
+func pullBranches(ctx context.Context, rrd ReadReplicaDatabase, branches []string) error {
 	err := rrd.srcDB.Rebase(ctx)
 	if err != nil {
 		return err
@@ -176,7 +178,7 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 	for i, refSpec := range refSpecs {
 		branch := ref.NewBranchRef(branches[i])
 		rtRef := refSpec.DestRef(branch)
-		err := pullRef(ctx, rrd, branch, rtRef)
+		err := fetchRef(ctx, rrd, branch, rtRef)
 		if err != nil {
 			return err
 		}
@@ -190,7 +192,7 @@ func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) 
 	return nil
 }
 
-func pullRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
+func fetchRef(ctx context.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
 	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
@@ -201,33 +203,35 @@ func pullRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltR
 		return err
 	}
 
-	err = rrd.ddb.FastForward(ctx, rrd.headRef, srcDBCommit)
+	err = rrd.ddb.FastForward(ctx, headRef, srcDBCommit)
 	if err != nil {
 		return err
 	}
 
-	wsRef, err := ref.WorkingSetRefForHead(rrd.headRef)
-	if err != nil {
-		return err
-	}
+	if headRef == rrd.headRef {
+		wsRef, err := ref.WorkingSetRefForHead(headRef)
+		if err != nil {
+			return err
+		}
 
-	ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return err
-	}
+		ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
+		if err != nil {
+			return err
+		}
 
-	commitRoot, err := srcDBCommit.GetRootValue()
-	if err != nil {
-		return err
-	}
+		commitRoot, err := srcDBCommit.GetRootValue()
+		if err != nil {
+			return err
+		}
 
-	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-	h, err := ws.HashOf()
-	if err != nil {
-		return err
-	}
+		ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+		h, err := ws.HashOf()
+		if err != nil {
+			return err
+		}
 
-	rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+		rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+	}
 
 	return nil
 }

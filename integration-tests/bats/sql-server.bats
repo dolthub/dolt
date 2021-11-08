@@ -1077,32 +1077,6 @@ while True:
     [[ "${lines[3]}" =~ "2" ]]
 }
 
-@test "sql-server: read-replica pulls new commits on read" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
-    mkdir remote1
-    cd repo2
-    dolt remote add remote1 file://../remote1
-    dolt push -u remote1 main
-
-    cd ..
-    rm -rf repo1
-    dolt clone file://./remote1 repo1
-    cd repo1
-    dolt remote add remote1 file://../remote1
-
-    cd ../repo2
-    dolt sql -q "create table test (a int)"
-    dolt commit -am "new commit"
-    dolt push -u remote1 main
-
-    cd ../repo1
-    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE remote1
-    start_sql_server repo1
-
-    server_query repo1 1 "show tables" "Table\ntest"
-}
-
 @test "sql-server: create database with no starting repo" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
@@ -1209,7 +1183,7 @@ while True:
     start_sql_server
     server_query "" 1 "show databases" "Database\ninformation_schema\nrepo1\ntest1\ntest2"
 }
-    
+
 @test "sql-server: fetch uses database tempdir from different working directory" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
