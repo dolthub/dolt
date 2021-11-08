@@ -123,7 +123,7 @@ teardown() {
     [[ "$output" =~ "dolt_commit('-am', 'cm')" ]] || false
 }
 
-@test "replication: replica sink bad source no errors with standard commands" {
+@test "replication: bad source doesn't error during non-transactional commands" {
     cd repo1
     dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE unknown
 
@@ -140,5 +140,17 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]]
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+}
+
+@test "replication: replica sink quiet warning" {
+    cd repo1
+    dolt config --local --add sqlserver.global.DOLT_READ_REPLICA_REMOTE unknown
+    dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
+
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "panic" ]]
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+    [[ "$output" =~ "dolt_replication_remote value is misconfigured" ]] || false
 }
 
