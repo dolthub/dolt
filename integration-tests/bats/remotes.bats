@@ -461,10 +461,6 @@ SQL
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
-    run dolt fetch
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-
     cd ../..
 
     # create second clone
@@ -514,6 +510,10 @@ SQL
     [ "${lines[1]}" != "" ]
     [ "${lines[2]}" != "" ]
     [ "${lines[3]}" != "" ]
+
+    run dolt fetch
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
 }
 
 @test "remotes: dolt fetch with docs" {
