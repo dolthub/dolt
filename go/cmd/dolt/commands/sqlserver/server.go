@@ -228,7 +228,7 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 		var init dsess.InitialDbState
 		var err error
 
-		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DoltDefaultBranchKey)
+		_, val, ok := sql.SystemVariables.GetGlobal(dsqle.DefaultBranchKey)
 		if ok && val != "" {
 			init, err = GetInitialDBStateWithDefaultBranch(ctx, db, val.(string))
 		} else {

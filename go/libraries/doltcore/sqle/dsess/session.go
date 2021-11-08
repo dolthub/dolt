@@ -44,7 +44,6 @@ const (
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
-	DoltDefaultBranchKey          = "dolt_default_branch"
 )
 
 const NonpersistableSessionCode = 1105 // default

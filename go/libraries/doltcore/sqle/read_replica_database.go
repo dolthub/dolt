@@ -16,6 +16,8 @@ package sqle
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -45,9 +47,11 @@ var _ sql.TriggerDatabase = &ReadReplicaDatabase{}
 var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
 var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
+var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
+
 var EmptyReadReplica = ReadReplicaDatabase{}
 
-func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string, meta *doltdb.WorkingSetMeta) (ReadReplicaDatabase, error) {
+func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string) (ReadReplicaDatabase, error) {
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
 		return EmptyReadReplica, err
@@ -55,7 +59,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 
 	remote, ok := remotes[remoteName]
 	if !ok {
-		return EmptyReadReplica, env.ErrRemoteNotFound
+		return EmptyReadReplica, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
 	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default)
@@ -91,9 +95,13 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 }
 
 func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
-	err := rrd.pullFromReplica(ctx)
-	if err != nil {
-		return nil, err
+	if rrd.srcDB != nil {
+		err := rrd.pullFromReplica(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ctx.GetLogger().Warn("replication failure; dolt_replication_remote value is misconfigured")
 	}
 	return rrd.Database.StartTransaction(ctx, tCharacteristic)
 }

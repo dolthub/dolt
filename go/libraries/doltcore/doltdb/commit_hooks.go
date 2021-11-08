@@ -23,44 +23,41 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-const (
-	ReplicateToRemoteKey = "dolt_replicate_to_remote"
-	DoltReadReplicaKey   = "dolt_read_replica_remote"
-)
-
-type ReplicateHook struct {
+type PushOnWriteHook struct {
 	destDB datas.Database
 	tmpDir string
-	outf   io.Writer
+	out    io.Writer
 }
 
-// NewReplicateHook creates a ReplicateHook, parameterizaed by the backup database
+var _ datas.CommitHook = (*PushOnWriteHook)(nil)
+
+// NewPushOnWriteHook creates a ReplicateHook, parameterizaed by the backup database
 // and a local tempfile for pushing
-func NewReplicateHook(destDB *DoltDB, tmpDir string) *ReplicateHook {
-	return &ReplicateHook{destDB: destDB.db, tmpDir: tmpDir}
+func NewPushOnWriteHook(destDB *DoltDB, tmpDir string) *PushOnWriteHook {
+	return &PushOnWriteHook{destDB: destDB.db, tmpDir: tmpDir}
 }
 
 // Execute implements datas.CommitHook, replicates head updates to the destDb field
-func (rh *ReplicateHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	return replicate(ctx, rh.destDB, db, rh.tmpDir, ds)
+func (rh *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
+	return pushDataset(ctx, rh.destDB, db, rh.tmpDir, ds)
 }
 
 // HandleError implements datas.CommitHook
-func (rh *ReplicateHook) HandleError(ctx context.Context, err error) error {
-	if rh.outf != nil {
-		rh.outf.Write([]byte(err.Error()))
+func (rh *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
+	if rh.out != nil {
+		rh.out.Write([]byte(err.Error()))
 	}
 	return nil
 }
 
 // SetLogger implements datas.CommitHook
-func (rh *ReplicateHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	rh.outf = wr
+func (rh *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
+	rh.out = wr
 	return nil
 }
 
 // replicate pushes a dataset from srcDB to destDB and force sets the destDB ref to the new dataset value
-func replicate(ctx context.Context, destDB, srcDB datas.Database, tempTableDir string, ds datas.Dataset) error {
+func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir string, ds datas.Dataset) error {
 	stRef, ok, err := ds.MaybeHeadRef()
 	if err != nil {
 		return err
@@ -98,4 +95,39 @@ func replicate(ctx context.Context, destDB, srcDB datas.Database, tempTableDir s
 
 	_, err = destDB.SetHead(ctx, ds, stRef)
 	return err
+}
+
+type LogHook struct {
+	msg []byte
+	out io.Writer
+}
+
+var _ datas.CommitHook = (*LogHook)(nil)
+
+// NewLogHook is a noop that logs to a writer when invoked
+func NewLogHook(msg []byte) *LogHook {
+	return &LogHook{msg: msg}
+}
+
+// Execute implements datas.CommitHook, writes message to log channel
+func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
+	if lh.out != nil {
+		_, err := lh.out.Write(lh.msg)
+		return err
+	}
+	return nil
+}
+
+// HandleError implements datas.CommitHook
+func (lh *LogHook) HandleError(ctx context.Context, err error) error {
+	if lh.out != nil {
+		lh.out.Write([]byte(err.Error()))
+	}
+	return nil
+}
+
+// SetLogger implements datas.CommitHook
+func (lh *LogHook) SetLogger(ctx context.Context, wr io.Writer) error {
+	lh.out = wr
+	return nil
 }
