@@ -2,7 +2,6 @@ package prolly
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"testing"
 
@@ -47,15 +46,21 @@ func makeMutableMap(t *testing.T, kd, vd val.TupleDesc, items [][2]val.Tuple) or
 var _ cartographer = makeMutableMap
 
 func TestMutableMapWrites(t *testing.T) {
-	t.Run("smoke test", func(t *testing.T) {
-		testMutateMap(t, 10)
-		//testMutateMap(t, 100)
-		//testMutateMap(t, 1000)
-		//testMutateMap(t, 10_000)
+	t.Run("single point edit", func(t *testing.T) {
+		testPointUpdates(t, 10)
+		testPointUpdates(t, 100)
+		testPointUpdates(t, 1000)
+		testPointUpdates(t, 10_000)
+	})
+	t.Run("multiple range edits", func(t *testing.T) {
+		testMultiplePointUpdates(t, 10)
+		testMultiplePointUpdates(t, 100)
+		testMultiplePointUpdates(t, 1000)
+		testMultiplePointUpdates(t, 10_000)
 	})
 }
 
-func testMutateMap(t *testing.T, count int) {
+func testPointUpdates(t *testing.T, count int) {
 	ctx := context.Background()
 	orig := ascendingMap(t, count)
 
@@ -71,22 +76,54 @@ func testMutateMap(t *testing.T, count int) {
 		mut := orig.Mutate()
 		key, value := putInts(mut, idx, -idx)
 
-		if idx == 0 {
-			fmt.Println(idx)
-		}
-
 		// materialize map and query result
 		m, err := mut.Map(ctx)
 		require.NoError(t, err)
 		err = m.Get(ctx, key, func(k, v val.Tuple) error {
-			assert.NotNil(t, k)
-			assert.NotNil(t, v)
+			assert.Equal(t, key, k)
 			assert.Equal(t, value, v)
 			return nil
 		})
 		require.NoError(t, err)
 	}
 }
+
+
+func testMultiplePointUpdates(t *testing.T, count int) {
+	ctx := context.Background()
+	orig := ascendingMap(t, count)
+
+	puts := make([]int64, count)
+	for i := range puts {
+		puts[i] = int64(i)
+	}
+	rand.Shuffle(count, func(i, j int) {
+		puts[i], puts[j] = puts[j], puts[i]
+	})
+
+	const k = 5
+	for x := 0; x < len(puts); x += k {
+		mut := orig.Mutate()
+
+		edits := make([][2]val.Tuple, k)
+		for i, idx := range puts[x:x+k] {
+			edits[i][0], edits[i][1] = putInts(mut, idx, -idx)
+		}
+		m, err := mut.Map(ctx)
+		require.NoError(t, err)
+
+		for _, pair := range edits {
+			key, value := pair[0], pair[1]
+			err = m.Get(ctx, key, func(k, v val.Tuple) error {
+				assert.Equal(t, key, k)
+				assert.Equal(t, value, v)
+				return nil
+			})
+			require.NoError(t, err)
+		}
+	}
+}
+
 
 func putInts(mut MutableMap, k, v int64) (key, value val.Tuple) {
 	kb := val.NewTupleBuilder(mut.m.keyDesc)

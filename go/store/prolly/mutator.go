@@ -16,7 +16,6 @@ package prolly
 
 import (
 	"context"
-
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -34,61 +33,70 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		return m, err
 	}
 
-	key, value := edits.next()
+	newKey, newValue := edits.next()
 
-	cur, err := mapCursorAtKey(ctx, m, key)
+	cur, err := mapCursorAtKey(ctx, m, newKey)
 	if err != nil {
 		return m, err
 	}
 
-	ch, err := newTreeChunker(ctx, cur, 0, m.ns, newDefaultNodeSplitter)
+	chunker, err := newTreeChunker(ctx, cur.clone(), 0, m.ns, newDefaultNodeSplitter)
 	if err != nil {
 		return m, err
 	}
 
-	for key != nil {
+	for newKey != nil {
+
+		// move |cur| to the next mutation point
+		err = cur.seek(ctx, nodeItem(newKey), m.compareItems)
+		if err != nil {
+			return Map{}, err
+		}
 
 		var oldValue val.Tuple
 		if cur.valid() {
-			k, v := getKeyValue(ctx, cur)
-			if compareKeys(m, key, k) == 0 {
+			// compare mutations |newKey| and |newValue|
+			// to the existing pair from the cursor
+			k, v := getKeyValuePair(ctx, cur)
+			if compareKeys(m, newKey, k) == 0 {
 				oldValue = v
 			}
 		}
 
-		if oldValue == nil && value == nil {
-			key, value = edits.next()
+		if oldValue == nil && newValue == nil {
+			newKey, newValue = edits.next()
 			continue // already non-present
 		}
-		if oldValue != nil && compareValues(m, value, oldValue) == 0 {
-			key, value = edits.next()
-			continue // same value
+		if oldValue != nil && compareValues(m, newValue, oldValue) == 0 {
+			newKey, newValue = edits.next()
+			continue // same newValue
 		}
 
-		err = ch.advanceTo(ctx, cur)
+		// move |chunker| to the next mutation point
+		err = chunker.advanceTo(ctx, cur)
 		if err != nil {
 			return m, err
 		}
 
 		if oldValue != nil {
 			// delete or update
-			if err = ch.Skip(ctx); err != nil {
+			if err = chunker.Skip(ctx); err != nil {
 				return m, err
 			}
 		} // else insert
 
-		if value != nil {
+		if newValue != nil {
 			// update or insert
-			_, err = ch.Append(ctx, nodeItem(key), nodeItem(value))
+			_, err = chunker.Append(ctx, nodeItem(newKey), nodeItem(newValue))
 			if err != nil {
 				return Map{}, err
 			}
 		}
 
-		key, value = edits.next()
+		newKey, newValue = edits.next()
 	}
 
-	m.root, err = ch.Done(ctx)
+	m.root, err = chunker.Done(ctx)
 	if err != nil {
 		return m, err
 	}
@@ -101,7 +109,7 @@ func mapCursorAtKey(ctx context.Context, m Map, key val.Tuple) (*nodeCursor, err
 	return &cur, err
 }
 
-func getKeyValue(ctx context.Context, cur *nodeCursor) (key, value val.Tuple) {
+func getKeyValuePair(ctx context.Context, cur *nodeCursor) (key, value val.Tuple) {
 	p := cur.currentPair()
 	key, value = val.Tuple(p.key()), val.Tuple(p.value())
 	return

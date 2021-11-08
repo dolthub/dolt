@@ -324,6 +324,20 @@ func (cur *nodeCursor) compare(other *nodeCursor) int {
 	return cur.idx - other.idx
 }
 
+func (cur *nodeCursor) clone() *nodeCursor {
+	cln := nodeCursor{
+		nd:     cur.nd,
+		idx:    cur.idx,
+		nrw:    cur.nrw,
+	}
+
+	if cur.parent != nil {
+		cln.parent = cur.parent.clone()
+	}
+
+	return &cln
+}
+
 func assertTrue(b bool) {
 	if !b {
 		panic("assertion failed")
