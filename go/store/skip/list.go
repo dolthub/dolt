@@ -28,6 +28,15 @@ const (
 	nullID = nodeId(0)
 )
 
+type List struct {
+	head  skipPointer
+	nodes []skipNode
+	cmp   ValueCmp
+	src   rand.Source
+}
+
+type ValueCmp func(left, right []byte) int
+
 type nodeId uint32
 
 type skipPointer [maxHeight]nodeId
@@ -38,15 +47,6 @@ type skipNode struct {
 
 	height uint8
 	next   skipPointer
-}
-
-type ValueCmp func(left, right []byte) int
-
-type List struct {
-	head  skipPointer
-	nodes []skipNode
-	cmp   ValueCmp
-	src   rand.Source
 }
 
 func NewSkipList(cmp ValueCmp) (l *List) {
@@ -219,19 +219,19 @@ func (l *List) makeNode(key, val []byte) (n skipNode) {
 }
 
 const (
-	pattern1 = uint64(1<<3 - 1)
-	pattern2 = uint64(1<<6 - 1)
-	pattern3 = uint64(1<<9 - 1)
-	pattern4 = uint64(1<<12 - 1)
+	pattern0 = uint64(1<<3 - 1)
+	pattern1 = uint64(1<<6 - 1)
+	pattern2 = uint64(1<<9 - 1)
+	pattern3 = uint64(1<<12 - 1)
 )
 
 func rollHeight(r rand.Source) (h uint8) {
 	roll := r.Int63()
 	patterns := []uint64{
+		pattern0,
 		pattern1,
 		pattern2,
 		pattern3,
-		pattern4,
 	}
 
 	for _, pat := range patterns {

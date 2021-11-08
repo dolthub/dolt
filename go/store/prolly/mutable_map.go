@@ -28,12 +28,16 @@ type MutableMap struct {
 func newMutableMap(m Map) MutableMap {
 	return MutableMap{
 		m:       m,
-		overlay: NewTupleMap(m.keyDesc),
+		overlay: newMemoryMap(m.keyDesc),
 	}
 }
 
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
-	return applyEdits(ctx, mut.m, mut.overlay.Iter())
+	return applyEdits(ctx, mut.m, mut.overlay.mutations())
+}
+
+func (mut MutableMap) Count() uint64 {
+	return mut.m.Count() + mut.overlay.Count()
 }
 
 func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) (err error) {
@@ -41,124 +45,27 @@ func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) (err error)
 	if !ok {
 		// synchronously flush overlay
 		mut.m, err = mut.Map(ctx)
-		mut.overlay = NewTupleMap(mut.m.keyDesc)
+		mut.overlay = newMemoryMap(mut.m.keyDesc)
 	}
 	return
 }
 
 func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
-	value, ok := mut.overlay.Get(key)
-	if ok {
-		return cb(key, value)
-	}
-	return mut.m.Get(ctx, key, cb)
+	panic("unimplemented")
 }
 
 func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	if ok = mut.overlay.Has(key); ok {
-		return
-	}
-	return mut.m.Has(ctx, key)
-}
-
-type editProvider interface {
-	Count() int
-	Next() (key, val val.Tuple)
-	Close() error
-}
-
-var _ editProvider = keyValueIter{}
-
-func applyEdits(ctx context.Context, m Map, edits editProvider) (Map, error) {
 	panic("unimplemented")
-	//var err error
-	//if edits.Count() == 0 {
-	//	return m, err
-	//}
-	//
-	//key, value := edits.Next()
-	//
-	//cur, err := mapCursorAtKey(ctx, m, key)
-	//if err != nil {
-	//	return m, err
-	//}
-	//
-	//ch, err := newTreeChunker(ctx, cur, 0, m.ns, newDefaultNodeSplitter)
-	//if err != nil {
-	//	return m, err
-	//}
-	//
-	//for key != nil {
-	//
-	//	var oldValue val.Tuple
-	//	if cur.valid() {
-	//		k, v, err := getKeyValue(ctx, cur)
-	//		if err != nil {
-	//			return m, err
-	//		}
-	//		if compareValues(m, key, k) == 0 {
-	//			oldValue = v
-	//		}
-	//	}
-	//
-	//	if oldValue == nil && value == nil {
-	//		continue // already non-present
-	//	}
-	//	if oldValue != nil && compareValues(m, value, oldValue) == 0 {
-	//		continue // same value
-	//	}
-	//
-	//	err = ch.advanceTo(ctx, cur)
-	//	if err != nil {
-	//		return m, err
-	//	}
-	//
-	//	if oldValue != nil {
-	//		// stats.Modifications++
-	//		if err = ch.Skip(ctx); err != nil {
-	//			return m, err
-	//		}
-	//	} // else stats.Additions++
-	//
-	//	if value != nil {
-	//		_, err = ch.Append(ctx, nodeItem(key), nodeItem(value))
-	//		if err != nil {
-	//			continue
-	//		}
-	//	}
-	//
-	//	key, value = edits.Next()
-	//}
-	//
-	//m.root, err = ch.Done(ctx)
-	//if err != nil {
-	//	return m, err
-	//}
-	//
-	//return m, nil
 }
 
-func mapCursorAtKey(ctx context.Context, m Map, key val.Tuple) (*nodeCursor, error) {
-	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
-	return &cur, err
+func (mut MutableMap) IterAll(ctx context.Context) (MapIter, error) {
+	panic("unimplemented")
 }
 
-func getKeyValue(ctx context.Context, cur *nodeCursor) (key, value val.Tuple, err error) {
-	panic("asdf")
-	//key = val.Tuple(cur.currentPair())
-	//
-	//if _, err = cur.advance(ctx); err != nil {
-	//	return nil, nil, err
-	//}
-	//
-	//value = val.Tuple(cur.currentPair())
-	//return
+func (mut MutableMap) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error) {
+	panic("unimplemented")
 }
 
-func compareKeys(m Map, left, right val.Tuple) int {
-	return int(m.keyDesc.Compare(left, right))
-}
-
-func compareValues(m Map, left, right val.Tuple) int {
-	return int(m.valDesc.Compare(left, right))
+func (mut MutableMap) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error) {
+	panic("unimplemented")
 }

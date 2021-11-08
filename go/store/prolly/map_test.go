@@ -30,18 +30,33 @@ import (
 
 var testRand = rand.New(rand.NewSource(0))
 
+type orderedMap interface {
+	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
+	Has(ctx context.Context, key val.Tuple) (ok bool, err error)
+	Count() uint64
+	IterAll(ctx context.Context) (MapIter, error)
+	IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error)
+	IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error)
+}
+
+type cartographer func(t *testing.T, kd, vd val.TupleDesc, items [][2]val.Tuple) orderedMap
+
+var _ orderedMap = Map{}
+var _ orderedMap = MutableMap{}
+var _ orderedMap = memoryMap{}
+
 func TestMap(t *testing.T) {
 	t.Run("get item from map", func(t *testing.T) {
-		testMapGet(t, 10)
-		testMapGet(t, 100)
-		testMapGet(t, 1000)
-		testMapGet(t, 10_000)
+		testOrderedMapGetAndHas(t, makeProllyMap, 10)
+		testOrderedMapGetAndHas(t, makeProllyMap, 100)
+		testOrderedMapGetAndHas(t, makeProllyMap, 1000)
+		testOrderedMapGetAndHas(t, makeProllyMap, 10_000)
 	})
 	t.Run("get from map at index", func(t *testing.T) {
-		testMapGetIndex(t, 10)
-		testMapGetIndex(t, 100)
-		testMapGetIndex(t, 1000)
-		testMapGetIndex(t, 10_000)
+		testOrderedMapGetIndex(t, makeProllyMap, 10)
+		testOrderedMapGetIndex(t, makeProllyMap, 100)
+		testOrderedMapGetIndex(t, makeProllyMap, 1000)
+		testOrderedMapGetIndex(t, makeProllyMap, 10_000)
 	})
 	//t.Run("get value range from map", func(t *testing.T) {
 	//	testMapIterValueRange(t, 10)
@@ -50,46 +65,38 @@ func TestMap(t *testing.T) {
 	//	testMapIterValueRange(t, 10_000)
 	//})
 	t.Run("get index range from map", func(t *testing.T) {
-		testMapIterIndexRange(t, 10)
-		testMapIterIndexRange(t, 100)
-		testMapIterIndexRange(t, 1000)
-		testMapIterIndexRange(t, 10_000)
+		testOrderedMapIterIndexRange(t, makeProllyMap, 10)
+		testOrderedMapIterIndexRange(t, makeProllyMap, 100)
+		testOrderedMapIterIndexRange(t, makeProllyMap, 1000)
+		testOrderedMapIterIndexRange(t, makeProllyMap, 10_000)
 	})
 }
 
-func testMapGet(t *testing.T, count int) {
-	kd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: false},
-	)
-	vd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-	)
-
+func makeProllyMap(t *testing.T, kd, vd val.TupleDesc, items [][2]val.Tuple) orderedMap {
 	ctx := context.Background()
-	m, kvPairs := randomMap(t, count, kd, vd)
+	ns := newTestNodeStore()
 
-	for _, kv := range kvPairs {
-		ok, err := m.Has(ctx, kv[0])
-		assert.True(t, ok)
+	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
+	require.NoError(t, err)
+
+	for _, item := range items {
+		_, err := chunker.Append(ctx, nodeItem(item[0]), nodeItem(item[1]))
 		require.NoError(t, err)
-		err = m.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
-			assert.NotNil(t, kv[0])
-			if !assert.Equal(t, kv[0], key) {
-				m.Has(ctx, kv[0])
-				assert.Equal(t, kv[0], key)
-			}
-			if !assert.Equal(t, kv[1], val) {
-				assert.Equal(t, kv[1], val)
-			}
-			return
-		})
-		require.NoError(t, err)
+	}
+	root, err := chunker.Done(ctx)
+	require.NoError(t, err)
+
+	return Map{
+		root:    root,
+		keyDesc: kd,
+		valDesc: vd,
+		ns:      ns,
 	}
 }
 
-func testMapGetIndex(t *testing.T, count int) {
+var _ cartographer = makeProllyMap
+
+func testOrderedMapGetAndHas(t *testing.T, mkr cartographer, count int) {
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Int64Enc, Nullable: false},
 	)
@@ -100,10 +107,16 @@ func testMapGetIndex(t *testing.T, count int) {
 	)
 
 	ctx := context.Background()
-	m, kvPairs := randomMap(t, count, kd, vd)
+	m, kvPairs := randomTestMap(t, count, kd, vd, mkr)
 
-	for idx, kv := range kvPairs {
-		err := m.GetIndex(ctx, uint64(idx), func(key, val val.Tuple) (err error) {
+	for _, kv := range kvPairs {
+		// Has()
+		ok, err := m.Has(ctx, kv[0])
+		assert.True(t, ok)
+		require.NoError(t, err)
+
+		// Get()
+		err = m.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, kv[0])
 			assert.Equal(t, kv[0], key)
 			assert.Equal(t, kv[1], val)
@@ -113,11 +126,36 @@ func testMapGetIndex(t *testing.T, count int) {
 	}
 }
 
-func testMapIterValueRange(t *testing.T, count int) {
+func testOrderedMapGetIndex(t *testing.T, mkr cartographer, count int) {
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	)
+
+	ctx := context.Background()
+	m, kvPairs := randomTestMap(t, count, kd, vd, mkr)
+	pm := m.(Map)
+
+	for idx, kv := range kvPairs {
+		err := pm.GetIndex(ctx, uint64(idx), func(key, val val.Tuple) (err error) {
+			assert.NotNil(t, kv[0])
+			assert.Equal(t, kv[0], key)
+			assert.Equal(t, kv[1], val)
+			return
+		})
+		require.NoError(t, err)
+	}
+}
+
+func testMapIterValueRange(t *testing.T, count int, mkr cartographer) {
 	assert.Equal(t, count, count)
 }
 
-func testMapIterIndexRange(t *testing.T, count int) {
+func testOrderedMapIterIndexRange(t *testing.T, mkr cartographer, count int) {
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Int64Enc, Nullable: false},
 	)
@@ -128,7 +166,7 @@ func testMapIterIndexRange(t *testing.T, count int) {
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 	)
 
-	m, kvPairs := randomMap(t, count, kd, vd)
+	m, kvPairs := randomTestMap(t, count, kd, vd, mkr)
 	ranges := indexRanges(m)
 
 	ctx := context.Background()
@@ -167,7 +205,7 @@ func testMapIterIndexRange(t *testing.T, count int) {
 	}
 }
 
-func indexRanges(m Map) (ranges []IndexRange) {
+func indexRanges(m orderedMap) (ranges []IndexRange) {
 	ok := true
 	start := uint64(0)
 	for ok {
@@ -189,27 +227,9 @@ func indexRanges(m Map) (ranges []IndexRange) {
 	return
 }
 
-func randomMap(t *testing.T, count int, kd, vd val.TupleDesc) (Map, [][2]val.Tuple) {
-	ctx := context.Background()
-	ns := newTestNodeStore()
-	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
-	require.NoError(t, err)
-
+func randomTestMap(t *testing.T, count int, kd, vd val.TupleDesc, mkr cartographer) (orderedMap, [][2]val.Tuple) {
 	items := randomTuplePairs(count, kd, vd)
-	for _, item := range items {
-		_, err := chunker.Append(ctx, nodeItem(item[0]), nodeItem(item[1]))
-		require.NoError(t, err)
-	}
-	root, err := chunker.Done(ctx)
-	require.NoError(t, err)
-
-	m := Map{
-		root:    root,
-		keyDesc: kd,
-		valDesc: vd,
-		ns:      ns,
-	}
-
+	m := mkr(t, kd, vd, items)
 	return m, items
 }
 

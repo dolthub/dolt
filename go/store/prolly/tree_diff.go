@@ -16,7 +16,6 @@ package prolly
 
 import "context"
 
-
 type DiffType byte
 
 const (
