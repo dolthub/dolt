@@ -242,15 +242,21 @@ func (dcc *DoltCliConfig) WriteableConfig() config.ReadWriteConfig {
 func (dcc DoltCliConfig) SetFailsafes(cfg map[string]string) {
 	existing, ok := dcc.ch.GetConfig("failsafe")
 	if !ok {
-		dcc.ch.AddConfig("failsafe", config.NewEmptyMapConfig())
+		existing = config.NewEmptyMapConfig()
+		dcc.ch.AddConfig("failsafe", existing)
 	}
 
 	_ = existing.SetStrings(cfg)
 }
 
+const (
+	DefaultEmail = "doltuser@dolthub.com"
+	DefaultName = "Dolt System Account"
+)
+
 var DefaultFailsafeConfig = map[string]string {
-	UserEmailKey: "doltuser@dolthub.com",
-	UserNameKey: "Dolt System Account",
+	UserEmailKey: DefaultEmail,
+	UserNameKey: DefaultName,
 }
 
 func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {

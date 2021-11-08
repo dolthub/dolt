@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -46,4 +47,22 @@ func TestConfig(t *testing.T) {
 
 	_, err := dEnv.Config.GetString("missing")
 	assert.Equal(t, config.ErrConfigParamNotFound, err)
+}
+
+func TestFailsafes(t *testing.T) {
+	dEnv, _ := createTestEnv(true, true)
+
+	lCfg, _ := dEnv.Config.GetConfig(LocalConfig)
+	require.NoError(t, lCfg.Unset([]string{UserNameKey}))
+
+	dEnv.Config.SetFailsafes(DefaultFailsafeConfig)
+
+	assert.Equal(t, DefaultEmail, dEnv.Config.GetStringOrDefault(UserEmailKey, "none"))
+	assert.Equal(t, DefaultName, dEnv.Config.GetStringOrDefault(UserNameKey, "none"))
+
+	dEnv.Config.SetFailsafes(map[string]string{UserEmailKey: "new", "abc": "def"})
+
+	assert.Equal(t, "new", dEnv.Config.GetStringOrDefault(UserEmailKey, "none"))
+	assert.Equal(t, DefaultName, dEnv.Config.GetStringOrDefault(UserNameKey, "none"))
+	assert.Equal(t, "def", dEnv.Config.GetStringOrDefault("abc", "none"))
 }
