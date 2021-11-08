@@ -69,6 +69,7 @@ Valid commands for dolt are
              migrate - Executes a repository migration to update to the latest format.
          read-tables - Fetch table(s) at a specific commit into a new dolt repo
                   gc - Cleans up unreferenced data from the repository.
+                dump - Export all tables.
 ```
 
 # Installation

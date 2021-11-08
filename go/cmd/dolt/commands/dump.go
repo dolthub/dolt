@@ -40,14 +40,15 @@ import (
 
 const (
 	forceParam = "force"
+	directoryFlag = "directory"
+	filenameFlag = "file-name"
 )
 
 var dumpDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Export all tables.`,
-	LongDesc: `{{.EmphasisLeft}}dolt dump{{.EmphasisRight}} will export {{.LessThan}}table{{.GreaterThan}} to 
-{{.LessThan}}|file{{.GreaterThan}}. If a dump file already exists then the operation will fail,unless the 
-{{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag is provided. The force flag forces the existing dump file to be 
-overwritten.
+	LongDesc: `{{.EmphasisLeft}}dolt dump{{.EmphasisRight}} will export {{.LessThan}}table{{.GreaterThan}} to {{.LessThan}}file{{.GreaterThan}}. 
+If a dump file already exists then the operation will fail,unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag 
+is provided. The force flag forces the existing dump file to be overwritten.
 `,
 
 	Synopsis: []string{
@@ -78,6 +79,8 @@ func (cmd DumpCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Valid values are sql and csv. Defaults to sql.")
+	ap.SupportsString(filenameFlag, "", "file_name", "Define file name for dump file. Valid value is sql only.")
+	ap.SupportsString(directoryFlag, "", "directory_name", "Define directory name to dump the files in. Valid file types are csv and json. Defaults to csv.")
 
 	return ap
 }
@@ -97,17 +100,10 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.BuildDError("too many arguments").SetPrintUsage().Build(), usage)
 	}
 
-	// TODO: make the file name and directory name configurable as command line options
-
-	var fileName string
-	resultFormat, _ := apr.GetValue(FormatFlag)
-
 	root, verr := GetWorkingWithVErr(dEnv)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
-
-	force := apr.Contains(forceParam)
 
 	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root)
 	if err != nil {
@@ -118,9 +114,27 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 0
 	}
 
+	force := apr.Contains(forceParam)
+	resultFormat, _ := apr.GetValue(FormatFlag)
+	fn, fnOk := apr.GetValue(filenameFlag)
+	dn, dnOk := apr.GetValue(directoryFlag)
+
 	switch resultFormat {
 	case "", "sql", ".sql":
-		fileName = "doltdump.sql"
+		if dnOk {
+			return HandleVErrAndExitCode(errhand.BuildDError("no directory name needed for .sql type").SetPrintUsage().Build(), usage)
+		}
+
+		var fileName string
+		if fnOk {
+			fileName = fn
+			if fileName[len(fileName)-4:] != ".sql"{
+				fileName += ".sql"
+			}
+		} else {
+			fileName = "doltdump.sql"
+		}
+
 		dumpOpts := getDumpOptions(fileName, resultFormat)
 		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fileName)
 		if err != nil {
@@ -136,23 +150,23 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			}
 		}
 	case "csv", ".csv":
-		for _, tbl := range tblNames {
-			fileName = "doltdump/" + tbl + ".csv"
-			dumpOpts := getDumpOptions(fileName, resultFormat)
-
-			fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fileName)
-			if err != nil {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-			}
-
-			tblOpts := newTableArgs(tbl, dumpOpts.dest)
-
-			err = dumpTable(ctx, root, dEnv, tblOpts, fPath)
-			if err != nil {
-				return HandleVErrAndExitCode(err, usage)
-			}
+		if fnOk {
+			return HandleVErrAndExitCode(errhand.BuildDError("no filename needed for .csv").SetPrintUsage().Build(), usage)
 		}
 
+		err = dumpTables(ctx, root, dEnv, force, tblNames, ".csv", dn+"/")
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+	case "json", ".json":
+		if fnOk {
+			return HandleVErrAndExitCode(errhand.BuildDError("no filename needed for .json").SetPrintUsage().Build(), usage)
+		}
+
+		err = dumpTables(ctx, root, dEnv, force, tblNames, ".json", dn+"/")
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	default:
 		return HandleVErrAndExitCode(errhand.BuildDError("invalid result format").SetPrintUsage().Build(), usage)
 	}
@@ -309,6 +323,32 @@ func newTableArgs(tblName string, destination mvdata.DataLocation) *tableOptions
 		src:       mvdata.TableDataLocation{Name: tblName},
 		dest:      destination,
 	}
+}
+
+// dumpTables returns nil if all tables is dumped successfully, and it returns err if there is one.
+// It handles only csv and json file types(rf).
+func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string) errhand.VerboseError {
+	var fName string
+	if dirName == "/" {
+		dirName = "doltdump/"
+	}
+	for _, tbl := range tblNames {
+		fName = dirName + tbl + rf
+		dumpOpts := getDumpOptions(fName, rf)
+
+		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fName)
+		if err != nil {
+			return err
+		}
+
+		tblOpts := newTableArgs(tbl, dumpOpts.dest)
+
+		err = dumpTable(ctx, root, dEnv, tblOpts, fPath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NewDumpDataMover returns dataMover with tableOptions given source table and destination file info
