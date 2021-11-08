@@ -251,12 +251,12 @@ func (dcc DoltCliConfig) SetFailsafes(cfg map[string]string) {
 
 const (
 	DefaultEmail = "doltuser@dolthub.com"
-	DefaultName = "Dolt System Account"
+	DefaultName  = "Dolt System Account"
 )
 
-var DefaultFailsafeConfig = map[string]string {
+var DefaultFailsafeConfig = map[string]string{
 	UserEmailKey: DefaultEmail,
-	UserNameKey: DefaultName,
+	UserNameKey:  DefaultName,
 }
 
 func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {
