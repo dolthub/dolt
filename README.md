@@ -60,7 +60,7 @@ Valid commands for dolt are
                 push - Push to a dolt remote.
               config - Dolt configuration.
               remote - Manage set of tracked repositories.
-              backup - Manage set of tracked repositories.
+              backup - Manage a set of server backups.
                login - Login to a dolt remote host.
                creds - Commands for managing credentials.
                   ls - List tables in the working set.
