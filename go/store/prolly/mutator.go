@@ -21,80 +21,79 @@ import (
 )
 
 type mutationIter interface {
-	count() int
 	next() (key, val val.Tuple)
+	count() int
 	close() error
 }
 
 var _ mutationIter = memIter{}
 
-func applyEdits(ctx context.Context, m Map, edits mutationIter) (Map, error) {
-	panic("unimplemented")
-	//var err error
-	//if edits.Count() == 0 {
-	//	return m, err
-	//}
-	//
-	//key, value := edits.Next()
-	//
-	//cur, err := mapCursorAtKey(ctx, m, key)
-	//if err != nil {
-	//	return m, err
-	//}
-	//
-	//ch, err := newTreeChunker(ctx, cur, 0, m.ns, newDefaultNodeSplitter)
-	//if err != nil {
-	//	return m, err
-	//}
-	//
-	//for key != nil {
-	//
-	//	var oldValue val.Tuple
-	//	if cur.valid() {
-	//		k, v, err := getKeyValue(ctx, cur)
-	//		if err != nil {
-	//			return m, err
-	//		}
-	//		if compareValues(m, key, k) == 0 {
-	//			oldValue = v
-	//		}
-	//	}
-	//
-	//	if oldValue == nil && value == nil {
-	//		continue // already non-present
-	//	}
-	//	if oldValue != nil && compareValues(m, value, oldValue) == 0 {
-	//		continue // same value
-	//	}
-	//
-	//	err = ch.advanceTo(ctx, cur)
-	//	if err != nil {
-	//		return m, err
-	//	}
-	//
-	//	if oldValue != nil {
-	//		// stats.Modifications++
-	//		if err = ch.Skip(ctx); err != nil {
-	//			return m, err
-	//		}
-	//	} // else stats.Additions++
-	//
-	//	if value != nil {
-	//		_, err = ch.Append(ctx, nodeItem(key), nodeItem(value))
-	//		if err != nil {
-	//			continue
-	//		}
-	//	}
-	//
-	//	key, value = edits.Next()
-	//}
-	//
-	//m.root, err = ch.Done(ctx)
-	//if err != nil {
-	//	return m, err
-	//}
-	//
-	//return m, nil
+func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, error) {
+	var err error
+	if edits.count() == 0 {
+		return m, err
+	}
+
+	key, value := edits.next()
+
+	cur, err := mapCursorAtKey(ctx, m, key)
+	if err != nil {
+		return m, err
+	}
+
+	ch, err := newTreeChunker(ctx, cur, 0, m.ns, newDefaultNodeSplitter)
+	if err != nil {
+		return m, err
+	}
+
+	for key != nil {
+
+		var oldValue val.Tuple
+		if cur.valid() {
+			k, v := getKeyValue(ctx, cur)
+			if compareKeys(m, key, k) == 0 {
+				oldValue = v
+			}
+		}
+
+		if oldValue == nil && value == nil {
+			key, value = edits.next()
+			continue // already non-present
+		}
+		if oldValue != nil && compareValues(m, value, oldValue) == 0 {
+			key, value = edits.next()
+			continue // same value
+		}
+
+		err = ch.advanceTo(ctx, cur)
+		if err != nil {
+			return m, err
+		}
+
+		if oldValue != nil {
+			// delete or update
+			if err = ch.Skip(ctx); err != nil {
+				return m, err
+			}
+		} // else insert
+
+		if value != nil {
+			// update or insert
+			_, err = ch.Append(ctx, nodeItem(key), nodeItem(value))
+			if err != nil {
+				return Map{}, err
+			}
+		}
+
+		key, value = edits.next()
+	}
+
+	m.root, err = ch.Done(ctx)
+	if err != nil {
+		return m, err
+	}
+
+	return m, nil
 }
 
 func mapCursorAtKey(ctx context.Context, m Map, key val.Tuple) (*nodeCursor, error) {
@@ -102,16 +101,10 @@ func mapCursorAtKey(ctx context.Context, m Map, key val.Tuple) (*nodeCursor, err
 	return &cur, err
 }
 
-func getKeyValue(ctx context.Context, cur *nodeCursor) (key, value val.Tuple, err error) {
-	panic("asdf")
-	//key = val.Tuple(cur.currentPair())
-	//
-	//if _, err = cur.advance(ctx); err != nil {
-	//	return nil, nil, err
-	//}
-	//
-	//value = val.Tuple(cur.currentPair())
-	//return
+func getKeyValue(ctx context.Context, cur *nodeCursor) (key, value val.Tuple) {
+	p := cur.currentPair()
+	key, value = val.Tuple(p.key()), val.Tuple(p.value())
+	return
 }
 
 func compareKeys(m Map, left, right val.Tuple) int {

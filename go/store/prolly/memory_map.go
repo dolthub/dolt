@@ -101,10 +101,9 @@ type memIter struct {
 }
 
 var _ MapIter = memIter{}
-var _ mutationIter = memIter{}
 
 func (it memIter) Next(context.Context) (key, val val.Tuple, err error) {
-	if it.remaining() == 0 {
+	if it.idx == it.Count() {
 		err = io.EOF
 		return
 	}
@@ -112,18 +111,16 @@ func (it memIter) Next(context.Context) (key, val val.Tuple, err error) {
 	return
 }
 
-func (it memIter) remaining() int {
-	return it.Count() - it.idx
-}
-
-func (it memIter) count() int {
-	return it.ListIter.Count()
-}
-
 func (it memIter) next() (key, value val.Tuple) {
 	key, value = it.ListIter.Next()
 	it.idx++
 	return
+}
+
+var _ mutationIter = memIter{}
+
+func (it memIter) count() int {
+	return it.ListIter.Count()
 }
 
 func (it memIter) close() error {

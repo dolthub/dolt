@@ -33,7 +33,7 @@ func newMutableMap(m Map) MutableMap {
 }
 
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
-	return applyEdits(ctx, mut.m, mut.overlay.mutations())
+	return materializeMutations(ctx, mut.m, mut.overlay.mutations())
 }
 
 func (mut MutableMap) Count() uint64 {
@@ -51,11 +51,28 @@ func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) (err error)
 }
 
 func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
-	panic("unimplemented")
+	var value val.Tuple
+	_ = mut.overlay.Get(ctx, key, func(k, v val.Tuple) error {
+		if v != nil {
+			value = v
+		}
+		return nil
+	})
+
+	if value != nil {
+		// |key| found in memory
+		return cb(key, value)
+	}
+
+	return mut.m.Get(ctx, key, cb)
 }
 
 func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	panic("unimplemented")
+	ok, _ = mut.overlay.Has(ctx, key)
+	if ok {
+		return
+	}
+	return mut.m.Has(ctx, key)
 }
 
 func (mut MutableMap) IterAll(ctx context.Context) (MapIter, error) {
