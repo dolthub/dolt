@@ -461,6 +461,10 @@ SQL
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
+    run dolt fetch
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
     cd ../..
 
     # create second clone
@@ -510,55 +514,6 @@ SQL
     [ "${lines[1]}" != "" ]
     [ "${lines[2]}" != "" ]
     [ "${lines[3]}" != "" ]
-
-}
-
-@test "remotes: fetch output with up-to-date branches" {
-    dolt remote add origin http://localhost:50051/test-org/test-repo
-    dolt sql -q 'create table test (id int primary key);'
-    dolt add .
-    dolt commit -m 'create test table.'
-    dolt push origin main:main
-
-    dolt checkout -b branch1
-    dolt sql -q 'insert into test (id) values (1), (2), (3);'
-    dolt add .
-    dolt commit -m 'add some values to branch 1.'
-    dolt push --set-upstream origin branch1
-
-    dolt checkout -b branch2
-    dolt sql -q 'insert into test (id) values (4), (5), (6);'
-    dolt add .
-    dolt commit -m 'add some values to branch 2.'
-    dolt push --set-upstream origin branch2
-
-    dolt checkout -b branch3
-    dolt sql -q 'insert into test (id) values (7), (8), (9);'
-    dolt add .
-    dolt commit -m 'add some values to branch 3.'
-    dolt push --set-upstream origin branch3
-
-    dolt checkout -b branch4
-    dolt sql -q 'insert into test (id) values (10), (11), (12);'
-    dolt add .
-    dolt commit -m 'add some values to  branch 4.'
-    dolt push --set-upstream origin branch4
-
-    # create first clone
-    cd dolt-repo-clones
-    dolt clone http://localhost:50051/test-org/test-repo
-    cd test-repo
-    dolt status
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch main" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-
-    cd ..
-    cd test-repo
-    run dolt fetch
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
 }
 
 @test "remotes: dolt fetch with docs" {
