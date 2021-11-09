@@ -16,7 +16,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -245,6 +244,22 @@ func CheckEnvIsValid(dEnv *env.DoltEnv) bool {
 	return true
 }
 
+const (
+	userNameRequiredError = `Author identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  dolt config --global user.email "you@example.com"
+  dolt config --global user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+
+fatal: empty ident name not allowed`
+)
+
 // CheckUserNameAndEmail returns true if the user name and email are set for this environment, or prints an error and
 // returns false if not.
 func CheckUserNameAndEmail(dEnv *env.DoltEnv) bool {
@@ -252,13 +267,13 @@ func CheckUserNameAndEmail(dEnv *env.DoltEnv) bool {
 
 	_, err := dEnv.Config.GetString(env.UserEmailKey)
 	if err != nil {
-		PrintErrln(color.RedString(fmt.Sprintf("No config found for required key %s, use dolt config --add %s <your email>", env.UserEmailKey, env.UserEmailKey)))
+		PrintErr(userNameRequiredError)
 		ok = false
 	}
 
 	_, err = dEnv.Config.GetString(env.UserNameKey)
 	if err != nil {
-		PrintErrln(color.RedString(fmt.Sprintf("No config found for required key %s, use dolt config --add %s <your name>", env.UserNameKey, env.UserNameKey)))
+		PrintErr(userNameRequiredError)
 		ok = false
 	}
 

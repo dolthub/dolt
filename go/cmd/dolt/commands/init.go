@@ -91,6 +91,11 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
+	// This command creates a commit, so we need user identity
+	if !cli.CheckUserNameAndEmail(dEnv) {
+		return 1
+	}
+
 	name, _ := apr.GetValue(usernameParamName)
 	email, _ := apr.GetValue(emailParamName)
 	initBranch, _ := apr.GetValue(initBranchParamName)
