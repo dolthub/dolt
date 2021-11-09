@@ -76,6 +76,11 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	// This command creates a commit, so we need user identity
+	if !cli.CheckUserNameAndEmail(dEnv) {
+		return 1
+	}
+
 	// Check if the -all param is provided. Stage all tables if so.
 	allFlag := apr.Contains(cli.AllFlag)
 

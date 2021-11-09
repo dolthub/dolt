@@ -142,17 +142,27 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 		return 1
 	}
 
-	cfgTypesSl := setCfgTypes.AsSlice()
-	for _, cfgType := range cfgTypesSl {
-		if _, ok := dEnv.Config.GetConfig(newCfgElement(cfgType)); !ok {
-			cli.PrintErrln(color.RedString("Unable to read config."))
+	var cfg config.ReadableConfig
+	switch setCfgTypes.Size() {
+	case 0:
+		 cfg = dEnv.Config
+	case 1:
+		configElement := newCfgElement(setCfgTypes.AsSlice()[0])
+		var ok bool
+		cfg, ok = dEnv.Config.GetConfig(configElement)
+		if !ok {
+			cli.Println(color.RedString("No config found for %s", configElement.String()))
 			return 1
 		}
+	default:
+		// should be impossible due to earlier checks
+		cli.Println(color.RedString("Cannot get more than one config scope at once"))
+		return 1
 	}
 
-	val, err := dEnv.Config.GetString(args[0])
+	val, err := cfg.GetString(args[0])
 	if err != nil {
-		if err == config.ErrConfigParamNotFound {
+		if err != config.ErrConfigParamNotFound {
 			cli.PrintErrln(color.RedString("Unexpected error: %s", err.Error()))
 		}
 		// Not found prints no error but returns status 1
