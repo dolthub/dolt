@@ -59,7 +59,6 @@ func TestMutableMapWrites(t *testing.T) {
 		testPointInserts(t, 10_000)
 	})
 	t.Run("point deletes", func(t *testing.T) {
-		// todo(andy): small map case
 		testPointDeletes(t, 10)
 		testPointDeletes(t, 100)
 		testPointDeletes(t, 1000)
@@ -78,8 +77,7 @@ func TestMutableMapWrites(t *testing.T) {
 		testMultiplePointInserts(t, 10_000)
 	})
 	t.Run("multiple point deletes", func(t *testing.T) {
-		// todo(andy): small map case
-		//testPointDeletes(t, 10)
+		testPointDeletes(t, 10)
 		testMultiplePointDeletes(t, 100)
 		testMultiplePointDeletes(t, 1000)
 		testMultiplePointDeletes(t, 10_000)
@@ -102,12 +100,10 @@ func testPointUpdates(t *testing.T, count int) {
 		mut := orig.Mutate()
 		key, value := putInts(mut, idx, -idx)
 
-		// materialize map and query result
-		m, err := mut.Map(ctx)
-		assert.NoError(t, err)
+		m := materializeMap(t, mut)
 		assert.Equal(t, count, int(m.Count()))
 
-		err = m.Get(ctx, key, func(k, v val.Tuple) error {
+		err := m.Get(ctx, key, func(k, v val.Tuple) error {
 			assert.Equal(t, key, k)
 			assert.Equal(t, value, v)
 			return nil
@@ -143,13 +139,12 @@ func testMultiplePointUpdates(t *testing.T, count int) {
 			edits[i][0], edits[i][1] = putInts(mut, idx, idx)
 		}
 
-		m, err := mut.Map(ctx)
-		assert.NoError(t, err)
+		m := materializeMap(t, mut)
 		assert.Equal(t, count, int(m.Count()))
 
 		for _, pair := range edits {
 			key, value := pair[0], pair[1]
-			err = m.Get(ctx, key, func(k, v val.Tuple) error {
+			err := m.Get(ctx, key, func(k, v val.Tuple) error {
 				assert.Equal(t, key, k)
 				assert.Equal(t, value, v)
 				return nil
@@ -178,9 +173,7 @@ func testPointInserts(t *testing.T, count int) {
 		mut := orig.Mutate()
 		key, value := putInts(mut, idx, idx)
 
-		// materialize map and query result
-		m, err := mut.Map(ctx)
-		assert.NoError(t, err)
+		m := materializeMap(t, mut)
 		assert.Equal(t, count+1, int(m.Count()))
 
 		ok, err := m.Has(ctx, key)
@@ -226,8 +219,7 @@ func testMultiplePointInserts(t *testing.T, count int) {
 		}
 
 		ctx := context.Background()
-		m, err := mut.Map(ctx)
-		assert.NoError(t, err)
+		m := materializeMap(t, mut)
 		assert.Equal(t, count+k, int(m.Count()))
 
 		for _, pair := range edits {
@@ -247,17 +239,6 @@ func testMultiplePointInserts(t *testing.T, count int) {
 	}
 }
 
-func putInts(mut MutableMap, k, v int64) (key, value val.Tuple) {
-	kb := val.NewTupleBuilder(mut.m.keyDesc)
-	vb := val.NewTupleBuilder(mut.m.valDesc)
-	kb.PutInt64(0, k)
-	vb.PutInt64(0, v)
-	key = kb.Build(sharedPool)
-	value = vb.Build(sharedPool)
-	_ = mut.Put(context.Background(), key, value)
-	return
-}
-
 func testPointDeletes(t *testing.T, count int) {
 	orig := ascendingMap(t, count)
 
@@ -274,9 +255,7 @@ func testPointDeletes(t *testing.T, count int) {
 		mut := orig.Mutate()
 		key := deleteInt(mut, idx)
 
-		// materialize map and query result
-		m, err := mut.Map(ctx)
-		assert.NoError(t, err)
+		m := materializeMap(t, mut)
 		assert.Equal(t, count-1, int(m.Count()))
 
 		ok, err := m.Has(ctx, key)
@@ -319,8 +298,7 @@ func testMultiplePointDeletes(t *testing.T, count int) {
 			edits[i] = deleteInt(mut, idx)
 		}
 
-		m, err := mut.Map(ctx)
-		assert.NoError(t, err)
+		m := materializeMap(t, mut)
 		assert.Equal(t, count-k, int(m.Count()))
 
 		for _, key := range edits {
@@ -338,12 +316,46 @@ func testMultiplePointDeletes(t *testing.T, count int) {
 	}
 }
 
+func putInts(mut MutableMap, k, v int64) (key, value val.Tuple) {
+	kb := val.NewTupleBuilder(mut.m.keyDesc)
+	vb := val.NewTupleBuilder(mut.m.valDesc)
+	kb.PutInt64(0, k)
+	vb.PutInt64(0, v)
+	key = kb.Build(sharedPool)
+	value = vb.Build(sharedPool)
+	_ = mut.Put(context.Background(), key, value)
+	return
+}
+
 func deleteInt(mut MutableMap, k int64) (key val.Tuple) {
 	kb := val.NewTupleBuilder(mut.m.keyDesc)
 	kb.PutInt64(0, k)
 	key = kb.Build(sharedPool)
 	_ = mut.Put(context.Background(), key, nil)
 	return
+}
+
+// validates edit provider and materializes map
+func materializeMap(t *testing.T, mut MutableMap) Map {
+	ctx := context.Background()
+
+	// ensure edits are provided in order
+	iter := mut.overlay.mutations()
+	prev, _ := iter.next()
+	require.NotNil(t, prev)
+	for {
+		next, _ := iter.next()
+		if next == nil {
+			break
+		}
+		cmp := mut.m.compareKeys(prev, next)
+		assert.True(t, cmp < 0)
+		prev = next
+	}
+
+	m, err := mut.Map(ctx)
+	assert.NoError(t, err)
+	return m
 }
 
 func ascendingMap(t *testing.T, count int) Map {
