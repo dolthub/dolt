@@ -145,7 +145,7 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 	var cfg config.ReadableConfig
 	switch setCfgTypes.Size() {
 	case 0:
-		 cfg = dEnv.Config
+		cfg = dEnv.Config
 	case 1:
 		configElement := newCfgElement(setCfgTypes.AsSlice()[0])
 		var ok bool
