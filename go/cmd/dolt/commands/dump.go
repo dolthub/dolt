@@ -44,8 +44,8 @@ const (
 	directoryFlag = "directory"
 	filenameFlag  = "file-name"
 
-	sqlFileExt = "sql"
-	csvFileExt = "csv"
+	sqlFileExt  = "sql"
+	csvFileExt  = "csv"
 	jsonFileExt = "json"
 )
 
