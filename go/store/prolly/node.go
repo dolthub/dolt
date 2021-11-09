@@ -157,6 +157,10 @@ func (nd Node) getItem(i int) nodeItem {
 }
 
 func (nd Node) getPair(i int) (p nodePair) {
+	count := nd.nodeCount()
+	if i >= count {
+		panic("out of bounds")
+	}
 	offs, itemStop := nd.offsets()
 	start, stop := offs.GetBounds(i, itemStop)
 	p[0] = nodeItem(nd[start:stop])

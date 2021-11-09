@@ -52,11 +52,16 @@ func newCursor(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, er
 	return
 }
 
+// todo(andy): comment doc: may return invalid cursor
 func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
 	cur = nodeCursor{nd: nd, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
 	for !cur.isLeaf() {
+
+		// stay in bounds for internal nodes
+		cur.keepInBounds()
+
 		mv := metaValue(cur.currentPair().value())
 		nd, err = fetchChild(ctx, nrw, mv)
 		if err != nil {
@@ -72,12 +77,16 @@ func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem,
 	return cur, nil
 }
 
-// todo(andy): this is a temporary function to optimize memory usage
+// todo(andy): comment doc: may return invalid cursor
 func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
 	cur = nodeCursor{nd: nd, parent: nil, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
 	for !cur.isLeaf() {
+
+		// stay in bounds for internal nodes
+		cur.keepInBounds()
+
 		// reuse |cur| object to keep stack alloc'd
 		mv := metaValue(cur.currentPair().value())
 		cur.nd, err = fetchChild(ctx, nrw, mv)
@@ -147,6 +156,15 @@ func (cur *nodeCursor) skipToNodeEnd() {
 	cur.idx = cur.lastKeyIdx()
 }
 
+func (cur *nodeCursor) keepInBounds() {
+	if cur.idx < 0 {
+		cur.skipToNodeStart()
+	}
+	if cur.idx > cur.lastKeyIdx() {
+		cur.skipToNodeEnd()
+	}
+}
+
 func (cur *nodeCursor) atNodeStart() bool {
 	return cur.idx == 0
 }
@@ -180,6 +198,8 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 		if err != nil {
 			return err
 		}
+		// stay in bounds for internal nodes
+		cur.parent.keepInBounds()
 
 		mv := metaValue(cur.parent.currentPair().value())
 		cur.nd, err = fetchChild(ctx, cur.nrw, mv)
@@ -195,10 +215,13 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 
 // search returns the index of |item| if it's present in |cur.nd|, or the
 // index of the next greatest element if it is not present.
-func (cur *nodeCursor) search(item nodeItem, cb compareFn) int {
-	idx := sort.Search(cur.nd.nodeCount()/stride, func(i int) bool {
+// todo(andy): update this comment too.
+func (cur *nodeCursor) search(item nodeItem, cb compareFn) (idx int) {
+	count := cur.nd.nodeCount()
+	idx = sort.Search(count/stride, func(i int) bool {
 		return cb(item, cur.nd.getItem(i*stride)) <= 0
 	})
+
 	return idx * stride
 }
 
@@ -326,9 +349,9 @@ func (cur *nodeCursor) compare(other *nodeCursor) int {
 
 func (cur *nodeCursor) clone() *nodeCursor {
 	cln := nodeCursor{
-		nd:     cur.nd,
-		idx:    cur.idx,
-		nrw:    cur.nrw,
+		nd:  cur.nd,
+		idx: cur.idx,
+		nrw: cur.nrw,
 	}
 
 	if cur.parent != nil {

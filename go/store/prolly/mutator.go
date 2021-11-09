@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -120,5 +121,19 @@ func compareKeys(m Map, left, right val.Tuple) int {
 }
 
 func compareValues(m Map, left, right val.Tuple) int {
-	return int(m.valDesc.Compare(left, right))
+	// order NULLs last
+	if left == nil {
+		if right == nil {
+			return 0
+		} else {
+			return 1
+		}
+	} else if right == nil {
+		if left == nil {
+			return 0
+		} else {
+			return -1
+		}
+	}
+	return m.valDesc.Compare(left, right)
 }

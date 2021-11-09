@@ -88,11 +88,16 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 		return err
 	}
 
-	pair := cur.currentPair()
-	k, v := val.Tuple(pair.key()), val.Tuple(pair.value())
+	var k, v val.Tuple
+	if cur.valid() {
+		pair := cur.currentPair()
 
-	if m.compareKeys(key, k) != 0 {
-		k, v = nil, nil
+		k = val.Tuple(pair.key())
+		if m.compareKeys(key, k) == 0 {
+			v = val.Tuple(pair.value())
+		} else {
+			k = nil
+		}
 	}
 
 	return cb(k, v)
@@ -123,9 +128,11 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 		return false, err
 	}
 
-	k := val.Tuple(cur.currentPair().key())
+	if cur.valid() {
+		k := val.Tuple(cur.currentPair().key())
+		ok = m.compareKeys(key, k) == 0
+	}
 
-	ok = m.compareKeys(key, k) == 0
 	return
 }
 
@@ -170,6 +177,7 @@ func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error
 }
 
 // searchNode is a searchFn for a Map, adapted from search.Sort.
+// todo(andy): update comment with differences from search.Sort
 func (m Map) searchNode(query nodeItem, nd Node) int {
 	n := nd.nodeCount() / stride
 	// Define f(-1) == false and f(n) == true.

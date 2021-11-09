@@ -399,9 +399,12 @@ func (sc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 	for sc.cur.valid() {
 		pair := sc.cur.currentPair()
 
-		if ok, err := sc.Append(ctx, pair.key(), pair.value()); err != nil {
+		var ok bool
+		ok, err = sc.Append(ctx, pair.key(), pair.value())
+		if err != nil {
 			return err
-		} else if ok && sc.cur.atNodeEnd() {
+		}
+		if ok && sc.cur.atNodeEnd() {
 			break // boundary occurred at same place in old & new Node
 		}
 
