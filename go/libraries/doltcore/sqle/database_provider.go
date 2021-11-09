@@ -274,10 +274,9 @@ func (p DoltDatabaseProvider) Function(name string) (sql.Function, error) {
 	return fn, nil
 }
 
-// switchAndFetchReplicaHead tries to pull latest version of a branch. Will fail if the branch
-// does not exist on the ReadReplicaDatabase's remote. Will fail if fetching and merging a
-// new branch that is not fast-forward compatible with the active branch. If the target branch
-// is not a replication head, we will only pull once.
+// switchAndFetchReplicaHead tries to pull the latest version of a branch. Will fail if the branch
+// does not exist on the ReadReplicaDatabase's remote. If the target branch is not a replication
+// head, the new branch will not be continuously fetched.
 func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Database) error {
 	destDb, ok := db.(ReadReplicaDatabase)
 	if !ok {
@@ -320,7 +319,7 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 		return err
 	}
 
-	// update the working set
+	// create workingSets/heads/branch and update the working set
 	err = pullBranches(ctx, destDb, []string{branch})
 	if err != nil {
 		return err
