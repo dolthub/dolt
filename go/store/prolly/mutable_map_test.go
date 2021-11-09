@@ -60,10 +60,29 @@ func TestMutableMapWrites(t *testing.T) {
 	})
 	t.Run("point deletes", func(t *testing.T) {
 		// todo(andy): small map case
-		//testPointDeletes(t, 10)
+		testPointDeletes(t, 10)
 		testPointDeletes(t, 100)
 		testPointDeletes(t, 1000)
 		testPointDeletes(t, 10_000)
+	})
+	t.Run("multiple point updates", func(t *testing.T) {
+		testMultiplePointUpdates(t, 10)
+		testMultiplePointUpdates(t, 100)
+		testMultiplePointUpdates(t, 1000)
+		testMultiplePointUpdates(t, 10_000)
+	})
+	t.Run("multiple point inserts", func(t *testing.T) {
+		testMultiplePointInserts(t, 10)
+		testMultiplePointInserts(t, 100)
+		testMultiplePointInserts(t, 1000)
+		testMultiplePointInserts(t, 10_000)
+	})
+	t.Run("multiple point deletes", func(t *testing.T) {
+		// todo(andy): small map case
+		//testPointDeletes(t, 10)
+		testMultiplePointDeletes(t, 100)
+		testMultiplePointDeletes(t, 1000)
+		testMultiplePointDeletes(t, 10_000)
 	})
 }
 
@@ -95,16 +114,35 @@ func testPointUpdates(t *testing.T, count int) {
 		})
 		require.NoError(t, err)
 	}
+}
+
+func testMultiplePointUpdates(t *testing.T, count int) {
+	orig := ascendingMap(t, count)
+
+	puts := make([]int64, count)
+	for i := range puts {
+		puts[i] = int64(i)
+	}
+	rand.Shuffle(len(puts), func(i, j int) {
+		puts[i], puts[j] = puts[j], puts[i]
+	})
 
 	// batches of 5 updates
 	const k = 5
-	for x := 0; x < len(puts); x += k {
-		mut := orig.Mutate()
+	edits := make([][2]val.Tuple, k)
+	ctx := context.Background()
 
-		edits := make([][2]val.Tuple, k)
+	for x := 0; x < len(puts); x += k {
+
+		mut := orig.Mutate()
+		stop := x + k
+		if stop > len(puts) {
+			stop = len(puts)
+		}
 		for i, idx := range puts[x : x+k] {
 			edits[i][0], edits[i][1] = putInts(mut, idx, idx)
 		}
+
 		m, err := mut.Map(ctx)
 		assert.NoError(t, err)
 		assert.Equal(t, count, int(m.Count()))
@@ -156,16 +194,38 @@ func testPointInserts(t *testing.T, count int) {
 		})
 		require.NoError(t, err)
 	}
+}
+
+func testMultiplePointInserts(t *testing.T, count int) {
+	// create map of even numbers
+	orig := ascendingMapWithStep(t, count, 2)
+
+	// todo(andy): inserting past the end
+	puts := make([]int64, count)
+	for i := range puts {
+		// create odd-number edits
+		puts[i] = int64(i*2) + 1
+	}
+	rand.Shuffle(len(puts), func(i, j int) {
+		puts[i], puts[j] = puts[j], puts[i]
+	})
 
 	// batches of 5 inserts
 	const k = 5
-	for x := 0; x < len(puts); x += k {
-		mut := orig.Mutate()
+	edits := make([][2]val.Tuple, k)
 
-		edits := make([][2]val.Tuple, k)
+	for x := 0; x < len(puts); x += k {
+
+		mut := orig.Mutate()
+		stop := x + k
+		if stop > len(puts) {
+			stop = len(puts)
+		}
 		for i, idx := range puts[x : x+k] {
 			edits[i][0], edits[i][1] = putInts(mut, idx, -idx)
 		}
+
+		ctx := context.Background()
 		m, err := mut.Map(ctx)
 		assert.NoError(t, err)
 		assert.Equal(t, count+k, int(m.Count()))
@@ -230,16 +290,35 @@ func testPointDeletes(t *testing.T, count int) {
 		})
 		require.NoError(t, err)
 	}
+}
+
+func testMultiplePointDeletes(t *testing.T, count int) {
+	orig := ascendingMap(t, count)
+
+	deletes := make([]int64, count)
+	for i := range deletes {
+		deletes[i] = int64(i)
+	}
+	rand.Shuffle(len(deletes), func(i, j int) {
+		deletes[i], deletes[j] = deletes[j], deletes[i]
+	})
 
 	// batches of 5 deletes
 	const k = 5
-	for x := 0; x < len(deletes); x += k {
-		mut := orig.Mutate()
+	edits := make([]val.Tuple, k)
+	ctx := context.Background()
 
-		edits := make([]val.Tuple, k)
+	for x := 0; x < len(deletes); x += k {
+
+		mut := orig.Mutate()
+		stop := x + k
+		if stop > len(deletes) {
+			stop = len(deletes)
+		}
 		for i, idx := range deletes[x : x+k] {
 			edits[i] = deleteInt(mut, idx)
 		}
+
 		m, err := mut.Map(ctx)
 		assert.NoError(t, err)
 		assert.Equal(t, count-k, int(m.Count()))

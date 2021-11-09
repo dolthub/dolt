@@ -131,6 +131,9 @@ func newCursorAtIndex(ctx context.Context, nrw NodeStore, nd Node, idx uint64) (
 }
 
 func (cur *nodeCursor) valid() bool {
+	if cur.nd == nil {
+		return false
+	}
 	cnt := cur.nd.nodeCount()
 	return cur.idx >= 0 && cur.idx < cnt
 }
@@ -238,9 +241,7 @@ func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
 }
 
 func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
-	lastIdx := cur.nd.nodeCount() - stride
-
-	if cur.idx < lastIdx {
+	if cur.idx < cur.lastKeyIdx() {
 		cur.idx += stride
 		return true, nil
 	}
@@ -250,7 +251,7 @@ func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	assertTrue(cur.idx == lastIdx)
+	assertTrue(cur.idx == cur.lastKeyIdx())
 
 	if cur.parent != nil {
 		ok, err := cur.parent.advanceInBounds(ctx)
@@ -359,6 +360,17 @@ func (cur *nodeCursor) clone() *nodeCursor {
 	}
 
 	return &cln
+}
+
+func (cur *nodeCursor) copy(other *nodeCursor) {
+	cur.nd = other.nd
+	cur.idx = other.idx
+	cur.nrw = other.nrw
+
+	if cur.parent != nil {
+		assertTrue(other.parent != nil)
+		cur.parent.copy(other.parent)
+	}
 }
 
 func assertTrue(b bool) {
