@@ -44,11 +44,11 @@ const (
 	directoryFlag = "directory"
 	filenameFlag  = "file-name"
 
-	sqlFileExt    = "sql"
-	csvFileExt    = "csv"
-	jsonFileExt   = "json"
-	emptyFileExt  = ""
-	emptyStr      = ""
+	sqlFileExt   = "sql"
+	csvFileExt   = "csv"
+	jsonFileExt  = "json"
+	emptyFileExt = ""
+	emptyStr     = ""
 )
 
 var dumpDocs = cli.CommandDocumentationContent{
