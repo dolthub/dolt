@@ -84,10 +84,6 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 		return err
 	}
 
-	if err != nil {
-		return err
-	}
-
 	ds, err = destDB.GetDataset(ctx, rf.String())
 	if err != nil {
 		return err

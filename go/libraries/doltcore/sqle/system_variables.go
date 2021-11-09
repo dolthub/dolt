@@ -23,6 +23,8 @@ const (
 	ReplicateToRemoteKey     = "dolt_replicate_to_remote"
 	ReadReplicaRemoteKey     = "dolt_read_replica_remote"
 	SkipReplicationErrorsKey = "dolt_skip_replication_errors"
+	ReplicateHeadsKey        = "dolt_replicate_heads"
+	ReplicateAllHeadsKey     = "dolt_replicate_all_heads"
 	CurrentBatchModeKey      = "batch_mode"
 )
 
@@ -68,5 +70,29 @@ func AddDoltSystemVariables() {
 			Type:              sql.NewSystemBoolType(SkipReplicationErrorsKey),
 			Default:           int8(0),
 		},
+		{
+			Name:              ReplicateHeadsKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemStringType(ReplicateHeadsKey),
+			Default:           "",
+		},
+		{
+			Name:              ReplicateAllHeadsKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(ReplicateAllHeadsKey),
+			Default:           int8(0),
+		},
 	})
+}
+
+func SkipReplicationWarnings() bool {
+	_, skip, ok := sql.SystemVariables.GetGlobal(SkipReplicationErrorsKey)
+	if !ok {
+		panic("dolt system variables not loaded")
+	}
+	return skip == int8(1)
 }

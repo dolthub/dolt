@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -30,10 +31,10 @@ import (
 
 type ReadReplicaDatabase struct {
 	Database
-	headRef        ref.DoltRef
 	remoteTrackRef ref.DoltRef
 	remote         env.Remote
 	srcDB          *doltdb.DoltDB
+	headRef        ref.DoltRef
 	tmpDir         string
 }
 
@@ -48,6 +49,9 @@ var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
 var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
+var ErrInvalidReplicateHeadsSetting = errors.New("invalid replicate heads setting")
+var ErrFailedToCastToReplicaDb = errors.New("failed to cast to ReadReplicaDatabase")
+var ErrCannotCreateReplicaRevisionDbForCommit = errors.New("cannot create replica revision db for commit")
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
@@ -67,88 +71,163 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, err
 	}
 
-	headRef := rsr.CWBHeadRef()
-	refSpecs, err := env.GetRefSpecs(rsr, remoteName)
-
-	var remoteTrackRef ref.DoltRef
-	var foundRef bool
-	for _, refSpec := range refSpecs {
-		trackRef := refSpec.DestRef(headRef)
-		if trackRef != nil {
-			remoteTrackRef = trackRef
-			foundRef = true
-			break
-		}
-	}
-	if !foundRef {
-		return EmptyReadReplica, env.ErrInvalidRefSpecRemote
-	}
-
 	return ReadReplicaDatabase{
-		Database:       db,
-		headRef:        headRef,
-		remoteTrackRef: remoteTrackRef,
-		remote:         remote,
-		tmpDir:         tmpDir,
-		srcDB:          srcDB,
+		Database: db,
+		remote:   remote,
+		tmpDir:   tmpDir,
+		srcDB:    srcDB,
+		headRef:  rsr.CWBHeadRef(),
 	}, nil
 }
 
 func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if rrd.srcDB != nil {
-		err := rrd.pullFromReplica(ctx)
+		err := rrd.PullFromRemote(ctx)
 		if err != nil {
-			return nil, err
+			err = fmt.Errorf("replication failed: %w", err)
+			if !SkipReplicationWarnings() {
+				return nil, err
+			}
+			ctx.GetLogger().Warn(err.Error())
 		}
 	} else {
-		ctx.GetLogger().Warn("replication failure; dolt_replication_remote value is misconfigured")
+		ctx.GetLogger().Warn("replication failed; dolt_replication_remote value is misconfigured")
 	}
 	return rrd.Database.StartTransaction(ctx, tCharacteristic)
 }
 
-func (rrd ReadReplicaDatabase) pullFromReplica(ctx *sql.Context) error {
-	ddb := rrd.Database.DbData().Ddb
+func (rrd ReadReplicaDatabase) PullFromRemote(ctx context.Context) error {
+	_, headsArg, ok := sql.SystemVariables.GetGlobal(ReplicateHeadsKey)
+	if !ok {
+		return sql.ErrUnknownSystemVariable.New(ReplicateHeadsKey)
+	}
+
+	_, allHeads, ok := sql.SystemVariables.GetGlobal(ReplicateAllHeadsKey)
+	if !ok {
+		return sql.ErrUnknownSystemVariable.New(ReplicateAllHeadsKey)
+	}
+
+	switch {
+	case headsArg != "" && allHeads == int8(1):
+		return fmt.Errorf("%w; cannot set both 'dolt_replicate_heads' and 'dolt_replicate_all_heads'", ErrInvalidReplicateHeadsSetting)
+	case headsArg != "":
+		heads, ok := headsArg.(string)
+		if !ok {
+			return sql.ErrInvalidSystemVariableValue.New(ReplicateHeadsKey)
+		}
+		branches := parseBranches(heads)
+		err := pullBranches(ctx, rrd, branches)
+		if err != nil {
+			return err
+		}
+	case allHeads == int8(1):
+		err := rrd.srcDB.Rebase(ctx)
+		if err != nil {
+			return err
+		}
+
+		refs, err := rrd.srcDB.GetBranches(ctx)
+		if err != nil {
+			return err
+		}
+
+		allBranches := make([]string, 0, len(refs))
+		for _, r := range refs {
+			allBranches = append(allBranches, r.GetPath())
+		}
+
+		err = pullBranches(ctx, rrd, allBranches)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("%w: dolt_replicate_heads not set", ErrInvalidReplicateHeadsSetting)
+	}
+	return nil
+}
+
+func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) (ReadReplicaDatabase, error) {
+	rrd.headRef = head
+	return rrd, nil
+}
+
+func pullBranches(ctx context.Context, rrd ReadReplicaDatabase, branches []string) error {
 	err := rrd.srcDB.Rebase(ctx)
 	if err != nil {
 		return err
 	}
-	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, ddb, rrd.headRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+
+	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
 	if err != nil {
 		return err
 	}
 
-	err = ddb.FastForward(ctx, rrd.remoteTrackRef, srcDBCommit)
+	for i, refSpec := range refSpecs {
+		branch := ref.NewBranchRef(branches[i])
+		rtRef := refSpec.DestRef(branch)
+		err := fetchRef(ctx, rrd, branch, rtRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = actions.FetchFollowTags(ctx, rrd.rsw.TempTableFilesDir(), rrd.srcDB, rrd.ddb, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
-
-	err = ddb.FastForward(ctx, rrd.headRef, srcDBCommit)
-	if err != nil {
-		return err
-	}
-
-	wsRef, err := ref.WorkingSetRefForHead(rrd.headRef)
-	if err != nil {
-		return err
-	}
-
-	ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
-	if err != nil {
-		return err
-	}
-
-	commitRoot, err := srcDBCommit.GetRootValue()
-	if err != nil {
-		return err
-	}
-
-	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-
-	h, err := ws.HashOf()
-	if err != nil {
-		return err
-	}
-	rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
 
 	return nil
+}
+
+func fetchRef(ctx context.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
+	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	if err != nil {
+		return err
+	}
+
+	err = rrd.ddb.FastForward(ctx, rtRef, srcDBCommit)
+	if err != nil {
+		return err
+	}
+
+	err = rrd.ddb.FastForward(ctx, headRef, srcDBCommit)
+	if err != nil {
+		return err
+	}
+
+	if headRef == rrd.headRef {
+		wsRef, err := ref.WorkingSetRefForHead(headRef)
+		if err != nil {
+			return err
+		}
+
+		ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
+		if err != nil {
+			return err
+		}
+
+		commitRoot, err := srcDBCommit.GetRootValue()
+		if err != nil {
+			return err
+		}
+
+		ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+		h, err := ws.HashOf()
+		if err != nil {
+			return err
+		}
+
+		rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, doltdb.TodoWorkingSetMeta())
+	}
+
+	return nil
+}
+
+func parseBranches(arg string) []string {
+	heads := strings.Split(arg, ",")
+	branches := make([]string, 0, len(heads))
+	for _, head := range heads {
+		branches = append(branches, head)
+	}
+	return branches
 }

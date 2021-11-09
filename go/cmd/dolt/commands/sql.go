@@ -473,13 +473,6 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 // skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
 // that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
-	var skipErrors bool
-	if _, val, ok := sql.SystemVariables.GetGlobal(dsqle.SkipReplicationErrorsKey); !ok {
-		return dsqle.ReadReplicaDatabase{}, sql.ErrUnknownSystemVariable.New(dsqle.SkipReplicationErrorsKey)
-	} else if val == int8(1) {
-		skipErrors = true
-	}
-
 	opts := editor.Options{
 		Deaf: dEnv.DbEaFactory(),
 	}
@@ -489,7 +482,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
 	if err != nil {
 		err = fmt.Errorf("%w from remote '%s'; %s", dsqle.ErrFailedToLoadReplicaDB, remoteName, err.Error())
-		if !skipErrors {
+		if !dsqle.SkipReplicationWarnings() {
 			return dsqle.ReadReplicaDatabase{}, err
 		}
 		cli.Println(err)
@@ -537,7 +530,7 @@ func execQuery(
 func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnWriteHook, error) {
 	_, val, ok := sql.SystemVariables.GetGlobal(dsqle.ReplicateToRemoteKey)
 	if !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(dsqle.SkipReplicationErrorsKey)
+		return nil, sql.ErrUnknownSystemVariable.New(dsqle.ReplicateToRemoteKey)
 	} else if val == "" {
 		return nil, nil
 	}
@@ -570,16 +563,10 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnW
 // replace misconfigured hooks with doltdb.LogHook instances that prints a warning when trying to execute.
 func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
-	var skipErrors bool
-	if _, val, ok := sql.SystemVariables.GetGlobal(dsqle.SkipReplicationErrorsKey); !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(dsqle.SkipReplicationErrorsKey)
-	} else if val == int8(1) {
-		skipErrors = true
-	}
 
 	if hook, err := getPushOnWriteHook(ctx, dEnv); err != nil {
 		err = fmt.Errorf("failure loading hook; %w", err)
-		if skipErrors {
+		if dsqle.SkipReplicationWarnings() {
 			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
 		} else {
 			return nil, err
@@ -1590,6 +1577,7 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 		if sessionDB := sess.GetCurrentDatabase(); sessionDB != "" {
 			sqlCtx.SetCurrentDatabase(sessionDB)
 		} else {
+
 			sqlCtx.SetCurrentDatabase(initialDb)
 		}
 
