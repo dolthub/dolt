@@ -189,7 +189,7 @@ teardown() {
     run dolt sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "invalid replicate head setting: dolt_replicate_heads not set" ]] || false
+    [[ "$output" =~ "invalid replicate heads setting: dolt_replicate_heads not set" ]] || false
 }
 
 @test "replication: replica pull conflicting head configurations" {
@@ -205,7 +205,7 @@ teardown() {
     run dolt sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "invalid replicate head setting; cannot set both" ]] || false
+    [[ "$output" =~ "invalid replicate heads setting; cannot set both" ]] || false
 }
 
 

@@ -274,6 +274,10 @@ func (p DoltDatabaseProvider) Function(name string) (sql.Function, error) {
 	return fn, nil
 }
 
+// switchAndFetchReplicaHead tries to pull latest version of a branch. Will fail if the branch
+// does not exist on the ReadReplicaDatabase's remote. Will fail if fetching and merging a
+// new branch that is not fast-forward compatible with the active branch. If the target branch
+// is not a replication head, we will only pull once.
 func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Database) error {
 	destDb, ok := db.(ReadReplicaDatabase)
 	if !ok {
@@ -295,13 +299,13 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 		}
 	}
 
-	// check whether remote branch exists before creating local tracking branch
+	// check whether branch is on remote before creating local tracking branch
 	_, err = actions.FetchRemoteBranch(ctx, destDb.tmpDir, destDb.remote, destDb.srcDB, destDb.DbData().Ddb, branchRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
 
-	// TODO is localBranches var really necessary? we're not going to call this that often
+	// TODO we assume FF merge is OK between working HEAD and new branch
 	if !branchExists {
 		cs, _ := doltdb.NewCommitSpec(destDb.headRef.String())
 		cm, err := destDb.ddb.Resolve(ctx, cs, nil)
@@ -314,13 +318,14 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 		}
 	}
 
-	// update ReadReplicaRemote with new HEAD and remote tracking branch
+	// update ReadReplicaRemote with new HEAD
+	// dolt_replicate_heads configuration remains unchanged
 	destDb, err = destDb.SetHeadRef(branchRef)
 	if err != nil {
 		return err
 	}
 
-	// we fetched, now formalize working set update
+	// we fetched, now formalize working set update (merge)
 	err = pullBranches(ctx, destDb, []string{branch})
 	if err != nil {
 		return err

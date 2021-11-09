@@ -34,7 +34,6 @@ type ReadReplicaDatabase struct {
 	remoteTrackRef ref.DoltRef
 	remote         env.Remote
 	srcDB          *doltdb.DoltDB
-	localBranches  map[string]ref.DoltRef
 	headRef        ref.DoltRef
 	tmpDir         string
 }
@@ -50,7 +49,7 @@ var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
 var _ sql.TransactionDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
-var ErrInvalidReplicateHeadSetting = errors.New("invalid replicate head setting")
+var ErrInvalidReplicateHeadsSetting = errors.New("invalid replicate heads setting")
 var ErrFailedToCastToReplicaDb = errors.New("failed to cast to ReadReplicaDatabase")
 var ErrCannotCreateReplicaRevisionDbForCommit = errors.New("cannot create replica revision db for commit")
 
@@ -72,19 +71,12 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, err
 	}
 
-	branches, err := db.ddb.GetBranches(ctx)
-	localBranches := make(map[string]ref.DoltRef, len(branches))
-	for _, br := range branches {
-		localBranches[br.String()] = br
-	}
-
 	return ReadReplicaDatabase{
-		Database:      db,
-		remote:        remote,
-		tmpDir:        tmpDir,
-		srcDB:         srcDB,
-		localBranches: localBranches,
-		headRef:       rsr.CWBHeadRef(),
+		Database: db,
+		remote:   remote,
+		tmpDir:   tmpDir,
+		srcDB:    srcDB,
+		headRef:  rsr.CWBHeadRef(),
 	}, nil
 }
 
@@ -117,11 +109,11 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx context.Context) error {
 
 	switch {
 	case headsArg != "" && allHeads == int8(1):
-		return fmt.Errorf("%w; cannot set both 'dolt_replicate_heads' and 'dolt_replicate_all_heads'", ErrInvalidReplicateHeadSetting)
+		return fmt.Errorf("%w; cannot set both 'dolt_replicate_heads' and 'dolt_replicate_all_heads'", ErrInvalidReplicateHeadsSetting)
 	case headsArg != "":
 		heads, ok := headsArg.(string)
 		if !ok {
-			return sql.ErrInvalidSystemVariableValue.New(heads)
+			return sql.ErrInvalidSystemVariableValue.New(ReplicateHeadsKey)
 		}
 		branches := parseBranches(heads)
 		err := pullBranches(ctx, rrd, branches)
@@ -149,7 +141,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx context.Context) error {
 			return err
 		}
 	default:
-		return fmt.Errorf("%w: dolt_replicate_heads not set", ErrInvalidReplicateHeadSetting)
+		return fmt.Errorf("%w: dolt_replicate_heads not set", ErrInvalidReplicateHeadsSetting)
 	}
 	return nil
 }
@@ -161,11 +153,6 @@ func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) (ReadReplicaDatabase
 
 func pullBranches(ctx context.Context, rrd ReadReplicaDatabase, branches []string) error {
 	err := rrd.srcDB.Rebase(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = rrd.ddb.Rebase(ctx)
 	if err != nil {
 		return err
 	}
@@ -209,15 +196,6 @@ func fetchRef(ctx context.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.D
 	}
 
 	if headRef == rrd.headRef {
-
-		//wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(headRef.String()))
-		//if err != nil {
-		//	return err
-		//}
-		//
-		////dSess := dsess.DSessFromSess(ctx.Session)
-		////return dSess.SwitchWorkingSet(ctx, dbName, wsRef)
-
 		wsRef, err := ref.WorkingSetRefForHead(headRef)
 		if err != nil {
 			return err

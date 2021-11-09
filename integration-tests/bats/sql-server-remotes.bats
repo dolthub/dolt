@@ -12,8 +12,8 @@ make_repo() {
 setup() {
     setup_no_dolt_init
     make_repo repo1
-
     mkdir rem1
+
     cd repo1
     dolt remote add remote1 file://../rem1
     dolt push remote1 main
