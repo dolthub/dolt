@@ -90,7 +90,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 
 func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if rrd.srcDB != nil {
-		err := rrd.PullFromReplica(ctx)
+		err := rrd.PullFromRemote(ctx)
 		if err != nil {
 			err = fmt.Errorf("replication failed: %w", err)
 			if !SkipReplicationWarnings() {
@@ -104,7 +104,7 @@ func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristi
 	return rrd.Database.StartTransaction(ctx, tCharacteristic)
 }
 
-func (rrd ReadReplicaDatabase) PullFromReplica(ctx context.Context) error {
+func (rrd ReadReplicaDatabase) PullFromRemote(ctx context.Context) error {
 	_, headsArg, ok := sql.SystemVariables.GetGlobal(ReplicateHeadsKey)
 	if !ok {
 		return sql.ErrUnknownSystemVariable.New(ReplicateHeadsKey)
@@ -155,17 +155,17 @@ func (rrd ReadReplicaDatabase) PullFromReplica(ctx context.Context) error {
 }
 
 func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) (ReadReplicaDatabase, error) {
-	//rtRef, err := remoteTrackingRef(rrd.rsr, head, rrd.remote.Name)
-	//if err != nil {
-	//	return rrd, err
-	//}
-	//rrd.remoteTrackRef = rtRef
 	rrd.headRef = head
 	return rrd, nil
 }
 
 func pullBranches(ctx context.Context, rrd ReadReplicaDatabase, branches []string) error {
 	err := rrd.srcDB.Rebase(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = rrd.ddb.Rebase(ctx)
 	if err != nil {
 		return err
 	}
@@ -209,6 +209,15 @@ func fetchRef(ctx context.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.D
 	}
 
 	if headRef == rrd.headRef {
+
+		//wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(headRef.String()))
+		//if err != nil {
+		//	return err
+		//}
+		//
+		////dSess := dsess.DSessFromSess(ctx.Session)
+		////return dSess.SwitchWorkingSet(ctx, dbName, wsRef)
+
 		wsRef, err := ref.WorkingSetRefForHead(headRef)
 		if err != nil {
 			return err

@@ -225,6 +225,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 	}
 
 	if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
+		// TODO move this out of analysis phase, should only happen at read time
 		err := switchAndFetchReplicaHead(ctx, revSpec, replicaDb)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
@@ -242,7 +243,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 	if doltdb.IsValidCommitHash(revSpec) {
 		srcDb, ok = srcDb.(Database)
 		if !ok {
-			return nil, dsess.InitialDbState{}, false, ErrCannotCreateReplicaRevisionDbForCommit
+			return nil, dsess.InitialDbState{}, false, nil
 		}
 		db, init, err := dbRevisionForCommit(ctx, srcDb.(Database), revSpec)
 		if err != nil {
@@ -281,14 +282,27 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 
 	branchRef := ref.NewBranchRef(branch)
 
+	var branchExists bool
+	branches, err := destDb.ddb.GetBranches(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, br := range branches {
+		if br.String() == branch {
+			branchExists = true
+			break
+		}
+	}
+
 	// check whether remote branch exists before creating local tracking branch
-	_, err := actions.FetchRemoteBranch(ctx, destDb.tmpDir, destDb.remote, destDb.srcDB, destDb.DbData().Ddb, branchRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	_, err = actions.FetchRemoteBranch(ctx, destDb.tmpDir, destDb.remote, destDb.srcDB, destDb.DbData().Ddb, branchRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
 
 	// TODO is localBranches var really necessary? we're not going to call this that often
-	if _, ok := destDb.localBranches[branch]; !ok {
+	if !branchExists {
 		cs, _ := doltdb.NewCommitSpec(destDb.headRef.String())
 		cm, err := destDb.ddb.Resolve(ctx, cs, nil)
 		if err != nil {
@@ -298,7 +312,6 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 		if err != nil {
 			return err
 		}
-		destDb.localBranches[branch] = branchRef
 	}
 
 	// update ReadReplicaRemote with new HEAD and remote tracking branch

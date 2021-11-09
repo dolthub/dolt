@@ -442,3 +442,69 @@ func TestReadReplica(t *testing.T) {
 		assert.ElementsMatch(t, res, []int{0})
 	})
 }
+
+func TestFetchOnCommand(t *testing.T) {
+	var err error
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("no working directory: %s", err.Error())
+	}
+	defer os.Chdir(cwd)
+
+	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
+	defer os.RemoveAll(multiSetup.Root)
+
+	multiSetup.NewDB("read_replica")
+	multiSetup.NewRemote("remote1")
+	multiSetup.PushToRemote("read_replica", "remote1", "main")
+	multiSetup.CloneDB("remote1", "source_db")
+
+	readReplicaDbName := multiSetup.DbNames[0]
+	sourceDbName := multiSetup.DbNames[1]
+
+	localCfg, ok := multiSetup.MrEnv.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
+	if !ok {
+		t.Fatal("local config does not exist")
+	}
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{sqle.ReadReplicaRemoteKey: "remote1", sqle.ReplicateHeadsKey: "main"})
+	dsess.InitPersistedSystemVars(multiSetup.MrEnv.GetEnv(readReplicaDbName))
+
+	// start server as read replica
+	sc := CreateServerController()
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
+
+	func() {
+		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
+		go func() {
+			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
+		}()
+		err = sc.WaitForStart()
+		require.NoError(t, err)
+	}()
+	defer sc.StopServer()
+
+	replicatedTable := "new_table"
+	multiSetup.CreateTable(sourceDbName, replicatedTable)
+	multiSetup.StageAll(sourceDbName)
+	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
+	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
+
+	t.Run("fetch on demand", func(t *testing.T) {
+		conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
+		defer conn.Close()
+		require.NoError(t, err)
+		sess := conn.NewSession(nil)
+
+		newBranch := "feature"
+		multiSetup.NewBranch(sourceDbName, newBranch)
+		multiSetup.CheckoutBranch(sourceDbName, newBranch)
+		multiSetup.PushToRemote(sourceDbName, "remote1", newBranch)
+
+		var res []int
+
+		q := sess.SelectBySql(fmt.Sprintf("use `%s/%s`", readReplicaDbName, newBranch))
+		_, err = q.LoadContext(context.Background(), &res)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, res, []int{0})
+	})
+}

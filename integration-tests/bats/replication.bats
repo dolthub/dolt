@@ -104,27 +104,48 @@ teardown() {
 @test "replication: pull non-main head" {
     dolt clone file://./rem1 repo2
     cd repo2
-    dolt branch new_feature
+    dolt checkout -b new_feature
+    dolt sql -q "create table t1 (a int)"
+    dolt commit -am "cm"
     dolt push origin new_feature
 
     cd ../repo1
     dolt config --local --add sqlserver.global.dolt_replicate_heads new_feature
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
-    dolt sql -q "show tables"
-    dolt checkout new_feature
+    run dolt sql -q "show tables as of hashof('new_feature')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "t1" ]] || false
 }
 
 @test "replication: pull multiple heads" {
     dolt clone file://./rem1 repo2
     cd repo2
-    dolt branch new_feature
+    dolt checkout -b new_feature
+    dolt sql -q "create table t1 (a int)"
+    dolt commit -am "cm"
     dolt push origin new_feature
+    dolt checkout main
+    dolt sql -q "create table t2 (a int)"
+    dolt commit -am "cm"
+    dolt push origin main
 
     cd ../repo1
     dolt config --local --add sqlserver.global.dolt_replicate_heads main,new_feature
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
-    dolt sql -q "show tables"
-    dolt checkout new_feature
+
+    run dolt sql -q "show tables as of hashof('new_feature')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "t1" ]] || false
+
+    run dolt sql -q "show tables as of hashof('main')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "t2" ]] || false
 }
 
 @test "replication: pull with unknown head" {
@@ -208,21 +229,25 @@ teardown() {
     [[ ! "$output" =~ "panic" ]] || false
 }
 
-@test "replication: replica pull all heads" {
+@test "replication: pull all heads" {
     dolt clone file://./rem1 repo2
     cd repo2
-    dolt branch new_feature
+    dolt checkout -b new_feature
+    dolt sql -q "create table t1 (a int)"
+    dolt commit -am "cm"
     dolt push origin new_feature
 
     cd ../repo1
     dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
-    dolt config --list
-    dolt sql -q "show tables"
-    dolt checkout new_feature
+    run dolt sql -q "show tables as of hashof('new_feature')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "t1" ]] || false
 }
 
-@test "replication: replica pull all heads pulls tags" {
+@test "replication: pull all heads pulls tags" {
     dolt clone file://./rem1 repo2
     cd repo2
     dolt checkout -b new_feature
@@ -240,7 +265,7 @@ teardown() {
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test "replication: source pushes feature head" {
+@test "replication: push feature head" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
     dolt checkout -b new_feature
@@ -253,7 +278,7 @@ teardown() {
     dolt fetch origin new_feature
 }
 
-@test "replication: no remote error" {
+@test "replication: push to unknown remote error" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
     run dolt sql -q "create table t1 (a int primary key)"
@@ -262,7 +287,7 @@ teardown() {
     [[ "$output" =~ "failure loading hook; remote not found: 'unknown'" ]] || false
 }
 
-@test "replication: quiet replication warnings" {
+@test "replication: quiet push to unknown remote warnings" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
@@ -286,7 +311,7 @@ teardown() {
     [[ ! "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
-@test "replication: replica sink errors" {
+@test "replication: pull bad remote errors" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote unknown
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
@@ -297,7 +322,7 @@ teardown() {
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
-@test "replication: replica sink quiet warning" {
+@test "replication: pull bad remote quiet warning" {
     cd repo1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote unknown
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
@@ -310,3 +335,43 @@ teardown() {
     [[ "$output" =~ "dolt_replication_remote value is misconfigured" ]] || false
 }
 
+@test "replication: use database syntax fetches missing branch" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt checkout -b feature-branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt commit -am "new commit"
+    dolt push origin feature-branch
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    run dolt sql -b -q "USE \`repo1/feature-branch\`; show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "${lines[1]}" =~ "Table" ]] || false
+    [[ "${lines[2]}" =~ "t1" ]] || false
+}
+
+@test "replication: database autofetch doesn't change replication heads setting" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt branch feature-branch
+    dolt push origin feature-branch
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    run dolt sql -q "use \`repo1/feature-branch\`"
+
+    cd ../repo2
+    dolt checkout feature-branch
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt commit -am "new commit"
+    dolt push origin feature-branch
+
+    cd ../repo1
+    dolt sql -b -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [[ ! "output" =~ "t1" ]] || false
+}
