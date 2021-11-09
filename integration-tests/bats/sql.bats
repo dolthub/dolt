@@ -618,6 +618,9 @@ SQL
 @test "sql: run outside a dolt directory" {
     mkdir new && cd new
 
+    mkdir decoy
+    touch decoy/file.txt
+
     dolt sql --disable-batch <<SQL
 CREATE DATABASE test1;
 USE test1;
@@ -643,10 +646,28 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test1" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
-
-    # We have to end in a valid dolt database directory for teardown to succeed
-    cd ..
+    [[ ! "$output" =~ "decoy" ]] || false
 }
+
+@test "sql: bad dolt db" {
+    mkdir new && cd new
+
+    mkdir -p decoy/.dolt/noms/oldgen
+    mkdir -p decoy/.dolt/noms/temptf
+    echo '{}' > decoy/config.json
+
+    # Not doing this cd ../ results in the teardown method failing on
+    # a skip, not sure why. It's not part of the actual test
+    cd ../
+    skip "This results in a panic right now"
+    
+    run dolt sql -q "show databases" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ ! "$output" =~ "decoy" ]] || false
+}
+
 
 @test "sql: set head ref session var" {
     dolt add .; dolt commit -m 'commit tables'
