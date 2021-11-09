@@ -214,7 +214,7 @@ teardown() {
     server_query repo2 1 "show tables" "Table\n"
 }
 
-@test "sql-server: connect to missing branch pulls remote" {
+@test "sql-server-remotes: connect to missing branch pulls remote" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
