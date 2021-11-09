@@ -218,7 +218,7 @@ teardown() {
     dolt sql -q "CREATE TABLE new_table(pk int);"
     run dolt dump --directory dumps
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "give file name only for sql type" ]] || false
+    [[ "$output" =~ "directory is not supported for sql exports" ]] || false
     [ ! -f dumpfile.sql ]
 }
 
@@ -380,7 +380,7 @@ teardown() {
     dolt sql -q "CREATE TABLE new_table(pk int);"
     run dolt dump -r .csv --file-name dumpfile.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "give directory name only for .csv type" ]] || false
+    [[ "$output" =~ "file-name is not supported for csv exports" ]] || false
     [ ! -f dumps/enums.csv ]
     [ ! -f dumps/new_table.csv ]
     [ ! -f dumps/warehouse.csv ]
@@ -536,7 +536,7 @@ teardown() {
     dolt sql -q "CREATE TABLE new_table(pk int);"
     run dolt dump -r json --file-name dumpfile.json
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "give directory name only for json type" ]] || false
+    [[ "$output" =~ "file-name is not supported for json exports" ]] || false
     [ ! -f dumps/enums.json ]
     [ ! -f dumps/new_table.json ]
     [ ! -f dumps/warehouse.json ]

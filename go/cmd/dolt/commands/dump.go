@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -42,12 +43,16 @@ const (
 	forceParam    = "force"
 	directoryFlag = "directory"
 	filenameFlag  = "file-name"
+
+	sqlFileExt = "sql"
+	csvFileExt = "csv"
+	jsonFileExt = "json"
 )
 
 var dumpDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Export all tables.`,
 	LongDesc: `{{.EmphasisLeft}}dolt dump{{.EmphasisRight}} will export {{.LessThan}}table{{.GreaterThan}} to {{.LessThan}}file{{.GreaterThan}}. 
-If a dump file already exists then the operation will fail,unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag 
+If a dump file already exists then the operation will fail, unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag 
 is provided. The force flag forces the existing dump file to be overwritten.
 `,
 
@@ -116,6 +121,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	force := apr.Contains(forceParam)
 	resFormat, _ := apr.GetValue(FormatFlag)
+	resFormat = strings.TrimPrefix(resFormat, ".")
 
 	name, vErr := validateArgs(apr)
 	if vErr != nil {
@@ -123,13 +129,13 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	switch resFormat {
-	case "", "sql", ".sql":
-		if name != "" {
-			if name[len(name)-4:] != ".sql" {
-				name = fmt.Sprintf("`%s`.sql", name)
-			}
-		} else {
+	case "", sqlFileExt:
+		if name == "" {
 			name = fmt.Sprintf("doltdump.sql")
+		} else {
+			if !strings.HasSuffix(name, ".sql") {
+				name = fmt.Sprintf("%s.sql", name)
+			}
 		}
 
 		dumpOpts := getDumpOptions(name, resFormat)
@@ -146,13 +152,13 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				return HandleVErrAndExitCode(err, usage)
 			}
 		}
-	case "csv", ".csv":
-		err = dumpTables(ctx, root, dEnv, force, tblNames, ".csv", name+"/")
+	case csvFileExt:
+		err = dumpTables(ctx, root, dEnv, force, tblNames, csvFileExt, name)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-	case "json", ".json":
-		err = dumpTables(ctx, root, dEnv, force, tblNames, ".json", name+"/")
+	case jsonFileExt:
+		err = dumpTables(ctx, root, dEnv, force, tblNames, jsonFileExt, name)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -298,6 +304,7 @@ func getDumpDestination(path string) mvdata.DataLocation {
 // handling errors for invalid arguments
 func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError) {
 	rf, _ := apr.GetValue(FormatFlag)
+	rf = strings.TrimPrefix(rf, ".")
 	fn, fnOk := apr.GetValue(filenameFlag)
 	dn, dnOk := apr.GetValue(directoryFlag)
 
@@ -305,14 +312,19 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 		return "", errhand.BuildDError("cannot pass both directory and file names").SetPrintUsage().Build()
 	}
 	switch rf {
-	case "", "sql", ".sql":
+	case "", sqlFileExt:
 		if dnOk {
-			return "", errhand.BuildDError("give file name only for sql type").SetPrintUsage().Build()
+			return "", errhand.BuildDError("%s is not supported for %s exports", directoryFlag, sqlFileExt).SetPrintUsage().Build()
 		}
 		return fn, nil
-	case "csv", ".csv", "json", ".json":
+	case csvFileExt:
 		if fnOk {
-			return "", errhand.BuildDError("give directory name only for %s type", rf).SetPrintUsage().Build()
+			return "", errhand.BuildDError("%s is not supported for %s exports", filenameFlag, csvFileExt).SetPrintUsage().Build()
+		}
+		return dn, nil
+	case jsonFileExt:
+		if fnOk {
+			return "", errhand.BuildDError("%s is not supported for %s exports", filenameFlag, jsonFileExt).SetPrintUsage().Build()
 		}
 		return dn, nil
 	default:
@@ -344,12 +356,16 @@ func newTableArgs(tblName string, destination mvdata.DataLocation) *tableOptions
 // It handles only csv and json file types(rf).
 func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string) errhand.VerboseError {
 	var fName string
-	if dirName == "/" {
+	if dirName == "" {
 		dirName = fmt.Sprintf("doltdump/")
-		dirName = "doltdump/"
+	} else {
+		if !strings.HasSuffix(dirName, "/") {
+			dirName = fmt.Sprintf("%s/", dirName)
+		}
 	}
+
 	for _, tbl := range tblNames {
-		fName = dirName + tbl + rf
+		fName = fmt.Sprintf("%s%s.%s", dirName, tbl, rf)
 		dumpOpts := getDumpOptions(fName, rf)
 
 		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, fName)
