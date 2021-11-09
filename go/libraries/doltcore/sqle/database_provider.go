@@ -300,18 +300,13 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 	}
 
 	// check whether branch is on remote before creating local tracking branch
-	_, err = actions.FetchRemoteBranch(ctx, destDb.tmpDir, destDb.remote, destDb.srcDB, destDb.DbData().Ddb, branchRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	cm, err := actions.FetchRemoteBranch(ctx, destDb.tmpDir, destDb.remote, destDb.srcDB, destDb.DbData().Ddb, branchRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
 
-	// TODO we assume FF merge is OK between working HEAD and new branch
+	// create refs/heads/branch dataset
 	if !branchExists {
-		cs, _ := doltdb.NewCommitSpec(destDb.headRef.String())
-		cm, err := destDb.ddb.Resolve(ctx, cs, nil)
-		if err != nil {
-			return err
-		}
 		err = destDb.ddb.NewBranchAtCommit(ctx, branchRef, cm)
 		if err != nil {
 			return err
@@ -325,7 +320,7 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 		return err
 	}
 
-	// we fetched, now formalize working set update (merge)
+	// update the working set
 	err = pullBranches(ctx, destDb, []string{branch})
 	if err != nil {
 		return err
