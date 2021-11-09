@@ -20,8 +20,8 @@ ask questions!
 
 ## What's it for?
 
-Lots of things! Dolt is a generally useful tool with countless 
-applications. But if you want some ideas, [here's how people are using 
+Lots of things! Dolt is a generally useful tool with countless
+applications. But if you want some ideas, [here's how people are using
 it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
 
 ## How do I use it?
@@ -393,7 +393,7 @@ Simply run:
 dolt sql-server
 ```
 
-You connect with mysql using the default port 3306 as follows. The default username is "root", and the default password is 
+You connect with mysql using the default port 3306 as follows. The default username is "root", and the default password is
 "" (empty password)
 
 ```bash
