@@ -67,3 +67,58 @@ func TestFailsafes(t *testing.T) {
 	assert.Equal(t, DefaultName, dEnv.Config.GetStringOrDefault(UserNameKey, "none"))
 	assert.Equal(t, "def", dEnv.Config.GetStringOrDefault("abc", "none"))
 }
+
+func TestWritableDoltConfig(t *testing.T) {
+	dEnv, _ := createTestEnv(true, true)
+
+	localName := "Willy"
+
+	gCfg, _ := dEnv.Config.GetConfig(GlobalConfig)
+	lCfg, _ := dEnv.Config.GetConfig(LocalConfig)
+	require.NoError(t, gCfg.SetStrings(map[string]string{UserNameKey: name}))
+	require.NoError(t, lCfg.SetStrings(map[string]string{UserNameKey: localName}))
+
+	cfg := dEnv.Config.WriteableConfig()
+
+	assert.Equal(t, localName, cfg.GetStringOrDefault(UserNameKey, "none"))
+
+	require.NoError(t, cfg.SetStrings(map[string]string{"test": "abc"}))
+	require.NoError(t, cfg.Unset([]string{UserNameKey}))
+
+	assert.Equal(t, name, cfg.GetStringOrDefault(UserNameKey, "none"))
+	assert.Equal(t, "abc", cfg.GetStringOrDefault("test", "none"))
+
+	_, err := lCfg.GetString(UserNameKey)
+	assert.Equal(t, config.ErrConfigParamNotFound, err)
+
+	assert.Equal(t, name, gCfg.GetStringOrDefault(UserNameKey, "none"))
+	_, err = gCfg.GetString("test")
+	assert.Equal(t, config.ErrConfigParamNotFound, err)
+}
+
+func TestWritableDoltConfigNoLocal(t *testing.T) {
+	dEnv, _ := createTestEnv(true, false)
+
+	newName := "Willy"
+
+	gCfg, _ := dEnv.Config.GetConfig(GlobalConfig)
+	require.NoError(t, gCfg.SetStrings(map[string]string{UserNameKey: name, "test": "abc"}))
+
+	cfg := dEnv.Config.WriteableConfig()
+
+	assert.Equal(t, name, cfg.GetStringOrDefault(UserNameKey, "none"))
+	assert.Equal(t, "abc", cfg.GetStringOrDefault("test", "none"))
+
+	require.NoError(t, cfg.SetStrings(map[string]string{UserNameKey: newName}))
+	require.NoError(t, cfg.Unset([]string{"test"}))
+
+	assert.Equal(t, newName, cfg.GetStringOrDefault(UserNameKey, "none"))
+
+	_, err := cfg.GetString("test")
+	assert.Equal(t, config.ErrConfigParamNotFound, err)
+
+	assert.Equal(t, newName, gCfg.GetStringOrDefault(UserNameKey, "none"))
+
+	_, err = gCfg.GetString("test")
+	assert.Equal(t, config.ErrConfigParamNotFound, err)
+}

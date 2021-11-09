@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_no_dolt_init
@@ -11,6 +12,7 @@ setup() {
 teardown() {
     teardown_common
     rm -rf "$BATS_TMPDIR/config-test$$"
+    stop_sql_server
 }
 
 @test "config: make sure no dolt configuration for simulated fresh user" {
@@ -162,6 +164,38 @@ teardown() {
     run dolt log
     [ "$status" -eq 0 ]
     regex='John Doe <john@doe.com>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "config: SQL can create databases with no user and email set" {
+    dolt sql -b -q  "
+    CREATE DATABASE testdb;
+    use testdb;
+    CREATE TABLE test (pk int primary key, c1 varchar(1));"
+
+    [ -d "testdb" ]
+    cd testdb
+    run dolt log
+    [ "$status" -eq 0 ]
+    regex='Dolt System Account <doltuser@dolthub.com>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "config: sql server can create databases with no user and email set" {
+    skiponwindows "This test has dependencies missing on windows installations"
+    
+    start_sql_server
+    
+    server_query "" 1 "create database testdb"
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntestdb"
+    server_query "testdb" 1 "create table a(x int)"
+    server_query "testdb" 1 "insert into a values (1), (2)"
+
+    [ -d "testdb" ]
+    cd testdb
+    run dolt log
+    [ "$status" -eq 0 ]
+    regex='Dolt System Account <doltuser@dolthub.com>'
     [[ "$output" =~ "$regex" ]] || false
 }
 

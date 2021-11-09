@@ -161,7 +161,7 @@ func getRepoRootDir(path, pathSeparator string) string {
 // directory at the root of the filesystem and returns that.
 func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error) {
 	if !dEnv.Valid() {
-		cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
+		cfg := dEnv.Config.WriteableConfig()
 		return MultiEnvForDirectory(ctx, cfg, dEnv.FS, dEnv.Version)
 	}
 

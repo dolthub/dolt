@@ -229,7 +229,7 @@ type writeableLocalDoltCliConfig struct {
 }
 
 // WriteableConfig returns a ReadWriteConfig reading from this config hierarchy. The config will read from the hierarchy
-// and write to the local config.
+// and write to the local config if it's available, or the global config otherwise.
 func (dcc *DoltCliConfig) WriteableConfig() config.ReadWriteConfig {
 	return writeableLocalDoltCliConfig{dcc}
 }
@@ -260,19 +260,25 @@ var DefaultFailsafeConfig = map[string]string{
 }
 
 func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {
-	localCfg, ok := w.GetConfig(LocalConfig)
+	cfg, ok := w.GetConfig(LocalConfig)
 	if !ok {
-		return errors.New("no local config found")
+		cfg, ok = w.GetConfig(GlobalConfig)
+		if !ok {
+			return errors.New("no local or global config found")
+		}
 	}
 
-	return localCfg.SetStrings(updates)
+	return cfg.SetStrings(updates)
 }
 
 func (w writeableLocalDoltCliConfig) Unset(params []string) error {
-	localCfg, ok := w.GetConfig(LocalConfig)
+	cfg, ok := w.GetConfig(LocalConfig)
 	if !ok {
-		return errors.New("no local config found")
+		cfg, ok = w.GetConfig(GlobalConfig)
+		if !ok {
+			return errors.New("no local or global config found")
+		}
 	}
 
-	return localCfg.Unset(params)
+	return cfg.Unset(params)
 }

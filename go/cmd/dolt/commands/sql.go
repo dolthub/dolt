@@ -1500,7 +1500,6 @@ func newSqlEngine(
 		dbStates = append(dbStates, dbState)
 	}
 
-	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
 	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, config, dbStates...)
 	if err != nil {
 		return nil, err
