@@ -44,14 +44,16 @@ const (
 	directoryFlag = "directory"
 	filenameFlag  = "file-name"
 
-	sqlFileExt  = "sql"
-	csvFileExt  = "csv"
-	jsonFileExt = "json"
+	sqlFileExt    = "sql"
+	csvFileExt    = "csv"
+	jsonFileExt   = "json"
+	emptyFileExt  = ""
+	emptyStr      = ""
 )
 
 var dumpDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Export all tables.`,
-	LongDesc: `{{.EmphasisLeft}}dolt dump{{.EmphasisRight}} will export {{.LessThan}}table{{.GreaterThan}} to {{.LessThan}}file{{.GreaterThan}}. 
+	LongDesc: `{{.EmphasisLeft}}dolt dump{{.EmphasisRight}} dumps all tables in the working set. 
 If a dump file already exists then the operation will fail, unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag 
 is provided. The force flag forces the existing dump file to be overwritten.
 `,
@@ -83,9 +85,9 @@ func (cmd DumpCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 func (cmd DumpCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
-	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Valid values are sql and csv. Defaults to sql.")
-	ap.SupportsString(filenameFlag, "", "file_name", "Define file name for dump file.")
-	ap.SupportsString(directoryFlag, "", "directory_name", "Define directory name to dump the files in.")
+	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Defaults to sql. Valid values are sql, csv and json.")
+	ap.SupportsString(filenameFlag, "", "file_name", "Define file name for dump file. Defaults to `doltdump.sql`.")
+	ap.SupportsString(directoryFlag, "", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
 
 	return ap
 }
@@ -129,8 +131,8 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	switch resFormat {
-	case "", sqlFileExt:
-		if name == "" {
+	case emptyFileExt, sqlFileExt:
+		if name == emptyStr {
 			name = fmt.Sprintf("doltdump.sql")
 		} else {
 			if !strings.HasSuffix(name, ".sql") {
@@ -233,21 +235,21 @@ func dumpTable(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, t
 func checkAndCreateOpenDestFile(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, dumpOpts *dumpOptions, fileName string) (string, errhand.VerboseError) {
 	ow, err := checkOverwrite(ctx, root, dEnv.FS, force, dumpOpts.dest)
 	if err != nil {
-		return "", errhand.VerboseErrorFromError(err)
+		return emptyStr, errhand.VerboseErrorFromError(err)
 	}
 	if ow {
-		return "", errhand.BuildDError("%s already exists. Use -f to overwrite.", fileName).Build()
+		return emptyStr, errhand.BuildDError("%s already exists. Use -f to overwrite.", fileName).Build()
 	}
 
 	// create new file
 	err = dEnv.FS.MkDirs(filepath.Dir(dumpOpts.DumpDestName()))
 	if err != nil {
-		return "", errhand.VerboseErrorFromError(err)
+		return emptyStr, errhand.VerboseErrorFromError(err)
 	}
 
 	filePath, err := dEnv.FS.Abs(fileName)
 	if err != nil {
-		return "", errhand.VerboseErrorFromError(err)
+		return emptyStr, errhand.VerboseErrorFromError(err)
 	}
 
 	os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
@@ -276,7 +278,7 @@ func importStatsCB(stats types.AppliedEditStats) {
 
 // getDumpDestination returns a dump destination corresponding to the input parameters
 func getDumpDestination(path string) mvdata.DataLocation {
-	destLoc := mvdata.NewDataLocation(path, "")
+	destLoc := mvdata.NewDataLocation(path, emptyStr)
 
 	switch val := destLoc.(type) {
 	case mvdata.FileDataLocation:
@@ -309,26 +311,26 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 	dn, dnOk := apr.GetValue(directoryFlag)
 
 	if fnOk && dnOk {
-		return "", errhand.BuildDError("cannot pass both directory and file names").SetPrintUsage().Build()
+		return emptyStr, errhand.BuildDError("cannot pass both directory and file names").SetPrintUsage().Build()
 	}
 	switch rf {
-	case "", sqlFileExt:
+	case emptyFileExt, sqlFileExt:
 		if dnOk {
-			return "", errhand.BuildDError("%s is not supported for %s exports", directoryFlag, sqlFileExt).SetPrintUsage().Build()
+			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", directoryFlag, sqlFileExt).SetPrintUsage().Build()
 		}
 		return fn, nil
 	case csvFileExt:
 		if fnOk {
-			return "", errhand.BuildDError("%s is not supported for %s exports", filenameFlag, csvFileExt).SetPrintUsage().Build()
+			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, csvFileExt).SetPrintUsage().Build()
 		}
 		return dn, nil
 	case jsonFileExt:
 		if fnOk {
-			return "", errhand.BuildDError("%s is not supported for %s exports", filenameFlag, jsonFileExt).SetPrintUsage().Build()
+			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, jsonFileExt).SetPrintUsage().Build()
 		}
 		return dn, nil
 	default:
-		return "", errhand.BuildDError("invalid result format").SetPrintUsage().Build()
+		return emptyStr, errhand.BuildDError("invalid result format").SetPrintUsage().Build()
 	}
 }
 
@@ -356,7 +358,7 @@ func newTableArgs(tblName string, destination mvdata.DataLocation) *tableOptions
 // It handles only csv and json file types(rf).
 func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string) errhand.VerboseError {
 	var fName string
-	if dirName == "" {
+	if dirName == emptyStr {
 		dirName = fmt.Sprintf("doltdump/")
 	} else {
 		if !strings.HasSuffix(dirName, "/") {
