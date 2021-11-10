@@ -38,8 +38,8 @@ func TestMutableMapReads(t *testing.T) {
 	//})
 }
 
-func makeMutableMap(t *testing.T, kd, vd val.TupleDesc, items [][2]val.Tuple) orderedMap {
-	m := makeProllyMap(t, kd, vd, items)
+func makeMutableMap(t *testing.T, mutKeyDesc, mutValDesc val.TupleDesc, items [][2]val.Tuple) orderedMap {
+	m := makeProllyMap(t, mutKeyDesc, mutValDesc, items)
 	return m.(Map).Mutate()
 }
 
@@ -77,35 +77,42 @@ func TestMutableMapWrites(t *testing.T) {
 		testMultiplePointInserts(t, 10_000)
 	})
 	t.Run("multiple point deletes", func(t *testing.T) {
-		testPointDeletes(t, 10)
+		testMultiplePointDeletes(t, 10)
 		testMultiplePointDeletes(t, 100)
 		testMultiplePointDeletes(t, 1000)
 		testMultiplePointDeletes(t, 10_000)
 	})
+	t.Run("mixed inserts, updates, and deletes", func(t *testing.T) {
+		testMixedMutations(t, 10)
+		testMixedMutations(t, 100)
+		testMixedMutations(t, 1000)
+		testMixedMutations(t, 10_000)
+	})
 }
 
 func testPointUpdates(t *testing.T, count int) {
-	orig := ascendingMap(t, count)
+	orig := ascendingIntMap(t, count)
 
-	puts := make([]int64, count)
-	for i := range puts {
-		puts[i] = int64(i)
+	updates := make([][2]val.Tuple, count)
+	for i := range updates {
+		updates[i][0], updates[i][1] = makePut(int64(i), int64(-i))
 	}
-	rand.Shuffle(len(puts), func(i, j int) {
-		puts[i], puts[j] = puts[j], puts[i]
+	rand.Shuffle(len(updates), func(i, j int) {
+		updates[i], updates[j] = updates[j], updates[i]
 	})
 
 	ctx := context.Background()
-	for _, idx := range puts {
+	for _, up := range updates {
 		mut := orig.Mutate()
-		key, value := putInts(mut, idx, -idx)
+		err := mut.Put(ctx, up[0], up[1])
+		require.NoError(t, err)
 
 		m := materializeMap(t, mut)
 		assert.Equal(t, count, int(m.Count()))
 
-		err := m.Get(ctx, key, func(k, v val.Tuple) error {
-			assert.Equal(t, key, k)
-			assert.Equal(t, value, v)
+		err = m.Get(ctx, up[0], func(k, v val.Tuple) error {
+			assert.Equal(t, up[0], k)
+			assert.Equal(t, up[1], v)
 			return nil
 		})
 		require.NoError(t, err)
@@ -113,40 +120,33 @@ func testPointUpdates(t *testing.T, count int) {
 }
 
 func testMultiplePointUpdates(t *testing.T, count int) {
-	orig := ascendingMap(t, count)
+	orig := ascendingIntMap(t, count)
 
-	puts := make([]int64, count)
-	for i := range puts {
-		puts[i] = int64(i)
+	updates := make([][2]val.Tuple, count)
+	for i := range updates {
+		updates[i][0], updates[i][1] = makePut(int64(i), int64(-i))
 	}
-	rand.Shuffle(len(puts), func(i, j int) {
-		puts[i], puts[j] = puts[j], puts[i]
+	rand.Shuffle(len(updates), func(i, j int) {
+		updates[i], updates[j] = updates[j], updates[i]
 	})
 
-	// batches of 5 updates
 	const k = 5
-	edits := make([][2]val.Tuple, k)
 	ctx := context.Background()
-
-	for x := 0; x < len(puts); x += k {
+	for x := 0; x < len(updates); x += k {
+		batch := updates[x : x+k]
 
 		mut := orig.Mutate()
-		stop := x + k
-		if stop > len(puts) {
-			stop = len(puts)
+		for _, up := range batch {
+			err := mut.Put(ctx, up[0], up[1])
+			require.NoError(t, err)
 		}
-		for i, idx := range puts[x : x+k] {
-			edits[i][0], edits[i][1] = putInts(mut, idx, idx)
-		}
-
 		m := materializeMap(t, mut)
 		assert.Equal(t, count, int(m.Count()))
 
-		for _, pair := range edits {
-			key, value := pair[0], pair[1]
-			err := m.Get(ctx, key, func(k, v val.Tuple) error {
-				assert.Equal(t, key, k)
-				assert.Equal(t, value, v)
+		for _, up := range batch {
+			err := m.Get(ctx, up[0], func(k, v val.Tuple) error {
+				assert.Equal(t, up[0], k)
+				assert.Equal(t, up[1], v)
 				return nil
 			})
 			require.NoError(t, err)
@@ -156,33 +156,34 @@ func testMultiplePointUpdates(t *testing.T, count int) {
 
 func testPointInserts(t *testing.T, count int) {
 	// create map of even numbers
-	orig := ascendingMapWithStep(t, count, 2)
+	orig := ascendingIntMapWithStep(t, count, 2)
 
-	// todo(andy): inserting past the end
-	puts := make([]int64, count)
-	for i := range puts {
-		// create odd-number edits
-		puts[i] = int64(i*2) + 1
+	inserts := make([][2]val.Tuple, count)
+	for i := range inserts {
+		// create odd-numbered inserts
+		v := int64(i*2) + 1
+		inserts[i][0], inserts[i][1] = makePut(v, v)
 	}
-	rand.Shuffle(len(puts), func(i, j int) {
-		puts[i], puts[j] = puts[j], puts[i]
+	rand.Shuffle(len(inserts), func(i, j int) {
+		inserts[i], inserts[j] = inserts[j], inserts[i]
 	})
 
 	ctx := context.Background()
-	for _, idx := range puts {
+	for _, in := range inserts {
 		mut := orig.Mutate()
-		key, value := putInts(mut, idx, idx)
+		err := mut.Put(ctx, in[0], in[1])
+		require.NoError(t, err)
 
 		m := materializeMap(t, mut)
 		assert.Equal(t, count+1, int(m.Count()))
 
-		ok, err := m.Has(ctx, key)
+		ok, err := m.Has(ctx, in[0])
 		assert.NoError(t, err)
 		assert.True(t, ok)
 
-		err = m.Get(ctx, key, func(k, v val.Tuple) error {
-			assert.Equal(t, key, k)
-			assert.Equal(t, value, v)
+		err = m.Get(ctx, in[0], func(k, v val.Tuple) error {
+			assert.Equal(t, in[0], k)
+			assert.Equal(t, in[1], v)
 			return nil
 		})
 		require.NoError(t, err)
@@ -191,47 +192,40 @@ func testPointInserts(t *testing.T, count int) {
 
 func testMultiplePointInserts(t *testing.T, count int) {
 	// create map of even numbers
-	orig := ascendingMapWithStep(t, count, 2)
+	orig := ascendingIntMapWithStep(t, count, 2)
 
-	// todo(andy): inserting past the end
-	puts := make([]int64, count)
-	for i := range puts {
-		// create odd-number edits
-		puts[i] = int64(i*2) + 1
+	inserts := make([][2]val.Tuple, count)
+	for i := range inserts {
+		// create odd-numbered inserts
+		v := int64(i*2) + 1
+		inserts[i][0], inserts[i][1] = makePut(v, v)
 	}
-	rand.Shuffle(len(puts), func(i, j int) {
-		puts[i], puts[j] = puts[j], puts[i]
+	rand.Shuffle(len(inserts), func(i, j int) {
+		inserts[i], inserts[j] = inserts[j], inserts[i]
 	})
 
 	// batches of 5 inserts
 	const k = 5
-	edits := make([][2]val.Tuple, k)
-
-	for x := 0; x < len(puts); x += k {
+	ctx := context.Background()
+	for x := 0; x < len(inserts); x += k {
+		batch := inserts[x : x+k]
 
 		mut := orig.Mutate()
-		stop := x + k
-		if stop > len(puts) {
-			stop = len(puts)
+		for _, in := range batch {
+			err := mut.Put(ctx, in[0], in[1])
+			require.NoError(t, err)
 		}
-		for i, idx := range puts[x : x+k] {
-			edits[i][0], edits[i][1] = putInts(mut, idx, -idx)
-		}
-
-		ctx := context.Background()
 		m := materializeMap(t, mut)
 		assert.Equal(t, count+k, int(m.Count()))
 
-		for _, pair := range edits {
-			key, value := pair[0], pair[1]
-
-			ok, err := m.Has(ctx, key)
+		for _, up := range batch {
+			ok, err := m.Has(ctx, up[0])
 			assert.NoError(t, err)
 			assert.True(t, ok)
 
-			err = m.Get(ctx, key, func(k, v val.Tuple) error {
-				assert.Equal(t, key, k)
-				assert.Equal(t, value, v)
+			err = m.Get(ctx, up[0], func(k, v val.Tuple) error {
+				assert.Equal(t, up[0], k)
+				assert.Equal(t, up[1], v)
 				return nil
 			})
 			require.NoError(t, err)
@@ -240,29 +234,29 @@ func testMultiplePointInserts(t *testing.T, count int) {
 }
 
 func testPointDeletes(t *testing.T, count int) {
-	orig := ascendingMap(t, count)
+	orig := ascendingIntMap(t, count)
 
-	deletes := make([]int64, count)
+	deletes := make([]val.Tuple, count)
 	for i := range deletes {
-		deletes[i] = int64(i)
+		deletes[i] = makeDelete(int64(i))
 	}
 	rand.Shuffle(len(deletes), func(i, j int) {
 		deletes[i], deletes[j] = deletes[j], deletes[i]
 	})
 
 	ctx := context.Background()
-	for _, idx := range deletes {
+	for _, del := range deletes {
 		mut := orig.Mutate()
-		key := deleteInt(mut, idx)
-
+		err := mut.Put(ctx, del, nil)
+		assert.NoError(t, err)
 		m := materializeMap(t, mut)
 		assert.Equal(t, count-1, int(m.Count()))
 
-		ok, err := m.Has(ctx, key)
+		ok, err := m.Has(ctx, del)
 		assert.NoError(t, err)
 		assert.False(t, ok)
 
-		err = m.Get(ctx, key, func(k, v val.Tuple) error {
+		err = m.Get(ctx, del, func(k, v val.Tuple) error {
 			assert.Nil(t, k)
 			assert.Nil(t, v)
 			return nil
@@ -272,11 +266,11 @@ func testPointDeletes(t *testing.T, count int) {
 }
 
 func testMultiplePointDeletes(t *testing.T, count int) {
-	orig := ascendingMap(t, count)
+	orig := ascendingIntMap(t, count)
 
-	deletes := make([]int64, count)
+	deletes := make([]val.Tuple, count)
 	for i := range deletes {
-		deletes[i] = int64(i)
+		deletes[i] = makeDelete(int64(i))
 	}
 	rand.Shuffle(len(deletes), func(i, j int) {
 		deletes[i], deletes[j] = deletes[j], deletes[i]
@@ -284,29 +278,25 @@ func testMultiplePointDeletes(t *testing.T, count int) {
 
 	// batches of 5 deletes
 	const k = 5
-	edits := make([]val.Tuple, k)
 	ctx := context.Background()
 
 	for x := 0; x < len(deletes); x += k {
+		batch := deletes[x : x+k]
 
 		mut := orig.Mutate()
-		stop := x + k
-		if stop > len(deletes) {
-			stop = len(deletes)
+		for _, del := range batch {
+			err := mut.Put(ctx, del, nil)
+			require.NoError(t, err)
 		}
-		for i, idx := range deletes[x : x+k] {
-			edits[i] = deleteInt(mut, idx)
-		}
-
 		m := materializeMap(t, mut)
 		assert.Equal(t, count-k, int(m.Count()))
 
-		for _, key := range edits {
-			ok, err := m.Has(ctx, key)
+		for _, del := range batch {
+			ok, err := m.Has(ctx, del)
 			assert.NoError(t, err)
 			assert.False(t, ok)
 
-			err = m.Get(ctx, key, func(k, v val.Tuple) error {
+			err = m.Get(ctx, del, func(k, v val.Tuple) error {
 				assert.Nil(t, k)
 				assert.Nil(t, v)
 				return nil
@@ -316,22 +306,105 @@ func testMultiplePointDeletes(t *testing.T, count int) {
 	}
 }
 
-func putInts(mut MutableMap, k, v int64) (key, value val.Tuple) {
-	kb := val.NewTupleBuilder(mut.m.keyDesc)
-	vb := val.NewTupleBuilder(mut.m.valDesc)
-	kb.PutInt64(0, k)
-	vb.PutInt64(0, v)
-	key = kb.Build(sharedPool)
-	value = vb.Build(sharedPool)
-	_ = mut.Put(context.Background(), key, value)
+func testMixedMutations(t *testing.T, count int) {
+	// create map of first |count| *even* numbers
+	orig := ascendingIntMapWithStep(t, count, 2)
+
+	mutations := make([][2]val.Tuple, count*2)
+	for i := 0; i < len(mutations); i += 2 {
+		// |v| is an existing key.
+		v := int64(i * 2)
+
+		// insert new key-value pair.
+		mutations[i][0], mutations[i][1] = makePut(v+1, v+1)
+
+		// create a delete or an update for |v|, but not both.
+		if i%4 == 0 {
+			// update existing key-value pair.
+			mutations[i+1][0], mutations[i+1][1] = makePut(v, -v)
+		} else {
+			// delete existing key-value pair.
+			mutations[i+1][0], mutations[i+1][1] = makeDelete(v), nil
+		}
+	}
+	rand.Shuffle(len(mutations), func(i, j int) {
+		mutations[i], mutations[j] = mutations[j], mutations[i]
+	})
+
+	// batches of 10 mutations
+	const k = 10
+	ctx := context.Background()
+	var err error
+
+	for x := 0; x < len(mutations); x += k {
+		batch := mutations[x : x+k]
+
+		mut := orig.Mutate()
+		for _, edit := range batch {
+			err = mut.Put(ctx, edit[0], edit[1])
+			require.NoError(t, err)
+		}
+		m := materializeMap(t, mut)
+
+		for _, edit := range batch {
+			key, ok := mutKeyDesc.GetInt64(0, edit[0])
+			assert.True(t, ok)
+
+			if key%2 == 1 {
+				// insert
+				ok, err = m.Has(ctx, edit[0])
+				assert.NoError(t, err)
+				assert.True(t, ok)
+			} else if edit[1] == nil {
+				// delete
+				ok, err = m.Has(ctx, edit[0])
+				assert.NoError(t, err)
+				assert.False(t, ok)
+			} else {
+				// update
+				ok, err = m.Has(ctx, edit[0])
+				assert.NoError(t, err)
+				assert.True(t, ok)
+			}
+		}
+	}
+}
+
+var mutKeyDesc = val.NewTupleDescriptor(
+	val.Type{Enc: val.Int64Enc, Nullable: false},
+)
+var mutValDesc = val.NewTupleDescriptor(
+	val.Type{Enc: val.Int64Enc, Nullable: true},
+)
+
+var mutKeyBuilder = val.NewTupleBuilder(mutKeyDesc)
+var mutValBuilder = val.NewTupleBuilder(mutValDesc)
+
+func ascendingIntMap(t *testing.T, count int) Map {
+	return ascendingIntMapWithStep(t, count, 1)
+}
+
+func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
+	items := make([][2]val.Tuple, count)
+	for i := range items {
+		v := int64(i * step)
+		items[i][0], items[i][1] = makePut(v, v)
+	}
+
+	return makeProllyMap(t, mutKeyDesc, mutValDesc, items).(Map)
+}
+
+func makePut(k, v int64) (key, value val.Tuple) {
+	mutKeyBuilder.PutInt64(0, k)
+	mutValBuilder.PutInt64(0, v)
+	key = mutKeyBuilder.Build(sharedPool)
+	value = mutValBuilder.Build(sharedPool)
 	return
 }
 
-func deleteInt(mut MutableMap, k int64) (key val.Tuple) {
-	kb := val.NewTupleBuilder(mut.m.keyDesc)
-	kb.PutInt64(0, k)
-	key = kb.Build(sharedPool)
-	_ = mut.Put(context.Background(), key, nil)
+func makeDelete(k int64) (key val.Tuple) {
+	mutKeyBuilder.PutInt64(0, k)
+	key = mutKeyBuilder.Build(sharedPool)
 	return
 }
 
@@ -356,30 +429,4 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 	m, err := mut.Map(ctx)
 	assert.NoError(t, err)
 	return m
-}
-
-func ascendingMap(t *testing.T, count int) Map {
-	return ascendingMapWithStep(t, count, 1)
-}
-
-func ascendingMapWithStep(t *testing.T, count, step int) Map {
-	kd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: false},
-	)
-	vd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-	)
-
-	keyBuilder := val.NewTupleBuilder(kd)
-	valBuilder := val.NewTupleBuilder(vd)
-	items := make([][2]val.Tuple, count)
-	for i := range items {
-		v := int64(i * step)
-		keyBuilder.PutInt64(0, v)
-		valBuilder.PutInt64(0, v)
-		items[i][0] = keyBuilder.Build(sharedPool)
-		items[i][1] = valBuilder.Build(sharedPool)
-	}
-
-	return makeProllyMap(t, kd, vd, items).(Map)
 }
