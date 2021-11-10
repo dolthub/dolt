@@ -135,6 +135,7 @@ func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string)
 				if len(newHeads) == 0 {
 					continue
 				}
+				// TODO do i need to explicitly copy newHeads?
 				for id, newCm := range newHeads {
 					if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
 						err := pushDataset(ctx, destDB.db, newCm.db, tmpDir, newCm.ds)
