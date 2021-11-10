@@ -53,7 +53,7 @@ var (
 )
 
 func TestServerArgs(t *testing.T) {
-	serverController := CreateServerController()
+	serverController := NewServerController()
 	go func() {
 		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
@@ -93,7 +93,7 @@ listener:
     read_timeout_millis: 5000
     write_timeout_millis: 5000
 `
-	serverController := CreateServerController()
+	serverController := NewServerController()
 	go func() {
 		dEnv := dtestutils.CreateEnvWithSeedData(t)
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
@@ -126,7 +126,7 @@ func TestServerBadArgs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
-			serverController := CreateServerController()
+			serverController := NewServerController()
 			go func(serverController *ServerController) {
 				startServer(context.Background(), "test", "dolt sql-server", test, env, serverController)
 			}(serverController)
@@ -161,7 +161,7 @@ func TestServerGoodParams(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(ConfigInfo(test), func(t *testing.T) {
-			sc := CreateServerController()
+			sc := NewServerController()
 			go func(config ServerConfig, sc *ServerController) {
 				_, _ = Serve(context.Background(), "", config, sc, env)
 			}(test, sc)
@@ -182,7 +182,7 @@ func TestServerSelect(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15300)
 
-	sc := CreateServerController()
+	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
 		_, _ = Serve(context.Background(), "", serverConfig, sc, env)
@@ -231,7 +231,7 @@ func TestServerSelect(t *testing.T) {
 
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
-	serverController := CreateServerController()
+	serverController := NewServerController()
 	server := &http.Server{
 		Addr:    ":15200",
 		Handler: http.DefaultServeMux,
@@ -257,7 +257,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15302)
 
-	sc := CreateServerController()
+	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
 		_, _ = Serve(context.Background(), "", serverConfig, sc, dEnv)
@@ -404,7 +404,7 @@ func TestReadReplica(t *testing.T) {
 	dsess.InitPersistedSystemVars(multiSetup.MrEnv.GetEnv(readReplicaDbName))
 
 	// start server as read replica
-	sc := CreateServerController()
+	sc := NewServerController()
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
 
 	func() {

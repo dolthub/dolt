@@ -179,6 +179,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	// We need a username and password for many SQL commands, so set defaults if they don't exist
+	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
+
 	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
@@ -352,10 +355,6 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	} else {
-		if !cli.CheckEnvIsValid(dEnv) {
-			return nil, errhand.BuildDError("Invalid working directory").Build()
-		}
-
 		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -1540,7 +1539,6 @@ func newSqlEngine(
 		dbStates = append(dbStates, dbState)
 	}
 
-	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
 	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, config, dbStates...)
 	if err != nil {
 		return nil, err

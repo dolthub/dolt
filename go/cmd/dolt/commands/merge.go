@@ -84,6 +84,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
+	// This command may create a commit, so we need user identity
+	if !cli.CheckUserNameAndEmail(dEnv) {
+		return 1
+	}
+
 	var verr errhand.VerboseError
 	if apr.Contains(cli.AbortParam) {
 		mergeActive, err := dEnv.IsMergeActive(ctx)

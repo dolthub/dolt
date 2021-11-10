@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_no_dolt_init
@@ -11,6 +12,7 @@ setup() {
 teardown() {
     teardown_common
     rm -rf "$BATS_TMPDIR/config-test$$"
+    stop_sql_server
 }
 
 @test "config: make sure no dolt configuration for simulated fresh user" {
@@ -22,7 +24,7 @@ teardown() {
 @test "config: try to initialize a repository with no configuration" {
     run dolt init
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Could not determine user.name" ]] || false
+    [[ "$output" =~ "Please tell me who you are" ]] || false
 }
 
 @test "config: set a global config variable" {
@@ -77,7 +79,7 @@ teardown() {
     dolt config --global --add user.name "bats tester"
     run dolt init
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Could not determine user.email" ]] || false
+    [[ "$output" =~ "Please tell me who you are" ]] || false
     dolt config --global --add user.email "bats-tester@liquidata.co"
     run dolt init
     [ "$status" -eq 0 ]
@@ -165,7 +167,39 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "config: COMMIT correctly errors when user.name or user.email is unset." {
+@test "config: SQL can create databases with no user and email set" {
+    dolt sql -b -q  "
+    CREATE DATABASE testdb;
+    use testdb;
+    CREATE TABLE test (pk int primary key, c1 varchar(1));"
+
+    [ -d "testdb" ]
+    cd testdb
+    run dolt log
+    [ "$status" -eq 0 ]
+    regex='Dolt System Account <doltuser@dolthub.com>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "config: sql server can create databases with no user and email set" {
+    skiponwindows "This test has dependencies missing on windows installations"
+    
+    start_sql_server
+    
+    server_query "" 1 "create database testdb"
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntestdb"
+    server_query "testdb" 1 "create table a(x int)"
+    server_query "testdb" 1 "insert into a values (1), (2)"
+
+    [ -d "testdb" ]
+    cd testdb
+    run dolt log
+    [ "$status" -eq 0 ]
+    regex='Dolt System Account <doltuser@dolthub.com>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "config: SQL COMMIT uses default values when user.name or user.email is unset." {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "joshn@doe.com"
 
@@ -179,13 +213,46 @@ teardown() {
     dolt config --global --unset user.email
 
     run dolt sql -q "SET @@dolt_repo_$$_head = COMMIT('-a', '-m', 'updated stuff')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set" ]] || false
+    [ "$status" -eq 0 ]
 
     dolt config --global --add user.name "bats tester"
     run dolt sql -q "SET @@dolt_repo_$$_head = COMMIT('-a', '-m', 'updated stuff')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Aborting commit due to empty committer email. Is your config set" ]] || false
+    [ "$status" -eq 0 ]
+}
+
+@test "config: DOLT_COMMIT uses default values when user.name or user.email is unset." {
+    dolt config --global --add user.name "bats tester"
+    dolt config --global --add user.email "joshn@doe.com"
+
+    dolt init
+    dolt sql -q "
+    CREATE TABLE test (
+       pk int primary key
+    )"
+
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'created table test')"
+    [ "$status" -eq 0 ]
+
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Dolt System Account" ]] || false
+    [[ "$output" =~ "created table test" ]] || false
+
+    dolt sql -q "create table test2 (pk int primary key)"
+    
+    dolt config --global --add user.name "bats tester"
+
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'created table test2')"
+    [ "$status" -eq 0 ]
+
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "bats tester" ]] || false
+    [[ "$output" =~ "doltuser@dolthub.com" ]] || false
+    [[ "$output" =~ "created table test2" ]] || false
 }
 
 @test "config: Set default init branch" {

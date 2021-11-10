@@ -96,20 +96,7 @@ var _ config.ReadableConfig = &DoltCliConfig{}
 func LoadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliConfig, error) {
 	ch := config.NewConfigHierarchy()
 
-	gPath, err := getGlobalCfgPath(hdp)
-	if err != nil {
-		return nil, err
-	}
-
 	lPath := getLocalConfigPath()
-
-	gCfg, err := ensureGlobalConfig(gPath, fs)
-	if err != nil {
-		return nil, err
-	}
-
-	ch.AddConfig(globalConfigName, gCfg)
-
 	if exists, _ := fs.Exists(lPath); exists {
 		lCfg, err := config.FromFile(lPath, fs)
 
@@ -117,6 +104,18 @@ func LoadDoltCliConfig(hdp HomeDirProvider, fs filesys.ReadWriteFS) (*DoltCliCon
 			ch.AddConfig(localConfigName, lCfg)
 		}
 	}
+
+	gPath, err := getGlobalCfgPath(hdp)
+	if err != nil {
+		return nil, err
+	}
+
+	gCfg, err := ensureGlobalConfig(gPath, fs)
+	if err != nil {
+		return nil, err
+	}
+
+	ch.AddConfig(globalConfigName, gCfg)
 
 	return &DoltCliConfig{ch, ch, fs}, nil
 }
@@ -230,25 +229,56 @@ type writeableLocalDoltCliConfig struct {
 }
 
 // WriteableConfig returns a ReadWriteConfig reading from this config hierarchy. The config will read from the hierarchy
-// and write to the local config.
+// and write to the local config if it's available, or the global config otherwise.
 func (dcc *DoltCliConfig) WriteableConfig() config.ReadWriteConfig {
 	return writeableLocalDoltCliConfig{dcc}
 }
 
-func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {
-	localCfg, ok := w.GetConfig(LocalConfig)
+// SetFailsafes sets the config values given as failsafes, i.e. values that will be returned as a last resort if they
+// are not found elsewhere in the config hierarchy. The "failsafe" config can be written to in order to conform to the
+// interface of ConfigHierarchy, but values will not persist beyond this session.
+// Calling SetFailsafes more than once will overwrite any previous values.
+// Should only be called after primary configuration of the config hierarchy has been completed.
+func (dcc DoltCliConfig) SetFailsafes(cfg map[string]string) {
+	existing, ok := dcc.ch.GetConfig("failsafe")
 	if !ok {
-		return errors.New("no local config found")
+		existing = config.NewEmptyMapConfig()
+		dcc.ch.AddConfig("failsafe", existing)
 	}
 
-	return localCfg.SetStrings(updates)
+	_ = existing.SetStrings(cfg)
+}
+
+const (
+	DefaultEmail = "doltuser@dolthub.com"
+	DefaultName  = "Dolt System Account"
+)
+
+var DefaultFailsafeConfig = map[string]string{
+	UserEmailKey: DefaultEmail,
+	UserNameKey:  DefaultName,
+}
+
+func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {
+	cfg, ok := w.GetConfig(LocalConfig)
+	if !ok {
+		cfg, ok = w.GetConfig(GlobalConfig)
+		if !ok {
+			return errors.New("no local or global config found")
+		}
+	}
+
+	return cfg.SetStrings(updates)
 }
 
 func (w writeableLocalDoltCliConfig) Unset(params []string) error {
-	localCfg, ok := w.GetConfig(LocalConfig)
+	cfg, ok := w.GetConfig(LocalConfig)
 	if !ok {
-		return errors.New("no local config found")
+		cfg, ok = w.GetConfig(GlobalConfig)
+		if !ok {
+			return errors.New("no local or global config found")
+		}
 	}
 
-	return localCfg.Unset(params)
+	return cfg.Unset(params)
 }

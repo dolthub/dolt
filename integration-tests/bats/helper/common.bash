@@ -48,7 +48,11 @@ setup_no_dolt_init() {
 
 assert_feature_version() {
     run dolt version --feature
-    [[ "$output" =~ "feature version: 2" ]] || exit 1
+    # Tests that don't end in a valid dolt dir will fail the above
+    # command, don't check its output in that case
+    if [ "$status" -eq 0 ]; then
+        [[ "$output" =~ "feature version: 2" ]] || exit 1
+    fi
 }
 
 setup_common() {
