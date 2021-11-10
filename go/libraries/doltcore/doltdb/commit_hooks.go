@@ -19,6 +19,7 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/store/datas"
 )
@@ -96,6 +97,7 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 type PushArg struct {
     ds datas.Dataset
     db datas.Database
+    hash hash.Hash
 }
 
 type AsyncPushOnWriteHook struct {
@@ -111,9 +113,9 @@ var _ datas.CommitHook = (*AsyncPushOnWriteHook)(nil)
 func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string) *AsyncPushOnWriteHook {
     ch := make(chan PushArg, asyncPushBufferSize)
 
-	newHeads := make(map[string]PushArg, asyncPushBufferSize)
-    latestHeads := make(map[string]PushArg, asyncPushBufferSize)
-    go func(ctx context.Context) error {
+	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
+    var latestHeads = make(map[string]PushArg, asyncPushBufferSize)
+    go func() error {
 		defer close(ch)
         for {
             p, ok  := <- ch
@@ -122,34 +124,46 @@ func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string)
             }
 			newHeads[p.ds.ID()] = p
         }
-    }(ctx)
+    }()
 
-    go func(ctx context.Context) error {
+    go func() error {
         for {
         	select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				for id, args := range newHeads {
-					if latest, ok := latestHeads[id]; ok && latest != args {
-						err := pushDataset(ctx, destDB.db, args.db, tmpDir, args.ds)
+				if len(newHeads) == 0 {
+					continue
+				}
+				for id, newCm := range newHeads {
+					newCm.ds.MaybeHeadRef()
+					if latest, ok := latestHeads[id]; !ok || latest.hash != newCm.hash {
+						err := pushDataset(ctx, destDB.db, newCm.db, tmpDir, newCm.ds)
 						if err != nil {
 							return err
 						}
-						latestHeads[id] = args
+						latestHeads[id] = newCm
 					}
 				}
 			}
         }
-    }(ctx)
+    }()
 
     return &AsyncPushOnWriteHook{ch: ch}
 }
 
 // Execute implements datas.CommitHook, replicates head updates to the destDb field
 func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
+	rf, ok, err := ds.MaybeHeadRef()
+	if !ok {
+		return ErrHashNotFound
+	}
+	if err != nil {
+		return ErrHashNotFound
+	}
+
     select {
-    case ah.ch <- PushArg{ds: ds, db: db}:
+    case ah.ch <- PushArg{ds: ds, db: db, hash: rf.TargetHash()}:
     case <-ctx.Done():
         return ctx.Err()
     }
