@@ -32,6 +32,28 @@ SQL
     [[ "$output" =~ "mydb" ]] || false
 }
 
+@test "sql-create-database: drop database" {
+    dolt sql <<SQL
+create database mydb;
+use mydb;
+create table test(a int primary key);
+select dolt_commit("-am", "first commit");
+SQL
+
+    [ -d mydb ]
+    cd mydb
+
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first commit" ]] || false
+
+    cd ..
+
+    dolt sql -q "drop database mydb"
+
+    [ ! -d mydb ]
+}
+
 @test "sql-create-database: create database that already exists throws an error" {
     run dolt sql << SQL
 CREATE DATABASE mydb;
@@ -52,18 +74,17 @@ SQL
 }
 
 @test "sql-create-database: create and drop new database" {
-    skip "Drop database doesn't work right now"
-    
     run dolt sql << SQL
 CREATE DATABASE mydb;
-SHOW WARNINGS;
 DROP DATABASE mydb;
-USE mydb;
 SQL
-    # Validate that CREATE DATABASE throws a warning
-    [[ "$output" =~ 'CREATE DATABASE creates an inmemory database that does not persist after the server exits. Dolt currently only supports a single disk backed database created by `dolt init`' ]] || false
 
-    [ "$status" -eq 1 ]
+    [ ! -d mydb ]
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "use mydb"
+
+    [ "%status" -eq 1]
     [[ "$output" =~ "database not found: mydb" ]] || false
 }
 
@@ -73,29 +94,32 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error parsing SQL" ]] || false
 
-    run dolt sql << SQL
-CREATE DATABASE IF NOT EXISTS test;
-SHOW DATABASES;
+    dolt sql -q "CREATE DATABASE IF NOT EXISTS test;"
+    run dolt sql -q "SHOW DATABASES;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ "$output" =~ "test" ]] || false
+
+    run dolt sql <<SQL
 USE test;
 CREATE TABLE test (
     pk int primary key
 );
 INSERT INTO test VALUES (222);
-SELECT COUNT(*) FROM test WHERE pk=222;
-DROP DATABASE test;
 SQL
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
-    [[ "$output" =~ "information_schema" ]] || false
-    [[ "$output" =~ "test" ]] || false
-    # From COUNT
+
+    run dolt sql <<SQL
+USE test;
+SELECT COUNT(*) FROM test WHERE pk=222;
+SQL
     [[ "$output" =~ "1" ]] || false
 
-    skip "Drop database doesn't work yet"
+    dolt sql -q "drop database test"
     
     run dolt sql << SQL
 CREATE DATABASE IF NOT EXISTS test;
-SHOW DATABASES;
 USE test;
 DROP DATABASE IF EXISTS test;
 DROP DATABASE IF EXISTS test;
