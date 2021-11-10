@@ -17,13 +17,14 @@ package serverbench
 import (
 	"context"
 	"fmt"
+	"runtime/pprof"
+	"strings"
+	"testing"
+
 	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"runtime/pprof"
-	"strings"
-	"testing"
 )
 
 // usage: `go test -bench .`
@@ -135,6 +136,7 @@ write_timeout_millis: 28800000
 
 	return multiSetup.MrEnv.GetEnv(writerName), cfg
 }
+
 //
 //func getProfFile(b *testing.B) *os.File {
 //	_, testFile, _, _ := runtime.Caller(0)
