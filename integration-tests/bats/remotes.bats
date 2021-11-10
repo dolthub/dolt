@@ -101,6 +101,17 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+@test "remotes: push output" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt checkout -b test-branch
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add .
+    dolt commit -m "Added test table"
+    dolt push --set-upstream test-remote test-branch | tr "\n" "*" > output.txt
+    run tail -c 1 output.txt
+    [ "$output" = "*" ]
+}
+
 @test "remotes: push and pull with docs from remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
