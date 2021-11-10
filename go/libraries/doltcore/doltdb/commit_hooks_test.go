@@ -164,7 +164,6 @@ func TestLogHook(t *testing.T) {
 	})
 }
 
-
 func TestAsyncPushOnWrite(t *testing.T) {
 	ctx := context.Background()
 

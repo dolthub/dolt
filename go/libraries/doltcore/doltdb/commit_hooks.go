@@ -95,14 +95,14 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 }
 
 type PushArg struct {
-    ds datas.Dataset
-    db datas.Database
-    hash hash.Hash
+	ds   datas.Dataset
+	db   datas.Database
+	hash hash.Hash
 }
 
 type AsyncPushOnWriteHook struct {
-	out    io.Writer
-    ch chan PushArg
+	out io.Writer
+	ch  chan PushArg
 }
 
 const asyncPushBufferSize = 100
@@ -111,24 +111,24 @@ var _ datas.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
 func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string) *AsyncPushOnWriteHook {
-    ch := make(chan PushArg, asyncPushBufferSize)
+	ch := make(chan PushArg, asyncPushBufferSize)
 
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
-    go func() error {
+	go func() error {
 		defer close(ch)
-        for {
-            p, ok  := <- ch
-            if !ok {
-                return ctx.Err()
-            }
+		for {
+			p, ok := <-ch
+			if !ok {
+				return ctx.Err()
+			}
 			newHeads[p.ds.ID()] = p
-        }
-    }()
+		}
+	}()
 
-    go func() error {
+	go func() error {
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
 		for {
-        	select {
+			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
@@ -146,10 +146,10 @@ func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string)
 					}
 				}
 			}
-        }
-    }()
+		}
+	}()
 
-    return &AsyncPushOnWriteHook{ch: ch}
+	return &AsyncPushOnWriteHook{ch: ch}
 }
 
 // Execute implements datas.CommitHook, replicates head updates to the destDb field
@@ -162,12 +162,12 @@ func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, d
 		return ErrHashNotFound
 	}
 
-    select {
-    case ah.ch <- PushArg{ds: ds, db: db, hash: rf.TargetHash()}:
-    case <-ctx.Done():
-        return ctx.Err()
-    }
-    return nil
+	select {
+	case ah.ch <- PushArg{ds: ds, db: db, hash: rf.TargetHash()}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
 
 // HandleError implements datas.CommitHook
