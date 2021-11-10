@@ -647,6 +647,10 @@ SQL
     [[ "$output" =~ "test1" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ ! "$output" =~ "decoy" ]] || false
+
+    # There's a bug in the teardown logic that means we need to cd
+    # into the repo directory before the test ends
+    cd ../
 }
 
 @test "sql: bad dolt db" {
