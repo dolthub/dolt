@@ -114,7 +114,6 @@ func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string)
     ch := make(chan PushArg, asyncPushBufferSize)
 
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
-    var latestHeads = make(map[string]PushArg, asyncPushBufferSize)
     go func() error {
 		defer close(ch)
         for {
@@ -127,7 +126,8 @@ func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string)
     }()
 
     go func() error {
-        for {
+		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
+		for {
         	select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -136,13 +136,13 @@ func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string)
 					continue
 				}
 				for id, newCm := range newHeads {
-					newCm.ds.MaybeHeadRef()
-					if latest, ok := latestHeads[id]; !ok || latest.hash != newCm.hash {
+					if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
 						err := pushDataset(ctx, destDB.db, newCm.db, tmpDir, newCm.ds)
 						if err != nil {
+							// TODO what to do with errors?
 							return err
 						}
-						latestHeads[id] = newCm
+						latestHeads[id] = newCm.hash
 					}
 				}
 			}
