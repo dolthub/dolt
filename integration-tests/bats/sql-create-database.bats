@@ -78,13 +78,12 @@ SQL
 CREATE DATABASE mydb;
 DROP DATABASE mydb;
 SQL
-
-    [ ! -d mydb ]
     [ "$status" -eq 0 ]
+    
+    [ ! -d mydb ]
 
     run dolt sql -q "use mydb"
-
-    [ "%status" -eq 1]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "database not found: mydb" ]] || false
 }
 
