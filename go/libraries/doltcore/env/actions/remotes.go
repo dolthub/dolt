@@ -191,6 +191,9 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	wg, progChan, pullerEventCh := progStarter(newCtx)
 	err = Push(ctx, tempTableDir, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
 	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	if err == nil {
+		cli.Println()
+	}
 
 	if err != nil {
 		switch err {
@@ -215,6 +218,9 @@ func pushTagToRemote(ctx context.Context, tempTableDir string, srcRef, destRef r
 	wg, progChan, pullerEventCh := progStarter(newCtx)
 	err = PushTag(ctx, tempTableDir, destRef.(ref.TagRef), localDB, remoteDB, tg, progChan, pullerEventCh)
 	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	if err == nil {
+		cli.Println()
+	}
 
 	if err != nil {
 		return err
@@ -462,7 +468,12 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := progStarter(newCtx)
-	defer progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	defer func(){
+		progStopper(cancelFunc, wg, progChan, pullerEventCh)
+		if err == nil {
+			cli.Println()
+		}
+	}()
 
 	err = destDb.PushChunksForRefHash(ctx, tempTableDir, srcDb, srcRoot, pullerEventCh)
 	if err != nil {
