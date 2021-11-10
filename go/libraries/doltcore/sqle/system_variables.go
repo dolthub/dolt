@@ -26,6 +26,7 @@ const (
 	ReplicateHeadsKey        = "dolt_replicate_heads"
 	ReplicateAllHeadsKey     = "dolt_replicate_all_heads"
 	CurrentBatchModeKey      = "batch_mode"
+	AsyncReplicationKey      = "dolt_async_replication"
 )
 
 func AddDoltSystemVariables() {
@@ -84,6 +85,14 @@ func AddDoltSystemVariables() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(ReplicateAllHeadsKey),
+			Default:           int8(0),
+		},
+		{
+			Name:              AsyncReplicationKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(AsyncReplicationKey),
 			Default:           int8(0),
 		},
 	})

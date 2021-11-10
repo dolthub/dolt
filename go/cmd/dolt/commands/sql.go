@@ -527,7 +527,7 @@ func execQuery(
 	return nil
 }
 
-func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnWriteHook, error) {
+func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (datas.CommitHook, error) {
 	_, val, ok := sql.SystemVariables.GetGlobal(dsqle.ReplicateToRemoteKey)
 	if !ok {
 		return nil, sql.ErrUnknownSystemVariable.New(dsqle.ReplicateToRemoteKey)
@@ -555,8 +555,11 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.PushOnW
 		return nil, err
 	}
 
-	pushHook := doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir())
-	return pushHook, nil
+	if _, val, ok := sql.SystemVariables.GetGlobal(dsqle.AsyncReplicationKey); ok && val == int8(1) {
+		return doltdb.NewAsyncPushOnWriteHook(ctx, ddb, dEnv.TempTableFilesDir()), nil
+	}
+
+	return doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir()), nil
 }
 
 // GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
