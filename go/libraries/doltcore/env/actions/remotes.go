@@ -191,20 +191,16 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	wg, progChan, pullerEventCh := progStarter(newCtx)
 	err = Push(ctx, tempTableDir, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
 	progStopper(cancelFunc, wg, progChan, pullerEventCh)
-	if err == nil {
+
+	switch err {
+	case nil:
 		cli.Println()
+		return nil
+	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
+		return err
+	default:
+		return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
 	}
-
-	if err != nil {
-		switch err {
-		case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
-			return err
-		default:
-			return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
-		}
-	}
-
-	return nil
 }
 
 func pushTagToRemote(ctx context.Context, tempTableDir string, srcRef, destRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, progStarter ProgStarter, progStopper ProgStopper) error {
@@ -218,14 +214,12 @@ func pushTagToRemote(ctx context.Context, tempTableDir string, srcRef, destRef r
 	wg, progChan, pullerEventCh := progStarter(newCtx)
 	err = PushTag(ctx, tempTableDir, destRef.(ref.TagRef), localDB, remoteDB, tg, progChan, pullerEventCh)
 	progStopper(cancelFunc, wg, progChan, pullerEventCh)
-	if err == nil {
-		cli.Println()
-	}
 
 	if err != nil {
 		return err
 	}
 
+	cli.Println()
 	return nil
 }
 
