@@ -672,7 +672,6 @@ SQL
     [[ ! "$output" =~ "decoy" ]] || false
 }
 
-
 @test "sql: set head ref session var" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch

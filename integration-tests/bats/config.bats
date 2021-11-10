@@ -255,7 +255,6 @@ teardown() {
     [[ "$output" =~ "created table test2" ]] || false
 }
 
-
 @test "config: Set default init branch" {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "joshn@doe.com"
