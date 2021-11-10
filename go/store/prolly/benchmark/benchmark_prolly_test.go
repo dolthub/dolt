@@ -15,11 +15,8 @@
 package benchmark
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"math/rand"
-	"sort"
 	"strconv"
 	"testing"
 
@@ -69,22 +66,22 @@ type typesBench struct {
 
 func benchmarkProllyMap(b *testing.B, size, iters uint64) {
 	bench := generateProllyBench(size)
+	b.ReportAllocs()
 	b.ResetTimer()
 
-	s := strconv.Itoa(int(size))
-	b.Run("benchmark prolly map "+s, func(b *testing.B) {
+	b.Run("benchmark prolly map", func(b *testing.B) {
 		ctx := context.Background()
+
 		for k := uint64(0); k < iters; k++ {
 			for i := 0; i < len(bench.tups); i++ {
 				idx := rand.Uint64() % uint64(len(bench.tups))
-				_ = bench.m.Get(ctx, bench.tups[idx][0], func(key, value val.Tuple) (e error) {
-					return
+				key := bench.tups[idx][0]
 
-					//assert.NotNil(b, key)
-					//assert.Equal(b, bench.tups[idx][0], key)
-					//assert.Equal(b, bench.tups[idx][1], value)
+				_ = bench.m.Get(ctx, key, func(_, _ val.Tuple) (e error) {
+					return
 				})
 			}
+			b.ReportAllocs()
 		}
 	})
 }
@@ -114,18 +111,17 @@ func generateProllyBench(size uint64) prollyBench {
 	ns := newTestNodeStore()
 
 	kd := val.NewTupleDescriptor(
-		val.Type{Coll: val.ByteOrderCollation, Nullable: false},
+		val.Type{Enc: val.Int64Enc, Nullable: false},
 	)
-
 	vd := val.NewTupleDescriptor(
-		val.Type{Coll: val.ByteOrderCollation, Nullable: true},
-		val.Type{Coll: val.ByteOrderCollation, Nullable: true},
-		val.Type{Coll: val.ByteOrderCollation, Nullable: true},
-		val.Type{Coll: val.ByteOrderCollation, Nullable: true},
-		val.Type{Coll: val.ByteOrderCollation, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
 	)
 
-	tups := generateProllyTuples(size)
+	tups := generateProllyTuples(kd, vd, size)
 
 	tt := make([]val.Tuple, 0, len(tups)*2)
 	for i := range tups {
@@ -147,29 +143,26 @@ func newTestNodeStore() prolly.NodeStore {
 	return prolly.NewNodeStore(ts.NewView())
 }
 
-func generateProllyTuples(size uint64) [][2]val.Tuple {
+func generateProllyTuples(kd, vd val.TupleDesc, size uint64) [][2]val.Tuple {
 	src := rand.NewSource(0)
 
 	tups := make([][2]val.Tuple, size)
+	kb := val.NewTupleBuilder(kd)
+	vb := val.NewTupleBuilder(vd)
+
 	for i := range tups {
 		// key
-		var k [8]byte
-		val.WriteUint64(k[:], uint64(i))
-		tups[i][0] = val.NewTuple(shared, k[:])
+		kb.PutInt64(0, int64(i))
+		tups[i][0] = kb.Build(shared)
 
 		// val
-		var vv [5][]byte
-		for i := range vv {
-			vv[i] = make([]byte, 8)
-			binary.LittleEndian.PutUint64(vv[i], uint64(src.Int63()))
-		}
-		tups[i][1] = val.NewTuple(shared, vv[:]...)
+		vb.PutInt64(0, src.Int63())
+		vb.PutInt64(1, src.Int63())
+		vb.PutInt64(2, src.Int63())
+		vb.PutInt64(3, src.Int63())
+		vb.PutInt64(4, src.Int63())
+		tups[i][1] = vb.Build(shared)
 	}
-
-	sort.Slice(tups, func(i, j int) bool {
-		cmp := bytes.Compare(tups[i][0].GetField(0), tups[j][0].GetField(0))
-		return cmp == -1
-	})
 
 	return tups
 }
