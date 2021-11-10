@@ -468,7 +468,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
 	wg, progChan, pullerEventCh := progStarter(newCtx)
-	defer func(){
+	defer func() {
 		progStopper(cancelFunc, wg, progChan, pullerEventCh)
 		if err == nil {
 			cli.Println()
