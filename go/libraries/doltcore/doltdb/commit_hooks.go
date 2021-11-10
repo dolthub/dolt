@@ -38,21 +38,21 @@ func NewPushOnWriteHook(destDB *DoltDB, tmpDir string) *PushOnWriteHook {
 }
 
 // Execute implements datas.CommitHook, replicates head updates to the destDb field
-func (rh *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	return pushDataset(ctx, rh.destDB, db, rh.tmpDir, ds)
+func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
+	return pushDataset(ctx, ph.destDB, db, ph.tmpDir, ds)
 }
 
 // HandleError implements datas.CommitHook
-func (rh *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
-	if rh.out != nil {
-		rh.out.Write([]byte(err.Error()))
+func (ph *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
+	if ph.out != nil {
+		ph.out.Write([]byte(err.Error()))
 	}
 	return nil
 }
 
 // SetLogger implements datas.CommitHook
-func (rh *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	rh.out = wr
+func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
+	ph.out = wr
 	return nil
 }
 
@@ -91,6 +91,83 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 
 	_, err = destDB.SetHead(ctx, ds, stRef)
 	return err
+}
+
+type PushArg struct {
+    ds datas.Dataset
+    db datas.Database
+}
+
+type AsyncPushOnWriteHook struct {
+	out    io.Writer
+    ch chan PushArg
+}
+
+const asyncPushBufferSize = 100
+
+var _ datas.CommitHook = (*AsyncPushOnWriteHook)(nil)
+
+// NewAsyncPushOnWriteHook creates a AsyncReplicateHook
+func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string) *AsyncPushOnWriteHook {
+    ch := make(chan PushArg, asyncPushBufferSize)
+
+	newHeads := make(map[string]PushArg, asyncPushBufferSize)
+    latestHeads := make(map[string]PushArg, asyncPushBufferSize)
+    go func(ctx context.Context) error {
+		defer close(ch)
+        for {
+            p, ok  := <- ch
+            if !ok {
+                return ctx.Err()
+            }
+			newHeads[p.ds.ID()] = p
+        }
+    }(ctx)
+
+    go func(ctx context.Context) error {
+        for {
+        	select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				for id, args := range newHeads {
+					if latest, ok := latestHeads[id]; ok && latest != args {
+						err := pushDataset(ctx, destDB.db, args.db, tmpDir, args.ds)
+						if err != nil {
+							return err
+						}
+						latestHeads[id] = args
+					}
+				}
+			}
+        }
+    }(ctx)
+
+    return &AsyncPushOnWriteHook{ch: ch}
+}
+
+// Execute implements datas.CommitHook, replicates head updates to the destDb field
+func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
+    select {
+    case ah.ch <- PushArg{ds: ds, db: db}:
+    case <-ctx.Done():
+        return ctx.Err()
+    }
+    return nil
+}
+
+// HandleError implements datas.CommitHook
+func (ah *AsyncPushOnWriteHook) HandleError(ctx context.Context, err error) error {
+	if ah.out != nil {
+		ah.out.Write([]byte(err.Error()))
+	}
+	return nil
+}
+
+// SetLogger implements datas.CommitHook
+func (ah *AsyncPushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
+	ah.out = wr
+	return nil
 }
 
 type LogHook struct {
