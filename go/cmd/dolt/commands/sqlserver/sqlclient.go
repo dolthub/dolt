@@ -67,12 +67,12 @@ func (cmd SqlClientCmd) Description() string {
 }
 
 func (cmd SqlClientCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
 }
 
-func (cmd SqlClientCmd) createArgParser() *argparser.ArgParser {
-	ap := SqlServerCmd{}.CreateArgParser()
+func (cmd SqlClientCmd) ArgParser() *argparser.ArgParser {
+	ap := SqlServerCmd{}.ArgParser()
 	ap.SupportsFlag(sqlClientDualFlag, "d", "Causes this command to spawn a dolt server that is automatically connected to.")
 	return ap
 }
@@ -86,7 +86,7 @@ func (cmd SqlClientCmd) Hidden() bool {
 }
 
 func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)

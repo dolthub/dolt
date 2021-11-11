@@ -54,6 +54,7 @@ const (
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
+var dumpZshCommand = &commands.DumpZshCmd{}
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
 	commands.InitCmd{},
 	commands.StatusCmd{},
@@ -100,6 +101,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
+	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
 }
 

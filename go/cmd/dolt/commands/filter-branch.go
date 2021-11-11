@@ -79,11 +79,11 @@ func (cmd FilterBranchCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd FilterBranchCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
 }
 
-func (cmd FilterBranchCmd) createArgParser() *argparser.ArgParser {
+func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(allFlag, "a", "filter all branches")
 	return ap
@@ -96,7 +96,7 @@ func (cmd FilterBranchCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

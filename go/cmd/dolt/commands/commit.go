@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -68,6 +69,10 @@ func (cmd CommitCmd) Description() string {
 func (cmd CommitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateCommitArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+}
+
+func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateCommitArgParser()
 }
 
 // Exec executes the command
