@@ -15,7 +15,7 @@ apt-get update && apt-get install -y zip
 cd /src
 BINS="dolt git-dolt git-dolt-smudge"
 OSES="windows linux darwin"
-ARCHS="amd64"
+ARCHS="amd64 arm64"
 
 for os in $OSES; do
   for arch in $ARCHS; do
