@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -30,6 +31,12 @@ type DumpZshCmd struct {
 	DoltCommand cli.SubCommandHandler
 }
 
+func (d DumpZshCmd) ArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsString(fileParamName, "", "file", "The file to write zsh file to docs to")
+	return ap
+}
+
 func (d DumpZshCmd) Name() string {
 	return "dump-zsh"
 }
@@ -39,12 +46,12 @@ func (d DumpZshCmd) Description() string {
 }
 
 func (d DumpZshCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.SupportsString(fileParamName, "", "file", "The file to write CLI docs to")
+	ap := d.ArgParser()
+
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	fileStr := apr.GetValueOrDefault(fileParamName, "cli.md")
+	fileStr := apr.GetValueOrDefault(fileParamName, "_dolt")
 
 	exists, _ := dEnv.FS.Exists(fileStr)
 	if exists {
@@ -126,19 +133,23 @@ _%s() {
             ;;
     esac
 }
+
 `
 
-	noSubFmt = `
+	lineJoiner = " \\\n"
+
+	leafCmdFmt = `
 _%s() {
     _arguments \
-               
 %s
 }
 `
 
-	argumentFmt = `               '(--%s)--%s[%s]'`
+	argumentFmt = `               '(%s)%s[%s]'`
 
-	cmdValueFmt = `                    "%s[%s]""`
+	argumentFmtNoHelp = `               '(%s)%s'`
+
+	cmdValueFmt = `                    "%s[%s]"`
 
 	argSwitchFmt = `                %s)
                     _%s
@@ -150,6 +161,7 @@ func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Comma
 
 	var subCmds []string
 	var subArgs []string
+
 	for _, curr := range subCommands {
 		var hidden bool
 		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
@@ -162,17 +174,6 @@ func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Comma
 
 		subCmds = append(subCmds, fmt.Sprintf(cmdValueFmt, curr.Name(), curr.Description()))
 		subArgs = append(subArgs, fmt.Sprintf(argSwitchFmt, curr.Name(), curr.Name()))
-	}
-
-	for _, curr := range subCommands {
-		var hidden bool
-		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
-			hidden = hidCmd.Hidden()
-		}
-
-		if hidden {
-			continue
-		}
 
 		if subCmdHandler, ok := curr.(cli.SubCommandHandler); ok {
 			err := d.dumpZsh(wr, subCmdHandler.Name(), subCmdHandler.Subcommands)
@@ -181,8 +182,8 @@ func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Comma
 				return err
 			}
 		} else {
-			currCmdStr := fmt.Sprintf("%s %s", cmdStr, curr.Name())
-			err := curr.CreateMarkdown(wr, currCmdStr)
+			//currCmdStr := fmt.Sprintf("%s %s", cmdStr, curr.Name())
+			err := d.dumpZshLeaf(wr, curr)
 
 			if err != nil {
 				return err
@@ -190,14 +191,52 @@ func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Comma
 		}
 	}
 
-	return nil
+	functionStr := fmt.Sprintf(subCmdFmt, cmdStr, cmdStr, strings.Join(subCmds, lineJoiner), strings.Join(subArgs, ""))
+
+	_, err := wr.Write([]byte(functionStr))
+	return err
 }
 
 func (d DumpZshCmd) dumpZshLeaf(wr io.Writer, command cli.Command) error {
-	//command.CreateMarkdown()
+	ap := command.ArgParser()
+	var args []string
+	if len(ap.Supported) > 0 || len(ap.ArgListHelp) > 0 {
+		// TODO: args that aren't flags
+		// for _, kvTuple := range cmdDoc.ArgParser.ArgListHelp {
+		//
+		// }
+		for _, opt := range ap.Supported {
+			args = append(args, formatOption(opt))
+		}
+
+		// TODO: need qualified name here
+		_, err := wr.Write([]byte(fmt.Sprintf(leafCmdFmt, command.Name(), strings.Join(args, lineJoiner))))
+		return err
+	}
+
 	return nil
 }
 
+func formatOption(opt *argparser.Option) string {
+	var formatString string
+
+	// TODO: valdesc?
+	if opt.Abbrev == "" && opt.Name != "" {
+		formatString = fmt.Sprintf("--%s", opt.Name)
+	} else if opt.Abbrev != "" && opt.Name == "" {
+		formatString = fmt.Sprintf("-%s", opt.Abbrev)
+	} else if opt.Abbrev != "" && opt.Name != "" {
+		formatString = fmt.Sprintf("-%s, --%s", opt.Abbrev, opt.Name)
+	} else {
+		panic("short and long name both empty")
+	}
+
+	if len(opt.Desc) > 0 {
+		return fmt.Sprintf(argumentFmt, formatString, formatString, opt.Desc)
+	} else {
+		return fmt.Sprintf(argumentFmtNoHelp, formatString, formatString)
+	}
+}
 
 func (d DumpZshCmd) CreateMarkdown(writer io.Writer, commandStr string) error {
 	return nil
