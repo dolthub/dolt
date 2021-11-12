@@ -28,27 +28,27 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-type DumpZshCmd struct {
+type GenZshCompCmd struct {
 	DoltCommand cli.SubCommandHandler
 }
 
-func (d DumpZshCmd) ArgParser() *argparser.ArgParser {
+func (z GenZshCompCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(fileParamName, "", "file", "The file to write zsh comp file to")
 	ap.SupportsFlag("includeHidden", "", "Include hidden commands")
 	return ap
 }
 
-func (d DumpZshCmd) Name() string {
-	return "dump-zsh"
+func (z GenZshCompCmd) Name() string {
+	return "gen-zsh"
 }
 
-func (d DumpZshCmd) Description() string {
-	return "Creates a zsh autocomp file for the current dolt commands"
+func (z GenZshCompCmd) Description() string {
+	return "Creates a zsh autocomp file for all dolt commands"
 }
 
-func (d DumpZshCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := d.ArgParser()
+func (z GenZshCompCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := z.ArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -76,7 +76,7 @@ func (d DumpZshCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
-	err = d.dumpZsh(wr, d.DoltCommand.Name(), d.DoltCommand.Subcommands, apr.Contains("includeHidden"))
+	err = z.dumpZsh(wr, z.DoltCommand.Name(), z.DoltCommand.Subcommands, apr.Contains("includeHidden"))
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to dump zsh.").AddCause(err).Build()
@@ -108,7 +108,6 @@ _%s() {
             ;;
     esac
 }
-
 `
 
 	lineJoiner = " \\\n"
@@ -142,7 +141,7 @@ _%s() {
 `
 )
 
-func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Command, includeHidden bool) error {
+func (z GenZshCompCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Command, includeHidden bool) error {
 
 	var subCmds []string
 	var subArgs []string
@@ -163,12 +162,12 @@ func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Comma
 		subCmdStr := fmt.Sprintf("%s_%s", cmdStr, sub.Name())
 
 		if subCmdHandler, ok := sub.(cli.SubCommandHandler); ok {
-			err := d.dumpZsh(wr, subCmdStr, subCmdHandler.Subcommands, includeHidden)
+			err := z.dumpZsh(wr, subCmdStr, subCmdHandler.Subcommands, includeHidden)
 			if err != nil {
 				return err
 			}
 		} else {
-			err := d.dumpZshLeaf(wr, subCmdStr, sub)
+			err := z.dumpZshLeaf(wr, subCmdStr, sub)
 			if err != nil {
 				return err
 			}
@@ -181,11 +180,11 @@ func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Comma
 	return err
 }
 
-func (d DumpZshCmd) dumpZshLeaf(wr io.Writer, cmdString string, command cli.Command) error {
+func (z GenZshCompCmd) dumpZshLeaf(wr io.Writer, cmdString string, command cli.Command) error {
 	ap := command.ArgParser()
 	var args []string
-	if len(ap.Supported) > 0 || len(ap.ArgListHelp) > 0 {
-		// TODO: args that aren't flags
+	if len(ap.Supported) > 0 {
+		// TODO: args that aren't flags (need a way to identify them as table names or other things)
 		// for _, kvTuple := range cmdDoc.ArgParser.ArgListHelp {
 		//
 		// }
@@ -244,17 +243,17 @@ func formatOption(opt *argparser.Option) string {
 	}
 }
 
-func (d DumpZshCmd) CreateMarkdown(writer io.Writer, commandStr string) error {
+func (z GenZshCompCmd) CreateMarkdown(writer io.Writer, commandStr string) error {
 	return nil
 }
 
 // Hidden should return true if this command should be hidden from the help text
-func (d DumpZshCmd) Hidden() bool {
+func (z GenZshCompCmd) Hidden() bool {
 	return true
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
 // that it be run from within a data repository directory
-func (d DumpZshCmd) RequiresRepo() bool {
+func (z GenZshCompCmd) RequiresRepo() bool {
 	return false
 }

@@ -54,7 +54,7 @@ const (
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
-var dumpZshCommand = &commands.DumpZshCmd{}
+var dumpZshCommand = &commands.GenZshCompCmd{}
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
 	commands.InitCmd{},
 	commands.StatusCmd{},
