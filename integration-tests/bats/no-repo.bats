@@ -57,7 +57,7 @@ teardown() {
 }
 
 @test "no-repo: dolt --help exits 0" {
-    run dolt
+    run dolt --help
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "Valid commands for dolt are" ]
 
