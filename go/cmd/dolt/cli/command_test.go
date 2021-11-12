@@ -39,6 +39,8 @@ type trackedCommand struct {
 	args        []string
 }
 
+var _ Command = (*trackedCommand)(nil)
+
 func (cmd *trackedCommand) ArgParser() *argparser.ArgParser {
 	return nil
 }

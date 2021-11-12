@@ -185,6 +185,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 
 	if !isHelp(subCommandStr) {
 		PrintErrln(color.RedString("Unknown Command " + subCommandStr))
+		return 1
 	}
 
 	hc.printUsage(commandStr)
