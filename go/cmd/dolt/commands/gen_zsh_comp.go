@@ -137,7 +137,6 @@ _%s() {
 }
 `
 
-
 	singleArgumentFmt = `               '(%s)%s[%s]'`
 
 	singleArgumentFmtNoHelp = `               '(%s)%s'`

@@ -22,12 +22,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/fatih/color"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/events"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
