@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -33,7 +34,8 @@ type DumpZshCmd struct {
 
 func (d DumpZshCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(fileParamName, "", "file", "The file to write zsh file to docs to")
+	ap.SupportsString(fileParamName, "", "file", "The file to write zsh comp file to")
+	ap.SupportsFlag("includeHidden", "", "Include hidden commands")
 	return ap
 }
 
@@ -66,33 +68,7 @@ func (d DumpZshCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
-	// _dolt() {
-	//    local line state
-	//
-	//    _arguments -C \
-	//               "1: :->cmds" \
-	//               "*::arg:->args"
-	//
-	//    case "$state" in
-	//        cmds)
-	//            _values "dolt command" \
-	//                    "add[add a table to the staging area]" \
-	//                    "table[table commands]"
-	//            ;;
-	//        args)
-	//            case $line[1] in
-	//                add)
-	//                    _add_cmd
-	//                    ;;
-	//                table)
-	//                    _table_cmd
-	//                    ;;
-	//            esac
-	//            ;;
-	//    esac
-	// }
-
-	_, err = wr.Write([]byte("#compdef _dolt dolt\n\n"))
+	_, err = wr.Write([]byte("#compdef _dolt dolt\n"))
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to dump zsh.").AddCause(err).Build()
 		cli.PrintErrln(verr.Verbose())
@@ -100,17 +76,16 @@ func (d DumpZshCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
-	err = d.dumpZsh(wr, d.DoltCommand.Name(), d.DoltCommand.Subcommands)
+	err = d.dumpZsh(wr, d.DoltCommand.Name(), d.DoltCommand.Subcommands, apr.Contains("includeHidden"))
 
 	if err != nil {
-		verr := errhand.BuildDError("error: Failed to dump docs.").AddCause(err).Build()
+		verr := errhand.BuildDError("error: Failed to dump zsh.").AddCause(err).Build()
 		cli.PrintErrln(verr.Verbose())
 
 		return 1
 	}
 
 	return 0
-
 }
 
 const (
@@ -140,14 +115,24 @@ _%s() {
 
 	leafCmdFmt = `
 _%s() {
-    _arguments \
+    _arguments -s \
 %s
 }
 `
 
-	argumentFmt = `               '(%s)%s[%s]'`
+	noOptCmdFmt = `
+_%s() {
+}
+`
 
-	argumentFmtNoHelp = `               '(%s)%s'`
+
+	singleArgumentFmt = `               '(%s)%s[%s]'`
+
+	singleArgumentFmtNoHelp = `               '(%s)%s'`
+
+	multiArgumentFmt = `               {%s}'[%s]'`
+
+	multiArgumentFmtNoHelp = `               {%s}'%s'`
 
 	cmdValueFmt = `                    "%s[%s]"`
 
@@ -157,34 +142,33 @@ _%s() {
 `
 )
 
-func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Command) error {
+func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Command, includeHidden bool) error {
 
 	var subCmds []string
 	var subArgs []string
 
-	for _, curr := range subCommands {
+	for _, sub := range subCommands {
 		var hidden bool
-		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
+		if hidCmd, ok := sub.(cli.HiddenCommand); ok {
 			hidden = hidCmd.Hidden()
 		}
 
-		if hidden {
+		if hidden && !includeHidden {
 			continue
 		}
 
-		subCmds = append(subCmds, fmt.Sprintf(cmdValueFmt, curr.Name(), curr.Description()))
-		subArgs = append(subArgs, fmt.Sprintf(argSwitchFmt, curr.Name(), curr.Name()))
+		subCmds = append(subCmds, fmt.Sprintf(cmdValueFmt, sub.Name(), sub.Description()))
+		subArgs = append(subArgs, fmt.Sprintf(argSwitchFmt, sub.Name(), fmt.Sprintf("%s_%s", cmdStr, sub.Name())))
 
-		if subCmdHandler, ok := curr.(cli.SubCommandHandler); ok {
-			err := d.dumpZsh(wr, subCmdHandler.Name(), subCmdHandler.Subcommands)
+		subCmdStr := fmt.Sprintf("%s_%s", cmdStr, sub.Name())
 
+		if subCmdHandler, ok := sub.(cli.SubCommandHandler); ok {
+			err := d.dumpZsh(wr, subCmdStr, subCmdHandler.Subcommands, includeHidden)
 			if err != nil {
 				return err
 			}
 		} else {
-			//currCmdStr := fmt.Sprintf("%s %s", cmdStr, curr.Name())
-			err := d.dumpZshLeaf(wr, curr)
-
+			err := d.dumpZshLeaf(wr, subCmdStr, sub)
 			if err != nil {
 				return err
 			}
@@ -197,7 +181,7 @@ func (d DumpZshCmd) dumpZsh(wr io.Writer, cmdStr string, subCommands []cli.Comma
 	return err
 }
 
-func (d DumpZshCmd) dumpZshLeaf(wr io.Writer, command cli.Command) error {
+func (d DumpZshCmd) dumpZshLeaf(wr io.Writer, cmdString string, command cli.Command) error {
 	ap := command.ArgParser()
 	var args []string
 	if len(ap.Supported) > 0 || len(ap.ArgListHelp) > 0 {
@@ -209,32 +193,54 @@ func (d DumpZshCmd) dumpZshLeaf(wr io.Writer, command cli.Command) error {
 			args = append(args, formatOption(opt))
 		}
 
-		// TODO: need qualified name here
-		_, err := wr.Write([]byte(fmt.Sprintf(leafCmdFmt, command.Name(), strings.Join(args, lineJoiner))))
+		_, err := wr.Write([]byte(fmt.Sprintf(leafCmdFmt, cmdString, strings.Join(args, lineJoiner))))
 		return err
 	}
 
-	return nil
+	_, err := wr.Write([]byte(fmt.Sprintf(noOptCmdFmt, cmdString)))
+	return err
 }
+
+var markdownRegex = regexp.MustCompile(`\{\{[\.a-zA-Z]+\}\}`)
 
 func formatOption(opt *argparser.Option) string {
 	var formatString string
 
+	both := false
 	// TODO: valdesc?
 	if opt.Abbrev == "" && opt.Name != "" {
 		formatString = fmt.Sprintf("--%s", opt.Name)
 	} else if opt.Abbrev != "" && opt.Name == "" {
 		formatString = fmt.Sprintf("-%s", opt.Abbrev)
 	} else if opt.Abbrev != "" && opt.Name != "" {
-		formatString = fmt.Sprintf("-%s, --%s", opt.Abbrev, opt.Name)
+		both = true
+		formatString = fmt.Sprintf("-%s,--%s", opt.Abbrev, opt.Name)
 	} else {
 		panic("short and long name both empty")
 	}
 
 	if len(opt.Desc) > 0 {
-		return fmt.Sprintf(argumentFmt, formatString, formatString, opt.Desc)
+		desc := opt.Desc
+
+		// Various sanitation steps
+		desc = strings.ReplaceAll(desc, "'", "''")
+		desc = string(markdownRegex.ReplaceAll([]byte(desc), []byte("")))
+
+		if strings.Contains(desc, "\n") {
+			// Truncate any multi-line help text
+			desc = desc[:strings.Index(desc, "\n")]
+		}
+		if both {
+			return fmt.Sprintf(multiArgumentFmt, formatString, desc)
+		} else {
+			return fmt.Sprintf(singleArgumentFmt, formatString, formatString, desc)
+		}
 	} else {
-		return fmt.Sprintf(argumentFmtNoHelp, formatString, formatString)
+		if both {
+			return fmt.Sprintf(multiArgumentFmtNoHelp, formatString, formatString)
+		} else {
+			return fmt.Sprintf(singleArgumentFmtNoHelp, formatString, formatString)
+		}
 	}
 }
 
