@@ -27,7 +27,6 @@ func fetchChild(ctx context.Context, ns NodeStore, mt metaValue) (Node, error) {
 }
 
 func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nodeItem) (Node, nodePair, error) {
-	lastKey := val.Tuple(items[len(items)-metaPairCount])
 	child := makeProllyNode(ns.Pool(), level, items...)
 
 	ref, err := ns.Write(ctx, child)
@@ -35,11 +34,15 @@ func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nod
 		return nil, nodePair{}, err
 	}
 
-	metaKey := val.CloneTuple(ns.Pool(), lastKey)
-	metaVal := newMetaValue(ns.Pool(), child.cumulativeCount(), ref)
-	metaPair := nodePair{nodeItem(metaKey), nodeItem(metaVal)}
+	var meta nodePair
+	if len(items) > 0 {
+		lastKey := val.Tuple(items[len(items)-metaPairCount])
+		metaKey := val.CloneTuple(ns.Pool(), lastKey)
+		metaVal := newMetaValue(ns.Pool(), child.cumulativeCount(), ref)
+		meta = nodePair{nodeItem(metaKey), nodeItem(metaVal)}
+	}
 
-	return child, metaPair, nil
+	return child, meta, nil
 }
 
 const (

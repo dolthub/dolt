@@ -65,35 +65,53 @@ func TestMutableMapWrites(t *testing.T) {
 		testPointDeletes(t, 10_000)
 	})
 	t.Run("multiple point updates", func(t *testing.T) {
-		testMultiplePointUpdates(t, 10)
-		testMultiplePointUpdates(t, 100)
-		testMultiplePointUpdates(t, 1000)
-		testMultiplePointUpdates(t, 10_000)
+		testMultiplePointUpdates(t, 5, 10)
+		testMultiplePointUpdates(t, 5, 100)
+		testMultiplePointUpdates(t, 5, 1000)
+		testMultiplePointUpdates(t, 5, 10_000)
 	})
 	t.Run("multiple point inserts", func(t *testing.T) {
-		testMultiplePointInserts(t, 10)
-		testMultiplePointInserts(t, 100)
-		testMultiplePointInserts(t, 1000)
-		testMultiplePointInserts(t, 10_000)
+		testMultiplePointInserts(t, 5, 10)
+		testMultiplePointInserts(t, 5, 100)
+		testMultiplePointInserts(t, 5, 1000)
+		testMultiplePointInserts(t, 5, 10_000)
 	})
 	t.Run("multiple point deletes", func(t *testing.T) {
-		testMultiplePointDeletes(t, 10)
-		testMultiplePointDeletes(t, 100)
-		testMultiplePointDeletes(t, 1000)
-		testMultiplePointDeletes(t, 10_000)
+		testMultiplePointDeletes(t, 5, 10)
+		testMultiplePointDeletes(t, 5, 100)
+		testMultiplePointDeletes(t, 5, 1000)
+		testMultiplePointDeletes(t, 5, 10_000)
 	})
 	t.Run("mixed inserts, updates, and deletes", func(t *testing.T) {
-		testMixedMutations(t, 10)
-		testMixedMutations(t, 100)
-		testMixedMutations(t, 1000)
-		testMixedMutations(t, 10_000)
+		testMixedMutations(t, 5, 10)
+		testMixedMutations(t, 5, 100)
+		testMixedMutations(t, 5, 1000)
+		testMixedMutations(t, 5, 10_000)
+	})
+	t.Run("insert outside of existing range", func(t *testing.T) {
+		testInsertsOutsideExistingRange(t, 10)
+		testInsertsOutsideExistingRange(t, 100)
+		testInsertsOutsideExistingRange(t, 1000)
+		testInsertsOutsideExistingRange(t, 10_000)
+	})
+	t.Run("bulk insert", func(t *testing.T) {
+		testBulkInserts(t, 10)
+		testBulkInserts(t, 100)
+		testBulkInserts(t, 1000)
+		testBulkInserts(t, 10_000)
+	})
+	t.Run("deleting all keys", func(t *testing.T) {
+		testMultiplePointDeletes(t, 10, 10)
+		testMultiplePointDeletes(t, 100, 100)
+		testMultiplePointDeletes(t, 1000, 1000)
+		testMultiplePointDeletes(t, 10_000, 10_000)
 	})
 }
 
-func testPointUpdates(t *testing.T, count int) {
-	orig := ascendingIntMap(t, count)
+func testPointUpdates(t *testing.T, mapCount int) {
+	orig := ascendingIntMap(t, mapCount)
 
-	updates := make([][2]val.Tuple, count)
+	updates := make([][2]val.Tuple, mapCount)
 	for i := range updates {
 		updates[i][0], updates[i][1] = makePut(int64(i), int64(-i))
 	}
@@ -108,7 +126,7 @@ func testPointUpdates(t *testing.T, count int) {
 		require.NoError(t, err)
 
 		m := materializeMap(t, mut)
-		assert.Equal(t, count, int(m.Count()))
+		assert.Equal(t, mapCount, int(m.Count()))
 
 		err = m.Get(ctx, up[0], func(k, v val.Tuple) error {
 			assert.Equal(t, up[0], k)
@@ -119,10 +137,10 @@ func testPointUpdates(t *testing.T, count int) {
 	}
 }
 
-func testMultiplePointUpdates(t *testing.T, count int) {
-	orig := ascendingIntMap(t, count)
+func testMultiplePointUpdates(t *testing.T, batch int, mapCount int) {
+	orig := ascendingIntMap(t, mapCount)
 
-	updates := make([][2]val.Tuple, count)
+	updates := make([][2]val.Tuple, mapCount)
 	for i := range updates {
 		updates[i][0], updates[i][1] = makePut(int64(i), int64(-i))
 	}
@@ -130,20 +148,19 @@ func testMultiplePointUpdates(t *testing.T, count int) {
 		updates[i], updates[j] = updates[j], updates[i]
 	})
 
-	const k = 5
 	ctx := context.Background()
-	for x := 0; x < len(updates); x += k {
-		batch := updates[x : x+k]
+	for x := 0; x < len(updates); x += batch {
+		b := updates[x : x+batch]
 
 		mut := orig.Mutate()
-		for _, up := range batch {
+		for _, up := range b {
 			err := mut.Put(ctx, up[0], up[1])
 			require.NoError(t, err)
 		}
 		m := materializeMap(t, mut)
-		assert.Equal(t, count, int(m.Count()))
+		assert.Equal(t, mapCount, int(m.Count()))
 
-		for _, up := range batch {
+		for _, up := range b {
 			err := m.Get(ctx, up[0], func(k, v val.Tuple) error {
 				assert.Equal(t, up[0], k)
 				assert.Equal(t, up[1], v)
@@ -154,11 +171,11 @@ func testMultiplePointUpdates(t *testing.T, count int) {
 	}
 }
 
-func testPointInserts(t *testing.T, count int) {
+func testPointInserts(t *testing.T, mapCount int) {
 	// create map of even numbers
-	orig := ascendingIntMapWithStep(t, count, 2)
+	orig := ascendingIntMapWithStep(t, mapCount, 2)
 
-	inserts := make([][2]val.Tuple, count)
+	inserts := make([][2]val.Tuple, mapCount)
 	for i := range inserts {
 		// create odd-numbered inserts
 		v := int64(i*2) + 1
@@ -175,7 +192,7 @@ func testPointInserts(t *testing.T, count int) {
 		require.NoError(t, err)
 
 		m := materializeMap(t, mut)
-		assert.Equal(t, count+1, int(m.Count()))
+		assert.Equal(t, mapCount+1, int(m.Count()))
 
 		ok, err := m.Has(ctx, in[0])
 		assert.NoError(t, err)
@@ -190,11 +207,11 @@ func testPointInserts(t *testing.T, count int) {
 	}
 }
 
-func testMultiplePointInserts(t *testing.T, count int) {
+func testMultiplePointInserts(t *testing.T, batch int, mapCount int) {
 	// create map of even numbers
-	orig := ascendingIntMapWithStep(t, count, 2)
+	orig := ascendingIntMapWithStep(t, mapCount, 2)
 
-	inserts := make([][2]val.Tuple, count)
+	inserts := make([][2]val.Tuple, mapCount)
 	for i := range inserts {
 		// create odd-numbered inserts
 		v := int64(i*2) + 1
@@ -204,21 +221,19 @@ func testMultiplePointInserts(t *testing.T, count int) {
 		inserts[i], inserts[j] = inserts[j], inserts[i]
 	})
 
-	// batches of 5 inserts
-	const k = 5
 	ctx := context.Background()
-	for x := 0; x < len(inserts); x += k {
-		batch := inserts[x : x+k]
+	for x := 0; x < len(inserts); x += batch {
+		b := inserts[x : x+batch]
 
 		mut := orig.Mutate()
-		for _, in := range batch {
+		for _, in := range b {
 			err := mut.Put(ctx, in[0], in[1])
 			require.NoError(t, err)
 		}
 		m := materializeMap(t, mut)
-		assert.Equal(t, count+k, int(m.Count()))
+		assert.Equal(t, mapCount+batch, int(m.Count()))
 
-		for _, up := range batch {
+		for _, up := range b {
 			ok, err := m.Has(ctx, up[0])
 			assert.NoError(t, err)
 			assert.True(t, ok)
@@ -233,10 +248,10 @@ func testMultiplePointInserts(t *testing.T, count int) {
 	}
 }
 
-func testPointDeletes(t *testing.T, count int) {
-	orig := ascendingIntMap(t, count)
+func testPointDeletes(t *testing.T, mapCount int) {
+	orig := ascendingIntMap(t, mapCount)
 
-	deletes := make([]val.Tuple, count)
+	deletes := make([]val.Tuple, mapCount)
 	for i := range deletes {
 		deletes[i] = makeDelete(int64(i))
 	}
@@ -250,7 +265,7 @@ func testPointDeletes(t *testing.T, count int) {
 		err := mut.Put(ctx, del, nil)
 		assert.NoError(t, err)
 		m := materializeMap(t, mut)
-		assert.Equal(t, count-1, int(m.Count()))
+		assert.Equal(t, mapCount-1, int(m.Count()))
 
 		ok, err := m.Has(ctx, del)
 		assert.NoError(t, err)
@@ -265,10 +280,10 @@ func testPointDeletes(t *testing.T, count int) {
 	}
 }
 
-func testMultiplePointDeletes(t *testing.T, count int) {
-	orig := ascendingIntMap(t, count)
+func testMultiplePointDeletes(t *testing.T, batch int, mapCount int) {
+	orig := ascendingIntMap(t, mapCount)
 
-	deletes := make([]val.Tuple, count)
+	deletes := make([]val.Tuple, mapCount)
 	for i := range deletes {
 		deletes[i] = makeDelete(int64(i))
 	}
@@ -276,22 +291,19 @@ func testMultiplePointDeletes(t *testing.T, count int) {
 		deletes[i], deletes[j] = deletes[j], deletes[i]
 	})
 
-	// batches of 5 deletes
-	const k = 5
 	ctx := context.Background()
-
-	for x := 0; x < len(deletes); x += k {
-		batch := deletes[x : x+k]
+	for x := 0; x < len(deletes); x += batch {
+		b := deletes[x : x+batch]
 
 		mut := orig.Mutate()
-		for _, del := range batch {
+		for _, del := range b {
 			err := mut.Put(ctx, del, nil)
 			require.NoError(t, err)
 		}
 		m := materializeMap(t, mut)
-		assert.Equal(t, count-k, int(m.Count()))
+		assert.Equal(t, mapCount-batch, int(m.Count()))
 
-		for _, del := range batch {
+		for _, del := range b {
 			ok, err := m.Has(ctx, del)
 			assert.NoError(t, err)
 			assert.False(t, ok)
@@ -306,11 +318,11 @@ func testMultiplePointDeletes(t *testing.T, count int) {
 	}
 }
 
-func testMixedMutations(t *testing.T, count int) {
-	// create map of first |count| *even* numbers
-	orig := ascendingIntMapWithStep(t, count, 2)
+func testMixedMutations(t *testing.T, batch int, mapCount int) {
+	// create map of first |mapCount| *even* numbers
+	orig := ascendingIntMapWithStep(t, mapCount, 2)
 
-	mutations := make([][2]val.Tuple, count*2)
+	mutations := make([][2]val.Tuple, mapCount*2)
 	for i := 0; i < len(mutations); i += 2 {
 		// |v| is an existing key.
 		v := int64(i * 2)
@@ -331,22 +343,19 @@ func testMixedMutations(t *testing.T, count int) {
 		mutations[i], mutations[j] = mutations[j], mutations[i]
 	})
 
-	// batches of 10 mutations
-	const k = 10
-	ctx := context.Background()
 	var err error
-
-	for x := 0; x < len(mutations); x += k {
-		batch := mutations[x : x+k]
+	ctx := context.Background()
+	for x := 0; x < len(mutations); x += batch {
+		b := mutations[x : x+batch]
 
 		mut := orig.Mutate()
-		for _, edit := range batch {
+		for _, edit := range b {
 			err = mut.Put(ctx, edit[0], edit[1])
 			require.NoError(t, err)
 		}
 		m := materializeMap(t, mut)
 
-		for _, edit := range batch {
+		for _, edit := range b {
 			key, ok := mutKeyDesc.GetInt64(0, edit[0])
 			assert.True(t, ok)
 
@@ -367,6 +376,77 @@ func testMixedMutations(t *testing.T, count int) {
 				assert.True(t, ok)
 			}
 		}
+	}
+}
+
+func testInsertsOutsideExistingRange(t *testing.T, mapCount int) {
+	orig := ascendingIntMapWithStep(t, mapCount, 1)
+
+	inserts := make([][2]val.Tuple, 2)
+	// insert before beginning
+	v := int64(-13)
+	inserts[0][0], inserts[0][1] = makePut(v, v)
+	// insert after end
+	v = int64(mapCount + 13)
+	inserts[1][0], inserts[1][1] = makePut(v, v)
+
+	ctx := context.Background()
+	for _, in := range inserts {
+		mut := orig.Mutate()
+		err := mut.Put(ctx, in[0], in[1])
+		require.NoError(t, err)
+
+		m := materializeMap(t, mut)
+		assert.Equal(t, mapCount+1, int(m.Count()))
+
+		ok, err := m.Has(ctx, in[0])
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		err = m.Get(ctx, in[0], func(k, v val.Tuple) error {
+			assert.Equal(t, in[0], k)
+			assert.Equal(t, in[1], v)
+			return nil
+		})
+		require.NoError(t, err)
+	}
+}
+
+func testBulkInserts(t *testing.T, size int) {
+	// create sparse map
+	orig := ascendingIntMapWithStep(t, size, size)
+
+	// make 10x as many inserts as the size of the map
+	inserts := make([][2]val.Tuple, size*10)
+	for i := range inserts {
+		v := rand.Int63()
+		inserts[i][0], inserts[i][1] = makePut(v, v)
+	}
+	rand.Shuffle(len(inserts), func(i, j int) {
+		inserts[i], inserts[j] = inserts[j], inserts[i]
+	})
+
+	ctx := context.Background()
+	mut := orig.Mutate()
+	for _, in := range inserts {
+		err := mut.Put(ctx, in[0], in[1])
+		require.NoError(t, err)
+	}
+
+	m := materializeMap(t, mut)
+	assert.Equal(t, size*11, int(m.Count()))
+
+	for _, in := range inserts {
+		ok, err := m.Has(ctx, in[0])
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		err = m.Get(ctx, in[0], func(k, v val.Tuple) error {
+			assert.Equal(t, in[0], k)
+			assert.Equal(t, in[1], v)
+			return nil
+		})
+		require.NoError(t, err)
 	}
 }
 
