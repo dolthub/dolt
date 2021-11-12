@@ -56,6 +56,16 @@ teardown() {
     [[ "$output" =~ "merge-base - Find the common ancestor of two commits." ]] || false
 }
 
+@test "no-repo: dolt --help exits 0" {
+    run dolt
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "Valid commands for dolt are" ]
+
+    # Check help output for supported commands (spotcheck)
+    [[ "$output" =~ "init - Create an empty Dolt data repository." ]] || false
+    [[ "$output" =~ "status - Show the working tree status." ]] || false
+}
+
 @test "no-repo: check all commands for valid help text" {
     # pipe all commands to a file
     # cut -s suppresses the line if it doesn't contain the delim
