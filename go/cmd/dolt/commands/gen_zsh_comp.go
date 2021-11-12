@@ -68,7 +68,7 @@ func (z GenZshCompCmd) Exec(_ context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	_, err = wr.Write([]byte(preamble))
+	_, err = wr.Write([]byte(fmt.Sprintf(preamble, dEnv.Version)))
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to dump zsh.").AddCause(err).Build()
 		cli.PrintErrln(verr.Verbose())
@@ -90,6 +90,8 @@ func (z GenZshCompCmd) Exec(_ context.Context, commandStr string, args []string,
 
 const (
 	preamble = `#compdef _dolt dolt
+# 
+# Generated with dolt gen-zsh for dolt version %s
 #
 # To install, move this file to $HOME/.zsh-completions and edit your .zshrc file
 # to include these lines (uncommented):
