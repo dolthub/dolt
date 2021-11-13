@@ -182,26 +182,26 @@ func TestRangeReaderOnEmptyMap(t *testing.T) {
 	}
 }
 
-func greaterThanCheck(n int64) func(k types.Tuple) (bool, error) {
-	return func(k types.Tuple) (bool, error) {
-		col0, err := k.Get(1)
+type greaterThanCheck int64
 
-		if err != nil {
-			panic(err)
-		}
+func (n greaterThanCheck) Check(ctx context.Context, k types.Tuple) (valid bool, skip bool, err error) {
+	col0, err := k.Get(1)
 
-		return int64(col0.(types.Int)) > n, nil
+	if err != nil {
+		panic(err)
 	}
+
+	return int64(col0.(types.Int)) > int64(n), false, nil
 }
 
-func lessThanCheck(n int64) func(k types.Tuple) (bool, error) {
-	return func(k types.Tuple) (bool, error) {
-		col0, err := k.Get(1)
+type lessThanCheck int64
 
-		if err != nil {
-			panic(err)
-		}
+func (n lessThanCheck) Check(ctx context.Context, k types.Tuple) (valid bool, skip bool, err error) {
+	col0, err := k.Get(1)
 
-		return int64(col0.(types.Int)) < n, nil
+	if err != nil {
+		panic(err)
 	}
+
+	return int64(col0.(types.Int)) < int64(n), false, nil
 }

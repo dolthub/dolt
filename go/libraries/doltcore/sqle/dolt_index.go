@@ -15,7 +15,6 @@
 package sqle
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -23,7 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -33,7 +32,6 @@ type DoltIndex interface {
 	IndexSchema() schema.Schema
 	TableData() types.Map
 	IndexRowData() types.Map
-	EqualsDoltIndex(index DoltIndex) bool
 }
 
 type doltIndex struct {
@@ -70,63 +68,86 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 	if len(ranges) == 0 {
 		return nil, nil
 	}
-	exprs := di.Expressions()
-	if len(ranges[0]) > len(exprs) {
-		return nil, nil
-	}
-	idx := di
-	if len(ranges[0]) < len(exprs) {
-		idx = idx.prefix(len(ranges[0]))
-		exprs = idx.Expressions()
-	}
 
-	var lookupRanges []lookup.Range
-
+	// This might remain nil if the given ranges each contain an EmptyRange for one of the columns. This will just
+	// cause the lookup to return no rows, which is the desired behavior.
+	var readRanges []*noms.ReadRange
+RangeLoop:
 	for _, rang := range ranges {
-		// TODO: support mixing range types and lengths, which will allow us to support indexing over mixed operators
-		// For now, grab a range to have a baseline so that we may enforce parity with all other ranges
-		var rangeTypes []sql.RangeType
-		rangeTypes = make([]sql.RangeType, len(rang[0]))
-		for i, r := range rang[0] {
-			rangeTypes[i] = r.Type()
+		if len(rang) > len(di.cols) {
+			return nil, nil
 		}
 
-		for i, rangeType := range rangeTypes {
-			var keys1 []interface{} // used if only one bound is set, or if both bounds are set represents the lowerbound
-			var keys2 []interface{} // used only when both bounds are set, thus will always represent the upperbound
-
-			for _, rangeColumn := range rang {
-				if len(rangeTypes) != len(rangeColumn) {
-					return nil, nil //TODO: support indexes having different range counts
-				}
-				rangeColumnExpr := rangeColumn[i]
-				if rangeColumnExpr.Type() != rangeType {
-					return nil, nil //TODO: support mixing range types
-				}
-
-				hasLower := rangeColumnExpr.HasLowerBound()
-				hasUpper := rangeColumnExpr.HasUpperBound()
-				if hasLower && hasUpper {
-					keys1 = append(keys1, sql.GetRangeCutKey(rangeColumnExpr.LowerBound))
-					keys2 = append(keys2, sql.GetRangeCutKey(rangeColumnExpr.UpperBound))
-				} else if hasLower && !hasUpper {
-					keys1 = append(keys1, sql.GetRangeCutKey(rangeColumnExpr.LowerBound))
-				} else if !hasLower && hasUpper {
-					keys1 = append(keys1, sql.GetRangeCutKey(rangeColumnExpr.UpperBound))
-				}
+		inclusive := true
+		var lowerKeys []interface{}
+		for _, rangeColumnExpr := range rang {
+			if rangeColumnExpr.HasLowerBound() {
+				inclusive = inclusive && rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed
+				lowerKeys = append(lowerKeys, sql.GetRangeCutKey(rangeColumnExpr.LowerBound))
+			} else {
+				inclusive = false
+				break
 			}
+		}
+		lowerboundTuple, err := di.keysToTuple(ctx, lowerKeys)
+		if err != nil {
+			return nil, err
+		}
 
-			lookupRange, err := idx.sqlRangeToLookupRange(ctx, rangeType, keys1, keys2)
-			if err != nil {
+		rangeCheck := make(nomsRangeCheck, len(rang))
+		for i, rangeColumnExpr := range rang {
+			// An empty column expression will mean that no values for this column can be matched, so we can discard the
+			// entire range.
+			if ok, err := rangeColumnExpr.IsEmpty(); err != nil {
 				return nil, err
+			} else if ok {
+				continue RangeLoop
 			}
-			lookupRanges = append(lookupRanges, lookupRange)
+
+			cb := columnBounds{}
+			promotedType := di.cols[i].TypeInfo.Promote()
+			if rangeColumnExpr.HasLowerBound() {
+				key := sql.GetRangeCutKey(rangeColumnExpr.LowerBound)
+				val, err := promotedType.ConvertValueToNomsValue(ctx, di.table.ValueReadWriter(), key)
+				if err != nil {
+					return nil, err
+				}
+				cb.lowerbound.equals = rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed
+				cb.lowerbound.infinity = false
+				cb.lowerbound.val = val
+			} else {
+				cb.lowerbound.equals = false
+				cb.lowerbound.infinity = true
+				cb.lowerbound.val = nil
+			}
+			if rangeColumnExpr.HasUpperBound() {
+				key := sql.GetRangeCutKey(rangeColumnExpr.UpperBound)
+				val, err := promotedType.ConvertValueToNomsValue(ctx, di.table.ValueReadWriter(), key)
+				if err != nil {
+					return nil, err
+				}
+				cb.upperbound.equals = rangeColumnExpr.UpperBound.TypeAsUpperBound() == sql.Closed
+				cb.upperbound.infinity = false
+				cb.upperbound.val = val
+			} else {
+				cb.upperbound.equals = false
+				cb.upperbound.infinity = true
+				cb.upperbound.val = nil
+			}
+			rangeCheck[i] = cb
 		}
+
+		readRanges = append(readRanges, &noms.ReadRange{
+			Start:     lowerboundTuple,
+			Inclusive: inclusive,
+			Reverse:   false,
+			Check:     rangeCheck,
+		})
 	}
 
 	return &doltIndexLookup{
-		idx:       idx,
-		ranges:    lookupRanges,
+		idx:       di,
+		ranges:    readRanges,
 		sqlRanges: ranges,
 	}, nil
 }
@@ -195,81 +216,6 @@ func (di *doltIndex) IndexRowData() types.Map {
 	return di.indexRowData
 }
 
-// sqlRangeToLookupRange takes a range returned by the sql engine and converts it to the appropriate lookup range used for noms traversal.
-func (di *doltIndex) sqlRangeToLookupRange(ctx *sql.Context, rangeType sql.RangeType, keys1, keys2 []interface{}) (lookup.Range, error) {
-	switch rangeType {
-	case sql.RangeType_Empty:
-		return lookup.EmptyRange(), nil
-	case sql.RangeType_All:
-		return lookup.AllRange(), nil
-	case sql.RangeType_GreaterThan:
-		tpl, err := di.keysToTuple(keys1)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		return lookup.GreaterThanRange(tpl)
-	case sql.RangeType_GreaterOrEqual:
-		tpl, err := di.keysToTuple(keys1)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		return lookup.GreaterOrEqualRange(tpl), nil
-	case sql.RangeType_LessThan:
-		tpl, err := di.keysToTuple(keys1)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		return lookup.LessThanRange(tpl), nil
-	case sql.RangeType_LessOrEqual:
-		tpl, err := di.keysToTuple(keys1)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		return lookup.LessOrEqualRange(tpl)
-	case sql.RangeType_ClosedClosed:
-		lowerTpl, err := di.keysToTuple(keys1)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		upperTpl, err := di.keysToTuple(keys2)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		return lookup.ClosedRange(lowerTpl, upperTpl)
-	case sql.RangeType_OpenOpen:
-		lowerTpl, err := di.keysToTuple(keys1)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		upperTpl, err := di.keysToTuple(keys2)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		return lookup.OpenRange(lowerTpl, upperTpl)
-	case sql.RangeType_OpenClosed:
-		lowerTpl, err := di.keysToTuple(keys1)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		upperTpl, err := di.keysToTuple(keys2)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		return lookup.CustomRange(lowerTpl, upperTpl, lookup.Open, lookup.Closed)
-	case sql.RangeType_ClosedOpen:
-		lowerTpl, err := di.keysToTuple(keys1)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		upperTpl, err := di.keysToTuple(keys2)
-		if err != nil {
-			return lookup.Range{}, err
-		}
-		return lookup.CustomRange(lowerTpl, upperTpl, lookup.Closed, lookup.Open)
-	}
-	return lookup.Range{}, sql.ErrInvalidRangeType.New()
-}
-
 // prefix returns a copy of this index with only the first n columns. If n is >= the number of columns present, then
 // the exact index is returned without copying.
 func (di *doltIndex) prefix(n int) *doltIndex {
@@ -284,68 +230,25 @@ func (di *doltIndex) prefix(n int) *doltIndex {
 	return &ndi
 }
 
-func (di *doltIndex) keysToTuple(keys []interface{}) (types.Tuple, error) {
+// keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to
+// start at the very beginning.
+func (di *doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tuple, error) {
 	nbf := di.indexRowData.Format()
-	if len(di.cols) != len(keys) {
-		return types.EmptyTuple(nbf), errors.New("keys must specify all columns for an index")
+	if len(keys) > len(di.cols) {
+		return types.EmptyTuple(nbf), errors.New("too many keys for the column count")
 	}
-	var vals []types.Value
-	for i, col := range di.cols {
+
+	vals := make([]types.Value, len(keys)*2)
+	for i := range keys {
+		col := di.cols[i]
 		// As an example, if our TypeInfo is Int8, we should not fail to create a tuple if we are returning all keys
 		// that have a value of less than 9001, thus we promote the TypeInfo to the widest type.
-		val, err := col.TypeInfo.Promote().ConvertValueToNomsValue(context.Background(), di.table.ValueReadWriter(), keys[i])
+		val, err := col.TypeInfo.Promote().ConvertValueToNomsValue(ctx, di.table.ValueReadWriter(), keys[i])
 		if err != nil {
 			return types.EmptyTuple(nbf), err
 		}
-		vals = append(vals, types.Uint(col.Tag), val)
+		vals[2*i] = types.Uint(col.Tag)
+		vals[2*i+1] = val
 	}
 	return types.NewTuple(nbf, vals...)
-}
-
-func (di *doltIndex) EqualsDoltIndex(oIdx DoltIndex) bool {
-	if !expressionsAreEquals(di.Expressions(), oIdx.Expressions()) {
-		return false
-	}
-
-	if di.Database() != oIdx.Database() {
-		return false
-	}
-
-	if di.Table() != oIdx.Table() {
-		return false
-	}
-
-	if di.ID() != oIdx.ID() {
-		return false
-	}
-
-	if di.IsUnique() != oIdx.IsUnique() {
-		return false
-	}
-
-	if !(schema.SchemasAreEqual(di.IndexSchema(), oIdx.IndexSchema())) {
-		return false
-	}
-
-	return true
-}
-
-func expressionsAreEquals(exprs1, exprs2 []string) bool {
-	if exprs1 == nil && exprs2 == nil {
-		return true
-	} else if exprs1 == nil || exprs2 == nil {
-		return false
-	}
-
-	if len(exprs1) != len(exprs2) {
-		return false
-	}
-
-	for i, expr1 := range exprs1 {
-		if expr1 != exprs2[i] {
-			return false
-		}
-	}
-
-	return true
 }

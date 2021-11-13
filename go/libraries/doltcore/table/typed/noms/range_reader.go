@@ -26,9 +26,33 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// InRangeCheck is a call made as the reader reads through values to check that the next value
-// being read is in the range]
-type InRangeCheck func(tuple types.Tuple) (bool, error)
+// InRangeCheck evaluates tuples to determine whether they are valid and/or should be skipped.
+type InRangeCheck interface {
+	// Check is a call made as the reader reads through values to check that the next value either being read is valid
+	// and whether it should be skipped or returned.
+	Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error)
+}
+
+// InRangeCheckAlways will always return that the given tuple is valid and not to be skipped.
+type InRangeCheckAlways struct{}
+
+func (InRangeCheckAlways) Check(_ context.Context, _ types.Tuple) (valid bool, skip bool, err error) {
+	return true, false, nil
+}
+
+// InRangeCheckNever will always return that the given tuple is not valid.
+type InRangeCheckNever struct{}
+
+func (InRangeCheckNever) Check(_ context.Context, _ types.Tuple) (valid bool, skip bool, err error) {
+	return false, false, nil
+}
+
+// InRangeCheckPartial will check if the given tuple contains the aliased tuple as a partial key.
+type InRangeCheckPartial types.Tuple
+
+func (ircp InRangeCheckPartial) Check(_ context.Context, t types.Tuple) (valid bool, skip bool, err error) {
+	return t.StartsWith(types.Tuple(ircp)), false, nil
+}
 
 // ReadRange represents a range of values to be read
 type ReadRange struct {
@@ -177,15 +201,16 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			return types.Tuple{}, types.Tuple{}, err
 		}
 
-		var inRange bool
 		if err != io.EOF {
-			inRange, err = nrr.currCheck(k)
-
+			valid, skip, err := nrr.currCheck.Check(ctx, k)
 			if err != nil {
 				return types.Tuple{}, types.Tuple{}, err
 			}
 
-			if inRange {
+			if valid {
+				if skip {
+					continue
+				}
 				if !v.Empty() {
 					nrr.cardCounter.updateWithKV(k, v)
 					if !nrr.cardCounter.empty() && !nrr.cardCounter.done() {
