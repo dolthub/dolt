@@ -202,9 +202,7 @@ func parentFkConstraintViolations(
 
 			shouldContinue, err := func() (bool, error) {
 				var mapIter table.TableReadCloser = noms.NewNomsRangeReader(postParent.IndexSchema, postParent.IndexData,
-					[]*noms.ReadRange{{Start: postParentIndexPartialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-						return tuple.StartsWith(postParentIndexPartialKey), nil
-					}}})
+					[]*noms.ReadRange{{Start: postParentIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postParentIndexPartialKey)}})
 				defer mapIter.Close(ctx)
 				if _, err := mapIter.ReadRow(ctx); err == nil {
 					// If the parent has more rows that satisfy the partial key then we choose to do nothing
@@ -263,9 +261,7 @@ func parentFkConstraintViolationsProcess(
 ) (bool, error) {
 	foundViolation := false
 	mapIter := noms.NewNomsRangeReader(postChild.IndexSchema, postChild.IndexData,
-		[]*noms.ReadRange{{Start: postChildIndexPartialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			return tuple.StartsWith(postChildIndexPartialKey), nil
-		}}})
+		[]*noms.ReadRange{{Start: postChildIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postChildIndexPartialKey)}})
 	defer mapIter.Close(ctx)
 	var postChildIndexRow row.Row
 	var err error
@@ -398,9 +394,7 @@ func childFkConstraintViolationsProcess(
 	postChildCVMapEditor *types.MapEditor,
 ) (bool, error) {
 	var mapIter table.TableReadCloser = noms.NewNomsRangeReader(postParent.IndexSchema, postParent.IndexData,
-		[]*noms.ReadRange{{Start: parentPartialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			return tuple.StartsWith(parentPartialKey), nil
-		}}})
+		[]*noms.ReadRange{{Start: parentPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(parentPartialKey)}})
 	defer mapIter.Close(ctx)
 	// If the row exists in the parent, then we don't need to do anything
 	if _, err := mapIter.ReadRow(ctx); err != nil {
