@@ -61,38 +61,16 @@ type dynamicNodeSplitter struct {
 	window uint32
 	salt   byte
 
-	patterns        []dynamicPattern
 	crossedBoundary bool
 }
 
 var _ nodeSplitter = &dynamicNodeSplitter{}
 
-type dynamicPattern [2]uint32
-
-func (pr dynamicPattern) rangeEnd() uint32 {
-	return pr[0]
-}
-
-func (pr dynamicPattern) pattern() uint32 {
-	return pr[1]
-}
-
-var smoothPatterns = []dynamicPattern{
-	// min size 512
-	{1024, 1<<16 - 1},
-	{2048, 1<<14 - 1},
-	{4096, 1<<12 - 1},
-	{8192, 1<<10 - 1},
-	{maxChunkSize, 1<<8 - 1},
-	// max size 16K
-}
-
 func newSmoothRollingHasher(salt byte) *dynamicNodeSplitter {
 	return &dynamicNodeSplitter{
-		bz:       buzhash.NewBuzHash(chunkWindow),
-		window:   chunkWindow,
-		salt:     salt,
-		patterns: smoothPatterns,
+		bz:     buzhash.NewBuzHash(chunkWindow),
+		window: chunkWindow,
+		salt:   salt,
 	}
 }
 
@@ -109,26 +87,23 @@ func (sns *dynamicNodeSplitter) Append(items ...nodeItem) (err error) {
 func (sns *dynamicNodeSplitter) hashByte(b byte) bool {
 	sns.offset++
 
-	if !sns.crossedBoundary {
-		sns.bz.HashByte(b ^ sns.salt)
-
-		if sns.offset < minChunkSize {
-			return sns.crossedBoundary
-		}
-		if sns.offset > maxChunkSize {
-			sns.crossedBoundary = true
-			return sns.crossedBoundary
-		}
-
-		hash := sns.bz.Sum32()
-		for _, rp := range sns.patterns {
-			if sns.offset < rp.rangeEnd() {
-				pat := rp.pattern()
-				sns.crossedBoundary = hash&pat == pat
-				return sns.crossedBoundary
-			}
-		}
+	if sns.crossedBoundary {
+		return true
 	}
+
+	sns.bz.HashByte(b ^ sns.salt)
+
+	if sns.offset < minChunkSize {
+		return true
+	}
+	if sns.offset > maxChunkSize {
+		sns.crossedBoundary = true
+		return true
+	}
+
+	hash := sns.bz.Sum32()
+	patt := patternFromOffset(sns.offset)
+	sns.crossedBoundary = hash&patt == patt
 
 	return sns.crossedBoundary
 }
@@ -143,4 +118,9 @@ func (sns *dynamicNodeSplitter) Reset() {
 	sns.crossedBoundary = false
 	sns.offset = 0
 	sns.bz = buzhash.NewBuzHash(sns.window)
+}
+
+func patternFromOffset(offset uint32) uint32 {
+	shift := 15 - (offset >> 10)
+	return 1<<shift - 1
 }
