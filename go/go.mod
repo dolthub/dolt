@@ -17,6 +17,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/denisbrodbeck/machineid v1.0.1
+	github.com/dgraph-io/badger/v3 v3.2103.2 // indirect
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/go-mysql-server v0.11.1-0.20211113070552-b67f2dc822ad
@@ -32,7 +33,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gocraft/dbr/v2 v2.7.0
 	github.com/golang/protobuf v1.5.2
-	github.com/golang/snappy v0.0.1
+	github.com/golang/snappy v0.0.3
 	github.com/google/go-cmp v0.5.5
 	github.com/google/uuid v1.2.0
 	github.com/jedib0t/go-pretty v4.3.1-0.20191104025401-85fe5d6a7c4d+incompatible

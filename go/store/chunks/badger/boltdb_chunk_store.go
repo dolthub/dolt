@@ -19,30 +19,30 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package boltdb
+package badger
 
 import (
 	"context"
 
-	"github.com/boltdb/bolt"
+	badger "github.com/dgraph-io/badger/v3"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-const dbFile = "bolt_chunk_store.db"
+const dbDir = "badger_chunk_store"
 
 var (
 	rootKey  = []byte("root")
 	csBucket = []byte("cs")
 )
 
-var db *bolt.DB
+var db *badger.DB
 
-func NewBoltDBChunkStore(ctx context.Context, dir string) (cs BoltDBChunkStore, err error) {
+func NewBadgerChunkStore(ctx context.Context, dir string) (cs BadgerChunkStore, err error) {
 	// TODO(andy): this is gross and bad
 	if db == nil {
-		db, err = bolt.Open(dbFile, 0600, nil)
+		db, err = badger.Open(badger.DefaultOptions(dbDir))
 		if err != nil {
 			return cs, err
 		}
@@ -52,46 +52,48 @@ func NewBoltDBChunkStore(ctx context.Context, dir string) (cs BoltDBChunkStore, 
 		return cs, err
 	}
 
-	cs = BoltDBChunkStore{DB: db}
+	cs = BadgerChunkStore{DB: db}
 	return cs, nil
 }
 
-func maybeInitBoltStore(db *bolt.DB) error {
-	return db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists(csBucket)
-		if err != nil {
-			return err
-		}
-
-		if b.Get(rootKey) == nil {
-			// write a new root if it doesn't exist
-			err = b.Put(rootKey, byteStr(hash.Hash{}))
+func maybeInitBoltStore(db *badger.DB) error {
+	return db.Update(func(tx *badger.Txn) (err error) {
+		_, err = tx.Get(rootKey)
+		if isAbsent(err) {
+			err = tx.Set(rootKey, byteStr(hash.Hash{}))
 		}
 		return err
 	})
 }
 
-type BoltDBChunkStore struct {
-	*bolt.DB
+type BadgerChunkStore struct {
+	*badger.DB
 }
 
-var _ chunks.ChunkStore = BoltDBChunkStore{}
-var _ chunks.ChunkStoreGarbageCollector = BoltDBChunkStore{}
+var _ chunks.ChunkStore = BadgerChunkStore{}
+var _ chunks.ChunkStoreGarbageCollector = BadgerChunkStore{}
 
-//var _ chunks.LoggingChunkStore = BoltDBChunkStore{}
+//var _ chunks.LoggingChunkStore = BadgerChunkStore{}
 
 // Get the Chunk for the value of the hash in the store. If the hash is
-// absent from the store EmptyChunk is returned.
-func (b BoltDBChunkStore) Get(ctx context.Context, h hash.Hash) (c chunks.Chunk, err error) {
-	err = b.DB.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(csBucket)
-		val := b.Get(byteStr(h))
-		if val == nil {
+// isAbsent from the store EmptyChunk is returned.
+func (b BadgerChunkStore) Get(ctx context.Context, h hash.Hash) (c chunks.Chunk, err error) {
+	err = b.DB.View(func(tx *badger.Txn) error {
+		var item *badger.Item
+		item, err = tx.Get(byteStr(h))
+		if isAbsent(err) {
 			c = chunks.EmptyChunk
+			return nil
 		}
-		// |val| is read-only
-		c = chunks.CopyNewChunk(val)
-		return nil
+		if err != nil {
+			return err
+		}
+
+		return item.Value(func(val []byte) (e error) {
+			// |val| is read-only
+			c = chunks.CopyNewChunk(val)
+			return
+		})
 	})
 	return
 }
@@ -99,46 +101,61 @@ func (b BoltDBChunkStore) Get(ctx context.Context, h hash.Hash) (c chunks.Chunk,
 // GetMany gets the Chunks with |hashes| from the store. On return,
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (b BoltDBChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
-	return b.DB.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(csBucket)
+func (b BadgerChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
+	return b.DB.View(func(tx *badger.Txn) (err error) {
+		var item *badger.Item
 		for h := range hashes {
-			val := b.Get(byteStr(h))
-			// nil value return signals absence
-			if val == nil {
+			item, err = tx.Get(byteStr(h))
+			if isAbsent(err) {
 				continue
 			}
-			// |val| is read-only
-			c := chunks.CopyNewChunk(val)
-			found(ctx, &c)
+			if err != nil {
+				return err
+			}
+
+			err = item.Value(func(val []byte) (e error) {
+				// |val| is read-only
+				c := chunks.CopyNewChunk(val)
+				found(ctx, &c)
+				return
+			})
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	})
 }
 
 // Has Returns true iff the value at the address |h| is contained in the store
-func (b BoltDBChunkStore) Has(ctx context.Context, h hash.Hash) (ok bool, err error) {
-	err = b.DB.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(csBucket)
-		val := b.Get(byteStr(h))
-		// nil value return signals absence
-		ok = val != nil
-		return nil
+func (b BadgerChunkStore) Has(ctx context.Context, h hash.Hash) (ok bool, err error) {
+	err = b.DB.View(func(tx *badger.Txn) error {
+		_, err = tx.Get(byteStr(h))
+		if err == nil {
+			ok = true
+		} else if isAbsent(err) {
+			ok = false
+			err = nil
+		}
+		return err
 	})
 	return
 }
 
-// HasMany Returns a new HashSet containing any members of |hashes| that are absent from the store.
-func (b BoltDBChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
+// HasMany Returns a new HashSet containing any members of |hashes| that are isAbsent from the store.
+func (b BadgerChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
 	absent = hash.NewHashSet()
-	err = b.DB.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(csBucket)
+	err = b.DB.View(func(tx *badger.Txn) error {
 		for h := range hashes {
-			val := b.Get(byteStr(h))
-			// nil value return signals absence
-			if val == nil {
-				absent.Insert(h)
+			_, err = tx.Get(byteStr(h))
+			if err == nil {
+				continue
 			}
+			if isAbsent(err) {
+				absent.Insert(h)
+				continue
+			}
+			return err
 		}
 		return nil
 	})
@@ -149,32 +166,37 @@ func (b BoltDBChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (abs
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (b BoltDBChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
-	return b.DB.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(csBucket)
-		return b.Put(byteStr(c.Hash()), c.Data())
+func (b BadgerChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
+	return b.DB.Update(func(tx *badger.Txn) error {
+		return tx.Set(byteStr(c.Hash()), c.Data())
 	})
 }
 
 // Version Returns the NomsVersion with which this ChunkSource is compatible.
-func (b BoltDBChunkStore) Version() string {
+func (b BadgerChunkStore) Version() string {
 	// todo: fix
 	return "__LD_1__" // pretend to be NBS
 }
 
 // Rebase brings this chunks.ChunkStore into sync with the persistent storage's
 // current root.
-func (b BoltDBChunkStore) Rebase(ctx context.Context) error {
+func (b BadgerChunkStore) Rebase(ctx context.Context) error {
 	return nil
 }
 
 // Root returns the root of the database as of the time the chunks.ChunkStore
 // was opened or the most recent call to Rebase.
-func (b BoltDBChunkStore) Root(ctx context.Context) (root hash.Hash, err error) {
-	err = b.DB.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(csBucket)
-		root = hash.New(b.Get(rootKey))
-		return nil
+func (b BadgerChunkStore) Root(ctx context.Context) (root hash.Hash, err error) {
+	err = b.DB.Update(func(tx *badger.Txn) error {
+		var item *badger.Item
+		if item, err = tx.Get(rootKey); err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) (err error) {
+			// |val| is read-only
+			copy(root[:], val)
+			return
+		})
 	})
 	return
 }
@@ -182,16 +204,27 @@ func (b BoltDBChunkStore) Root(ctx context.Context) (root hash.Hash, err error) 
 // Commit atomically attempts to persist all novel Chunks and update the
 // persisted root hash from last to current (or keeps it the same).
 // If last doesn't match the root in persistent storage, returns false.
-func (b BoltDBChunkStore) Commit(ctx context.Context, current, last hash.Hash) (ok bool, err error) {
-	err = b.DB.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(csBucket)
-		root := hash.New(b.Get(rootKey))
-		if !root.Equal(last) {
-			ok = false
-			return nil
+func (b BadgerChunkStore) Commit(ctx context.Context, current, last hash.Hash) (ok bool, err error) {
+	err = b.DB.Update(func(tx *badger.Txn) error {
+		var item *badger.Item
+		if item, err = tx.Get(rootKey); err != nil {
+			return err
 		}
-		ok = true
-		return b.Put(rootKey, byteStr(current))
+
+		// Check
+		err = item.Value(func(val []byte) (err error) {
+			ok = last.Equal(hash.New(val))
+			return
+		})
+		if err != nil {
+			return err
+		}
+
+		// Set
+		if ok {
+			err = tx.Set(rootKey, byteStr(current))
+		}
+		return err
 	})
 	return
 }
@@ -199,14 +232,14 @@ func (b BoltDBChunkStore) Commit(ctx context.Context, current, last hash.Hash) (
 // Stats may return some kind of struct that reports statistics about the
 // chunks.ChunkStore instance. The type is implementation-dependent, and impls
 // may return nil
-func (b BoltDBChunkStore) Stats() interface{} {
+func (b BadgerChunkStore) Stats() interface{} {
 	return nil
 }
 
 // StatsSummary may return a string containing summarized statistics for
 // this chunks.ChunkStore. It must return "Unsupported" if this operation is not
 // supported.
-func (b BoltDBChunkStore) StatsSummary() string {
+func (b BadgerChunkStore) StatsSummary() string {
 	return ""
 }
 
@@ -214,18 +247,18 @@ func (b BoltDBChunkStore) StatsSummary() string {
 // Close(), the chunks.ChunkStore may not be used again. It is NOT SAFE to call
 // Close() concurrently with any other chunks.ChunkStore method; behavior is
 // undefined and probably crashy.
-func (b BoltDBChunkStore) Close() error {
+func (b BadgerChunkStore) Close() error {
 	return b.DB.Close()
 }
 
-//func (b BoltDBChunkStore) SetLogger(logger chunks.DebugLogger) {}
+//func (b BadgerChunkStore) SetLogger(logger chunks.DebugLogger) {}
 
 // MarkAndSweepChunks expects |keepChunks| to receive the chunk hashes
 // that should be kept in the chunk store. Once |keepChunks| is closed
 // and MarkAndSweepChunks returns, the chunk store will only have the
 // chunks sent on |keepChunks| and will have removed all other content
 // from the chunks.ChunkStore.
-func (b BoltDBChunkStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
+func (b BadgerChunkStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest chunks.ChunkStore) error {
 	// todo
 	return nil
 }
@@ -233,4 +266,8 @@ func (b BoltDBChunkStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash
 func byteStr(h hash.Hash) []byte {
 	bb := [20]byte(h)
 	return bb[:]
+}
+
+func isAbsent(err error) bool {
+	return err == badger.ErrKeyNotFound
 }

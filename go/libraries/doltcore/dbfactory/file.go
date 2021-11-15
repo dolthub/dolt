@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/chunks/boltdb"
+	"github.com/dolthub/dolt/go/store/chunks/badger"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -58,7 +58,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	}
 
 	//newGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize)
-	boltCS, err := boltdb.NewBoltDBChunkStore(ctx, path)
+	boltCS, err := badger.NewBadgerChunkStore(ctx, path)
 	if err != nil {
 		return nil, err
 	}
