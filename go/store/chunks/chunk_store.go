@@ -61,7 +61,8 @@ type ChunkStore interface {
 	Version() string
 
 	// Rebase brings this ChunkStore into sync with the persistent storage's
-	// current root.
+	// current root. This is necessary in the case where an out-of-process
+	// actor has Commit'd to this ChunkStore.
 	Rebase(ctx context.Context) error
 
 	// Root returns the root of the database as of the time the ChunkStore

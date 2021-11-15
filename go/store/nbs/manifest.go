@@ -90,6 +90,12 @@ type manifestGCGenUpdater interface {
 	UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
+type manifestStater interface {
+	manifest
+
+	Stat(ctx context.Context) (manifestSignature, error)
+}
+
 // ManifestInfo is an interface for retrieving data from a manifest outside of this package
 type ManifestInfo interface {
 	GetVersion() string
@@ -117,6 +123,8 @@ type manifestContents struct {
 	root         hash.Hash
 	gcGen        addr
 	specs        []tableSpec
+
+	sig manifestSignature
 
 	// An appendix is a list of |tableSpecs| that track an auxillary collection of
 	// table files used _only_ for query performance optimizations. These appendix |tableSpecs| can be safely
@@ -299,6 +307,24 @@ func (mm manifestManager) updateWillFail(lastLock addr) (cached manifestContents
 		}
 	}
 	return
+}
+
+func (mm manifestManager) Stat(ctx context.Context) (sig manifestSignature, ok bool, err error) {
+	mm.lockOutFetch()
+	defer func() {
+		afErr := mm.allowFetch()
+		if err == nil {
+			err = afErr
+		}
+	}()
+
+	var ms manifestStater
+	ms, ok = mm.m.(manifestStater)
+	if ok {
+		sig, err = ms.Stat(ctx)
+	}
+
+	return sig, ok, err
 }
 
 func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, err error) {
@@ -509,4 +535,13 @@ func generateLockHash(root hash.Hash, specs []tableSpec, appendix []tableSpec) (
 	h = blockHash.Sum(h) // Appends hash to h
 	copy(lock[:], h)
 	return
+}
+
+type manifestSignature struct {
+	mtime time.Time
+	size  int64
+}
+
+func (ms manifestSignature) equals(other manifestSignature) bool {
+	return ms.size == other.size && ms.mtime.Equal(other.mtime)
 }
