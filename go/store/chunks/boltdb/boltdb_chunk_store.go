@@ -91,7 +91,7 @@ func (b BoltDBChunkStore) Get(ctx context.Context, h hash.Hash) (c chunks.Chunk,
 // GetMany gets the Chunks with |hashes| from the store. On return,
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (b BoltDBChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
+func (b BoltDBChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	return b.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(csBucket)
 		for h := range hashes {
@@ -101,7 +101,7 @@ func (b BoltDBChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foun
 				continue
 			}
 			c := chunks.NewChunk(val)
-			found(&c)
+			found(ctx, &c)
 		}
 		return nil
 	})
@@ -181,6 +181,7 @@ func (b BoltDBChunkStore) Commit(ctx context.Context, current, last hash.Hash) (
 			ok = false
 			return nil
 		}
+		ok = true
 		return b.Put(rootKey, byteStr(current))
 	})
 	return
