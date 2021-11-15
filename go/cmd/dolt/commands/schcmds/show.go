@@ -136,7 +136,10 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 		}
 
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
+		sqlCtx, engine, _, err := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 
 		var notFound []string
 		for _, tblName := range tables {

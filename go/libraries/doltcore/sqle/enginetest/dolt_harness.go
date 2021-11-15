@@ -58,7 +58,11 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
-	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS).WithDbFactoryUrl(doltdb.InMemDoltDB)
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	require.NoError(t, err)
+	pro, err := sqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv)
+	require.NoError(t, err)
+	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
 
@@ -199,7 +203,10 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 }
 
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
-	return sqle.NewDoltDatabaseProvider(d.env.Config, d.env.FS, dbs...).WithDbFactoryUrl(doltdb.InMemDoltDB)
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), d.env)
+	require.NoError(d.t, err)
+	pro, err := sqle.NewDoltDatabaseProvider(d.env.Config, mrEnv, dbs...)
+	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
 func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.InitialDbState {

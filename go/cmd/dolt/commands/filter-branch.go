@@ -252,7 +252,11 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 	db := dsqle.NewDatabase(dbName, dEnv.DbData(), opts)
 
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, db)
+	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
+	if err != nil {
+		return nil, nil, err
+	}
+	pro, err := dsqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv, db)
 	if err != nil {
 		return nil, nil, err
 	}

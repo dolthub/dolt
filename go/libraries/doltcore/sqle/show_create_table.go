@@ -21,6 +21,7 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
@@ -28,17 +29,20 @@ import (
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
 
-func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *dsess.Session) {
+func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *dsess.Session, error) {
 	sess := dsess.DefaultSession()
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(sess),
 		sql.WithTracer(tracing.Tracer(ctx)))
 
 	var cfg config.ReadableConfig = nil
-	pro := NewDoltDatabaseProvider(cfg, nil, sqlDb)
+	pro, err := NewDoltDatabaseProvider(cfg, &env.MultiRepoEnv{}, sqlDb)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	engine := sqle.NewDefault(pro)
 	sqlCtx.SetCurrentDatabase(sqlDb.Name())
-	return sqlCtx, engine, sess
+	return sqlCtx, engine, sess, nil
 }
 
 func GetCreateTableStmt(ctx *sql.Context, engine *sqle.Engine, tableName string) (string, error) {

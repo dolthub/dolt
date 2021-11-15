@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -103,15 +104,18 @@ type PushArg struct {
 type AsyncPushOnWriteHook struct {
 	out io.Writer
 	ch  chan PushArg
+	mu  *sync.RWMutex
 }
 
-const asyncPushBufferSize = 100
+const asyncPushBufferSize = 20
 
 var _ datas.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
 func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string) *AsyncPushOnWriteHook {
 	ch := make(chan PushArg, asyncPushBufferSize)
+
+	mu := &sync.Mutex{}
 
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 	go func() error {
@@ -121,11 +125,14 @@ func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string)
 			if !ok {
 				return ctx.Err()
 			}
+			mu.Lock()
 			newHeads[p.ds.ID()] = p
+			mu.Unlock()
 		}
 	}()
 
 	go func() error {
+		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
 		for {
 			select {
@@ -135,8 +142,12 @@ func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string)
 				if len(newHeads) == 0 {
 					continue
 				}
-				// TODO do i need to explicitly copy newHeads?
-				for id, newCm := range newHeads {
+				mu.Lock()
+				for k, v := range newHeads {
+					newHeadsCopy[k] = v
+				}
+				mu.Unlock()
+				for id, newCm := range newHeadsCopy {
 					if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
 						err := pushDataset(ctx, destDB.db, newCm.db, tmpDir, newCm.ds)
 						if err != nil {

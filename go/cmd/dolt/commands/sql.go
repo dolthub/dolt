@@ -54,12 +54,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type batchMode int64
@@ -106,10 +103,6 @@ const (
 )
 
 var delimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*(\s+\S+\s*)?$`)
-
-func init() {
-	dsqle.AddDoltSystemVariables()
-}
 
 type SqlCmd struct {
 	VersionStr string
@@ -375,7 +368,7 @@ func execShell(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv.FileSystem(), format, initialDb, dbs...)
+	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -400,7 +393,7 @@ func execBatch(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv.FileSystem(), format, initialDb, dbs...)
+	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -443,7 +436,7 @@ func execMultiStatements(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv.FileSystem(), format, initialDb, dbs...)
+	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -469,28 +462,6 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData(), opts)
 }
 
-// newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
-// skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
-// that will log warnings when attempting to perform replica commands.
-func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
-	opts := editor.Options{
-		Deaf: dEnv.DbEaFactory(),
-	}
-
-	db := dsqle.NewDatabase(name, dEnv.DbData(), opts)
-
-	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
-	if err != nil {
-		err = fmt.Errorf("%w from remote '%s'; %s", dsqle.ErrFailedToLoadReplicaDB, remoteName, err.Error())
-		if !dsqle.SkipReplicationWarnings() {
-			return dsqle.ReadReplicaDatabase{}, err
-		}
-		cli.Println(err)
-		return dsqle.ReadReplicaDatabase{Database: db}, nil
-	}
-	return rrd, nil
-}
-
 func execQuery(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
@@ -502,7 +473,7 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv.FileSystem(), format, initialDb, dbs...)
+	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -527,84 +498,30 @@ func execQuery(
 	return nil
 }
 
-func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv) (datas.CommitHook, error) {
-	_, val, ok := sql.SystemVariables.GetGlobal(dsqle.ReplicateToRemoteKey)
-	if !ok {
-		return nil, sql.ErrUnknownSystemVariable.New(dsqle.ReplicateToRemoteKey)
-	} else if val == "" {
-		return nil, nil
-	}
-
-	remoteName, ok := val.(string)
-	if !ok {
-		return nil, sql.ErrInvalidSystemVariableValue.New(val)
-	}
-
-	remotes, err := dEnv.GetRemotes()
-	if err != nil {
-		return nil, err
-	}
-
-	rem, ok := remotes[remoteName]
-	if !ok {
-		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
-	}
-
-	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, val, ok := sql.SystemVariables.GetGlobal(dsqle.AsyncReplicationKey); ok && val == int8(1) {
-		return doltdb.NewAsyncPushOnWriteHook(ctx, ddb, dEnv.TempTableFilesDir()), nil
-	}
-
-	return doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir()), nil
-}
-
-// GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
-// replace misconfigured hooks with doltdb.LogHook instances that prints a warning when trying to execute.
-func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv) ([]datas.CommitHook, error) {
-	postCommitHooks := make([]datas.CommitHook, 0)
-
-	if hook, err := getPushOnWriteHook(ctx, dEnv); err != nil {
-		err = fmt.Errorf("failure loading hook; %w", err)
-		if dsqle.SkipReplicationWarnings() {
-			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
-		} else {
-			return nil, err
-		}
-	} else if hook != nil {
-		postCommitHooks = append(postCommitHooks, hook)
-	}
-
-	return postCommitHooks, nil
-}
-
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
 func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
 	var dbs []dsqle.SqlDatabase
 	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		postCommitHooks, err := GetCommitHooks(ctx, dEnv)
-		if err != nil {
-			return true, err
-		}
-		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
+		//postCommitHooks, err := GetCommitHooks(ctx, dEnv)
+		//if err != nil {
+		//	return true, err
+		//}
+		//dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 
 		db = newDatabase(name, dEnv)
 
-		if _, remote, ok := sql.SystemVariables.GetGlobal(dsqle.ReadReplicaRemoteKey); ok && remote != "" {
-			remoteName, ok := remote.(string)
-			if !ok {
-				return true, sql.ErrInvalidSystemVariableValue.New(remote)
-			}
-			db, err = newReplicaDatabase(ctx, name, remoteName, dEnv)
-			if err != nil {
-				return true, err
-			}
-		}
+		//if _, remote, ok := sql.SystemVariables.GetGlobal(dsqle.ReadReplicaRemoteKey); ok && remote != "" {
+		//	remoteName, ok := remote.(string)
+		//	if !ok {
+		//		return true, sql.ErrInvalidSystemVariableValue.New(remote)
+		//	}
+		//	db, err = newReplicaDatabase(ctx, name, remoteName, dEnv)
+		//	if err != nil {
+		//		return true, err
+		//	}
+		//}
 
 		dbs = append(dbs, db)
 		return false, nil
@@ -1226,7 +1143,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 	}
 
 	currentBatchMode := invalidBatchMode
-	if v, err := ctx.GetSessionVariable(ctx, dsqle.CurrentBatchModeKey); err == nil {
+	if v, err := ctx.GetSessionVariable(ctx, dsess.CurrentBatchModeKey); err == nil {
 		currentBatchMode = batchMode(v.(int64))
 	} else {
 		return err
@@ -1246,7 +1163,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 		}
 	}
 
-	err = ctx.SetSessionVariable(ctx, dsqle.CurrentBatchModeKey, int64(newBatchMode))
+	err = ctx.SetSessionVariable(ctx, dsess.CurrentBatchModeKey, int64(newBatchMode))
 	if err != nil {
 		return err
 	}
@@ -1507,7 +1424,8 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 func newSqlEngine(
 	ctx context.Context,
 	config config.ReadWriteConfig,
-	fs filesys.Filesys,
+	//fs filesys.Filesys,
+	mrEnv *env.MultiRepoEnv,
 	format resultFormat,
 	initialDb string,
 	dbs ...dsqle.SqlDatabase,
@@ -1519,7 +1437,10 @@ func newSqlEngine(
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
-	pro := dsqle.NewDoltDatabaseProvider(config, fs, all...)
+	pro, err := dsqle.NewDoltDatabaseProvider(config, mrEnv, all...)
+	if err != nil {
+		return nil, err
+	}
 
 	engine := sqle.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
 

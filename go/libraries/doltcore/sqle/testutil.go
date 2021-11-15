@@ -109,11 +109,17 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
 func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
-	engine := sqle.NewDefault(NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, db))
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	if err != nil {
+		return nil, nil, err
+	}
+	pro, err := NewDoltDatabaseProvider(dEnv.Config, mrEnv, db)
+	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
+	engine := sqle.NewDefault(pro)
 
 	sqlCtx := NewTestSQLCtx(ctx)
 
-	err := dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
+	err = dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
 	if err != nil {
 		return nil, nil, err
 	}

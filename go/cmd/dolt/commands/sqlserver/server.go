@@ -130,7 +130,10 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 
 	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, all...)
+	pro, err := dsqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv, all...)
+	if err != nil {
+		return err, nil
+	}
 
 	a := analyzer.NewBuilder(pro).WithParallelism(serverConfig.QueryParallelism()).Build()
 	sqlEngine := sqle.New(a, nil)

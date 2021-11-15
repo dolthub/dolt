@@ -100,7 +100,11 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 		tbl:      tbl,
 		editOpts: opts,
 	}
-	pro := NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, tiDb)
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	require.NoError(t, err)
+	pro, err := NewDoltDatabaseProvider(dEnv.Config, mrEnv, tiDb)
+	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
+
 	engine = sqle.NewDefault(pro)
 
 	// Get an updated root to use for the rest of the test

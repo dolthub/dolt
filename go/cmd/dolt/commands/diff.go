@@ -576,7 +576,10 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 		cli.Println(sqlfmt.DropTableStmt(td.FromName))
 	} else if td.IsAdd() {
 		sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
-		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+		sqlCtx, engine, _, err := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 		stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)

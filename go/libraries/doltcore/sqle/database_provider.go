@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -44,7 +43,7 @@ type DoltDatabaseProvider struct {
 	mu        *sync.RWMutex
 
 	dataRootDir string
-	fs          filesys.Filesys
+	mrEnv       *env.MultiRepoEnv
 	cfg         config.ReadableConfig
 
 	dbFactoryUrl string
@@ -58,7 +57,7 @@ var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 const createDbWC = 1105 // 1105 represents an unknown error.
 
 // NewDoltDatabaseProvider returns a provider for the databases given
-func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
+func NewDoltDatabaseProvider(config config.ReadableConfig, mrEnv *env.MultiRepoEnv, databases ...sql.Database) (DoltDatabaseProvider, error) {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
@@ -69,14 +68,19 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, d
 		funcs[strings.ToLower(fn.FunctionName())] = fn
 	}
 
+	dbs, err := applyReplicationConfig(context.Background(), mrEnv, dbs)
+	if err != nil {
+		return DoltDatabaseProvider{}, err
+	}
+
 	return DoltDatabaseProvider{
 		databases:    dbs,
 		functions:    funcs,
 		mu:           &sync.RWMutex{},
-		fs:           fs,
+		mrEnv:        mrEnv,
 		cfg:          config,
 		dbFactoryUrl: doltdb.LocalDirDoltDB,
-	}
+	}, nil
 }
 
 // WithFunctions returns a copy of this provider with the functions given. Any previous functions are removed.
@@ -148,19 +152,19 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	exists, isDir := p.fs.Exists(name)
+	exists, isDir := p.mrEnv.FileSystem().Exists(name)
 	if exists && isDir {
 		return sql.ErrDatabaseExists.New(name)
 	} else if exists {
 		return fmt.Errorf("Cannot create DB, file exists at %s", name)
 	}
 
-	err := p.fs.MkDirs(name)
+	err := p.mrEnv.FileSystem().MkDirs(name)
 	if err != nil {
 		return err
 	}
 
-	newFs, err := p.fs.WithWorkingDir(name)
+	newFs, err := p.mrEnv.FileSystem().WithWorkingDir(name)
 	if err != nil {
 		return err
 	}

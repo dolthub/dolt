@@ -44,6 +44,7 @@ const (
 	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
+	CurrentBatchModeKey           = "batch_mode"
 )
 
 const NonpersistableSessionCode = 1105 // default
@@ -98,6 +99,14 @@ func init() {
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(ForceTransactionCommit),
 			Default:           int8(0),
+		},
+		{
+			Name:              CurrentBatchModeKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemIntType(CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
+			Default:           int64(0),
 		},
 	})
 

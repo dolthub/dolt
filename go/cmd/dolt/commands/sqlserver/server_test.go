@@ -405,7 +405,7 @@ func TestReadReplica(t *testing.T) {
 
 	// start server as read replica
 	sc := CreateServerController()
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15304)
 
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
