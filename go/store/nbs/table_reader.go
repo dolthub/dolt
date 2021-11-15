@@ -41,7 +41,7 @@ import (
 )
 
 // Do not read more than 128MB at a time.
-const maxReadSize = 128 * 1024 * 1024 * 1024
+const maxReadSize = 128 * 1024 * 1024
 
 // CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.
 type CompressedChunk struct {
