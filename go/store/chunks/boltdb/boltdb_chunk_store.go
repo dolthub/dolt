@@ -82,7 +82,8 @@ func (b BoltDBChunkStore) Get(ctx context.Context, h hash.Hash) (c chunks.Chunk,
 		if val == nil {
 			c = chunks.EmptyChunk
 		}
-		c = chunks.NewChunk(val)
+		// |val| is read-only
+		c = chunks.CopyNewChunk(val)
 		return nil
 	})
 	return
@@ -100,7 +101,8 @@ func (b BoltDBChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foun
 			if val == nil {
 				continue
 			}
-			c := chunks.NewChunk(val)
+			// |val| is read-only
+			c := chunks.CopyNewChunk(val)
 			found(ctx, &c)
 		}
 		return nil

@@ -59,6 +59,12 @@ func NewChunk(data []byte) Chunk {
 	return Chunk{r, data}
 }
 
+func CopyNewChunk(data []byte) Chunk {
+	clone := make([]byte, len(data))
+	copy(clone, data)
+	return NewChunk(clone)
+}
+
 // NewChunkWithHash creates a new chunk with a known hash. The hash is not re-calculated or verified. This should obviously only be used in cases where the caller already knows the specified hash is correct.
 func NewChunkWithHash(r hash.Hash, data []byte) Chunk {
 	return Chunk{r, data}
