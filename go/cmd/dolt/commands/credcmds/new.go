@@ -51,7 +51,7 @@ func (cmd NewCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd NewCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, newDocs, ap))
 }
 
@@ -66,14 +66,14 @@ func (cmd NewCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_NEW
 }
 
-func (cmd NewCmd) createArgParser() *argparser.ArgParser {
+func (cmd NewCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	return ap
 }
 
 // Exec executes the command
 func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, newDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 

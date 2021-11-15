@@ -54,7 +54,7 @@ func (cmd VersionCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
 }
 
-func (cmd VersionCmd) createArgParser() *argparser.ArgParser {
+func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(featureVersionFlag, "f", "query the feature version of this repository.")
 	return ap
@@ -66,7 +66,7 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	cli.Println("dolt version", cmd.VersionStr)
 
 	usage := func() {}
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	apr := cli.ParseArgsOrDie(ap, args, usage)
 
 	var verr errhand.VerboseError

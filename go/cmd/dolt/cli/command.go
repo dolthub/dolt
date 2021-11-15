@@ -27,6 +27,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/events"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
@@ -65,6 +66,8 @@ type Command interface {
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
 	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 	CreateMarkdown(writer io.Writer, commandStr string) error
+	// ArgParser returns the arg parser for this command
+	ArgParser() *argparser.ArgParser
 }
 
 // SignalCommand is an extension of Command that allows commands to install their own signal handlers, rather than use
@@ -151,6 +154,10 @@ func (hc SubCommandHandler) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 
+func (hc SubCommandHandler) ArgParser() *argparser.ArgParser {
+	return nil
+}
+
 func (hc SubCommandHandler) Hidden() bool {
 	return hc.hidden
 }
@@ -178,10 +185,11 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 
 	if !isHelp(subCommandStr) {
 		PrintErrln(color.RedString("Unknown Command " + subCommandStr))
+		return 1
 	}
 
 	hc.printUsage(commandStr)
-	return 1
+	return 0
 }
 
 func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
