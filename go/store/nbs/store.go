@@ -864,17 +864,8 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-
-	sig, ok, err := nbs.mm.Stat(ctx)
-	if err != nil {
-		return err
-	}
-	if ok && sig.equals(nbs.upstream.sig) {
-		// short-circuit if the manifest is unchanged
-		return nil
-	}
-
 	exists, contents, err := nbs.mm.Fetch(ctx, nbs.stats)
+
 	if err != nil {
 		return err
 	}

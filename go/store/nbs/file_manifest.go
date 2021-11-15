@@ -209,41 +209,6 @@ func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock addr, newConten
 	return updateWithChecker(ctx, fm.dir, checker, lastLock, newContents, writeHook)
 }
 
-func (fm fileManifest) Stat(ctx context.Context) (sig manifestSignature, err error) {
-	var lock bool
-
-	lock, err = lockFileExists(fm.dir)
-	if err != nil || !lock {
-		// !lock => uninitialized store
-		return
-	}
-
-	// take a file lock
-	lck := newLock(fm.dir)
-	if err = lck.Lock(); err != nil {
-		return
-	}
-	defer func() {
-		unlockErr := lck.Unlock()
-		if err == nil {
-			err = unlockErr
-		}
-	}()
-
-	var info os.FileInfo
-	info, err = os.Stat(filepath.Join(fm.dir, manifestFileName))
-	if err != nil {
-		return
-	}
-
-	sig = manifestSignature{
-		mtime: info.ModTime(),
-		size:  info.Size(),
-	}
-
-	return
-}
-
 // parseV5Manifest parses the v5 manifest from the Reader given. Assumes the first field (the manifest version and
 // following : character) have already been consumed by the reader.
 //
@@ -290,7 +255,7 @@ func parseV5Manifest(r io.Reader) (manifestContents, error) {
 }
 
 // parseManifest parses the manifest bytes in the reader given and returns the contents. Consumes the first few bytes
-func parseManifest(r io.Reader) (mc manifestContents, err error) {
+func parseManifest(r io.Reader) (manifestContents, error) {
 	var version []byte
 	buf := make([]byte, 1)
 
@@ -312,24 +277,12 @@ func parseManifest(r io.Reader) (mc manifestContents, err error) {
 
 	switch string(version) {
 	case storageVersion4:
-		mc, err = parseV4Manifest(r)
+		return parseV4Manifest(r)
 	case StorageVersion:
-		mc, err = parseV5Manifest(r)
+		return parseV5Manifest(r)
 	default:
-		err = fmt.Errorf("Unknown manifest version: %s. You may need to update your client", string(version))
-		return mc, err
+		return manifestContents{}, fmt.Errorf("Unknown manifest version: %s. You may need to update your client", string(version))
 	}
-
-	f, ok := r.(*os.File)
-	if ok {
-		var info os.FileInfo
-		if info, err = f.Stat(); err != nil {
-			return mc, err
-		}
-		mc.sig = manifestSignature{mtime: info.ModTime(), size: info.Size()}
-	}
-
-	return mc, err
 }
 
 func writeManifest(temp io.Writer, contents manifestContents) error {
