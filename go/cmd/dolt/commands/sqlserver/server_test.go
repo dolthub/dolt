@@ -424,6 +424,7 @@ func TestReadReplica(t *testing.T) {
 	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
 
 	t.Run("read replica pulls multiple branches", func(t *testing.T) {
+		t.Skip("TODO")
 		conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
 		defer conn.Close()
 		require.NoError(t, err)
