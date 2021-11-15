@@ -63,11 +63,11 @@ func (cmd TagCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd TagCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
 }
 
-func (cmd TagCmd) createArgParser() *argparser.ArgParser {
+func (cmd TagCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	// todo: docs
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"ref", "A commit ref that the tag should point at."})
@@ -84,7 +84,7 @@ func (cmd TagCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
