@@ -103,6 +103,10 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	return &DoltDB{db}, nil
 }
 
+func (ddb *DoltDB) Close() error {
+	return ddb.db.Close()
+}
+
 // NomsRoot returns the hash of the noms dataset map
 func (ddb *DoltDB) NomsRoot(ctx context.Context) (hash.Hash, error) {
 	return ddb.db.NomsRoot(ctx)

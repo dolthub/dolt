@@ -434,6 +434,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 	if err != nil {
 		return err
 	}
+	// TODO(andy): this would be a better place to close the database
 
 	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, branchName, name, email, t)
 	if err != nil {

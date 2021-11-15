@@ -37,14 +37,27 @@ var (
 	csBucket = []byte("cs")
 )
 
+var db *bolt.DB
+
 func NewBoltDBChunkStore(ctx context.Context, dir string) (cs BoltDBChunkStore, err error) {
-	var db *bolt.DB
-	db, err = bolt.Open(dbFile, 0600, nil)
-	if err != nil {
+	// TODO(andy): this is gross and bad
+	if db == nil {
+		db, err = bolt.Open(dbFile, 0600, nil)
+		if err != nil {
+			return cs, err
+		}
+	}
+
+	if err = maybeInitBoltStore(db); err != nil {
 		return cs, err
 	}
 
-	err = db.Update(func(tx *bolt.Tx) error {
+	cs = BoltDBChunkStore{DB: db}
+	return cs, nil
+}
+
+func maybeInitBoltStore(db *bolt.DB) error {
+	return db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists(csBucket)
 		if err != nil {
 			return err
@@ -56,12 +69,6 @@ func NewBoltDBChunkStore(ctx context.Context, dir string) (cs BoltDBChunkStore, 
 		}
 		return err
 	})
-	if err != nil {
-		return cs, err
-	}
-
-	cs = BoltDBChunkStore{DB: db}
-	return cs, nil
 }
 
 type BoltDBChunkStore struct {
