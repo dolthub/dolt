@@ -8,8 +8,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
@@ -33,20 +31,22 @@ type SqlEngine struct {
 // sqlEngine packages up the context necessary to run sql queries against dsqle.
 func NewSqlEngine(
 	ctx context.Context,
-	config config.ReadWriteConfig,
-	fs filesys.Filesys,
+	mrEnv *env.MultiRepoEnv,
 	format PrintResultFormat,
-	initialDb string,
-	dbs ...dsqle.SqlDatabase,
-) (*SqlEngine, error) {
+	initialDb string) (*SqlEngine, error) {
 	au := new(auth.None)
 
 	parallelism := runtime.GOMAXPROCS(0)
 
+	dbs, err := CollectDBs(ctx, mrEnv)
+	if err != nil {
+		return nil, err
+	}
+
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
-	pro := dsqle.NewDoltDatabaseProvider(config, fs, all...)
+	pro := dsqle.NewDoltDatabaseProvider(mrEnv.Config(), mrEnv.FileSystem(), all...)
 
 	engine := sqle.New(analyzer.NewBuilder(pro).WithParallelism(
 		parallelism).Build(), &sqle.Config{Auth: au})
@@ -71,7 +71,7 @@ func NewSqlEngine(
 		dbStates = append(dbStates, dbState)
 	}
 
-	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, config, dbStates...)
+	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, mrEnv.Config(), dbStates...)
 	if err != nil {
 		return nil, err
 	}
@@ -208,38 +208,4 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 
 		return sqlCtx, nil
 	}
-}
-
-func getDbState(ctx context.Context, db dsqle.Database, mrEnv env.MultiRepoEnv) (dsess.InitialDbState, error) {
-	var dEnv *env.DoltEnv
-	mrEnv.Iter(func(name string, de *env.DoltEnv) (stop bool, err error) {
-		if name == db.Name() {
-			dEnv = de
-			return true, nil
-		}
-		return false, nil
-	})
-
-	if dEnv == nil {
-		return dsess.InitialDbState{}, fmt.Errorf("Couldn't find environment for database %s", db.Name())
-	}
-
-	head := dEnv.RepoStateReader().CWBHeadSpec()
-	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
-
-	return dsess.InitialDbState{
-		Db:         db,
-		HeadCommit: headCommit,
-		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
-		Remotes:    dEnv.RepoState.Remotes,
-	}, nil
 }

@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"net"
 	"strconv"
 	"time"
@@ -31,7 +32,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -113,7 +113,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 	}
 
-	dbs, err := commands.CollectDBs(ctx, mrEnv)
+	dbs, err := cliengine.CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return err, nil
 	}
