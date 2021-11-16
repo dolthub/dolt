@@ -50,10 +50,11 @@ import (
 )
 
 const (
-	Version = "0.32.2"
+	Version = "0.34.2"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
+var dumpZshCommand = &commands.GenZshCompCmd{}
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
 	commands.InitCmd{},
 	commands.StatusCmd{},
@@ -86,7 +87,6 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.BlameCmd{},
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
-	dumpDocsCommand,
 	commands.MigrateCmd{},
 	indexcmds.Commands,
 	commands.ReadTablesCmd{},
@@ -95,10 +95,14 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
 	commands.VersionCmd{VersionStr: Version},
+	commands.DumpCmd{},
+	dumpDocsCommand,
+	dumpZshCommand,
 })
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
+	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
 }
 

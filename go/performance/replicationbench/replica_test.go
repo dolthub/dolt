@@ -28,9 +28,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 type query string
@@ -116,11 +116,11 @@ func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg 
 
 	writerName := multiSetup.DbNames[0]
 
-	localCfg, ok := multiSetup.MrEnv[writerName].Config.GetConfig(env.LocalConfig)
+	localCfg, ok := multiSetup.MrEnv.GetEnv(writerName).Config.GetConfig(env.LocalConfig)
 	if !ok {
 		b.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{doltdb.ReplicateToRemoteKey: "remote1"})
+	localCfg.SetStrings(map[string]string{sqle.ReplicateToRemoteKey: "remote1"})
 
 	yaml := []byte(fmt.Sprintf(`
 log_level: warning
@@ -149,7 +149,7 @@ listener:
 		b.Fatal(err)
 	}
 
-	return multiSetup.MrEnv[writerName], cfg
+	return multiSetup.MrEnv.GetEnv(writerName), cfg
 }
 
 func getProfFile(b *testing.B) *os.File {
@@ -163,7 +163,7 @@ func getProfFile(b *testing.B) *os.File {
 }
 
 func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, cfg srv.ServerConfig, queries []query) {
-	serverController := srv.CreateServerController()
+	serverController := srv.NewServerController()
 
 	eg, ctx := errgroup.WithContext(ctx)
 

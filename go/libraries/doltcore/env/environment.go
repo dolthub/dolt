@@ -25,7 +25,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -39,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -57,37 +55,6 @@ const (
 
 	tempTablesDir = "temptf"
 )
-
-func GetCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
-	postCommitHooks := make([]datas.CommitHook, 0)
-	if _, val, ok := sql.SystemVariables.GetGlobal(doltdb.ReplicateToRemoteKey); ok && val != "" {
-		backupName, ok := val.(string)
-		if !ok {
-			return nil, sql.ErrInvalidSystemVariableValue.New(val)
-		}
-
-		remotes, err := dEnv.GetRemotes()
-		if err != nil {
-			return nil, err
-		}
-		rem, ok := remotes[backupName]
-		if !ok {
-			return nil, ErrRemoteNotFound
-		}
-		ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
-
-		if err != nil {
-			return nil, err
-		}
-		replicateHook := doltdb.NewReplicateHook(ddb, dEnv.TempTableFilesDir())
-		if err != nil {
-			return nil, err
-		}
-		postCommitHooks = append(postCommitHooks, replicateHook)
-	}
-
-	return postCommitHooks, nil
-}
 
 var zeroHashStr = (hash.Hash{}).String()
 
@@ -132,7 +99,7 @@ type DoltEnv struct {
 
 // Load loads the DoltEnv for the current directory of the cli
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string) *DoltEnv {
-	config, cfgErr := loadDoltCliConfig(hdp, fs)
+	config, cfgErr := LoadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
 	docs, docsErr := doltdocs.LoadDocs(fs)
@@ -166,7 +133,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			backups[n] = r
 		}
 		dEnv.RepoState.Backups = backups
-
 	}
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
@@ -215,6 +181,12 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {
 	return GetStringOrDefault(cfg, InitBranchName, DefaultInitBranch)
+}
+
+// Valid returns whether this environment has been properly initialized. This is useful because although every command
+// gets a DoltEnv, not all of them require it, and we allow invalid dolt envs to be passed around for this reason.
+func (dEnv *DoltEnv) Valid() bool {
+	return dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.

@@ -1,4 +1,5 @@
 **/.idea/
+**/.dolt/
 .vscode
 .run
 venv

@@ -56,7 +56,7 @@ func (cmd CheckCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, checkDocs, ap))
 }
 
@@ -71,7 +71,7 @@ func (cmd CheckCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_CHECK
 }
 
-func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
+func (cmd CheckCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString("endpoint", "", "", "API endpoint, otherwise taken from config.")
 	ap.SupportsString("creds", "", "", "Public Key ID or Public Key for credentials, otherwise taken from config.")
@@ -80,7 +80,7 @@ func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

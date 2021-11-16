@@ -68,11 +68,16 @@ func (cmd SendMetricsCmd) CreateMarkdown(wr io.Writer, commandStr string) error 
 	return nil
 }
 
+func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
+	return ap
+}
+
 // Exec is the implementation of the command that flushes the events to the grpc service
 // Exec executes the command
 func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
+	ap := cmd.ArgParser()
 
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

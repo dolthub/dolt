@@ -67,11 +67,11 @@ func (cmd InitCmd) RequiresRepo() bool {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd InitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, initDocs, ap))
 }
 
-func (cmd InitCmd) createArgParser() *argparser.ArgParser {
+func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(usernameParamName, "", "name", fmt.Sprintf("The name used in commits to this repo. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserNameKey))
 	ap.SupportsString(emailParamName, "", "email", fmt.Sprintf("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserEmailKey))
@@ -82,7 +82,7 @@ func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, initDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
@@ -94,6 +94,14 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	name, _ := apr.GetValue(usernameParamName)
 	email, _ := apr.GetValue(emailParamName)
 	initBranch, _ := apr.GetValue(initBranchParamName)
+
+	if len(name) == 0 || len(email) == 0 {
+		// This command creates a commit, so we need user identity
+		if !cli.CheckUserNameAndEmail(dEnv) {
+			return 1
+		}
+	}
+
 	name = dEnv.Config.IfEmptyUseConfig(name, env.UserNameKey)
 	email = dEnv.Config.IfEmptyUseConfig(email, env.UserEmailKey)
 	if initBranch == "" {

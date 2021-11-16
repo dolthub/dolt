@@ -137,6 +137,7 @@ func TestConfigGet(t *testing.T) {
 			CfgSet:     multiCfg,
 			ConfigElem: env.LocalConfig,
 			Key:        "title",
+			Code:       1,
 		},
 		{
 			Name:       "missing param",
