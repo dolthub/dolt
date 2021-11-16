@@ -25,7 +25,7 @@ const (
 	maxHeight = uint8(5)
 	highest   = maxHeight - 1
 
-	nullID = nodeId(0)
+	sentinelId = nodeId(0)
 )
 
 type List struct {
@@ -47,6 +47,7 @@ type skipNode struct {
 
 	height uint8
 	next   skipPointer
+	prev   nodeId
 }
 
 func NewSkipList(cmp ValueCmp) (l *List) {
@@ -58,10 +59,12 @@ func NewSkipList(cmp ValueCmp) (l *List) {
 	}
 
 	// initialize sentinel node
-	l.nodes[nullID] = skipNode{
-		id:  nullID,
+	l.nodes[sentinelId] = skipNode{
+		id:  sentinelId,
 		key: nil, val: nil,
 		height: maxHeight,
+		next:   skipPointer{},
+		prev:   sentinelId,
 	}
 
 	return
@@ -93,52 +96,66 @@ func (l *List) Put(key, val []byte) {
 		panic("key must be non-nil")
 	}
 	if l.Full() {
+		// todo(andy): revisit
 		panic("list has no capacity")
 	}
 
-	next := l.head
-	var prevNd skipNode
-	var breadcrumbs skipPointer
+	var curr, prev skipNode
+	var next, history skipPointer
 
+	next = l.head
 	for h := int(highest); h >= 0; h-- {
-		currNd := l.getNode(next[h])
-		for l.compareKeys(key, currNd.key) > 0 {
-			prevNd = currNd
-			next = currNd.next
-			currNd = l.getNode(next[h])
-		}
-		// prevNd.key < key <= currNd.key
 
-		if l.compareKeys(key, currNd.key) == 0 {
+		// for each skip level, advance until
+		//   prev.key < key <= curr.key
+		curr = l.getNode(next[h])
+		for l.compareKeys(key, curr.key) > 0 {
+			prev = curr
+			next = curr.next
+			curr = l.getNode(next[h])
+		}
+
+		if l.compareKeys(key, curr.key) == 0 {
 			// in-place update
-			currNd.val = val
-			l.updateNode(currNd)
+			curr.val = val
+			l.updateNode(curr)
 			return
 		}
 
 		// save our steps
-		breadcrumbs[h] = prevNd.id
+		history[h] = prev.id
 	}
 
 	insert := l.makeNode(key, val)
-	for h := uint8(0); h <= insert.height; h++ {
-		// update l.head if |insert| is less than |head|
-		head := l.getNode(l.head[h])
-		if l.compare(insert, head) < 0 {
-			l.head[h] = insert.id
-			insert.next[h] = head.id
+	l.splice(insert, history)
+
+	return
+}
+
+func (l *List) splice(nd skipNode, history skipPointer) {
+	for h := uint8(0); h <= nd.height; h++ {
+		// if |node.key| is the smallest key for
+		// level |h| then update |l.head|
+		first := l.getNode(l.head[h])
+		if l.compare(nd, first) < 0 {
+			l.head[h] = nd.id
+			nd.next[h] = first.id
 			continue
 		}
 
-		// otherwise, splice in |insert| at breadcrumbs[h]
-		prev := l.getNode(breadcrumbs[h])
-		insert.next[h] = prev.next[h]
-		prev.next[h] = insert.id
-		l.updateNode(prev)
+		// otherwise, splice in |node| using |history|
+		prevNd := l.getNode(history[h])
+		nd.next[h] = prevNd.next[h]
+		prevNd.next[h] = nd.id
+		l.updateNode(prevNd)
 	}
-	l.updateNode(insert)
 
-	return
+	// set back pointers for level 0
+	nextNd := l.getNode(nd.next[0])
+	nd.prev = nextNd.prev
+	nextNd.prev = nd.id
+	l.updateNode(nextNd)
+	l.updateNode(nd)
 }
 
 type ListIter struct {
@@ -146,22 +163,21 @@ type ListIter struct {
 	list *List
 }
 
-func IterAll(l *List, cb func([]byte, []byte)) {
-	iter := l.Iter()
-	key, val := iter.Next()
-	for key != nil {
-		cb(key, val)
-		key, val = iter.Next()
-	}
-}
-
 func (it *ListIter) Count() int {
 	return it.list.Count()
 }
 
-func (it *ListIter) Next() (key, val []byte) {
-	key, val = it.curr.key, it.curr.val
+func (it *ListIter) Current() (key, val []byte) {
+	return it.curr.key, it.curr.val
+}
+
+func (it *ListIter) Advance() {
 	it.curr = it.list.getNode(it.curr.next[0])
+	return
+}
+
+func (it *ListIter) Retreat() {
+	it.curr = it.list.getNode(it.curr.prev)
 	return
 }
 
@@ -175,6 +191,13 @@ func (l *List) Iter() *ListIter {
 func (l *List) IterAt(key []byte) *ListIter {
 	return &ListIter{
 		curr: l.seek(key),
+		list: l,
+	}
+}
+
+func (l *List) IterAtLast() *ListIter {
+	return &ListIter{
+		curr: l.lastNode(),
 		list: l,
 	}
 }
@@ -194,6 +217,11 @@ func (l *List) seek(key []byte) (node skipNode) {
 
 func (l *List) firstNode() skipNode {
 	return l.getNode(l.head[0])
+}
+
+func (l *List) lastNode() skipNode {
+	s := l.getNode(sentinelId)
+	return l.getNode(s.prev)
 }
 
 func (l *List) getNode(id nodeId) skipNode {
@@ -222,6 +250,8 @@ func (l *List) makeNode(key, val []byte) (n skipNode) {
 		key:    key,
 		val:    val,
 		height: rollHeight(l.src),
+		next:   skipPointer{},
+		prev:   sentinelId,
 	}
 	l.nodes = append(l.nodes, n)
 
