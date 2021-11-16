@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -124,7 +125,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	}
 
-	outputFmt := commands.FormatTabular
+	outputFmt := cliengine.FormatTabular
 
 	formatSr, ok := apr.GetValue(commands.FormatFlag)
 
@@ -138,7 +139,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	sqlCtx := sql.NewContext(ctx)
-	err = commands.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...), false)
+	err = cliengine.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...), false)
 
 	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
