@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var addDocs = cli.CommandDocumentationContent{
@@ -55,6 +56,10 @@ func (cmd AddCmd) Description() string {
 func (cmd AddCmd) CreateMarkdown(writer io.Writer, commandStr string) error {
 	ap := cli.CreateAddArgParser()
 	return CreateMarkdown(writer, cli.GetCommandDocumentation(commandStr, addDocs, ap))
+}
+
+func (cmd AddCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateAddArgParser()
 }
 
 // Exec executes the command

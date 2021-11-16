@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -71,13 +72,16 @@ func (cmd CommitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 }
 
+func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateCommitArgParser()
+}
+
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	// Check if the -all param is provided. Stage all tables if so.
 	allFlag := apr.Contains(cli.AllFlag)
 
 	roots, err := dEnv.Roots(ctx)
@@ -97,6 +101,10 @@ func (cmd CommitCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr st
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
 	} else {
+		// This command creates a commit, so we need user identity
+		if !cli.CheckUserNameAndEmail(dEnv) {
+			return 1
+		}
 		name, email, err = env.GetNameAndEmail(dEnv.Config)
 	}
 

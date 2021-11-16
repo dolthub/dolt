@@ -215,18 +215,22 @@ func RunAsyncReplicationThreads(ctx context.Context, wg *sync.WaitGroup, ch chan
 		defer wg.Done()
 		defer close(ch)
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
-		flush := func(newHeads map[string]PushArg) {
+		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
+		flush := func() {
 			if len(newHeads) == 0 {
 				return
 			}
 			mu.Lock()
+			for k, v := range newHeads {
+				newHeadsCopy[k] = v
+			}
 			mu.Unlock()
-			for id, newCm := range newHeads {
+			for id, newCm := range newHeadsCopy {
 				if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
 					// need background context to drain after sql context is canceled
 					err := pushDataset(context.Background(), destDB.db, newCm.db, tmpDir, newCm.ds)
 					if err != nil {
-						logger.Write([]byte(err.Error()))
+						logger.Write([]byte("replication failed: " + err.Error()))
 					}
 					latestHeads[id] = newCm.hash
 				}
@@ -236,10 +240,10 @@ func RunAsyncReplicationThreads(ctx context.Context, wg *sync.WaitGroup, ch chan
 		for {
 			select {
 			case <-newCtx.Done():
-				flush(newHeads)
+				flush()
 				return newCtx.Err()
 			default:
-				flush(newHeads)
+				flush()
 			}
 		}
 	}()

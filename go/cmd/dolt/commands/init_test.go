@@ -59,26 +59,28 @@ func TestInit(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		dEnv := createUninitializedEnv()
-		gCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-		gCfg.SetStrings(test.GlobalConfig)
+		t.Run(test.Name, func(t *testing.T) {
+			dEnv := createUninitializedEnv()
+			gCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
+			gCfg.SetStrings(test.GlobalConfig)
 
-		var wg sync.WaitGroup
-		result := InitCmd{}.Exec(context.Background(), &wg, "dolt init", test.Args, dEnv)
+			var wg sync.WaitGroup
+			result := InitCmd{}.Exec(context.Background(), &wg, "dolt init", test.Args, dEnv)
 
-		if (result == 0) != test.ExpectSuccess {
-			t.Error(test.Name, "- Expected success:", test.ExpectSuccess, "result:", result == 0)
-		} else if test.ExpectSuccess {
-			// succceeded as expected
-			if !dEnv.HasDoltDir() {
-				t.Error(test.Name, "- .dolt dir should exist after initialization")
+			if (result == 0) != test.ExpectSuccess {
+				t.Error(test.Name, "- Expected success:", test.ExpectSuccess, "result:", result == 0)
+			} else if test.ExpectSuccess {
+				// succceeded as expected
+				if !dEnv.HasDoltDir() {
+					t.Error(test.Name, "- .dolt dir should exist after initialization")
+				}
+			} else {
+				// failed as expected
+				if dEnv.HasDoltDir() {
+					t.Error(test.Name, "- dolt directory shouldn't exist after failure to initialize")
+				}
 			}
-		} else {
-			// failed as expected
-			if dEnv.HasDoltDir() {
-				t.Error(test.Name, "- dolt directory shouldn't exist after failure to initialize")
-			}
-		}
+		})
 	}
 }
 

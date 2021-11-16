@@ -63,7 +63,7 @@ func (cmd MigrateCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 
-func (cmd MigrateCmd) createArgParser() *argparser.ArgParser {
+func (cmd MigrateCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(migratePushFlag, "", "Push all migrated branches to the remote")
 	ap.SupportsFlag(migratePullFlag, "", "Update all remote refs for a migrated remote")
@@ -77,7 +77,7 @@ func (cmd MigrateCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd MigrateCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

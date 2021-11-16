@@ -75,11 +75,11 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ConfigCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 }
 
-func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
+func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")
@@ -93,7 +93,7 @@ func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
 // Exec is used by the config command to allow users to view / edit their global and repository local configurations.
 // Exec executes the command
 func (cmd ConfigCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
@@ -143,32 +143,35 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 		return 1
 	}
 
-	cfgTypesSl := setCfgTypes.AsSlice()
-	for _, cfgType := range cfgTypesSl {
-		if _, ok := dEnv.Config.GetConfig(newCfgElement(cfgType)); !ok {
-			cli.PrintErrln(color.RedString("Unable to read config."))
+	var cfg config.ReadableConfig
+	switch setCfgTypes.Size() {
+	case 0:
+		cfg = dEnv.Config
+	case 1:
+		configElement := newCfgElement(setCfgTypes.AsSlice()[0])
+		var ok bool
+		cfg, ok = dEnv.Config.GetConfig(configElement)
+		if !ok {
+			cli.Println(color.RedString("No config found for %s", configElement.String()))
 			return 1
 		}
+	default:
+		// should be impossible due to earlier checks
+		cli.Println(color.RedString("Cannot get more than one config scope at once"))
+		return 1
 	}
 
-	if setCfgTypes.Size() == 0 {
-		cfgTypesSl = []string{localParamName, globalParamName}
-	}
-
-	for _, cfgType := range cfgTypesSl {
-		cfg, ok := dEnv.Config.GetConfig(newCfgElement(cfgType))
-		if ok {
-			if val, err := cfg.GetString(args[0]); err == nil {
-				printFn(args[0], &val)
-				return 0
-			} else if err != config.ErrConfigParamNotFound {
-				cli.PrintErrln(color.RedString("Unexpected error: %s", err.Error()))
-				return 1
-			}
+	val, err := cfg.GetString(args[0])
+	if err != nil {
+		if err != config.ErrConfigParamNotFound {
+			cli.PrintErrln(color.RedString("Unexpected error: %s", err.Error()))
 		}
+		// Not found prints no error but returns status 1
+		return 1
 	}
 
-	return 1
+	printFn(args[0], &val)
+	return 0
 }
 
 func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {

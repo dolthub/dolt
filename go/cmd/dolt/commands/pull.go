@@ -59,7 +59,7 @@ func (cmd PullCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 }
 
-func (cmd PullCmd) createArgParser() *argparser.ArgParser {
+func (cmd PullCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(cli.SquashParam, "", "Merges changes to the working set without updating the commit history")
 	return ap

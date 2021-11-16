@@ -299,11 +299,11 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 	{
 		name: "index name collisions",
 		setup: []testCommand{
-			{commands.SqlCmd{}, []string{"-q", "create index both on test (c1,c2);"}},
+			{commands.SqlCmd{}, []string{"-q", "create index `both` on test (c1,c2);"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
-			{commands.SqlCmd{}, []string{"-q", "create index both on test (c2, c3);"}},
+			{commands.SqlCmd{}, []string{"-q", "create index `both` on test (c2, c3);"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},

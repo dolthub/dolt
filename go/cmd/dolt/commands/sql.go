@@ -128,11 +128,11 @@ func (cmd SqlCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 }
 
-func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
+func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits")
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json. Defaults to tabular. ")
@@ -164,7 +164,7 @@ func (cmd SqlCmd) RequiresRepo() bool {
 // Unlike other commands, sql doesn't set a new working root directly, as the SQL layer updates the working set as
 // necessary when committing work.
 func (cmd SqlCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -172,6 +172,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr strin
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+
+	// We need a username and password for many SQL commands, so set defaults if they don't exist
+	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
 	mrEnv, verr := getMultiRepoEnv(ctx, apr, dEnv, cmd)
 	if verr != nil {
@@ -330,10 +333,6 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	} else {
-		if !cli.CheckEnvIsValid(dEnv) {
-			return nil, errhand.BuildDError("Invalid working directory").Build()
-		}
-
 		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -1416,7 +1415,6 @@ func newSqlEngine(ctx context.Context, wg *sync.WaitGroup, config config.ReadWri
 		dbStates = append(dbStates, dbState)
 	}
 
-	// TODO: not having user and email for this command should probably be an error or warning, it disables certain functionality
 	sess, err := dsess.NewDoltSession(sql.NewEmptyContext(), sql.NewBaseSession(), pro, config, dbStates...)
 	if err != nil {
 		return nil, err

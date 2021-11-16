@@ -82,7 +82,7 @@ func (cmd ResolveCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ResolveCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
 }
 
@@ -91,7 +91,7 @@ func (cmd ResolveCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CONF_RESOLVE
 }
 
-func (cmd ResolveCmd) createArgParser() *argparser.ArgParser {
+func (cmd ResolveCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed. When in auto-resolve mode, '.' can be used to resolve all tables."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"key", "key(s) of rows within a table whose conflicts have been resolved"})
@@ -103,7 +103,7 @@ func (cmd ResolveCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd ResolveCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

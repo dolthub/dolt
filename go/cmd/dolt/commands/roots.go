@@ -69,7 +69,7 @@ func (cmd RootsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
 }
 
-func (cmd RootsCmd) createArgParser() *argparser.ArgParser {
+func (cmd RootsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsInt(numFilesParam, "n", "number", "Number of table files to scan.")
 	return ap
@@ -77,7 +77,7 @@ func (cmd RootsCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd RootsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

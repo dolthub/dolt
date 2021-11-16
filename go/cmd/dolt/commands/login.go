@@ -66,11 +66,11 @@ func (cmd LoginCmd) RequiresRepo() bool {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LoginCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, loginDocs, ap))
 }
 
-func (cmd LoginCmd) createArgParser() *argparser.ArgParser {
+func (cmd LoginCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds", "A specific credential to use for login."})
 	return ap
@@ -83,7 +83,7 @@ func (cmd LoginCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd LoginCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, loginDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

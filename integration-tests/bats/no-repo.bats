@@ -56,6 +56,16 @@ teardown() {
     [[ "$output" =~ "merge-base - Find the common ancestor of two commits." ]] || false
 }
 
+@test "no-repo: dolt --help exits 0" {
+    run dolt --help
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "Valid commands for dolt are" ]
+
+    # Check help output for supported commands (spotcheck)
+    [[ "$output" =~ "init - Create an empty Dolt data repository." ]] || false
+    [[ "$output" =~ "status - Show the working tree status." ]] || false
+}
+
 @test "no-repo: check all commands for valid help text" {
     # pipe all commands to a file
     # cut -s suppresses the line if it doesn't contain the delim
@@ -142,9 +152,8 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 }
 
 @test "no-repo: dolt sql outside of a dolt repository" {
-    run dolt sql
-    [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
 }
 
 @test "no-repo: dolt checkout outside of a dolt repository" {

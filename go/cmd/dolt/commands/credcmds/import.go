@@ -66,7 +66,7 @@ func (cmd ImportCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ImportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, importDocs, ap))
 }
 
@@ -83,7 +83,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 
 const noProfileFlag = "no-profile"
 
-func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
+func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"jwk_filename", "The JWK file. If omitted, import operates on stdin."})
 	ap.SupportsFlag(noProfileFlag, "", "If provided, no attempt will be made to contact doltremoteapi and update user.name and user.email.")
@@ -92,7 +92,7 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

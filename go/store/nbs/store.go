@@ -865,14 +865,17 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	exists, contents, err := nbs.mm.Fetch(ctx, nbs.stats)
-
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+		if contents.lock == nbs.upstream.lock {
+			// short-circuit if manifest is unchanged
+			return nil
+		}
 
+		newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 		if err != nil {
 			return err
 		}

@@ -98,11 +98,11 @@ func (cmd BackupCmd) RequiresRepo() bool {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BackupCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, backupDocs, ap))
 }
 
-func (cmd BackupCmd) createArgParser() *argparser.ArgParser {
+func (cmd BackupCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"region", "cloud provider region associated with this backup."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
@@ -122,7 +122,7 @@ func (cmd BackupCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd BackupCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, backupDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

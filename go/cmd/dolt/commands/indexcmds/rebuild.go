@@ -51,7 +51,7 @@ func (cmd RebuildCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 
-func (cmd RebuildCmd) createArgParser() *argparser.ArgParser {
+func (cmd RebuildCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table that the given index belongs to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"index", "The name of the index to rebuild."})
@@ -59,7 +59,7 @@ func (cmd RebuildCmd) createArgParser() *argparser.ArgParser {
 }
 
 func (cmd RebuildCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rebuildDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

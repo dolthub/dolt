@@ -68,6 +68,10 @@ func (cmd CheckoutCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
 }
 
+func (cmd CheckoutCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateCheckoutArgParser()
+}
+
 // EventType returns the type of the event to log
 func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CHECKOUT

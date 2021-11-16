@@ -123,11 +123,11 @@ func (cmd SqlServerCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlServerCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.CreateArgParser()
+	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 }
 
-func (cmd SqlServerCmd) CreateArgParser() *argparser.ArgParser {
+func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	serverConfig := DefaultServerConfig()
 
 	ap := argparser.NewArgParser()
@@ -163,7 +163,7 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 
 // Exec executes the command
 func (cmd SqlServerCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	controller := CreateServerController()
+	controller := NewServerController()
 	newCtx, cancelF := context.WithCancel(context.Background())
 	go func() {
 		<-ctx.Done()
@@ -174,8 +174,11 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr
 }
 
 func startServer(ctx context.Context, wg *sync.WaitGroup, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
-	ap := SqlServerCmd{}.CreateArgParser()
+	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
+
+	// We need a username and password for many SQL commands, so set defaults if they don't exist
+	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	serverConfig, err := GetServerConfig(dEnv, apr)

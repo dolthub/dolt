@@ -689,7 +689,6 @@ SQL
 }
 
 @test "sql-server: LOAD DATA LOCAL INFILE works" {
-    skip "LOAD DATA currently relies on setting secure_file_priv sys var which is incorrect"
      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
      cd repo1
@@ -697,7 +696,7 @@ SQL
 
      multi_query repo1 1 "
      CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
-     SET local_infile=1;
+     SET GLOBAL local_infile = 1;
      LOAD DATA LOCAL INFILE '$BATS_TEST_DIRNAME/helper/1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
      "
 

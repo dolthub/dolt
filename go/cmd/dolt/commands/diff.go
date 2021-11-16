@@ -134,11 +134,11 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd DiffCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 }
 
-func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
+func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
@@ -152,7 +152,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd DiffCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

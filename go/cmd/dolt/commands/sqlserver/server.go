@@ -50,7 +50,7 @@ func Serve(ctx context.Context, wg *sync.WaitGroup, version string, serverConfig
 
 	// Code is easier to work through if we assume that serverController is never nil
 	if serverController == nil {
-		serverController = CreateServerController()
+		serverController = NewServerController()
 	}
 
 	var mySQLServer *server.Server
@@ -100,21 +100,10 @@ func Serve(ctx context.Context, wg *sync.WaitGroup, version string, serverConfig
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 
 	if len(dbNamesAndPaths) == 0 {
-		if dEnv.Valid() {
-			// Running in a dolt dir
-			var err error
-			mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
-			if err != nil {
-				return err, nil
-			}
-		} else {
-			// Running outside a dolt dir
-			var err error
-			cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-			mrEnv, err = env.MultiEnvForDirectory(ctx, cfg, dEnv.FS, version)
-			if err != nil {
-				return err, nil
-			}
+		var err error
+		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
+		if err != nil {
+			return err, nil
 		}
 	} else {
 		var err error

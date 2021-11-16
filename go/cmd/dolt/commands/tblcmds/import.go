@@ -325,12 +325,24 @@ func (cmd ImportCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ImportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, importDocs, ap))
 }
 
-func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
-	ap := createArgParser()
+func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{tableParam, "The new or existing table being imported to."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{fileParam, "The file being imported. Supported file types are csv, psv, and nbf."})
+	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
+	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
+	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
+	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
+	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
+	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
+	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
+	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
+	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimeter for a csv style file with a non-comma delimiter.")
 	return ap
 }
 
@@ -341,7 +353,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -392,23 +404,6 @@ func (cmd ImportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr st
 	}
 
 	return commands.HandleVErrAndExitCode(verr, usage)
-}
-
-func createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{tableParam, "The new or existing table being imported to."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{fileParam, "The file being imported. Supported file types are csv, psv, and nbf."})
-	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
-	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
-	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
-	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
-	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
-	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
-	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
-	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
-	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
-	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimeter for a csv style file with a non-comma delimiter.")
-	return ap
 }
 
 var displayStrLen int

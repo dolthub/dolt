@@ -90,11 +90,11 @@ func (cmd BlameCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BlameCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, blameDocs, ap))
 }
 
-func (cmd BlameCmd) createArgParser() *argparser.ArgParser {
+func (cmd BlameCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	return ap
 }
@@ -121,7 +121,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 // When all nodes have blame information, stop iterating through commits and print the blame graph.
 // Exec executes the command
 func (cmd BlameCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, blameDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
