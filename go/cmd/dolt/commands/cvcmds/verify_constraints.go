@@ -16,7 +16,6 @@ package cvcmds
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/set"

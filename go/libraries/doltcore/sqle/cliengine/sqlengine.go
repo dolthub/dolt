@@ -3,6 +3,17 @@ package cliengine
 import (
 	"context"
 	"fmt"
+	"os"
+	"runtime"
+	"strings"
+
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/auth"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -11,15 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
-	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/auth"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"os"
-	"runtime"
-	"strings"
 )
 
 type SqlEngine struct {
@@ -98,7 +100,7 @@ func NewSqlEngine(
 
 func NewRebasedSqlEngine(engine *sqle.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
-		dbs: dbs,
+		dbs:    dbs,
 		engine: engine,
 	}
 }
