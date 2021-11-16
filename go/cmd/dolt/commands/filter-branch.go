@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"io"
 	"runtime"
 	"strings"
@@ -38,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -298,7 +298,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	sqlCtx.SetCurrentDatabase(dbName)
 
-	se := cliengine.NewRebasedSqlEngine(engine,  map[string]dsqle.SqlDatabase{dbName: db})
+	se := cliengine.NewRebasedSqlEngine(engine, map[string]dsqle.SqlDatabase{dbName: db})
 
 	return sqlCtx, se, nil
 }

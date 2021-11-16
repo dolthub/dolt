@@ -16,7 +16,6 @@ package schcmds
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 

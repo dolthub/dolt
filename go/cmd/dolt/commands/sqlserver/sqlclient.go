@@ -18,7 +18,6 @@ import (
 	"context"
 	mysql "database/sql"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"io"
 	"path/filepath"
 	"strings"
@@ -34,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
