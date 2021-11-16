@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -57,7 +58,7 @@ var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 const createDbWC = 1105 // 1105 represents an unknown error.
 
 // NewDoltDatabaseProvider returns a provider for the databases given
-func NewDoltDatabaseProvider(config config.ReadableConfig, mrEnv *env.MultiRepoEnv, databases ...sql.Database) (DoltDatabaseProvider, error) {
+func NewDoltDatabaseProvider(ctx context.Context, wg *sync.WaitGroup, config config.ReadableConfig, mrEnv *env.MultiRepoEnv, logger io.Writer, databases ...sql.Database) (DoltDatabaseProvider, error) {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
@@ -68,7 +69,7 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, mrEnv *env.MultiRepoE
 		funcs[strings.ToLower(fn.FunctionName())] = fn
 	}
 
-	dbs, err := applyReplicationConfig(context.Background(), mrEnv, dbs)
+	dbs, err := applyReplicationConfig(ctx, wg, mrEnv, logger, dbs)
 	if err != nil {
 		return DoltDatabaseProvider{}, err
 	}

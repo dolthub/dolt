@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -81,7 +82,7 @@ func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd InitCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, initDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

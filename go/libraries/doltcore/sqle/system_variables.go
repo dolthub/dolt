@@ -28,6 +28,11 @@ const (
 	AsyncReplicationKey      = "dolt_async_replication"
 )
 
+const (
+	SysVarFalse = int8(0)
+	SysVarTrue  = int8(1)
+)
+
 func init() {
 	AddDoltSystemVariables()
 }
@@ -98,5 +103,5 @@ func SkipReplicationWarnings() bool {
 	if !ok {
 		panic("dolt system variables not loaded")
 	}
-	return skip == int8(1)
+	return skip == SysVarTrue
 }

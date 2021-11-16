@@ -53,7 +53,7 @@ func TestSqlIntegration(t *testing.T) {
 			cmd := commands.SqlCmd{}
 
 			for _, query := range test.setup {
-				code := cmd.Exec(ctx, cmd.Name(), []string{"-q", query}, dEnv)
+				code := cmd.Exec(ctx, wg, cmd.Name(), []string{"-q", query}, dEnv)
 				require.Equal(t, 0, code)
 			}
 

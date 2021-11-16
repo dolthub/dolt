@@ -20,6 +20,7 @@ import (
 	"io"
 	"runtime"
 	"strings"
+	"sync"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
@@ -95,7 +96,7 @@ func (cmd FilterBranchCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd FilterBranchCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -256,7 +257,8 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	if err != nil {
 		return nil, nil, err
 	}
-	pro, err := dsqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv, db)
+	var wg sync.WaitGroup
+	pro, err := dsqle.NewDoltDatabaseProvider(context.Background(), &wg, dEnv.Config, mrEnv, cli.CliOut, db)
 	if err != nil {
 		return nil, nil, err
 	}

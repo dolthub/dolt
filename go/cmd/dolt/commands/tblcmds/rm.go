@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
@@ -67,7 +68,7 @@ func (cmd RmCmd) createArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RmCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblRmDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -90,7 +91,7 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	cli.CliOut = io.Discard // display nothing on success
-	return commands.SqlCmd{}.Exec(ctx, "", []string{
+	return commands.SqlCmd{}.Exec(ctx, wg, "", []string{
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),
 		queryStr,

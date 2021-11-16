@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	pretty "github.com/jedib0t/go-pretty/table"
@@ -119,7 +120,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 //
 // When all nodes have blame information, stop iterating through commits and print the blame graph.
 // Exec executes the command
-func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd BlameCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, blameDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

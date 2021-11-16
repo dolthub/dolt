@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -36,7 +37,8 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Conte
 		sql.WithTracer(tracing.Tracer(ctx)))
 
 	var cfg config.ReadableConfig = nil
-	pro, err := NewDoltDatabaseProvider(cfg, &env.MultiRepoEnv{}, sqlDb)
+	var wg sync.WaitGroup
+	pro, err := NewDoltDatabaseProvider(ctx, &wg, cfg, &env.MultiRepoEnv{}, nil, sqlDb)
 	if err != nil {
 		return nil, nil, nil, err
 	}

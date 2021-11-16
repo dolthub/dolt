@@ -17,6 +17,7 @@ package credcmds
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -75,7 +76,7 @@ func (cmd UseCmd) createArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd UseCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, useDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

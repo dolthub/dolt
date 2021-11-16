@@ -19,6 +19,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,7 +63,7 @@ func (cmd *trackedCommand) RequiresRepo() bool {
 	return false
 }
 
-func (cmd *trackedCommand) Exec(ctx context.Context, cmdStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd *trackedCommand) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	cmd.called = true
 	cmd.cmdStr = cmdStr
 	cmd.args = args
@@ -127,7 +128,7 @@ func runCommand(root Command, commandLine string) int {
 		panic("Invalid test command line")
 	}
 
-	return root.Exec(context.Background(), appName, tokens[1:], nil)
+	return root.Exec(context.Background(), wg, appName, tokens[1:], nil)
 }
 
 func TestHasHelpFlag(t *testing.T) {

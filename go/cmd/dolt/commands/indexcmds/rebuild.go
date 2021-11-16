@@ -17,6 +17,7 @@ package indexcmds
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -57,7 +58,7 @@ func (cmd RebuildCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RebuildCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rebuildDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

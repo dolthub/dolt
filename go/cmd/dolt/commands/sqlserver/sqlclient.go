@@ -21,6 +21,7 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/abiosoft/readline"
@@ -85,7 +86,7 @@ func (cmd SqlClientCmd) Hidden() bool {
 	return false
 }
 
-func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd SqlClientCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
 
@@ -115,7 +116,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 		serverController = CreateServerController()
 		go func() {
-			_, _ = Serve(ctx, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
+			_, _ = Serve(ctx, wg, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
 		}()
 		err = serverController.WaitForStart()
 		if err != nil {

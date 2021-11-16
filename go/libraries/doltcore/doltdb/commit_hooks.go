@@ -104,7 +104,6 @@ type PushArg struct {
 type AsyncPushOnWriteHook struct {
 	out io.Writer
 	ch  chan PushArg
-	mu  *sync.RWMutex
 }
 
 const asyncPushBufferSize = 20
@@ -112,71 +111,26 @@ const asyncPushBufferSize = 20
 var _ datas.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
-func NewAsyncPushOnWriteHook(ctx context.Context, destDB *DoltDB, tmpDir string) *AsyncPushOnWriteHook {
+func NewAsyncPushOnWriteHook(ctx context.Context, wg *sync.WaitGroup, destDB *DoltDB, tmpDir string, logger io.Writer) *AsyncPushOnWriteHook {
 	ch := make(chan PushArg, asyncPushBufferSize)
-
-	mu := &sync.Mutex{}
-
-	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
-	go func() error {
-		defer close(ch)
-		for {
-			p, ok := <-ch
-			if !ok {
-				return ctx.Err()
-			}
-			mu.Lock()
-			newHeads[p.ds.ID()] = p
-			mu.Unlock()
-		}
-	}()
-
-	go func() error {
-		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
-		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-				if len(newHeads) == 0 {
-					continue
-				}
-				mu.Lock()
-				for k, v := range newHeads {
-					newHeadsCopy[k] = v
-				}
-				mu.Unlock()
-				for id, newCm := range newHeadsCopy {
-					if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
-						err := pushDataset(ctx, destDB.db, newCm.db, tmpDir, newCm.ds)
-						if err != nil {
-							// TODO what to do with errors?
-							return err
-						}
-						latestHeads[id] = newCm.hash
-					}
-				}
-			}
-		}
-	}()
-
+	RunAsyncReplicationThreads(ctx, wg, ch, destDB, tmpDir, logger)
 	return &AsyncPushOnWriteHook{ch: ch}
 }
 
 // Execute implements datas.CommitHook, replicates head updates to the destDb field
 func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
 	rf, ok, err := ds.MaybeHeadRef()
-	if !ok {
+	if err != nil {
 		return ErrHashNotFound
 	}
-	if err != nil {
+	if !ok {
 		return ErrHashNotFound
 	}
 
 	select {
 	case ah.ch <- PushArg{ds: ds, db: db, hash: rf.TargetHash()}:
 	case <-ctx.Done():
+		ah.ch <- PushArg{ds: ds, db: db, hash: rf.TargetHash()}
 		return ctx.Err()
 	}
 	return nil
@@ -229,4 +183,65 @@ func (lh *LogHook) HandleError(ctx context.Context, err error) error {
 func (lh *LogHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	lh.out = wr
 	return nil
+}
+
+func RunAsyncReplicationThreads(ctx context.Context, wg *sync.WaitGroup, ch chan PushArg, destDB *DoltDB, tmpDir string, logger io.Writer) {
+	mu := &sync.Mutex{}
+	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
+
+	// let the commits drain first, then push
+	newCtx, stop := context.WithCancel(context.Background())
+	wg.Add(1)
+	go func() error {
+		defer wg.Done()
+		for {
+			select {
+			case p, ok := <-ch:
+				if !ok {
+					return ctx.Err()
+				}
+				mu.Lock()
+				newHeads[p.ds.ID()] = p
+				mu.Unlock()
+			case <-ctx.Done():
+				stop()
+				return ctx.Err()
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() error {
+		defer wg.Done()
+		defer close(ch)
+		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
+		flush := func(newHeads map[string]PushArg) {
+			if len(newHeads) == 0 {
+				return
+			}
+			mu.Lock()
+			mu.Unlock()
+			for id, newCm := range newHeads {
+				if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
+					// need background context to drain after sql context is canceled
+					err := pushDataset(context.Background(), destDB.db, newCm.db, tmpDir, newCm.ds)
+					if err != nil {
+						logger.Write([]byte(err.Error()))
+					}
+					latestHeads[id] = newCm.hash
+				}
+			}
+		}
+
+		for {
+			select {
+			case <-newCtx.Done():
+				flush(newHeads)
+				return newCtx.Err()
+			default:
+				flush(newHeads)
+			}
+		}
+	}()
+
 }

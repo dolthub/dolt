@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/abiosoft/readline"
@@ -162,7 +163,7 @@ func (cmd SqlCmd) RequiresRepo() bool {
 // Exec executes the command
 // Unlike other commands, sql doesn't set a new working root directly, as the SQL layer updates the working set as
 // necessary when committing work.
-func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd SqlCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 
@@ -201,9 +202,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
-		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage)
+		return queryMode(ctx, wg, mrEnv, initialRoots, apr, query, currentDb, format, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, currentDb, format, usage)
+		return savedQueryMode(ctx, wg, mrEnv, initialRoots, savedQueryName, currentDb, format, usage)
 	} else if apr.Contains(listSavedFlag) {
 		return listSavedQueriesMode(ctx, mrEnv, initialRoots, currentDb, format, usage)
 	} else {
@@ -221,17 +222,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if multiStatementMode {
-			verr := execMultiStatements(ctx, continueOnError, mrEnv, os.Stdin, format, currentDb)
+			verr := execMultiStatements(ctx, wg, continueOnError, mrEnv, os.Stdin, format, currentDb)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(ctx, continueOnError, mrEnv, os.Stdin, format, currentDb)
+			verr := execBatch(ctx, wg, continueOnError, mrEnv, os.Stdin, format, currentDb)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execShell(ctx, mrEnv, format, currentDb)
+			verr := execShell(ctx, wg, mrEnv, format, currentDb)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -260,19 +261,12 @@ func listSavedQueriesMode(
 		return 0
 	}
 
+	var wg *sync.WaitGroup
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, currentDb), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, wg, mrEnv, query, format, currentDb), usage)
 }
 
-func savedQueryMode(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
-	initialRoots map[string]*doltdb.RootValue,
-	savedQueryName string,
-	currentDb string,
-	format resultFormat,
-	usage cli.UsagePrinter,
-) int {
+func savedQueryMode(ctx context.Context, wg *sync.WaitGroup, mrEnv *env.MultiRepoEnv, initialRoots map[string]*doltdb.RootValue, savedQueryName string, currentDb string, format resultFormat, usage cli.UsagePrinter) int {
 	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
 
 	if err != nil {
@@ -280,37 +274,28 @@ func savedQueryMode(
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, currentDb), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, wg, mrEnv, sq.Query, format, currentDb), usage)
 }
 
-func queryMode(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
-	initialRoots map[string]*doltdb.RootValue,
-	apr *argparser.ArgParseResults,
-	query string,
-	currentDb string,
-	format resultFormat,
-	usage cli.UsagePrinter,
-) int {
+func queryMode(ctx context.Context, wg *sync.WaitGroup, mrEnv *env.MultiRepoEnv, initialRoots map[string]*doltdb.RootValue, apr *argparser.ArgParseResults, query string, currentDb string, format resultFormat, usage cli.UsagePrinter) int {
 	batchMode := apr.Contains(BatchFlag)
 	multiStatementMode := apr.Contains(disableBatchFlag)
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	if multiStatementMode {
 		batchInput := strings.NewReader(query)
-		verr := execMultiStatements(ctx, continueOnError, mrEnv, batchInput, format, currentDb)
+		verr := execMultiStatements(ctx, wg, continueOnError, mrEnv, batchInput, format, currentDb)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, currentDb)
+		verr := execBatch(ctx, wg, continueOnError, mrEnv, batchInput, format, currentDb)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else {
-		verr := execQuery(ctx, mrEnv, query, format, currentDb)
+		verr := execQuery(ctx, wg, mrEnv, query, format, currentDb)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -358,17 +343,12 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	return mrEnv, nil
 }
 
-func execShell(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
-	format resultFormat,
-	initialDb string,
-) errhand.VerboseError {
+func execShell(ctx context.Context, wg *sync.WaitGroup, mrEnv *env.MultiRepoEnv, format resultFormat, initialDb string) errhand.VerboseError {
 	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
+	se, err := newSqlEngine(ctx, wg, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -380,20 +360,13 @@ func execShell(
 	return nil
 }
 
-func execBatch(
-	ctx context.Context,
-	continueOnErr bool,
-	mrEnv *env.MultiRepoEnv,
-	batchInput io.Reader,
-	format resultFormat,
-	initialDb string,
-) errhand.VerboseError {
+func execBatch(ctx context.Context, wg *sync.WaitGroup, continueOnErr bool, mrEnv *env.MultiRepoEnv, batchInput io.Reader, format resultFormat, initialDb string) errhand.VerboseError {
 	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
+	se, err := newSqlEngine(ctx, wg, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -424,19 +397,12 @@ func execBatch(
 	return nil
 }
 
-func execMultiStatements(
-	ctx context.Context,
-	continueOnErr bool,
-	mrEnv *env.MultiRepoEnv,
-	batchInput io.Reader,
-	format resultFormat,
-	initialDb string,
-) errhand.VerboseError {
+func execMultiStatements(ctx context.Context, wg *sync.WaitGroup, continueOnErr bool, mrEnv *env.MultiRepoEnv, batchInput io.Reader, format resultFormat, initialDb string) errhand.VerboseError {
 	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
+	se, err := newSqlEngine(ctx, wg, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -462,18 +428,12 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, dEnv.DbData(), opts)
 }
 
-func execQuery(
-	ctx context.Context,
-	mrEnv *env.MultiRepoEnv,
-	query string,
-	format resultFormat,
-	initialDb string,
-) errhand.VerboseError {
+func execQuery(ctx context.Context, wg *sync.WaitGroup, mrEnv *env.MultiRepoEnv, query string, format resultFormat, initialDb string) errhand.VerboseError {
 	dbs, err := CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	se, err := newSqlEngine(ctx, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
+	se, err := newSqlEngine(ctx, wg, mrEnv.Config(), mrEnv, format, initialDb, dbs...)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1421,15 +1381,7 @@ type sqlEngine struct {
 var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
-func newSqlEngine(
-	ctx context.Context,
-	config config.ReadWriteConfig,
-	//fs filesys.Filesys,
-	mrEnv *env.MultiRepoEnv,
-	format resultFormat,
-	initialDb string,
-	dbs ...dsqle.SqlDatabase,
-) (*sqlEngine, error) {
+func newSqlEngine(ctx context.Context, wg *sync.WaitGroup, config config.ReadWriteConfig, mrEnv *env.MultiRepoEnv, format resultFormat, initialDb string, dbs ...dsqle.SqlDatabase) (*sqlEngine, error) {
 	au := new(auth.None)
 
 	parallelism := runtime.GOMAXPROCS(0)
@@ -1437,7 +1389,7 @@ func newSqlEngine(
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
-	pro, err := dsqle.NewDoltDatabaseProvider(config, mrEnv, all...)
+	pro, err := dsqle.NewDoltDatabaseProvider(ctx, wg, config, mrEnv, cli.CliOut, all...)
 	if err != nil {
 		return nil, err
 	}

@@ -208,7 +208,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	}
 
 	// setup hook
-	hook := NewAsyncPushOnWriteHook(ctx, destDB, tmpDir)
+	hook := NewAsyncPushOnWriteHook(ctx, destDB, tmpDir, nil)
 
 	t.Run("replicate to remote", func(t *testing.T) {
 		for i := 0; i < 1000; i++ {

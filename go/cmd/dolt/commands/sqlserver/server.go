@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 	"time"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -41,7 +42,7 @@ import (
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func Serve(ctx context.Context, version string, serverConfig ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
+func Serve(ctx context.Context, wg *sync.WaitGroup, version string, serverConfig ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()
@@ -130,7 +131,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 
 	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
-	pro, err := dsqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv, all...)
+	pro, err := dsqle.NewDoltDatabaseProvider(ctx, wg, dEnv.Config, mrEnv, cli.CliOut, all...)
 	if err != nil {
 		return err, nil
 	}

@@ -62,6 +62,6 @@ func TestCommandsRequireInitializedDir(t *testing.T) {
 
 	dEnv := createUninitializedEnv()
 	for _, test := range tests {
-		test.comm.Exec(context.Background(), test.cmdStr, test.args, dEnv)
+		test.comm.Exec(context.Background(), wg, test.cmdStr, test.args, dEnv)
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	"google.golang.org/grpc"
 
@@ -79,7 +80,7 @@ func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CheckCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

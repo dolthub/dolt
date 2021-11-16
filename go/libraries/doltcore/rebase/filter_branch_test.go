@@ -193,7 +193,7 @@ func setupFilterBranchTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	for _, c := range setupCommon {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+		exitCode := c.cmd.Exec(ctx, wg, c.cmd.Name(), c.args, dEnv)
 		require.Equal(t, 0, exitCode)
 	}
 
@@ -205,13 +205,13 @@ func testFilterBranch(t *testing.T, test filterBranchTest) {
 	dEnv := setupFilterBranchTests(t)
 
 	for _, c := range test.setup {
-		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+		exitCode := c.cmd.Exec(ctx, wg, c.cmd.Name(), c.args, dEnv)
 		require.Equal(t, 0, exitCode)
 	}
 
 	for _, a := range test.asserts {
 		for _, c := range a.setup {
-			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+			exitCode := c.cmd.Exec(ctx, wg, c.cmd.Name(), c.args, dEnv)
 			require.Equal(t, 0, exitCode)
 		}
 

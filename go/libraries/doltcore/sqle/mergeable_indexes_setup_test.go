@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -102,7 +103,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	}
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
-	pro, err := NewDoltDatabaseProvider(dEnv.Config, mrEnv, tiDb)
+	pro, err := NewDoltDatabaseProvider(context.Background(), wg, dEnv.Config, mrEnv, cli.CliOut, tiDb)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	engine = sqle.NewDefault(pro)

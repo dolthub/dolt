@@ -117,7 +117,7 @@ func TestKeylessMerge(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, c := range test.setup {
-				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+				exitCode := c.cmd.Exec(ctx, wg, c.cmd.Name(), c.args, dEnv)
 				require.Equal(t, 0, exitCode)
 			}
 
@@ -247,7 +247,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, c := range cc {
-			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+			exitCode := c.cmd.Exec(ctx, wg, c.cmd.Name(), c.args, dEnv)
 			require.Equal(t, 0, exitCode)
 		}
 	}
@@ -292,7 +292,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 
 			resolve := cnfcmds.ResolveCmd{}
 			args := []string{"--ours", tblName}
-			exitCode := resolve.Exec(ctx, resolve.Name(), args, dEnv)
+			exitCode := resolve.Exec(ctx, wg, resolve.Name(), args, dEnv)
 			require.Equal(t, 0, exitCode)
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -308,7 +308,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 
 			resolve := cnfcmds.ResolveCmd{}
 			args := []string{"--theirs", tblName}
-			exitCode := resolve.Exec(ctx, resolve.Name(), args, dEnv)
+			exitCode := resolve.Exec(ctx, wg, resolve.Name(), args, dEnv)
 			require.Equal(t, 0, exitCode)
 
 			root, err := dEnv.WorkingRoot(ctx)

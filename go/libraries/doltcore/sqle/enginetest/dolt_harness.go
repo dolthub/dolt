@@ -18,12 +18,14 @@ import (
 	"context"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -60,7 +62,8 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
-	pro, err := sqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv)
+	var wg sync.WaitGroup
+	pro, err := sqle.NewDoltDatabaseProvider(context.Background(), &wg, dEnv.Config, mrEnv, cli.CliOut)
 	require.NoError(t, err)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
@@ -205,7 +208,8 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), d.env)
 	require.NoError(d.t, err)
-	pro, err := sqle.NewDoltDatabaseProvider(d.env.Config, mrEnv, dbs...)
+	var wg sync.WaitGroup
+	pro, err := sqle.NewDoltDatabaseProvider(context.Background(), &wg, d.env.Config, mrEnv, cli.CliOut, dbs...)
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 

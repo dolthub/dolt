@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 
@@ -135,7 +136,7 @@ func createLogArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LogCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return logWithLoggerFunc(ctx, commandStr, args, dEnv, logToStdOutFunc)
 }
 

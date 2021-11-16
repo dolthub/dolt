@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/fatih/color"
 	"google.golang.org/grpc/codes"
@@ -75,7 +76,7 @@ func (cmd MigrateCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd MigrateCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

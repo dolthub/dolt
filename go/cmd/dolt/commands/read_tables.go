@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 	"path"
+	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -81,7 +82,7 @@ func (cmd ReadTablesCmd) createArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ReadTablesCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))

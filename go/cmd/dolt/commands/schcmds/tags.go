@@ -17,6 +17,7 @@ package schcmds
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -63,7 +64,7 @@ func (cmd TagsCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd TagsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblTagsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

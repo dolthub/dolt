@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 
@@ -339,7 +340,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ImportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -71,7 +72,7 @@ func (cmd CpCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CpCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblCpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -91,7 +92,7 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	queryStr = fmt.Sprintf("%sINSERT INTO `%s` SELECT * FROM `%s`;", queryStr, newTbl, oldTbl)
 
 	cli.CliOut = io.Discard // display nothing on success
-	return commands.SqlCmd{}.Exec(ctx, "", []string{
+	return commands.SqlCmd{}.Exec(ctx, wg, "", []string{
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),
 		queryStr,

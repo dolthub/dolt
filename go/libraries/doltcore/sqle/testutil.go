@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -27,6 +28,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -113,7 +115,8 @@ func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Data
 	if err != nil {
 		return nil, nil, err
 	}
-	pro, err := NewDoltDatabaseProvider(dEnv.Config, mrEnv, db)
+	var wg sync.WaitGroup
+	pro, err := NewDoltDatabaseProvider(context.Background(), &wg, dEnv.Config, mrEnv, cli.CliOut, db)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 	engine := sqle.NewDefault(pro)
 

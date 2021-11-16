@@ -20,6 +20,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
@@ -38,7 +39,7 @@ const (
 	testHomeDir = "/user/tester"
 )
 
-type doltCommandFunc func(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
+type doltCommandFunc func(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int
 
 func removeTempDoltDataDir(fs filesys.Filesys) {
 	cwd, err := os.Getwd()
@@ -125,7 +126,8 @@ func doltExport(b *testing.B, fs filesys.Filesys, rows int, cols []*SeedColumn, 
 	commandFunc, commandStr, args, dEnv := getBenchmarkingTools(fs, rows, cols, workingDir, pathToImportFile, format)
 
 	// import
-	status := commandFunc(context.Background(), commandStr, args, dEnv)
+	var wg sync.WaitGroup
+	status := commandFunc(context.Background(), &wg, commandStr, args, dEnv)
 	if status != 0 {
 		log.Fatalf("failed to import table successfully with exit code %d \n", status)
 	}
@@ -146,7 +148,8 @@ func doltSQLSelect(b *testing.B, fs filesys.Filesys, rows int, cols []*SeedColum
 	commandFunc, commandStr, args, dEnv := getBenchmarkingTools(fs, rows, cols, workingDir, pathToImportFile, format)
 
 	// import
-	status := commandFunc(context.Background(), commandStr, args, dEnv)
+	var wg sync.WaitGroup
+	status := commandFunc(context.Background(), &wg, commandStr, args, dEnv)
 	if status != 0 {
 		log.Fatalf("failed to import table successfully with exit code %d \n", status)
 	}
@@ -160,8 +163,9 @@ func doltSQLSelect(b *testing.B, fs filesys.Filesys, rows int, cols []*SeedColum
 
 func runBenchmark(b *testing.B, commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
 	b.ResetTimer()
+	var wg sync.WaitGroup
 	for i := 0; i < b.N; i++ {
-		status := commandFunc(context.Background(), commandStr, args, dEnv)
+		status := commandFunc(context.Background(), &wg, commandStr, args, dEnv)
 		if status != 0 {
 			log.Fatalf("running benchmark failed with exit code... %d \n", status)
 		}

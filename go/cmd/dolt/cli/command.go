@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/fatih/color"
@@ -62,7 +63,7 @@ type Command interface {
 	// Description returns a description of the command
 	Description() string
 	// Exec executes the command
-	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
+	Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int
 	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 	CreateMarkdown(writer io.Writer, commandStr string) error
 }
@@ -155,7 +156,10 @@ func (hc SubCommandHandler) Hidden() bool {
 	return hc.hidden
 }
 
-func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (hc SubCommandHandler) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	wg.Add(1)
+	defer wg.Done()
+
 	if len(args) < 1 && hc.Unspecified == nil {
 		hc.printUsage(commandStr)
 		return 1
@@ -169,11 +173,11 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	for _, cmd := range hc.Subcommands {
 		lwrName := strings.ToLower(cmd.Name())
 		if lwrName == subCommandStr {
-			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv)
+			return hc.handleCommand(ctx, wg, commandStr+" "+subCommandStr, cmd, args[1:], dEnv)
 		}
 	}
 	if hc.Unspecified != nil {
-		return hc.handleCommand(ctx, commandStr, hc.Unspecified, args, dEnv)
+		return hc.handleCommand(ctx, wg, commandStr, hc.Unspecified, args, dEnv)
 	}
 
 	if !isHelp(subCommandStr) {
@@ -184,7 +188,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	return 1
 }
 
-func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
+func (hc SubCommandHandler) handleCommand(ctx context.Context, wg *sync.WaitGroup, commandStr string, cmd Command, args []string, dEnv *env.DoltEnv) int {
 	cmdRequiresRepo := true
 	if rnrCmd, ok := cmd.(RepoNotRequiredCommand); ok {
 		cmdRequiresRepo = rnrCmd.RequiresRepo()
@@ -211,7 +215,7 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		defer stop()
 	}
 
-	ret := cmd.Exec(ctx, commandStr, args, dEnv)
+	ret := cmd.Exec(ctx, wg, commandStr, args, dEnv)
 
 	if evt != nil {
 		events.GlobalCollector.CloseEventAndAdd(evt)

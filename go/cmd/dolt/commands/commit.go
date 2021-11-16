@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 
@@ -71,7 +72,7 @@ func (cmd CommitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 }
 
 // Exec executes the command
-func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CommitCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -162,7 +163,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	// if the commit was successful, print it out using the log command
-	return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
+	return LogCmd{}.Exec(ctx, wg, "log", []string{"-n=1"}, dEnv)
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {

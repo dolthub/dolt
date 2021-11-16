@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 
@@ -62,7 +63,7 @@ func (cmd VersionCmd) createArgParser() *argparser.ArgParser {
 
 // Version displays the version of the running dolt client
 // Exec executes the command
-func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd VersionCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	cli.Println("dolt version", cmd.VersionStr)
 
 	usage := func() {}

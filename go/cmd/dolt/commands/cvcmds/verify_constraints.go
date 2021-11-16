@@ -17,6 +17,7 @@ package cvcmds
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -68,7 +69,7 @@ func (cmd VerifyConstraintsCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

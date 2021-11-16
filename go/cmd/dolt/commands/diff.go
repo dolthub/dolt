@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	textdiff "github.com/andreyvit/diff"
 	humanize "github.com/dustin/go-humanize"
@@ -150,7 +151,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd DiffCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

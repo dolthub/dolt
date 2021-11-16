@@ -21,6 +21,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 
@@ -161,7 +162,7 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 }
 
 // Exec executes the command
-func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd SqlServerCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	controller := CreateServerController()
 	newCtx, cancelF := context.WithCancel(context.Background())
 	go func() {
@@ -169,10 +170,10 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 		controller.StopServer()
 		cancelF()
 	}()
-	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
+	return startServer(newCtx, wg, cmd.VersionStr, commandStr, args, dEnv, controller)
 }
 
-func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
+func startServer(ctx context.Context, wg *sync.WaitGroup, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	ap := SqlServerCmd{}.CreateArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 
@@ -192,7 +193,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 
 	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-	if startError, closeError := Serve(ctx, versionStr, serverConfig, serverController, dEnv); startError != nil || closeError != nil {
+	if startError, closeError := Serve(ctx, wg, versionStr, serverConfig, serverController, dEnv); startError != nil || closeError != nil {
 		if startError != nil {
 			cli.PrintErrln(startError)
 		}

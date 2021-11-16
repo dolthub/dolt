@@ -34,7 +34,7 @@ type testCommand struct {
 }
 
 func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) {
-	exitCode := tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv)
+	exitCode := tc.cmd.Exec(ctx, wg, tc.cmd.Name(), tc.args, dEnv)
 	require.Equal(t, 0, exitCode)
 }
 
@@ -61,7 +61,7 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, originalMap.Empty())
 
-		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
+		exitCode := commands.SqlCmd{}.Exec(ctx, wg, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
 		require.Equal(t, 0, exitCode)
 
 		table, err = getTable(ctx, dEnv, "test")
@@ -110,7 +110,7 @@ func TestAddPk(t *testing.T) {
 		table, err := getTable(ctx, dEnv, "test")
 		assert.NoError(t, err)
 
-		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (c1)"}, dEnv)
+		exitCode := commands.SqlCmd{}.Exec(ctx, wg, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (c1)"}, dEnv)
 		require.Equal(t, 0, exitCode)
 
 		table, err = getTable(ctx, dEnv, "test")

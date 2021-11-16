@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 
@@ -91,7 +92,7 @@ func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
 
 // Exec is used by the config command to allow users to view / edit their global and repository local configurations.
 // Exec executes the command
-func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ConfigCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

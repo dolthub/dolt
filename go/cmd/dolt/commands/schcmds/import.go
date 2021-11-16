@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 
@@ -161,7 +162,7 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 
 // Exec implements the import schema command that will take a file and infer it's schema, and then create a table matching that schema.
 // Exec executes the command
-func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ImportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schImportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

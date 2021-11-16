@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -61,7 +62,7 @@ func (cmd *DumpDocsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 }
 
 // Exec executes the command
-func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd *DumpDocsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(fileParamName, "", "file", "The file to write CLI docs to")
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
