@@ -81,19 +81,9 @@ func (l *List) Has(key []byte) (ok bool) {
 }
 
 func (l *List) Get(key []byte) (val []byte, ok bool) {
-	ptr := l.head
-	var curr skipNode
-
-	for h := int64(highest); h >= 0; h-- {
-		curr = l.getNode(ptr[h])
-		for l.compareKeys(key, curr.key) > 0 {
-			ptr = curr.next
-			curr = l.getNode(ptr[h])
-		}
-	}
-
-	if l.compareKeys(key, curr.key) == 0 {
-		val, ok = curr.val, true
+	node := l.seek(key)
+	if l.compareKeys(key, node.key) == 0 {
+		val, ok = node.val, true
 	}
 	return
 }
@@ -156,6 +146,15 @@ type ListIter struct {
 	list *List
 }
 
+func IterAll(l *List, cb func([]byte, []byte)) {
+	iter := l.Iter()
+	key, val := iter.Next()
+	for key != nil {
+		cb(key, val)
+		key, val = iter.Next()
+	}
+}
+
 func (it *ListIter) Count() int {
 	return it.list.Count()
 }
@@ -173,13 +172,24 @@ func (l *List) Iter() *ListIter {
 	}
 }
 
-func (l *List) IterAll(cb func([]byte, []byte)) {
-	iter := l.Iter()
-	key, val := iter.Next()
-	for key != nil {
-		cb(key, val)
-		key, val = iter.Next()
+func (l *List) IterAt(key []byte) *ListIter {
+	return &ListIter{
+		curr: l.seek(key),
+		list: l,
 	}
+}
+
+// seek returns the skipNode with the smallest key >= |key|.
+func (l *List) seek(key []byte) (node skipNode) {
+	ptr := l.head
+	for h := int64(highest); h >= 0; h-- {
+		node = l.getNode(ptr[h])
+		for l.compareKeys(key, node.key) > 0 {
+			ptr = node.next
+			node = l.getNode(ptr[h])
+		}
+	}
+	return
 }
 
 func (l *List) firstNode() skipNode {

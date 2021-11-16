@@ -15,10 +15,9 @@
 package skip
 
 import (
-	"fmt"
+	"bytes"
 	"math/rand"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,42 +46,49 @@ func testSkipList(t *testing.T, vals ...[]byte) {
 	rand.Shuffle(len(vals), func(i, j int) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
+	testSkipListPuts(t, vals...)
+	testSkipListGets(t, vals...)
+	testSkipListUpdates(t, vals...)
+	testSkipListIter(t, vals...)
+}
 
-	// test puts
-	list := NewSkipList(strCmp)
+func testSkipListPuts(t *testing.T, vals ...[]byte) {
+	list := NewSkipList(bytes.Compare)
 	for _, v := range vals {
 		list.Put(v, v)
-		//printList(list)
 	}
 	assert.Equal(t, len(vals), list.Count())
+}
 
-	// test gets
+func testSkipListGets(t *testing.T, vals ...[]byte) {
+	list := NewSkipList(bytes.Compare)
+	for _, v := range vals {
+		list.Put(v, v)
+	}
+
+	// get in different order
 	rand.Shuffle(len(vals), func(i, j int) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
+
 	for _, exp := range vals {
 		act, ok := list.Get(exp)
 		assert.True(t, ok)
 		assert.Equal(t, exp, act)
 	}
 
+	// test absent key
 	act, ok := list.Get(b("123"))
 	assert.False(t, ok)
 	assert.Nil(t, act)
+}
 
-	// test iter
-	sort.Slice(vals, func(i, j int) bool {
-		return strCmp(vals[i], vals[j]) == -1
-	})
+func testSkipListUpdates(t *testing.T, vals ...[]byte) {
+	list := NewSkipList(bytes.Compare)
+	for _, v := range vals {
+		list.Put(v, v)
+	}
 
-	i := 0
-	list.IterAll(func(key, val []byte) {
-		assert.Equal(t, key, key)
-		assert.Equal(t, vals[i], key)
-		i++
-	})
-
-	// test in-place updates
 	v2 := []byte("789")
 	for _, v := range vals {
 		list.Put(v, v2)
@@ -99,6 +105,35 @@ func testSkipList(t *testing.T, vals ...[]byte) {
 	}
 }
 
+func testSkipListIter(t *testing.T, vals ...[]byte) {
+	list := NewSkipList(bytes.Compare)
+	for _, v := range vals {
+		list.Put(v, v)
+	}
+
+	// put |vals| back in order
+	sort.Slice(vals, func(i, j int) bool {
+		return bytes.Compare(vals[i], vals[j]) == -1
+	})
+
+	idx := 0
+	IterAll(list, func(key, val []byte) {
+		assert.Equal(t, key, key)
+		assert.Equal(t, vals[idx], key)
+		idx++
+	})
+	assert.Equal(t, len(vals), idx)
+
+	// test iter at
+	for k := 0; k < 10; k++ {
+		idx = rand.Int() % len(vals)
+		key := vals[idx]
+		act := countFrom(key, list)
+		exp := len(vals) - idx
+		assert.Equal(t, exp, act)
+	}
+}
+
 func randomVals(cnt int64) (vals [][]byte) {
 	vals = make([][]byte, cnt)
 	for i := range vals {
@@ -109,33 +144,16 @@ func randomVals(cnt int64) (vals [][]byte) {
 	return
 }
 
-func printList(l *List) {
-	sb := strings.Builder{}
-	sb.WriteString("[ ")
-	seenOne := false
-
-	l.IterAll(func(key, _ []byte) {
-		if seenOne {
-			sb.WriteString(", ")
-		}
-		seenOne = true
-		sb.Write(key)
-	})
-	sb.WriteString(" ]")
-	fmt.Println(sb.String())
-}
-
 func b(s string) []byte {
 	return []byte(s)
 }
 
-func strCmp(left, right []byte) int {
-	l, r := string(left), string(right)
-	if l < r {
-		return -1
+func countFrom(key []byte, l *List) (count int) {
+	iter := l.IterAt(key)
+	k, _ := iter.Next()
+	for k != nil {
+		count++
+		k, _ = iter.Next()
 	}
-	if l > r {
-		return 1
-	}
-	return 0
+	return
 }
