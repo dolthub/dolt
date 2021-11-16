@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
+// SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
 	dbs            map[string]dsqle.SqlDatabase
 	sess           *dsess.DoltSession
@@ -30,7 +31,7 @@ type SqlEngine struct {
 	resultFormat   PrintResultFormat
 }
 
-// sqlEngine packages up the context necessary to run sql queries against dsqle.
+// NewSqlEngine returns a SqlEngine
 func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
@@ -98,6 +99,7 @@ func NewSqlEngine(
 	}, nil
 }
 
+// NewRebasedEngine returns a smalled rebased engine primarily used in filterbranch.
 func NewRebasedSqlEngine(engine *sqle.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
 		dbs:    dbs,
@@ -105,6 +107,7 @@ func NewRebasedSqlEngine(engine *sqle.Engine, dbs map[string]dsqle.SqlDatabase) 
 	}
 }
 
+// IterDBs iterates over the set of databases the engine wraps.
 func (se *SqlEngine) IterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bool, err error)) error {
 	for name, db := range se.dbs {
 		stop, err := cb(name, db)
@@ -121,6 +124,7 @@ func (se *SqlEngine) IterDBs(cb func(name string, db dsqle.SqlDatabase) (stop bo
 	return nil
 }
 
+// GetRoots returns the underlying roots values the engine read/writes to.
 func (se *SqlEngine) GetRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
 	newRoots := make(map[string]*doltdb.RootValue)
 	for name, db := range se.dbs {
@@ -135,19 +139,22 @@ func (se *SqlEngine) GetRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue
 	return newRoots, nil
 }
 
+// NewContext converts a context.Context to a sql.Context.
 func (se *SqlEngine) NewContext(ctx context.Context) (*sql.Context, error) {
 	return se.contextFactory(ctx)
 }
 
+// GetReturnFormat() returns the printing format the engine is associated with.
 func (se *SqlEngine) GetReturnFormat() PrintResultFormat {
 	return se.resultFormat
 }
 
-// Execute a SQL statement and return values for printing.
+// Query execute a SQL statement and return values for printing.
 func (se *SqlEngine) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
 	return se.engine.Query(ctx, query)
 }
 
+// Analyze analyzes a node.
 func (se *SqlEngine) Analyze(ctx *sql.Context, n sql.Node) (sql.Node, error) {
 	return se.engine.Analyzer.Analyze(ctx, n, nil)
 }

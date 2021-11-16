@@ -46,6 +46,7 @@ const (
 	writeBatchSize = 1
 )
 
+// PrettyPrintResults prints the result of a query (schema + row iter).
 func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, hasTopLevelOrderBy bool) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
