@@ -78,11 +78,11 @@ func (cmd DumpCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the help text for the command at the given path
 func (cmd DumpCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 }
 
-func (cmd DumpCmd) createArgParser() *argparser.ArgParser {
+func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Defaults to sql. Valid values are sql, csv and json.")
@@ -99,7 +99,7 @@ func (cmd DumpCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, dumpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

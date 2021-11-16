@@ -74,11 +74,11 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ConfigCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 }
 
-func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
+func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")
@@ -92,7 +92,7 @@ func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
 // Exec is used by the config command to allow users to view / edit their global and repository local configurations.
 // Exec executes the command
 func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
