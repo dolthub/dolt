@@ -40,8 +40,8 @@ type testCommand struct {
 }
 
 func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) {
-	var wg *sync.WaitGroup
-	exitCode := tc.cmd.Exec(ctx, wg, tc.cmd.Name(), tc.args, dEnv)
+	var wg sync.WaitGroup
+	exitCode := tc.cmd.Exec(ctx, &wg, tc.cmd.Name(), tc.args, dEnv)
 	require.Equal(t, 0, exitCode)
 }
 
@@ -473,7 +473,7 @@ func fkCollection(fks ...doltdb.ForeignKey) *doltdb.ForeignKeyCollection {
 func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
-	var wg *sync.WaitGroup
+	var wg sync.WaitGroup
 
 	for _, c := range setupCommon {
 		c.exec(t, ctx, dEnv)
@@ -483,11 +483,11 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, wg, "checkout", []string{env.DefaultInitBranch}, dEnv)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, &wg, "checkout", []string{env.DefaultInitBranch}, dEnv)
 	require.Equal(t, 0, exitCode)
 
 	// merge branches
-	exitCode = commands.MergeCmd{}.Exec(ctx, wg, "merge", []string{"other"}, dEnv)
+	exitCode = commands.MergeCmd{}.Exec(ctx, &wg, "merge", []string{"other"}, dEnv)
 	assert.Equal(t, 0, exitCode)
 
 	wr, err := dEnv.WorkingRoot(ctx)
@@ -517,7 +517,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
-	var wg *sync.WaitGroup
+	var wg sync.WaitGroup
 	for _, c := range setupCommon {
 		c.exec(t, ctx, dEnv)
 	}
@@ -529,12 +529,12 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, wg, "checkout", []string{env.DefaultInitBranch}, dEnv)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, &wg, "checkout", []string{env.DefaultInitBranch}, dEnv)
 	require.Equal(t, 0, exitCode)
 
 	mainSch := getSchema(t, dEnv)
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, wg, "checkout", []string{"other"}, dEnv)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, &wg, "checkout", []string{"other"}, dEnv)
 	require.Equal(t, 0, exitCode)
 
 	otherSch := getSchema(t, dEnv)
@@ -566,7 +566,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
-	var wg *sync.WaitGroup
+	var wg sync.WaitGroup
 	for _, c := range setupForeignKeyTests {
 		c.exec(t, ctx, dEnv)
 	}
@@ -579,13 +579,13 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, wg, "checkout", []string{env.DefaultInitBranch}, dEnv)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, &wg, "checkout", []string{env.DefaultInitBranch}, dEnv)
 	require.Equal(t, 0, exitCode)
 
 	mainRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, wg, "checkout", []string{"other"}, dEnv)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, &wg, "checkout", []string{"other"}, dEnv)
 	require.Equal(t, 0, exitCode)
 
 	otherRoot, err := dEnv.WorkingRoot(ctx)

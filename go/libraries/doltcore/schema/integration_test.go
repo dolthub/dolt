@@ -51,11 +51,11 @@ func TestSqlIntegration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 			cmd := commands.SqlCmd{}
 
 			for _, query := range test.setup {
-				code := cmd.Exec(ctx, wg, cmd.Name(), []string{"-q", query}, dEnv)
+				code := cmd.Exec(ctx, &wg, cmd.Name(), []string{"-q", query}, dEnv)
 				require.Equal(t, 0, code)
 			}
 

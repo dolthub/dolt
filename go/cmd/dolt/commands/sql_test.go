@@ -43,11 +43,11 @@ var tableName = "people"
 func TestSqlConsole(t *testing.T) {
 	t.Run("SQL console opens and exits", func(t *testing.T) {
 		dEnv := dtestutils.CreateEnvWithSeedData(t)
-		var wg *sync.WaitGroup
+		var wg sync.WaitGroup
 		args := []string{}
 		commandStr := "dolt sql"
 
-		result := SqlCmd{}.Exec(context.TODO(), wg, commandStr, args, dEnv)
+		result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
 		assert.Equal(t, 0, result)
 	})
 
@@ -69,12 +69,12 @@ func TestSqlBatchMode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 
 			args := []string{"-b", "-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -107,12 +107,12 @@ func TestSqlSelect(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -132,12 +132,12 @@ func TestSqlShow(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -161,7 +161,7 @@ func TestCreateTable(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 			working, err := dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
 			has, err := working.HasTable(context.Background(), tableName)
@@ -170,7 +170,7 @@ func TestCreateTable(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			working, err = dEnv.WorkingRoot(context.Background())
@@ -205,11 +205,11 @@ func TestShowTables(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -235,11 +235,11 @@ func TestAlterTable(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -261,11 +261,11 @@ func TestDropTable(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -378,12 +378,12 @@ func TestInsert(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(ctx, wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(ctx, &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
@@ -463,12 +463,12 @@ func TestUpdate(t *testing.T) {
 		t.Run(test.query, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(ctx, wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(ctx, &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
@@ -543,12 +543,12 @@ func TestDelete(t *testing.T) {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
 			ctx := context.Background()
-			var wg *sync.WaitGroup
+			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(ctx, wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(ctx, &wg, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {

@@ -62,8 +62,8 @@ func TestCommandsRequireInitializedDir(t *testing.T) {
 	}
 
 	dEnv := createUninitializedEnv()
-	var wg *sync.WaitGroup
+	var wg sync.WaitGroup
 	for _, test := range tests {
-		test.comm.Exec(context.Background(), wg, test.cmdStr, test.args, dEnv)
+		test.comm.Exec(context.Background(), &wg, test.cmdStr, test.args, dEnv)
 	}
 }

@@ -18,8 +18,8 @@ func TestCommitHooksNoErrors(t *testing.T) {
 	AddDoltSystemVariables()
 	sql.SystemVariables.SetGlobal(SkipReplicationErrorsKey, true)
 	sql.SystemVariables.SetGlobal(ReplicateToRemoteKey, "unknown")
-	var wg *sync.WaitGroup
-	hooks, err := GetCommitHooks(context.Background(), wg, dEnv, &buffer.Buffer{})
+	var wg sync.WaitGroup
+	hooks, err := GetCommitHooks(context.Background(), &wg, dEnv, &buffer.Buffer{})
 	assert.NoError(t, err)
 	if len(hooks) < 1 {
 		t.Error("failed to produce noop hook")

@@ -277,11 +277,11 @@ func TestConfigList(t *testing.T) {
 func TestConfig(t *testing.T) {
 	ctx := context.TODO()
 	dEnv := createTestEnv()
-	var wg *sync.WaitGroup
+	var wg sync.WaitGroup
 
 	configCmd := ConfigCmd{}
-	ret := configCmd.Exec(ctx, wg, "dolt config", []string{"-global", "--add", "name", "bheni"}, dEnv)
-	ret += configCmd.Exec(ctx, wg, "dolt config", []string{"-global", "--add", "title", "dufus"}, dEnv)
+	ret := configCmd.Exec(ctx, &wg, "dolt config", []string{"-global", "--add", "name", "bheni"}, dEnv)
+	ret += configCmd.Exec(ctx, &wg, "dolt config", []string{"-global", "--add", "title", "dufus"}, dEnv)
 
 	expectedGlobal := map[string]string{
 		"name":  "bheni",
@@ -294,7 +294,7 @@ func TestConfig(t *testing.T) {
 		t.Error("config -add did not yield expected global results")
 	}
 
-	ret = configCmd.Exec(ctx, wg, "dolt config", []string{"-local", "--add", "title", "senior dufus"}, dEnv)
+	ret = configCmd.Exec(ctx, &wg, "dolt config", []string{"-local", "--add", "title", "senior dufus"}, dEnv)
 
 	expectedLocal := map[string]string{
 		"title": "senior dufus",
@@ -308,7 +308,7 @@ func TestConfig(t *testing.T) {
 		t.Error("Unexpected value of \"title\" retrieved from the config hierarchy")
 	}
 
-	ret = configCmd.Exec(ctx, wg, "dolt config", []string{"-global", "--unset", "name"}, dEnv)
+	ret = configCmd.Exec(ctx, &wg, "dolt config", []string{"-global", "--unset", "name"}, dEnv)
 
 	expectedGlobal = map[string]string{
 		"title": "dufus",
@@ -369,17 +369,17 @@ func TestInvalidConfigArgs(t *testing.T) {
 	ctx := context.TODO()
 	dEnv := createTestEnv()
 	configCmd := ConfigCmd{}
-	var wg *sync.WaitGroup
+	var wg sync.WaitGroup
 
 	// local and global flags passed together is invalid
-	ret := configCmd.Exec(ctx, wg, "dolt config", []string{"--global", "--local", "--add", "name", "bheni"}, dEnv)
+	ret := configCmd.Exec(ctx, &wg, "dolt config", []string{"--global", "--local", "--add", "name", "bheni"}, dEnv)
 
 	if ret == 0 {
 		t.Error("Invalid commands should fail. Command has both local and global")
 	}
 
 	// both -add and -get are used
-	ret = configCmd.Exec(ctx, wg, "dolt config", []string{"-global", "--get", "--add", "title"}, dEnv)
+	ret = configCmd.Exec(ctx, &wg, "dolt config", []string{"-global", "--get", "--add", "title"}, dEnv)
 
 	if ret == 0 {
 		t.Error("Invalid commands should fail. Command is missing local/global")
