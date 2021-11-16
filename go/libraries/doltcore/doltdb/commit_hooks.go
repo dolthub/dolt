@@ -189,7 +189,7 @@ func RunAsyncReplicationThreads(ctx context.Context, wg *sync.WaitGroup, ch chan
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
-	// let the commits drain first, then push
+	// stop first go routine before second
 	newCtx, stop := context.WithCancel(context.Background())
 	wg.Add(1)
 	go func() error {
@@ -217,17 +217,18 @@ func RunAsyncReplicationThreads(ctx context.Context, wg *sync.WaitGroup, ch chan
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
 		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
 		flush := func() {
+			mu.Lock()
 			if len(newHeads) == 0 {
+				mu.Unlock()
 				return
 			}
-			mu.Lock()
 			for k, v := range newHeads {
 				newHeadsCopy[k] = v
 			}
 			mu.Unlock()
 			for id, newCm := range newHeadsCopy {
 				if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
-					// need background context to drain after sql context is canceled
+					// use background context to drain after sql context is canceled
 					err := pushDataset(context.Background(), destDB.db, newCm.db, tmpDir, newCm.ds)
 					if err != nil {
 						logger.Write([]byte("replication failed: " + err.Error()))
