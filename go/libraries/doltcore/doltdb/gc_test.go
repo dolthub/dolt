@@ -16,6 +16,7 @@ package doltdb_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -110,6 +111,7 @@ func TestGarbageCollection(t *testing.T) {
 func testGarbageCollection(t *testing.T, test gcTest) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
+	var wg *sync.WaitGroup
 
 	for _, c := range gcSetupCommon {
 		exitCode := c.cmd.Exec(ctx, wg, c.cmd.Name(), c.args, dEnv)

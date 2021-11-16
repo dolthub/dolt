@@ -16,6 +16,7 @@ package merge_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,6 +109,7 @@ func TestKeylessMerge(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtu.CreateTestEnv()
+			var wg *sync.WaitGroup
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
@@ -245,6 +247,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)
+		var wg *sync.WaitGroup
 
 		for _, c := range cc {
 			exitCode := c.cmd.Exec(ctx, wg, c.cmd.Name(), c.args, dEnv)
@@ -288,6 +291,8 @@ func TestKeylessMergeConflicts(t *testing.T) {
 
 		t.Run(test.name+"_resolved_ours", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
+			var wg *sync.WaitGroup
+
 			setupTest(t, ctx, dEnv, test.setup)
 
 			resolve := cnfcmds.ResolveCmd{}
@@ -304,6 +309,8 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		})
 		t.Run(test.name+"_resolved_theirs", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
+			var wg *sync.WaitGroup
+
 			setupTest(t, ctx, dEnv, test.setup)
 
 			resolve := cnfcmds.ResolveCmd{}

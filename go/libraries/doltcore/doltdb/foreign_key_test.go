@@ -16,6 +16,7 @@ package doltdb_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,6 +45,7 @@ func TestForeignKeyErrors(t *testing.T) {
 
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
+	var wg *sync.WaitGroup
 
 	for _, c := range cmds {
 		exitCode := c.cmd.Exec(ctx, wg, c.cmd.Name(), c.args, dEnv)
@@ -85,6 +87,7 @@ var fkSetupCommon = []testCommand{
 func testForeignKeys(t *testing.T, test foreignKeyTest) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
+	var wg *sync.WaitGroup
 
 	for _, c := range fkSetupCommon {
 		exitCode := c.cmd.Exec(ctx, wg, c.cmd.Name(), c.args, dEnv)

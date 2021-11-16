@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -112,35 +113,31 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 
 func applyReplicationConfig(ctx context.Context, wg *sync.WaitGroup, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs map[string]sql.Database) (map[string]sql.Database, error) {
 	outputDbs := make(map[string]sql.Database, len(dbs))
-	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+	for name, db := range dbs {
+		name = strings.ToLower(name)
+		dEnv := mrEnv.GetEnv(name)
+		if dEnv == nil {
+			outputDbs[name] = db
+			continue
+		}
 		postCommitHooks, err := GetCommitHooks(ctx, wg, dEnv, logger)
 		if err != nil {
-			return true, err
+			return nil, err
 		}
 		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
-
-		db, ok := dbs[name]
-		if !ok {
-			return false, nil
-		}
 
 		if _, remote, ok := sql.SystemVariables.GetGlobal(ReadReplicaRemoteKey); ok && remote != "" {
 			remoteName, ok := remote.(string)
 			if !ok {
-				return true, sql.ErrInvalidSystemVariableValue.New(remote)
+				return nil, sql.ErrInvalidSystemVariableValue.New(remote)
 			}
 			db, err = newReplicaDatabase(ctx, name, remoteName, dEnv)
 			if err != nil {
-				return true, err
+				return nil, err
 			}
 		}
 
 		outputDbs[name] = db
-
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
 	}
 	return outputDbs, nil
 }

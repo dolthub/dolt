@@ -16,6 +16,7 @@ package doltdb_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,7 +59,7 @@ func (cmd fvCommand) exec(ctx context.Context, dEnv *env.DoltEnv) int {
 	// execute the command using |cmd.user|'s Feature Version
 	doltdb.DoltFeatureVersion = cmd.user.vers
 	defer func() { doltdb.DoltFeatureVersion = DoltFeatureVersionCopy }()
-
+	var wg *sync.WaitGroup
 	return cmd.cmd.Exec(ctx, wg, cmd.cmd.Name(), cmd.args, dEnv)
 }
 

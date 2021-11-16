@@ -65,7 +65,7 @@ func (cmd *trackedCommand) RequiresRepo() bool {
 
 func (cmd *trackedCommand) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	cmd.called = true
-	cmd.cmdStr = cmdStr
+	cmd.cmdStr = commandStr
 	cmd.args = args
 	return 0
 }
@@ -128,7 +128,8 @@ func runCommand(root Command, commandLine string) int {
 		panic("Invalid test command line")
 	}
 
-	return root.Exec(context.Background(), wg, appName, tokens[1:], nil)
+	var wg sync.WaitGroup
+	return root.Exec(context.Background(), &wg, appName, tokens[1:], nil)
 }
 
 func TestHasHelpFlag(t *testing.T) {

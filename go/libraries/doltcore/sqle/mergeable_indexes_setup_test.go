@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -103,6 +104,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	}
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
+	var wg *sync.WaitGroup
 	pro, err := NewDoltDatabaseProvider(context.Background(), wg, dEnv.Config, mrEnv, cli.CliOut, tiDb)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 

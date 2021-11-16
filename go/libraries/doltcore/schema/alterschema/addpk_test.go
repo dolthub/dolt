@@ -16,6 +16,7 @@ package alterschema_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,6 +35,7 @@ type testCommand struct {
 }
 
 func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) {
+	var wg *sync.WaitGroup
 	exitCode := tc.cmd.Exec(ctx, wg, tc.cmd.Name(), tc.args, dEnv)
 	require.Equal(t, 0, exitCode)
 }
@@ -48,6 +50,7 @@ func TestAddPk(t *testing.T) {
 	t.Run("Add primary key to table with index", func(t *testing.T) {
 		dEnv := dtestutils.CreateTestEnv()
 		ctx := context.Background()
+		var wg *sync.WaitGroup
 
 		for _, c := range setupAdd {
 			c.exec(t, ctx, dEnv)
@@ -102,6 +105,7 @@ func TestAddPk(t *testing.T) {
 	t.Run("Add primary key with diff column set than before", func(t *testing.T) {
 		dEnv := dtestutils.CreateTestEnv()
 		ctx := context.Background()
+		var wg *sync.WaitGroup
 
 		for _, c := range setupAdd {
 			c.exec(t, ctx, dEnv)

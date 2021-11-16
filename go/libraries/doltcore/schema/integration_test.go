@@ -16,6 +16,7 @@ package schema_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -50,6 +51,7 @@ func TestSqlIntegration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
+			var wg *sync.WaitGroup
 			cmd := commands.SqlCmd{}
 
 			for _, query := range test.setup {

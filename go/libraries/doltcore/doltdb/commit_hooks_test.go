@@ -19,7 +19,11 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/buffer"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -27,8 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
-
-	"github.com/stretchr/testify/assert"
 )
 
 const defaultBranch = "main"
@@ -208,7 +210,8 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	}
 
 	// setup hook
-	hook := NewAsyncPushOnWriteHook(ctx, destDB, tmpDir, nil)
+	var wg sync.WaitGroup
+	hook := NewAsyncPushOnWriteHook(ctx, &wg, destDB, tmpDir, &buffer.Buffer{})
 
 	t.Run("replicate to remote", func(t *testing.T) {
 		for i := 0; i < 1000; i++ {

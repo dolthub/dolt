@@ -79,13 +79,14 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 }
 
 var defaultSkippedQueries = []string{
-	"show variables",           // we set extra variables
-	"show create table fk_tbl", // we create an extra key for the FK that vanilla gms does not
-	"show indexes from",        // we create / expose extra indexes (for foreign keys)
-	"json_arrayagg",            // TODO: aggregation ordering
-	"json_objectagg",           // TODO: aggregation ordering
-	"typestable",               // Bit type isn't working?
-	"dolt_commit_diff_",        // see broken queries in `dolt_system_table_queries.go`
+	"show variables",             // we set extra variables
+	"show create table fk_tbl",   // we create an extra key for the FK that vanilla gms does not
+	"show indexes from",          // we create / expose extra indexes (for foreign keys)
+	"json_arrayagg",              // TODO: aggregation ordering
+	"json_objectagg",             // TODO: aggregation ordering
+	"typestable",                 // Bit type isn't working?
+	"dolt_commit_diff_",          // see broken queries in `dolt_system_table_queries.go`
+	"show global variables like", // we set extra variables
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or

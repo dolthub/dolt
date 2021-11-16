@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -276,6 +277,7 @@ func TestConfigList(t *testing.T) {
 func TestConfig(t *testing.T) {
 	ctx := context.TODO()
 	dEnv := createTestEnv()
+	var wg *sync.WaitGroup
 
 	configCmd := ConfigCmd{}
 	ret := configCmd.Exec(ctx, wg, "dolt config", []string{"-global", "--add", "name", "bheni"}, dEnv)
@@ -367,6 +369,7 @@ func TestInvalidConfigArgs(t *testing.T) {
 	ctx := context.TODO()
 	dEnv := createTestEnv()
 	configCmd := ConfigCmd{}
+	var wg *sync.WaitGroup
 
 	// local and global flags passed together is invalid
 	ret := configCmd.Exec(ctx, wg, "dolt config", []string{"--global", "--local", "--add", "name", "bheni"}, dEnv)
