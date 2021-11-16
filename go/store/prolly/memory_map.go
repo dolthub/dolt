@@ -78,7 +78,7 @@ func (mm memoryMap) Has(_ context.Context, key val.Tuple) (ok bool, err error) {
 
 // IterAll returns a MapIterator that iterates over the entire Map.
 func (mm memoryMap) IterAll(_ context.Context) (MapIter, error) {
-	panic("unimplemented")
+	return memIter{iter: mm.list.Iter()}, nil
 }
 
 // IterValueRange returns a MapIterator that iterates over an ValueRange.
@@ -92,35 +92,39 @@ func (mm memoryMap) IterIndexRange(_ context.Context, rng IndexRange) (MapIter, 
 }
 
 func (mm memoryMap) mutations() mutationIter {
-	return memIter{ListIter: mm.list.Iter()}
+	return memIter{iter: mm.list.Iter()}
 }
 
 type memIter struct {
-	*skip.ListIter
-	idx int
+	iter    *skip.ListIter
+	reverse bool
 }
 
 var _ MapIter = memIter{}
+var _ mutationIter = memIter{}
 
 func (it memIter) Next(context.Context) (key, val val.Tuple, err error) {
-	if it.idx == it.Count() {
-		err = io.EOF
-		return
-	}
 	key, val = it.next()
+	if key == nil {
+		err = io.EOF
+	}
 	return
 }
 
 func (it memIter) next() (key, value val.Tuple) {
-	key, value = it.ListIter.Next()
-	it.idx++
+	key, value = it.iter.Current()
+	if key == nil {
+		return
+	} else if it.reverse {
+		it.iter.Retreat()
+	} else {
+		it.iter.Advance()
+	}
 	return
 }
 
-var _ mutationIter = memIter{}
-
 func (it memIter) count() int {
-	return it.ListIter.Count()
+	return it.iter.Count()
 }
 
 func (it memIter) close() error {

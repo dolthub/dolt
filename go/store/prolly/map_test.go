@@ -58,6 +58,12 @@ func TestMap(t *testing.T) {
 		testOrderedMapGetIndex(t, makeProllyMap, 1000)
 		testOrderedMapGetIndex(t, makeProllyMap, 10_000)
 	})
+	t.Run("iter all from map", func(t *testing.T) {
+		testOrderedMapIterAll(t, makeProllyMap, 10)
+		testOrderedMapIterAll(t, makeProllyMap, 100)
+		testOrderedMapIterAll(t, makeProllyMap, 1000)
+		testOrderedMapIterAll(t, makeProllyMap, 10_000)
+	})
 	//t.Run("get value range from map", func(t *testing.T) {
 	//	testMapIterValueRange(t, 10)
 	//	testMapIterValueRange(t, 100)
@@ -149,6 +155,36 @@ func testOrderedMapGetIndex(t *testing.T, mkr cartographer, count int) {
 		})
 		require.NoError(t, err)
 	}
+}
+
+func testOrderedMapIterAll(t *testing.T, mkr cartographer, count int) {
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	)
+	m, kvPairs := randomTestMap(t, count, kd, vd, mkr)
+
+	ctx := context.Background()
+	iter, err := m.IterAll(ctx)
+	require.NoError(t, err)
+
+	idx := 0
+	for {
+		key, value, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		assert.Equal(t, kvPairs[idx][0], key)
+		assert.Equal(t, kvPairs[idx][1], value)
+		idx++
+	}
+	assert.Equal(t, count/2, idx)
 }
 
 func testMapIterValueRange(t *testing.T, count int, mkr cartographer) {

@@ -24,6 +24,12 @@ func TestMutableMapReads(t *testing.T) {
 	//	testOrderedMapGetIndex(t, makeMutableMap, 1000)
 	//	testOrderedMapGetIndex(t, makeMutableMap, 10_000)
 	//})
+	t.Run("iter all from map", func(t *testing.T) {
+		testOrderedMapIterAll(t, makeProllyMap, 10)
+		testOrderedMapIterAll(t, makeProllyMap, 100)
+		testOrderedMapIterAll(t, makeProllyMap, 1000)
+		testOrderedMapIterAll(t, makeProllyMap, 10_000)
+	})
 	//t.Run("get value range from map", func(t *testing.T) {
 	//	testMapIterValueRange(t, 10)
 	//	testMapIterValueRange(t, 100)
