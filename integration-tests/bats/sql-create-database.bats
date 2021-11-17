@@ -111,6 +111,11 @@ SQL
 
     [ -d "$absdir/mydb1" ]
     [ -d "$absdir/mydb2" ]
+
+    dolt sql --multi-db-dir "$absdir" -q "drop database mydb1"
+
+    [ ! -d "$absdir/mydb1" ]
+    [ -d "$absdir/mydb2" ]
 }
 
 @test "sql-create-database: drop current database" {
