@@ -305,12 +305,9 @@ func runMain() int {
 
 	defer tempfiles.MovableTempFileProvider.Clean()
 
-	if dEnv.DoltDB != nil {
-		err := dsess.InitPersistedSystemVars(dEnv)
-		if err != nil {
-			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
-		}
-		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.OutStream)
+	err = dsess.InitPersistedSystemVars(dEnv)
+	if err != nil {
+		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
 	start := time.Now()
