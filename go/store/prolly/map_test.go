@@ -50,6 +50,9 @@ func TestMap(t *testing.T) {
 			t.Run("iter all from map", func(t *testing.T) {
 				testOrderedMapIterAll(t, prollyMap, tuples)
 			})
+			t.Run("iter value range", func(t *testing.T) {
+				testOrderedMapIterValueRange(t, prollyMap, tuples)
+			})
 		})
 	}
 }
@@ -101,6 +104,19 @@ var _ orderedMap = Map{}
 var _ orderedMap = MutableMap{}
 var _ orderedMap = memoryMap{}
 
+func getKeyDesc(om orderedMap) val.TupleDesc {
+	switch m := om.(type) {
+	case Map:
+		return m.keyDesc
+	case MutableMap:
+		return m.m.keyDesc
+	case memoryMap:
+		return m.keyDesc
+	default:
+		panic("unknown ordered map")
+	}
+}
+
 func testOrderedMapGetAndHas(t *testing.T, m orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	for _, kv := range tuples {
@@ -137,6 +153,104 @@ func testOrderedMapIterAll(t *testing.T, m orderedMap, tuples [][2]val.Tuple) {
 		idx++
 	}
 	assert.Equal(t, len(tuples), idx)
+}
+
+func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+	ctx := context.Background()
+	desc := getKeyDesc(om)
+
+	for i := 0; i < 100; i++ {
+
+		cnt := len(tuples)
+		a, z := testRand.Intn(cnt), testRand.Intn(cnt)
+		if a > z {
+			a, z = z, a
+		}
+		start, stop := tuples[a][0], tuples[z][0]
+
+		tests := []struct {
+			testRange Range
+			expCount  int
+		}{
+			// two-sided ranges
+			{
+				testRange: OpenRange(start, stop, desc),
+				expCount:  nonNegative((z - a) - 1),
+			},
+			{
+				testRange: OpenStartRange(start, stop, desc),
+				expCount:  nonNegative(z - a),
+			},
+			{
+				testRange: OpenStopRange(start, stop, desc),
+				expCount:  nonNegative(z - a),
+			},
+			{
+				testRange: ClosedRange(start, stop, desc),
+				expCount:  nonNegative((z - a) + 1),
+			},
+
+			// put it down flip it and reverse it
+			{
+				testRange: OpenRange(stop, start, desc),
+				expCount:  nonNegative((z - a) - 1),
+			},
+			{
+				testRange: OpenStartRange(stop, start, desc),
+				expCount:  nonNegative(z - a),
+			},
+			{
+				testRange: OpenStopRange(stop, start, desc),
+				expCount:  nonNegative(z - a),
+			},
+			{
+				testRange: ClosedRange(stop, start, desc),
+				expCount:  nonNegative((z - a) + 1),
+			},
+
+			// one-sided ranges
+			{
+				testRange: GreaterRange(start),
+				expCount:  nonNegative(cnt - a - 1),
+			},
+			{
+				testRange: GreaterOrEqualRange(start),
+				expCount:  nonNegative(cnt - a),
+			},
+			{
+				testRange: LesserRange(stop),
+				expCount:  nonNegative(z),
+			},
+			{
+				testRange: LesserOrEqualRange(stop),
+				expCount:  nonNegative(z + 1),
+			},
+		}
+
+		for _, test := range tests {
+			iter, err := om.IterValueRange(ctx, test.testRange)
+			require.NoError(t, err)
+
+			key, _, err := iter.Next(ctx)
+			actCount := 0
+			for err != io.EOF {
+				actCount++
+				prev := key
+				key, _, err = iter.Next(ctx)
+
+				if key != nil {
+					if test.testRange.Reverse {
+						assert.True(t, desc.Compare(prev, key) > 0)
+					} else {
+						assert.True(t, desc.Compare(prev, key) < 0)
+					}
+				}
+			}
+			assert.Equal(t, io.EOF, err)
+			assert.Equal(t, test.expCount, actCount)
+		}
+		//fmt.Printf("count: %d \t a: %d \t z: %d \n", cnt, a, z)
+	}
 }
 
 func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val.Tuple) {
@@ -223,4 +337,11 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 	default:
 		panic("unknown encoding")
 	}
+}
+
+func nonNegative(x int) int {
+	if x < 0 {
+		x = 0
+	}
+	return x
 }

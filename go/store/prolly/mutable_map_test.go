@@ -28,11 +28,11 @@ func TestMutableMapReads(t *testing.T) {
 			t.Run("get item from map", func(t *testing.T) {
 				testOrderedMapGetAndHas(t, mutableMap, tuples)
 			})
-			//t.Run("iter all from map", func(t *testing.T) {
-			//	testOrderedMapIterAll(t, mutableMap, tuples)
-			//})
-			t.Run("get index range from map", func(t *testing.T) {
-				testOrderedMapGetAndHas(t, mutableMap, tuples)
+			t.Run("iter all from map", func(t *testing.T) {
+				//testOrderedMapIterAll(t, mutableMap, tuples)
+			})
+			t.Run("iter value range", func(t *testing.T) {
+				//testOrderedMapIterValueRange(t, mutableMap, tuples)
 			})
 		})
 	}

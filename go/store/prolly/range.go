@@ -36,6 +36,116 @@ type RangeCut struct {
 	Unbound   bool
 }
 
+func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: false,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: false,
+		},
+		Reverse: desc.Compare(start, stop) > 0,
+	}
+}
+
+func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: false,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: true,
+		},
+		Reverse: desc.Compare(start, stop) > 0,
+	}
+}
+
+func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: false,
+		},
+		Reverse: desc.Compare(start, stop) > 0,
+	}
+}
+
+func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: true,
+		},
+		Reverse: desc.Compare(start, stop) > 0,
+	}
+}
+
+func GreaterRange(start val.Tuple) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: false,
+		},
+		Stop: RangeCut{
+			Unbound: true,
+		},
+		Reverse: false,
+	}
+}
+
+func GreaterOrEqualRange(start val.Tuple) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: true,
+		},
+		Stop: RangeCut{
+			Unbound: true,
+		},
+		Reverse: false,
+	}
+}
+
+func LesserRange(stop val.Tuple) Range {
+	return Range{
+		Start: RangeCut{
+			Unbound: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: false,
+		},
+		Reverse: false,
+	}
+}
+
+func LesserOrEqualRange(stop val.Tuple) Range {
+	return Range{
+		Start: RangeCut{
+			Unbound: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: true,
+		},
+		Reverse: false,
+	}
+}
+
+// todo(andy): reverse ranges for GT, GTE, LT, and LTE?
+
 type tupleCursor interface {
 	current() (key, value val.Tuple)
 	advance(ctx context.Context) error
@@ -56,7 +166,7 @@ func iterRange(ctx context.Context, r Range, cur tupleCursor) (key, value val.Tu
 			return nil, nil, io.EOF
 		}
 		if r.Reverse {
-			cmp *= -1
+			cmp = -cmp
 		}
 		if cmp > 0 {
 			return nil, nil, io.EOF
