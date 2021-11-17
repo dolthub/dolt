@@ -82,7 +82,7 @@ func (mm memoryMap) IterAll(_ context.Context) (MapIter, error) {
 }
 
 // IterValueRange returns a MapIterator that iterates over an ValueRange.
-func (mm memoryMap) IterValueRange(_ context.Context, rng ValueRange) (MapIter, error) {
+func (mm memoryMap) IterValueRange(_ context.Context, rng Range) (MapIter, error) {
 	panic("unimplemented")
 }
 

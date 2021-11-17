@@ -37,7 +37,7 @@ type compareFn func(left, right nodeItem) int
 
 type searchFn func(item nodeItem, nd Node) (idx int)
 
-func newCursor(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
+func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.isLeaf() {
 		mv := metaValue(cur.currentPair().value())
@@ -52,9 +52,27 @@ func newCursor(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, er
 	return
 }
 
+func newCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
+	cur = &nodeCursor{nd: nd, nrw: nrw}
+	cur.skipToNodeEnd()
+
+	for !cur.isLeaf() {
+		mv := metaValue(cur.currentPair().value())
+		nd, err = fetchChild(ctx, nrw, mv)
+		if err != nil {
+			return nil, err
+		}
+
+		parent := cur
+		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
+		cur.skipToNodeEnd()
+	}
+	return
+}
+
 // todo(andy): comment doc: may return invalid cursor
-func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
-	cur = nodeCursor{nd: nd, nrw: nrw}
+func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur *nodeCursor, err error) {
+	cur = &nodeCursor{nd: nd, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
 	for !cur.isLeaf() {
@@ -69,12 +87,12 @@ func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem,
 		}
 
 		parent := cur
-		cur = nodeCursor{nd: nd, parent: &parent, nrw: nrw}
+		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
 
 		cur.idx = search(item, cur.nd)
 	}
 
-	return cur, nil
+	return
 }
 
 // todo(andy): comment doc: may return invalid cursor
@@ -320,7 +338,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 			return true, nil
 		}
 		// if not |ok|, then every parent, grandparent, etc.,
-		// failed to retreatInBounds(): we're before the start
+		// failed to retreatInBounds(): we're before the start.
 		// of the prolly tree.
 	}
 

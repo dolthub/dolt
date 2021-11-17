@@ -35,7 +35,7 @@ type orderedMap interface {
 	Has(ctx context.Context, key val.Tuple) (ok bool, err error)
 	Count() uint64
 	IterAll(ctx context.Context) (MapIter, error)
-	IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error)
+	IterValueRange(ctx context.Context, rng Range) (MapIter, error)
 	IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error)
 }
 
@@ -288,7 +288,7 @@ func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val
 			continue
 		}
 		if keyDesc.Compare(items[i][0], items[i-1][0]) == 0 {
-			panic("duplicate key")
+			panic("duplicate Key")
 		}
 	}
 	return

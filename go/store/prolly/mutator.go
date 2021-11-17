@@ -36,7 +36,7 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 
 	newKey, newValue := edits.next()
 
-	cur, err := mapCursorAtKey(ctx, m, newKey)
+	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(newKey), m.searchNode)
 	if err != nil {
 		return m, err
 	}
@@ -103,11 +103,6 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 	}
 
 	return m, nil
-}
-
-func mapCursorAtKey(ctx context.Context, m Map, key val.Tuple) (*nodeCursor, error) {
-	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
-	return &cur, err
 }
 
 func getKeyValuePair(ctx context.Context, cur *nodeCursor) (key, value val.Tuple) {

@@ -83,7 +83,7 @@ func iterTree(ctx context.Context, ns NodeStore, nd Node, cb func(item nodeItem)
 		return nil
 	}
 
-	cur, err := newCursor(ctx, ns, nd)
+	cur, err := newCursorAtStart(ctx, ns, nd)
 	if err != nil {
 		return err
 	}

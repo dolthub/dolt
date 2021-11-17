@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -138,46 +139,64 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 
 // IterAll returns a MapIterator that iterates over the entire Map.
 func (m Map) IterAll(ctx context.Context) (MapIter, error) {
-	return m.IterIndexRange(ctx, IndexRange{low: 0, high: m.Count() - 1})
+	rng := Range{
+		Start:   RangeCut{Unbound: true},
+		Stop:    RangeCut{Unbound: true},
+		Reverse: false,
+	}
+	return m.IterValueRange(ctx, rng)
 }
 
 // IterValueRange returns a MapIterator that iterates over an ValueRange.
-func (m Map) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error) {
-	start := nodeItem(rng.lowKey)
-	if rng.reverse {
-		start = nodeItem(rng.highKey)
-	}
+func (m Map) IterValueRange(ctx context.Context, rng Range) (MapIter, error) {
+	var cur *nodeCursor
+	var err error
 
-	cur, err := newCursorAtItem(ctx, m.ns, m.root, start, m.searchNode)
+	if rng.Start.Unbound {
+		if rng.Reverse {
+			cur, err = m.cursorAtEnd(ctx)
+		} else {
+			cur, err = m.cursorAtStart(ctx)
+		}
+	} else {
+		cur, err = m.cursorAtkey(ctx, rng.Start.Key)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	return &valueIter{rng: rng, cur: cur}, nil
+	iter := mapRangeIter{
+		cur: cur,
+		rng: rng,
+		kd:  m.keyDesc,
+	}
+
+	err = startInsideRange(ctx, rng, iter)
+	if err != nil {
+		return nil, err
+	}
+
+	return iter, nil
 }
 
-// IterIndexRange returns a MapIterator that iterates over an IndexRange.
-func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error) {
-	if rng.low > m.Count() || rng.high > m.Count() {
-		return nil, errors.New("range out of bounds")
-	}
+func (m Map) cursorAtStart(ctx context.Context) (*nodeCursor, error) {
+	return newCursorAtStart(ctx, m.ns, m.root)
+}
 
-	treeIndex := rng.low * 2
-	if rng.reverse {
-		treeIndex = rng.high * 2
-	}
+func (m Map) cursorAtEnd(ctx context.Context) (*nodeCursor, error) {
+	return newCursorAtEnd(ctx, m.ns, m.root)
+}
 
-	cur, err := newCursorAtIndex(ctx, m.ns, m.root, treeIndex)
-	if err != nil {
-		return nil, err
+func (m Map) cursorAtkey(ctx context.Context, key val.Tuple) (*nodeCursor, error) {
+	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
+	if err == nil {
+		cur.keepInBounds()
 	}
-	remaining := rng.high - rng.low + 1
+	return cur, err
 
-	return &indexIter{rng: rng, cur: cur, rem: remaining}, nil
 }
 
 // searchNode is a searchFn for a Map, adapted from search.Sort.
-// todo(andy): update comment with differences from search.Sort
 func (m Map) searchNode(query nodeItem, nd Node) int {
 	n := nd.nodeCount() / stride
 	// Define f(-1) == false and f(n) == true.
@@ -206,4 +225,94 @@ func (m Map) compareItems(left, right nodeItem) int {
 
 func (m Map) compareKeys(left, right val.Tuple) int {
 	return int(m.keyDesc.Compare(left, right))
+}
+
+type mapRangeIter struct {
+	cur *nodeCursor
+	rng Range
+	kd  val.TupleDesc
+}
+
+var _ MapIter = mapRangeIter{}
+var _ tupleCursor = mapRangeIter{}
+
+func (cur mapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
+	return iterRange(ctx, cur.rng, cur)
+}
+
+func (cur mapRangeIter) current() (key, value val.Tuple) {
+	if cur.cur.valid() {
+		pair := cur.cur.currentPair()
+		key, value = val.Tuple(pair.key()), val.Tuple(pair.value())
+	}
+	return
+}
+
+func (cur mapRangeIter) advance(ctx context.Context) (err error) {
+	_, err = cur.cur.advance(ctx)
+	return
+}
+
+func (cur mapRangeIter) retreat(ctx context.Context) (err error) {
+	_, err = cur.cur.retreat(ctx)
+	return
+}
+
+func (cur mapRangeIter) desc() val.TupleDesc {
+	return cur.kd
+}
+
+// todo(andy): deprecated
+
+// IndexRange is an Inclusive range of item indexes
+type IndexRange struct {
+	low, high uint64
+	reverse   bool
+}
+
+type indexIter struct {
+	rng IndexRange
+	cur nodeCursor
+	rem uint64
+}
+
+func (it *indexIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
+	if it.rem == 0 {
+		return nil, nil, io.EOF
+	}
+
+	pair := it.cur.currentPair()
+	key, value = val.Tuple(pair.key()), val.Tuple(pair.value())
+
+	if it.rng.reverse {
+		_, err = it.cur.retreat(ctx)
+	} else {
+		_, err = it.cur.advance(ctx)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	it.rem--
+	return
+}
+
+// IterIndexRange returns a MapIterator that iterates over an IndexRange.
+func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error) {
+	if rng.low > m.Count() || rng.high > m.Count() {
+		return nil, errors.New("range out of bounds")
+	}
+
+	treeIndex := rng.low * 2
+	if rng.reverse {
+		treeIndex = rng.high * 2
+	}
+
+	cur, err := newCursorAtIndex(ctx, m.ns, m.root, treeIndex)
+	if err != nil {
+		return nil, err
+	}
+	remaining := rng.high - rng.low + 1
+
+	return &indexIter{rng: rng, cur: cur, rem: remaining}, nil
 }

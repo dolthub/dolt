@@ -79,7 +79,7 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapIter, error) {
 	panic("unimplemented")
 }
 
-func (mut MutableMap) IterValueRange(ctx context.Context, rng ValueRange) (MapIter, error) {
+func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapIter, error) {
 	panic("unimplemented")
 }
 
