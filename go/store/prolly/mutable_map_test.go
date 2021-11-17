@@ -2,6 +2,7 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -12,106 +13,79 @@ import (
 )
 
 func TestMutableMapReads(t *testing.T) {
-	t.Run("get item from map", func(t *testing.T) {
-		testOrderedMapGetAndHas(t, makeMutableMap, 10)
-		testOrderedMapGetAndHas(t, makeMutableMap, 100)
-		testOrderedMapGetAndHas(t, makeMutableMap, 1000)
-		testOrderedMapGetAndHas(t, makeMutableMap, 10_000)
-	})
-	//t.Run("get from map at index", func(t *testing.T) {
-	//	testOrderedMapGetIndex(t, makeMutableMap, 10)
-	//	testOrderedMapGetIndex(t, makeMutableMap, 100)
-	//	testOrderedMapGetIndex(t, makeMutableMap, 1000)
-	//	testOrderedMapGetIndex(t, makeMutableMap, 10_000)
-	//})
-	t.Run("iter all from map", func(t *testing.T) {
-		testOrderedMapIterAll(t, makeProllyMap, 10)
-		testOrderedMapIterAll(t, makeProllyMap, 100)
-		testOrderedMapIterAll(t, makeProllyMap, 1000)
-		testOrderedMapIterAll(t, makeProllyMap, 10_000)
-	})
-	//t.Run("get value range from map", func(t *testing.T) {
-	//	testMapIterValueRange(t, 10)
-	//	testMapIterValueRange(t, 100)
-	//	testMapIterValueRange(t, 1000)
-	//	testMapIterValueRange(t, 10_000)
-	//})
-	//t.Run("get index range from map", func(t *testing.T) {
-	//	testOrderedMapIterIndexRange(t, makeMutableMap, 10)
-	//	testOrderedMapIterIndexRange(t, makeMutableMap, 100)
-	//	testOrderedMapIterIndexRange(t, makeMutableMap, 1000)
-	//	testOrderedMapIterIndexRange(t, makeMutableMap, 10_000)
-	//})
+	scales := []int{
+		10,
+		100,
+		1000,
+		10_000,
+	}
+
+	for _, s := range scales {
+		name := fmt.Sprintf("test mutable map at scale %d", s)
+		t.Run(name, func(t *testing.T) {
+			mutableMap, tuples := makeMutableMap(t, s)
+
+			t.Run("get item from map", func(t *testing.T) {
+				testOrderedMapGetAndHas(t, mutableMap, tuples)
+			})
+			//t.Run("iter all from map", func(t *testing.T) {
+			//	testOrderedMapIterAll(t, mutableMap, tuples)
+			//})
+			t.Run("get index range from map", func(t *testing.T) {
+				testOrderedMapGetAndHas(t, mutableMap, tuples)
+			})
+		})
+	}
 }
 
-func makeMutableMap(t *testing.T, mutKeyDesc, mutValDesc val.TupleDesc, items [][2]val.Tuple) orderedMap {
-	m := makeProllyMap(t, mutKeyDesc, mutValDesc, items)
-	return m.(Map).Mutate()
+func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+	m, tuples := makeProllyMap(t, count)
+	return m.(Map).Mutate(), tuples
 }
-
-var _ cartographer = makeMutableMap
 
 func TestMutableMapWrites(t *testing.T) {
-	t.Run("point updates", func(t *testing.T) {
-		testPointUpdates(t, 10)
-		testPointUpdates(t, 100)
-		testPointUpdates(t, 1000)
-		testPointUpdates(t, 10_000)
-	})
-	t.Run("point inserts", func(t *testing.T) {
-		testPointInserts(t, 10)
-		testPointInserts(t, 100)
-		testPointInserts(t, 1000)
-		testPointInserts(t, 10_000)
-	})
-	t.Run("point deletes", func(t *testing.T) {
-		testPointDeletes(t, 10)
-		testPointDeletes(t, 100)
-		testPointDeletes(t, 1000)
-		testPointDeletes(t, 10_000)
-	})
-	t.Run("multiple point updates", func(t *testing.T) {
-		testMultiplePointUpdates(t, 5, 10)
-		testMultiplePointUpdates(t, 5, 100)
-		testMultiplePointUpdates(t, 5, 1000)
-		testMultiplePointUpdates(t, 5, 10_000)
-	})
-	t.Run("multiple point inserts", func(t *testing.T) {
-		testMultiplePointInserts(t, 5, 10)
-		testMultiplePointInserts(t, 5, 100)
-		testMultiplePointInserts(t, 5, 1000)
-		testMultiplePointInserts(t, 5, 10_000)
-	})
-	t.Run("multiple point deletes", func(t *testing.T) {
-		testMultiplePointDeletes(t, 5, 10)
-		testMultiplePointDeletes(t, 5, 100)
-		testMultiplePointDeletes(t, 5, 1000)
-		testMultiplePointDeletes(t, 5, 10_000)
-	})
-	t.Run("mixed inserts, updates, and deletes", func(t *testing.T) {
-		testMixedMutations(t, 5, 10)
-		testMixedMutations(t, 5, 100)
-		testMixedMutations(t, 5, 1000)
-		testMixedMutations(t, 5, 10_000)
-	})
-	t.Run("insert outside of existing range", func(t *testing.T) {
-		testInsertsOutsideExistingRange(t, 10)
-		testInsertsOutsideExistingRange(t, 100)
-		testInsertsOutsideExistingRange(t, 1000)
-		testInsertsOutsideExistingRange(t, 10_000)
-	})
-	t.Run("bulk insert", func(t *testing.T) {
-		testBulkInserts(t, 10)
-		testBulkInserts(t, 100)
-		testBulkInserts(t, 1000)
-		testBulkInserts(t, 10_000)
-	})
-	t.Run("deleting all keys", func(t *testing.T) {
-		testMultiplePointDeletes(t, 10, 10)
-		testMultiplePointDeletes(t, 100, 100)
-		testMultiplePointDeletes(t, 1000, 1000)
-		testMultiplePointDeletes(t, 10_000, 10_000)
-	})
+	scales := []int{
+		10,
+		100,
+		1000,
+		10_000,
+	}
+
+	for _, s := range scales {
+		name := fmt.Sprintf("test mutable map at scale %d", s)
+		t.Run(name, func(t *testing.T) {
+			t.Run("point updates", func(t *testing.T) {
+				testPointUpdates(t, s)
+			})
+			t.Run("point inserts", func(t *testing.T) {
+				testPointInserts(t, s)
+			})
+			t.Run("point deletes", func(t *testing.T) {
+				testPointDeletes(t, s)
+			})
+			t.Run("multiple point updates", func(t *testing.T) {
+				testMultiplePointUpdates(t, s/2, s)
+			})
+			t.Run("multiple point inserts", func(t *testing.T) {
+				testMultiplePointInserts(t, s/2, s)
+			})
+			t.Run("multiple point deletes", func(t *testing.T) {
+				testMultiplePointDeletes(t, s/2, s)
+			})
+			t.Run("mixed inserts, updates, and deletes", func(t *testing.T) {
+				testMixedMutations(t, s/2, s)
+			})
+			t.Run("insert outside of existing range", func(t *testing.T) {
+				testInsertsOutsideExistingRange(t, s)
+			})
+			t.Run("bulk insert", func(t *testing.T) {
+				testBulkInserts(t, s)
+			})
+			t.Run("deleting all keys", func(t *testing.T) {
+				testMultiplePointDeletes(t, s, s)
+			})
+		})
+	}
 }
 
 func testPointUpdates(t *testing.T, mapCount int) {
@@ -456,6 +430,38 @@ func testBulkInserts(t *testing.T, size int) {
 	}
 }
 
+func ascendingIntMap(t *testing.T, count int) Map {
+	return ascendingIntMapWithStep(t, count, 1)
+}
+
+func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
+	ctx := context.Background()
+	ns := newTestNodeStore()
+
+	tuples := make([][2]val.Tuple, count)
+	for i := range tuples {
+		v := int64(i * step)
+		tuples[i][0], tuples[i][1] = makePut(v, v)
+	}
+
+	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
+	require.NoError(t, err)
+
+	for _, pair := range tuples {
+		_, err := chunker.Append(ctx, nodeItem(pair[0]), nodeItem(pair[1]))
+		require.NoError(t, err)
+	}
+	root, err := chunker.Done(ctx)
+	require.NoError(t, err)
+
+	return Map{
+		root:    root,
+		keyDesc: mutKeyDesc,
+		valDesc: mutValDesc,
+		ns:      ns,
+	}
+}
+
 var mutKeyDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: false},
 )
@@ -465,20 +471,6 @@ var mutValDesc = val.NewTupleDescriptor(
 
 var mutKeyBuilder = val.NewTupleBuilder(mutKeyDesc)
 var mutValBuilder = val.NewTupleBuilder(mutValDesc)
-
-func ascendingIntMap(t *testing.T, count int) Map {
-	return ascendingIntMapWithStep(t, count, 1)
-}
-
-func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
-	items := make([][2]val.Tuple, count)
-	for i := range items {
-		v := int64(i * step)
-		items[i][0], items[i][1] = makePut(v, v)
-	}
-
-	return makeProllyMap(t, mutKeyDesc, mutValDesc, items).(Map)
-}
 
 func makePut(k, v int64) (key, value val.Tuple) {
 	mutKeyBuilder.PutInt64(0, k)

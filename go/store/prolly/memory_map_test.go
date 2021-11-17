@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,46 +23,52 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func TestMemoryMap(t *testing.T) {
-	t.Run("get item from map", func(t *testing.T) {
-		testOrderedMapGetAndHas(t, makeMemoryMap, 10)
-		testOrderedMapGetAndHas(t, makeMemoryMap, 100)
-		testOrderedMapGetAndHas(t, makeMemoryMap, 1000)
-		testOrderedMapGetAndHas(t, makeMemoryMap, 10_000)
-	})
-	//t.Run("get from map at index", func(t *testing.T) {
-	//	testOrderedMapGetIndex(t, makeMemoryMap, 10)
-	//	testOrderedMapGetIndex(t, makeMemoryMap, 100)
-	//	testOrderedMapGetIndex(t, makeMemoryMap, 1000)
-	//	testOrderedMapGetIndex(t, makeMemoryMap, 10_000)
-	//})
-	t.Run("iter all from map", func(t *testing.T) {
-		testOrderedMapIterAll(t, makeProllyMap, 10)
-		testOrderedMapIterAll(t, makeProllyMap, 100)
-		testOrderedMapIterAll(t, makeProllyMap, 1000)
-		testOrderedMapIterAll(t, makeProllyMap, 10_000)
-	})
-	//t.Run("get value range from map", func(t *testing.T) {
-	//	testMapIterValueRange(t, 10)
-	//	testMapIterValueRange(t, 100)
-	//	testMapIterValueRange(t, 1000)
-	//	testMapIterValueRange(t, 10_000)
-	//})
-	//t.Run("get index range from map", func(t *testing.T) {
-	//	testOrderedMapIterIndexRange(t, makeMemoryMap, 10)
-	//	testOrderedMapIterIndexRange(t, makeMemoryMap, 100)
-	//	testOrderedMapIterIndexRange(t, makeMemoryMap, 1000)
-	//	testOrderedMapIterIndexRange(t, makeMemoryMap, 10_000)
-	//})
+func TestMemMap(t *testing.T) {
+	scales := []int{
+		10,
+		100,
+		1000,
+		10_000,
+	}
+
+	for _, s := range scales {
+		name := fmt.Sprintf("test memory map at scale %d", s)
+		t.Run(name, func(t *testing.T) {
+			memMap, tuples := makeMemMap(t, s)
+
+			t.Run("get item from map", func(t *testing.T) {
+				testOrderedMapGetAndHas(t, memMap, tuples)
+			})
+			t.Run("iter all from map", func(t *testing.T) {
+				testOrderedMapIterAll(t, memMap, tuples)
+			})
+			//t.Run("get value range from map", func(t *testing.T) {
+			//	testOrderedMapGetAndHas(t, memMap, tuples)
+			//})
+			t.Run("get index range from map", func(t *testing.T) {
+				testOrderedMapGetAndHas(t, memMap, tuples)
+			})
+		})
+	}
 }
 
-func makeMemoryMap(t *testing.T, kd, vd val.TupleDesc, items [][2]val.Tuple) orderedMap {
+func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	)
+
+	tuples := randomTuplePairs(count, kd, vd)
+
 	mm := newMemoryMap(kd)
-	for _, item := range items {
-		ok := mm.Put(item[0], item[1])
+	for _, pair := range tuples {
+		ok := mm.Put(pair[0], pair[1])
 		require.True(t, ok)
 	}
-	return mm
-}
 
-var _ cartographer = makeMemoryMap
+	return mm, tuples
+}

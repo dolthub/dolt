@@ -16,93 +16,48 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
 	"sort"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/val"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var testRand = rand.New(rand.NewSource(0))
 
-type orderedMap interface {
-	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
-	Has(ctx context.Context, key val.Tuple) (ok bool, err error)
-	Count() uint64
-	IterAll(ctx context.Context) (MapIter, error)
-	IterValueRange(ctx context.Context, rng Range) (MapIter, error)
-	IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error)
-}
-
-type cartographer func(t *testing.T, kd, vd val.TupleDesc, items [][2]val.Tuple) orderedMap
-
-var _ orderedMap = Map{}
-var _ orderedMap = MutableMap{}
-var _ orderedMap = memoryMap{}
-
 func TestMap(t *testing.T) {
-	t.Run("get item from map", func(t *testing.T) {
-		testOrderedMapGetAndHas(t, makeProllyMap, 10)
-		testOrderedMapGetAndHas(t, makeProllyMap, 100)
-		testOrderedMapGetAndHas(t, makeProllyMap, 1000)
-		testOrderedMapGetAndHas(t, makeProllyMap, 10_000)
-	})
-	t.Run("get from map at index", func(t *testing.T) {
-		testOrderedMapGetIndex(t, makeProllyMap, 10)
-		testOrderedMapGetIndex(t, makeProllyMap, 100)
-		testOrderedMapGetIndex(t, makeProllyMap, 1000)
-		testOrderedMapGetIndex(t, makeProllyMap, 10_000)
-	})
-	t.Run("iter all from map", func(t *testing.T) {
-		testOrderedMapIterAll(t, makeProllyMap, 10)
-		testOrderedMapIterAll(t, makeProllyMap, 100)
-		testOrderedMapIterAll(t, makeProllyMap, 1000)
-		testOrderedMapIterAll(t, makeProllyMap, 10_000)
-	})
-	//t.Run("get value range from map", func(t *testing.T) {
-	//	testMapIterValueRange(t, 10)
-	//	testMapIterValueRange(t, 100)
-	//	testMapIterValueRange(t, 1000)
-	//	testMapIterValueRange(t, 10_000)
-	//})
-	t.Run("get index range from map", func(t *testing.T) {
-		testOrderedMapIterIndexRange(t, makeProllyMap, 10)
-		testOrderedMapIterIndexRange(t, makeProllyMap, 100)
-		testOrderedMapIterIndexRange(t, makeProllyMap, 1000)
-		testOrderedMapIterIndexRange(t, makeProllyMap, 10_000)
-	})
+	scales := []int{
+		10,
+		100,
+		1000,
+		10_000,
+	}
+
+	for _, s := range scales {
+		name := fmt.Sprintf("test prolly map at scale %d", s)
+		t.Run(name, func(t *testing.T) {
+			prollyMap, tuples := makeProllyMap(t, s)
+
+			t.Run("get item from map", func(t *testing.T) {
+				testOrderedMapGetAndHas(t, prollyMap, tuples)
+			})
+			t.Run("iter all from map", func(t *testing.T) {
+				testOrderedMapIterAll(t, prollyMap, tuples)
+			})
+		})
+	}
 }
 
-func makeProllyMap(t *testing.T, kd, vd val.TupleDesc, items [][2]val.Tuple) orderedMap {
+func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	ctx := context.Background()
 	ns := newTestNodeStore()
 
-	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
-	require.NoError(t, err)
-
-	for _, item := range items {
-		_, err := chunker.Append(ctx, nodeItem(item[0]), nodeItem(item[1]))
-		require.NoError(t, err)
-	}
-	root, err := chunker.Done(ctx)
-	require.NoError(t, err)
-
-	return Map{
-		root:    root,
-		keyDesc: kd,
-		valDesc: vd,
-		ns:      ns,
-	}
-}
-
-var _ cartographer = makeProllyMap
-
-func testOrderedMapGetAndHas(t *testing.T, mkr cartographer, count int) {
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Int64Enc, Nullable: false},
 	)
@@ -112,10 +67,43 @@ func testOrderedMapGetAndHas(t *testing.T, mkr cartographer, count int) {
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 	)
 
-	ctx := context.Background()
-	m, kvPairs := randomTestMap(t, count, kd, vd, mkr)
+	tuples := randomTuplePairs(count, kd, vd)
 
-	for _, kv := range kvPairs {
+	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
+	require.NoError(t, err)
+
+	for _, pair := range tuples {
+		_, err := chunker.Append(ctx, nodeItem(pair[0]), nodeItem(pair[1]))
+		require.NoError(t, err)
+	}
+	root, err := chunker.Done(ctx)
+	require.NoError(t, err)
+
+	m := Map{
+		root:    root,
+		keyDesc: kd,
+		valDesc: vd,
+		ns:      ns,
+	}
+
+	return m, tuples
+}
+
+type orderedMap interface {
+	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
+	Has(ctx context.Context, key val.Tuple) (ok bool, err error)
+	Count() uint64
+	IterAll(ctx context.Context) (MapIter, error)
+	IterValueRange(ctx context.Context, rng Range) (MapIter, error)
+}
+
+var _ orderedMap = Map{}
+var _ orderedMap = MutableMap{}
+var _ orderedMap = memoryMap{}
+
+func testOrderedMapGetAndHas(t *testing.T, m orderedMap, tuples [][2]val.Tuple) {
+	ctx := context.Background()
+	for _, kv := range tuples {
 		// Has()
 		ok, err := m.Has(ctx, kv[0])
 		assert.True(t, ok)
@@ -132,43 +120,7 @@ func testOrderedMapGetAndHas(t *testing.T, mkr cartographer, count int) {
 	}
 }
 
-func testOrderedMapGetIndex(t *testing.T, mkr cartographer, count int) {
-	kd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: false},
-	)
-	vd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-	)
-
-	ctx := context.Background()
-	m, kvPairs := randomTestMap(t, count, kd, vd, mkr)
-	pm := m.(Map)
-
-	for idx, kv := range kvPairs {
-		err := pm.GetIndex(ctx, uint64(idx), func(key, val val.Tuple) (err error) {
-			assert.NotNil(t, kv[0])
-			assert.Equal(t, kv[0], key)
-			assert.Equal(t, kv[1], val)
-			return
-		})
-		require.NoError(t, err)
-	}
-}
-
-func testOrderedMapIterAll(t *testing.T, mkr cartographer, count int) {
-	kd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: false},
-	)
-	vd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-	)
-	m, kvPairs := randomTestMap(t, count, kd, vd, mkr)
-
+func testOrderedMapIterAll(t *testing.T, m orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	iter, err := m.IterAll(ctx)
 	require.NoError(t, err)
@@ -180,93 +132,11 @@ func testOrderedMapIterAll(t *testing.T, mkr cartographer, count int) {
 			break
 		}
 		require.NoError(t, err)
-		assert.Equal(t, kvPairs[idx][0], key)
-		assert.Equal(t, kvPairs[idx][1], value)
+		assert.Equal(t, tuples[idx][0], key)
+		assert.Equal(t, tuples[idx][1], value)
 		idx++
 	}
-	assert.Equal(t, count/2, idx)
-}
-
-func testMapIterValueRange(t *testing.T, count int, mkr cartographer) {
-	assert.Equal(t, count, count)
-}
-
-func testOrderedMapIterIndexRange(t *testing.T, mkr cartographer, count int) {
-	kd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: false},
-	)
-	vd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-	)
-
-	m, kvPairs := randomTestMap(t, count, kd, vd, mkr)
-	ranges := indexRanges(m)
-
-	ctx := context.Background()
-	for _, rng := range ranges {
-		rng.reverse = false
-		idx := rng.low
-		iter, err := m.IterIndexRange(ctx, rng)
-		require.NoError(t, err)
-		for {
-			key, value, err := iter.Next(ctx)
-			if err == io.EOF {
-				break
-			}
-			require.NoError(t, err)
-			assert.Equal(t, kvPairs[idx][0], key)
-			assert.Equal(t, kvPairs[idx][1], value)
-			idx++
-		}
-	}
-
-	for _, rng := range ranges {
-		rng.reverse = true
-		idx := rng.high
-		iter, err := m.IterIndexRange(ctx, rng)
-		require.NoError(t, err)
-		for {
-			key, value, err := iter.Next(ctx)
-			if err == io.EOF {
-				break
-			}
-			require.NoError(t, err)
-			assert.Equal(t, kvPairs[idx][0], key)
-			assert.Equal(t, kvPairs[idx][1], value)
-			idx--
-		}
-	}
-}
-
-func indexRanges(m orderedMap) (ranges []IndexRange) {
-	ok := true
-	start := uint64(0)
-	for ok {
-		width := (testRand.Uint64() % 15) + 1
-		stop := start + width
-
-		if stop >= m.Count() {
-			stop = m.Count() - 1
-			ok = false
-		}
-
-		ranges = append(ranges, IndexRange{
-			low:  start,
-			high: stop,
-		})
-
-		start = stop
-	}
-	return
-}
-
-func randomTestMap(t *testing.T, count int, kd, vd val.TupleDesc, mkr cartographer) (orderedMap, [][2]val.Tuple) {
-	items := randomTuplePairs(count, kd, vd)
-	m := mkr(t, kd, vd, items)
-	return m, items
+	assert.Equal(t, len(tuples), idx)
 }
 
 func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val.Tuple) {
