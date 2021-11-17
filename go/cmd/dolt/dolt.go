@@ -310,10 +310,6 @@ func runMain() int {
 		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
-	if dEnv.DoltDB != nil {
-		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.OutStream)
-	}
-
 	start := time.Now()
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 

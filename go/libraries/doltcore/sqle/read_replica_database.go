@@ -55,7 +55,7 @@ var ErrCannotCreateReplicaRevisionDbForCommit = errors.New("cannot create replic
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
-func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, dEnv *env.DoltEnv, isMultiDb bool) (ReadReplicaDatabase, error) {
+func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, dEnv *env.DoltEnv) (ReadReplicaDatabase, error) {
 	remotes, err := dEnv.GetRemotes()
 	if err != nil {
 		return EmptyReadReplica, err
