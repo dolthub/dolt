@@ -41,7 +41,13 @@ import (
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func Serve(ctx context.Context, version string, serverConfig ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
+func Serve(
+		ctx context.Context,
+		version string,
+		serverConfig ServerConfig,
+		serverController *ServerController,
+		dEnv *env.DoltEnv,
+) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()
@@ -99,14 +105,37 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 
 	if len(dbNamesAndPaths) == 0 {
-		var err error
-		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
-		if err != nil {
-			return err, nil
+		if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
+			var err error
+			fs := dEnv.FS
+			if len(serverConfig.DataDir()) > 0 {
+				fs, err = fs.WithWorkingDir(serverConfig.DataDir())
+				if err != nil {
+					return err, nil
+				}
+			}
+
+			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version)
+			if err != nil {
+				return err, nil
+			}
+		} else {
+			var err error
+			mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
+			if err != nil {
+				return err, nil
+			}
 		}
 	} else {
 		var err error
-		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.FS, version, dbNamesAndPaths...)
+		fs := dEnv.FS
+		if len(serverConfig.DataDir()) > 0 {
+			fs, err = fs.WithWorkingDir(serverConfig.DataDir())
+			if err != nil {
+				return err, nil
+			}
+		}
+		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dbNamesAndPaths...)
 
 		if err != nil {
 			return err, nil
@@ -119,7 +148,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 
 	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, all...)
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem(), all...)
 
 	a := analyzer.NewBuilder(pro).WithParallelism(serverConfig.QueryParallelism()).Build()
 	sqlEngine := sqle.New(a, nil)

@@ -350,7 +350,7 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	multiDir, multiDbMode := apr.GetValue(multiDBDirFlag)
 	if multiDbMode {
 		var err error
-		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.FS, multiDir, cmd.VersionStr)
+		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), dEnv.FS, multiDir, cmd.VersionStr)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}

@@ -102,7 +102,10 @@ type YAMLConfig struct {
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
 	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
+	dataDir           *string `yaml:"data_dir"`
 }
+
+var _ ServerConfig = YAMLConfig{}
 
 func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 	var cfg YAMLConfig
@@ -302,4 +305,11 @@ func (cfg YAMLConfig) PersistenceBehavior() string {
 		return loadPerisistentGlobals
 	}
 	return *cfg.BehaviorConfig.PersistenceBehavior
+}
+
+func (cfg YAMLConfig) DataDir() string {
+	if cfg.dataDir != nil {
+		return *cfg.dataDir
+	}
+	return ""
 }
