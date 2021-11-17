@@ -18,10 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/parquet"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/parquet"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
