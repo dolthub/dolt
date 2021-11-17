@@ -23,6 +23,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 
@@ -368,7 +369,12 @@ func LoadMultiEnvFromDir(ctx context.Context, hdp HomeDirProvider, fs filesys.Fi
 		return nil, err
 	}
 
-	return LoadMultiEnv(ctx, hdp, fs, version, envNamesAndPaths...)
+	multiDbDirFs, err := fs.WithWorkingDir(path)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	return LoadMultiEnv(ctx, hdp, multiDbDirFs, version, envNamesAndPaths...)
 }
 
 func dirToDBName(dirName string) string {
