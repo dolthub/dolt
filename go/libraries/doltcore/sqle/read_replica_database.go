@@ -66,11 +66,6 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
-	// TODO: new remote if multidb, append database name to url
-	//if isMultiDb {
-	//	remote = env.NewRemote(remote.Name, path.Join(remote.Url, remote.Name), remote.Params, dEnv)
-	//}
-
 	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default)
 	if err != nil {
 		return EmptyReadReplica, err
