@@ -84,14 +84,33 @@ SQL
     
     dolt sql --multi-db-dir db_dir -q "drop database mydb1"
     
-    [ ! -d mydb1 ]
-    [ -d mydb2 ]
+    [ ! -d db_dir/mydb1 ]
+    [ -d db_dir/mydb2 ]
 
     run dolt sql --multi-db-dir db_dir -q "show databases"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "mydb2" ]] || false
     [[ ! "$output" =~ "mydb1" ]] || false
     [[ ! "$output" =~ "dolt_repo_$$" ]] || false
+
+    # multi-db-dir with abs path
+    absdir="/tmp/$$/db_dir"
+    mkdir -p "$absdir"
+
+    dolt sql --multi-db-dir "$absdir" <<SQL
+create database mydb1;
+create database mydb2;
+use mydb1;
+create table test(a int primary key);
+select dolt_commit("-am", "first commit mydb1");
+use mydb2;
+begin;
+create table test(a int primary key);
+select dolt_commit("-am", "first commit mydb2");
+SQL
+
+    [ -d "$absdir/mydb1" ]
+    [ -d "$absdir/mydb2" ]
 }
 
 @test "sql-create-database: drop current database" {
