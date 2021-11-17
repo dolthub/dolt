@@ -59,6 +59,10 @@ func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
 	return mrEnv.cfg
 }
 
+func (mrEnv *MultiRepoEnv) Size() int {
+	return len(mrEnv.envs)
+}
+
 // TODO: un export
 // AddEnv adds an environment to the MultiRepoEnv by name
 func (mrEnv *MultiRepoEnv) AddEnv(name string, dEnv *DoltEnv) {

@@ -55,8 +55,8 @@ var ErrCannotCreateReplicaRevisionDbForCommit = errors.New("cannot create replic
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
-func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string) (ReadReplicaDatabase, error) {
-	remotes, err := rsr.GetRemotes()
+func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, dEnv *env.DoltEnv, isMultiDb bool) (ReadReplicaDatabase, error) {
+	remotes, err := dEnv.GetRemotes()
 	if err != nil {
 		return EmptyReadReplica, err
 	}
@@ -66,6 +66,11 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		return EmptyReadReplica, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}
 
+	// TODO: new remote if multidb, append database name to url
+	//if isMultiDb {
+	//	remote = env.NewRemote(remote.Name, path.Join(remote.Url, remote.Name), remote.Params, dEnv)
+	//}
+
 	srcDB, err := remote.GetRemoteDB(ctx, types.Format_Default)
 	if err != nil {
 		return EmptyReadReplica, err
@@ -74,9 +79,9 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 	return ReadReplicaDatabase{
 		Database: db,
 		remote:   remote,
-		tmpDir:   tmpDir,
+		tmpDir:   dEnv.TempTableFilesDir(),
 		srcDB:    srcDB,
-		headRef:  rsr.CWBHeadRef(),
+		headRef:  dEnv.RepoStateReader().CWBHeadRef(),
 	}, nil
 }
 

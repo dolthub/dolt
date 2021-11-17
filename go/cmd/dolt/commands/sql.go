@@ -471,14 +471,14 @@ func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 // newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
 // skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
 // that will log warnings when attempting to perform replica commands.
-func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
+func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv, isMulti bool) (dsqle.ReadReplicaDatabase, error) {
 	opts := editor.Options{
 		Deaf: dEnv.DbEaFactory(),
 	}
 
 	db := dsqle.NewDatabase(name, dEnv.DbData(), opts)
 
-	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
+	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv, isMulti)
 	if err != nil {
 		err = fmt.Errorf("%w from remote '%s'; %s", dsqle.ErrFailedToLoadReplicaDB, remoteName, err.Error())
 		if !dsqle.SkipReplicationWarnings() {
@@ -596,7 +596,7 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsqle.SqlDataba
 			if !ok {
 				return true, sql.ErrInvalidSystemVariableValue.New(remote)
 			}
-			db, err = newReplicaDatabase(ctx, name, remoteName, dEnv)
+			db, err = newReplicaDatabase(ctx, name, remoteName, dEnv, mrEnv.Size() > 1)
 			if err != nil {
 				return true, err
 			}
