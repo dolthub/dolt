@@ -90,6 +90,20 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "replication-multidb: missing database config" {
+    dolt config --global --add sqlserver.global.dolt_replicate_to_remote unknown
+    run dolt sql --multi-db-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "remote not found: 'unknown'" ]] || false
+}
+
+@test "replication-multidb: missing database config quiet warning" {
+    dolt config --global --add sqlserver.global.dolt_replicate_to_remote unknown
+    dolt config --global --add sqlserver.global.dolt_skip_replication_errors 1
+    dolt sql --multi-db-dir=dbs1 -b -q "use repo1; create table t1 (a int primary key)"
+}
+
 @test "replication-multidb: sql-server push on commit" {
     dolt config --global --add sqlserver.global.dolt_replicate_to_remote remote1
     cd dbs1
