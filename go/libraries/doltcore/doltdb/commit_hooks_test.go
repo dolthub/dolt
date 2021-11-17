@@ -214,7 +214,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	hook := NewAsyncPushOnWriteHook(ctx, &wg, destDB, tmpDir, &buffer.Buffer{})
 
 	t.Run("replicate to remote", func(t *testing.T) {
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < 200; i++ {
 			cs, _ := NewCommitSpec("main")
 			commit, err := ddb.Resolve(context.Background(), cs, nil)
 
@@ -255,7 +255,6 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			_, err = ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
 			ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
 			err = hook.Execute(ctx, ds, ddb.db)
-			//fmt.Println(srcCommit)
 		}
 	})
 }
