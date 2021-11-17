@@ -15,15 +15,20 @@
 package tblcmds
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"strings"
+	"sync/atomic"
 
 	"github.com/fatih/color"
 
@@ -470,8 +475,36 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	g, ctx := errgroup.WithContext(ctx)
 
 	parsedRowChan := make(chan sql.Row)
-	badRowChan := make(chan sql.Row)
+	badRowChan := make(chan *pipeline.TransformRowFailure)
+	var rowErr error
+	var printStarted bool
+	var b bytes.Buffer
+	var badCount int64
+	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
+		if !options.contOnErr {
+			rowErr = trf
+			return true
+		}
 
+		if !printStarted {
+			cli.PrintErrln("The following rows were skipped:")
+			printStarted = true
+		}
+
+		r := pipeline.GetTransFailureSqlRow(trf)
+
+		if r != nil {
+			err := writeBadRowToCli(ctx, r, &b)
+			if err != nil {
+				return true
+			}
+		}
+
+		atomic.AddInt64(&badCount, 1)
+		return false
+	}
+
+	// Start the group that reads rows from the reader
 	g.Go(func() error {
 		defer close(parsedRowChan)
 
@@ -480,8 +513,12 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 			if err != nil {
 				if err == io.EOF {
 					return nil
+				} else if table.IsBadRow(err) {
+					dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+					badRowChan <- &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
+				} else {
+					return err
 				}
-				return err
 			}
 
 			dRow, err := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
@@ -497,11 +534,34 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 		}
 	})
 
+	// Start the group that writes rows
 	g.Go(func() error {
+		defer close(badRowChan)
+
 		err := wr.StartWriting(ctx, parsedRowChan, badRowChan)
 		if err != nil {
 			return err
 		}
+		return nil
+	})
+
+	// Start the group that handles the bad row callback
+	g.Go(func() error {
+		select {
+			case bRow, ok := <-badRowChan:
+				if !ok {
+					return nil
+				}
+
+				quit := badRowCB(bRow)
+
+				if quit {
+					return nil
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+		}
+
 		return nil
 	})
 
@@ -697,4 +757,35 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	}
 
 	panic("Unhandled Error type")
+}
+
+// writeBadRowToCli prints a bad row in a csv form to STDERR.
+func writeBadRowToCli(ctx context.Context, sqlRow sql.Row, b *bytes.Buffer) error {
+	wr := bufio.NewWriter(b)
+
+	colValStrs := make([]*string, len(sqlRow))
+
+	for colNum, col := range sqlRow {
+		if col != nil {
+			str := sqlutil.SqlColToStr(ctx, col)
+			colValStrs[colNum] = &str
+		} else {
+			colValStrs[colNum] = nil
+		}
+	}
+
+	err := csv.WriteCSVRow(wr, colValStrs, ",", false)
+	if err != nil {
+		return err
+	}
+
+	err = wr.Flush()
+	if err != nil {
+		return err
+	}
+
+	str := b.String()
+	cli.PrintErr(str)
+
+	return nil
 }

@@ -70,7 +70,7 @@ type DataReader interface {
 }
 
 type DataWriter interface {
-	StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan sql.Row) error
+	StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error
 }
 
 type DataMover struct {

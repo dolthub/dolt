@@ -8,6 +8,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 	sqle "github.com/dolthub/go-mysql-server"
@@ -81,7 +82,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 	}, nil
 }
 
-func (s *SqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan sql.Row) error {
+func (s *SqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error {
 	err := s.createTable(s.sqlCtx, s.wrSch)
 	if err != nil {
 		return err
@@ -96,6 +97,7 @@ func (s *SqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 	if err != nil {
 		return err
 	}
+	defer iter.Close(s.sqlCtx)
 
 	// TODO: badRow support
 	for {
@@ -104,24 +106,23 @@ func (s *SqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 			s.statsCB(s.stats)
 		}
 
-		_, err := iter.Next()
+		row, err := iter.Next()
 		if err != nil {
 			if err == io.EOF {
 				err = iter.Close(s.sqlCtx)
 				break
 			}
 
-			iter.Close(s.sqlCtx)
-			return err
+			badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: row, TransformName: "reader", Details: err.Error()}
 		}
 
 		_ = atomic.AddInt32(&s.statOps, 1)
 		s.stats.Additions++
 	}
 
-	if err != nil {
-		return err
-	}
+	//if err != nil {
+	//	return err
+	//}
 
 	atomic.LoadInt32(&s.statOps)
 	atomic.StoreInt32(&s.statOps, 0)

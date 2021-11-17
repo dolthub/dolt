@@ -16,12 +16,14 @@ package pipeline
 
 import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // TransformRowFailure is an error implementation that stores the row that failed to transform, the transform that
 // failed and some details of the error
 type TransformRowFailure struct {
 	Row           row.Row
+	SqlRow		  sql.Row
 	TransformName string
 	Details       string
 }
@@ -59,6 +61,17 @@ func GetTransFailureRow(err error) row.Row {
 
 	return trf.Row
 
+}
+
+// GetTransFailureRow extracts the row that failed from an error that is an instance of a TransformRowFailure
+func GetTransFailureSqlRow(err error) sql.Row {
+	trf, ok := err.(*TransformRowFailure)
+
+	if !ok {
+		panic("Verify error using IsTransformFailure before calling this.")
+	}
+
+	return trf.SqlRow
 }
 
 // GetTransFailureDetails extracts the details string from an error that is an instance of a TransformRowFailure
