@@ -18,6 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"strings"
@@ -383,23 +386,24 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mover, nDMErr := newImportDataMover(ctx, root, dEnv, mvOpts, importStatsCB)
-
+	rd, nDMErr := newImportDataReader(ctx, root, dEnv, mvOpts)
 	if nDMErr != nil {
-
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, mvOpts)
+	wr, nDMErr := newImportDataWriter(ctx, root, dEnv, rd.GetSchema(), mvOpts)
+	if nDMErr != nil {
+		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	skipped, err := move(ctx, rd, wr, mvOpts)
 
 	cli.PrintErrln()
 
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
-	}
-	if verr == nil {
-		cli.PrintErrln(color.CyanString("Import completed successfully."))
 	}
 
 	return commands.HandleVErrAndExitCode(verr, usage)
@@ -412,6 +416,101 @@ func importStatsCB(stats types.AppliedEditStats) {
 	total := noEffect + stats.Modifications + stats.Additions
 	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
+}
+
+func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.TableReadCloser, *mvdata.DataMoverCreationError) {
+	var err error
+
+	// Checks whether import destination table already exists. This can probably be simplified to not need a root value...
+	ow, err := impOpts.checkOverwrite(ctx, root, dEnv.FS)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
+	}
+	if ow {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
+	}
+
+	rd, _, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
+	}
+
+
+	return rd, nil
+}
+
+func newImportDataWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (mvdata.DataWriter, *mvdata.DataMoverCreationError) {
+	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, imOpts)
+	if dmce != nil {
+		return nil, dmce
+	}
+
+	err := wrSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		preImage := imOpts.nameMapper.PreImage(col.Name)
+		_, found := rdSchema.GetAllCols().GetByName(preImage)
+		if !found {
+			err = fmt.Errorf("input primary keys do not match primary keys of existing table")
+		}
+		return err == nil, err
+	})
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	}
+
+	// TODO: Use impopts to create a DataReader and DataWriter
+	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, wrSch, imOpts.contOnErr, imOpts.dest.Name, importStatsCB)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err} // TODO: Fix
+	}
+
+	return mv, nil
+}
+
+func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, options *importOptions) (int64, error) {
+	g, ctx := errgroup.WithContext(ctx)
+
+	parsedRowChan := make(chan sql.Row)
+	badRowChan := make(chan sql.Row)
+
+	g.Go(func() error {
+		defer close(parsedRowChan)
+
+		for {
+			r, err := rd.ReadRow(ctx)
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return err
+			}
+
+			dRow, err := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+			if err != nil {
+				return err
+			}
+
+			select {
+			case parsedRowChan <- dRow:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	g.Go(func() error {
+		err := wr.StartWriting(ctx, parsedRowChan, badRowChan)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	err := g.Wait()
+	if err != nil {
+		return 0, err // get the count right
+	}
+
+	return 0, nil
 }
 
 func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
@@ -472,15 +571,7 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	var wr table.TableWriteCloser
 	switch impOpts.operation {
 	case CreateOp:
-		filePath, err := dEnv.FS.Abs(impOpts.DestName())
-		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
-		}
-		writer, err := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
-		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
-		}
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts, writer)
+		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts, nil)
 	case ReplaceOp:
 		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts)
 	case UpdateOp:

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -62,6 +63,14 @@ type DataMoverOptions interface {
 type DataMoverCloser interface {
 	table.TableWriteCloser
 	Flush(context.Context) (*doltdb.RootValue, error)
+}
+
+type DataReader interface {
+	StartReading(ctx context.Context, readSchema schema.Schema, outputChannel chan sql.Row)
+}
+
+type DataWriter interface {
+	StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan sql.Row) error
 }
 
 type DataMover struct {

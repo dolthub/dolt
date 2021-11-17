@@ -173,6 +173,10 @@ func (se *SqlEngine) Analyze(ctx *sql.Context, n sql.Node) (sql.Node, error) {
 	return se.engine.Analyzer.Analyze(ctx, n, nil)
 }
 
+func (se *SqlEngine) GetAnalyzer() *analyzer.Analyzer {
+	return se.engine.Analyzer
+}
+
 // TODO: All of this logic should be moved to the engine...
 func (se *SqlEngine) Dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
 	action := strings.ToLower(dbddl.Action)
@@ -204,6 +208,10 @@ func (se *SqlEngine) Dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 	}
 
 	return sch, nil, nil
+}
+
+func (se *SqlEngine) SetBatchMode() {
+	se.sess.EnableBatchedMode()
 }
 
 func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
