@@ -35,7 +35,7 @@ require (
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.1
-	github.com/google/go-cmp v0.5.5
+	github.com/google/go-cmp v0.5.6
 	github.com/google/uuid v1.2.0
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/jedib0t/go-pretty v4.3.1-0.20191104025401-85fe5d6a7c4d+incompatible
@@ -65,7 +65,7 @@ require (
 	github.com/uber/jaeger-lib v2.4.0+incompatible // indirect
 	go.mongodb.org/mongo-driver v1.7.0 // indirect
 	go.uber.org/zap v1.15.0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
 	golang.org/x/net v0.0.0-20210505214959-0714010a04ed
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210503173754-0981d6026fa6
@@ -80,8 +80,14 @@ require (
 )
 
 require (
+	github.com/xitongsys/parquet-go v1.6.1
+	github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371
+)
+
+require (
 	cloud.google.com/go v0.66.0 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
+	github.com/apache/thrift v0.13.1-0.20201008052519-daf620915714 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
@@ -89,10 +95,12 @@ require (
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/jmespath/go-jmespath v0.3.0 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jstemmer/go-junit-report v0.9.1 // indirect
+	github.com/klauspost/compress v1.10.10 // indirect
 	github.com/mattn/go-colorable v0.1.7 // indirect
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852 // indirect
+	github.com/pierrec/lz4/v4 v4.1.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/src-d/go-oniguruma v1.1.0 // indirect
