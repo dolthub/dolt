@@ -360,7 +360,7 @@ func execShell(
 	format cliengine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := cliengine.NewSqlEngine(ctx, mrEnv, format, initialDb)
+	se, err := cliengine.NewSqlEngine(ctx, mrEnv, format, initialDb, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -380,7 +380,7 @@ func execBatch(
 	format cliengine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := cliengine.NewSqlEngine(ctx, mrEnv, format, initialDb)
+	se, err := cliengine.NewSqlEngine(ctx, mrEnv, format, initialDb, false)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -392,11 +392,6 @@ func execBatch(
 
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
-	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
 	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr)
 	if err != nil {
 		// If we encounter an error, attempt to flush what we have so far to disk before exiting
@@ -419,7 +414,7 @@ func execMultiStatements(
 	format cliengine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := cliengine.NewSqlEngine(ctx, mrEnv, format, initialDb)
+	se, err := cliengine.NewSqlEngine(ctx, mrEnv, format, initialDb, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -445,7 +440,7 @@ func execQuery(
 	format cliengine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := cliengine.NewSqlEngine(ctx, mrEnv, format, initialDb)
+	se, err := cliengine.NewSqlEngine(ctx, mrEnv, format, initialDb, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

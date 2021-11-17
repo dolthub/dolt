@@ -21,7 +21,7 @@ import (
 	"runtime"
 	"strings"
 
-	sqle "github.com/dolthub/go-mysql-server"
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
@@ -31,17 +31,19 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
 	dbs            map[string]dsqle.SqlDatabase
-	sess           *dsess.DoltSession
 	contextFactory func(ctx context.Context) (*sql.Context, error)
-	engine         *sqle.Engine
+	dsessFactory   func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error)
+	engine         *gms.Engine
 	resultFormat   PrintResultFormat
 }
 
@@ -50,7 +52,8 @@ func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	format PrintResultFormat,
-	initialDb string) (*SqlEngine, error) {
+	initialDb string,
+	autocommit bool) (*SqlEngine, error) {
 	au := new(auth.None)
 
 	parallelism := runtime.GOMAXPROCS(0)
@@ -65,8 +68,8 @@ func NewSqlEngine(
 
 	pro := dsqle.NewDoltDatabaseProvider(mrEnv.Config(), mrEnv.FileSystem(), all...)
 
-	engine := sqle.New(analyzer.NewBuilder(pro).WithParallelism(
-		parallelism).Build(), &sqle.Config{Auth: au})
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(
+		parallelism).Build(), &gms.Config{Auth: au})
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -99,22 +102,22 @@ func NewSqlEngine(
 	}
 
 	// TODO: this should just be the session default like it is with MySQL
-	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)
+	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, autocommit)
 	if err != nil {
 		return nil, err
 	}
 
 	return &SqlEngine{
 		dbs:            nameToDB,
-		sess:           sess,
 		contextFactory: newSqlContext(sess, initialDb),
+		dsessFactory:   newDoltSession(pro, mrEnv.Config()),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
 }
 
 // NewRebasedEngine returns a smalled rebased engine primarily used in filterbranch.
-func NewRebasedSqlEngine(engine *sqle.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
+func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
 		dbs:    dbs,
 		engine: engine,
@@ -156,6 +159,10 @@ func (se *SqlEngine) GetRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue
 // NewContext converts a context.Context to a sql.Context.
 func (se *SqlEngine) NewContext(ctx context.Context) (*sql.Context, error) {
 	return se.contextFactory(ctx)
+}
+
+func (se *SqlEngine) NewDoltSession(ctx context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
+	return se.dsessFactory(ctx, mysqlSess, se.engine.Analyzer.Catalog.AllDatabases())
 }
 
 // GetReturnFormat() returns the printing format the engine is associated with.
@@ -206,6 +213,10 @@ func (se *SqlEngine) Dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 	return sch, nil, nil
 }
 
+func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
+	return se.engine
+}
+
 func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {
 	sqlDbs := make([]sql.Database, 0, len(dbs))
 	for _, db := range dbs {
@@ -231,4 +242,82 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 
 		return sqlCtx, nil
 	}
+}
+
+func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
+	return func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
+		ddbs := dsqle.DbsAsDSQLDBs(dbs)
+		states, err := getDbStates(ctx, ddbs)
+		if err != nil {
+			return nil, err
+		}
+
+		dsess, err := dsess.NewDoltSession(sql.NewEmptyContext(), mysqlSess, pro, config, states...)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: this should just be the session default like it is with MySQL
+		err = dsess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)
+		if err != nil {
+			return nil, err
+		}
+
+		return dsess, nil
+	}
+}
+
+func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialDbState, error) {
+	dbStates := make([]dsess.InitialDbState, len(dbs))
+	for i, db := range dbs {
+		var init dsess.InitialDbState
+		var err error
+
+		_, val, ok := sql.SystemVariables.GetGlobal(dsqle.DefaultBranchKey)
+		if ok && val != "" {
+			init, err = getInitialDBStateWithDefaultBranch(ctx, db, val.(string))
+		} else {
+			init, err = dsqle.GetInitialDBState(ctx, db)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		dbStates[i] = init
+	}
+
+	return dbStates, nil
+}
+
+func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabase, branch string) (dsess.InitialDbState, error) {
+	init, err := dsqle.GetInitialDBState(ctx, db)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	ddb := init.DbData.Ddb
+	r := ref.NewBranchRef(branch)
+
+	head, err := ddb.ResolveCommitRef(ctx, r)
+	if err != nil {
+		init.Err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
+	} else {
+		init.Err = nil
+	}
+	init.HeadCommit = head
+
+	if init.Err == nil {
+		workingSetRef, err := ref.WorkingSetRefForHead(r)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+
+		ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+		init.WorkingSet = ws
+	}
+
+	return init, nil
 }
