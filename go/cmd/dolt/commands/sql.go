@@ -461,28 +461,8 @@ func execQuery(ctx context.Context, wg *sync.WaitGroup, mrEnv *env.MultiRepoEnv,
 // objects.
 func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]dsqle.SqlDatabase, error) {
 	var dbs []dsqle.SqlDatabase
-	var db dsqle.SqlDatabase
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		//postCommitHooks, err := GetCommitHooks(ctx, dEnv)
-		//if err != nil {
-		//	return true, err
-		//}
-		//dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
-
-		db = newDatabase(name, dEnv)
-
-		//if _, remote, ok := sql.SystemVariables.GetGlobal(dsqle.ReadReplicaRemoteKey); ok && remote != "" {
-		//	remoteName, ok := remote.(string)
-		//	if !ok {
-		//		return true, sql.ErrInvalidSystemVariableValue.New(remote)
-		//	}
-		//	db, err = newReplicaDatabase(ctx, name, remoteName, dEnv)
-		//	if err != nil {
-		//		return true, err
-		//	}
-		//}
-
-		dbs = append(dbs, db)
+		dbs = append(dbs, newDatabase(name, dEnv))
 		return false, nil
 	})
 

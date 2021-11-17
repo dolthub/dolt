@@ -141,5 +141,3 @@ func applyReplicationConfig(ctx context.Context, wg *sync.WaitGroup, mrEnv *env.
 	}
 	return outputDbs, nil
 }
-
-const asyncPushBufferSize = 20

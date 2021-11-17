@@ -21,10 +21,11 @@ import (
 	"strings"
 	"testing"
 
-	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+
+	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 // usage: `go test -bench .`
@@ -63,7 +64,7 @@ func benchmarkAsyncPush(b *testing.B, test serverTest) {
 	ctx := context.Background()
 
 	// setup
-	dEnv, cfg = getEnvAndConfig(ctx, b)
+	dEnv, cfg = getAsyncEnvAndConfig(ctx, b)
 	executeServerQueries(ctx, b, dEnv, cfg, test.setup)
 
 	// bench
@@ -85,14 +86,6 @@ func benchmarkAsyncPush(b *testing.B, test serverTest) {
 	})
 }
 
-//const (
-//	database = "dolt_bench"
-//	port     = 1234
-//
-//	name  = "name"
-//	email = "name@fake.horse"
-//)
-
 func getAsyncEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg srv.ServerConfig) {
 	multiSetup := testcommands.NewMultiRepoTestSetup(b.Fatal)
 
@@ -111,22 +104,22 @@ func getAsyncEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv,
 log_level: warning
 
 behavior:
-read_only: false
+ read_only: false
 
 user:
-name: "root"
-password: ""
+ name: "root"
+ password: ""
 
 databases:
-- name: "%s"
-  path: "%s"
+ - name: "%s"
+   path: "%s"
 
 listener:
-host: localhost
-port: %d
-max_connections: 128
-read_timeout_millis: 28800000
-write_timeout_millis: 28800000
+ host: localhost
+ port: %d
+ max_connections: 128
+ read_timeout_millis: 28800000
+ write_timeout_millis: 28800000
 `, writerName, multiSetup.DbPaths[writerName], port))
 
 	cfg, err := srv.NewYamlConfig(yaml)
@@ -136,73 +129,3 @@ write_timeout_millis: 28800000
 
 	return multiSetup.MrEnv.GetEnv(writerName), cfg
 }
-
-//
-//func getProfFile(b *testing.B) *os.File {
-//	_, testFile, _, _ := runtime.Caller(0)
-//
-//	f, err := os.Create(path.Join(path.Dir(testFile), b.Name()+".out"))
-//	if err != nil {
-//		b.Fatal(err)
-//	}
-//	return f
-//}
-//
-//func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, cfg srv.ServerConfig, queries []query) {
-//	serverController := srv.CreateServerController()
-//
-//	eg, ctx := errgroup.WithContext(ctx)
-//
-//	//b.Logf("Starting server with Config %v\n", srv.ConfigInfo(cfg))
-//	eg.Go(func() (err error) {
-//		startErr, closeErr := srv.Serve(ctx, "", cfg, serverController, dEnv)
-//		if startErr != nil {
-//			return startErr
-//		}
-//		if closeErr != nil {
-//			return closeErr
-//		}
-//		return nil
-//	})
-//	if err := serverController.WaitForStart(); err != nil {
-//		b.Fatal(err)
-//	}
-//
-//	for _, q := range queries {
-//		if err := executeQuery(cfg, q); err != nil {
-//			b.Fatal(err)
-//		}
-//	}
-//
-//	serverController.StopServer()
-//	if err := serverController.WaitForClose(); err != nil {
-//		b.Fatal(err)
-//	}
-//	if err := eg.Wait(); err != nil {
-//		b.Fatal(err)
-//	}
-//}
-//
-//func executeQuery(cfg srv.ServerConfig, q query) error {
-//	cs := srv.ConnectionString(cfg) + database
-//	conn, err := dbr.Open("mysql", cs, nil)
-//	if err != nil {
-//		return err
-//	}
-//
-//	rows, err := conn.Query(string(q))
-//	if err != nil {
-//		return err
-//	}
-//
-//	for {
-//		if err = rows.Err(); err != nil {
-//			return err
-//		}
-//		if ok := rows.Next(); !ok {
-//			break
-//		}
-//	}
-//
-//	return rows.Err()
-//}
