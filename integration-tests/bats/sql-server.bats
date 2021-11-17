@@ -1165,8 +1165,8 @@ while True:
     
     # make sure the databases exist on restart
     stop_sql_server
-    start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --multi-db-dir=db_dir
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest3"
 }
 
 @test "sql-server: create database errors" {
