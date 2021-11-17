@@ -144,4 +144,62 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	})
+
+	t.Run("Add primary key when one more cells contain NULL", func(t *testing.T) {
+		dEnv := dtestutils.CreateTestEnv()
+		ctx := context.Background()
+
+		for _, c := range setupAdd {
+			c.exec(t, ctx, dEnv)
+		}
+
+		_, err := getTable(ctx, dEnv, "test")
+		assert.NoError(t, err)
+
+		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (c1)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD COLUMN (id INT NULL)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test DROP PRIMARY KEY"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (id)"}, dEnv)
+		require.Equal(t, 1, exitCode)
+
+		/*
+		table, err = getTable(ctx, dEnv, "test")
+		assert.NoError(t, err)
+
+		sch, err := table.GetSchema(ctx)
+		assert.NoError(t, err)
+
+		// Assert the new index map is not empty
+		newMap, err := table.GetRowData(ctx)
+		assert.NoError(t, err)
+		assert.False(t, newMap.Empty())
+		assert.Equal(t, newMap.Len(), uint64(2))
+
+		// Assert the noms level encoding of the map by ensuring the correct index values are present
+		kr1, err := createRow(sch, sch.GetAllCols().Tags, []types.Value{types.Int(1), types.Int(1)})
+		assert.NoError(t, err)
+		kr1Key, err := kr1.NomsMapKey(sch).Value(ctx)
+		assert.NoError(t, err)
+
+		ok, err := newMap.Has(ctx, kr1Key)
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		kr2, err := createRow(sch, sch.GetAllCols().Tags, []types.Value{types.Int(2), types.Int(2)})
+		assert.NoError(t, err)
+		kr2Key, err := kr2.NomsMapKey(sch).Value(ctx)
+		assert.NoError(t, err)
+
+		ok, err = newMap.Has(ctx, kr2Key)
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		*/
+	})
+
 }

@@ -39,6 +39,7 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, sql.ErrMultiplePrimaryKeysDefined.New() // Also caught in GMS
 	}
 
+
 	// Map function for converting columns to a primary key
 	newCollection := schema.MapColCollection(sch.GetAllCols(), func(col schema.Column) schema.Column {
 		for _, c := range columns {
@@ -50,6 +51,41 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 
 		return col
 	})
+
+	// Get Row Data out of Table
+	rowData, err := table.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Go through columns of new table
+	err = newCollection.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		// Skip if they are not going to be part if primary key
+		if !col.IsPartOfPK {
+			return false, nil
+		}
+
+		// Go through every row
+		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
+			if err != nil {
+				return false, err
+			}
+			val, ok := r.GetColVal(tag)
+			if !ok || val == nil || val == types.NullValue {
+				return true, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
+			}
+			return false, nil
+		})
+		if err != nil {
+			return true, err
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	newSchema, err := schema.SchemaFromCols(newCollection)
 	if err != nil {
