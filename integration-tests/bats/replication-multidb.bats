@@ -50,6 +50,8 @@ teardown() {
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
+
+    dolt config --list | awk '{ print $1 }' | grep sqlserver.global | xargs dolt config --global --unset
 }
 
 @test "replication-multidb: load global vars" {
