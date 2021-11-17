@@ -273,6 +273,7 @@ func MultiEnvForDirectory(
 func LoadMultiEnv(
 	ctx context.Context,
 	hdp HomeDirProvider,
+	cfg config.ReadWriteConfig,
 	fs filesys.Filesys,
 	version string,
 	envNamesAndPaths ...EnvNameAndPath,
@@ -292,18 +293,10 @@ func LoadMultiEnv(
 		nameToPath[nameAndPath.Name] = nameAndPath.Path
 	}
 
-	cfg, err := LoadDoltCliConfig(hdp, fs)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: revisit this, callers should specify which config they want to use in a multi-DB environment
-	localCfg := cfg.WriteableConfig()
-
 	mrEnv := &MultiRepoEnv{
 		envs: make([]NamedEnv, 0),
 		fs:   fs,
-		cfg:  localCfg,
+		cfg:  cfg,
 	}
 
 	for name, path := range nameToPath {
@@ -362,7 +355,13 @@ func DBNamesAndPathsFromDir(fs filesys.Filesys, path string) ([]EnvNameAndPath, 
 // LoadMultiEnvFromDir looks at each subfolder of the given path as a Dolt repository and attempts to return a MultiRepoEnv
 // with initialized environments for each of those subfolder data repositories. subfolders whose name starts with '.' are
 // skipped.
-func LoadMultiEnvFromDir(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, path, version string) (*MultiRepoEnv, error) {
+func LoadMultiEnvFromDir(
+		ctx context.Context,
+		hdp HomeDirProvider,
+		cfg config.ReadWriteConfig,
+		fs filesys.Filesys,
+		path, version string,
+) (*MultiRepoEnv, error) {
 	envNamesAndPaths, err := DBNamesAndPathsFromDir(fs, path)
 
 	if err != nil {
@@ -374,7 +373,7 @@ func LoadMultiEnvFromDir(ctx context.Context, hdp HomeDirProvider, fs filesys.Fi
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	return LoadMultiEnv(ctx, hdp, multiDbDirFs, version, envNamesAndPaths...)
+	return LoadMultiEnv(ctx, hdp, cfg, multiDbDirFs, version, envNamesAndPaths...)
 }
 
 func dirToDBName(dirName string) string {

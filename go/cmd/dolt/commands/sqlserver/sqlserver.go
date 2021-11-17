@@ -252,7 +252,9 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 			return nil, errors.New("failed to read databases in path specified by --multi-db-dir. error: " + err.Error())
 		}
 
-		serverConfig.withDBNamesAndPaths(dbNamesAndPaths)
+		// We set datadir to multi-db-dir here too
+		// TODO: rename multi-db-dir to data_dir
+		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(multiDBDir)
 	}
 
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
