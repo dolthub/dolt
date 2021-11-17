@@ -39,8 +39,54 @@ func TestMutableMapReads(t *testing.T) {
 }
 
 func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
-	m, tuples := makeProllyMap(t, count)
-	return m.(Map).Mutate(), tuples
+	ctx := context.Background()
+	ns := newTestNodeStore()
+
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	)
+
+	tuples := randomTuplePairs(count, kd, vd)
+	// 2/3 of tuples in Map
+	// 1/3 of tuples in memoryMap
+	split := (count * 2) / 3
+	shuffleTuplePairs(tuples)
+
+	mapTuples := tuples[:split]
+	memTuples := tuples[split:]
+	sortTuplePairs(mapTuples, kd)
+	sortTuplePairs(memTuples, kd)
+
+	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
+	require.NoError(t, err)
+	for _, pair := range mapTuples {
+		_, err := chunker.Append(ctx, nodeItem(pair[0]), nodeItem(pair[1]))
+		require.NoError(t, err)
+	}
+	root, err := chunker.Done(ctx)
+	require.NoError(t, err)
+
+	mut := MutableMap{
+		m: Map{
+			root:    root,
+			keyDesc: kd,
+			valDesc: vd,
+			ns:      ns,
+		},
+		overlay: newMemoryMap(kd),
+	}
+
+	for _, pair := range memTuples {
+		err = mut.Put(ctx, pair[0], pair[1])
+		require.NoError(t, err)
+	}
+
+	return mut, tuples
 }
 
 func TestMutableMapWrites(t *testing.T) {
@@ -244,6 +290,7 @@ func testPointDeletes(t *testing.T, mapCount int) {
 		mut := orig.Mutate()
 		err := mut.Put(ctx, del, nil)
 		assert.NoError(t, err)
+
 		m := materializeMap(t, mut)
 		assert.Equal(t, mapCount-1, int(m.Count()))
 

@@ -95,7 +95,6 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 type orderedMap interface {
 	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
 	Has(ctx context.Context, key val.Tuple) (ok bool, err error)
-	Count() uint64
 	IterAll(ctx context.Context) (MapIter, error)
 	IterValueRange(ctx context.Context, rng Range) (MapIter, error)
 }
@@ -179,15 +178,15 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 			},
 			{
 				testRange: OpenStartRange(start, stop, desc),
-				expCount:  nonNegative(z - a),
+				expCount:  z - a,
 			},
 			{
 				testRange: OpenStopRange(start, stop, desc),
-				expCount:  nonNegative(z - a),
+				expCount:  z - a,
 			},
 			{
 				testRange: ClosedRange(start, stop, desc),
-				expCount:  nonNegative((z - a) + 1),
+				expCount:  (z - a) + 1,
 			},
 
 			// put it down flip it and reverse it
@@ -197,15 +196,15 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 			},
 			{
 				testRange: OpenStartRange(stop, start, desc),
-				expCount:  nonNegative(z - a),
+				expCount:  z - a,
 			},
 			{
 				testRange: OpenStopRange(stop, start, desc),
-				expCount:  nonNegative(z - a),
+				expCount:  z - a,
 			},
 			{
 				testRange: ClosedRange(stop, start, desc),
-				expCount:  nonNegative((z - a) + 1),
+				expCount:  (z - a) + 1,
 			},
 
 			// one-sided ranges
@@ -215,15 +214,15 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 			},
 			{
 				testRange: GreaterOrEqualRange(start),
-				expCount:  nonNegative(cnt - a),
+				expCount:  cnt - a,
 			},
 			{
 				testRange: LesserRange(stop),
-				expCount:  nonNegative(z),
+				expCount:  z,
 			},
 			{
 				testRange: LesserOrEqualRange(stop),
-				expCount:  nonNegative(z + 1),
+				expCount:  z + 1,
 			},
 		}
 
@@ -257,15 +256,13 @@ func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val
 	keyBuilder := val.NewTupleBuilder(keyDesc)
 	valBuilder := val.NewTupleBuilder(valDesc)
 
-	items = make([][2]val.Tuple, count/2)
+	items = make([][2]val.Tuple, count)
 	for i := range items {
 		items[i][0] = randomTuple(keyBuilder)
 		items[i][1] = randomTuple(valBuilder)
 	}
 
-	sort.Slice(items, func(i, j int) bool {
-		return keyDesc.Compare(items[i][0], items[j][0]) < 0
-	})
+	sortTuplePairs(items, keyDesc)
 
 	for i := range items {
 		if i == 0 {
@@ -283,6 +280,18 @@ func randomTuple(tb *val.TupleBuilder) (tup val.Tuple) {
 		randomField(tb, i, typ)
 	}
 	return tb.Build(sharedPool)
+}
+
+func sortTuplePairs(items [][2]val.Tuple, keyDesc val.TupleDesc) {
+	sort.Slice(items, func(i, j int) bool {
+		return keyDesc.Compare(items[i][0], items[j][0]) < 0
+	})
+}
+
+func shuffleTuplePairs(items [][2]val.Tuple) {
+	testRand.Shuffle(len(items), func(i, j int) {
+		items[i], items[j] = items[j], items[i]
+	})
 }
 
 func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {

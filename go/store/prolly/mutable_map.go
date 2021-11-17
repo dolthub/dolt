@@ -37,7 +37,7 @@ func (mut MutableMap) Map(ctx context.Context) (Map, error) {
 }
 
 func (mut MutableMap) Count() uint64 {
-	return mut.m.Count() + mut.overlay.Count()
+	panic("harder than you think!")
 }
 
 func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) (err error) {
