@@ -46,7 +46,7 @@ const (
 	defaultMaxConnections      = 100
 	defaultQueryParallelism    = 2
 	defaultPersistenceBahavior = loadPerisistentGlobals
-	defaultDataDir = "."
+	defaultDataDir             = "."
 )
 
 const (
@@ -302,7 +302,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		maxConnections:      defaultMaxConnections,
 		queryParallelism:    defaultQueryParallelism,
 		persistenceBehavior: defaultPersistenceBahavior,
-		dataDir:defaultDataDir,
+		dataDir:             defaultDataDir,
 	}
 }
 
