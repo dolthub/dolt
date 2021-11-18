@@ -221,7 +221,7 @@ func b(s string) []byte {
 }
 
 func iterAll(l *List, cb func([]byte, []byte)) {
-	iter := l.Iter()
+	iter := l.IterAtStart()
 	key, val := iter.Current()
 	for key != nil {
 		cb(key, val)
@@ -231,7 +231,7 @@ func iterAll(l *List, cb func([]byte, []byte)) {
 }
 
 func iterAllBackwards(l *List, cb func([]byte, []byte)) {
-	iter := l.IterAtLast()
+	iter := l.IterAtEnd()
 	key, val := iter.Current()
 	for key != nil {
 		cb(key, val)

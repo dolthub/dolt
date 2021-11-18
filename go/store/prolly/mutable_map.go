@@ -60,7 +60,7 @@ func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (er
 	})
 
 	if value != nil {
-		// |key| found in memory
+		// |key| found in memCur
 		return cb(key, value)
 	}
 
@@ -75,14 +75,32 @@ func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err erro
 	return mut.m.Has(ctx, key)
 }
 
-func (mut MutableMap) IterAll(ctx context.Context) (MapIter, error) {
-	panic("unimplemented")
+func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
+	rng := Range{
+		Start:   RangeCut{Unbound: true},
+		Stop:    RangeCut{Unbound: true},
+		KeyDesc: mut.m.keyDesc,
+		Reverse: false,
+	}
+	return mut.IterValueRange(ctx, rng)
 }
 
-func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapIter, error) {
-	panic("unimplemented")
-}
+func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+	mem, err := mut.overlay.IterValueRange(ctx, rng)
+	if err != nil {
+		return MapRangeIter{}, err
+	}
 
-func (mut MutableMap) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error) {
-	panic("unimplemented")
+	pro, err := mut.m.IterValueRange(ctx, rng)
+	if err != nil {
+		return MapRangeIter{}, err
+	}
+
+	rng.Reverse = false
+
+	return MapRangeIter{
+		memCur: mem.memCur,
+		proCur: pro.proCur,
+		rng:    rng,
+	}, nil
 }

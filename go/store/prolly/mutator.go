@@ -26,7 +26,7 @@ type mutationIter interface {
 	close() error
 }
 
-var _ mutationIter = memIter{}
+var _ mutationIter = memTupleCursor{}
 
 func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, error) {
 	var err error

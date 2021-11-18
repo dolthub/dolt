@@ -21,12 +21,9 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type MapIter interface {
-	Next(ctx context.Context) (key, value val.Tuple, err error)
-}
-
 type Range struct {
 	Start, Stop RangeCut
+	KeyDesc     val.TupleDesc
 	Reverse     bool
 }
 
@@ -35,6 +32,64 @@ type RangeCut struct {
 	Inclusive bool
 	Unbound   bool
 }
+
+func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: false,
+		},
+		Stop: RangeCut{
+			Unbound: true,
+		},
+		KeyDesc: desc,
+		Reverse: false,
+	}
+}
+
+func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: true,
+		},
+		Stop: RangeCut{
+			Unbound: true,
+		},
+		KeyDesc: desc,
+		Reverse: false,
+	}
+}
+
+func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Unbound: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: false,
+		},
+		KeyDesc: desc,
+		Reverse: false,
+	}
+}
+
+func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Unbound: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: true,
+		},
+		KeyDesc: desc,
+		Reverse: false,
+	}
+}
+
+// todo(andy): reverse ranges for GT, GTE, LT, and LTE?
 
 func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
@@ -46,6 +101,7 @@ func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 			Key:       stop,
 			Inclusive: false,
 		},
+		KeyDesc: desc,
 		Reverse: desc.Compare(start, stop) > 0,
 	}
 }
@@ -60,6 +116,7 @@ func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 			Key:       stop,
 			Inclusive: true,
 		},
+		KeyDesc: desc,
 		Reverse: desc.Compare(start, stop) > 0,
 	}
 }
@@ -74,6 +131,7 @@ func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 			Key:       stop,
 			Inclusive: false,
 		},
+		KeyDesc: desc,
 		Reverse: desc.Compare(start, stop) > 0,
 	}
 }
@@ -88,111 +146,132 @@ func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 			Key:       stop,
 			Inclusive: true,
 		},
+		KeyDesc: desc,
 		Reverse: desc.Compare(start, stop) > 0,
 	}
 }
 
-func GreaterRange(start val.Tuple) Range {
-	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: false,
-		},
-		Stop: RangeCut{
-			Unbound: true,
-		},
-		Reverse: false,
-	}
+type MapRangeIter struct {
+	memCur, proCur tupleCursor
+	rng            Range
 }
 
-func GreaterOrEqualRange(start val.Tuple) Range {
-	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: true,
-		},
-		Stop: RangeCut{
-			Unbound: true,
-		},
-		Reverse: false,
-	}
-}
+func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
+	memKey, proKey := it.currentKeys()
 
-func LesserRange(stop val.Tuple) Range {
-	return Range{
-		Start: RangeCut{
-			Unbound: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: false,
-		},
-		Reverse: false,
-	}
-}
-
-func LesserOrEqualRange(stop val.Tuple) Range {
-	return Range{
-		Start: RangeCut{
-			Unbound: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: true,
-		},
-		Reverse: false,
-	}
-}
-
-// todo(andy): reverse ranges for GT, GTE, LT, and LTE?
-
-type tupleCursor interface {
-	current() (key, value val.Tuple)
-	advance(ctx context.Context) error
-	retreat(ctx context.Context) error
-	desc() val.TupleDesc
-}
-
-func iterRange(ctx context.Context, r Range, cur tupleCursor) (key, value val.Tuple, err error) {
-	key, value = cur.current()
-	if key == nil {
+	if memKey == nil && proKey == nil {
 		return nil, nil, io.EOF
 	}
 
-	if !r.Stop.Unbound { // check bounds
-		cmp := cur.desc().Compare(key, r.Stop.Key)
+	goMem, goPro := it.compareCursors(memKey, proKey)
 
-		if cmp == 0 && !r.Stop.Inclusive {
-			return nil, nil, io.EOF
-		}
-		if r.Reverse {
-			cmp = -cmp
-		}
-		if cmp > 0 {
-			return nil, nil, io.EOF
+	if goPro {
+		key, value = it.proCur.current()
+		err = it.progressCursor(ctx, it.proCur)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 
-	if r.Reverse {
-		err = cur.retreat(ctx)
-	} else {
-		err = cur.advance(ctx)
+	// if |goPro| and |goMem| are both true, advance both
+	// cursors and take |key| and |value| from |memCur|
+	if goMem {
+		key, value = it.memCur.current()
+		err = it.progressCursor(ctx, it.memCur)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return key, value, nil
+}
+
+func (it MapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
+	if it.memCur != nil {
+		memKey, _ = it.memCur.current()
+		if memKey != nil && !it.keyInRange(memKey) {
+			memKey = nil
+		}
+	}
+	if it.proCur != nil {
+		proKey, _ = it.proCur.current()
+		if proKey != nil && !it.keyInRange(proKey) {
+			proKey = nil
+		}
+	}
+	return
+}
+
+func (it MapRangeIter) compareCursors(memKey, proKey val.Tuple) (goMem, goPro bool) {
+	if memKey == nil {
+		goPro = true
+		return
+	}
+
+	if proKey == nil {
+		goMem = true
+		return
+	}
+
+	cmp := it.rng.KeyDesc.Compare(memKey, proKey)
+	if it.rng.Reverse {
+		cmp = -cmp
+	}
+	if cmp <= 0 {
+		goMem = true
+	}
+	if cmp >= 0 {
+		goPro = true
 	}
 
 	return
 }
 
+func (it MapRangeIter) keyInRange(key val.Tuple) bool {
+	if key == nil {
+		panic("nil key")
+	}
+	if it.rng.Stop.Unbound {
+		return true
+	}
+
+	cmp := it.rng.KeyDesc.Compare(key, it.rng.Stop.Key)
+	if it.rng.Reverse {
+		cmp = -cmp
+	}
+
+	if cmp == 0 {
+		return it.rng.Stop.Inclusive
+	}
+
+	return cmp < 0
+}
+
+func (it MapRangeIter) progressCursor(ctx context.Context, cur tupleCursor) error {
+	if it.rng.Reverse {
+		return cur.retreat(ctx)
+	} else {
+		return cur.advance(ctx)
+	}
+}
+
+type tupleCursor interface {
+	current() (key, value val.Tuple)
+	advance(ctx context.Context) error
+	retreat(ctx context.Context) error
+}
+
 // assumes we're no more than one position away from the correct starting position.
-func startInsideRange(ctx context.Context, r Range, cur tupleCursor) error {
+func startInRange(ctx context.Context, r Range, cur tupleCursor) error {
 	if r.Start.Unbound {
 		return nil
 	}
 
 	key, _ := cur.current()
 	if key == nil {
-		return io.EOF
+		return nil
 	}
-	cmp := cur.desc().Compare(key, r.Start.Key)
+	cmp := r.KeyDesc.Compare(key, r.Start.Key)
 
 	if cmp == 0 && r.Start.Inclusive {
 		return nil

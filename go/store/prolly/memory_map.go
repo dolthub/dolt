@@ -16,7 +16,6 @@ package prolly
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/store/skip"
 	"github.com/dolthub/dolt/go/store/val"
@@ -77,41 +76,53 @@ func (mm memoryMap) Has(_ context.Context, key val.Tuple) (ok bool, err error) {
 }
 
 // IterAll returns a MapIterator that iterates over the entire Map.
-func (mm memoryMap) IterAll(_ context.Context) (MapIter, error) {
-	return memIter{iter: mm.list.Iter()}, nil
+func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
+	rng := Range{
+		Start:   RangeCut{Unbound: true},
+		Stop:    RangeCut{Unbound: true},
+		KeyDesc: mm.keyDesc,
+		Reverse: false,
+	}
+	return mm.IterValueRange(ctx, rng)
 }
 
 // IterValueRange returns a MapIterator that iterates over an ValueRange.
-func (mm memoryMap) IterValueRange(_ context.Context, rng Range) (MapIter, error) {
-	panic("unimplemented")
-}
+func (mm memoryMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+	var iter *skip.ListIter
+	if rng.Start.Unbound {
+		if rng.Reverse {
+			iter = mm.list.IterAtEnd()
+		} else {
+			iter = mm.list.IterAtStart()
+		}
+	} else {
+		iter = mm.list.IterAt(rng.Start.Key)
+	}
 
-// IterIndexRange returns a MapIterator that iterates over an IndexRange.
-func (mm memoryMap) IterIndexRange(_ context.Context, rng IndexRange) (MapIter, error) {
-	panic("unimplemented")
+	tc := memTupleCursor{iter: iter}
+	if err := startInRange(ctx, rng, tc); err != nil {
+		return MapRangeIter{}, err
+	}
+
+	return MapRangeIter{
+		memCur: tc,
+		rng:    rng,
+	}, nil
 }
 
 func (mm memoryMap) mutations() mutationIter {
-	return memIter{iter: mm.list.Iter()}
+	return memTupleCursor{iter: mm.list.IterAtStart()}
 }
 
-type memIter struct {
+type memTupleCursor struct {
 	iter    *skip.ListIter
 	reverse bool
 }
 
-var _ MapIter = memIter{}
-var _ mutationIter = memIter{}
+var _ tupleCursor = mapTupleCursor{}
+var _ mutationIter = memTupleCursor{}
 
-func (it memIter) Next(context.Context) (key, val val.Tuple, err error) {
-	key, val = it.next()
-	if key == nil {
-		err = io.EOF
-	}
-	return
-}
-
-func (it memIter) next() (key, value val.Tuple) {
+func (it memTupleCursor) next() (key, value val.Tuple) {
 	key, value = it.iter.Current()
 	if key == nil {
 		return
@@ -123,10 +134,24 @@ func (it memIter) next() (key, value val.Tuple) {
 	return
 }
 
-func (it memIter) count() int {
+func (it memTupleCursor) current() (key, value val.Tuple) {
+	return it.iter.Current()
+}
+
+func (it memTupleCursor) advance(context.Context) (err error) {
+	it.iter.Advance()
+	return
+}
+
+func (it memTupleCursor) retreat(context.Context) (err error) {
+	it.iter.Retreat()
+	return
+}
+
+func (it memTupleCursor) count() int {
 	return it.iter.Count()
 }
 
-func (it memIter) close() error {
+func (it memTupleCursor) close() error {
 	return nil
 }

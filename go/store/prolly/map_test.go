@@ -40,7 +40,7 @@ func TestMap(t *testing.T) {
 	}
 
 	for _, s := range scales {
-		name := fmt.Sprintf("test prolly map at scale %d", s)
+		name := fmt.Sprintf("test proCur map at scale %d", s)
 		t.Run(name, func(t *testing.T) {
 			prollyMap, tuples := makeProllyMap(t, s)
 
@@ -49,6 +49,9 @@ func TestMap(t *testing.T) {
 			})
 			t.Run("iter all from map", func(t *testing.T) {
 				testOrderedMapIterAll(t, prollyMap, tuples)
+			})
+			t.Run("iter all backwards from map", func(t *testing.T) {
+				testOrderedMapIterAllBackward(t, prollyMap, tuples)
 			})
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, prollyMap, tuples)
@@ -95,8 +98,8 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 type orderedMap interface {
 	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
 	Has(ctx context.Context, key val.Tuple) (ok bool, err error)
-	IterAll(ctx context.Context) (MapIter, error)
-	IterValueRange(ctx context.Context, rng Range) (MapIter, error)
+	IterAll(ctx context.Context) (MapRangeIter, error)
+	IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error)
 }
 
 var _ orderedMap = Map{}
@@ -116,16 +119,16 @@ func getKeyDesc(om orderedMap) val.TupleDesc {
 	}
 }
 
-func testOrderedMapGetAndHas(t *testing.T, m orderedMap, tuples [][2]val.Tuple) {
+func testOrderedMapGetAndHas(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	for _, kv := range tuples {
 		// Has()
-		ok, err := m.Has(ctx, kv[0])
+		ok, err := om.Has(ctx, kv[0])
 		assert.True(t, ok)
 		require.NoError(t, err)
 
 		// Get()
-		err = m.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
+		err = om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, kv[0])
 			assert.Equal(t, kv[0], key)
 			assert.Equal(t, kv[1], val)
@@ -135,9 +138,9 @@ func testOrderedMapGetAndHas(t *testing.T, m orderedMap, tuples [][2]val.Tuple) 
 	}
 }
 
-func testOrderedMapIterAll(t *testing.T, m orderedMap, tuples [][2]val.Tuple) {
+func testOrderedMapIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
-	iter, err := m.IterAll(ctx)
+	iter, err := om.IterAll(ctx)
 	require.NoError(t, err)
 
 	idx := 0
@@ -154,6 +157,38 @@ func testOrderedMapIterAll(t *testing.T, m orderedMap, tuples [][2]val.Tuple) {
 	assert.Equal(t, len(tuples), idx)
 }
 
+func testOrderedMapIterAllBackward(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+	rng := Range{
+		Start:   RangeCut{Unbound: true},
+		Stop:    RangeCut{Unbound: true},
+		KeyDesc: getKeyDesc(om),
+		Reverse: true,
+	}
+
+	ctx := context.Background()
+	iter, err := om.IterValueRange(ctx, rng)
+	require.NoError(t, err)
+
+	idx := len(tuples) - 1
+	for {
+		key, value, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		assert.Equal(t, tuples[idx][0], key)
+		assert.Equal(t, tuples[idx][1], value)
+		idx--
+	}
+	assert.Equal(t, -1, idx)
+}
+
+type rangeTest struct {
+	name      string
+	testRange Range
+	expCount  int
+}
+
 func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	desc := getKeyDesc(om)
@@ -167,88 +202,98 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 		}
 		start, stop := tuples[a][0], tuples[z][0]
 
-		tests := []struct {
-			testRange Range
-			expCount  int
-		}{
+		tests := []rangeTest{
 			// two-sided ranges
 			{
+				name:      "OpenRange",
 				testRange: OpenRange(start, stop, desc),
 				expCount:  nonNegative((z - a) - 1),
 			},
 			{
+				name:      "OpenStartRange",
 				testRange: OpenStartRange(start, stop, desc),
 				expCount:  z - a,
 			},
 			{
+				name:      "OpenStopRange",
 				testRange: OpenStopRange(start, stop, desc),
 				expCount:  z - a,
 			},
 			{
+				name:      "ClosedRange",
 				testRange: ClosedRange(start, stop, desc),
 				expCount:  (z - a) + 1,
 			},
 
 			// put it down flip it and reverse it
-			{
-				testRange: OpenRange(stop, start, desc),
-				expCount:  nonNegative((z - a) - 1),
-			},
-			{
-				testRange: OpenStartRange(stop, start, desc),
-				expCount:  z - a,
-			},
-			{
-				testRange: OpenStopRange(stop, start, desc),
-				expCount:  z - a,
-			},
-			{
-				testRange: ClosedRange(stop, start, desc),
-				expCount:  (z - a) + 1,
-			},
+			//{
+			//	name:      "OpenRange",
+			//	testRange: OpenRange(stop, start, desc),
+			//	expCount:  nonNegative((z - a) - 1),
+			//},
+			//{
+			//	name:      "OpenStartRange",
+			//	testRange: OpenStartRange(stop, start, desc),
+			//	expCount:  z - a,
+			//},
+			//{
+			//	name:      "OpenStopRange",
+			//	testRange: OpenStopRange(stop, start, desc),
+			//	expCount:  z - a,
+			//},
+			//{
+			//	name:      "ClosedRange",
+			//	testRange: ClosedRange(stop, start, desc),
+			//	expCount:  (z - a) + 1,
+			//},
 
 			// one-sided ranges
 			{
-				testRange: GreaterRange(start),
+				name:      "GreaterRange",
+				testRange: GreaterRange(start, desc),
 				expCount:  nonNegative(cnt - a - 1),
 			},
 			{
-				testRange: GreaterOrEqualRange(start),
+				name:      "GreaterOrEqualRange",
+				testRange: GreaterOrEqualRange(start, desc),
 				expCount:  cnt - a,
 			},
 			{
-				testRange: LesserRange(stop),
+				name:      "LesserRange",
+				testRange: LesserRange(stop, desc),
 				expCount:  z,
 			},
 			{
-				testRange: LesserOrEqualRange(stop),
+				name:      "LesserOrEqualRange",
+				testRange: LesserOrEqualRange(stop, desc),
 				expCount:  z + 1,
 			},
 		}
 
 		for _, test := range tests {
-			iter, err := om.IterValueRange(ctx, test.testRange)
-			require.NoError(t, err)
+			t.Run(test.name, func(t *testing.T) {
+				iter, err := om.IterValueRange(ctx, test.testRange)
+				require.NoError(t, err)
 
-			key, _, err := iter.Next(ctx)
-			actCount := 0
-			for err != io.EOF {
-				actCount++
-				prev := key
-				key, _, err = iter.Next(ctx)
+				key, _, err := iter.Next(ctx)
+				actCount := 0
+				for err != io.EOF {
+					actCount++
+					prev := key
+					key, _, err = iter.Next(ctx)
 
-				if key != nil {
-					if test.testRange.Reverse {
-						assert.True(t, desc.Compare(prev, key) > 0)
-					} else {
-						assert.True(t, desc.Compare(prev, key) < 0)
+					if key != nil {
+						if test.testRange.Reverse {
+							assert.True(t, desc.Compare(prev, key) > 0)
+						} else {
+							assert.True(t, desc.Compare(prev, key) < 0)
+						}
 					}
 				}
-			}
-			assert.Equal(t, io.EOF, err)
-			assert.Equal(t, test.expCount, actCount)
+				assert.Equal(t, io.EOF, err)
+				assert.Equal(t, test.expCount, actCount)
+			})
 		}
-		//fmt.Printf("count: %d \t a: %d \t z: %d \n", cnt, a, z)
 	}
 }
 

@@ -16,9 +16,7 @@ package prolly
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -138,17 +136,18 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 }
 
 // IterAll returns a MapIterator that iterates over the entire Map.
-func (m Map) IterAll(ctx context.Context) (MapIter, error) {
+func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	rng := Range{
 		Start:   RangeCut{Unbound: true},
 		Stop:    RangeCut{Unbound: true},
+		KeyDesc: m.keyDesc,
 		Reverse: false,
 	}
 	return m.IterValueRange(ctx, rng)
 }
 
 // IterValueRange returns a MapIterator that iterates over an ValueRange.
-func (m Map) IterValueRange(ctx context.Context, rng Range) (MapIter, error) {
+func (m Map) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var cur *nodeCursor
 	var err error
 
@@ -162,21 +161,18 @@ func (m Map) IterValueRange(ctx context.Context, rng Range) (MapIter, error) {
 		cur, err = m.cursorAtkey(ctx, rng.Start.Key)
 	}
 	if err != nil {
-		return nil, err
+		return MapRangeIter{}, err
 	}
 
-	iter := mapRangeIter{
-		cur: cur,
-		rng: rng,
-		kd:  m.keyDesc,
+	tc := mapTupleCursor{cur: cur}
+	if err = startInRange(ctx, rng, tc); err != nil {
+		return MapRangeIter{}, err
 	}
 
-	err = startInsideRange(ctx, rng, iter)
-	if err != nil {
-		return nil, err
-	}
-
-	return iter, nil
+	return MapRangeIter{
+		proCur: tc,
+		rng:    rng,
+	}, nil
 }
 
 func (m Map) cursorAtStart(ctx context.Context) (*nodeCursor, error) {
@@ -227,20 +223,13 @@ func (m Map) compareKeys(left, right val.Tuple) int {
 	return int(m.keyDesc.Compare(left, right))
 }
 
-type mapRangeIter struct {
+type mapTupleCursor struct {
 	cur *nodeCursor
-	rng Range
-	kd  val.TupleDesc
 }
 
-var _ MapIter = mapRangeIter{}
-var _ tupleCursor = mapRangeIter{}
+var _ tupleCursor = mapTupleCursor{}
 
-func (cur mapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	return iterRange(ctx, cur.rng, cur)
-}
-
-func (cur mapRangeIter) current() (key, value val.Tuple) {
+func (cur mapTupleCursor) current() (key, value val.Tuple) {
 	if cur.cur.valid() {
 		pair := cur.cur.currentPair()
 		key, value = val.Tuple(pair.key()), val.Tuple(pair.value())
@@ -248,71 +237,12 @@ func (cur mapRangeIter) current() (key, value val.Tuple) {
 	return
 }
 
-func (cur mapRangeIter) advance(ctx context.Context) (err error) {
+func (cur mapTupleCursor) advance(ctx context.Context) (err error) {
 	_, err = cur.cur.advance(ctx)
 	return
 }
 
-func (cur mapRangeIter) retreat(ctx context.Context) (err error) {
+func (cur mapTupleCursor) retreat(ctx context.Context) (err error) {
 	_, err = cur.cur.retreat(ctx)
 	return
-}
-
-func (cur mapRangeIter) desc() val.TupleDesc {
-	return cur.kd
-}
-
-// todo(andy): deprecated
-
-// IndexRange is an Inclusive range of item indexes
-type IndexRange struct {
-	low, high uint64
-	reverse   bool
-}
-
-type indexIter struct {
-	rng IndexRange
-	cur nodeCursor
-	rem uint64
-}
-
-func (it *indexIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	if it.rem == 0 {
-		return nil, nil, io.EOF
-	}
-
-	pair := it.cur.currentPair()
-	key, value = val.Tuple(pair.key()), val.Tuple(pair.value())
-
-	if it.rng.reverse {
-		_, err = it.cur.retreat(ctx)
-	} else {
-		_, err = it.cur.advance(ctx)
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-
-	it.rem--
-	return
-}
-
-// IterIndexRange returns a MapIterator that iterates over an IndexRange.
-func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error) {
-	if rng.low > m.Count() || rng.high > m.Count() {
-		return nil, errors.New("range out of bounds")
-	}
-
-	treeIndex := rng.low * 2
-	if rng.reverse {
-		treeIndex = rng.high * 2
-	}
-
-	cur, err := newCursorAtIndex(ctx, m.ns, m.root, treeIndex)
-	if err != nil {
-		return nil, err
-	}
-	remaining := rng.high - rng.low + 1
-
-	return &indexIter{rng: rng, cur: cur, rem: remaining}, nil
 }

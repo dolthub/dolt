@@ -29,10 +29,13 @@ func TestMutableMapReads(t *testing.T) {
 				testOrderedMapGetAndHas(t, mutableMap, tuples)
 			})
 			t.Run("iter all from map", func(t *testing.T) {
-				//testOrderedMapIterAll(t, mutableMap, tuples)
+				testOrderedMapIterAll(t, mutableMap, tuples)
+			})
+			t.Run("iter all backwards from map", func(t *testing.T) {
+				//testOrderedMapIterAllBackward(t, mutableMap, tuples)
 			})
 			t.Run("iter value range", func(t *testing.T) {
-				//testOrderedMapIterValueRange(t, mutableMap, tuples)
+				testOrderedMapIterValueRange(t, mutableMap, tuples)
 			})
 		})
 	}
@@ -85,6 +88,8 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 		err = mut.Put(ctx, pair[0], pair[1])
 		require.NoError(t, err)
 	}
+
+	sortTuplePairs(tuples, kd)
 
 	return mut, tuples
 }

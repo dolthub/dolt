@@ -181,13 +181,6 @@ func (it *ListIter) Retreat() {
 	return
 }
 
-func (l *List) Iter() *ListIter {
-	return &ListIter{
-		curr: l.firstNode(),
-		list: l,
-	}
-}
-
 func (l *List) IterAt(key []byte) *ListIter {
 	return &ListIter{
 		curr: l.seek(key),
@@ -195,7 +188,14 @@ func (l *List) IterAt(key []byte) *ListIter {
 	}
 }
 
-func (l *List) IterAtLast() *ListIter {
+func (l *List) IterAtStart() *ListIter {
+	return &ListIter{
+		curr: l.firstNode(),
+		list: l,
+	}
+}
+
+func (l *List) IterAtEnd() *ListIter {
 	return &ListIter{
 		curr: l.lastNode(),
 		list: l,
