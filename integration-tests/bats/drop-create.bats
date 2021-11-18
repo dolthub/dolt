@@ -95,5 +95,11 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    [[ "$output" =~ modified:[[:space:]]*test ]] || false
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+   \`c\` INT" ]] || false
+    [[ "$output" =~ "|  <  | a | b |   |" ]] || false
+    [[ "$output" =~ "|  >  | a | b | c |" ]] || false
 }
