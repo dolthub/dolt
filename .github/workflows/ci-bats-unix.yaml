@@ -64,7 +64,8 @@ jobs:
           pip install pandas
           pip install pyarrow
       - name: Install Parquet-tools
-        run: brew install parquet-tools
+        run: |
+        brew install parquet-tools
       - name: Install Dolt
         working-directory: ./go
         run: |
