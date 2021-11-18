@@ -156,6 +156,15 @@ type MapRangeIter struct {
 	rng            Range
 }
 
+func maybeFmt(key val.Tuple, desc val.TupleDesc) (s string) {
+	if key != nil {
+		s = desc.Format(key)
+	} else {
+		s = "[ nil ]"
+	}
+	return
+}
+
 func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
 	memKey, proKey := it.currentKeys()
 

@@ -96,8 +96,6 @@ func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIt
 		return MapRangeIter{}, err
 	}
 
-	rng.Reverse = false
-
 	return MapRangeIter{
 		memCur: mem.memCur,
 		proCur: pro.proCur,

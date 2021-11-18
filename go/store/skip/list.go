@@ -181,11 +181,19 @@ func (it *ListIter) Retreat() {
 	return
 }
 
-func (l *List) IterAt(key []byte) *ListIter {
-	return &ListIter{
+func (l *List) IterAt(key []byte) (it *ListIter) {
+	it = &ListIter{
 		curr: l.seek(key),
 		list: l,
 	}
+
+	if it.curr.id == sentinelId {
+		// try to keep |it| in bounds if |key| is
+		// greater than the largest key in |l|
+		it.Retreat()
+	}
+
+	return
 }
 
 func (l *List) IterAtStart() *ListIter {

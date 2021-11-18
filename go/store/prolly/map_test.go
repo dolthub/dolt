@@ -158,10 +158,11 @@ func testOrderedMapIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 }
 
 func testOrderedMapIterAllBackward(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+	desc := getKeyDesc(om)
 	rng := Range{
 		Start:   RangeCut{Unbound: true},
 		Stop:    RangeCut{Unbound: true},
-		KeyDesc: getKeyDesc(om),
+		KeyDesc: desc,
 		Reverse: true,
 	}
 
@@ -226,26 +227,26 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 			},
 
 			// put it down flip it and reverse it
-			//{
-			//	name:      "OpenRange",
-			//	testRange: OpenRange(stop, start, desc),
-			//	expCount:  nonNegative((z - a) - 1),
-			//},
-			//{
-			//	name:      "OpenStartRange",
-			//	testRange: OpenStartRange(stop, start, desc),
-			//	expCount:  z - a,
-			//},
-			//{
-			//	name:      "OpenStopRange",
-			//	testRange: OpenStopRange(stop, start, desc),
-			//	expCount:  z - a,
-			//},
-			//{
-			//	name:      "ClosedRange",
-			//	testRange: ClosedRange(stop, start, desc),
-			//	expCount:  (z - a) + 1,
-			//},
+			{
+				name:      "OpenRange",
+				testRange: OpenRange(stop, start, desc),
+				expCount:  nonNegative((z - a) - 1),
+			},
+			{
+				name:      "OpenStartRange",
+				testRange: OpenStartRange(stop, start, desc),
+				expCount:  z - a,
+			},
+			{
+				name:      "OpenStopRange",
+				testRange: OpenStopRange(stop, start, desc),
+				expCount:  z - a,
+			},
+			{
+				name:      "ClosedRange",
+				testRange: ClosedRange(stop, start, desc),
+				expCount:  (z - a) + 1,
+			},
 
 			// one-sided ranges
 			{
@@ -325,6 +326,14 @@ func randomTuple(tb *val.TupleBuilder) (tup val.Tuple) {
 		randomField(tb, i, typ)
 	}
 	return tb.Build(sharedPool)
+}
+
+func cloneRandomTuples(items [][2]val.Tuple) (clone [][2]val.Tuple) {
+	clone = make([][2]val.Tuple, len(items))
+	for i := range clone {
+		clone[i] = items[i]
+	}
+	return
 }
 
 func sortTuplePairs(items [][2]val.Tuple, keyDesc val.TupleDesc) {

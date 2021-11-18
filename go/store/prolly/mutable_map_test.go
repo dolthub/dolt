@@ -32,7 +32,7 @@ func TestMutableMapReads(t *testing.T) {
 				testOrderedMapIterAll(t, mutableMap, tuples)
 			})
 			t.Run("iter all backwards from map", func(t *testing.T) {
-				//testOrderedMapIterAllBackward(t, mutableMap, tuples)
+				testOrderedMapIterAllBackward(t, mutableMap, tuples)
 			})
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, mutableMap, tuples)
@@ -57,11 +57,12 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	tuples := randomTuplePairs(count, kd, vd)
 	// 2/3 of tuples in Map
 	// 1/3 of tuples in memoryMap
+	clone := cloneRandomTuples(tuples)
 	split := (count * 2) / 3
-	shuffleTuplePairs(tuples)
+	shuffleTuplePairs(clone)
 
-	mapTuples := tuples[:split]
-	memTuples := tuples[split:]
+	mapTuples := clone[:split]
+	memTuples := clone[split:]
 	sortTuplePairs(mapTuples, kd)
 	sortTuplePairs(memTuples, kd)
 
@@ -88,8 +89,6 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 		err = mut.Put(ctx, pair[0], pair[1])
 		require.NoError(t, err)
 	}
-
-	sortTuplePairs(tuples, kd)
 
 	return mut, tuples
 }
