@@ -51,25 +51,26 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return col
 	})
 
-	// Go through columns of new table
-	err = newCollection.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		// Skip if they are not part of primary key
-		if !col.IsPartOfPK {
-			return false, nil
-		}
+	// Get Row Data out of Table
+	rowData, err := table.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-		// Get Row Data out of Table
-		rowData, err := table.GetRowData(ctx)
+	// Go through every row
+	err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
 		if err != nil {
-			return true, err
+			return false, err
 		}
 
-		// Go through every row
-		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-			if err != nil {
-				return false, err
+		// Go through every column of row
+		err = newCollection.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			// Skip if they are not part of primary key
+			if !col.IsPartOfPK {
+				return false, nil
 			}
+
 			// Check if column value is null
 			val, ok := r.GetColVal(tag)
 			if !ok || val == nil || val == types.NullValue {
@@ -77,9 +78,11 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 			}
 			return false, nil
 		})
+
 		if err != nil {
 			return true, err
 		}
+
 		return false, nil
 	})
 
