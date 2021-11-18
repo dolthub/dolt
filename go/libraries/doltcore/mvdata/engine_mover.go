@@ -11,28 +11,31 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
-	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"io"
 	"strings"
 	"sync/atomic"
 )
 
-type SqlEngineMover struct {
+type sqlEngineMover struct {
 	se *cliengine.SqlEngine
 	sqlCtx *sql.Context
 
 	tableName string
 	database string
 	wrSch sql.Schema
+	contOnErr bool
 
-	ContOnErr  bool
-	statsCB noms.StatsCB
-	stats   types.AppliedEditStats
-	statOps int32
+	statsCB   noms.StatsCB
+	stats     types.AppliedEditStats
+	statOps   int32
+
+	importOption TableImportOp
 }
 
-func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.Schema, cont bool, tableName string, statsCB noms.StatsCB) (*SqlEngineMover, error) {
+func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.Schema, operation TableImportOp, cont bool, tableName string, statsCB noms.StatsCB) (*sqlEngineMover, error) {
 	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
 	if err != nil {
 		return nil, err
@@ -68,22 +71,22 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return nil, err
 	}
 
-	return &SqlEngineMover{
-		se: se,
-		sqlCtx: sqlCtx,
-		ContOnErr: cont,
+	return &sqlEngineMover{
+		se:        se,
+		sqlCtx:    sqlCtx,
+		contOnErr: cont,
 
 		database: dbName,
 		tableName: tableName,
 		wrSch: doltSchema,
 
 		statsCB: statsCB,
-
+		importOption: operation,
 	}, nil
 }
 
-func (s *SqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error {
-	err := s.createTable(s.sqlCtx, s.wrSch)
+func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error {
+	err := s.createOrEmptyTableIfNeeded()
 	if err != nil {
 		return err
 	}
@@ -104,18 +107,17 @@ func (s *SqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 		badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "create", Details: err.Error()}
 	}
 
-	specialInsert, err := sqle.CreateSpecialInsertNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.ContOnErr, errorHandler) // contonerr translates to ignore
+	insertOrUpdateOperation, err := s.getNodeOperation(inputChannel, errorHandler)
 	if err != nil {
 		return err
 	}
 
-	iter, err := specialInsert.RowIter(s.sqlCtx, nil)
+	iter, err := insertOrUpdateOperation.RowIter(s.sqlCtx, nil)
 	if err != nil {
 		return err
 	}
 	defer iter.Close(s.sqlCtx)
 
-	// TODO: badRow support
 	for {
 		if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {
 			atomic.StoreInt32(&s.statOps, 0)
@@ -123,40 +125,45 @@ func (s *SqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 		}
 
 		_, err := iter.Next()
-		if err != nil {
-			if err == io.EOF {
-				_ = iter.Close(s.sqlCtx)
-				break
-			}
-			//var offendingRow sql.Row
-			//if wi, ok := err.(sql.WrappedInsertError); ok {
-			//	offendingRow = wi.OffendingRow
-			//}
-			//badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "reader", Details: err.Error()}
-		} else {
+
+		// All other errors are handled by the errorHandler
+		if err == nil {
 			_ = atomic.AddInt32(&s.statOps, 1)
 			s.stats.Additions++
+		} else if err == io.EOF {
+			_ = iter.Close(s.sqlCtx)
+			atomic.LoadInt32(&s.statOps)
+			atomic.StoreInt32(&s.statOps, 0)
+			s.statsCB(s.stats)
+
+			return err
 		}
 	}
-
-	atomic.LoadInt32(&s.statOps)
-	atomic.StoreInt32(&s.statOps, 0)
-	s.statsCB(s.stats)
-
-	return nil
 }
 
-func (s *SqlEngineMover) Commit(ctx context.Context) error {
+func (s *sqlEngineMover) Commit(ctx context.Context) error {
 	// TODO: Move this to the actual import code
 	_, _, err := s.se.Query(s.sqlCtx, "COMMIT")
 	return err
 }
 
-func (s *SqlEngineMover) createTable(sqlCtx *sql.Context, sch sql.Schema) error {
-	colStmts := make([]string, len(sch))
+func (s *sqlEngineMover) createOrEmptyTableIfNeeded() error {
+	switch s.importOption {
+	case CreateOp:
+		return s.createTable()
+	case ReplaceOp:
+		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("TRUNCATE TABLE %s", s.tableName))
+		return err
+	default:
+		return nil
+	}
+}
+
+func (s *sqlEngineMover) createTable() error {
+	colStmts := make([]string, len(s.wrSch))
 	var primaryKeyCols []string
 
-	for i, col := range sch {
+	for i, col := range s.wrSch {
 		stmt := fmt.Sprintf("  `%s` %s", col.Name, strings.ToLower(col.Type.String()))
 
 		if !col.Nullable {
@@ -194,8 +201,59 @@ func (s *SqlEngineMover) createTable(sqlCtx *sql.Context, sch sql.Schema) error 
 		strings.Join(colStmts, ",\n"),
 	)
 
-	_, _, err := s.se.Query(sqlCtx, query)
+	_, _, err := s.se.Query(s.sqlCtx, query)
 	return err
+}
+
+func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandler func (err error)) (sql.Node, error) {
+	switch s.importOption {
+	case CreateOp:
+		// anti patten to do create table here.
+		return createSpecialInsertNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, errorHandler) // contonerr translates to ignore
+	case ReplaceOp:
+		return createSpecialInsertNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, errorHandler) // contonerr translates to ignore
+	}
+
+	return nil, fmt.Errorf("unsupported")
+}
+
+func createSpecialInsertNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, errorHandler plan.ErrorHandler) (sql.Node, error) {
+	src := plan.NewRowIterSource(schema, source)
+	dest := plan.NewUnresolvedTable(tableName, dbname)
+
+	insert := plan.NewInsertInto(sql.UnresolvedDatabase(dbname), dest, src, false, nil, nil, ignore)
+	analyzed, err := analyzer.Analyze(ctx, insert, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	analyzed, err = plan.TransformUp(analyzed, func(node sql.Node) (sql.Node, error) {
+		switch n := node.(type) {
+		case *plan.InsertInto:
+			strat := plan.Propagate
+			if ignore {
+				strat = plan.Ignore
+			}
+			withError := plan.NewErrorHandlerNode(n, strat, errorHandler)
+			return withError, nil
+		default:
+			return n, nil
+		}
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	analyzedQueryProcess, ok := analyzed.(*plan.QueryProcess)
+	if !ok {
+		return nil, fmt.Errorf("internal error: unknown analyzed result type `%T`", analyzed)
+	}
+
+	// We don't want the accumulator node wrapping the analyzed insert.
+	accumulatorNode := analyzedQueryProcess.Child
+
+	return accumulatorNode.(*plan.RowUpdateAccumulator).Child, nil
 }
 
 func quoteIdentifiers(ids []string) []string {

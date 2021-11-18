@@ -362,3 +362,12 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 
 	return schema.SchemaFromCols(newCols)
 }
+
+type TableImportOp string
+
+const (
+	CreateOp  TableImportOp = "overwrite"
+	ReplaceOp TableImportOp = "replace"
+	UpdateOp  TableImportOp = "update"
+)
+

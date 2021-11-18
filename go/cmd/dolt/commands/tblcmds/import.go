@@ -95,17 +95,8 @@ In create, update, and replace scenarios the file's extension is used to infer t
 	},
 }
 
-type tableImportOp string
-
-const (
-	CreateOp  tableImportOp = "overwrite"
-	ReplaceOp tableImportOp = "replace"
-	UpdateOp  tableImportOp = "update"
-	InvalidOp tableImportOp = "invalid"
-)
-
 type importOptions struct {
-	operation   tableImportOp
+	operation   mvdata.TableImportOp
 	tableName   string
 	contOnErr   bool
 	force       bool
@@ -144,7 +135,7 @@ func (m importOptions) FloatThreshold() float64 {
 }
 
 func (m importOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
-	if !m.force && m.operation == CreateOp {
+	if !m.force && m.operation == mvdata.CreateOp {
 		return m.dest.Exists(ctx, root, fs)
 	}
 	return false, nil
@@ -216,17 +207,17 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		}
 	}
 
-	var moveOp tableImportOp
+	var moveOp mvdata.TableImportOp
 	switch {
 	case apr.Contains(createParam):
-		moveOp = CreateOp
+		moveOp = mvdata.CreateOp
 	case apr.Contains(replaceParam):
-		moveOp = ReplaceOp
+		moveOp = mvdata.ReplaceOp
 	default:
-		moveOp = UpdateOp
+		moveOp = mvdata.UpdateOp
 	}
 
-	if moveOp != CreateOp {
+	if moveOp != mvdata.CreateOp {
 		root, err := dEnv.WorkingRoot(ctx)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -467,7 +458,7 @@ func newImportDataWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 	}
 
 	// TODO: Use impopts to create a DataReader and DataWriter
-	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, wrSch, imOpts.contOnErr, imOpts.dest.Name, importStatsCB)
+	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, wrSch, imOpts.operation, imOpts.contOnErr, imOpts.dest.Name, importStatsCB)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err} // TODO: Fix
 	}
@@ -541,6 +532,8 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that writes rows
 	g.Go(func() error {
+		defer close(badRowChan)
+
 		err := wr.StartWriting(ctx, parsedRowChan, badRowChan)
 		if err != nil {
 			return err
@@ -550,8 +543,6 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that handles the bad row callback
 	g.Go(func() error {
-		defer close(badRowChan) // TODO: MIght need to move bacl
-
 		select {
 			case bRow, ok := <-badRowChan:
 				if !ok {
@@ -571,7 +562,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	})
 
 	err := g.Wait()
-	if err != nil {
+	if err != nil && err != io.EOF {
 		return badCount, err // get the count right
 	}
 	if rowErr != nil {
@@ -643,11 +634,11 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 
 	var wr table.TableWriteCloser
 	switch impOpts.operation {
-	case CreateOp:
+	case mvdata.CreateOp:
 		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts, nil)
-	case ReplaceOp:
+	case mvdata.ReplaceOp:
 		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts)
-	case UpdateOp:
+	case mvdata.UpdateOp:
 		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, rdTags, opts)
 	default:
 		err = errors.New("invalid move operation")
@@ -683,7 +674,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 		return out, nil
 	}
 
-	if impOpts.operation == CreateOp {
+	if impOpts.operation == mvdata.CreateOp {
 		if impOpts.srcIsStream() {
 			// todo: capture stream data to file so we can use schema inferrence
 			return nil, nil
