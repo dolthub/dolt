@@ -404,6 +404,10 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	skipped, err := move(ctx, rd, wr, mvOpts)
+	if err != nil {
+		verr = errhand.BuildDError(err.Error()).Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
 
 	cli.PrintErrln()
 
@@ -474,6 +478,7 @@ func newImportDataWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
+	// Setup the necessary data points for the import job
 	parsedRowChan := make(chan sql.Row)
 	badRowChan := make(chan *pipeline.TransformRowFailure)
 	var rowErr error
@@ -536,8 +541,6 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that writes rows
 	g.Go(func() error {
-		defer close(badRowChan)
-
 		err := wr.StartWriting(ctx, parsedRowChan, badRowChan)
 		if err != nil {
 			return err
@@ -547,6 +550,8 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that handles the bad row callback
 	g.Go(func() error {
+		defer close(badRowChan) // TODO: MIght need to move bacl
+
 		select {
 			case bRow, ok := <-badRowChan:
 				if !ok {
@@ -567,10 +572,18 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	err := g.Wait()
 	if err != nil {
-		return 0, err // get the count right
+		return badCount, err // get the count right
+	}
+	if rowErr != nil {
+		return badCount, rowErr
 	}
 
-	return 0, nil
+	err = wr.Commit(ctx)
+	if err != nil {
+		return badCount, err
+	}
+
+	return badCount, nil
 }
 
 func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {

@@ -71,6 +71,7 @@ type DataReader interface {
 
 type DataWriter interface {
 	StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error
+	Commit(ctx context.Context) error
 }
 
 type DataMover struct {

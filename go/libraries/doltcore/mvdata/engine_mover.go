@@ -88,7 +88,23 @@ func (s *SqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 		return err
 	}
 
-	specialInsert, err := sqle.CreateSpecialInsertNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch)
+	errorHandler := func (err error) {
+		if err == io.EOF {
+			return
+		}
+
+		var offendingRow sql.Row
+		switch n := err.(type) {
+		case sql.WrappedInsertError:
+			offendingRow = n.OffendingRow
+		case sql.ErrInsertIgnore:
+			offendingRow = n.OffendingRow
+		}
+
+		badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "create", Details: err.Error()}
+	}
+
+	specialInsert, err := sqle.CreateSpecialInsertNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.ContOnErr, errorHandler) // contonerr translates to ignore
 	if err != nil {
 		return err
 	}
@@ -106,30 +122,33 @@ func (s *SqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 			s.statsCB(s.stats)
 		}
 
-		row, err := iter.Next()
+		_, err := iter.Next()
 		if err != nil {
 			if err == io.EOF {
-				err = iter.Close(s.sqlCtx)
+				_ = iter.Close(s.sqlCtx)
 				break
 			}
-
-			badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: row, TransformName: "reader", Details: err.Error()}
+			//var offendingRow sql.Row
+			//if wi, ok := err.(sql.WrappedInsertError); ok {
+			//	offendingRow = wi.OffendingRow
+			//}
+			//badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "reader", Details: err.Error()}
+		} else {
+			_ = atomic.AddInt32(&s.statOps, 1)
+			s.stats.Additions++
 		}
-
-		_ = atomic.AddInt32(&s.statOps, 1)
-		s.stats.Additions++
 	}
-
-	//if err != nil {
-	//	return err
-	//}
 
 	atomic.LoadInt32(&s.statOps)
 	atomic.StoreInt32(&s.statOps, 0)
 	s.statsCB(s.stats)
 
+	return nil
+}
+
+func (s *SqlEngineMover) Commit(ctx context.Context) error {
 	// TODO: Move this to the actual import code
-	_, _, err = s.se.Query(s.sqlCtx, "COMMIT")
+	_, _, err := s.se.Query(s.sqlCtx, "COMMIT")
 	return err
 }
 

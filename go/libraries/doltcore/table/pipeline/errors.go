@@ -30,7 +30,7 @@ type TransformRowFailure struct {
 
 // Error returns a string containing details of the error that occurred
 func (trf *TransformRowFailure) Error() string {
-	return trf.TransformName + " failed processing"
+	return trf.TransformName + " failed processing due to: " + trf.Details
 }
 
 // IsTransformFailure will return true if the error is an instance of a TransformRowFailure
