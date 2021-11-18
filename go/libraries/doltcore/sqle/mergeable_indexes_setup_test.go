@@ -134,13 +134,17 @@ func customRange(tpl1, tpl2 types.Tuple, bt1, bt2 sql.RangeBoundType) *noms.Read
 		if tupleIndex%2 == 0 {
 			return false, nil
 		}
-		nrc = append(nrc, columnBounds{
-			lowerbound: bound{
-				equals:   bt1 == sql.Closed,
-				infinity: false,
-				val:      tupleVal,
-			},
-		})
+		if bt1 == sql.Closed {
+			nrc = append(nrc, columnBounds{
+				boundsCase: boundsCase_greaterEquals_infinity,
+				lowerbound: tupleVal,
+			})
+		} else {
+			nrc = append(nrc, columnBounds{
+				boundsCase: boundsCase_greater_infinity,
+				lowerbound: tupleVal,
+			})
+		}
 		return false, nil
 	})
 	_ = tpl2.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
@@ -148,10 +152,14 @@ func customRange(tpl1, tpl2 types.Tuple, bt1, bt2 sql.RangeBoundType) *noms.Read
 			return false, nil
 		}
 		idx := (tupleIndex - 1) / 2
-		nrc[idx].upperbound = bound{
-			equals:   bt2 == sql.Closed,
-			infinity: false,
-			val:      tupleVal,
+		if bt2 == sql.Closed {
+			// Bounds cases are enum aliases on bytes, and they're arranged such that we can increment the case
+			// that was previously set when evaluating the lowerbound to get the proper overall case.
+			nrc[idx].boundsCase += 1
+			nrc[idx].upperbound = tupleVal
+		} else {
+			nrc[idx].boundsCase += 2
+			nrc[idx].upperbound = tupleVal
 		}
 		return false, nil
 	})
@@ -170,16 +178,8 @@ func greaterThanRange(tpl types.Tuple) *noms.ReadRange {
 			return false, nil
 		}
 		nrc = append(nrc, columnBounds{
-			lowerbound: bound{
-				equals:   false,
-				infinity: false,
-				val:      tupleVal,
-			},
-			upperbound: bound{
-				equals:   false,
-				infinity: true,
-				val:      nil,
-			},
+			boundsCase: boundsCase_greater_infinity,
+			lowerbound: tupleVal,
 		})
 		return false, nil
 	})
@@ -198,16 +198,8 @@ func lessThanRange(tpl types.Tuple) *noms.ReadRange {
 			return false, nil
 		}
 		nrc = append(nrc, columnBounds{
-			lowerbound: bound{
-				equals:   false,
-				infinity: true,
-				val:      nil,
-			},
-			upperbound: bound{
-				equals:   false,
-				infinity: false,
-				val:      tupleVal,
-			},
+			boundsCase: boundsCase_infinity_less,
+			upperbound: tupleVal,
 		})
 		return false, nil
 	})
@@ -226,16 +218,8 @@ func greaterOrEqualRange(tpl types.Tuple) *noms.ReadRange {
 			return false, nil
 		}
 		nrc = append(nrc, columnBounds{
-			lowerbound: bound{
-				equals:   true,
-				infinity: false,
-				val:      tupleVal,
-			},
-			upperbound: bound{
-				equals:   false,
-				infinity: true,
-				val:      nil,
-			},
+			boundsCase: boundsCase_greaterEquals_infinity,
+			lowerbound: tupleVal,
 		})
 		return false, nil
 	})
@@ -254,16 +238,8 @@ func lessOrEqualRange(tpl types.Tuple) *noms.ReadRange {
 			return false, nil
 		}
 		nrc = append(nrc, columnBounds{
-			lowerbound: bound{
-				equals:   false,
-				infinity: true,
-				val:      nil,
-			},
-			upperbound: bound{
-				equals:   true,
-				infinity: false,
-				val:      tupleVal,
-			},
+			boundsCase: boundsCase_infinity_lessEquals,
+			upperbound: tupleVal,
 		})
 		return false, nil
 	})
@@ -282,16 +258,7 @@ func allRange(tpl types.Tuple) *noms.ReadRange {
 			return false, nil
 		}
 		nrc = append(nrc, columnBounds{
-			lowerbound: bound{
-				equals:   false,
-				infinity: true,
-				val:      nil,
-			},
-			upperbound: bound{
-				equals:   false,
-				infinity: true,
-				val:      nil,
-			},
+			boundsCase: boundsCase_infinity_infinity,
 		})
 		return false, nil
 	})
