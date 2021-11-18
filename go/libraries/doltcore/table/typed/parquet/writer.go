@@ -17,8 +17,8 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"github.com/xitongsys/parquet-go-source/local"
 
+	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/source"
 	"github.com/xitongsys/parquet-go/writer"
 
@@ -31,9 +31,9 @@ import (
 var WriteBufSize = 256 * 1024
 
 type ParquetWriter struct {
-	filewriter 	source.ParquetFile
-	pwriter 	*writer.CSVWriter
-	sch     	schema.Schema
+	filewriter source.ParquetFile
+	pwriter    *writer.CSVWriter
+	sch        schema.Schema
 }
 
 func NewParquetWriter(outSch schema.Schema, destName string) (*ParquetWriter, error) {

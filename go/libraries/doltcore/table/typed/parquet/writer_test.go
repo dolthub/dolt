@@ -17,11 +17,12 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"github.com/xitongsys/parquet-go-source/local"
-	"github.com/xitongsys/parquet-go/reader"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/xitongsys/parquet-go-source/local"
+	"github.com/xitongsys/parquet-go/reader"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -47,9 +48,9 @@ var colColl = schema.NewColCollection(inCols...)
 var rowSch = schema.MustSchemaFromCols(colColl)
 
 type Person struct {
-	Name    string  `parquet:"name=name, type=BYTE_ARRAY, convertedtype=UTF8"`
-	Age     int64   `parquet:"name=age, type=INT64, repetitiontype=OPTIONAL"`
-	Title   string   `parquet:"name=title, type=BYTE_ARRAY, convertedtype=UTF8, repetitiontype=OPTIONAL"`
+	Name  string `parquet:"name=name, type=BYTE_ARRAY, convertedtype=UTF8"`
+	Age   int64  `parquet:"name=age, type=INT64, repetitiontype=OPTIONAL"`
+	Title string `parquet:"name=title, type=BYTE_ARRAY, convertedtype=UTF8, repetitiontype=OPTIONAL"`
 }
 
 func mustRow(r row.Row, err error) row.Row {
@@ -79,7 +80,7 @@ func getSampleRows() (rows []row.Row) {
 			ageColTag:  types.Uint(27),
 			//titleColTag: types.String(""),
 
-		/* title = NULL */})),
+			/* title = NULL */})),
 	}
 }
 
