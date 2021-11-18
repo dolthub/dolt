@@ -356,11 +356,11 @@ func DBNamesAndPathsFromDir(fs filesys.Filesys, path string) ([]EnvNameAndPath, 
 // with initialized environments for each of those subfolder data repositories. subfolders whose name starts with '.' are
 // skipped.
 func LoadMultiEnvFromDir(
-		ctx context.Context,
-		hdp HomeDirProvider,
-		cfg config.ReadWriteConfig,
-		fs filesys.Filesys,
-		path, version string,
+	ctx context.Context,
+	hdp HomeDirProvider,
+	cfg config.ReadWriteConfig,
+	fs filesys.Filesys,
+	path, version string,
 ) (*MultiRepoEnv, error) {
 	envNamesAndPaths, err := DBNamesAndPathsFromDir(fs, path)
 

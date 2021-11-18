@@ -216,7 +216,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	}
 
 	// TODO: delete database in current dir
-	
+
 	delete(p.databases, strings.ToLower(name))
 	return nil
 }

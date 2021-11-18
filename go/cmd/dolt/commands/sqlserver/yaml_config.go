@@ -102,7 +102,7 @@ type YAMLConfig struct {
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
 	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
-	dataDir           *string `yaml:"data_dir"`
+	dataDir           *string               `yaml:"data_dir"`
 }
 
 var _ ServerConfig = YAMLConfig{}
