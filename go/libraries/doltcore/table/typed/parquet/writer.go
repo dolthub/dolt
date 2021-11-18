@@ -17,9 +17,8 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"io"
-
 	"github.com/xitongsys/parquet-go-source/local"
+
 	"github.com/xitongsys/parquet-go/source"
 	"github.com/xitongsys/parquet-go/writer"
 
@@ -32,21 +31,27 @@ import (
 var WriteBufSize = 256 * 1024
 
 type ParquetWriter struct {
-	closer  source.ParquetFile
-	pwriter *writer.CSVWriter
-	sch     schema.Schema
+	filewriter 	source.ParquetFile
+	pwriter 	*writer.CSVWriter
+	sch     	schema.Schema
 }
 
-func NewParquetWriter(wr io.WriteCloser, outSch schema.Schema, srcName string, destName string) (*ParquetWriter, error) {
+func NewParquetWriter(outSch schema.Schema, destName string) (*ParquetWriter, error) {
 	allCols := outSch.GetAllCols()
 	columns := allCols.GetColumns()
 
 	ColTypeMap := getTypeMap()
 	var csvSchema []string
+	var repetitionType string
 	for _, col := range columns {
 		colName := col.Name
 		colType := col.TypeInfo.GetTypeIdentifier()
-		csvSchema = append(csvSchema, fmt.Sprintf("name=%s, %s", colName, ColTypeMap[colType]))
+		if col.IsNullable() {
+			repetitionType = `, repetitiontype=OPTIONAL`
+		} else {
+			repetitionType = ``
+		}
+		csvSchema = append(csvSchema, fmt.Sprintf("name=%s, %s%s", colName, ColTypeMap[colType], repetitionType))
 	}
 
 	fw, err := local.NewLocalFileWriter(destName)
@@ -56,12 +61,12 @@ func NewParquetWriter(wr io.WriteCloser, outSch schema.Schema, srcName string, d
 
 	// np configures the degree of concurrency for our Reader and Writers
 	// TODO: not sure what default value to set 'np' to
-	pw, err := writer.NewCSVWriter(csvSchema, fw, 4)
+	pw, err := writer.NewCSVWriter(csvSchema, fw, int64(WriteBufSize))
 	if err != nil {
 		return nil, err
 	}
 
-	return &ParquetWriter{closer: fw, pwriter: pw, sch: outSch}, nil
+	return &ParquetWriter{filewriter: fw, pwriter: pw, sch: outSch}, nil
 }
 
 func (pwr *ParquetWriter) GetSchema() schema.Schema {
@@ -101,27 +106,28 @@ func (pwr *ParquetWriter) Close(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	pwr.closer.Close()
+	pwr.filewriter.Close()
 	return nil
 }
 
 func getTypeMap() map[typeinfo.Identifier]string {
 
 	typeMap := map[typeinfo.Identifier]string{
-		typeinfo.DatetimeTypeIdentifier:   `type=BYTE_ARRAY`,
-		typeinfo.DecimalTypeIdentifier:    `type=BYTE_ARRAY`,
-		typeinfo.EnumTypeIdentifier:       `type=BYTE_ARRAY`,
-		typeinfo.InlineBlobTypeIdentifier: `type=BYTE_ARRAY`,
-		typeinfo.SetTypeIdentifier:        `type=BYTE_ARRAY`,
-		typeinfo.TimeTypeIdentifier:       `type=BYTE_ARRAY`,
-		typeinfo.TupleTypeIdentifier:      `type=BYTE_ARRAY`,
-		typeinfo.UuidTypeIdentifier:       `type=BYTE_ARRAY`,
-		typeinfo.VarBinaryTypeIdentifier:  `type=BYTE_ARRAY`,
-		typeinfo.YearTypeIdentifier:       `type=BYTE_ARRAY`,
+		typeinfo.DatetimeTypeIdentifier:   `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.DecimalTypeIdentifier:    `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.EnumTypeIdentifier:       `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.InlineBlobTypeIdentifier: `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.SetTypeIdentifier:        `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.TimeTypeIdentifier:       `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.TupleTypeIdentifier:      `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.UuidTypeIdentifier:       `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.VarBinaryTypeIdentifier:  `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.YearTypeIdentifier:       `type=BYTE_ARRAY, convertedtype=UTF8`,
+		typeinfo.BlobStringTypeIdentifier: `type=BYTE_ARRAY, convertedtype=UTF8`,
 
 		typeinfo.BitTypeIdentifier:       `type=BYTE_ARRAY`,
 		typeinfo.BoolTypeIdentifier:      `type=BOOLEAN`,
-		typeinfo.VarStringTypeIdentifier: `type=BYTE_ARRAY`,
+		typeinfo.VarStringTypeIdentifier: `type=BYTE_ARRAY, convertedtype=UTF8`,
 		typeinfo.UintTypeIdentifier:      `type=INT64, convertedtype=UINT_64`,
 		typeinfo.IntTypeIdentifier:       `type=INT64, convertedtype=INT_64`,
 		typeinfo.FloatTypeIdentifier:     `type=DOUBLE`,

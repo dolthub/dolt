@@ -308,3 +308,48 @@ SQL
    run dolt sql -q "SELECT * FROM timetable" -r csv
    [[ "$output" =~ "1,2021-06-02 15:37:24 +0000 UTC" ]] ||  false
 }
+
+@test "export-tables: parquet file export check with parquet tools" {
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
+    dolt sql -q "INSERT INTO test_table VALUES (1, 'row1', 22), (2, 'row2', 33), (3, 'row3', 22);"
+
+    run dolt table export -f test_table result.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f result.parquet ]
+
+    run parquet-tools cat --json result.parquet > output.json
+    [ "$status" -eq 0 ]
+    row1='{"pk":1,"col1":"row1","col2":22}'
+    row2='{"pk":2,"col1":"row2","col2":33}'
+    row3='{"pk":3,"col1":"row3","col2":22}'
+    [[ "$output" =~ "$row1" ]] || false
+    [[ "$output" =~ "$row2" ]] || false
+    [[ "$output" =~ "$row3" ]] || false
+}
+
+@test "export-tables: parquet file export compare pandas and pyarrow reads" {
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
+    dolt sql -q "INSERT INTO test_table VALUES (1, 'row1', 22), (2, 'row2', 33), (3, 'row3', 22);"
+
+    run dolt table export -f test_table result.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f result.parquet ]
+
+    echo "import pandas as pd" > panda.py
+    echo "df = pd.read_parquet('result.parquet')" >> panda.py
+    echo "print(df)" >> panda.py
+    python3 panda.py > pandas.txt
+    [ -f pandas.txt ]
+
+    echo "import pyarrow.parquet as pq" > arrow.py
+    echo "table = pq.read_table('result.parquet')" >> arrow.py
+    echo "print(table.to_pandas())" >> arrow.py
+    python3 arrow.py > pyarrow.txt
+    [ -f pyarrow.txt ]
+
+    run diff pandas.txt pyarrow.txt
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
