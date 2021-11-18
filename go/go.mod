@@ -41,7 +41,6 @@ require (
 	github.com/jedib0t/go-pretty v4.3.1-0.20191104025401-85fe5d6a7c4d+incompatible
 	github.com/jpillora/backoff v1.0.0
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
-	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.9
@@ -55,6 +54,7 @@ require (
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/shirou/gopsutil v3.21.2+incompatible
 	github.com/shopspring/decimal v1.2.0
+	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/sirupsen/logrus v1.8.1
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/spf13/cobra v1.0.0
