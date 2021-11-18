@@ -310,7 +310,7 @@ SQL
 }
 
 @test "export-tables: parquet file export check with parquet tools" {
-    brew install parquet-tools
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
     dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
     dolt sql -q "INSERT INTO test_table VALUES (1, 'row1', 22), (2, 'row2', 33), (3, 'row3', 22);"
 
@@ -330,8 +330,6 @@ SQL
 }
 
 @test "export-tables: parquet file export compare pandas and pyarrow reads" {
-    pip install pandas
-    pip install pyarrow
     dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
     dolt sql -q "INSERT INTO test_table VALUES (1, 'row1', 22), (2, 'row2', 33), (3, 'row3', 22);"
 
