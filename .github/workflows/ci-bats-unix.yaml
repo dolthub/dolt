@@ -63,9 +63,6 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
-      - name: Install Parquet-tools
-        run: |
-        brew install parquet-tools
       - name: Install Dolt
         working-directory: ./go
         run: |
@@ -81,6 +78,8 @@ jobs:
       - name: Install expect
         if: matrix.os == 'ubuntu-18.04'
         run: sudo apt-get install -y expect
+      - name: Install Parquet-tools
+        run: brew install parquet-tools
       - name: Check expect
         run: expect -v
       - name: Test all Unix
