@@ -155,7 +155,8 @@ func (s *sqlEngineMover) createOrEmptyTableIfNeeded() error {
 		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("TRUNCATE TABLE %s", s.tableName))
 		return err
 	default:
-		return nil
+		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("START TRANSACTION"))
+		return err
 	}
 }
 
@@ -207,21 +208,20 @@ func (s *sqlEngineMover) createTable() error {
 
 func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandler func (err error)) (sql.Node, error) {
 	switch s.importOption {
-	case CreateOp:
-		// anti patten to do create table here.
-		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, errorHandler) // contonerr translates to ignore
-	case ReplaceOp:
-		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, errorHandler) // contonerr translates to ignore
+	case CreateOp, ReplaceOp:
+		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr,false, errorHandler) // contonerr translates to ignore
+	case UpdateOp:
+		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, false, true, errorHandler)
+	default:
+		return nil, fmt.Errorf("unsupported")
 	}
-
-	return nil, fmt.Errorf("unsupported")
 }
 
-func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, errorHandler plan.ErrorHandler) (sql.Node, error) {
+func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, replace bool, errorHandler plan.ErrorHandler) (sql.Node, error) {
 	src := plan.NewRowIterSource(schema, source)
 	dest := plan.NewUnresolvedTable(tableName, dbname)
 
-	insert := plan.NewInsertInto(sql.UnresolvedDatabase(dbname), dest, src, false, nil, nil, ignore)
+	insert := plan.NewInsertInto(sql.UnresolvedDatabase(dbname), dest, src, replace, nil, nil, ignore)
 	analyzed, err := analyzer.Analyze(ctx, insert, nil)
 	if err != nil {
 		return nil, err
@@ -254,10 +254,6 @@ func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbnam
 	accumulatorNode := analyzedQueryProcess.Child
 
 	return accumulatorNode.(*plan.RowUpdateAccumulator).Child, nil
-}
-
-func createUpdateImportNode(ctx *sql.Context, analyze *analyzer.Analyzer, dbname string, tableName string) {
-
 }
 
 func quoteIdentifiers(ids []string) []string {
