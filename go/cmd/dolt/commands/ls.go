@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -61,12 +60,12 @@ func (cmd LsCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+func (cmd LsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cmd.ArgParser()
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 }
 
-func (cmd LsCmd) createArgParser() *argparser.ArgParser {
+func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(verboseFlag, "v", "show the hash of the table")
 	ap.SupportsFlag(systemFlag, "s", "show system tables")
@@ -81,7 +80,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

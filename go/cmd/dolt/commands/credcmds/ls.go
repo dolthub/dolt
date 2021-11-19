@@ -16,6 +16,7 @@ package credcmds
 
 import (
 	"context"
+	"io"
 	"strings"
 
 	"github.com/fatih/color"
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var lsDocs = cli.CommandDocumentationContent{
@@ -53,9 +53,9 @@ func (cmd LsCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+func (cmd LsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cmd.ArgParser()
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -69,7 +69,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_LS
 }
 
-func (cmd LsCmd) createArgParser() *argparser.ArgParser {
+func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag("verbose", "v", "Verbose output, including key id.")
 	return ap
@@ -77,7 +77,7 @@ func (cmd LsCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

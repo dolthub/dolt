@@ -29,7 +29,6 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var schExportDocs = cli.CommandDocumentationContent{
@@ -53,12 +52,12 @@ func (cmd ExportCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
+func (cmd ExportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cmd.ArgParser()
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
 }
 
-func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
+func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "the file that the schema will be written to."})
@@ -72,7 +71,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

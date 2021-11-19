@@ -23,7 +23,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
@@ -74,9 +75,9 @@ func (idt *IndexedDoltTable) IsTemporary() bool {
 }
 
 type rangePartition struct {
-	partitionRange prolly.Range
+	partitionRange *noms.ReadRange
 	keyBytes       []byte
-	rowData        prolly.Map
+	rowData        types.Map
 }
 
 func (rp rangePartition) Key() []byte {
@@ -84,13 +85,13 @@ func (rp rangePartition) Key() []byte {
 }
 
 type rangePartitionIter struct {
-	ranges  []prolly.Range
+	ranges  []*noms.ReadRange
 	curr    int
 	mu      *sync.Mutex
-	rowData prolly.Map
+	rowData types.Map
 }
 
-func NewRangePartitionIter(ranges []prolly.Range, rowData prolly.Map) *rangePartitionIter {
+func NewRangePartitionIter(ranges []*noms.ReadRange, rowData types.Map) *rangePartitionIter {
 	return &rangePartitionIter{
 		ranges:  ranges,
 		curr:    0,
@@ -147,7 +148,7 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
 	switch typed := part.(type) {
 	case rangePartition:
-		return t.indexLookup.RowIterForRanges(ctx, typed.rowData, projectedCols, []prolly.Range{typed.partitionRange})
+		return t.indexLookup.RowIterForRanges(ctx, typed.rowData, []*noms.ReadRange{typed.partitionRange}, projectedCols)
 	case sqlutil.SinglePartition:
 		return t.indexLookup.RowIter(ctx, typed.RowData, projectedCols)
 	}

@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
@@ -67,13 +66,13 @@ func (cmd SqlClientCmd) Description() string {
 	return "Starts a built-in MySQL client."
 }
 
-func (cmd SqlClientCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
+func (cmd SqlClientCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cmd.ArgParser()
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
 }
 
-func (cmd SqlClientCmd) createArgParser() *argparser.ArgParser {
-	ap := SqlServerCmd{}.CreateArgParser()
+func (cmd SqlClientCmd) ArgParser() *argparser.ArgParser {
+	ap := SqlServerCmd{}.ArgParser()
 	ap.SupportsFlag(sqlClientDualFlag, "d", "Causes this command to spawn a dolt server that is automatically connected to.")
 	return ap
 }
@@ -87,7 +86,7 @@ func (cmd SqlClientCmd) Hidden() bool {
 }
 
 func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -96,7 +95,17 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	var err error
 
 	if apr.Contains(sqlClientDualFlag) {
-		serverConfig, err = GetServerConfig(dEnv, apr, true)
+		if !dEnv.Valid() {
+			if !cli.CheckEnvIsValid(dEnv) {
+				return 2
+			}
+
+			cli.PrintErrln(color.RedString("--dual flag requires running within a dolt database directory"))
+			cli.PrintErrln(err.Error())
+			return 1
+		}
+
+		serverConfig, err = GetServerConfig(dEnv, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())
@@ -104,7 +113,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 		cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-		serverController = CreateServerController()
+		serverController = NewServerController()
 		go func() {
 			_, _ = Serve(ctx, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
 		}()
@@ -114,7 +123,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			return 1
 		}
 	} else {
-		serverConfig, err = GetServerConfig(dEnv, apr, false)
+		serverConfig, err = GetServerConfig(dEnv, apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Bad Configuration"))
 			cli.PrintErrln(err.Error())

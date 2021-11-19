@@ -42,58 +42,65 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
-	Version = "0.32.1"
+	Version = "0.34.4"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
+var dumpZshCommand = &commands.GenZshCompCmd{}
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
 	commands.InitCmd{},
 	commands.StatusCmd{},
 	commands.AddCmd{},
+	commands.DiffCmd{},
 	commands.ResetCmd{},
 	commands.CommitCmd{},
 	commands.SqlCmd{VersionStr: Version},
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{},
 	commands.LogCmd{},
-	commands.DiffCmd{},
-	commands.BlameCmd{},
-	commands.MergeCmd{},
 	commands.BranchCmd{},
-	commands.TagCmd{},
 	commands.CheckoutCmd{},
+	commands.MergeCmd{},
+	cnfcmds.Commands,
+	commands.RevertCmd{},
+	commands.CloneCmd{},
+	commands.FetchCmd{},
+	commands.PullCmd{},
+	commands.PushCmd{},
+	commands.ConfigCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
-	commands.PushCmd{},
-	commands.PullCmd{},
-	commands.FetchCmd{},
-	commands.CloneCmd{},
-	commands.RevertCmd{},
-	credcmds.Commands,
 	commands.LoginCmd{},
-	commands.VersionCmd{VersionStr: Version},
-	commands.ConfigCmd{},
+	credcmds.Commands,
 	commands.LsCmd{},
 	schcmds.Commands,
 	tblcmds.Commands,
-	cnfcmds.Commands,
+	commands.TagCmd{},
+	commands.BlameCmd{},
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
+	commands.MigrateCmd{},
 	dumpDocsCommand,
 	commands.ReadTablesCmd{},
 	commands.GarbageCollectionCmd{},
 	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
+	commands.VersionCmd{VersionStr: Version},
+	commands.DumpCmd{},
+	dumpDocsCommand,
+	dumpZshCommand,
 })
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
+	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
 }
 
@@ -296,8 +303,9 @@ func runMain() int {
 
 	defer tempfiles.MovableTempFileProvider.Clean()
 
-	if dEnv.DoltDB != nil {
-		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.OutStream)
+	err = dsess.InitPersistedSystemVars(dEnv)
+	if err != nil {
+		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
 	start := time.Now()

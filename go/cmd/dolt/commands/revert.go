@@ -16,16 +16,16 @@ package commands
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var revertDocs = cli.CommandDocumentationContent{
@@ -57,9 +57,13 @@ func (cmd RevertCmd) Description() string {
 }
 
 // CreateMarkdown implements the interface cli.Command.
-func (cmd RevertCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := argparser.NewArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, revertDocs, ap))
+func (cmd RevertCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cli.CreateRevertArgParser()
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, revertDocs, ap))
+}
+
+func (cmd RevertCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateRevertArgParser()
 }
 
 // Exec implements the interface cli.Command.
@@ -67,6 +71,11 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	ap := cli.CreateRevertArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	// This command creates a commit, so we need user identity
+	if !cli.CheckUserNameAndEmail(dEnv) {
+		return 1
+	}
 
 	if apr.NArg() < 1 {
 		usage()

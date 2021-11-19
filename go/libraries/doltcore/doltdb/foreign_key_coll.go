@@ -714,9 +714,7 @@ func (fk ForeignKey) ValidateData(
 		}
 
 		indexIter := noms.NewNomsRangeReader(parentDef.Schema(), parentIdxData,
-			[]*noms.ReadRange{{Start: partial, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-				return tuple.StartsWith(partial), nil
-			}}},
+			[]*noms.ReadRange{{Start: partial, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(partial)}},
 		)
 
 		switch _, err = indexIter.ReadRow(ctx); err {

@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/fatih/color"
 
@@ -71,12 +72,12 @@ func (cmd GarbageCollectionCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd GarbageCollectionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, gcDocs, ap))
+func (cmd GarbageCollectionCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cmd.ArgParser()
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, gcDocs, ap))
 }
 
-func (cmd GarbageCollectionCmd) createArgParser() *argparser.ArgParser {
+func (cmd GarbageCollectionCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(gcShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	return ap
@@ -92,7 +93,7 @@ func (cmd GarbageCollectionCmd) EventType() eventsapi.ClientEventType {
 func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	var verr errhand.VerboseError
 
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, gcDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

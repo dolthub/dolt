@@ -31,8 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
@@ -66,9 +66,13 @@ func (cmd CommitCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd CommitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateCommitArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+}
+
+func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateCommitArgParser()
 }
 
 // Exec executes the command
@@ -77,7 +81,6 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	// Check if the -all param is provided. Stage all tables if so.
 	allFlag := apr.Contains(cli.AllFlag)
 
 	roots, err := dEnv.Roots(ctx)
@@ -97,6 +100,10 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
 	} else {
+		// This command creates a commit, so we need user identity
+		if !cli.CheckUserNameAndEmail(dEnv) {
+			return 1
+		}
 		name, email, err = env.GetNameAndEmail(dEnv.Config)
 	}
 

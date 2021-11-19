@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
@@ -97,9 +98,10 @@ func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, stateme
 // NewTestSQLCtx returns a new *sql.Context with a default DoltSession, a new IndexRegistry, and a new ViewRegistry
 func NewTestSQLCtx(ctx context.Context) *sql.Context {
 	session := dsess.DefaultSession()
+	dsess := session.NewDoltSession(config2.NewMapConfig(make(map[string]string)))
 	sqlCtx := sql.NewContext(
 		ctx,
-		sql.WithSession(session),
+		sql.WithSession(dsess),
 	).WithCurrentDB("dolt")
 
 	return sqlCtx
@@ -107,7 +109,7 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
 func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
-	engine := sqle.NewDefault(NewDoltDatabaseProvider(dEnv.Config, db))
+	engine := sqle.NewDefault(NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, db))
 
 	sqlCtx := NewTestSQLCtx(ctx)
 

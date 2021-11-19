@@ -1278,10 +1278,7 @@ func (ddb *DoltDB) PushChunksForRefHash(ctx context.Context, tempDir string, src
 func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, stRef types.Ref, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
 		puller, err := datas.NewPuller(ctx, tempDir, defaultChunksPerTF, srcDB.db, ddb.db, stRef.TargetHash(), pullerEventCh)
-
-		if err == datas.ErrDBUpToDate {
-			return nil
-		} else if err != nil {
+		if err != nil {
 			return err
 		}
 
@@ -1305,4 +1302,13 @@ func (ddb *DoltDB) SetCommitHookLogger(ctx context.Context, wr io.Writer) *DoltD
 		ddb.db = ddb.db.SetCommitHookLogger(ctx, wr)
 	}
 	return ddb
+}
+
+func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) error {
+	ds, err := ddb.db.GetDataset(ctx, datasetId)
+	if err != nil {
+		return err
+	}
+	ddb.db.ExecuteCommitHooks(ctx, ds)
+	return nil
 }

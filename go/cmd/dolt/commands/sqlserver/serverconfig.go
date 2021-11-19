@@ -35,16 +35,23 @@ const (
 )
 
 const (
-	defaultHost             = "localhost"
-	defaultPort             = 3306
-	defaultUser             = "root"
-	defaultPass             = ""
-	defaultTimeout          = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
-	defaultReadOnly         = false
-	defaultLogLevel         = LogLevel_Info
-	defaultAutoCommit       = true
-	defaultMaxConnections   = 100
-	defaultQueryParallelism = 2
+	defaultHost                = "localhost"
+	defaultPort                = 3306
+	defaultUser                = "root"
+	defaultPass                = ""
+	defaultTimeout             = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
+	defaultReadOnly            = false
+	defaultLogLevel            = LogLevel_Info
+	defaultAutoCommit          = true
+	defaultMaxConnections      = 100
+	defaultQueryParallelism    = 2
+	defaultPersistenceBahavior = loadPerisistentGlobals
+	defaultDataDir             = "."
+)
+
+const (
+	ignorePeristentGlobals = "ignore"
+	loadPerisistentGlobals = "load"
 )
 
 // String returns the string representation of the log level.
@@ -91,6 +98,8 @@ type ServerConfig interface {
 	// a multiple db configuration. If nil is returned the server will look for a database in the current directory and
 	// give it a name automatically.
 	DatabaseNamesAndPaths() []env.EnvNameAndPath
+	// DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
+	DataDir() string
 	// MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 	MaxConnections() uint64
 	// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
@@ -101,6 +110,8 @@ type ServerConfig interface {
 	TLSCert() string
 	// RequireSecureTransport is true if the server should reject non-TLS connections.
 	RequireSecureTransport() bool
+	// PersistenceBehavior is "load" if we include persisted system globals on server init
+	PersistenceBehavior() string
 }
 
 type commandLineServerConfig struct {
@@ -112,13 +123,17 @@ type commandLineServerConfig struct {
 	readOnly               bool
 	logLevel               LogLevel
 	dbNamesAndPaths        []env.EnvNameAndPath
+	dataDir                string
 	autoCommit             bool
 	maxConnections         uint64
 	queryParallelism       int
 	tlsKey                 string
 	tlsCert                string
 	requireSecureTransport bool
+	persistenceBehavior    string
 }
+
+var _ ServerConfig = (*commandLineServerConfig)(nil)
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
 func (cfg *commandLineServerConfig) Host() string {
@@ -175,6 +190,11 @@ func (cfg *commandLineServerConfig) QueryParallelism() int {
 	return cfg.queryParallelism
 }
 
+// PersistenceBehavior returns whether to autoload persisted server configuration
+func (cfg *commandLineServerConfig) PersistenceBehavior() string {
+	return cfg.persistenceBehavior
+}
+
 func (cfg *commandLineServerConfig) TLSKey() string {
 	return cfg.tlsKey
 }
@@ -192,6 +212,10 @@ func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 // give it a name automatically.
 func (cfg *commandLineServerConfig) DatabaseNamesAndPaths() []env.EnvNameAndPath {
 	return cfg.dbNamesAndPaths
+}
+
+func (cfg *commandLineServerConfig) DataDir() string {
+	return cfg.dataDir
 }
 
 // withHost updates the host and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
@@ -254,19 +278,31 @@ func (cfg *commandLineServerConfig) withDBNamesAndPaths(dbNamesAndPaths []env.En
 	return cfg
 }
 
+func (cfg *commandLineServerConfig) withDataDir(dataDir string) *commandLineServerConfig {
+	cfg.dataDir = dataDir
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) withPersistenceBehavior(persistenceBehavior string) *commandLineServerConfig {
+	cfg.persistenceBehavior = persistenceBehavior
+	return cfg
+}
+
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
-		host:             defaultHost,
-		port:             defaultPort,
-		user:             defaultUser,
-		password:         defaultPass,
-		timeout:          defaultTimeout,
-		readOnly:         defaultReadOnly,
-		logLevel:         defaultLogLevel,
-		autoCommit:       defaultAutoCommit,
-		maxConnections:   defaultMaxConnections,
-		queryParallelism: defaultQueryParallelism,
+		host:                defaultHost,
+		port:                defaultPort,
+		user:                defaultUser,
+		password:            defaultPass,
+		timeout:             defaultTimeout,
+		readOnly:            defaultReadOnly,
+		logLevel:            defaultLogLevel,
+		autoCommit:          defaultAutoCommit,
+		maxConnections:      defaultMaxConnections,
+		queryParallelism:    defaultQueryParallelism,
+		persistenceBehavior: defaultPersistenceBahavior,
+		dataDir:             defaultDataDir,
 	}
 }
 

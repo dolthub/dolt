@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -25,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var checkoutDocs = cli.CommandDocumentationContent{
@@ -62,9 +62,13 @@ func (cmd CheckoutCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CheckoutCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd CheckoutCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateCheckoutArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
+}
+
+func (cmd CheckoutCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateCheckoutArgParser()
 }
 
 // EventType returns the type of the event to log

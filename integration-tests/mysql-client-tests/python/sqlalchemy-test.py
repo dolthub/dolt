@@ -6,19 +6,29 @@ from sqlalchemy import create_engine
 import sys
 
 QUERY_RESPONSE = [
-    { "create table test (pk int, `value` int, primary key(pk))": [] },
-    { "describe test": [
+    {"create table test (pk int, `value` int, primary key(pk))": []},
+    {"describe test": [
         ('pk', 'int', 'NO', 'PRI', '', ''),
         ('value', 'int', 'YES', '', '', '')
-    ] },
-    { "insert into test (pk, `value`) values (0,0)": () },
-    { "select * from test": [(0,0)] }
+    ]},
+    {"insert into test (pk, `value`) values (0,0)": ()},
+    {"select * from test": [(0, 0)]},
+    {"select dolt_add('-A');": [(0,)]},
+    {"select dolt_commit('-m', 'my commit')": [('',)]},
+    {"select COUNT(*) FROM dolt_log": [(2,)]},
+    {"select dolt_checkout('-b', 'mybranch')": [(0,)]},
+    {"insert into test (pk, `value`) values (1,1)": []},
+    {"select dolt_commit('-a', '-m', 'my commit2')": [('',)]},
+    {"select dolt_checkout('main')": [(0,)]},
+    {"select dolt_merge('mybranch')": [(1,)]},
+    {"select COUNT(*) FROM dolt_log": [(3,)]},
 ]
-    
+
+
 def main():
     user = sys.argv[1]
     port = int(sys.argv[2])
-    db   = sys.argv[3]
+    db = sys.argv[3]
 
     conn_string_base = "mysql+mysqlconnector://"
 
@@ -26,18 +36,18 @@ def main():
                            "{user}@127.0.0.1:{port}/{db}".format(user=user,
                                                                  port=port,
                                                                  db=db)
-    )
+                           )
 
     with engine.connect() as con:
         for query_response in QUERY_RESPONSE:
             query = list(query_response.keys())[0]
             exp_results = query_response[query]
-            
+
             result_proxy = con.execute(query)
-            
+
             try:
                 results = result_proxy.fetchall()
-                if ( results != exp_results ):
+                if (results != exp_results) and ("dolt_commit" not in query):
                     print("Query:")
                     print(query)
                     print("Expected:")
@@ -52,5 +62,6 @@ def main():
 
     con.close()
     exit(0)
+
 
 main()

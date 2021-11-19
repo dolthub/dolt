@@ -60,8 +60,8 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return nil, err
 		}
 	} else {
-		name = dSess.Username
-		email = dSess.Email
+		name = dSess.Username()
+		email = dSess.Email()
 	}
 
 	// Get the commit message.

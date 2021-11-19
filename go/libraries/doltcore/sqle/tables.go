@@ -39,9 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -188,40 +186,59 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, err
 	}
 
-	tblSch, err := tbl.GetSchema(ctx)
+	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	rows, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	var sqlIndexes []sql.Index
+	cols := sch.GetPKCols().GetColumns()
 
-	indexSch, err := schema.SchemaFromCols(tblSch.GetPKCols())
-	if err != nil {
-		return nil, err
+	if len(cols) > 0 {
+		sqlIndexes = append(sqlIndexes, &doltIndex{
+			cols:         cols,
+			db:           t.db,
+			id:           "PRIMARY",
+			indexRowData: rowData,
+			indexSch:     sch,
+			table:        tbl,
+			tableData:    rowData,
+			tableName:    t.Name(),
+			tableSch:     sch,
+			unique:       true,
+			generated:    false,
+		})
 	}
-	keyDesc, _ := rows.TupleDescriptors()
-	bld := val.NewTupleBuilder(keyDesc)
 
-	sqlIndexes = append(sqlIndexes, &doltIndex{
-		id:        "PRIMARY",
-		unique:    true,
-		generated: false,
-		tableName: t.Name(),
-		db:        t.db,
-		table:     tbl,
-		indexRows: rows,
-		keyBldr:   bld,
-		indexSch:  indexSch,
-		tableRows: rows,
-		tableSch:  tblSch,
-	})
-
-	// todo(andy) partial and secondary indexes
+	for _, index := range sch.Indexes().AllIndexes() {
+		indexRowData, err := tbl.GetIndexRowData(ctx, index.Name())
+		if err != nil {
+			return nil, err
+		}
+		cols := make([]schema.Column, index.Count())
+		for i, tag := range index.IndexedColumnTags() {
+			cols[i], _ = index.GetColumn(tag)
+		}
+		sqlIndexes = append(sqlIndexes, &doltIndex{
+			cols:         cols,
+			db:           t.db,
+			id:           index.Name(),
+			indexRowData: indexRowData,
+			indexSch:     index.Schema(),
+			table:        tbl,
+			tableData:    rowData,
+			tableName:    t.Name(),
+			tableSch:     sch,
+			unique:       index.IsUnique(),
+			comment:      index.Comment(),
+			generated:    false,
+		})
+	}
 
 	return sqlIndexes, nil
 }
@@ -262,7 +279,7 @@ func (t *DoltTable) NumRows(ctx *sql.Context) (uint64, error) {
 		return 0, err
 	}
 
-	return m.Count(), nil
+	return m.Len(), nil
 }
 
 // Format returns the NomsBinFormat for the underlying table
@@ -303,7 +320,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
-	numElements := rowData.Count()
+	numElements := rowData.Len()
 
 	if numElements == 0 {
 		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 0, rowData}), nil
@@ -461,7 +478,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, e
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
-	if sess.BatchMode == dsess.Batched {
+	if sess.BatchMode() == dsess.Batched {
 		if t.ed != nil {
 			return t.ed, nil
 		}
@@ -510,24 +527,20 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
-	numOfRows := int(rowData.Count())
+	numOfRows := int(rowData.Len())
 	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, table.ValueReadWriter(), t.sch)
 	if err != nil {
 		return 0, err
 	}
-
-	empty := prolly.NewEmptyMap(t.sch)
-	indexes, err := types.NewMap(ctx, table.ValueReadWriter())
+	empty, err := types.NewMap(ctx, table.ValueReadWriter())
 	if err != nil {
 		return 0, err
 	}
 	// truncate table resets auto-increment value
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), schVal, empty, indexes, nil)
+	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), schVal, empty, empty, nil)
 	if err != nil {
 		return 0, err
 	}
-
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable, t.opts)
 	if err != nil {
 		return 0, err
@@ -537,12 +550,10 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
 	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
 	if err != nil {
 		return 0, err
 	}
-
 	err = t.setRoot(ctx, newRoot)
 	if err != nil {
 		return 0, err
@@ -689,11 +700,11 @@ var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
 type doltTablePartitionIter struct {
 	i          int
 	mu         *sync.Mutex
-	rowData    prolly.Map
+	rowData    types.Map
 	partitions []doltTablePartition
 }
 
-func newDoltTablePartitionIter(rowData prolly.Map, partitions ...doltTablePartition) *doltTablePartitionIter {
+func newDoltTablePartitionIter(rowData types.Map, partitions ...doltTablePartition) *doltTablePartitionIter {
 	return &doltTablePartitionIter{0, &sync.Mutex{}, rowData, partitions}
 }
 
@@ -726,7 +737,7 @@ type doltTablePartition struct {
 	start uint64
 	// all elements in the partition will be less than end (exclusive)
 	end     uint64
-	rowData prolly.Map
+	rowData types.Map
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition.
@@ -737,9 +748,8 @@ func (p doltTablePartition) Key() []byte {
 // IteratorForPartition returns a types.MapIterator implementation which will iterate through the values
 // for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
 // unless paired with a mutex
-func (p doltTablePartition) IteratorForPartition(ctx context.Context, m prolly.Map) (types.MapTupleIterator, error) {
-	panic("unimplemented")
-	//return m.IterIndexRange(ctx, p.start, p.end)
+func (p doltTablePartition) IteratorForPartition(ctx context.Context, m types.Map) (types.MapTupleIterator, error) {
+	return m.RangeIterator(ctx, p.start, p.end)
 }
 
 type partitionIter struct {
@@ -1403,13 +1413,11 @@ func createIndexForTable(
 			return nil, err
 		}
 	} else { // set the index row data and get a new root with the updated table
-		// todo(andy)
-		//indexRows, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
-		//if err != nil {
-		//	return nil, err
-		//}
-		empty := prolly.NewEmptyMap(index.Schema())
-		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), empty)
+		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
+		if err != nil {
+			return nil, err
+		}
+		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), indexRowData)
 		if err != nil {
 			return nil, err
 		}

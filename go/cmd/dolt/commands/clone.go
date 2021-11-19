@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"io"
 	"os"
 	"path"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -71,12 +71,12 @@ func (cmd CloneCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CloneCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
+func (cmd CloneCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cmd.ArgParser()
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
 }
 
-func (cmd CloneCmd) createArgParser() *argparser.ArgParser {
+func (cmd CloneCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(remoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
 	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
@@ -94,7 +94,7 @@ func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

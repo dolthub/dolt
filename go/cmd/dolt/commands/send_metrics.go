@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"strconv"
 	"time"
@@ -30,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // SendMetricsCommand is the command used for sending metrics
@@ -64,15 +64,20 @@ func (cmd SendMetricsCmd) Hidden() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SendMetricsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SendMetricsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
+}
+
+func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
+	return ap
 }
 
 // Exec is the implementation of the command that flushes the events to the grpc service
 // Exec executes the command
 func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
+	ap := cmd.ArgParser()
 
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

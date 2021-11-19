@@ -40,8 +40,6 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names mus
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
-const DoltReadReplicaKey = "dolt_read_replica_remote"
-
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
@@ -64,7 +62,10 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 		switch v := sqlDb.(type) {
 		case ReadReplicaDatabase, Database:
 			dsqlDBs = append(dsqlDBs, v)
+		case ReadOnlyDatabase, *UserSpaceDatabase:
 		default:
+			// esoteric analyzer errors occur if we silently drop databases, usually caused by pointer receivers
+			panic("cannot cast to SqlDatabase")
 		}
 	}
 	return dsqlDBs
@@ -177,14 +178,23 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
+	var retainedErr error
+
 	headCommit, err := ddb.Resolve(ctx, rsr.CWBHeadSpec(), rsr.CWBHeadRef())
+	if err == doltdb.ErrBranchNotFound {
+		retainedErr = err
+		err = nil
+	}
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
 
-	ws, err := env.WorkingSet(ctx, ddb, rsr)
-	if err != nil {
-		return dsess.InitialDbState{}, err
+	var ws *doltdb.WorkingSet
+	if retainedErr == nil {
+		ws, err = env.WorkingSet(ctx, ddb, rsr)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
 	}
 
 	remotes, err := rsr.GetRemotes()
@@ -204,6 +214,7 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 		DbData:     db.DbData(),
 		Remotes:    remotes,
 		Branches:   branches,
+		Err:        retainedErr,
 	}, nil
 }
 
@@ -341,7 +352,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	//case doltdb.CommitAncestorsTableName:
 	//	dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	//case doltdb.StatusTableName:
-	//	dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}), db.drw), true
+	//	dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess.Session, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}), db.drw), true
 	//}
 	//if found {
 	//	return dt, found, nil
@@ -776,7 +787,7 @@ func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sq
 	return db.createTempDoltTable(ctx, tableName, tempTableRootValue, doltSch, sess)
 }
 
-func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema, dsess *dsess.Session) error {
+func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root *doltdb.RootValue, doltSch schema.Schema, dsess *dsess.DoltSession) error {
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {

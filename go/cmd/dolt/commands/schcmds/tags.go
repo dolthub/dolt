@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var tblTagsDocs = cli.CommandDocumentationContent{
@@ -51,12 +51,12 @@ func (cmd TagsCmd) Description() string {
 	return "Shows the column tags of one or more tables."
 }
 
-func (cmd TagsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblTagsDocs, ap))
+func (cmd TagsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cmd.ArgParser()
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tblTagsDocs, ap))
 }
 
-func (cmd TagsCmd) createArgParser() *argparser.ArgParser {
+func (cmd TagsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) whose tags will be displayed."})
 	ap.SupportsString(commands.FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json. Defaults to tabular.")
@@ -64,7 +64,7 @@ func (cmd TagsCmd) createArgParser() *argparser.ArgParser {
 }
 
 func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblTagsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

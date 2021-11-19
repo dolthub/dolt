@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -26,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var pullDocs = cli.CommandDocumentationContent{
@@ -53,12 +53,12 @@ func (cmd PullCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd PullCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd PullCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreatePullArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, pullDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 }
 
-func (cmd PullCmd) createArgParser() *argparser.ArgParser {
+func (cmd PullCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(cli.SquashParam, "", "Merges changes to the working set without updating the commit history")
 	return ap

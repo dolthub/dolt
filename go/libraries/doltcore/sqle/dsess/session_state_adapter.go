@@ -17,15 +17,12 @@ package dsess
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // SessionStateAdapter is an adapter for env.RepoStateReader in SQL contexts, getting information about the repo state
@@ -86,11 +83,11 @@ func NewSessionStateAdapter(session *Session, dbName string, remotes map[string]
 }
 
 func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
-	return s.session.dbStates[s.dbName].GetRoots(), nil
+	return s.session.GetDbStates()[s.dbName].GetRoots(), nil
 }
 
 func (s SessionStateAdapter) CWBHeadRef() ref.DoltRef {
-	workingSet := s.session.dbStates[s.dbName].WorkingSet
+	workingSet := s.session.GetDbStates()[s.dbName].WorkingSet
 	headRef, err := workingSet.Ref().ToHeadRef()
 	// TODO: fix this interface
 	if err != nil {
@@ -110,15 +107,15 @@ func (s SessionStateAdapter) CWBHeadSpec() *doltdb.CommitSpec {
 }
 
 func (s SessionStateAdapter) IsMergeActive(ctx context.Context) (bool, error) {
-	return s.session.dbStates[s.dbName].WorkingSet.MergeActive(), nil
+	return s.session.GetDbStates()[s.dbName].WorkingSet.MergeActive(), nil
 }
 
 func (s SessionStateAdapter) GetMergeCommit(ctx context.Context) (*doltdb.Commit, error) {
-	return s.session.dbStates[s.dbName].WorkingSet.MergeState().Commit(), nil
+	return s.session.GetDbStates()[s.dbName].WorkingSet.MergeState().Commit(), nil
 }
 
 func (s SessionStateAdapter) GetPreMergeWorking(ctx context.Context) (*doltdb.RootValue, error) {
-	return s.session.dbStates[s.dbName].WorkingSet.MergeState().PreMergeWorkingRoot(), nil
+	return s.session.GetDbStates()[s.dbName].WorkingSet.MergeState().PreMergeWorkingRoot(), nil
 }
 
 func (s SessionStateAdapter) GetRemotes() (map[string]env.Remote, error) {
@@ -155,14 +152,5 @@ func (s SessionStateAdapter) RemoveBackup(ctx context.Context, name string) erro
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() string {
-	//todo: save tempfile in dbState on server startup?
-	return mustAbs(dbfactory.DoltDir, "temptf")
-}
-
-func mustAbs(path ...string) string {
-	absPath, err := filesys.LocalFS.Abs(filepath.Join(path...))
-	if err != nil {
-		panic(err)
-	}
-	return absPath
+	return s.session.GetDbStates()[s.dbName].tmpTablesDir
 }

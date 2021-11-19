@@ -16,6 +16,7 @@ package cvcmds
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -56,11 +56,11 @@ func (cmd VerifyConstraintsCmd) Description() string {
 	return "Command to verify that the constraints on the given table(s) are satisfied."
 }
 
-func (cmd VerifyConstraintsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd VerifyConstraintsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
 }
 
-func (cmd VerifyConstraintsCmd) createArgParser() *argparser.ArgParser {
+func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(vcAllParam, "a", "Verifies constraints against every row.")
 	ap.SupportsFlag(vcOutputOnlyParam, "o", "Disables writing the results to the constraint violations table.")
@@ -69,7 +69,7 @@ func (cmd VerifyConstraintsCmd) createArgParser() *argparser.ArgParser {
 }
 
 func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

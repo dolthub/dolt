@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var mergeBaseDocs = cli.CommandDocumentationContent{
@@ -50,12 +50,12 @@ func (cmd MergeBaseCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MergeBaseCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, mergeBaseDocs, ap))
+func (cmd MergeBaseCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+	ap := cmd.ArgParser()
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, mergeBaseDocs, ap))
 }
 
-func (cmd MergeBaseCmd) createArgParser() *argparser.ArgParser {
+func (cmd MergeBaseCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	//ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	return ap
@@ -68,7 +68,7 @@ func (cmd MergeBaseCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeBaseDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

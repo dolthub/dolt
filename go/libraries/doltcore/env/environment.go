@@ -38,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -56,34 +55,6 @@ const (
 
 	tempTablesDir = "temptf"
 )
-
-func getCommitHooks(ctx context.Context, dEnv *DoltEnv) ([]datas.CommitHook, error) {
-	postCommitHooks := make([]datas.CommitHook, 0)
-
-	backupName := dEnv.Config.GetStringOrDefault(doltdb.ReplicateToRemoteKey, "")
-	if backupName != "" {
-		remotes, err := dEnv.GetRemotes()
-		if err != nil {
-			return nil, err
-		}
-		rem, ok := remotes[backupName]
-		if !ok {
-			return nil, ErrRemoteNotFound
-		}
-		ddb, err := rem.GetRemoteDB(ctx, types.Format_Default)
-
-		if err != nil {
-			return nil, err
-		}
-		replicateHook := doltdb.NewReplicateHook(ddb, dEnv.TempTableFilesDir())
-		if err != nil {
-			return nil, err
-		}
-		postCommitHooks = append(postCommitHooks, replicateHook)
-	}
-
-	return postCommitHooks, nil
-}
 
 var zeroHashStr = (hash.Hash{}).String()
 
@@ -128,7 +99,7 @@ type DoltEnv struct {
 
 // Load loads the DoltEnv for the current directory of the cli
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string) *DoltEnv {
-	config, cfgErr := loadDoltCliConfig(hdp, fs)
+	config, cfgErr := LoadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 
 	docs, docsErr := doltdocs.LoadDocs(fs)
@@ -162,7 +133,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 			backups[n] = r
 		}
 		dEnv.RepoState.Backups = backups
-
 	}
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
@@ -206,20 +176,17 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 		}
 	}
 
-	if dbLoadErr == nil {
-		postCommitHooks, dbLoadErr := getCommitHooks(ctx, dEnv)
-		if dbLoadErr != nil {
-			dEnv.DBLoadError = dbLoadErr
-		} else {
-			dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
-		}
-	}
-
 	return dEnv
 }
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {
 	return GetStringOrDefault(cfg, InitBranchName, DefaultInitBranch)
+}
+
+// Valid returns whether this environment has been properly initialized. This is useful because although every command
+// gets a DoltEnv, not all of them require it, and we allow invalid dolt envs to be passed around for this reason.
+func (dEnv *DoltEnv) Valid() bool {
+	return dEnv.CfgLoadErr == nil && dEnv.DBLoadError == nil && dEnv.HasDoltDir() && dEnv.HasDoltDataDir()
 }
 
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
@@ -520,6 +487,33 @@ func (dEnv *DoltEnv) Roots(ctx context.Context) (doltdb.Roots, error) {
 	}
 
 	headRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return doltdb.Roots{
+		Head:    headRoot,
+		Working: ws.WorkingRoot(),
+		Staged:  ws.StagedRoot(),
+	}, nil
+}
+
+// RecoveryRoots returns the roots for this environment in the case that the
+// currently checked out branch has been deleted or HEAD has been updated in a
+// non-principled way to point to a branch that does not exist. This is used by
+// `dolt checkout`, in particular, to go forward with a `dolt checkout` of an
+// existing branch in the degraded state where the current branch was deleted.
+func (dEnv *DoltEnv) RecoveryRoots(ctx context.Context) (doltdb.Roots, error) {
+	ws, err := dEnv.WorkingSet(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	headRoot, err := dEnv.HeadRoot(ctx)
+	if err == doltdb.ErrBranchNotFound {
+		headRoot = ws.StagedRoot()
+		err = nil
+	}
 	if err != nil {
 		return doltdb.Roots{}, err
 	}

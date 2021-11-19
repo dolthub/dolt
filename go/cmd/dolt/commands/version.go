@@ -16,13 +16,13 @@ package commands
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -50,11 +50,11 @@ func (cmd VersionCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd VersionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd VersionCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
 }
 
-func (cmd VersionCmd) createArgParser() *argparser.ArgParser {
+func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(featureVersionFlag, "f", "query the feature version of this repository.")
 	return ap
@@ -66,7 +66,7 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	cli.Println("dolt version", cmd.VersionStr)
 
 	usage := func() {}
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	apr := cli.ParseArgsOrDie(ap, args, usage)
 
 	var verr errhand.VerboseError

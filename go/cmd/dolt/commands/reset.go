@@ -17,9 +17,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
-
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -27,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 const (
@@ -36,20 +36,19 @@ const (
 
 var resetDocContent = cli.CommandDocumentationContent{
 	ShortDesc: "Resets staged tables to their HEAD state",
-	LongDesc: `Sets the state of a table in the staging area to be that table's value at HEAD
-
-{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}"
-	This form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. (It does not affect the working tree or
-	the current branch.)
-
-	This means that {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} is the opposite of {{.EmphasisLeft}}dolt add <tables>{{.EmphasisRight}}.
-
-	After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the
-	contents out of the staged tables to the working tables.
-
-dolt reset .
-	This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}`,
-
+	LongDesc: "Sets the state of a table in the staging area to be that table's value at HEAD\n\n" +
+		"{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}" +
+		"\n\n" +
+		"This form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. " +
+		"It does not affect the working tree or the current branch." +
+		"\n\n" +
+		"This means that {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} is the opposite of {{.EmphasisLeft}}dolt add <tables>{{.EmphasisRight}}." +
+		"\n\n" +
+		"After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the contents out of the staged tables to the working tables." +
+		"\n\n" +
+		"{{.EmphasisLeft}}dolt reset .{{.EmphasisRight}}" +
+		"\n\n" +
+		"This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}",
 	Synopsis: []string{
 		"{{.LessThan}}tables{{.GreaterThan}}...",
 		"[--hard | --soft]",
@@ -69,9 +68,13 @@ func (cmd ResetCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ResetCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateResetArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+}
+
+func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateResetArgParser()
 }
 
 // Exec executes the command

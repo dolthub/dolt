@@ -76,8 +76,8 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 			return nil, err
 		}
 	} else {
-		name = dSess.Username
-		email = dSess.Email
+		name = dSess.Username()
+		email = dSess.Email()
 	}
 
 	msg, msgOk := apr.GetValue(cli.CommitMessageArg)

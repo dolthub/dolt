@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2020-2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,143 +16,145 @@ package sqle
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type DoltIndex interface {
 	sql.Index
-	sql.AscendIndex
-	sql.DescendIndex
-	sql.NegateIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
-	TableData() prolly.Map
-	IndexRowData() prolly.Map
-	Equals(index DoltIndex) bool
+	TableData() types.Map
+	IndexRowData() types.Map
 }
 
 type doltIndex struct {
-	id        string
-	unique    bool
-	generated bool
-	comment   string
-	tableName string
-	table     *doltdb.Table
-	db        sql.Database
-
-	keyBldr   *val.TupleBuilder
-	indexSch  schema.Schema
-	indexRows prolly.Map
-
-	tableSch  schema.Schema
-	tableRows prolly.Map
+	cols         []schema.Column
+	db           sql.Database
+	id           string
+	indexRowData types.Map
+	indexSch     schema.Schema
+	table        *doltdb.Table
+	tableData    types.Map
+	tableName    string
+	tableSch     schema.Schema
+	unique       bool
+	comment      string
+	generated    bool
 }
 
-//TODO: have queries using IS NULL make use of indexes
 var _ DoltIndex = (*doltIndex)(nil)
 
-// AscendGreaterOrEqual implements sql.AscendIndex
-func (di *doltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
-	panic("unimplement")
-	//tpl, err := di.tupleFromKeys(keys)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &doltIndexLookup{
-	//	idx: di,
-	//	ranges: []lookup.Range{
-	//		lookup.GreaterOrEqualRange(tpl),
-	//	},
-	//}, nil
+// ColumnExpressionTypes implements the interface sql.Index.
+func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+	cets := make([]sql.ColumnExpressionType, len(di.cols))
+	for i, col := range di.cols {
+		cets[i] = sql.ColumnExpressionType{
+			Expression: di.tableName + "." + col.Name,
+			Type:       col.TypeInfo.ToSqlType(),
+		}
+	}
+	return cets
 }
 
-// AscendLessThan implements sql.AscendIndex
-func (di *doltIndex) AscendLessThan(keys ...interface{}) (sql.IndexLookup, error) {
-	panic("unimplement")
-	//tpl, err := di.tupleFromKeys(keys)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &doltIndexLookup{
-	//	idx: di,
-	//	ranges: []lookup.Range{
-	//		lookup.LessThanRange(tpl),
-	//	},
-	//}, nil
-}
+// NewLookup implements the interface sql.Index.
+func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+	if len(ranges) == 0 {
+		return nil, nil
+	}
 
-// AscendRange implements sql.AscendIndex
-// TODO: rename this from AscendRange to BetweenRange or something
-func (di *doltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []interface{}) (sql.IndexLookup, error) {
-	panic("unimplement")
-	//greaterTpl, err := di.tupleFromKeys(greaterOrEqual)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//lessTpl, err := di.tupleFromKeys(lessThanOrEqual)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//r, err := lookup.ClosedRange(greaterTpl, lessTpl)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &doltIndexLookup{
-	//	idx: di,
-	//	ranges: []lookup.Range{
-	//		r,
-	//	},
-	//}, nil
-}
+	// This might remain nil if the given ranges each contain an EmptyRange for one of the columns. This will just
+	// cause the lookup to return no rows, which is the desired behavior.
+	var readRanges []*noms.ReadRange
+RangeLoop:
+	for _, rang := range ranges {
+		if len(rang) > len(di.cols) {
+			return nil, nil
+		}
 
-// DescendGreater implements sql.DescendIndex
-func (di *doltIndex) DescendGreater(keys ...interface{}) (sql.IndexLookup, error) {
-	panic("unimplement")
-	//tpl, err := di.tupleFromKeys(keys)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//r, err := lookup.GreaterThanRange(tpl)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &doltIndexLookup{
-	//	idx: di,
-	//	ranges: []lookup.Range{
-	//		r,
-	//	},
-	//}, nil
-}
+		inclusive := true
+		var lowerKeys []interface{}
+		for _, rangeColumnExpr := range rang {
+			if rangeColumnExpr.HasLowerBound() {
+				inclusive = inclusive && rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed
+				lowerKeys = append(lowerKeys, sql.GetRangeCutKey(rangeColumnExpr.LowerBound))
+			} else {
+				inclusive = false
+				break
+			}
+		}
+		lowerboundTuple, err := di.keysToTuple(ctx, lowerKeys)
+		if err != nil {
+			return nil, err
+		}
 
-// DescendLessOrEqual implements sql.DescendIndex
-func (di *doltIndex) DescendLessOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
-	panic("unimplement")
-	//tpl, err := di.tupleFromKeys(keys)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//r, err := lookup.LessOrEqualRange(tpl)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &doltIndexLookup{
-	//	idx: di,
-	//	ranges: []lookup.Range{
-	//		r,
-	//	},
-	//}, nil
-}
+		rangeCheck := make(nomsRangeCheck, len(rang))
+		for i, rangeColumnExpr := range rang {
+			// An empty column expression will mean that no values for this column can be matched, so we can discard the
+			// entire range.
+			if ok, err := rangeColumnExpr.IsEmpty(); err != nil {
+				return nil, err
+			} else if ok {
+				continue RangeLoop
+			}
 
-// DescendRange implements sql.DescendIndex
-// TODO: fix go-mysql-server to remove this duplicate function
-func (di *doltIndex) DescendRange(lessOrEqual, greaterOrEqual []interface{}) (sql.IndexLookup, error) {
-	return di.AscendRange(greaterOrEqual, lessOrEqual)
+			cb := columnBounds{}
+			// We promote each type as the value has already been validated against the type
+			promotedType := di.cols[i].TypeInfo.Promote()
+			if rangeColumnExpr.HasLowerBound() {
+				key := sql.GetRangeCutKey(rangeColumnExpr.LowerBound)
+				val, err := promotedType.ConvertValueToNomsValue(ctx, di.table.ValueReadWriter(), key)
+				if err != nil {
+					return nil, err
+				}
+				if rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed {
+					// For each lowerbound case, we set the upperbound to infinity, as the upperbound can increment to
+					// get to the desired overall case while retaining whatever was set for the lowerbound.
+					cb.boundsCase = boundsCase_greaterEquals_infinity
+				} else {
+					cb.boundsCase = boundsCase_greater_infinity
+				}
+				cb.lowerbound = val
+			} else {
+				cb.boundsCase = boundsCase_infinity_infinity
+			}
+			if rangeColumnExpr.HasUpperBound() {
+				key := sql.GetRangeCutKey(rangeColumnExpr.UpperBound)
+				val, err := promotedType.ConvertValueToNomsValue(ctx, di.table.ValueReadWriter(), key)
+				if err != nil {
+					return nil, err
+				}
+				if rangeColumnExpr.UpperBound.TypeAsUpperBound() == sql.Closed {
+					// Bounds cases are enum aliases on bytes, and they're arranged such that we can increment the case
+					// that was previously set when evaluating the lowerbound to get the proper overall case.
+					cb.boundsCase += 1
+				} else {
+					cb.boundsCase += 2
+				}
+				cb.upperbound = val
+			}
+			rangeCheck[i] = cb
+		}
+
+		readRanges = append(readRanges, &noms.ReadRange{
+			Start:     lowerboundTuple,
+			Inclusive: inclusive,
+			Reverse:   false,
+			Check:     rangeCheck,
+		})
+	}
+
+	return &doltIndexLookup{
+		idx:       di,
+		ranges:    readRanges,
+		sqlRanges: ranges,
+	}, nil
 }
 
 // Database implement sql.Index
@@ -162,47 +164,11 @@ func (di *doltIndex) Database() string {
 
 // Expressions implements sql.Index
 func (di *doltIndex) Expressions() []string {
-	cols := di.indexSch.GetAllCols().GetColumns()
-	strs := make([]string, len(cols))
-	for i, col := range cols {
+	strs := make([]string, len(di.cols))
+	for i, col := range di.cols {
 		strs[i] = di.tableName + "." + col.Name
 	}
 	return strs
-}
-
-// Get implements sql.Index
-func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
-	tup := tupleFromSqlValues(di.keyBldr, keys...)
-	return &doltIndexLookup{
-		idx:    di,
-		ranges: []prolly.Range{{Point: tup}},
-	}, nil
-}
-
-// Not implements sql.NegateIndex
-func (di *doltIndex) Not(keys ...interface{}) (sql.IndexLookup, error) {
-	panic("unimplement")
-	//tpl, err := di.tupleFromKeys(keys)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//r1 := lookup.LessThanRange(tpl)
-	//r2, err := lookup.GreaterThanRange(tpl)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &doltIndexLookup{
-	//	idx: di,
-	//	ranges: []lookup.Range{
-	//		r1,
-	//		r2,
-	//	},
-	//}, nil
-}
-
-// Has implements sql.Index
-func (*doltIndex) Has(partition sql.Partition, key ...interface{}) (bool, error) {
-	return false, errors.New("unimplemented")
 }
 
 // ID implements sql.Index
@@ -235,7 +201,7 @@ func (di *doltIndex) Schema() schema.Schema {
 	return di.tableSch
 }
 
-// Schema returns the dolt index schema.
+// IndexSchema returns the dolt index schema.
 func (di *doltIndex) IndexSchema() schema.Schema {
 	return di.indexSch
 }
@@ -246,59 +212,48 @@ func (di *doltIndex) Table() string {
 }
 
 // TableData returns the map of table data for this index (the map of the target table, not the index storage table)
-func (di *doltIndex) TableData() prolly.Map {
-	return di.tableRows
+func (di *doltIndex) TableData() types.Map {
+	return di.tableData
 }
 
 // IndexRowData returns the map of index row data.
-func (di *doltIndex) IndexRowData() prolly.Map {
-	return di.indexRows
+func (di *doltIndex) IndexRowData() types.Map {
+	return di.indexRowData
 }
 
-func (di *doltIndex) Equals(oIdx DoltIndex) bool {
-	if !expressionsAreEquals(di.Expressions(), oIdx.Expressions()) {
-		return false
+// prefix returns a copy of this index with only the first n columns. If n is >= the number of columns present, then
+// the exact index is returned without copying.
+func (di *doltIndex) prefix(n int) *doltIndex {
+	if n >= len(di.cols) {
+		return di
 	}
-
-	if di.Database() != oIdx.Database() {
-		return false
-	}
-
-	if di.Table() != oIdx.Table() {
-		return false
-	}
-
-	if di.ID() != oIdx.ID() {
-		return false
-	}
-
-	if di.IsUnique() != oIdx.IsUnique() {
-		return false
-	}
-
-	if !(schema.SchemasAreEqual(di.IndexSchema(), oIdx.IndexSchema())) {
-		return false
-	}
-
-	return true
+	ndi := *di
+	ndi.cols = di.cols[:n]
+	ndi.id = fmt.Sprintf("%s_PREFIX_%d", di.id, n)
+	ndi.comment = fmt.Sprintf("prefix of %s multi-column index on %d column(s)", di.id, n)
+	ndi.generated = true
+	return &ndi
 }
 
-func expressionsAreEquals(exprs1, exprs2 []string) bool {
-	if exprs1 == nil && exprs2 == nil {
-		return true
-	} else if exprs1 == nil || exprs2 == nil {
-		return false
+// keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to
+// start at the very beginning.
+func (di *doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tuple, error) {
+	nbf := di.indexRowData.Format()
+	if len(keys) > len(di.cols) {
+		return types.EmptyTuple(nbf), errors.New("too many keys for the column count")
 	}
 
-	if len(exprs1) != len(exprs2) {
-		return false
-	}
-
-	for i, expr1 := range exprs1 {
-		if expr1 != exprs2[i] {
-			return false
+	vals := make([]types.Value, len(keys)*2)
+	for i := range keys {
+		col := di.cols[i]
+		// As an example, if our TypeInfo is Int8, we should not fail to create a tuple if we are returning all keys
+		// that have a value of less than 9001, thus we promote the TypeInfo to the widest type.
+		val, err := col.TypeInfo.Promote().ConvertValueToNomsValue(ctx, di.table.ValueReadWriter(), keys[i])
+		if err != nil {
+			return types.EmptyTuple(nbf), err
 		}
+		vals[2*i] = types.Uint(col.Tag)
+		vals[2*i+1] = val
 	}
-
-	return true
+	return types.NewTuple(nbf, vals...)
 }

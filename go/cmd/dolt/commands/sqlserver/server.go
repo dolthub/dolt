@@ -37,10 +37,17 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func Serve(ctx context.Context, version string, serverConfig ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
+func Serve(
+	ctx context.Context,
+	version string,
+	serverConfig ServerConfig,
+	serverController *ServerController,
+	dEnv *env.DoltEnv,
+) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()
@@ -48,7 +55,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	// Code is easier to work through if we assume that serverController is never nil
 	if serverController == nil {
-		serverController = CreateServerController()
+		serverController = NewServerController()
 	}
 
 	var mySQLServer *server.Server
@@ -83,19 +90,51 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		permissions = auth.ReadPerm
 	}
 
+	serverConf := server.Config{Protocol: "tcp"}
+
+	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
+		serverConf, startError = serverConf.NewConfig()
+		if startError != nil {
+			return
+		}
+	}
+
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
-	var mrEnv env.MultiRepoEnv
+	var mrEnv *env.MultiRepoEnv
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
+
 	if len(dbNamesAndPaths) == 0 {
-		var err error
-		mrEnv, err = env.DoltEnvAsMultiEnv(dEnv)
-		if err != nil {
-			return err, nil
+		if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
+			fs, err := dEnv.FS.WithWorkingDir(serverConfig.DataDir())
+			if err != nil {
+				return err, nil
+			}
+
+			// TODO: this should be the global config, probably?
+			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version)
+			if err != nil {
+				return err, nil
+			}
+		} else {
+			var err error
+			mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
+			if err != nil {
+				return err, nil
+			}
 		}
 	} else {
 		var err error
-		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.FS, version, dbNamesAndPaths...)
+		fs := dEnv.FS
+		if len(serverConfig.DataDir()) > 0 {
+			fs, err = fs.WithWorkingDir(serverConfig.DataDir())
+			if err != nil {
+				return err, nil
+			}
+		}
+
+		// TODO: this should be the global config, probably?
+		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dbNamesAndPaths...)
 
 		if err != nil {
 			return err, nil
@@ -106,8 +145,9 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	if err != nil {
 		return err, nil
 	}
+
 	all := append(dsqleDBsAsSqlDBs(dbs), information_schema.NewInformationSchemaDatabase())
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, all...)
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem(), all...)
 
 	a := analyzer.NewBuilder(pro).WithParallelism(serverConfig.QueryParallelism()).Build()
 	sqlEngine := sqle.New(a, nil)
@@ -128,21 +168,20 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		return nil, err
 	}
 
+	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	// to the value of mysql that we support.
+	serverConf.Address = hostPort
+	serverConf.Auth = userAuth
+	serverConf.ConnReadTimeout = readTimeout
+	serverConf.ConnWriteTimeout = writeTimeout
+	serverConf.MaxConnections = serverConfig.MaxConnections()
+	serverConf.TLSConfig = tlsConfig
+	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
+
 	mySQLServer, startError = server.NewServer(
-		server.Config{
-			Protocol:               "tcp",
-			Address:                hostPort,
-			Auth:                   userAuth,
-			ConnReadTimeout:        readTimeout,
-			ConnWriteTimeout:       writeTimeout,
-			MaxConnections:         serverConfig.MaxConnections(),
-			TLSConfig:              tlsConfig,
-			RequireSecureTransport: serverConfig.RequireSecureTransport(),
-			// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-			// to the value of mysql that we support.
-		},
+		serverConf,
 		sqlEngine,
-		newSessionBuilder(sqlEngine, dEnv.Config, pro, mrEnv, serverConfig.AutoCommit()),
+		newSessionBuilder(sqlEngine, mrEnv.Config(), pro, serverConfig.AutoCommit()),
 	)
 
 	if startError != nil {
@@ -169,19 +208,19 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsqle.DoltDatabaseProvider, mrEnv env.MultiRepoEnv, autocommit bool) server.SessionBuilder {
+func newSessionBuilder(sqlEngine *sqle.Engine, dConf config.ReadWriteConfig, pro dsqle.DoltDatabaseProvider, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
 		tmpSqlCtx := sql.NewEmptyContext()
 
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
-		mysqlSess := sql.NewSession(host, client, conn.ConnectionID)
+		mysqlSess := sql.NewBaseSessionWithClientServer(host, client, conn.ConnectionID)
 		doltDbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
 		dbStates, err := getDbStates(ctx, doltDbs)
 		if err != nil {
 			return nil, err
 		}
 
-		doltSess, err := dsess.NewSession(tmpSqlCtx, mysqlSess, pro, dConf, dbStates...)
+		doltSess, err := dsess.NewDoltSession(tmpSqlCtx, mysqlSess, pro, dConf, dbStates...)
 		if err != nil {
 			return nil, err
 		}
@@ -191,8 +230,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, dConf *env.DoltCliConfig, pro dsq
 			return nil, err
 		}
 
-		dbs := dsqle.DbsAsDSQLDBs(sqlEngine.Analyzer.Catalog.AllDatabases())
-		for _, db := range dbs {
+		for _, db := range doltDbs {
 			db.DbData().Ddb.SetCommitHookLogger(ctx, doltSess.GetLogger().Logger.Out)
 		}
 
@@ -206,7 +244,7 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 		var init dsess.InitialDbState
 		var err error
 
-		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DoltDefaultBranchKey)
+		_, val, ok := sql.SystemVariables.GetGlobal(dsqle.DefaultBranchKey)
 		if ok && val != "" {
 			init, err = GetInitialDBStateWithDefaultBranch(ctx, db, val.(string))
 		} else {
@@ -233,21 +271,24 @@ func GetInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabas
 
 	head, err := ddb.ResolveCommitRef(ctx, r)
 	if err != nil {
-		err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
-		return dsess.InitialDbState{}, err
+		init.Err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
+	} else {
+		init.Err = nil
 	}
 	init.HeadCommit = head
 
-	workingSetRef, err := ref.WorkingSetRefForHead(r)
-	if err != nil {
-		return dsess.InitialDbState{}, err
-	}
+	if init.Err == nil {
+		workingSetRef, err := ref.WorkingSetRefForHead(r)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
 
-	ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
-	if err != nil {
-		return dsess.InitialDbState{}, err
+		ws, err := init.DbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
+		if err != nil {
+			return dsess.InitialDbState{}, err
+		}
+		init.WorkingSet = ws
 	}
-	init.WorkingSet = ws
 
 	return init, nil
 }

@@ -16,14 +16,14 @@ package commands
 
 import (
 	"context"
-
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var addDocs = cli.CommandDocumentationContent{
@@ -52,9 +52,13 @@ func (cmd AddCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd AddCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd AddCmd) CreateMarkdown(writer io.Writer, commandStr string) error {
 	ap := cli.CreateAddArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, addDocs, ap))
+	return CreateMarkdown(writer, cli.GetCommandDocumentation(commandStr, addDocs, ap))
+}
+
+func (cmd AddCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateAddArgParser()
 }
 
 // Exec executes the command

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var mergeDocs = cli.CommandDocumentationContent{
@@ -63,9 +63,13 @@ func (cmd MergeCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd MergeCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateMergeArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
+}
+
+func (cmd MergeCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateMergeArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -81,6 +85,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
 		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
+		return 1
+	}
+
+	// This command may create a commit, so we need user identity
+	if !cli.CheckUserNameAndEmail(dEnv) {
 		return 1
 	}
 

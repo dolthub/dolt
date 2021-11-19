@@ -21,8 +21,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type IndexLookupKeyIterator interface {
@@ -32,10 +33,13 @@ type IndexLookupKeyIterator interface {
 
 type doltIndexLookup struct {
 	idx    DoltIndex
-	ranges []prolly.Range // The collection of ranges that represent this lookup.
+	ranges []lookup.Range // The collection of ranges that represent this lookup.
 }
 
-var _ sql.MergeableIndexLookup = (*doltIndexLookup)(nil)
+// nomsRangeCheck is used to compare a tuple against a set of comparisons in the noms row iterator.
+type nomsRangeCheck []columnBounds
+
+var _ noms.InRangeCheck = nomsRangeCheck{}
 
 func (il *doltIndexLookup) String() string {
 	// TODO: this could be expanded with additional info (like the expression used to create the index lookup)
@@ -46,93 +50,86 @@ func (il *doltIndexLookup) IndexRowData() prolly.Map {
 	return il.idx.IndexRowData()
 }
 
-// IsMergeable implements sql.MergeableIndexLookup
-func (il *doltIndexLookup) IsMergeable(indexLookup sql.IndexLookup) bool {
-	otherIl, ok := indexLookup.(*doltIndexLookup)
-	if !ok {
-		return false
-	}
-
-	return il.idx.Equals(otherIl.idx)
+// Index implements the interface sql.IndexLookup
+func (il *doltIndexLookup) Index() sql.Index {
+	return il.idx
 }
 
 // Intersection implements sql.MergeableIndexLookup
 func (il *doltIndexLookup) Intersection(indexLookups ...sql.IndexLookup) (sql.IndexLookup, error) {
-	panic("todo")
-	//rangeCombinations := make([][]lookup.Range, len(il.ranges))
-	//for i, ilRange := range il.ranges {
-	//	rangeCombinations[i] = []lookup.Range{ilRange}
-	//}
-	//for _, indexLookup := range indexLookups {
-	//	otherIl, ok := indexLookup.(*doltIndexLookup)
-	//	if !ok {
-	//		return nil, fmt.Errorf("failed to intersect sql.IndexLookup with type '%T'", indexLookup)
-	//	}
-	//	var newRangeCombination [][]lookup.Range
-	//	for _, rangeCombination := range rangeCombinations {
-	//		for _, ilRange := range otherIl.ranges {
-	//			rc := make([]lookup.Range, len(rangeCombination)+1)
-	//			copy(rc, rangeCombination)
-	//			rc[len(rangeCombination)] = ilRange
-	//			newRangeCombination = append(newRangeCombination, rc)
-	//		}
-	//	}
-	//	rangeCombinations = newRangeCombination
-	//}
-	//var newRanges []lookup.Range
-	//var err error
-	//var ok bool
-	//for _, rangeCombination := range rangeCombinations {
-	//	intersectedRange := lookup.AllRange()
-	//	for _, rangeToIntersect := range rangeCombination {
-	//		intersectedRange, ok, err = intersectedRange.TryIntersect(rangeToIntersect)
-	//		if err != nil {
-	//			return nil, err
-	//		}
-	//		if !ok {
-	//			break
-	//		}
-	//	}
-	//	if !intersectedRange.IsEmpty() {
-	//		newRanges = append(newRanges, intersectedRange)
-	//	}
-	//}
-	//newRanges, err = lookup.SimplifyRanges(newRanges)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &doltIndexLookup{
-	//	idx:    il.idx,
-	//	ranges: newRanges,
-	//}, nil
+	rangeCombinations := make([][]lookup.Range, len(il.ranges))
+	for i, ilRange := range il.ranges {
+		rangeCombinations[i] = []lookup.Range{ilRange}
+	}
+	for _, indexLookup := range indexLookups {
+		otherIl, ok := indexLookup.(*doltIndexLookup)
+		if !ok {
+			return nil, fmt.Errorf("failed to intersect sql.IndexLookup with type '%T'", indexLookup)
+		}
+		var newRangeCombination [][]lookup.Range
+		for _, rangeCombination := range rangeCombinations {
+			for _, ilRange := range otherIl.ranges {
+				rc := make([]lookup.Range, len(rangeCombination)+1)
+				copy(rc, rangeCombination)
+				rc[len(rangeCombination)] = ilRange
+				newRangeCombination = append(newRangeCombination, rc)
+			}
+		}
+		rangeCombinations = newRangeCombination
+	}
+	var newRanges []lookup.Range
+	var err error
+	var ok bool
+	for _, rangeCombination := range rangeCombinations {
+		intersectedRange := lookup.AllRange()
+		for _, rangeToIntersect := range rangeCombination {
+			intersectedRange, ok, err = intersectedRange.TryIntersect(rangeToIntersect)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				break
+			}
+		}
+		if !intersectedRange.IsEmpty() {
+			newRanges = append(newRanges, intersectedRange)
+		}
+	}
+	newRanges, err = lookup.SimplifyRanges(newRanges)
+	if err != nil {
+		return nil, err
+	}
+	return &doltIndexLookup{
+		idx:    il.idx,
+		ranges: newRanges,
+	}, nil
 }
 
 // Union implements sql.MergeableIndexLookup
 func (il *doltIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.IndexLookup, error) {
-	panic("todo")
-	//var ranges []lookup.Range
-	//var err error
-	//if len(il.ranges) == 0 {
-	//	ranges = []lookup.Range{lookup.EmptyRange()}
-	//} else {
-	//	ranges = make([]lookup.Range, len(il.ranges))
-	//	copy(ranges, il.ranges)
-	//}
-	//for _, indexLookup := range indexLookups {
-	//	otherIl, ok := indexLookup.(*doltIndexLookup)
-	//	if !ok {
-	//		return nil, fmt.Errorf("failed to union sql.IndexLookup with type '%T'", indexLookup)
-	//	}
-	//	ranges = append(ranges, otherIl.ranges...)
-	//}
-	//ranges, err = lookup.SimplifyRanges(ranges)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return &doltIndexLookup{
-	//	idx:    il.idx,
-	//	ranges: ranges,
-	//}, nil
+	var ranges []lookup.Range
+	var err error
+	if len(il.ranges) == 0 {
+		ranges = []lookup.Range{lookup.EmptyRange()}
+	} else {
+		ranges = make([]lookup.Range, len(il.ranges))
+		copy(ranges, il.ranges)
+	}
+	for _, indexLookup := range indexLookups {
+		otherIl, ok := indexLookup.(*doltIndexLookup)
+		if !ok {
+			return nil, fmt.Errorf("failed to union sql.IndexLookup with type '%T'", indexLookup)
+		}
+		ranges = append(ranges, otherIl.ranges...)
+	}
+	ranges, err = lookup.SimplifyRanges(ranges)
+	if err != nil {
+		return nil, err
+	}
+	return &doltIndexLookup{
+		idx:    il.idx,
+		ranges: ranges,
+	}, nil
 }
 
 // RowIter returns a row iterator for this index lookup. The iterator will return the single matching row for the index.
@@ -157,18 +154,159 @@ func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
 	return covers
 }
 
-func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rows prolly.Map, projs []string, ranges []prolly.Range) (sql.RowIter, error) {
-	if len(ranges) > 1 {
-		panic("todo")
+func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData types.Map, ranges []lookup.Range, columns []string) (sql.RowIter, error) {
+	readRanges := make([]*noms.ReadRange, len(ranges))
+	for i, lookupRange := range ranges {
+		readRanges[i] = lookupRange.ToReadRange()
 	}
 
-	iter, err := rows.IterValueRange(ctx, ranges[0])
-	if err != nil {
-		return nil, err
+	nrr := noms.NewNomsRangeReader(il.idx.IndexSchema(), rowData, readRanges)
+
+	covers := il.indexCoversCols(columns)
+	if covers {
+		return NewCoveringIndexRowIterAdapter(ctx, il.idx, nrr, columns), nil
+	} else {
+		return NewIndexLookupRowIterAdapter(ctx, il.idx, nrr), nil
 	}
 	sch := il.idx.Schema()
 
 	return rowIterFromMapIter(ctx, sch, projs, rows, iter)
+}
+
+// Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
+// the bounds and above the upperbound.
+func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, val types.Value) (ok bool, over bool, err error) {
+	switch cb.boundsCase {
+	case boundsCase_infinity_infinity:
+		return true, false, nil
+	case boundsCase_infinity_lessEquals:
+		ok, err := cb.upperbound.Less(nbf, val)
+		if err != nil || ok {
+			return false, true, err
+		}
+	case boundsCase_infinity_less:
+		ok, err := val.Less(nbf, cb.upperbound)
+		if err != nil || !ok {
+			return false, true, err
+		}
+	case boundsCase_greaterEquals_infinity:
+		ok, err := val.Less(nbf, cb.lowerbound)
+		if err != nil || ok {
+			return false, false, err
+		}
+	case boundsCase_greaterEquals_lessEquals:
+		ok, err := val.Less(nbf, cb.lowerbound)
+		if err != nil || ok {
+			return false, false, err
+		}
+		ok, err = cb.upperbound.Less(nbf, val)
+		if err != nil || ok {
+			return false, true, err
+		}
+	case boundsCase_greaterEquals_less:
+		ok, err := val.Less(nbf, cb.lowerbound)
+		if err != nil || ok {
+			return false, false, err
+		}
+		ok, err = val.Less(nbf, cb.upperbound)
+		if err != nil || !ok {
+			return false, true, err
+		}
+	case boundsCase_greater_infinity:
+		ok, err := cb.lowerbound.Less(nbf, val)
+		if err != nil || !ok {
+			return false, false, err
+		}
+	case boundsCase_greater_lessEquals:
+		ok, err := cb.lowerbound.Less(nbf, val)
+		if err != nil || !ok {
+			return false, false, err
+		}
+		ok, err = cb.upperbound.Less(nbf, val)
+		if err != nil || ok {
+			return false, true, err
+		}
+	case boundsCase_greater_less:
+		ok, err := cb.lowerbound.Less(nbf, val)
+		if err != nil || !ok {
+			return false, false, err
+		}
+		ok, err = val.Less(nbf, cb.upperbound)
+		if err != nil || !ok {
+			return false, true, err
+		}
+	default:
+		return false, false, fmt.Errorf("unknown bounds")
+	}
+	return true, false, nil
+}
+
+// Equals returns whether the calling columnBounds is equivalent to the given columnBounds.
+func (cb columnBounds) Equals(otherBounds columnBounds) bool {
+	if cb.boundsCase != otherBounds.boundsCase {
+		return false
+	}
+	if cb.lowerbound == nil || otherBounds.lowerbound == nil {
+		if cb.lowerbound != nil || otherBounds.lowerbound != nil {
+			return false
+		}
+	} else if !cb.lowerbound.Equals(otherBounds.lowerbound) {
+		return false
+	}
+	if cb.upperbound == nil || otherBounds.upperbound == nil {
+		if cb.upperbound != nil || otherBounds.upperbound != nil {
+			return false
+		}
+	} else if !cb.upperbound.Equals(otherBounds.upperbound) {
+		return false
+	}
+	return true
+}
+
+// Check implements the interface noms.InRangeCheck.
+func (nrc nomsRangeCheck) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
+	itr := types.TupleItrPool.Get().(*types.TupleIterator)
+	defer types.TupleItrPool.Put(itr)
+	err = itr.InitForTuple(tuple)
+	if err != nil {
+		return false, false, err
+	}
+	nbf := tuple.Format()
+
+	for i := 0; i < len(nrc) && itr.HasMore(); i++ {
+		if err := itr.Skip(); err != nil {
+			return false, false, err
+		}
+		_, val, err := itr.Next()
+		if err != nil {
+			return false, false, err
+		}
+		if val == nil {
+			break
+		}
+
+		ok, over, err := nrc[i].Between(ctx, nbf, val)
+		if err != nil {
+			return false, false, err
+		}
+		if !ok {
+			return i != 0 || !over, true, nil
+		}
+	}
+	return true, false, nil
+}
+
+// Equals returns whether the calling nomsRangeCheck is equivalent to the given nomsRangeCheck.
+func (nrc nomsRangeCheck) Equals(otherNrc nomsRangeCheck) bool {
+	if len(nrc) != len(otherNrc) {
+		return false
+	}
+	for i := range nrc {
+		if !nrc[i].Equals(otherNrc[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 type keyIter interface {
