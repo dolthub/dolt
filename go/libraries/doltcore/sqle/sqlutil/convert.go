@@ -62,11 +62,11 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
 // For result set schemas, see ToDoltResultSchema.
 func ToDoltSchema(
-		ctx context.Context,
-		root *doltdb.RootValue,
-		tableName string,
-		sqlSchema sql.Schema,
-		headRoot *doltdb.RootValue,
+	ctx context.Context,
+	root *doltdb.RootValue,
+	tableName string,
+	sqlSchema sql.Schema,
+	headRoot *doltdb.RootValue,
 ) (schema.Schema, error) {
 	var cols []schema.Column
 	var err error

@@ -190,11 +190,11 @@ func (root *RootValue) GenerateTagsForNewColColl(ctx context.Context, tableName 
 // GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
 // the new columns are used to see the tag generator.
 func (root *RootValue) GenerateTagsForNewColumns(
-		ctx context.Context,
-		tableName string,
-		newColNames []string,
-		newColKinds []types.NomsKind,
-		headRoot *RootValue,
+	ctx context.Context,
+	tableName string,
+	newColNames []string,
+	newColKinds []types.NomsKind,
+	headRoot *RootValue,
 ) ([]uint64, error) {
 	if len(newColNames) != len(newColKinds) {
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
@@ -232,7 +232,7 @@ func (root *RootValue) GenerateTagsForNewColumns(
 				return nil, err
 			}
 
-			existingCols  = schema.GetSharedCols(sch, newColNames, newColKinds)
+			existingCols = schema.GetSharedCols(sch, newColNames, newColKinds)
 		}
 	}
 
