@@ -100,18 +100,18 @@ func writeToParquet(pWr *ParquetWriter, rows []row.Row, t *testing.T) {
 
 func TestWriter(t *testing.T) {
 	const root = ""
+	const expected = `Bill Billerson,32,Senior Dufus
+Rob Robertson,25,Dufus
+John Johnson,21,
+Andy Anderson,27,
+`
+
 	file, err := ioutil.TempFile(root, "parquet")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(file.Name())
 	path := file.Name()
-
-	const expected = `Bill Billerson,32,Senior Dufus
-Rob Robertson,25,Dufus
-John Johnson,21,
-Andy Anderson,27,
-`
 
 	rows := getSampleRows()
 
@@ -127,7 +127,7 @@ Andy Anderson,27,
 		t.Fatal("Cannot open file", err)
 	}
 
-	pr, err := reader.NewParquetReader(pRd, new(Person), int64(WriteBufSize))
+	pr, err := reader.NewParquetReader(pRd, new(Person), 4)
 	if err != nil {
 		t.Fatal("Cannot create parquet reader", err)
 	}

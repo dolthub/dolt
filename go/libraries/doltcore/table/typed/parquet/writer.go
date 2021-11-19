@@ -61,7 +61,7 @@ func NewParquetWriter(outSch schema.Schema, destName string) (*ParquetWriter, er
 
 	// np configures the degree of concurrency for our Reader and Writers
 	// TODO: not sure what default value to set 'np' to
-	pw, err := writer.NewCSVWriter(csvSchema, fw, int64(WriteBufSize))
+	pw, err := writer.NewCSVWriter(csvSchema, fw, 4)
 	if err != nil {
 		return nil, err
 	}
