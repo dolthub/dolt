@@ -462,10 +462,10 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 
 	// ensure edits are provided in order
 	iter := mut.overlay.mutations()
-	prev, _ := iter.next()
+	prev, _ := iter.nextMutation()
 	require.NotNil(t, prev)
 	for {
-		next, _ := iter.next()
+		next, _ := iter.nextMutation()
 		if next == nil {
 			break
 		}

@@ -45,7 +45,7 @@ func TestMap(t *testing.T) {
 			prollyMap, tuples := makeProllyMap(t, s)
 
 			t.Run("get item from map", func(t *testing.T) {
-				testOrderedMapGetAndHas(t, prollyMap, tuples)
+				testOrderedMapGet(t, prollyMap, tuples)
 			})
 			t.Run("iter all from map", func(t *testing.T) {
 				testOrderedMapIterAll(t, prollyMap, tuples)
@@ -55,6 +55,11 @@ func TestMap(t *testing.T) {
 			})
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, prollyMap, tuples)
+			})
+
+			pm := prollyMap.(Map)
+			t.Run("item exists in map", func(t *testing.T) {
+				testProllyMapHas(t, pm, tuples)
 			})
 		})
 	}
@@ -97,7 +102,6 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 
 type orderedMap interface {
 	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
-	Has(ctx context.Context, key val.Tuple) (ok bool, err error)
 	IterAll(ctx context.Context) (MapRangeIter, error)
 	IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error)
 }
@@ -119,21 +123,24 @@ func getKeyDesc(om orderedMap) val.TupleDesc {
 	}
 }
 
-func testOrderedMapGetAndHas(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testOrderedMapGet(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	for _, kv := range tuples {
-		// Has()
-		ok, err := om.Has(ctx, kv[0])
-		assert.True(t, ok)
-		require.NoError(t, err)
-
-		// Get()
-		err = om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
+		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, kv[0])
 			assert.Equal(t, kv[0], key)
 			assert.Equal(t, kv[1], val)
 			return
 		})
+		require.NoError(t, err)
+	}
+}
+
+func testProllyMapHas(t *testing.T, om Map, tuples [][2]val.Tuple) {
+	ctx := context.Background()
+	for _, kv := range tuples {
+		ok, err := om.Has(ctx, kv[0])
+		assert.True(t, ok)
 		require.NoError(t, err)
 	}
 }

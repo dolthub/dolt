@@ -235,7 +235,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 }
 
 // search returns the index of |item| if it's present in |cur.nd|, or the
-// index of the next greatest element if it is not present.
+// index of the nextMutation greatest element if it is not present.
 // todo(andy): update this comment too.
 func (cur *nodeCursor) search(item nodeItem, cb compareFn) (idx int) {
 	count := cur.nd.nodeCount()

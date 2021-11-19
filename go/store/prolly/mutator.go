@@ -21,7 +21,7 @@ import (
 )
 
 type mutationIter interface {
-	next() (key, val val.Tuple)
+	nextMutation() (key, val val.Tuple)
 	count() int
 	close() error
 }
@@ -34,7 +34,7 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		return m, err
 	}
 
-	newKey, newValue := edits.next()
+	newKey, newValue := edits.nextMutation()
 
 	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(newKey), m.searchNode)
 	if err != nil {
@@ -48,7 +48,7 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 
 	for newKey != nil {
 
-		// move |cur| to the next mutation point
+		// move |cur| to the nextMutation mutation point
 		err = cur.seek(ctx, nodeItem(newKey), m.compareItems)
 		if err != nil {
 			return Map{}, err
@@ -65,15 +65,15 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		}
 
 		if oldValue == nil && newValue == nil {
-			newKey, newValue = edits.next()
+			newKey, newValue = edits.nextMutation()
 			continue // already non-present
 		}
 		if oldValue != nil && compareValues(m, newValue, oldValue) == 0 {
-			newKey, newValue = edits.next()
+			newKey, newValue = edits.nextMutation()
 			continue // same newValue
 		}
 
-		// move |chunker| to the next mutation point
+		// move |chunker| to the nextMutation mutation point
 		err = chunker.advanceTo(ctx, cur)
 		if err != nil {
 			return m, err
@@ -94,7 +94,7 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 			}
 		}
 
-		newKey, newValue = edits.next()
+		newKey, newValue = edits.nextMutation()
 	}
 
 	m.root, err = chunker.Done(ctx)

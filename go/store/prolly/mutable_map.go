@@ -51,16 +51,12 @@ func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) (err error)
 }
 
 func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
-	var value val.Tuple
-	_ = mut.overlay.Get(ctx, key, func(k, v val.Tuple) error {
-		if v != nil {
-			value = v
+	value, ok := mut.overlay.list.Get(key)
+	if ok {
+		if value == nil {
+			// there is a pending delete of |key| in |mut.overlay|.
+			key = nil
 		}
-		return nil
-	})
-
-	if value != nil {
-		// |key| found in memCur
 		return cb(key, value)
 	}
 
@@ -68,11 +64,11 @@ func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (er
 }
 
 func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	ok, _ = mut.overlay.Has(ctx, key)
-	if ok {
+	err = mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
+		ok = key != nil
 		return
-	}
-	return mut.m.Has(ctx, key)
+	})
+	return
 }
 
 func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {

@@ -59,20 +59,14 @@ func (mm memoryMap) Put(key, val val.Tuple) (ok bool) {
 }
 
 func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn) error {
-	var value val.Tuple
-	v, ok := mm.list.Get(key)
-	if ok {
-		value = v
-	} else {
+	value, ok := mm.list.Get(key)
+	if !ok || value == nil {
 		key = nil
 	}
 
+	// if |ok| is true but |value| is nil, then there
+	// is a pending delete of |key| in |mm.list|.
 	return cb(key, value)
-}
-
-func (mm memoryMap) Has(_ context.Context, key val.Tuple) (ok bool, err error) {
-	_, ok = mm.list.Get(key)
-	return
 }
 
 // IterAll returns a MapIterator that iterates over the entire Map.
@@ -122,15 +116,12 @@ type memTupleCursor struct {
 var _ tupleCursor = mapTupleCursor{}
 var _ mutationIter = memTupleCursor{}
 
-func (it memTupleCursor) next() (key, value val.Tuple) {
+func (it memTupleCursor) nextMutation() (key, value val.Tuple) {
 	key, value = it.iter.Current()
 	if key == nil {
 		return
-	} else if it.reverse {
-		it.iter.Retreat()
-	} else {
-		it.iter.Advance()
 	}
+	it.iter.Advance()
 	return
 }
 
@@ -139,12 +130,28 @@ func (it memTupleCursor) current() (key, value val.Tuple) {
 }
 
 func (it memTupleCursor) advance(context.Context) (err error) {
-	it.iter.Advance()
+	key, _ := it.iter.Current()
+	var value val.Tuple
+
+	// skip over pending deletes as we advance
+	// if |key| == nil, we're at the end of the list
+	for key != nil && value == nil {
+		it.iter.Advance()
+		key, value = it.iter.Current()
+	}
 	return
 }
 
 func (it memTupleCursor) retreat(context.Context) (err error) {
-	it.iter.Retreat()
+	key, _ := it.iter.Current()
+	var value val.Tuple
+
+	// skip over pending deletes as we retreat
+	// if |key| == nil, we're at the start of the list
+	for key != nil && value == nil {
+		it.iter.Retreat()
+		key, value = it.iter.Current()
+	}
 	return
 }
 

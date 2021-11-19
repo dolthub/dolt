@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -21,10 +22,10 @@ func TestMutableMapReads(t *testing.T) {
 	for _, s := range scales {
 		name := fmt.Sprintf("test mutable map at scale %d", s)
 		t.Run(name, func(t *testing.T) {
-			mutableMap, tuples := makeMutableMap(t, s)
 
+			mutableMap, tuples := makeMutableMap(t, s)
 			t.Run("get item from map", func(t *testing.T) {
-				testOrderedMapGetAndHas(t, mutableMap, tuples)
+				testOrderedMapGet(t, mutableMap, tuples)
 			})
 			t.Run("iter all from map", func(t *testing.T) {
 				testOrderedMapIterAll(t, mutableMap, tuples)
@@ -35,6 +36,20 @@ func TestMutableMapReads(t *testing.T) {
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, mutableMap, tuples)
 			})
+
+			mutableMap2, tuples2, deletes := makeMutableMapWithDeletes(t, s)
+			t.Run("get item from map with deletes", func(t *testing.T) {
+				testMutableMapGetAndHas(t, mutableMap2, tuples2, deletes)
+			})
+			//t.Run("iter all from map with deletes", func(t *testing.T) {
+			//	testOrderedMapIterAll(t, mutableMap2, tuples2)
+			//})
+			//t.Run("iter all backwards from map", func(t *testing.T) {
+			//	testOrderedMapIterAllBackward(t, mutableMap2, tuples2)
+			//})
+			//t.Run("iter value range", func(t *testing.T) {
+			//	testOrderedMapIterValueRange(t, mutableMap2, tuples2)
+			//})
 		})
 	}
 }
@@ -89,4 +104,59 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	}
 
 	return mut, tuples
+}
+
+func makeMutableMapWithDeletes(t *testing.T, count int) (mut MutableMap, tuples, deletes [][2]val.Tuple) {
+	ctx := context.Background()
+	om, tuples := makeMutableMap(t, count)
+	mut = om.(MutableMap)
+
+	testRand.Shuffle(count, func(i, j int) {
+		tuples[i], tuples[j] = tuples[j], tuples[i]
+	})
+
+	// delete 1/4 of tuples
+	deletes = tuples[:count/4]
+
+	// re-sort the remaining tuples
+	tuples = tuples[count/4:]
+	sortTuplePairs(tuples, getKeyDesc(om))
+
+	for _, kv := range deletes {
+		err := mut.Put(ctx, kv[0], nil)
+		require.NoError(t, err)
+	}
+
+	return mut, tuples, deletes
+}
+
+func testMutableMapGetAndHas(t *testing.T, mut MutableMap, tuples, deletes [][2]val.Tuple) {
+	ctx := context.Background()
+	for _, kv := range tuples {
+		ok, err := mut.Has(ctx, kv[0])
+		assert.True(t, ok)
+		require.NoError(t, err)
+
+		err = mut.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
+			assert.NotNil(t, kv[0])
+			assert.Equal(t, kv[0], key)
+			assert.Equal(t, kv[1], val)
+			return
+		})
+		require.NoError(t, err)
+	}
+
+	for _, kv := range deletes {
+		ok, err := mut.Has(ctx, kv[0])
+		assert.False(t, ok)
+		require.NoError(t, err)
+
+		err = mut.Get(ctx, kv[0], func(key, value val.Tuple) (err error) {
+			assert.NotNil(t, kv[0])
+			assert.Equal(t, val.Tuple(nil), key)
+			assert.Equal(t, val.Tuple(nil), value)
+			return
+		})
+		require.NoError(t, err)
+	}
 }

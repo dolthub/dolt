@@ -93,22 +93,22 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 	return nil
 }
 
-// advanceTo advances the treeChunker to |next|, the next mutation point.
+// advanceTo advances the treeChunker to |nextMutation|, the nextMutation mutation point.
 func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 	// There a four cases to handle when advancing the tree chunker
-	//  (1) |tc.cur| and |next| are aligned, we're done
+	//  (1) |tc.cur| and |nextMutation| are aligned, we're done
 	//
-	//  (2) |tc.cur| is "ahead" of |next|. This can be caused by advances
-	//      at a lower level of the tree. In this case, advance |next|
+	//  (2) |tc.cur| is "ahead" of |nextMutation|. This can be caused by advances
+	//      at a lower level of the tree. In this case, advance |nextMutation|
 	//      until it is even with |tc.cur|.
 	//
-	//  (3) |tc.cur| is behind |next|, we must consume elements between the
-	//      two cursors until |tc.cur| catches up with |next|.
+	//  (3) |tc.cur| is behind |nextMutation|, we must consume elements between the
+	//      two cursors until |tc.cur| catches up with |nextMutation|.
 	//
 	//  (4) This is a special case of (3) where we can "Fast-Forward" |tc.cur|
-	//      towards |next|. As we consume elements between the two cursors, if
+	//      towards |nextMutation|. As we consume elements between the two cursors, if
 	//      we re-synchronize with the previous tree, we can skip over the
-	//      chunks between the re-synchronization boundary and |next|.
+	//      chunks between the re-synchronization boundary and |nextMutation|.
 
 	cmp := tc.cur.compare(next)
 
@@ -129,7 +129,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 
 	for tc.cur.compare(next) < 0 { // Case (3) or (4)
 
-		// append items until we catchup with |next|, or until
+		// append items until we catchup with |nextMutation|, or until
 		// we resynchronize with the previous tree.
 		pair := tc.cur.currentPair()
 		ok, err := tc.Append(ctx, pair.key(), pair.value())
@@ -144,8 +144,8 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 
 			if tc.cur.parent != nil {
 				if tc.cur.parent.compare(next.parent) < 0 { // Case (4)
-					// |tc| re-synchronized at |tc.level|, but we're still behind |next|.
-					// We can advance |tc| at level+1 to get to |next| faster.
+					// |tc| re-synchronized at |tc.level|, but we're still behind |nextMutation|.
+					// We can advance |tc| at level+1 to get to |nextMutation| faster.
 					fastForward = true
 				}
 
@@ -170,9 +170,9 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 	}
 
 	if tc.parent != nil && next.parent != nil {
-		// At this point we've either caught up to |next|, or we've
+		// At this point we've either caught up to |nextMutation|, or we've
 		// re-synchronized at |tc.level| and we're fast-forwarding
-		// at the next level up in the tree.
+		// at the nextMutation level up in the tree.
 		err := tc.parent.advanceTo(ctx, next.parent)
 		if err != nil {
 			return err
@@ -180,7 +180,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 	}
 
 	// We may have invalidated cursors as we re-synchronized,
-	// so copy |next| here.
+	// so copy |nextMutation| here.
 	tc.cur.copy(next)
 
 	if fastForward { // Case (4)
@@ -209,7 +209,7 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 	// (3) Internal Nodes (level > 0) must contain at least 2 key-value pairs (4 node items).
 	//     Infinite recursion can occur if internal nodes contain a single metaPair with a key
 	//     large enough to trigger a chunk boundary. Forming a chunk boundary after a single
-	//     key will lead to an identical metaPair in the next level in the tree, triggering
+	//     key will lead to an identical metaPair in the nextMutation level in the tree, triggering
 	//     the same state infinitely. This problem can only occur at levels 2 and above,
 	//     but we enforce this constraint for all internal nodes of the tree.
 
@@ -231,7 +231,7 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 	if overflow {
 		// Enforce constraints (1) and (2):
 		//  |key| and |value| won't fit in this chunk, force a
-		//  boundary here and pass them to the next chunk.
+		//  boundary here and pass them to the nextMutation chunk.
 		err := tc.handleChunkBoundary(ctx)
 		if err != nil {
 			return false, err
