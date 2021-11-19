@@ -157,6 +157,10 @@ func (nd Node) getItem(i int) nodeItem {
 }
 
 func (nd Node) getPair(i int) (p nodePair) {
+	count := nd.nodeCount()
+	if i >= count {
+		panic("out of bounds")
+	}
 	offs, itemStop := nd.offsets()
 	start, stop := offs.GetBounds(i, itemStop)
 	p[0] = nodeItem(nd[start:stop])
@@ -169,6 +173,7 @@ func (nd Node) size() val.ByteSize {
 	return val.ByteSize(len(nd))
 }
 
+// todo(andy): move (de)serialization to val/codec.go
 func (nd Node) level() int {
 	sl := nd[nd.size()-treeLevelSize:]
 	return int(val.ReadUint8(sl))

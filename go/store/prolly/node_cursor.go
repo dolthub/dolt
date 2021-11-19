@@ -25,6 +25,7 @@ const (
 )
 
 // nodeCursor explores a tree of Node items.
+// todo(andy): refactor as slice
 type nodeCursor struct {
 	nd     Node
 	idx    int
@@ -36,7 +37,7 @@ type compareFn func(left, right nodeItem) int
 
 type searchFn func(item nodeItem, nd Node) (idx int)
 
-func newCursor(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
+func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.isLeaf() {
 		mv := metaValue(cur.currentPair().value())
@@ -51,11 +52,34 @@ func newCursor(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, er
 	return
 }
 
-func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
-	cur = nodeCursor{nd: nd, nrw: nrw}
+func newCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
+	cur = &nodeCursor{nd: nd, nrw: nrw}
+	cur.skipToNodeEnd()
+
+	for !cur.isLeaf() {
+		mv := metaValue(cur.currentPair().value())
+		nd, err = fetchChild(ctx, nrw, mv)
+		if err != nil {
+			return nil, err
+		}
+
+		parent := cur
+		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
+		cur.skipToNodeEnd()
+	}
+	return
+}
+
+// todo(andy): comment doc: may return invalid cursor
+func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur *nodeCursor, err error) {
+	cur = &nodeCursor{nd: nd, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
 	for !cur.isLeaf() {
+
+		// stay in bounds for internal nodes
+		cur.keepInBounds()
+
 		mv := metaValue(cur.currentPair().value())
 		nd, err = fetchChild(ctx, nrw, mv)
 		if err != nil {
@@ -63,20 +87,24 @@ func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem,
 		}
 
 		parent := cur
-		cur = nodeCursor{nd: nd, parent: &parent, nrw: nrw}
+		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
 
 		cur.idx = search(item, cur.nd)
 	}
 
-	return cur, nil
+	return
 }
 
-// todo(andy): this is a temporary function to optimize memory usage
+// todo(andy): comment doc: may return invalid cursor
 func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
 	cur = nodeCursor{nd: nd, parent: nil, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
 	for !cur.isLeaf() {
+
+		// stay in bounds for internal nodes
+		cur.keepInBounds()
+
 		// reuse |cur| object to keep stack alloc'd
 		mv := metaValue(cur.currentPair().value())
 		cur.nd, err = fetchChild(ctx, nrw, mv)
@@ -121,6 +149,9 @@ func newCursorAtIndex(ctx context.Context, nrw NodeStore, nd Node, idx uint64) (
 }
 
 func (cur *nodeCursor) valid() bool {
+	if cur.nd == nil {
+		return false
+	}
 	cnt := cur.nd.nodeCount()
 	return cur.idx >= 0 && cur.idx < cnt
 }
@@ -144,6 +175,15 @@ func (cur *nodeCursor) skipToNodeStart() {
 
 func (cur *nodeCursor) skipToNodeEnd() {
 	cur.idx = cur.lastKeyIdx()
+}
+
+func (cur *nodeCursor) keepInBounds() {
+	if cur.idx < 0 {
+		cur.skipToNodeStart()
+	}
+	if cur.idx > cur.lastKeyIdx() {
+		cur.skipToNodeEnd()
+	}
 }
 
 func (cur *nodeCursor) atNodeStart() bool {
@@ -179,6 +219,8 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 		if err != nil {
 			return err
 		}
+		// stay in bounds for internal nodes
+		cur.parent.keepInBounds()
 
 		mv := metaValue(cur.parent.currentPair().value())
 		cur.nd, err = fetchChild(ctx, cur.nrw, mv)
@@ -193,11 +235,14 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 }
 
 // search returns the index of |item| if it's present in |cur.nd|, or the
-// index of the next greatest element if it is not present.
-func (cur *nodeCursor) search(item nodeItem, cb compareFn) int {
-	idx := sort.Search(cur.nd.nodeCount()/stride, func(i int) bool {
+// index of the nextMutation greatest element if it is not present.
+// todo(andy): update this comment too.
+func (cur *nodeCursor) search(item nodeItem, cb compareFn) (idx int) {
+	count := cur.nd.nodeCount()
+	idx = sort.Search(count/stride, func(i int) bool {
 		return cb(item, cur.nd.getItem(i*stride)) <= 0
 	})
+
 	return idx * stride
 }
 
@@ -214,9 +259,7 @@ func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
 }
 
 func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
-	lastIdx := cur.nd.nodeCount() - stride
-
-	if cur.idx < lastIdx {
+	if cur.idx < cur.lastKeyIdx() {
 		cur.idx += stride
 		return true, nil
 	}
@@ -226,7 +269,7 @@ func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	assertTrue(cur.idx == lastIdx)
+	assertTrue(cur.idx == cur.lastKeyIdx())
 
 	if cur.parent != nil {
 		ok, err := cur.parent.advanceInBounds(ctx)
@@ -295,7 +338,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 			return true, nil
 		}
 		// if not |ok|, then every parent, grandparent, etc.,
-		// failed to retreatInBounds(): we're before the start
+		// failed to retreatInBounds(): we're before the start.
 		// of the prolly tree.
 	}
 
@@ -321,6 +364,31 @@ func (cur *nodeCursor) compare(other *nodeCursor) int {
 	}
 	assertTrue(cur.nd.nodeCount() == other.nd.nodeCount())
 	return cur.idx - other.idx
+}
+
+func (cur *nodeCursor) clone() *nodeCursor {
+	cln := nodeCursor{
+		nd:  cur.nd,
+		idx: cur.idx,
+		nrw: cur.nrw,
+	}
+
+	if cur.parent != nil {
+		cln.parent = cur.parent.clone()
+	}
+
+	return &cln
+}
+
+func (cur *nodeCursor) copy(other *nodeCursor) {
+	cur.nd = other.nd
+	cur.idx = other.idx
+	cur.nrw = other.nrw
+
+	if cur.parent != nil {
+		assertTrue(other.parent != nil)
+		cur.parent.copy(other.parent)
+	}
 }
 
 func assertTrue(b bool) {

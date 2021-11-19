@@ -138,7 +138,10 @@ func ReadUint32(val []byte) uint32 {
 func ReadUint48(val []byte) (u uint64) {
 	expectSize(val, uint48Size)
 	var tmp [8]byte
-	copy(tmp[:uint48Size], val)
+	// copy |val| to |tmp|
+	tmp[5], tmp[4] = val[5], val[4]
+	tmp[3], tmp[2] = val[3], val[2]
+	tmp[1], tmp[0] = val[1], val[0]
 	u = binary.LittleEndian.Uint64(tmp[:])
 	return
 }
@@ -220,7 +223,10 @@ func WriteUint48(buf []byte, u uint64) {
 	}
 	var tmp [8]byte
 	binary.LittleEndian.PutUint64(tmp[:], u)
-	copy(buf, tmp[:uint48Size])
+	// copy |tmp| to |buf|
+	buf[5], buf[4] = tmp[5], tmp[4]
+	buf[3], buf[2] = tmp[3], tmp[2]
+	buf[1], buf[0] = tmp[1], tmp[0]
 }
 
 func WriteInt64(buf []byte, val int64) {

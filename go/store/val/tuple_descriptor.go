@@ -70,6 +70,7 @@ func NewTupleDescriptorWithComparator(cmp TupleCompare, types ...Type) (td Tuple
 // Compare returns the Comaparison of |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
 	if td.raw != nil {
+		// todo(andy): this is broken for signed ints
 		return compareRaw(left, right, td.raw)
 	} else {
 		return td.cmp(left, right, td)

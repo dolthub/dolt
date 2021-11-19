@@ -16,18 +16,17 @@ package prolly
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// Map is a prolly tree implementing map semantics.
 type Map struct {
 	root    Node
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
-	ns      NodeStore
+	// todo(andy): do we need a metaValue descriptor?
+	ns NodeStore
 }
 
 type KeyValueFn func(key, value val.Tuple) error
@@ -42,7 +41,7 @@ func NewMap(node Node, ns NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	}
 }
 
-// NewMapFromTuples creates a prolly tree Map from a slice of sorted Tuples.
+// NewMapFromTuples creates a prolly tree Map from slice of sorted Tuples.
 func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
 	m := NewMap(nil, ns, keyDesc, valDesc)
 
@@ -70,6 +69,11 @@ func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.Tu
 	return m, nil
 }
 
+// Mutate makes a MutableMap from a Map.
+func (m Map) Mutate() MutableMap {
+	return newMutableMap(m)
+}
+
 // Count returns the number of key-value pairs in the Map.
 func (m Map) Count() uint64 {
 	return m.root.cumulativeCount() / 2
@@ -83,30 +87,17 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 		return err
 	}
 
-	pair := cur.currentPair()
-	k, v := val.Tuple(pair.key()), val.Tuple(pair.value())
+	var k, v val.Tuple
+	if cur.valid() {
+		pair := cur.currentPair()
 
-	if m.compareKeys(key, k) != 0 {
-		k, v = nil, nil
+		k = val.Tuple(pair.key())
+		if m.compareKeys(key, k) == 0 {
+			v = val.Tuple(pair.value())
+		} else {
+			k = nil
+		}
 	}
-
-	return cb(k, v)
-}
-
-// GetIndex passes the key-value pair at index |idx| to the callback.
-func (m Map) GetIndex(ctx context.Context, idx uint64, cb KeyValueFn) (err error) {
-	if idx > m.Count() {
-		return fmt.Errorf("index is out of bounds for map")
-	}
-
-	treeIndex := idx * 2
-	cur, err := newCursorAtIndex(ctx, m.ns, m.root, treeIndex)
-	if err != nil {
-		return err
-	}
-
-	pair := cur.currentPair()
-	k, v := val.Tuple(pair.key()), val.Tuple(pair.value())
 
 	return cb(k, v)
 }
@@ -118,38 +109,64 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 		return false, err
 	}
 
-	k := val.Tuple(cur.currentPair().key())
+	if cur.valid() {
+		k := val.Tuple(cur.currentPair().key())
+		ok = m.compareKeys(key, k) == 0
+	}
 
-	ok = m.compareKeys(key, k) == 0
 	return
 }
 
-// IterAll returns a MapIterator that iterates over the entire Map.
-func (m Map) IterAll(ctx context.Context) (MapIter, error) {
-	return m.IterIndexRange(ctx, IndexRange{low: 0, high: m.Count() - 1})
+// IterAll returns a MapRangeIter that iterates over the entire Map.
+func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
+	rng := Range{
+		Start:   RangeCut{Unbound: true},
+		Stop:    RangeCut{Unbound: true},
+		KeyDesc: m.keyDesc,
+		Reverse: false,
+	}
+	return m.IterValueRange(ctx, rng)
 }
 
-// IterIndexRange returns a MapIterator that iterates over an IndexRange.
-func (m Map) IterIndexRange(ctx context.Context, rng IndexRange) (MapIter, error) {
-	if rng.low > m.Count() || rng.high > m.Count() {
-		return nil, errors.New("range out of bounds")
-	}
+// IterValueRange returns a MapRangeIter that iterates over a Range.
+func (m Map) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+	var cur *nodeCursor
+	var err error
 
-	treeIndex := rng.low * 2
-	if rng.reverse {
-		treeIndex = rng.high * 2
+	if rng.Start.Unbound {
+		if rng.Reverse {
+			cur, err = m.cursorAtEnd(ctx)
+		} else {
+			cur, err = m.cursorAtStart(ctx)
+		}
+	} else {
+		cur, err = m.cursorAtkey(ctx, rng.Start.Key)
 	}
-
-	cur, err := newCursorAtIndex(ctx, m.ns, m.root, treeIndex)
 	if err != nil {
-		return nil, err
+		return MapRangeIter{}, err
 	}
-	remaining := rng.high - rng.low + 1
+	proCur := mapTupleCursor{cur: cur}
 
-	return &indexIter{rng: rng, cur: cur, rem: remaining}, nil
+	return NewMapRangeIter(ctx, nil, proCur, rng)
 }
 
-// searchNode is a searchFn for a Map, adapted from sort.Search.
+func (m Map) cursorAtStart(ctx context.Context) (*nodeCursor, error) {
+	return newCursorAtStart(ctx, m.ns, m.root)
+}
+
+func (m Map) cursorAtEnd(ctx context.Context) (*nodeCursor, error) {
+	return newCursorAtEnd(ctx, m.ns, m.root)
+}
+
+func (m Map) cursorAtkey(ctx context.Context, key val.Tuple) (*nodeCursor, error) {
+	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
+	if err == nil {
+		cur.keepInBounds()
+	}
+	return cur, err
+}
+
+// searchNode is a searchFn for a Map, adapted from search.Sort.
 func (m Map) searchNode(query nodeItem, nd Node) int {
 	n := nd.nodeCount() / stride
 	// Define f(-1) == false and f(n) == true.
@@ -178,4 +195,28 @@ func (m Map) compareItems(left, right nodeItem) int {
 
 func (m Map) compareKeys(left, right val.Tuple) int {
 	return int(m.keyDesc.Compare(left, right))
+}
+
+type mapTupleCursor struct {
+	cur *nodeCursor
+}
+
+var _ tupleCursor = mapTupleCursor{}
+
+func (cur mapTupleCursor) current() (key, value val.Tuple) {
+	if cur.cur.valid() {
+		pair := cur.cur.currentPair()
+		key, value = val.Tuple(pair.key()), val.Tuple(pair.value())
+	}
+	return
+}
+
+func (cur mapTupleCursor) advance(ctx context.Context) (err error) {
+	_, err = cur.cur.advance(ctx)
+	return
+}
+
+func (cur mapTupleCursor) retreat(ctx context.Context) (err error) {
+	_, err = cur.cur.retreat(ctx)
+	return
 }

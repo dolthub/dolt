@@ -63,7 +63,7 @@ func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeStore) {
 	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	require.NoError(t, err)
 
-	items := randomTupleItemPairs(count)
+	items := randomTupleItemPairs(count / 2)
 	for _, item := range items {
 		_, err := chunker.Append(ctx, item[0], item[1])
 		assert.NoError(t, err)
@@ -93,7 +93,7 @@ func searchTestTree(item nodeItem, nd Node) int {
 
 func randomTupleItemPairs(count int) (items [][2]nodeItem) {
 	tups := randomTuplePairs(count, keyDesc, valDesc)
-	items = make([][2]nodeItem, count/2)
+	items = make([][2]nodeItem, count)
 	if len(tups) != len(items) {
 		panic("mismatch")
 	}
