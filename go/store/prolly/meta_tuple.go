@@ -54,6 +54,8 @@ const (
 	metaValueRefIdx   = 1
 )
 
+// metaValue is a value Tuple in an internal Node of a prolly tree.
+// metaValues have two fields: cumulative count and ref.
 type metaValue val.Tuple
 
 func newMetaValue(pool pool.BuffPool, count uint64, ref hash.Hash) metaValue {
@@ -62,11 +64,15 @@ func newMetaValue(pool pool.BuffPool, count uint64, ref hash.Hash) metaValue {
 	return metaValue(val.NewTuple(pool, cnt[:], ref[:]))
 }
 
+// GetCumulativeCount returns the cumulative number of nodeItems
+// within the subtree pointed to by a metaValue.
 func (mt metaValue) GetCumulativeCount() uint64 {
 	cnt := val.Tuple(mt).GetField(metaValueCountIdx)
 	return val.ReadUint48(cnt)
 }
 
+// GetRef returns the hash.Hash of the child Node pointed
+// to by this metaValue.
 func (mt metaValue) GetRef() hash.Hash {
 	tup := val.Tuple(mt)
 	ref := tup.GetField(metaValueRefIdx)

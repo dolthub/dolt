@@ -22,9 +22,16 @@ import (
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
+// NodeStore reads and writes prolly tree Nodes.
 type NodeStore interface {
+
+	// Read reads a prolly tree Node from the store.
 	Read(ctx context.Context, ref hash.Hash) (Node, error)
+
+	// Write writes a prolly tree Node to the store.
 	Write(ctx context.Context, nd Node) (hash.Hash, error)
+
+	// Pool returns a buffer pool.
 	Pool() pool.BuffPool
 }
 
@@ -37,21 +44,25 @@ var _ NodeStore = nodeStore{}
 
 var sharedPool = pool.NewBuffPool()
 
+// NewNodeStore makes a new NodeStore.
 func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 	return nodeStore{store: cs, bp: sharedPool}
 }
 
+// Read implements NodeStore.
 func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	c, err := ns.store.Get(ctx, ref)
 	return c.Data(), err
 }
 
+// Write implements NodeStore.
 func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	c := chunks.NewChunk(nd)
 	err := ns.store.Put(ctx, c)
 	return c.Hash(), err
 }
 
+// Pool implements NodeStore.
 func (ns nodeStore) Pool() pool.BuffPool {
 	return ns.bp
 }

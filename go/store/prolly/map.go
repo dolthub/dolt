@@ -25,8 +25,7 @@ type Map struct {
 	root    Node
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
-	// todo(andy): do we need a metaValue descriptor?
-	ns NodeStore
+	ns      NodeStore
 }
 
 type KeyValueFn func(key, value val.Tuple) error
