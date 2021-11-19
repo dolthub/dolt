@@ -426,7 +426,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 		}
 
 		if dArgs.diffParts&SchemaOnlyDiff != 0 {
-			verr = diffSchemas(ctx, fromRoot, toRoot, td, dArgs)
+			verr = diffSchemas(ctx, toRoot, td, dArgs)
 		}
 
 		if dArgs.diffParts&DataOnlyDiff != 0 {
@@ -446,7 +446,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 	return nil
 }
 
-func diffSchemas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+func diffSchemas(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
@@ -481,6 +481,7 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.V
 	return nil
 }
 
+// TODO: this doesn't handle check constraints or triggers
 func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
@@ -502,10 +503,10 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))
 		}
 
-		// eq := schema.SchemasAreEqual(fromSch, toSch)
-		// if eq && !td.HasFKChanges() {
-		// 	return nil
-		// }
+		eq := schema.SchemasAreEqual(fromSch, toSch)
+		if eq && !td.HasFKChanges() {
+			return nil
+		}
 
 		colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
 		for _, tag := range unionTags {
