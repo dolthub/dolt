@@ -46,18 +46,18 @@ func (mm memoryMap) compare(left, right []byte) int {
 	return int(mm.keyDesc.Compare(left, right))
 }
 
+// Count returns the number of entries in the memoryMap.
 func (mm memoryMap) Count() uint64 {
 	return uint64(mm.list.Count())
 }
 
-func (mm memoryMap) Put(key, val val.Tuple) (ok bool) {
-	ok = !mm.list.Full()
-	if ok {
-		mm.list.Put(key, val)
-	}
-	return
+// Put adds the Tuple pair |key|, |value| to the memoryMap.
+func (mm memoryMap) Put(key, val val.Tuple) {
+	mm.list.Put(key, val)
 }
 
+// Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
+// If the |key| is not present in the memoryMap, a nil Tuple pair is passed to |cb|.
 func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn) error {
 	value, ok := mm.list.Get(key)
 	if !ok || value == nil {
@@ -80,7 +80,7 @@ func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 	return mm.IterValueRange(ctx, rng)
 }
 
-// IterValueRange returns a MapIterator that iterates over an ValueRange.
+// IterValueRange returns a MapRangeIter that iterates over a Range.
 func (mm memoryMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var iter *skip.ListIter
 	if rng.Start.Unbound {
@@ -92,17 +92,9 @@ func (mm memoryMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter
 	} else {
 		iter = mm.list.IterAt(rng.Start.Key)
 	}
+	memCur := memTupleCursor{iter: iter}
 
-	mri := MapRangeIter{
-		memCur: memTupleCursor{iter: iter},
-		rng:    rng,
-	}
-
-	if err := startInRange(ctx, mri); err != nil {
-		return MapRangeIter{}, err
-	}
-
-	return mri, nil
+	return NewMapRangeIter(ctx, memCur, nil, rng)
 }
 
 func (mm memoryMap) mutations() mutationIter {

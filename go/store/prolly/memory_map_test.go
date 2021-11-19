@@ -82,8 +82,7 @@ func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	tuples := randomTuplePairs(count, memKeyDesc, memValueDesc)
 	mm := newMemoryMap(memKeyDesc)
 	for _, pair := range tuples {
-		ok := mm.Put(pair[0], pair[1])
-		require.True(t, ok)
+		mm.Put(pair[0], pair[1])
 	}
 
 	return mm, tuples
@@ -106,8 +105,7 @@ func makeMemMapWithDeletes(t *testing.T, count int) (mut memoryMap, tuples, dele
 	sortTuplePairs(tuples, desc)
 
 	for _, kv := range deletes {
-		ok := mut.Put(kv[0], nil)
-		require.True(t, ok)
+		mut.Put(kv[0], nil)
 	}
 
 	return mut, tuples, deletes

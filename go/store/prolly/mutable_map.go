@@ -22,6 +22,10 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+const (
+	maxPending = 64 * 1024
+)
+
 type MutableMap struct {
 	m       Map
 	overlay memoryMap
@@ -34,25 +38,19 @@ func newMutableMap(m Map) MutableMap {
 	}
 }
 
+// Map materializes the pending mutations in the MutableMap.
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
 	return materializeMutations(ctx, mut.m, mut.overlay.mutations())
 }
 
-func (mut MutableMap) Count() uint64 {
-	panic("harder than you think!")
+// Put adds the Tuple pair |key|, |value| to the MutableMap.
+func (mut MutableMap) Put(_ context.Context, key, value val.Tuple) error {
+	mut.overlay.Put(key, value)
+	return nil
 }
 
-func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) (err error) {
-	ok := mut.overlay.Put(key, value)
-	if !ok {
-		// todo(andy): put again?
-		// synchronously flush overlay
-		mut.m, err = mut.Map(ctx)
-		mut.overlay = newMemoryMap(mut.m.keyDesc)
-	}
-	return
-}
-
+// Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
+// If the |key| is not present in the MutableMap, a nil Tuple pair is passed to |cb|.
 func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
 	value, ok := mut.overlay.list.Get(key)
 	if ok {
@@ -66,6 +64,7 @@ func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (er
 	return mut.m.Get(ctx, key, cb)
 }
 
+// Has returns true if |key| is present in the MutableMap.
 func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	err = mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		ok = key != nil
@@ -74,6 +73,7 @@ func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err erro
 	return
 }
 
+// IterAll returns a MapRangeIter that iterates over the entire MutableMap.
 func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 	rng := Range{
 		Start:   RangeCut{Unbound: true},
@@ -84,6 +84,7 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 	return mut.IterValueRange(ctx, rng)
 }
 
+// IterValueRange returns a MapRangeIter that iterates over a Range.
 func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var iter *skip.ListIter
 	if rng.Start.Unbound {
@@ -95,6 +96,7 @@ func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIt
 	} else {
 		iter = mut.overlay.list.IterAt(rng.Start.Key)
 	}
+	memCur := memTupleCursor{iter: iter}
 
 	var err error
 	var cur *nodeCursor
@@ -110,16 +112,7 @@ func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIt
 	if err != nil {
 		return MapRangeIter{}, err
 	}
+	proCur := mapTupleCursor{cur: cur}
 
-	mri := MapRangeIter{
-		memCur: memTupleCursor{iter: iter},
-		proCur: mapTupleCursor{cur: cur},
-		rng:    rng,
-	}
-
-	if err = startInRange(ctx, mri); err != nil {
-		return MapRangeIter{}, err
-	}
-
-	return mri, nil
+	return NewMapRangeIter(ctx, memCur, proCur, rng)
 }

@@ -74,10 +74,6 @@ func (l *List) Count() int {
 	return len(l.nodes) - 1
 }
 
-func (l *List) Full() bool {
-	return l.Count() >= maxCount
-}
-
 func (l *List) Has(key []byte) (ok bool) {
 	_, ok = l.Get(key)
 	return
@@ -95,8 +91,7 @@ func (l *List) Put(key, val []byte) {
 	if key == nil {
 		panic("key must be non-nil")
 	}
-	if l.Full() {
-		// todo(andy): revisit
+	if l.Count() >= maxCount {
 		panic("list has no capacity")
 	}
 

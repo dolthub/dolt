@@ -21,12 +21,14 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// RangeCut bounds a Range.
 type RangeCut struct {
 	Key       val.Tuple
 	Inclusive bool
 	Unbound   bool
 }
 
+// Range is a range of Tuples.
 type Range struct {
 	Start, Stop RangeCut
 	KeyDesc     val.TupleDesc
@@ -63,6 +65,7 @@ func (r Range) insideStop(key val.Tuple) bool {
 	return cmp < 0
 }
 
+// GreaterRange defines a Range of Tuples greater than |start|.
 func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -77,6 +80,7 @@ func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
+// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
 func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -91,6 +95,7 @@ func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
+// LesserRange defines a Range of Tuples less than |stop|.
 func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -105,6 +110,7 @@ func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
+// LesserOrEqualRange defines a Range of Tuples less than or equal to |stop|.
 func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -121,6 +127,7 @@ func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
 
 // todo(andy): reverse ranges for GT, GTE, LT, and LTE?
 
+// OpenRange defines a non-inclusive Range of Tuples from |start| to |stop|.
 func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -136,6 +143,7 @@ func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
+// OpenStartRange defines a half-open Range of Tuples from |start| to |stop|.
 func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -151,6 +159,7 @@ func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
+// OpenStopRange defines a half-open Range of Tuples from |start| to |stop|.
 func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -166,6 +175,7 @@ func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
+// ClosedRange defines an inclusive Range of Tuples from |start| to |stop|.
 func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -181,9 +191,25 @@ func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
+// MapRangeIter iterates over a Range of Tuples.
 type MapRangeIter struct {
 	memCur, proCur tupleCursor
 	rng            Range
+}
+
+func NewMapRangeIter(ctx context.Context, memCur, proCur tupleCursor, rng Range) (MapRangeIter, error) {
+	mri := MapRangeIter{
+		memCur: memCur,
+		proCur: proCur,
+		rng:    rng,
+	}
+
+	err := startInRange(ctx, mri)
+	if err != nil {
+		return MapRangeIter{}, err
+	}
+
+	return mri, nil
 }
 
 type tupleCursor interface {
@@ -192,6 +218,7 @@ type tupleCursor interface {
 	retreat(ctx context.Context) error
 }
 
+// Next returns the next pair of Tuples in the Range, or io.EOF if the iter is done.
 func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
 	for value == nil {
 		key, value = it.current()

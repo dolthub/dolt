@@ -102,24 +102,6 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 	return cb(k, v)
 }
 
-// GetIndex passes the key-value pair at index |idx| to the callback.
-func (m Map) GetIndex(ctx context.Context, idx uint64, cb KeyValueFn) (err error) {
-	if idx > m.Count() {
-		return fmt.Errorf("index is out of bounds for map")
-	}
-
-	treeIndex := idx * 2
-	cur, err := newCursorAtIndex(ctx, m.ns, m.root, treeIndex)
-	if err != nil {
-		return err
-	}
-
-	pair := cur.currentPair()
-	k, v := val.Tuple(pair.key()), val.Tuple(pair.value())
-
-	return cb(k, v)
-}
-
 // Has returns true is |key| is present in the Map.
 func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	cur, err := newLeafCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
@@ -135,7 +117,7 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return
 }
 
-// IterAll returns a MapIterator that iterates over the entire Map.
+// IterAll returns a MapRangeIter that iterates over the entire Map.
 func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	rng := Range{
 		Start:   RangeCut{Unbound: true},
@@ -146,7 +128,7 @@ func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	return m.IterValueRange(ctx, rng)
 }
 
-// IterValueRange returns a MapIterator that iterates over an ValueRange.
+// IterValueRange returns a MapRangeIter that iterates over a Range.
 func (m Map) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var cur *nodeCursor
 	var err error
@@ -163,17 +145,9 @@ func (m Map) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error
 	if err != nil {
 		return MapRangeIter{}, err
 	}
+	proCur := mapTupleCursor{cur: cur}
 
-	mri := MapRangeIter{
-		memCur: mapTupleCursor{cur: cur},
-		rng:    rng,
-	}
-
-	if err = startInRange(ctx, mri); err != nil {
-		return MapRangeIter{}, err
-	}
-
-	return mri, nil
+	return NewMapRangeIter(ctx, nil, proCur, rng)
 }
 
 func (m Map) cursorAtStart(ctx context.Context) (*nodeCursor, error) {
@@ -190,7 +164,6 @@ func (m Map) cursorAtkey(ctx context.Context, key val.Tuple) (*nodeCursor, error
 		cur.keepInBounds()
 	}
 	return cur, err
-
 }
 
 // searchNode is a searchFn for a Map, adapted from search.Sort.
