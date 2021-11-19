@@ -46,7 +46,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/types"
@@ -448,10 +447,6 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 }
 
 func diffSchemas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
-	fromSchemas, err := fromRoot.GetAllSchemas(ctx)
-	if err != nil {
-		return errhand.BuildDError("could not read schemas from fromRoot").AddCause(err).Build()
-	}
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
@@ -462,107 +457,27 @@ func diffSchemas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, td dif
 			panic("cannot perform tabular schema diff for added/dropped tables")
 		}
 
-		return tabularSchemaDiff(ctx, td, fromSchemas, toSchemas)
+		return printShowCreateTableDiff(ctx, td)
 	}
 
 	return sqlSchemaDiff(ctx, td, toSchemas)
 }
 
-func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toSchemas map[string]schema.Schema) errhand.VerboseError {
+func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.VerboseError {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	eq := schema.SchemasAreEqual(fromSch, toSch)
-	if eq && !td.HasFKChanges() {
-		return nil
-	}
+	sqlDb := sqle.NewSingleTableDatabase(td.ToName, fromSch, td.FromFks, td.FromFksParentSch)
+	sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+	fromCreateStmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
 
-	cli.Println("  CREATE TABLE", td.ToName, "(")
+	sqlDb = sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
+	sqlCtx, engine, _ = sqle.PrepareCreateTableStmt(ctx, sqlDb)
+	toCreateStmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
 
-	colDiffs, tags := diff.DiffSchColumns(fromSch, toSch)
-	for _, tag := range tags {
-		dff := colDiffs[tag]
-		switch dff.DiffType {
-		case diff.SchDiffNone:
-			cli.Println(sqlfmt.FmtCol(4, 0, 0, *dff.New))
-		case diff.SchDiffAdded:
-			cli.Println(color.GreenString("+ " + sqlfmt.FmtCol(2, 0, 0, *dff.New)))
-		case diff.SchDiffRemoved:
-			// removed from sch2
-			cli.Println(color.RedString("- " + sqlfmt.FmtCol(2, 0, 0, *dff.Old)))
-		case diff.SchDiffModified:
-			// changed in sch2
-			n0, t0 := dff.Old.Name, dff.Old.TypeInfo.ToSqlType().String()
-			n1, t1 := dff.New.Name, dff.New.TypeInfo.ToSqlType().String()
-
-			nameLen := 0
-			typeLen := 0
-
-			if n0 != n1 {
-				n0 = color.YellowString(n0)
-				n1 = color.YellowString(n1)
-				nameLen = mathutil.Max(len(n0), len(n1))
-			}
-
-			if t0 != t1 {
-				t0 = color.YellowString(t0)
-				t1 = color.YellowString(t1)
-				typeLen = mathutil.Max(len(t0), len(t1))
-			}
-
-			cli.Println("< " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n0, t0, *dff.Old))
-			cli.Println("> " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
-		}
-	}
-
-	// Display Primary Key Set Differences
-	if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
-		fromPkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
-		toPkStr := strings.Join(toSch.GetPKCols().GetColumnNames(), ", ")
-		cli.Println("<" + sqlfmt.FmtColPrimaryKey(3, fromPkStr, false))
-		cli.Println(">" + sqlfmt.FmtColPrimaryKey(3, toPkStr, false))
-	} else {
-		// Just display the normal primary keys string
-		pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
-		cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr, true))
-	}
-
-	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
-		switch idxDiff.DiffType {
-		case diff.SchDiffNone:
-			cli.Println("     " + sqlfmt.FmtIndex(idxDiff.To))
-		case diff.SchDiffAdded:
-			cli.Println(color.GreenString("+    " + sqlfmt.FmtIndex(idxDiff.To)))
-		case diff.SchDiffRemoved:
-			cli.Println(color.RedString("-    " + sqlfmt.FmtIndex(idxDiff.From)))
-		case diff.SchDiffModified:
-			cli.Println("<    " + sqlfmt.FmtIndex(idxDiff.From))
-			cli.Println(">    " + sqlfmt.FmtIndex(idxDiff.To))
-		}
-	}
-
-	for _, fkDiff := range diff.DiffForeignKeys(td.FromFks, td.ToFks) {
-		switch fkDiff.DiffType {
-		case diff.SchDiffNone:
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			cli.Println("     " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, parentSch))
-		case diff.SchDiffAdded:
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			cli.Println(color.GreenString("+    " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, parentSch)))
-		case diff.SchDiffRemoved:
-			parentSch := toSchemas[fkDiff.From.ReferencedTableName]
-			cli.Println(color.RedString("-    " + sqlfmt.FmtForeignKey(fkDiff.From, fromSch, parentSch)))
-		case diff.SchDiffModified:
-			fromParent, toParent := fromSchemas[fkDiff.From.ReferencedTableName], toSchemas[fkDiff.To.ReferencedTableName]
-			cli.Println("<    " + sqlfmt.FmtForeignKey(fkDiff.From, fromSch, fromParent))
-			cli.Println(">    " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, toParent))
-		}
-	}
-
-	cli.Println("  );")
-	cli.Println()
+	cli.Print(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
 	return nil
 }
 
@@ -587,10 +502,10 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))
 		}
 
-		eq := schema.SchemasAreEqual(fromSch, toSch)
-		if eq && !td.HasFKChanges() {
-			return nil
-		}
+		// eq := schema.SchemasAreEqual(fromSch, toSch)
+		// if eq && !td.HasFKChanges() {
+		// 	return nil
+		// }
 
 		colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
 		for _, tag := range unionTags {
