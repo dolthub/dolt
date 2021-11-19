@@ -73,10 +73,10 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		}
 
 		fromDeltas = append(fromDeltas, TableDelta{
-			FromName:  name,
-			FromTable: tbl,
-			FromSch:   sch,
-			FromFks:   fks,
+			FromName:         name,
+			FromTable:        tbl,
+			FromSch:          sch,
+			FromFks:          fks,
 			FromFksParentSch: parentSchs,
 		})
 		return
@@ -146,15 +146,15 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 
 	match := func(t, f TableDelta) TableDelta {
 		return TableDelta{
-			FromName:       f.FromName,
-			ToName:         t.ToName,
-			FromTable:      f.FromTable,
-			ToTable:        t.ToTable,
-			FromSch:        f.FromSch,
-			ToSch:          t.ToSch,
-			FromFks:        f.FromFks,
-			ToFks:          t.ToFks,
-			ToFksParentSch: t.ToFksParentSch,
+			FromName:         f.FromName,
+			ToName:           t.ToName,
+			FromTable:        f.FromTable,
+			ToTable:          t.ToTable,
+			FromSch:          f.FromSch,
+			ToSch:            t.ToSch,
+			FromFks:          f.FromFks,
+			ToFks:            t.ToFks,
+			ToFksParentSch:   t.ToFksParentSch,
 			FromFksParentSch: t.FromFksParentSch,
 		}
 	}
