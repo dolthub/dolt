@@ -41,15 +41,15 @@ func TestMutableMapReads(t *testing.T) {
 			t.Run("get item from map with deletes", func(t *testing.T) {
 				testMutableMapGetAndHas(t, mutableMap2, tuples2, deletes)
 			})
-			//t.Run("iter all from map with deletes", func(t *testing.T) {
-			//	testOrderedMapIterAll(t, mutableMap2, tuples2)
-			//})
-			//t.Run("iter all backwards from map", func(t *testing.T) {
-			//	testOrderedMapIterAllBackward(t, mutableMap2, tuples2)
-			//})
-			//t.Run("iter value range", func(t *testing.T) {
-			//	testOrderedMapIterValueRange(t, mutableMap2, tuples2)
-			//})
+			t.Run("iter all from map with deletes", func(t *testing.T) {
+				testOrderedMapIterAll(t, mutableMap2, tuples2)
+			})
+			t.Run("iter all backwards from map", func(t *testing.T) {
+				testOrderedMapIterAllBackward(t, mutableMap2, tuples2)
+			})
+			t.Run("iter value range", func(t *testing.T) {
+				testOrderedMapIterValueRange(t, mutableMap2, tuples2)
+			})
 		})
 	}
 }
@@ -59,12 +59,12 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	ns := newTestNodeStore()
 
 	kd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: false},
+		val.Type{Enc: val.Uint32Enc, Nullable: false},
 	)
 	vd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
 	)
 
 	tuples := randomTuplePairs(count, kd, vd)
@@ -120,7 +120,8 @@ func makeMutableMapWithDeletes(t *testing.T, count int) (mut MutableMap, tuples,
 
 	// re-sort the remaining tuples
 	tuples = tuples[count/4:]
-	sortTuplePairs(tuples, getKeyDesc(om))
+	desc := getKeyDesc(om)
+	sortTuplePairs(tuples, desc)
 
 	for _, kv := range deletes {
 		err := mut.Put(ctx, kv[0], nil)

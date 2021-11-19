@@ -17,6 +17,8 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/skip"
+
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -43,6 +45,7 @@ func (mut MutableMap) Count() uint64 {
 func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) (err error) {
 	ok := mut.overlay.Put(key, value)
 	if !ok {
+		// todo(andy): put again?
 		// synchronously flush overlay
 		mut.m, err = mut.Map(ctx)
 		mut.overlay = newMemoryMap(mut.m.keyDesc)
@@ -82,19 +85,41 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 }
 
 func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	mem, err := mut.overlay.IterValueRange(ctx, rng)
+	var iter *skip.ListIter
+	if rng.Start.Unbound {
+		if rng.Reverse {
+			iter = mut.overlay.list.IterAtEnd()
+		} else {
+			iter = mut.overlay.list.IterAtStart()
+		}
+	} else {
+		iter = mut.overlay.list.IterAt(rng.Start.Key)
+	}
+
+	var err error
+	var cur *nodeCursor
+	if rng.Start.Unbound {
+		if rng.Reverse {
+			cur, err = mut.m.cursorAtEnd(ctx)
+		} else {
+			cur, err = mut.m.cursorAtStart(ctx)
+		}
+	} else {
+		cur, err = mut.m.cursorAtkey(ctx, rng.Start.Key)
+	}
 	if err != nil {
 		return MapRangeIter{}, err
 	}
 
-	pro, err := mut.m.IterValueRange(ctx, rng)
-	if err != nil {
-		return MapRangeIter{}, err
-	}
-
-	return MapRangeIter{
-		memCur: mem.memCur,
-		proCur: pro.proCur,
+	mri := MapRangeIter{
+		memCur: memTupleCursor{iter: iter},
+		proCur: mapTupleCursor{cur: cur},
 		rng:    rng,
-	}, nil
+	}
+
+	if err = startInRange(ctx, mri); err != nil {
+		return MapRangeIter{}, err
+	}
+
+	return mri, nil
 }

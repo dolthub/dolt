@@ -21,16 +21,46 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+type RangeCut struct {
+	Key       val.Tuple
+	Inclusive bool
+	Unbound   bool
+}
+
 type Range struct {
 	Start, Stop RangeCut
 	KeyDesc     val.TupleDesc
 	Reverse     bool
 }
 
-type RangeCut struct {
-	Key       val.Tuple
-	Inclusive bool
-	Unbound   bool
+func (r Range) insideStart(key val.Tuple) bool {
+	if r.Start.Unbound {
+		return true
+	}
+
+	cmp := r.KeyDesc.Compare(key, r.Start.Key)
+	if cmp == 0 {
+		return r.Start.Inclusive
+	}
+	if r.Reverse {
+		cmp = -cmp
+	}
+	return cmp > 0
+}
+
+func (r Range) insideStop(key val.Tuple) bool {
+	if r.Stop.Unbound {
+		return true
+	}
+
+	cmp := r.KeyDesc.Compare(key, r.Stop.Key)
+	if cmp == 0 {
+		return r.Stop.Inclusive
+	}
+	if r.Reverse {
+		cmp = -cmp
+	}
+	return cmp < 0
 }
 
 func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
@@ -160,34 +190,48 @@ type tupleCursor interface {
 	current() (key, value val.Tuple)
 	advance(ctx context.Context) error
 	retreat(ctx context.Context) error
-	startInRange(ctx context.Context, r Range) error
 }
 
 func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
+	for err == nil && value == nil {
+		// |value| == nil is a pending delete
+		key, value, err = it.nextPair(ctx)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return key, value, nil
+}
+
+func (it MapRangeIter) nextPair(ctx context.Context) (key, value val.Tuple, err error) {
 	memKey, proKey := it.currentKeys()
 
 	if memKey == nil && proKey == nil {
+		// tuple cursors exhausted
 		return nil, nil, io.EOF
 	}
 
-	goMem, goPro := it.compareCursors(memKey, proKey)
+	cmp := it.compareKeys(memKey, proKey)
 
-	if goPro {
+	if cmp >= 0 {
 		key, value = it.proCur.current()
-		err = it.progressCursor(ctx, it.proCur)
-		if err != nil {
+		if err = it.progressCursor(ctx, it.proCur); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	// if |goPro| and |goMem| are both true, advance both
-	// cursors and take |key| and |value| from |memCur|
-	if goMem {
+	// if |cmp| == 0, progress both cursors and
+	// use |key| and |value| from memory overlay
+
+	if cmp <= 0 {
 		key, value = it.memCur.current()
-		err = it.progressCursor(ctx, it.memCur)
-		if err != nil {
+		if err = it.progressCursor(ctx, it.memCur); err != nil {
 			return nil, nil, err
 		}
+	}
+
+	if !it.rng.insideStop(key) {
+		return nil, nil, io.EOF
 	}
 
 	return key, value, nil
@@ -196,62 +240,29 @@ func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err erro
 func (it MapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
 	if it.memCur != nil {
 		memKey, _ = it.memCur.current()
-		if memKey != nil && !it.keyInRange(memKey) {
-			memKey = nil
-		}
 	}
 	if it.proCur != nil {
 		proKey, _ = it.proCur.current()
-		if proKey != nil && !it.keyInRange(proKey) {
-			proKey = nil
-		}
 	}
 	return
 }
 
-func (it MapRangeIter) compareCursors(memKey, proKey val.Tuple) (goMem, goPro bool) {
+func (it MapRangeIter) compareKeys(memKey, proKey val.Tuple) (cmp int) {
 	if memKey == nil {
-		goPro = true
+		cmp = 1
 		return
 	}
-
 	if proKey == nil {
-		goMem = true
+		cmp = -1
 		return
 	}
 
-	cmp := it.rng.KeyDesc.Compare(memKey, proKey)
+	cmp = it.rng.KeyDesc.Compare(memKey, proKey)
 	if it.rng.Reverse {
 		cmp = -cmp
-	}
-	if cmp <= 0 {
-		goMem = true
-	}
-	if cmp >= 0 {
-		goPro = true
 	}
 
 	return
-}
-
-func (it MapRangeIter) keyInRange(key val.Tuple) bool {
-	if key == nil {
-		panic("nil key")
-	}
-	if it.rng.Stop.Unbound {
-		return true
-	}
-
-	cmp := it.rng.KeyDesc.Compare(key, it.rng.Stop.Key)
-	if it.rng.Reverse {
-		cmp = -cmp
-	}
-
-	if cmp == 0 {
-		return it.rng.Stop.Inclusive
-	}
-
-	return cmp < 0
 }
 
 func (it MapRangeIter) progressCursor(ctx context.Context, cur tupleCursor) error {
@@ -260,4 +271,61 @@ func (it MapRangeIter) progressCursor(ctx context.Context, cur tupleCursor) erro
 	} else {
 		return cur.advance(ctx)
 	}
+}
+
+func startInRange(ctx context.Context, it MapRangeIter) (err error) {
+	if it.rng.Start.Unbound {
+		return nil
+	}
+
+	memKey, proKey := it.currentKeys()
+	if memKey == nil && proKey == nil {
+		return nil // tuple cursors exhausted
+	}
+
+	var key, value val.Tuple
+
+	if it.compareKeys(memKey, proKey) > 0 {
+		key, value = it.proCur.current()
+	} else {
+		key, value = it.memCur.current()
+	}
+
+	for value == nil || !it.rng.insideStart(key) {
+		// |value| == nil is a pending delete
+
+		cmp := it.compareKeys(memKey, proKey)
+		if cmp >= 0 {
+			if err = it.progressCursor(ctx, it.proCur); err != nil {
+				return err
+			}
+			proKey, _ = it.proCur.current()
+		}
+		if cmp <= 0 {
+			if err = it.progressCursor(ctx, it.memCur); err != nil {
+				return err
+			}
+			memKey, _ = it.memCur.current()
+		}
+
+		if it.compareKeys(memKey, proKey) > 0 {
+			key, value = current(it.proCur)
+		} else {
+			key, value = current(it.memCur)
+		}
+
+		if key == nil {
+			break
+		}
+	}
+
+	// both cursors are now within |it.rng|
+	return nil
+}
+
+func current(tc tupleCursor) (key, value val.Tuple) {
+	if tc != nil {
+		key, value = tc.current()
+	}
+	return
 }

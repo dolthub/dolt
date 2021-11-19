@@ -93,17 +93,16 @@ func (mm memoryMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter
 		iter = mm.list.IterAt(rng.Start.Key)
 	}
 
-	tc := memTupleCursor{iter: iter}
+	mri := MapRangeIter{
+		memCur: memTupleCursor{iter: iter},
+		rng:    rng,
+	}
 
-	err := tc.startInRange(ctx, rng)
-	if err != nil {
+	if err := startInRange(ctx, mri); err != nil {
 		return MapRangeIter{}, err
 	}
 
-	return MapRangeIter{
-		memCur: tc,
-		rng:    rng,
-	}, nil
+	return mri, nil
 }
 
 func (mm memoryMap) mutations() mutationIter {
@@ -131,32 +130,13 @@ func (it memTupleCursor) current() (key, value val.Tuple) {
 	return it.iter.Current()
 }
 
-var skips = 0
-
 func (it memTupleCursor) advance(context.Context) (err error) {
 	it.iter.Advance()
-
-	key, value := it.iter.Current()
-	// if |value| is nil, it's a pending delete should be skipped
-	// if |key| is nil, we're past the end of the list
-	for value == nil && key != nil {
-		skips++
-		it.iter.Advance()
-		key, value = it.iter.Current()
-	}
 	return
 }
 
 func (it memTupleCursor) retreat(context.Context) (err error) {
 	it.iter.Retreat()
-
-	key, value := it.iter.Current()
-	// if |value| is nil, it's a pending delete should be skipped
-	// if |key| is nil, we're before the start of the list
-	for value == nil && key != nil {
-		it.iter.Retreat()
-		key, value = it.iter.Current()
-	}
 	return
 }
 
@@ -165,45 +145,5 @@ func (it memTupleCursor) count() int {
 }
 
 func (it memTupleCursor) close() error {
-	return nil
-}
-
-// todo(andy) assumes we're no more than one position away from the correct starting position.
-func (it memTupleCursor) startInRange(ctx context.Context, r Range) error {
-
-	key, value := it.iter.Current()
-	// if |value| is nil, it's a pending delete should be skipped
-	// if |key| is nil, we're before the start of the list
-	for value == nil && key != nil {
-		if r.Reverse {
-			it.iter.Retreat()
-		} else {
-			it.iter.Advance()
-		}
-		key, value = it.iter.Current()
-	}
-
-	if r.Start.Unbound {
-		return nil
-	}
-
-	key, _ = it.current()
-	if key == nil {
-		return nil
-	}
-	cmp := r.KeyDesc.Compare(key, r.Start.Key)
-
-	if cmp == 0 && r.Start.Inclusive {
-		return nil
-	}
-
-	if r.Reverse && cmp >= 0 {
-		return it.retreat(ctx)
-	}
-
-	if !r.Reverse && cmp <= 0 {
-		return it.advance(ctx)
-	}
-
 	return nil
 }

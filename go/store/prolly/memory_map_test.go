@@ -59,6 +59,12 @@ func TestMemMap(t *testing.T) {
 			t.Run("iter all from map with deletes", func(t *testing.T) {
 				testOrderedMapIterAll(t, memMap2, tuples2)
 			})
+			t.Run("iter all backwards from map", func(t *testing.T) {
+				testOrderedMapIterAllBackward(t, memMap2, tuples2)
+			})
+			t.Run("iter value range", func(t *testing.T) {
+				testOrderedMapIterValueRange(t, memMap2, tuples2)
+			})
 		})
 	}
 }
@@ -68,8 +74,8 @@ var memKeyDesc = val.NewTupleDescriptor(
 )
 var memValueDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Uint32Enc, Nullable: true},
-	//val.Type{Enc: val.Int64Enc, Nullable: true},
-	//val.Type{Enc: val.Int64Enc, Nullable: true},
+	val.Type{Enc: val.Uint32Enc, Nullable: true},
+	val.Type{Enc: val.Uint32Enc, Nullable: true},
 )
 
 func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
@@ -96,7 +102,8 @@ func makeMemMapWithDeletes(t *testing.T, count int) (mut memoryMap, tuples, dele
 
 	// re-sort the remaining tuples
 	tuples = tuples[count/4:]
-	sortTuplePairs(tuples, getKeyDesc(om))
+	desc := getKeyDesc(om)
+	sortTuplePairs(tuples, desc)
 
 	for _, kv := range deletes {
 		ok := mut.Put(kv[0], nil)

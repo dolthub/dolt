@@ -71,12 +71,12 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	ns := newTestNodeStore()
 
 	kd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: false},
+		val.Type{Enc: val.Uint32Enc, Nullable: false},
 	)
 	vd := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
-		val.Type{Enc: val.Int64Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
 	)
 
 	tuples := randomTuplePairs(count, kd, vd)
@@ -160,21 +160,16 @@ func testOrderedMapIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 			break
 		}
 		actual[idx][0], actual[idx][1] = key, value
-
-		if idx >= len(tuples) {
-			break
-		}
-
-		require.NoError(t, err)
-		assert.Equal(t, tuples[idx][0], key)
-		assert.Equal(t, tuples[idx][1], value)
 		idx++
 	}
 	actual = actual[:idx]
-	fmt.Println(skips)
-	fmt.Println(len(tuples))
 
 	assert.Equal(t, len(tuples), idx)
+	for i, kv := range actual {
+		require.NoError(t, err)
+		assert.Equal(t, tuples[i][0], kv[0])
+		assert.Equal(t, tuples[i][1], kv[1])
+	}
 }
 
 func testOrderedMapIterAllBackward(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
@@ -313,6 +308,7 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 				}
 				assert.Equal(t, io.EOF, err)
 				assert.Equal(t, test.expCount, actCount)
+				//fmt.Printf("a: %d \t z: %d cnt: %d", a, z, cnt)
 			})
 		}
 	}
@@ -335,7 +331,7 @@ func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val
 			continue
 		}
 		if keyDesc.Compare(items[i][0], items[i-1][0]) == 0 {
-			panic("duplicate Key")
+			panic("duplicate key, unlucky!")
 		}
 	}
 	return
@@ -429,16 +425,16 @@ func nonNegative(x int) int {
 	return x
 }
 
-func fmtTupleList(tuples [][2]val.Tuple) string {
+func fmtTupleList(tuples [][2]val.Tuple, kd, vd val.TupleDesc) string {
 	var sb strings.Builder
 	sb.WriteString("{ ")
 	for _, kv := range tuples {
 		if kv[0] == nil || kv[1] == nil {
 			break
 		}
-		sb.WriteString(memKeyDesc.Format(kv[0]))
+		sb.WriteString(kd.Format(kv[0]))
 		sb.WriteString(": ")
-		sb.WriteString(memValueDesc.Format(kv[1]))
+		sb.WriteString(vd.Format(kv[1]))
 		sb.WriteString(", ")
 	}
 	sb.WriteString("}")
