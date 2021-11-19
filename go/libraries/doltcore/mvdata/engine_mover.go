@@ -209,15 +209,15 @@ func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandle
 	switch s.importOption {
 	case CreateOp:
 		// anti patten to do create table here.
-		return createSpecialInsertNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, errorHandler) // contonerr translates to ignore
+		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, errorHandler) // contonerr translates to ignore
 	case ReplaceOp:
-		return createSpecialInsertNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, errorHandler) // contonerr translates to ignore
+		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, errorHandler) // contonerr translates to ignore
 	}
 
 	return nil, fmt.Errorf("unsupported")
 }
 
-func createSpecialInsertNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, errorHandler plan.ErrorHandler) (sql.Node, error) {
+func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, errorHandler plan.ErrorHandler) (sql.Node, error) {
 	src := plan.NewRowIterSource(schema, source)
 	dest := plan.NewUnresolvedTable(tableName, dbname)
 
@@ -254,6 +254,10 @@ func createSpecialInsertNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbna
 	accumulatorNode := analyzedQueryProcess.Child
 
 	return accumulatorNode.(*plan.RowUpdateAccumulator).Child, nil
+}
+
+func createUpdateImportNode(ctx *sql.Context, analyze *analyzer.Analyzer, dbname string, tableName string) {
+
 }
 
 func quoteIdentifiers(ids []string) []string {
