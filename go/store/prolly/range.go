@@ -193,48 +193,44 @@ type tupleCursor interface {
 }
 
 func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	for err == nil && value == nil {
+	for value == nil {
+		key, value = it.current()
+
+		if key == nil {
+			// |key| == nil is exhausted |iter|
+			return nil, nil, io.EOF
+		}
+
 		// |value| == nil is a pending delete
-		key, value, err = it.nextPair(ctx)
+
+		if err = it.progress(ctx); err != nil {
+			return nil, nil, err
+		}
 	}
-	if err != nil {
-		return nil, nil, err
-	}
+
 	return key, value, nil
 }
 
-func (it MapRangeIter) nextPair(ctx context.Context) (key, value val.Tuple, err error) {
+func (it MapRangeIter) current() (key, value val.Tuple) {
 	memKey, proKey := it.currentKeys()
 
 	if memKey == nil && proKey == nil {
-		// tuple cursors exhausted
-		return nil, nil, io.EOF
+		// cursors exhausted
+		return nil, nil
 	}
 
-	cmp := it.compareKeys(memKey, proKey)
-
-	if cmp >= 0 {
+	if it.compareKeys(memKey, proKey) > 0 {
 		key, value = it.proCur.current()
-		if err = it.progressCursor(ctx, it.proCur); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	// if |cmp| == 0, progress both cursors and
-	// use |key| and |value| from memory overlay
-
-	if cmp <= 0 {
+	} else {
+		// |memCur| wins ties
 		key, value = it.memCur.current()
-		if err = it.progressCursor(ctx, it.memCur); err != nil {
-			return nil, nil, err
-		}
 	}
 
 	if !it.rng.insideStop(key) {
-		return nil, nil, io.EOF
+		return nil, nil
 	}
 
-	return key, value, nil
+	return
 }
 
 func (it MapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
@@ -247,25 +243,44 @@ func (it MapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
 	return
 }
 
-func (it MapRangeIter) compareKeys(memKey, proKey val.Tuple) (cmp int) {
+func (it MapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
 	if memKey == nil {
-		cmp = 1
-		return
+		return 1
 	}
 	if proKey == nil {
-		cmp = -1
-		return
+		return -1
 	}
 
-	cmp = it.rng.KeyDesc.Compare(memKey, proKey)
+	cmp := it.rng.KeyDesc.Compare(memKey, proKey)
 	if it.rng.Reverse {
 		cmp = -cmp
 	}
+	return cmp
+}
 
+func (it MapRangeIter) progress(ctx context.Context) (err error) {
+	memKey, proKey := it.currentKeys()
+
+	if memKey == nil && proKey == nil {
+		return nil // can't progress
+	}
+
+	cmp := it.compareKeys(memKey, proKey)
+
+	if cmp >= 0 {
+		if err = it.moveCursor(ctx, it.proCur); err != nil {
+			return err
+		}
+	}
+	if cmp <= 0 {
+		if err = it.moveCursor(ctx, it.memCur); err != nil {
+			return err
+		}
+	}
 	return
 }
 
-func (it MapRangeIter) progressCursor(ctx context.Context, cur tupleCursor) error {
+func (it MapRangeIter) moveCursor(ctx context.Context, cur tupleCursor) error {
 	if it.rng.Reverse {
 		return cur.retreat(ctx)
 	} else {
@@ -273,59 +288,30 @@ func (it MapRangeIter) progressCursor(ctx context.Context, cur tupleCursor) erro
 	}
 }
 
-func startInRange(ctx context.Context, it MapRangeIter) (err error) {
-	if it.rng.Start.Unbound {
+func startInRange(ctx context.Context, iter MapRangeIter) error {
+	if iter.rng.Start.Unbound {
 		return nil
 	}
 
-	memKey, proKey := it.currentKeys()
-	if memKey == nil && proKey == nil {
-		return nil // tuple cursors exhausted
+	key, value := iter.current()
+	if key == nil {
+		// |key| == nil is exhausted iter
+		return nil
 	}
 
-	var key, value val.Tuple
+	// |value| == nil is a pending delete
 
-	if it.compareKeys(memKey, proKey) > 0 {
-		key, value = it.proCur.current()
-	} else {
-		key, value = it.memCur.current()
-	}
-
-	for value == nil || !it.rng.insideStart(key) {
-		// |value| == nil is a pending delete
-
-		cmp := it.compareKeys(memKey, proKey)
-		if cmp >= 0 {
-			if err = it.progressCursor(ctx, it.proCur); err != nil {
-				return err
-			}
-			proKey, _ = it.proCur.current()
-		}
-		if cmp <= 0 {
-			if err = it.progressCursor(ctx, it.memCur); err != nil {
-				return err
-			}
-			memKey, _ = it.memCur.current()
+	for !iter.rng.insideStart(key) || value == nil {
+		if err := iter.progress(ctx); err != nil {
+			return err
 		}
 
-		if it.compareKeys(memKey, proKey) > 0 {
-			key, value = current(it.proCur)
-		} else {
-			key, value = current(it.memCur)
-		}
-
+		key, value = iter.current()
 		if key == nil {
-			break
+			// |key| == nil is exhausted iter
+			return nil
 		}
 	}
 
-	// both cursors are now within |it.rng|
 	return nil
-}
-
-func current(tc tupleCursor) (key, value val.Tuple) {
-	if tc != nil {
-		key, value = tc.current()
-	}
-	return
 }

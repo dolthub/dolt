@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-var testRand = rand.New(rand.NewSource(0))
+var testRand = rand.New(rand.NewSource(time.Now().Unix()))
 
 func TestMap(t *testing.T) {
 	scales := []int{
