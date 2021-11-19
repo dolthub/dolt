@@ -50,6 +50,21 @@ func TestMutableMapReads(t *testing.T) {
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, mutableMap2, tuples2)
 			})
+
+			prollyMap, err := mutableMap2.Map(context.Background())
+			require.NoError(t, err)
+			t.Run("get item from map with deletes", func(t *testing.T) {
+				testProllyMapHas(t, prollyMap, tuples2)
+			})
+			t.Run("iter all from map with deletes", func(t *testing.T) {
+				testOrderedMapIterAll(t, prollyMap, tuples2)
+			})
+			t.Run("iter all backwards from map", func(t *testing.T) {
+				testOrderedMapIterAllBackward(t, prollyMap, tuples2)
+			})
+			t.Run("iter value range", func(t *testing.T) {
+				testOrderedMapIterValueRange(t, prollyMap, tuples2)
+			})
 		})
 	}
 }

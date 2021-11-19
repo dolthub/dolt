@@ -288,29 +288,27 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 		}
 
 		for _, test := range tests {
-			t.Run(test.name, func(t *testing.T) {
-				iter, err := om.IterValueRange(ctx, test.testRange)
-				require.NoError(t, err)
+			iter, err := om.IterValueRange(ctx, test.testRange)
+			require.NoError(t, err)
 
-				key, _, err := iter.Next(ctx)
-				actCount := 0
-				for err != io.EOF {
-					actCount++
-					prev := key
-					key, _, err = iter.Next(ctx)
+			key, _, err := iter.Next(ctx)
+			actCount := 0
+			for err != io.EOF {
+				actCount++
+				prev := key
+				key, _, err = iter.Next(ctx)
 
-					if key != nil {
-						if test.testRange.Reverse {
-							assert.True(t, desc.Compare(prev, key) > 0)
-						} else {
-							assert.True(t, desc.Compare(prev, key) < 0)
-						}
+				if key != nil {
+					if test.testRange.Reverse {
+						assert.True(t, desc.Compare(prev, key) > 0)
+					} else {
+						assert.True(t, desc.Compare(prev, key) < 0)
 					}
 				}
-				assert.Equal(t, io.EOF, err)
-				assert.Equal(t, test.expCount, actCount)
-				//fmt.Printf("a: %d \t z: %d cnt: %d", a, z, cnt)
-			})
+			}
+			assert.Equal(t, io.EOF, err)
+			assert.Equal(t, test.expCount, actCount)
+			//fmt.Printf("a: %d \t z: %d cnt: %d", a, z, cnt)
 		}
 	}
 }
