@@ -67,6 +67,7 @@ SQL
     [[ "$output" =~ "new table" ]] || false
     [[ "$output" =~ "test" ]] || false
 
+    dolt diff HEAD~
     run dolt diff HEAD~
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "added table" ]] || false
@@ -99,9 +100,10 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ modified:[[:space:]]*test ]] || false
 
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+   \`c\` INT" ]] || false
+    [[ "$output" =~ "+  \`c\` int," ]] || false
     [[ "$output" =~ "|  <  | a | b |   |" ]] || false
     [[ "$output" =~ "|  >  | a | b | c |" ]] || false
 }
@@ -132,9 +134,10 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ modified:[[:space:]]*test ]] || false
 
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+   \`c\` INT" ]] || false
+    [[ "$output" =~ "+  \`c\` int," ]] || false
     [[ "$output" =~ "|  <  | a | b |      |" ]] || false
     [[ "$output" =~ "|  >  | a | b | c    |" ]] || false
     [[ "$output" =~ "|  <  | 1 | 1 | NULL |" ]] || false
@@ -171,9 +174,10 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ modified:[[:space:]]*test ]] || false
 
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-   \`c\` INT" ]] || false
+    [[ "$output" =~ "-  \`c\` int," ]] || false
     [[ "$output" =~ "|  <  | a | b | c    |" ]] || false
     [[ "$output" =~ "|  >  | a | b |      |" ]] || false
     [[ "$output" =~ "|  <  | 1 | 2 | 3    |" ]] || false
@@ -208,9 +212,10 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ modified:[[:space:]]*test ]] || false
 
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-   \`c\` INT" ]] || false
+    [[ "$output" =~ "-  \`c\` int," ]] || false
     [[ "$output" =~ "|  <  | a | b  | c    |" ]] || false
     [[ "$output" =~ "|  >  | a | b  |      |" ]] || false
     [[ "$output" =~ "|  <  | 1 | 2  | 3    |" ]] || false
@@ -246,13 +251,14 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ modified:[[:space:]]*test ]] || false
 
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "<   \`a\`    INT" ]] || false
-    [[ "$output" =~ ">   \`a\` BIGINT" ]] || false
-    [[ "$output" =~ "<   \`b\`     INT" ]] || false
-    [[ "$output" =~ ">   \`b\` TINYINT" ]] || false
-    [[ "$output" =~ "+   \`c\` INT" ]] || false
+    [[ "$output" =~ "-  \`a\` int NOT NULL," ]] || false
+    [[ "$output" =~ "-  \`b\` int," ]] || false
+    [[ "$output" =~ "+  \`a\` bigint NOT NULL," ]] || false
+    [[ "$output" =~ "+  \`b\` tinyint," ]] || false
+    [[ "$output" =~ "+  \`c\` int," ]] || false
     [[ "$output" =~ "|  <  | a | b |   |" ]] || false
     [[ "$output" =~ "|  >  | a | b | c |" ]] || false
 }
@@ -284,15 +290,17 @@ SQL
     [[ "$output" =~ modified:[[:space:]]*test ]] || false
 
     dolt diff
+    run dolt diff
     [ "$status" -eq 0 ]
 
-    [[ "$output" =~ "-  `a` int NOT NULL," ]] || false
-    [[ "$output" =~ "-  `b` int," ]] || false
-    [[ "$output" =~ "-  PRIMARY KEY (`a`)" ]] || false
-    [[ "$output" =~ "+  `a` bigint NOT NULL," ]] || false
-    [[ "$output" =~ "+  `b` tinyint NOT NULL," ]] || false
-    [[ "$output" =~ "+  PRIMARY KEY (`a`)," ]] || false
-    [[ "$output" =~ "+  CONSTRAINT `chk_vk8cbuqc` CHECK (`b` > 0)" ]] || false
+    [[ "$output" =~ "-  \`a\` int NOT NULL," ]] || false
+    [[ "$output" =~ "-  \`b\` int," ]] || false
+    [[ "$output" =~ "-  PRIMARY KEY (\`a\`)" ]] || false
+    [[ "$output" =~ "+  \`a\` bigint NOT NULL," ]] || false
+    [[ "$output" =~ "+  \`b\` tinyint NOT NULL," ]] || false
+    [[ "$output" =~ "+  \`c\` varchar(10)," ]] || false
+    [[ "$output" =~ "+  PRIMARY KEY (\`a\`)," ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`chk_vk8cbuqc\` CHECK (\`b\` > 0)" ]] || false
     [[ "$output" =~ "|  <  | a | b |   |" ]] || false
     [[ "$output" =~ "|  >  | a | b | c |" ]] || false
 }
@@ -324,13 +332,14 @@ SQL
     [[ "$output" =~ modified:[[:space:]]*test ]] || false
 
     dolt diff
+    run dolt diff
     [ "$status" -eq 0 ]
 
-    [[ "$output" =~ "-  `a` int NOT NULL," ]] || false
-    [[ "$output" =~ "-  `b` int DEFAULT 10," ]] || false
-    [[ "$output" =~ "+  `a` bigint NOT NULL," ]] || false
-    [[ "$output" =~ "+  `b` tinyint NOT NULL DEFAULT 50," ]] || false
-    [[ "$output" =~ "+  `c` varchar(10)" ]] || false
+    [[ "$output" =~ "-  \`a\` int NOT NULL," ]] || false
+    [[ "$output" =~ "-  \`b\` int DEFAULT 10," ]] || false
+    [[ "$output" =~ "+  \`a\` bigint NOT NULL," ]] || false
+    [[ "$output" =~ "+  \`b\` tinyint NOT NULL DEFAULT 50," ]] || false
+    [[ "$output" =~ "+  \`c\` varchar(10)" ]] || false
     [[ "$output" =~ "|  <  | a | b |   |" ]] || false
     [[ "$output" =~ "|  >  | a | b | c |" ]] || false
 }
