@@ -115,7 +115,7 @@ func TestCanReadAhead(t *testing.T) {
 		testCase{offsetRec{offset: 8191, length: 2048}, 0, 4096, 4096, expected{end: 10239, can: true}},
 		testCase{offsetRec{offset: 8191, length: 2048}, 0, 4096, 2048, expected{end: 4096, can: false}},
 		testCase{offsetRec{offset: 2048, length: 2048}, 0, 4096, 2048, expected{end: 4096, can: true}},
-		testCase{offsetRec{offset: 137438953472, length: 2048}, 0, 137438953472, 4096, expected{end: 137438953472, can: false}},
+		testCase{offsetRec{offset: (1 << 27), length: 2048}, 0, 128 * 1024 * 1024, 4096, expected{end: 134217728, can: false}},
 	} {
 		end, can := canReadAhead(c.rec, c.start, c.end, c.blockSize)
 		assert.Equal(t, c.ex.end, end)

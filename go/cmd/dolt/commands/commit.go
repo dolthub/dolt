@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -68,6 +69,10 @@ func (cmd CommitCmd) Description() string {
 func (cmd CommitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateCommitArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+}
+
+func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateCommitArgParser()
 }
 
 // Exec executes the command

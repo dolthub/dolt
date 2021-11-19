@@ -10,6 +10,13 @@ teardown() {
     teardown_common
 }
 
+@test "primary-key-changes: add primary key using null values" {
+    dolt sql -q "create table t(pk int, val int)"
+    dolt sql -q "INSERT INTO t (val) VALUES (1)"
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
+    [ "$status" -eq 1 ]
+}
+
 @test "primary-key-changes: add single primary key" {
     dolt sql -q "create table t(pk int, val int)"
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
@@ -573,11 +580,5 @@ SQL
     dolt sql -q "create table t (pk int, c1 int)"
     dolt sql -q "insert into t values (NULL, NULL)"
     run dolt sql -q "alter table t add primary key(pk)"
-    skip "This should fail on some sort of constraint error"
     [ $status -eq 1 ]
-
-    # This is the current failure mode
-    run dolt sql -q "update t set c1=1"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "received nil" ]] || false
 }

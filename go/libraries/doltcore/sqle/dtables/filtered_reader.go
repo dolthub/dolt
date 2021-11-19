@@ -310,15 +310,7 @@ func rangesForFiniteSetOfPartialKeys(nbf *types.NomsBinFormat, tag types.Uint, f
 			return nil, err
 		}
 
-		ranges[i] = &noms.ReadRange{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			rowsFirstPKElemVal, err := tuple.Get(1)
-
-			if err != nil {
-				return false, err
-			}
-
-			return firstPKElemVal.Equals(rowsFirstPKElemVal), nil
-		}}
+		ranges[i] = &noms.ReadRange{Start: key, Inclusive: true, Reverse: false, Check: checkEquals{firstPKElemVal}}
 	}
 
 	return ranges, nil
@@ -349,39 +341,15 @@ func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.In
 
 		// no upper bound so the check will always return true
 		if in.End == nil {
-			check = func(t types.Tuple) (b bool, err error) {
-				return true, nil
-			}
+			check = noms.InRangeCheckAlways{}
 		} else if in.End.Inclusive {
 			// has an endpoint which is inclusive of the endpoint value.  Return true while the value is less than or
 			// equal to the endpoint
-			check = func(t types.Tuple) (b bool, err error) {
-				keyVal, err := t.Get(1)
-
-				if err != nil {
-					return false, err
-				}
-
-				eq := keyVal.Equals(in.End.Val)
-
-				if eq {
-					return true, nil
-				}
-
-				return keyVal.Less(nbf, in.End.Val)
-			}
+			check = checkLessThanOrEquals{in.End.Val}
 		} else {
 			// has an endpoint which is exclusive of the endpoint value.  Return true while the value is less than
 			// the endpoint
-			check = func(t types.Tuple) (b bool, err error) {
-				keyVal, err := t.Get(1)
-
-				if err != nil {
-					return false, err
-				}
-
-				return keyVal.Less(nbf, in.End.Val)
-			}
+			check = checkLessThan{in.End.Val}
 		}
 	} else {
 		// No starting point so start at the end point and iterate backwards
@@ -400,9 +368,7 @@ func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.In
 		}
 
 		// there is no lower bound so always return true
-		check = func(tuple types.Tuple) (b bool, err error) {
-			return true, nil
-		}
+		check = noms.InRangeCheckAlways{}
 	}
 
 	return &noms.ReadRange{Start: startKey, Inclusive: inclusive, Reverse: reverse, Check: check}, nil
@@ -552,4 +518,39 @@ func getCreateFuncForSinglePK(nbf *types.NomsBinFormat, keySet setalgebra.Set, s
 	}
 
 	panic("unhandled case")
+}
+
+type checkEquals struct{ types.Value }
+
+func (ce checkEquals) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
+	rowsFirstPKElemVal, err := tuple.Get(1)
+	if err != nil {
+		return false, false, err
+	}
+	return (ce.Value).Equals(rowsFirstPKElemVal), false, nil
+}
+
+type checkLessThan struct{ types.Value }
+
+func (clt checkLessThan) Check(ctx context.Context, t types.Tuple) (valid bool, skip bool, err error) {
+	keyVal, err := t.Get(1)
+	if err != nil {
+		return false, false, err
+	}
+	ok, err := keyVal.Less(t.Format(), clt.Value)
+	return ok, false, err
+}
+
+type checkLessThanOrEquals struct{ types.Value }
+
+func (clte checkLessThanOrEquals) Check(ctx context.Context, t types.Tuple) (valid bool, skip bool, err error) {
+	keyVal, err := t.Get(1)
+	if err != nil {
+		return false, false, err
+	}
+	if keyVal.Equals(clte.Value) {
+		return true, false, nil
+	}
+	ok, err := keyVal.Less(t.Format(), clte.Value)
+	return ok, false, err
 }

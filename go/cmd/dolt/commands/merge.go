@@ -68,6 +68,10 @@ func (cmd MergeCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 }
 
+func (cmd MergeCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateMergeArgParser()
+}
+
 // EventType returns the type of the event to log
 func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_MERGE

@@ -21,7 +21,7 @@
 
 package gen
 
-import "github.com/kch42/buzhash"
+import "github.com/silvasur/buzhash"
 
 const (
 	chunkPattern = uint32(1<<12 - 1) // Avg Chunk Size of 4k

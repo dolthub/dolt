@@ -60,10 +60,16 @@ func (cmd *DumpDocsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil
 }
 
-// Exec executes the command
-func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd *DumpDocsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(fileParamName, "", "file", "The file to write CLI docs to")
+	return ap
+}
+
+// Exec executes the command
+func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.ArgParser()
+
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

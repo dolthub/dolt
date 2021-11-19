@@ -54,7 +54,7 @@ func (cmd UseCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd UseCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, useDocs, ap))
 }
 
@@ -69,14 +69,14 @@ func (cmd UseCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_USE
 }
 
-func (cmd UseCmd) createArgParser() *argparser.ArgParser {
+func (cmd UseCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	return ap
 }
 
 // Exec executes the command
 func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, useDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	args = apr.Args

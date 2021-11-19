@@ -29,9 +29,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -120,11 +120,175 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	}, roots.Working
 }
 
+func closedRange(tpl1, tpl2 types.Tuple) *noms.ReadRange {
+	return customRange(tpl1, tpl2, sql.Closed, sql.Closed)
+}
+
+func openRange(tpl1, tpl2 types.Tuple) *noms.ReadRange {
+	return customRange(tpl1, tpl2, sql.Open, sql.Open)
+}
+
+func customRange(tpl1, tpl2 types.Tuple, bt1, bt2 sql.RangeBoundType) *noms.ReadRange {
+	var nrc nomsRangeCheck
+	_ = tpl1.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
+		if tupleIndex%2 == 0 {
+			return false, nil
+		}
+		if bt1 == sql.Closed {
+			nrc = append(nrc, columnBounds{
+				boundsCase: boundsCase_greaterEquals_infinity,
+				lowerbound: tupleVal,
+			})
+		} else {
+			nrc = append(nrc, columnBounds{
+				boundsCase: boundsCase_greater_infinity,
+				lowerbound: tupleVal,
+			})
+		}
+		return false, nil
+	})
+	_ = tpl2.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
+		if tupleIndex%2 == 0 {
+			return false, nil
+		}
+		idx := (tupleIndex - 1) / 2
+		if bt2 == sql.Closed {
+			// Bounds cases are enum aliases on bytes, and they're arranged such that we can increment the case
+			// that was previously set when evaluating the lowerbound to get the proper overall case.
+			nrc[idx].boundsCase += 1
+			nrc[idx].upperbound = tupleVal
+		} else {
+			nrc[idx].boundsCase += 2
+			nrc[idx].upperbound = tupleVal
+		}
+		return false, nil
+	})
+	return &noms.ReadRange{
+		Start:     tpl1,
+		Inclusive: bt1 == sql.Closed,
+		Reverse:   false,
+		Check:     nrc,
+	}
+}
+
+func greaterThanRange(tpl types.Tuple) *noms.ReadRange {
+	var nrc nomsRangeCheck
+	_ = tpl.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
+		if tupleIndex%2 == 0 {
+			return false, nil
+		}
+		nrc = append(nrc, columnBounds{
+			boundsCase: boundsCase_greater_infinity,
+			lowerbound: tupleVal,
+		})
+		return false, nil
+	})
+	return &noms.ReadRange{
+		Start:     tpl,
+		Inclusive: false,
+		Reverse:   false,
+		Check:     nrc,
+	}
+}
+
+func lessThanRange(tpl types.Tuple) *noms.ReadRange {
+	var nrc nomsRangeCheck
+	_ = tpl.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
+		if tupleIndex%2 == 0 {
+			return false, nil
+		}
+		nrc = append(nrc, columnBounds{
+			boundsCase: boundsCase_infinity_less,
+			upperbound: tupleVal,
+		})
+		return false, nil
+	})
+	return &noms.ReadRange{
+		Start:     types.EmptyTuple(types.Format_Default),
+		Inclusive: false,
+		Reverse:   false,
+		Check:     nrc,
+	}
+}
+
+func greaterOrEqualRange(tpl types.Tuple) *noms.ReadRange {
+	var nrc nomsRangeCheck
+	_ = tpl.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
+		if tupleIndex%2 == 0 {
+			return false, nil
+		}
+		nrc = append(nrc, columnBounds{
+			boundsCase: boundsCase_greaterEquals_infinity,
+			lowerbound: tupleVal,
+		})
+		return false, nil
+	})
+	return &noms.ReadRange{
+		Start:     tpl,
+		Inclusive: true,
+		Reverse:   false,
+		Check:     nrc,
+	}
+}
+
+func lessOrEqualRange(tpl types.Tuple) *noms.ReadRange {
+	var nrc nomsRangeCheck
+	_ = tpl.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
+		if tupleIndex%2 == 0 {
+			return false, nil
+		}
+		nrc = append(nrc, columnBounds{
+			boundsCase: boundsCase_infinity_lessEquals,
+			upperbound: tupleVal,
+		})
+		return false, nil
+	})
+	return &noms.ReadRange{
+		Start:     types.EmptyTuple(types.Format_Default),
+		Inclusive: false,
+		Reverse:   false,
+		Check:     nrc,
+	}
+}
+
+func allRange(tpl types.Tuple) *noms.ReadRange {
+	var nrc nomsRangeCheck
+	_ = tpl.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
+		if tupleIndex%2 == 0 {
+			return false, nil
+		}
+		nrc = append(nrc, columnBounds{
+			boundsCase: boundsCase_infinity_infinity,
+		})
+		return false, nil
+	})
+	return &noms.ReadRange{
+		Start:     types.EmptyTuple(types.Format_Default),
+		Inclusive: false,
+		Reverse:   false,
+		Check:     nrc,
+	}
+}
+
+func readRangesEqual(nr1, nr2 *noms.ReadRange) bool {
+	if nr1 == nil || nr2 == nil {
+		if nr1 == nil && nr2 == nil {
+			return true
+		}
+		return false
+	}
+	if nr1.Inclusive != nr2.Inclusive || nr1.Reverse != nr2.Reverse || !nr1.Start.Equals(nr2.Start) ||
+		!nr1.Check.(nomsRangeCheck).Equals(nr2.Check.(nomsRangeCheck)) {
+		return false
+	}
+	return true
+}
+
 // Database made to test indexes while using the full SQL engine.
 type testIndexDb struct {
 	t           *testing.T
 	tbl         *AlterableDoltTable
-	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
+	finalRanges func([]*noms.ReadRange) // We return the final range set to compare to the expected ranges
 	editOpts    editor.Options
 }
 
@@ -155,7 +319,7 @@ type testIndexTable struct {
 	*AlterableDoltTable
 	t           *testing.T
 	il          *testIndexLookup
-	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
+	finalRanges func([]*noms.ReadRange) // We return the final range set to compare to the expected ranges
 }
 
 var _ sql.IndexedTable = (*testIndexTable)(nil)
@@ -208,7 +372,7 @@ func (tbl *testIndexTable) PartitionRows(ctx *sql.Context, part sql.Partition) (
 type testIndex struct {
 	*doltIndex
 	t           *testing.T
-	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
+	finalRanges func([]*noms.ReadRange) // We return the final range set to compare to the expected ranges
 }
 
 var _ sql.Index = (*testIndex)(nil)
@@ -228,7 +392,7 @@ type testIndexLookup struct {
 	*doltIndexLookup
 	testIdx     *testIndex
 	t           *testing.T
-	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
+	finalRanges func([]*noms.ReadRange) // We return the final range set to compare to the expected ranges
 }
 
 var _ sql.IndexLookup = (*testIndexLookup)(nil)

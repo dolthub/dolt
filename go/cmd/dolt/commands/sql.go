@@ -134,11 +134,11 @@ func (cmd SqlCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 }
 
-func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
+func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits")
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json. Defaults to tabular. ")
@@ -170,7 +170,7 @@ func (cmd SqlCmd) RequiresRepo() bool {
 // Unlike other commands, sql doesn't set a new working root directly, as the SQL layer updates the working set as
 // necessary when committing work.
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -478,7 +478,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 
 	db := dsqle.NewDatabase(name, dEnv.DbData(), opts)
 
-	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
+	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {
 		err = fmt.Errorf("%w from remote '%s'; %s", dsqle.ErrFailedToLoadReplicaDB, remoteName, err.Error())
 		if !dsqle.SkipReplicationWarnings() {
