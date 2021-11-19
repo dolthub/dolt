@@ -236,12 +236,15 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		}
 	}
 
-	// If we found any existing columns, set them in the newTags list
-	for _, col := range existingCols {
-		for i := range newColNames {
-			if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) {
-				newTags[i] = col.Tag
-				break
+	// If we found any existing columns set them in the newTags list.
+	// We only do this if we want to reuse columns from a previous existing table with the same name
+	if headRoot != nil {
+		for _, col := range existingCols {
+			for i := range newColNames {
+				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) {
+					newTags[i] = col.Tag
+					break
+				}
 			}
 		}
 	}
