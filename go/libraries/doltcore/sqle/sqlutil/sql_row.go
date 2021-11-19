@@ -300,6 +300,8 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			return strconv.FormatFloat(float64(typedCol), 'g', -1, 32)
 		case string:
 			return typedCol
+		case []byte:
+			return string(typedCol)
 		case bool:
 			if typedCol {
 				return "true"

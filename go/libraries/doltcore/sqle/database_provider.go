@@ -201,6 +201,22 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// Get the DB's directory
+	exists, isDir := p.fs.Exists(name)
+	if !exists {
+		// engine should already protect against this
+		return sql.ErrDatabaseNotFound.New(name)
+	} else if !isDir {
+		return fmt.Errorf("unexpected error: %s exists but is not a directory", name)
+	}
+
+	err := p.fs.Delete(name, true)
+	if err != nil {
+		return err
+	}
+
+	// TODO: delete database in current dir
+
 	delete(p.databases, strings.ToLower(name))
 	return nil
 }
