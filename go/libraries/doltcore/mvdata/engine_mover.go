@@ -60,7 +60,6 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return nil, err
 	}
 
-	// TODO: Move this to factory
 	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -73,7 +72,6 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 
 	return &sqlEngineMover{
 		se:        se,
-		sqlCtx:    sqlCtx,
 		contOnErr: cont,
 
 		database: dbName,
@@ -86,7 +84,13 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 }
 
 func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error {
-	err := s.createOrEmptyTableIfNeeded()
+	var err error
+	s.sqlCtx, err = s.se.NewContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = s.createOrEmptyTableIfNeeded()
 	if err != nil {
 		return err
 	}
@@ -104,7 +108,12 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 			offendingRow = n.OffendingRow
 		}
 
-		badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "create", Details: err.Error()}
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "create", Details: err.Error()}
+		}
 	}
 
 	insertOrUpdateOperation, err := s.getNodeOperation(inputChannel, errorHandler)

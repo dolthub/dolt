@@ -82,6 +82,7 @@ teardown() {
 @test "import-create-tables: create a table with json data import. bad json data." {
     run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
+    echo $output
     [[ "$output" =~ "cause: invalid character after object key:value pair: 'b'" ]] || false
     run dolt ls
     [ "$status" -eq 0 ]

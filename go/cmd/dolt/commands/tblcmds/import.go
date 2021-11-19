@@ -18,7 +18,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
@@ -43,8 +42,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -405,6 +402,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 	}
+	cli.PrintErrln(color.CyanString("Import completed successfully."))
 
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
@@ -532,7 +530,10 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that writes rows
 	g.Go(func() error {
-		defer close(badRowChan)
+		c := func() {
+			close(badRowChan)
+		}
+		defer c()
 
 		err := wr.StartWriting(ctx, parsedRowChan, badRowChan)
 		if err != nil {
@@ -543,21 +544,18 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that handles the bad row callback
 	g.Go(func() error {
-		select {
-			case bRow, ok := <-badRowChan:
-				if !ok {
-					return nil
-				}
-
+		for bRow := range badRowChan {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
 				quit := badRowCB(bRow)
 
 				if quit {
 					return nil
 				}
-			case <-ctx.Done():
-				return ctx.Err()
+			}
 		}
-
 		return nil
 	})
 
@@ -575,88 +573,6 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	}
 
 	return badCount, nil
-}
-
-func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
-	var err error
-
-	ow, err := impOpts.checkOverwrite(ctx, root, dEnv.FS)
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
-	}
-	if ow {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
-	}
-
-	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, impOpts)
-	if dmce != nil {
-		return nil, dmce
-	}
-
-	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
-	}
-
-	defer func() {
-		if rd != nil {
-			rd.Close(ctx)
-		}
-	}()
-
-	err = wrSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		preImage := impOpts.nameMapper.PreImage(col.Name)
-		_, found := rd.GetSchema().GetAllCols().GetByName(preImage)
-		if !found {
-			err = fmt.Errorf("input primary keys do not match primary keys of existing table")
-		}
-		return err == nil, err
-	})
-
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-	}
-
-	transforms, fieldMapping, err := mvdata.NameMapTransform(ctx, root.VRW(), rd.GetSchema(), wrSch, impOpts.nameMapper)
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err}
-	}
-
-	// read tags will be the tags of read rows which come from the imported data.  Being able to distinguish columns coming
-	// from the import data allows us to merge the data with existing rows
-	rdTags := make([]uint64, 0, len(fieldMapping.SrcToDest))
-	for _, tag := range fieldMapping.SrcToDest {
-		rdTags = append(rdTags, tag)
-	}
-
-	bulkTeaf := editor.NewBulkImportTEAFactory(root.VRW().Format(), root.VRW(), dEnv.TempTableFilesDir())
-	opts := editor.Options{Deaf: bulkTeaf}
-
-	var wr table.TableWriteCloser
-	switch impOpts.operation {
-	case mvdata.CreateOp:
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts, nil)
-	case mvdata.ReplaceOp:
-		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts)
-	case mvdata.UpdateOp:
-		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, rdTags, opts)
-	default:
-		err = errors.New("invalid move operation")
-	}
-
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
-	}
-
-	imp := &mvdata.DataMover{
-		Rd:         rd,
-		Transforms: transforms,
-		Wr:         wr,
-		ContOnErr:  impOpts.contOnErr,
-	}
-	rd = nil
-
-	return imp, nil
 }
 
 func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
@@ -790,6 +706,8 @@ func writeBadRowToCli(ctx context.Context, sqlRow sql.Row, b *bytes.Buffer) erro
 
 	str := b.String()
 	cli.PrintErr(str)
+	// TODO: this is not actually printing the error properly
+	b.Reset()
 
 	return nil
 }
