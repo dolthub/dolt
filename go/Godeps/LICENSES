@@ -4270,16 +4270,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 
 ================================================================================
-= github.com/kch42/buzhash licensed under: =
-
-           DO WHATEVER THE FUCK YOU WANT, PUBLIC LICENSE
-   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
-
-            0. You just DO WHATEVER THE FUCK YOU WANT.
-= LICENSE 03d3e3813a51a67f46a07063e39f5d6451619f4ede2ae1c4c4cccb9e =
-================================================================================
-
-================================================================================
 = github.com/lestrrat-go/strftime licensed under: =
 
 MIT License
@@ -4843,6 +4833,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 = LICENSE d444eac7bc0c9b4473712ca71079dd0af192c0204b1846213e79865d =
+================================================================================
+
+================================================================================
+= github.com/silvasur/buzhash licensed under: =
+
+           DO WHATEVER THE FUCK YOU WANT, PUBLIC LICENSE
+   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+            0. You just DO WHATEVER THE FUCK YOU WANT.
+= LICENSE 03d3e3813a51a67f46a07063e39f5d6451619f4ede2ae1c4c4cccb9e =
 ================================================================================
 
 ================================================================================

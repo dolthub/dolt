@@ -69,8 +69,8 @@ jobs:
           asset_path: go/out/dolt-linux-amd64.tar.gz
           asset_name: dolt-linux-amd64.tar.gz
           asset_content_type: application/zip
-      - name: Upload OSX Distro
-        id: upload-osx-distro
+      - name: Upload OSX AMD64 Distro
+        id: upload-osx-amd64-distro
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -78,6 +78,16 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: go/out/dolt-darwin-amd64.tar.gz
           asset_name: dolt-darwin-amd64.tar.gz
+          asset_content_type: application/zip
+      - name: Upload OSX ARM64 Distro
+        id: upload-osx-arm64-distro
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-darwin-arm64.tar.gz
+          asset_name: dolt-darwin-arm64.tar.gz
           asset_content_type: application/zip
       - name: Upload Windows Distro
         id: upload-windows-distro

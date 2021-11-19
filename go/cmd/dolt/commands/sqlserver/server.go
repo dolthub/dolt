@@ -106,15 +106,12 @@ func Serve(
 
 	if len(dbNamesAndPaths) == 0 {
 		if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
-			var err error
-			fs := dEnv.FS
-			if len(serverConfig.DataDir()) > 0 {
-				fs, err = fs.WithWorkingDir(serverConfig.DataDir())
-				if err != nil {
-					return err, nil
-				}
+			fs, err := dEnv.FS.WithWorkingDir(serverConfig.DataDir())
+			if err != nil {
+				return err, nil
 			}
 
+			// TODO: this should be the global config, probably?
 			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version)
 			if err != nil {
 				return err, nil
@@ -135,6 +132,8 @@ func Serve(
 				return err, nil
 			}
 		}
+
+		// TODO: this should be the global config, probably?
 		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), fs, version, dbNamesAndPaths...)
 
 		if err != nil {
