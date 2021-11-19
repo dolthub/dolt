@@ -44,7 +44,7 @@ func NewConfigHierarchy() *ConfigHierarchy {
 
 // AddConfig adds a ReadWriteConfig to the hierarchy.  Newly added configs are at a lower priority than the configs that
 // were added previously.  Though the ConfigHierarchy does not support modification of stored values in the configs
-// directly, the configs it manages must implement the WriteConfig interface.
+// directly, the configs it manages must implement the WritableConfig interface.
 func (ch *ConfigHierarchy) AddConfig(name string, cs ReadWriteConfig) {
 	name = strings.TrimSpace(strings.ToLower(name))
 

@@ -68,6 +68,10 @@ func (cmd MergeCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 }
 
+func (cmd MergeCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateMergeArgParser()
+}
+
 // EventType returns the type of the event to log
 func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_MERGE
@@ -81,6 +85,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
 		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
+		return 1
+	}
+
+	// This command may create a commit, so we need user identity
+	if !cli.CheckUserNameAndEmail(dEnv) {
 		return 1
 	}
 

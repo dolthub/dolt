@@ -71,27 +71,24 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []enginetest.ScriptTest{
 		{
-			Name: "failed statements data validation for INSERT, UPDATE",
+			Name: "CrossDB Queries",
 			SetUpScript: []string{
-				"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));",
-				"INSERT INTO test VALUES (1,1), (4,4), (5,5);",
+				"CREATE DATABASE test",
+				"CREATE TABLE test.x (pk int primary key)",
+				"insert into test.x values (1),(2),(3)",
+				"DELETE FROM test.x WHERE pk=2",
+				"UPDATE test.x set pk=300 where pk=3",
+				"create table a (xa int primary key, ya int, za int)",
+				"insert into a values (1,2,3)",
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:          "INSERT INTO test VALUES (2,2), (3,3), (1,1);",
-					ExpectedErrStr: "duplicate primary key given: [1]",
+					Query:    "SELECT pk from test.x",
+					Expected: []sql.Row{{1}, {300}},
 				},
 				{
-					Query:    "SELECT * FROM test;",
-					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
-				},
-				{
-					Query:          "UPDATE test SET pk = pk + 1;",
-					ExpectedErrStr: "duplicate primary key given: [5]",
-				},
-				{
-					Query:    "SELECT * FROM test;",
-					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
+					Query:    "SELECT * from a",
+					Expected: []sql.Row{{1, 2, 3}},
 				},
 			},
 		},
@@ -244,6 +241,7 @@ func TestCreateDatabase(t *testing.T) {
 }
 
 func TestDropDatabase(t *testing.T) {
+	t.Skip("Dolt doesn't yet support dropping the primary database, which these tests do")
 	enginetest.TestDropDatabase(t, newDoltHarness(t))
 }
 

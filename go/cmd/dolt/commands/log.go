@@ -121,11 +121,11 @@ func (cmd LogCmd) EventType() eventsapi.ClientEventType {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LogCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := createLogArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, logDocs, ap))
 }
 
-func createLogArgParser() *argparser.ArgParser {
+func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output.")
 	ap.SupportsInt(minParentsParam, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
@@ -136,11 +136,11 @@ func createLogArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return logWithLoggerFunc(ctx, commandStr, args, dEnv, logToStdOutFunc)
+	return cmd.logWithLoggerFunc(ctx, commandStr, args, dEnv, logToStdOutFunc)
 }
 
-func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
-	ap := createLogArgParser()
+func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, logDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

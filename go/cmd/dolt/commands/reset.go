@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 const (
@@ -70,6 +71,10 @@ func (cmd ResetCmd) Description() string {
 func (cmd ResetCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateResetArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+}
+
+func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateResetArgParser()
 }
 
 // Exec executes the command

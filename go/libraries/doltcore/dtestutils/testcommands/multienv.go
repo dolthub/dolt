@@ -135,15 +135,32 @@ func (mr *MultiRepoTestSetup) NewRemote(remoteName string) {
 	os.Mkdir(remote, os.ModePerm)
 	remotePath := fmt.Sprintf("file:///%s", remote)
 
-	dEnv := mr.MrEnv[mr.DbNames[0]]
+	dEnv := mr.MrEnv.GetEnv(mr.DbNames[0])
 	rem := env.NewRemote(remoteName, remotePath, nil, dEnv)
 
-	for _, dEnv := range mr.MrEnv {
+	mr.MrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		dEnv.RepoState.AddRemote(rem)
 		dEnv.RepoState.Save(filesys.LocalFS)
-	}
+		return false, nil
+	})
 
 	mr.Remotes[remoteName] = rem
+}
+
+func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
+	dEnv := mr.MrEnv.GetEnv(dbName)
+	err := actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(), branchName, "head", false)
+	if err != nil {
+		mr.Errhand(err)
+	}
+}
+
+func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
+	dEnv := mr.MrEnv.GetEnv(dbName)
+	err := actions.CheckoutBranch(context.Background(), dEnv, branchName)
+	if err != nil {
+		mr.Errhand(err)
+	}
 }
 
 func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
@@ -201,10 +218,7 @@ func (mr *MultiRepoTestSetup) GetDB(dbName string) *doltdb.DoltDB {
 
 func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit {
 	ctx := context.Background()
-	dEnv, ok := mr.MrEnv[dbName]
-	if !ok {
-		panic("database not found")
-	}
+	dEnv := mr.MrEnv.GetEnv(dbName)
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		panic("couldn't get working set: " + err.Error())
@@ -251,10 +265,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 }
 
 func (mr *MultiRepoTestSetup) CreateTable(dbName, tblName string) {
-	dEnv, ok := mr.MrEnv[dbName]
-	if !ok {
-		mr.Errhand(fmt.Sprintf("Failed to find db: %s", dbName))
-	}
+	dEnv := mr.MrEnv.GetEnv(dbName)
 
 	imt, sch := dtestutils.CreateTestDataTable(true)
 	rows := make([]row.Row, imt.NumRows())
@@ -269,13 +280,11 @@ func (mr *MultiRepoTestSetup) CreateTable(dbName, tblName string) {
 }
 
 func (mr *MultiRepoTestSetup) StageAll(dbName string) {
-	dEnv, ok := mr.MrEnv[dbName]
-	if !ok {
-		mr.Errhand(fmt.Sprintf("Failed to find db: %s", dbName))
-	}
+	dEnv := mr.MrEnv.GetEnv(dbName)
+
 	ctx := context.Background()
 	roots, err := dEnv.Roots(ctx)
-	if !ok {
+	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to get roots: %s", dbName))
 	}
 
@@ -286,19 +295,16 @@ func (mr *MultiRepoTestSetup) StageAll(dbName string) {
 	}
 }
 
-func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName string) {
+func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string) {
 	ctx := context.Background()
-	dEnv, ok := mr.MrEnv[dbName]
-	if !ok {
-		mr.Errhand(fmt.Sprintf("Failed to find db: %s", dbName))
-	}
+	dEnv := mr.MrEnv.GetEnv(dbName)
 
 	ap := cli.CreatePushArgParser()
-	apr, err := ap.Parse([]string{remoteName, defaultBranch})
+	apr, err := ap.Parse([]string{remoteName, branchName})
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
-	opts, err := env.NewParseOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, false, false)
+	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, false, false)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}

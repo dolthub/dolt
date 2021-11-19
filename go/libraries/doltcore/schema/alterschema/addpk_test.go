@@ -144,4 +144,28 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	})
+
+	t.Run("Add primary key when one more cells contain NULL", func(t *testing.T) {
+		dEnv := dtestutils.CreateTestEnv()
+		ctx := context.Background()
+
+		for _, c := range setupAdd {
+			c.exec(t, ctx, dEnv)
+		}
+
+		_, err := getTable(ctx, dEnv, "test")
+		assert.NoError(t, err)
+
+		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (c1)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD COLUMN (c2 INT NULL)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test DROP PRIMARY KEY"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)"}, dEnv)
+		require.Equal(t, 1, exitCode)
+	})
 }

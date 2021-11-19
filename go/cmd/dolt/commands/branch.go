@@ -85,11 +85,11 @@ func (cmd BranchCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BranchCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
 }
 
-func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
+func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	ap.SupportsFlag(listFlag, "", "List branches")
@@ -112,7 +112,7 @@ func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, branchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

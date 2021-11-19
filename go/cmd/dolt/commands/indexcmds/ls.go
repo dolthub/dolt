@@ -50,14 +50,14 @@ func (cmd LsCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 
-func (cmd LsCmd) createArgParser() *argparser.ArgParser {
+func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table to display indexes from. If one is not specified, then all tables' indexes are displayed."})
 	return ap
 }
 
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

@@ -87,6 +87,8 @@ type InMemFS struct {
 	objs   map[string]memObj
 }
 
+var _ Filesys = (*InMemFS)(nil)
+
 // EmptyInMemFS creates an empty InMemFS instance
 func EmptyInMemFS(workingDir string) *InMemFS {
 	return NewInMemFS([]string{}, map[string][]byte{}, workingDir)
@@ -133,6 +135,17 @@ func NewInMemFS(dirs []string, files map[string][]byte, cwd string) *InMemFS {
 	}
 
 	return fs
+}
+
+// WithWorkingDir returns a copy of this file system with the current working dir set to the path given
+func (fs InMemFS) WithWorkingDir(path string) (Filesys, error) {
+	abs, err := fs.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	fs.cwd = abs
+	return &fs, nil
 }
 
 func (fs *InMemFS) getAbsPath(path string) string {
@@ -300,6 +313,28 @@ func (fsw *inMemFSWriteCloser) Close() error {
 // OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
 // it will be overwritten.
 func (fs *InMemFS) OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, error) {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
+	fp = fs.getAbsPath(fp)
+
+	if exists, isDir := fs.exists(fp); exists && isDir {
+		return nil, ErrIsDir
+	}
+
+	dir := filepath.Dir(fp)
+	parentDir, err := fs.mkDirs(dir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &inMemFSWriteCloser{fp, parentDir, fs, bytes.NewBuffer(make([]byte, 0, 512)), fs.rwLock}, nil
+}
+
+// OpenForWriteAppend opens a file for writing.  The file will be created if it does not exist, and if it does exist
+// it will append to existing file.
+func (fs *InMemFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteCloser, error) {
 	fs.rwLock.Lock()
 	defer fs.rwLock.Unlock()
 

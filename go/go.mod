@@ -19,11 +19,11 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
-	github.com/dolthub/go-mysql-server v0.11.1-0.20211101232357-2f55f4d5a9e7
+	github.com/dolthub/go-mysql-server v0.11.1-0.20211118151213-d685afc5e3da
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20211013185428-a8845fb919c1
+	github.com/dolthub/vitess v0.0.0-20211112215933-1feb51c6c461
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -31,7 +31,7 @@ require (
 	github.com/go-openapi/errors v0.19.6 // indirect
 	github.com/go-openapi/strfmt v0.19.5 // indirect
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/gocraft/dbr/v2 v2.7.0
+	github.com/gocraft/dbr/v2 v2.7.2
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.1
@@ -41,7 +41,6 @@ require (
 	github.com/jedib0t/go-pretty v4.3.1-0.20191104025401-85fe5d6a7c4d+incompatible
 	github.com/jpillora/backoff v1.0.0
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
-	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.9
@@ -55,6 +54,7 @@ require (
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/shirou/gopsutil v3.21.2+incompatible
 	github.com/shopspring/decimal v1.2.0
+	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/sirupsen/logrus v1.8.1
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/spf13/cobra v1.0.0
