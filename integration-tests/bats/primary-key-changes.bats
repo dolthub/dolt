@@ -10,6 +10,13 @@ teardown() {
     teardown_common
 }
 
+@test "primary-key-changes: add primary key using null values" {
+    dolt sql -q "create table t(pk int, val int)"
+    dolt sql -q "INSERT INTO t (val) VALUES (1)"
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
+    [ "$status" -eq 1 ]
+}
+
 @test "primary-key-changes: add single primary key" {
     dolt sql -q "create table t(pk int, val int)"
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk)"
@@ -567,5 +574,11 @@ SQL
     run dolt sql -q "select * from c where val = 2" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "2,2" ]] || false
+}
 
+@test "primary-key-changes: can't add a primary key on a column containing NULLs" {
+    dolt sql -q "create table t (pk int, c1 int)"
+    dolt sql -q "insert into t values (NULL, NULL)"
+    run dolt sql -q "alter table t add primary key(pk)"
+    [ $status -eq 1 ]
 }

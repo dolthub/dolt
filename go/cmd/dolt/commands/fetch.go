@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var fetchDocs = cli.CommandDocumentationContent{
@@ -62,6 +63,10 @@ func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 func (cmd FetchCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateFetchArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
+}
+
+func (cmd FetchCmd) ArgParser() *argparser.ArgParser {
+	return cli.CreateFetchArgParser()
 }
 
 // Exec executes the command

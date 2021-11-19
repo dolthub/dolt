@@ -60,7 +60,7 @@ func (cmd VerifyConstraintsCmd) CreateMarkdown(wr io.Writer, commandStr string) 
 	return nil
 }
 
-func (cmd VerifyConstraintsCmd) createArgParser() *argparser.ArgParser {
+func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(vcAllParam, "a", "Verifies constraints against every row.")
 	ap.SupportsFlag(vcOutputOnlyParam, "o", "Disables writing the results to the constraint violations table.")
@@ -69,7 +69,7 @@ func (cmd VerifyConstraintsCmd) createArgParser() *argparser.ArgParser {
 }
 
 func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

@@ -554,6 +554,124 @@ SQL
     [[ "$output" =~ table_a ]] || false
 }
 
+@test "sql: create new database" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt checkout -b feature-branch
+    dolt checkout main
+    
+    dolt sql --disable-batch <<SQL
+CREATE DATABASE test1;
+USE test1;
+CREATE TABLE table_a(x int primary key);
+insert into table_a values (1), (2);
+SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
+SQL
+
+    cd test1
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ table_a ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "created table_a" ]] || false
+
+    cd ../
+    run dolt sql --disable-batch <<SQL
+use test1;
+show tables;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "table_a" ]] || false
+    
+    dolt sql -q "create database test2"
+    [ -d "test2" ]
+
+    # the current db should always be the one that the SQL command was
+    # run in, not any nested dbs
+    run dolt sql -q "select database()"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo" ]] || false
+
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo" ]] || false
+    [[ "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "test2" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+
+    touch existing_file
+    mkdir existing_dir
+
+    run dolt sql -q "create database existing_file"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "exists" ]] || false
+
+    run dolt sql -q "create database existing_dir"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "exists" ]] || false
+}
+
+@test "sql: run outside a dolt directory" {
+    mkdir new && cd new
+
+    mkdir decoy
+    touch decoy/file.txt
+
+    dolt sql --disable-batch <<SQL
+CREATE DATABASE test1;
+USE test1;
+CREATE TABLE table_a(x int primary key);
+insert into table_a values (1), (2);
+SELECT DOLT_COMMIT('-a', '-m', 'created table_a');
+SQL
+
+    cd test1
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ table_a ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "created table_a" ]] || false
+
+    cd ../
+    
+    run dolt sql -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ ! "$output" =~ "decoy" ]] || false
+
+    # There's a bug in the teardown logic that means we need to cd
+    # into the repo directory before the test ends
+    cd ../
+}
+
+@test "sql: bad dolt db" {
+    mkdir new && cd new
+
+    mkdir -p decoy/.dolt/noms/oldgen
+    mkdir -p decoy/.dolt/noms/temptf
+    echo '{}' > decoy/config.json
+
+    # Not doing this cd ../ results in the teardown method failing on
+    # a skip, not sure why. It's not part of the actual test
+    cd ../
+    skip "This results in a panic right now"
+    
+    run dolt sql -q "show databases" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ ! "$output" =~ "decoy" ]] || false
+}
+
 @test "sql: set head ref session var" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch

@@ -342,7 +342,7 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 	db := dsql.NewDatabase("dolt", dEnv.DbData(), opts)
-	pro := dsql.NewDoltDatabaseProvider(dEnv.Config, db)
+	pro := dsql.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, db)
 	engine := sqle.NewDefault(pro)
 
 	return engine, nil

@@ -33,7 +33,7 @@ import (
 
 const defaultBranch = "main"
 
-func TestReplicateHook(t *testing.T) {
+func TestPushOnWriteHook(t *testing.T) {
 	ctx := context.Background()
 
 	// destination repo
@@ -121,10 +121,10 @@ func TestReplicateHook(t *testing.T) {
 	}
 
 	// setup hook
-	hook := NewReplicateHook(destDB, tmpDir)
+	hook := NewPushOnWriteHook(destDB, tmpDir)
 	ddb.SetCommitHooks(ctx, []datas.CommitHook{hook})
 
-	t.Run("replicate to backup remote", func(t *testing.T) {
+	t.Run("replicate to remote", func(t *testing.T) {
 		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
 		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
 		err = hook.Execute(ctx, ds, ddb.db)
@@ -147,5 +147,19 @@ func TestReplicateHook(t *testing.T) {
 		hook.HandleError(ctx, errors.New(msg))
 
 		assert.Equal(t, buffer.String(), msg)
+	})
+}
+
+func TestLogHook(t *testing.T) {
+	msg := []byte("hello")
+	var err error
+	t.Run("new log hook", func(t *testing.T) {
+		ctx := context.Background()
+		hook := NewLogHook(msg)
+		var buffer = &bytes.Buffer{}
+		err = hook.SetLogger(ctx, buffer)
+		assert.NoError(t, err)
+		hook.Execute(ctx, datas.Dataset{}, nil)
+		assert.Equal(t, buffer.Bytes(), msg)
 	})
 }

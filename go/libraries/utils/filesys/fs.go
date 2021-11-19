@@ -51,6 +51,10 @@ type WritableFS interface {
 	// it will be overwritten.
 	OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, error)
 
+	// OpenForWriteAppend opens a file for writing. The file will be created if it does not exist, and it will
+	// append only to that new file. If file exists, it will append to existing file.
+	OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteCloser, error)
+
 	// WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 	// and if it does exist it will be overwritten.
 	WriteFile(fp string, data []byte) error
@@ -93,6 +97,9 @@ type Filesys interface {
 	ReadableFS
 	WritableFS
 	WalkableFS
+
+	// WithWorkingDir returns a copy of this Filesys with the given working directory
+	WithWorkingDir(path string) (Filesys, error)
 }
 
 func UnmarshalJSONFile(fs ReadableFS, path string, dest interface{}) error {

@@ -75,7 +75,7 @@ func (cmd CatCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
 
-func (cmd CatCmd) createArgParser() *argparser.ArgParser {
+func (cmd CatCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table that the given index belongs to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"index", "The name of the index that belongs to the given table."})
@@ -84,7 +84,7 @@ func (cmd CatCmd) createArgParser() *argparser.ArgParser {
 }
 
 func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, catDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

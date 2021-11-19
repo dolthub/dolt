@@ -188,9 +188,7 @@ func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, in
 	}
 
 	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
-		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			return tuple.StartsWith(key), nil
-		}}},
+		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(key)}},
 	)
 
 	_, err = indexIter.ReadRow(ctx)
@@ -217,9 +215,7 @@ func GetIndexedRowKVPs(ctx context.Context, te TableEditor, key types.Tuple, ind
 	}
 
 	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
-		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			return tuple.StartsWith(key), nil
-		}}},
+		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(key)}},
 	)
 
 	rowData, err := tbl.GetRowData(ctx)

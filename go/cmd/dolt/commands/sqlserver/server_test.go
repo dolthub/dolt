@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -26,10 +27,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
@@ -52,7 +53,7 @@ var (
 )
 
 func TestServerArgs(t *testing.T) {
-	serverController := CreateServerController()
+	serverController := NewServerController()
 	go func() {
 		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
@@ -92,7 +93,7 @@ listener:
     read_timeout_millis: 5000
     write_timeout_millis: 5000
 `
-	serverController := CreateServerController()
+	serverController := NewServerController()
 	go func() {
 		dEnv := dtestutils.CreateEnvWithSeedData(t)
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
@@ -125,7 +126,7 @@ func TestServerBadArgs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
-			serverController := CreateServerController()
+			serverController := NewServerController()
 			go func(serverController *ServerController) {
 				startServer(context.Background(), "test", "dolt sql-server", test, env, serverController)
 			}(serverController)
@@ -160,7 +161,7 @@ func TestServerGoodParams(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(ConfigInfo(test), func(t *testing.T) {
-			sc := CreateServerController()
+			sc := NewServerController()
 			go func(config ServerConfig, sc *ServerController) {
 				_, _ = Serve(context.Background(), "", config, sc, env)
 			}(test, sc)
@@ -181,7 +182,7 @@ func TestServerSelect(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15300)
 
-	sc := CreateServerController()
+	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
 		_, _ = Serve(context.Background(), "", serverConfig, sc, env)
@@ -230,7 +231,7 @@ func TestServerSelect(t *testing.T) {
 
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
-	serverController := CreateServerController()
+	serverController := NewServerController()
 	server := &http.Server{
 		Addr:    ":15200",
 		Handler: http.DefaultServeMux,
@@ -256,7 +257,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15302)
 
-	sc := CreateServerController()
+	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
 		_, _ = Serve(context.Background(), "", serverConfig, sc, dEnv)
@@ -389,50 +390,55 @@ func TestReadReplica(t *testing.T) {
 
 	multiSetup.NewDB("read_replica")
 	multiSetup.NewRemote("remote1")
-	multiSetup.PushToRemote("read_replica", "remote1")
+	multiSetup.PushToRemote("read_replica", "remote1", "main")
 	multiSetup.CloneDB("remote1", "source_db")
 
 	readReplicaDbName := multiSetup.DbNames[0]
 	sourceDbName := multiSetup.DbNames[1]
 
-	localCfg, ok := multiSetup.MrEnv[readReplicaDbName].Config.GetConfig(env.LocalConfig)
+	localCfg, ok := multiSetup.MrEnv.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
 	if !ok {
 		t.Fatal("local config does not exist")
 	}
-	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{doltdb.DoltReadReplicaKey: "remote1"})
-	dsess.InitPersistedSystemVars(multiSetup.MrEnv[readReplicaDbName])
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{sqle.ReadReplicaRemoteKey: "remote1", sqle.ReplicateHeadsKey: "main,feature"})
+	dsess.InitPersistedSystemVars(multiSetup.MrEnv.GetEnv(readReplicaDbName))
 
 	// start server as read replica
-	sc := CreateServerController()
+	sc := NewServerController()
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
 
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 		go func() {
-			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv[readReplicaDbName])
+			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
 		}()
 		err = sc.WaitForStart()
 		require.NoError(t, err)
 	}()
 	defer sc.StopServer()
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
-	defer conn.Close()
+	replicatedTable := "new_table"
+	multiSetup.CreateTable(sourceDbName, replicatedTable)
+	multiSetup.StageAll(sourceDbName)
+	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
+	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
 
-	require.NoError(t, err)
-	sess := conn.NewSession(nil)
+	t.Run("read replica pulls multiple branches", func(t *testing.T) {
+		conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+readReplicaDbName, nil)
+		defer conn.Close()
+		require.NoError(t, err)
+		sess := conn.NewSession(nil)
 
-	t.Run("read replica pulls on read", func(t *testing.T) {
-		var res []string
-		replicatedTable := "new_table"
-		multiSetup.CreateTable(sourceDbName, replicatedTable)
-		multiSetup.StageAll(sourceDbName)
-		_ = multiSetup.CommitWithWorkingSet(sourceDbName)
-		multiSetup.PushToRemote(sourceDbName, "remote1")
+		newBranch := "feature"
+		multiSetup.NewBranch(sourceDbName, newBranch)
+		multiSetup.CheckoutBranch(sourceDbName, newBranch)
+		multiSetup.PushToRemote(sourceDbName, "remote1", newBranch)
 
-		q := sess.SelectBySql("show tables")
-		_, err := q.LoadContext(context.Background(), &res)
+		var res []int
+
+		q := sess.SelectBySql(fmt.Sprintf("select dolt_checkout('%s')", newBranch))
+		_, err = q.LoadContext(context.Background(), &res)
 		assert.NoError(t, err)
-		assert.ElementsMatch(t, res, []string{replicatedTable})
+		assert.ElementsMatch(t, res, []int{0})
 	})
 }

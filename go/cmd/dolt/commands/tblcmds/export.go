@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/fatih/color"
@@ -183,11 +184,11 @@ func (cmd ExportCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ExportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 }
 
-func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
+func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
@@ -207,7 +208,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cmd.ArgParser()
 	_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 
 	exOpts, verr := parseExportArgs(ap, commandStr, args)
@@ -269,8 +270,23 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	inSch := rd.GetSchema()
 	outSch := inSch
 
+	err = dEnv.FS.MkDirs(filepath.Dir(exOpts.DestName()))
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	filePath, err := dEnv.FS.Abs(exOpts.DestName())
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	writer, err := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
+	}
+
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, opts)
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, srcIsSorted, outSch, statsCB, opts, writer)
 
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()
