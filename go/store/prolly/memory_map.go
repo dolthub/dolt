@@ -94,7 +94,9 @@ func (mm memoryMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter
 	}
 
 	tc := memTupleCursor{iter: iter}
-	if err := startInRange(ctx, rng, tc); err != nil {
+
+	err := tc.startInRange(ctx, rng)
+	if err != nil {
 		return MapRangeIter{}, err
 	}
 
@@ -113,7 +115,7 @@ type memTupleCursor struct {
 	reverse bool
 }
 
-var _ tupleCursor = mapTupleCursor{}
+var _ tupleCursor = memTupleCursor{}
 var _ mutationIter = memTupleCursor{}
 
 func (it memTupleCursor) nextMutation() (key, value val.Tuple) {
@@ -129,13 +131,16 @@ func (it memTupleCursor) current() (key, value val.Tuple) {
 	return it.iter.Current()
 }
 
-func (it memTupleCursor) advance(context.Context) (err error) {
-	key, _ := it.iter.Current()
-	var value val.Tuple
+var skips = 0
 
-	// skip over pending deletes as we advance
-	// if |key| == nil, we're at the end of the list
-	for key != nil && value == nil {
+func (it memTupleCursor) advance(context.Context) (err error) {
+	it.iter.Advance()
+
+	key, value := it.iter.Current()
+	// if |value| is nil, it's a pending delete should be skipped
+	// if |key| is nil, we're past the end of the list
+	for value == nil && key != nil {
+		skips++
 		it.iter.Advance()
 		key, value = it.iter.Current()
 	}
@@ -143,12 +148,12 @@ func (it memTupleCursor) advance(context.Context) (err error) {
 }
 
 func (it memTupleCursor) retreat(context.Context) (err error) {
-	key, _ := it.iter.Current()
-	var value val.Tuple
+	it.iter.Retreat()
 
-	// skip over pending deletes as we retreat
-	// if |key| == nil, we're at the start of the list
-	for key != nil && value == nil {
+	key, value := it.iter.Current()
+	// if |value| is nil, it's a pending delete should be skipped
+	// if |key| is nil, we're before the start of the list
+	for value == nil && key != nil {
 		it.iter.Retreat()
 		key, value = it.iter.Current()
 	}
@@ -160,5 +165,45 @@ func (it memTupleCursor) count() int {
 }
 
 func (it memTupleCursor) close() error {
+	return nil
+}
+
+// todo(andy) assumes we're no more than one position away from the correct starting position.
+func (it memTupleCursor) startInRange(ctx context.Context, r Range) error {
+
+	key, value := it.iter.Current()
+	// if |value| is nil, it's a pending delete should be skipped
+	// if |key| is nil, we're before the start of the list
+	for value == nil && key != nil {
+		if r.Reverse {
+			it.iter.Retreat()
+		} else {
+			it.iter.Advance()
+		}
+		key, value = it.iter.Current()
+	}
+
+	if r.Start.Unbound {
+		return nil
+	}
+
+	key, _ = it.current()
+	if key == nil {
+		return nil
+	}
+	cmp := r.KeyDesc.Compare(key, r.Start.Key)
+
+	if cmp == 0 && r.Start.Inclusive {
+		return nil
+	}
+
+	if r.Reverse && cmp >= 0 {
+		return it.retreat(ctx)
+	}
+
+	if !r.Reverse && cmp <= 0 {
+		return it.advance(ctx)
+	}
+
 	return nil
 }

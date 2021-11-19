@@ -156,13 +156,11 @@ type MapRangeIter struct {
 	rng            Range
 }
 
-func maybeFmt(key val.Tuple, desc val.TupleDesc) (s string) {
-	if key != nil {
-		s = desc.Format(key)
-	} else {
-		s = "[ nil ]"
-	}
-	return
+type tupleCursor interface {
+	current() (key, value val.Tuple)
+	advance(ctx context.Context) error
+	retreat(ctx context.Context) error
+	startInRange(ctx context.Context, r Range) error
 }
 
 func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
@@ -262,37 +260,4 @@ func (it MapRangeIter) progressCursor(ctx context.Context, cur tupleCursor) erro
 	} else {
 		return cur.advance(ctx)
 	}
-}
-
-type tupleCursor interface {
-	current() (key, value val.Tuple)
-	advance(ctx context.Context) error
-	retreat(ctx context.Context) error
-}
-
-// assumes we're no more than one position away from the correct starting position.
-func startInRange(ctx context.Context, r Range, cur tupleCursor) error {
-	if r.Start.Unbound {
-		return nil
-	}
-
-	key, _ := cur.current()
-	if key == nil {
-		return nil
-	}
-	cmp := r.KeyDesc.Compare(key, r.Start.Key)
-
-	if cmp == 0 && r.Start.Inclusive {
-		return nil
-	}
-
-	if r.Reverse && cmp >= 0 {
-		return cur.retreat(ctx)
-	}
-
-	if !r.Reverse && cmp <= 0 {
-		return cur.advance(ctx)
-	}
-
-	return nil
 }

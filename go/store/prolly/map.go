@@ -165,7 +165,9 @@ func (m Map) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error
 	}
 
 	tc := mapTupleCursor{cur: cur}
-	if err = startInRange(ctx, rng, tc); err != nil {
+
+	err = tc.startInRange(ctx, rng)
+	if err != nil {
 		return MapRangeIter{}, err
 	}
 
@@ -245,4 +247,32 @@ func (cur mapTupleCursor) advance(ctx context.Context) (err error) {
 func (cur mapTupleCursor) retreat(ctx context.Context) (err error) {
 	_, err = cur.cur.retreat(ctx)
 	return
+}
+
+// todo(andy) assumes we're no more than one position away from the correct starting position.
+// todo(andy) factor a common start func?
+func (it mapTupleCursor) startInRange(ctx context.Context, r Range) error {
+	if r.Start.Unbound {
+		return nil
+	}
+
+	key, _ := it.current()
+	if key == nil {
+		return nil
+	}
+	cmp := r.KeyDesc.Compare(key, r.Start.Key)
+
+	if cmp == 0 && r.Start.Inclusive {
+		return nil
+	}
+
+	if r.Reverse && cmp >= 0 {
+		return it.retreat(ctx)
+	}
+
+	if !r.Reverse && cmp <= 0 {
+		return it.advance(ctx)
+	}
+
+	return nil
 }

@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -150,17 +151,29 @@ func testOrderedMapIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	iter, err := om.IterAll(ctx)
 	require.NoError(t, err)
 
+	actual := make([][2]val.Tuple, len(tuples)*2)
+
 	idx := 0
 	for {
 		key, value, err := iter.Next(ctx)
 		if err == io.EOF {
 			break
 		}
+		actual[idx][0], actual[idx][1] = key, value
+
+		if idx >= len(tuples) {
+			break
+		}
+
 		require.NoError(t, err)
 		assert.Equal(t, tuples[idx][0], key)
 		assert.Equal(t, tuples[idx][1], value)
 		idx++
 	}
+	actual = actual[:idx]
+	fmt.Println(skips)
+	fmt.Println(len(tuples))
+
 	assert.Equal(t, len(tuples), idx)
 }
 
@@ -414,4 +427,20 @@ func nonNegative(x int) int {
 		x = 0
 	}
 	return x
+}
+
+func fmtTupleList(tuples [][2]val.Tuple) string {
+	var sb strings.Builder
+	sb.WriteString("{ ")
+	for _, kv := range tuples {
+		if kv[0] == nil || kv[1] == nil {
+			break
+		}
+		sb.WriteString(memKeyDesc.Format(kv[0]))
+		sb.WriteString(": ")
+		sb.WriteString(memValueDesc.Format(kv[1]))
+		sb.WriteString(", ")
+	}
+	sb.WriteString("}")
+	return sb.String()
 }

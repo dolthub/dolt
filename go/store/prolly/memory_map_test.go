@@ -56,20 +56,20 @@ func TestMemMap(t *testing.T) {
 			t.Run("get item from map with deletes", func(t *testing.T) {
 				testMemoryMapGetAndHas(t, memMap2, tuples2, deletes)
 			})
-			//t.Run("iter all from map with deletes", func(t *testing.T) {
-			//	testOrderedMapIterAll(t, memMap2, tuples2)
-			//})
+			t.Run("iter all from map with deletes", func(t *testing.T) {
+				testOrderedMapIterAll(t, memMap2, tuples2)
+			})
 		})
 	}
 }
 
 var memKeyDesc = val.NewTupleDescriptor(
-	val.Type{Enc: val.Int64Enc, Nullable: false},
+	val.Type{Enc: val.Uint32Enc, Nullable: false},
 )
 var memValueDesc = val.NewTupleDescriptor(
-	val.Type{Enc: val.Int64Enc, Nullable: true},
-	val.Type{Enc: val.Int64Enc, Nullable: true},
-	val.Type{Enc: val.Int64Enc, Nullable: true},
+	val.Type{Enc: val.Uint32Enc, Nullable: true},
+	//val.Type{Enc: val.Int64Enc, Nullable: true},
+	//val.Type{Enc: val.Int64Enc, Nullable: true},
 )
 
 func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
