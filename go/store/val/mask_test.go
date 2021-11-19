@@ -38,7 +38,7 @@ func TestMemberSet(t *testing.T) {
 }
 
 func testMemberSet(t *testing.T, count int) {
-	memSet := makeMemberSet(maskPool, count)
+	memSet := makeMemberMask(maskPool, count)
 
 	for i := 0; i < count; i++ {
 		assert.False(t, memSet.present(i))
@@ -61,7 +61,7 @@ func testMemberSet(t *testing.T, count int) {
 }
 
 func testCountPrefix(t *testing.T, count int) {
-	memSet := makeMemberSet(maskPool, count)
+	memSet := makeMemberMask(maskPool, count)
 
 	for i := 0; i < count; i++ {
 		assert.Equal(t, i, memSet.countPrefix(i))
@@ -74,7 +74,7 @@ func testCountPrefix(t *testing.T, count int) {
 }
 
 func testCountSuffix(t *testing.T, count int) {
-	memSet := makeMemberSet(maskPool, count)
+	memSet := makeMemberMask(maskPool, count)
 
 	c := 0
 	for i := count - 1; i >= 0; i-- {
@@ -88,7 +88,7 @@ func testCountSuffix(t *testing.T, count int) {
 	assert.Equal(t, expected, memSet.countSuffix(0))
 }
 
-func setRandom(ms memberSet, len int) (count int) {
+func setRandom(ms memberMask, len int) (count int) {
 
 	for i := 0; i < len; i++ {
 		if rand.Int()%2 == 1 {

@@ -14,10 +14,10 @@
 
 package val
 
-import "encoding/binary"
-
 type Offsets []byte
 
+// OffsetsSize returns the number of bytes needed to
+// store |fieldCount| offsets.
 func OffsetsSize(count int) ByteSize {
 	if count == 0 {
 		return 0
@@ -25,27 +25,43 @@ func OffsetsSize(count int) ByteSize {
 	return ByteSize((count - 1) * 2)
 }
 
-func (sl Offsets) Count() int {
-	return (len(sl) / 2) + 1
+// Count returns the number of offsets stored in |sl|.
+func (os Offsets) Count() int {
+	return (len(os) / 2) + 1
 }
 
-func (sl Offsets) Get(i int) ByteSize {
+// GetBounds returns the ith offset. |last| is the byte position
+// of the _end_ of the last element.
+func (os Offsets) GetBounds(i int, last ByteSize) (start, stop ByteSize) {
+	start = os.getOffset(i)
+	if os.isLastIndex(i) {
+		stop = last
+	} else {
+		stop = os.getOffset(i + 1)
+	}
+	return
+}
+
+// getOffset gets the byte position of the _start_ of element |i|.
+func (os Offsets) getOffset(i int) ByteSize {
 	if i == 0 {
 		return 0
 	}
 	start := (i - 1) * 2
-	off := binary.LittleEndian.Uint16(sl[start : start+2])
+	off := ReadUint16(os[start : start+2])
 	return ByteSize(off)
 }
 
-func (sl Offsets) Put(i int, off ByteSize) {
+// Put writes offset |pos| at index |i|.
+func (os Offsets) Put(i int, off ByteSize) {
 	if i == 0 {
 		return
 	}
 	start := (i - 1) * 2
-	binary.LittleEndian.PutUint16(sl[start:start+2], uint16(off))
+	WriteUint16(os[start:start+2], uint16(off))
 }
 
-func (sl Offsets) IsLastIndex(i int) bool {
-	return len(sl) == i*2
+// isLastIndex returns true if |i| is the last index in |sl|.
+func (os Offsets) isLastIndex(i int) bool {
+	return len(os) == i*2
 }

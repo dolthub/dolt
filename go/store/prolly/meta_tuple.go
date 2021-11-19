@@ -16,83 +16,59 @@ package prolly
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-const (
-	metaTupleCountIdx = -2
-	metaTupleRefIdx   = -1
+func fetchChild(ctx context.Context, ns NodeStore, mt metaValue) (Node, error) {
+	return ns.Read(ctx, mt.GetRef())
+}
 
-	metaTupleRefSize = 20
+func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nodeItem) (Node, nodePair, error) {
+	child := makeProllyNode(ns.Pool(), level, items...)
+
+	ref, err := ns.Write(ctx, child)
+	if err != nil {
+		return nil, nodePair{}, err
+	}
+
+	var meta nodePair
+	if len(items) > 0 {
+		lastKey := val.Tuple(items[len(items)-metaPairCount])
+		metaKey := val.CloneTuple(ns.Pool(), lastKey)
+		metaVal := newMetaValue(ns.Pool(), child.cumulativeCount(), ref)
+		meta = nodePair{nodeItem(metaKey), nodeItem(metaVal)}
+	}
+
+	return child, meta, nil
+}
+
+const (
+	metaPairCount  = 2
+	metaPairKeyIdx = 0
+	metaPairValIdx = 1
+
+	metaValueCountIdx = 0
+	metaValueRefIdx   = 1
 )
 
-type metaTuple val.Tuple
+type metaValue val.Tuple
 
-func newMetaTuple(pool pool.BuffPool, count uint64, ref hash.Hash, key [][]byte) metaTuple {
+func newMetaValue(pool pool.BuffPool, count uint64, ref hash.Hash) metaValue {
 	var cnt [6]byte
-	writeUint48(cnt[:], count)
-	key = append(key, cnt[:], ref[:])
-	return metaTuple(val.NewTuple(pool, key...))
+	val.WriteUint48(cnt[:], count)
+	return metaValue(val.NewTuple(pool, cnt[:], ref[:]))
 }
 
-func (mt metaTuple) GetCumulativeCount() uint64 {
-	cnt := val.Tuple(mt).GetField(metaTupleCountIdx)
-	return readUint48(cnt)
+func (mt metaValue) GetCumulativeCount() uint64 {
+	cnt := val.Tuple(mt).GetField(metaValueCountIdx)
+	return val.ReadUint48(cnt)
 }
 
-func (mt metaTuple) GetRef() hash.Hash {
+func (mt metaValue) GetRef() hash.Hash {
 	tup := val.Tuple(mt)
-	ref := tup.GetField(metaTupleRefIdx)
-	if len(ref) != metaTupleRefSize {
-		s := val.NewTupleDescriptor(
-			val.Type{Enc: val.Int64Enc},
-			val.Type{Enc: val.BytesEnc},
-			val.Type{Enc: val.BytesEnc},
-		).Format(tup)
-		c := tup.Count()
-		panic(fmt.Sprintf("incorrect number of bytes for meta tuple ref (%d, %s)", c, s))
-	}
+	ref := tup.GetField(metaValueRefIdx)
 	return hash.New(ref)
-}
-
-func fetchRef(ctx context.Context, nrw NodeStore, item nodeItem) (Node, error) {
-	return nrw.Read(ctx, metaTuple(item).GetRef())
-}
-
-func writeNewNode(ctx context.Context, nrw NodeStore, level uint64, items ...nodeItem) (Node, metaTuple, error) {
-	nd := makeProllyNode(nrw.Pool(), level, items...)
-
-	ref, err := nrw.Write(ctx, nd)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	fields := metaTupleFields(level, items...)
-	meta := newMetaTuple(nrw.Pool(), nd.cumulativeCount(), ref, fields)
-
-	return nd, meta, nil
-}
-
-func metaTupleFields(level uint64, items ...nodeItem) (fields [][]byte) {
-	// todo(andy): this is specific to Map
-	var key val.Tuple
-	var cnt int
-
-	if level == 0 {
-		key = val.Tuple(items[len(items)-2])
-		cnt = key.Count()
-	} else {
-		key = val.Tuple(items[len(items)-1])
-		// discard ref and count from child
-		cnt = key.Count() - 2
-	}
-
-	for i := 0; i < cnt; i++ {
-		fields = append(fields, key.GetField(i))
-	}
-	return
 }

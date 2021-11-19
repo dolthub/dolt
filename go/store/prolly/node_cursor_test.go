@@ -35,68 +35,42 @@ func TestNodeCursor(t *testing.T) {
 }
 
 func testNewCursorAtItem(t *testing.T, count int) {
-	root, items, nrw := randomTree(t, count)
+	root, items, ns := randomTree(t, count)
 	assert.NotNil(t, root)
 
 	ctx := context.Background()
 	for i := range items {
 		key, value := items[i][0], items[i][1]
-		cur, err := newCursorAtItem(ctx, nrw, root, key, searchTestTree)
+		cur, err := newCursorAtItem(ctx, ns, root, key, searchTestTree)
 		require.NoError(t, err)
-		assert.Equal(t, key, cur.current())
-		_, err = cur.advance(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, value, cur.current())
+
+		pair := cur.currentPair()
+		assert.Equal(t, key, pair.key())
+		assert.Equal(t, value, pair.value())
 	}
 
-	validateTreeItems(t, nrw, root, items)
+	validateTreeItems(t, ns, root, items)
 }
 
-func TestTreeCursor(t *testing.T) {
-	t.Run("tree cursor", func(t *testing.T) {
-		testTreeCursor(t, 10)
-		testTreeCursor(t, 100)
-		testTreeCursor(t, 1000)
-	})
-}
-
-func testTreeCursor(t *testing.T, count int) {
-	root, items, nrw := randomTree(t, count)
-	assert.NotNil(t, root)
-
-	ctx := context.Background()
-	tc, err := newTreeCursor(ctx, nrw, root)
-	require.NoError(t, err)
-	for _, item := range items {
-		assert.Equal(t, item[0], tc.current())
-		_, err = tc.advance(ctx)
-		require.NoError(t, err)
-
-		assert.Equal(t, item[1], tc.current())
-		_, err = tc.advance(ctx)
-		require.NoError(t, err)
-	}
-}
-
-func newTestNRW() NodeStore {
+func newTestNodeStore() NodeStore {
 	ts := &chunks.TestStorage{}
 	return NewNodeStore(ts.NewView())
 }
 
 func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeStore) {
 	ctx := context.Background()
-	nrw := newTestNRW()
-	chunker, err := newEmptyTreeChunker(ctx, nrw, newDefaultNodeSplitter)
+	ns := newTestNodeStore()
+	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	require.NoError(t, err)
 
-	items := randomTupleItemPairs(count)
+	items := randomTupleItemPairs(count / 2)
 	for _, item := range items {
 		_, err := chunker.Append(ctx, item[0], item[1])
 		assert.NoError(t, err)
 	}
 	nd, err := chunker.Done(ctx)
 	assert.NoError(t, err)
-	return nd, items, nrw
+	return nd, items, ns
 }
 
 var keyDesc = val.NewTupleDescriptor(
@@ -110,22 +84,16 @@ var valDesc = val.NewTupleDescriptor(
 )
 
 func searchTestTree(item nodeItem, nd Node) int {
-	card := 1
-	if nd.leafNode() {
-		card = 2
-	}
-
-	idx := sort.Search(nd.nodeCount()/card, func(i int) bool {
-		l, r := val.Tuple(item), val.Tuple(nd.getItem(i*card))
+	idx := sort.Search(nd.nodeCount()/stride, func(i int) bool {
+		l, r := val.Tuple(item), val.Tuple(nd.getItem(i*stride))
 		return keyDesc.Compare(l, r) <= 0
 	})
-
-	return idx * card
+	return idx * stride
 }
 
 func randomTupleItemPairs(count int) (items [][2]nodeItem) {
 	tups := randomTuplePairs(count, keyDesc, valDesc)
-	items = make([][2]nodeItem, count/2)
+	items = make([][2]nodeItem, count)
 	if len(tups) != len(items) {
 		panic("mismatch")
 	}

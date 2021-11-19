@@ -17,7 +17,13 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/skip"
+
 	"github.com/dolthub/dolt/go/store/val"
+)
+
+const (
+	maxPending = 64 * 1024
 )
 
 type MutableMap struct {
@@ -28,135 +34,85 @@ type MutableMap struct {
 func newMutableMap(m Map) MutableMap {
 	return MutableMap{
 		m:       m,
-		overlay: NewTupleMap(m.keyDesc),
+		overlay: newMemoryMap(m.keyDesc),
 	}
 }
 
+// Map materializes the pending mutations in the MutableMap.
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
-	return applyEdits(ctx, mut.m, mut.overlay.Iter())
+	return materializeMutations(ctx, mut.m, mut.overlay.mutations())
 }
 
-func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) (err error) {
-	ok := mut.overlay.Put(key, value)
-	if !ok {
-		// synchronously flush overlay
-		mut.m, err = mut.Map(ctx)
-		mut.overlay = NewTupleMap(mut.m.keyDesc)
-	}
-	return
+// Put adds the Tuple pair |key|, |value| to the MutableMap.
+func (mut MutableMap) Put(_ context.Context, key, value val.Tuple) error {
+	mut.overlay.Put(key, value)
+	return nil
 }
 
+// Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
+// If the |key| is not present in the MutableMap, a nil Tuple pair is passed to |cb|.
 func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
-	value, ok := mut.overlay.Get(key)
+	value, ok := mut.overlay.list.Get(key)
 	if ok {
+		if value == nil {
+			// there is a pending delete of |key| in |mut.overlay|.
+			key = nil
+		}
 		return cb(key, value)
 	}
+
 	return mut.m.Get(ctx, key, cb)
 }
 
+// Has returns true if |key| is present in the MutableMap.
 func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	if ok = mut.overlay.Has(key); ok {
+	err = mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
+		ok = key != nil
 		return
-	}
-	return mut.m.Has(ctx, key)
-}
-
-type editProvider interface {
-	Count() int
-	Next() (key, val val.Tuple)
-	Close() error
-}
-
-var _ editProvider = keyValueIter{}
-
-func applyEdits(ctx context.Context, m Map, edits editProvider) (Map, error) {
-	var err error
-	if edits.Count() == 0 {
-		return m, err
-	}
-
-	key, value := edits.Next()
-
-	cur, err := mapCursorAtKey(ctx, m, key)
-	if err != nil {
-		return m, err
-	}
-
-	ch, err := newTreeChunker(ctx, cur, 0, m.nrw, newDefaultNodeSplitter)
-	if err != nil {
-		return m, err
-	}
-
-	for key != nil {
-
-		var oldValue val.Tuple
-		if cur.valid() {
-			k, v, err := getKeyValue(ctx, cur)
-			if err != nil {
-				return m, err
-			}
-			if compareValues(m, key, k) == 0 {
-				oldValue = v
-			}
-		}
-
-		if oldValue == nil && value == nil {
-			continue // already non-present
-		}
-		if oldValue != nil && compareValues(m, value, oldValue) == 0 {
-			continue // same value
-		}
-
-		err = ch.advanceTo(ctx, cur)
-		if err != nil {
-			return m, err
-		}
-
-		if oldValue != nil {
-			// stats.Modifications++
-			if err = ch.Skip(ctx); err != nil {
-				return m, err
-			}
-		} // else stats.Additions++
-
-		if value != nil {
-			_, err = ch.Append(ctx, nodeItem(key), nodeItem(value))
-			if err != nil {
-				continue
-			}
-		}
-
-		key, value = edits.Next()
-	}
-
-	m.root, err = ch.Done(ctx)
-	if err != nil {
-		return m, err
-	}
-
-	return m, nil
-}
-
-func mapCursorAtKey(ctx context.Context, m Map, key val.Tuple) (*nodeCursor, error) {
-	cur, err := newCursorAtItem(ctx, m.nrw, m.root, nodeItem(key), m.searchNode)
-	return &cur, err
-}
-
-func getKeyValue(ctx context.Context, cur *nodeCursor) (key, value val.Tuple, err error) {
-	key = val.Tuple(cur.current())
-
-	if _, err = cur.advance(ctx); err != nil {
-		return nil, nil, err
-	}
-
-	value = val.Tuple(cur.current())
+	})
 	return
 }
 
-func compareKeys(m Map, left, right val.Tuple) int {
-	return int(m.keyDesc.Compare(left, right))
+// IterAll returns a MapRangeIter that iterates over the entire MutableMap.
+func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
+	rng := Range{
+		Start:   RangeCut{Unbound: true},
+		Stop:    RangeCut{Unbound: true},
+		KeyDesc: mut.m.keyDesc,
+		Reverse: false,
+	}
+	return mut.IterValueRange(ctx, rng)
 }
 
-func compareValues(m Map, left, right val.Tuple) int {
-	return int(m.valDesc.Compare(left, right))
+// IterValueRange returns a MapRangeIter that iterates over a Range.
+func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+	var iter *skip.ListIter
+	if rng.Start.Unbound {
+		if rng.Reverse {
+			iter = mut.overlay.list.IterAtEnd()
+		} else {
+			iter = mut.overlay.list.IterAtStart()
+		}
+	} else {
+		iter = mut.overlay.list.IterAt(rng.Start.Key)
+	}
+	memCur := memTupleCursor{iter: iter}
+
+	var err error
+	var cur *nodeCursor
+	if rng.Start.Unbound {
+		if rng.Reverse {
+			cur, err = mut.m.cursorAtEnd(ctx)
+		} else {
+			cur, err = mut.m.cursorAtStart(ctx)
+		}
+	} else {
+		cur, err = mut.m.cursorAtkey(ctx, rng.Start.Key)
+	}
+	if err != nil {
+		return MapRangeIter{}, err
+	}
+	proCur := mapTupleCursor{cur: cur}
+
+	return NewMapRangeIter(ctx, memCur, proCur, rng)
 }

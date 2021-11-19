@@ -14,11 +14,18 @@
 
 package val
 
-import "github.com/dolthub/dolt/go/store/pool"
+import (
+	"math/bits"
 
-type memberSet []byte
+	"github.com/dolthub/dolt/go/store/pool"
+)
 
-func makeMemberSet(pool pool.BuffPool, count int) memberSet {
+// memberMask is a bit-array encoding field membership in Tuples.
+// Fields with non-NULL values are present, and encoded as 1,
+// NULL fields are absent and encoded as 0.
+type memberMask []byte
+
+func makeMemberMask(pool pool.BuffPool, count int) memberMask {
 	sz := uint64(maskSize(count))
 	return pool.Get(sz)
 }
@@ -28,46 +35,49 @@ func maskSize(count int) ByteSize {
 	return ByteSize((count + 7) / 8)
 }
 
-func (ms memberSet) size() ByteSize {
-	return ByteSize(len(ms))
+// size returns the byte size of |nm|
+func (nm memberMask) size() ByteSize {
+	return ByteSize(len(nm))
 }
 
-func (ms memberSet) set(i int) {
-	ms[i/8] |= uint8(1) << (i % 8)
+// set flips bit |i| to 1
+func (nm memberMask) set(i int) {
+	nm[i/8] |= uint8(1) << (i % 8)
 }
 
-func (ms memberSet) unset(i int) {
-	ms[i/8] &= ^(uint8(1) << (i % 8))
+// set flips bit |i| to 0
+func (nm memberMask) unset(i int) {
+	nm[i/8] &= ^(uint8(1) << (i % 8))
 }
 
 // present returns true if the |i|th member is non-null.
-func (ms memberSet) present(i int) bool {
+func (nm memberMask) present(i int) bool {
 	query := uint8(1) << (i % 8)
-	return query&ms[i/8] == query
+	return query&nm[i/8] == query
 }
 
 // count returns the number of members present
-func (ms memberSet) count() (n int) {
-	for _, b := range ms {
-		n += countBitsSet(b)
+func (nm memberMask) count() (n int) {
+	for _, b := range nm {
+		n += bits.OnesCount8(b)
 	}
 	return
 }
 
 // countPrefix returns the count of the members at or before |i|.
-func (ms memberSet) countPrefix(i int) (n int) {
-	for _, b := range ms[:i/8] {
-		n += countBitsSet(b)
+func (nm memberMask) countPrefix(i int) (n int) {
+	for _, b := range nm[:i/8] {
+		n += bits.OnesCount8(b)
 	}
-	n += countBitsSet(ms[i/8] & prefixMask(i%8))
+	n += bits.OnesCount8(nm[i/8] & prefixMask(i%8))
 	return
 }
 
 // countSuffix returns the count of the members at or after |i|.
-func (ms memberSet) countSuffix(i int) (n int) {
-	n += countBitsSet(ms[i/8] & suffixMask(i%8))
-	for i := int(i/8) + 1; i < len(ms); i++ {
-		n += countBitsSet(ms[i])
+func (nm memberMask) countSuffix(i int) (n int) {
+	n += bits.OnesCount8(nm[i/8] & suffixMask(i%8))
+	for i := int(i/8) + 1; i < len(nm); i++ {
+		n += bits.OnesCount8(nm[i])
 	}
 	return
 }
@@ -78,23 +88,4 @@ func prefixMask(k int) byte {
 
 func suffixMask(k int) byte {
 	return byte(255) << k
-}
-
-func countBitsSet(b uint8) (n int) {
-	n += int(1 & b)
-	b >>= 1
-	n += int(1 & b)
-	b >>= 1
-	n += int(1 & b)
-	b >>= 1
-	n += int(1 & b)
-	b >>= 1
-	n += int(1 & b)
-	b >>= 1
-	n += int(1 & b)
-	b >>= 1
-	n += int(1 & b)
-	b >>= 1
-	n += int(1 & b)
-	return
 }

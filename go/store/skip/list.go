@@ -25,8 +25,17 @@ const (
 	maxHeight = uint8(5)
 	highest   = maxHeight - 1
 
-	nullID = nodeId(0)
+	sentinelId = nodeId(0)
 )
+
+type List struct {
+	head  skipPointer
+	nodes []skipNode
+	cmp   ValueCmp
+	src   rand.Source
+}
+
+type ValueCmp func(left, right []byte) int
 
 type nodeId uint32
 
@@ -38,15 +47,7 @@ type skipNode struct {
 
 	height uint8
 	next   skipPointer
-}
-
-type ValueCmp func(left, right []byte) int
-
-type List struct {
-	head  skipPointer
-	nodes []skipNode
-	cmp   ValueCmp
-	src   rand.Source
+	prev   nodeId
 }
 
 func NewSkipList(cmp ValueCmp) (l *List) {
@@ -58,10 +59,12 @@ func NewSkipList(cmp ValueCmp) (l *List) {
 	}
 
 	// initialize sentinel node
-	l.nodes[nullID] = skipNode{
-		id:  nullID,
+	l.nodes[sentinelId] = skipNode{
+		id:  sentinelId,
 		key: nil, val: nil,
 		height: maxHeight,
+		next:   skipPointer{},
+		prev:   sentinelId,
 	}
 
 	return
@@ -71,29 +74,15 @@ func (l *List) Count() int {
 	return len(l.nodes) - 1
 }
 
-func (l *List) Full() bool {
-	return l.Count() >= maxCount
-}
-
 func (l *List) Has(key []byte) (ok bool) {
 	_, ok = l.Get(key)
 	return
 }
 
 func (l *List) Get(key []byte) (val []byte, ok bool) {
-	ptr := l.head
-	var curr skipNode
-
-	for h := int64(highest); h >= 0; h-- {
-		curr = l.getNode(ptr[h])
-		for l.compareKeys(key, curr.key) > 0 {
-			ptr = curr.next
-			curr = l.getNode(ptr[h])
-		}
-	}
-
-	if l.compareKeys(key, curr.key) == 0 {
-		val, ok = curr.val, true
+	node := l.seek(key)
+	if l.compareKeys(key, node.key) == 0 {
+		val, ok = node.val, true
 	}
 	return
 }
@@ -102,53 +91,66 @@ func (l *List) Put(key, val []byte) {
 	if key == nil {
 		panic("key must be non-nil")
 	}
-	if l.Full() {
+	if l.Count() >= maxCount {
 		panic("list has no capacity")
 	}
 
-	next := l.head
-	var prevNd skipNode
-	var breadcrumbs skipPointer
+	var curr, prev skipNode
+	var next, history skipPointer
 
+	next = l.head
 	for h := int(highest); h >= 0; h-- {
-		currNd := l.getNode(next[h])
-		for l.compareKeys(key, currNd.key) > 0 {
-			prevNd = currNd
-			next = currNd.next
-			currNd = l.getNode(next[h])
-		}
-		// prevNd.key < key <= currNd.key
 
-		if l.compareKeys(key, currNd.key) == 0 {
+		// for each skip level, advance until
+		//   prev.key < key <= curr.key
+		curr = l.getNode(next[h])
+		for l.compareKeys(key, curr.key) > 0 {
+			prev = curr
+			next = curr.next
+			curr = l.getNode(next[h])
+		}
+
+		if l.compareKeys(key, curr.key) == 0 {
 			// in-place update
-			currNd.val = val
-			l.updateNode(currNd)
+			curr.val = val
+			l.updateNode(curr)
 			return
 		}
 
 		// save our steps
-		breadcrumbs[h] = prevNd.id
+		history[h] = prev.id
 	}
 
 	insert := l.makeNode(key, val)
-	for h := uint8(0); h <= insert.height; h++ {
-		// update l.head if |insert| is less than |head|
-		head := l.getNode(l.head[h])
-		if l.compare(insert, head) < 0 {
-			l.head[h] = insert.id
-			insert.next[h] = head.id
+	l.splice(insert, history)
+
+	return
+}
+
+func (l *List) splice(nd skipNode, history skipPointer) {
+	for h := uint8(0); h <= nd.height; h++ {
+		// if |node.key| is the smallest key for
+		// level |h| then update |l.head|
+		first := l.getNode(l.head[h])
+		if l.compare(nd, first) < 0 {
+			l.head[h] = nd.id
+			nd.next[h] = first.id
 			continue
 		}
 
-		// otherwise, splice in |insert| at breadcrumbs[h]
-		prev := l.getNode(breadcrumbs[h])
-		insert.next[h] = prev.next[h]
-		prev.next[h] = insert.id
-		l.updateNode(prev)
+		// otherwise, splice in |node| using |history|
+		prevNd := l.getNode(history[h])
+		nd.next[h] = prevNd.next[h]
+		prevNd.next[h] = nd.id
+		l.updateNode(prevNd)
 	}
-	l.updateNode(insert)
 
-	return
+	// set back pointers for level 0
+	nextNd := l.getNode(nd.next[0])
+	nd.prev = nextNd.prev
+	nextNd.prev = nd.id
+	l.updateNode(nextNd)
+	l.updateNode(nd)
 }
 
 type ListIter struct {
@@ -160,30 +162,69 @@ func (it *ListIter) Count() int {
 	return it.list.Count()
 }
 
-func (it *ListIter) Next() (key, val []byte) {
-	key, val = it.curr.key, it.curr.val
+func (it *ListIter) Current() (key, val []byte) {
+	return it.curr.key, it.curr.val
+}
+
+func (it *ListIter) Advance() {
 	it.curr = it.list.getNode(it.curr.next[0])
 	return
 }
 
-func (l *List) Iter() *ListIter {
+func (it *ListIter) Retreat() {
+	it.curr = it.list.getNode(it.curr.prev)
+	return
+}
+
+func (l *List) IterAt(key []byte) (it *ListIter) {
+	it = &ListIter{
+		curr: l.seek(key),
+		list: l,
+	}
+
+	if it.curr.id == sentinelId {
+		// try to keep |it| in bounds if |key| is
+		// greater than the largest key in |l|
+		it.Retreat()
+	}
+
+	return
+}
+
+func (l *List) IterAtStart() *ListIter {
 	return &ListIter{
 		curr: l.firstNode(),
 		list: l,
 	}
 }
 
-func (l *List) IterAll(cb func([]byte, []byte)) {
-	iter := l.Iter()
-	key, val := iter.Next()
-	for key != nil {
-		cb(key, val)
-		key, val = iter.Next()
+func (l *List) IterAtEnd() *ListIter {
+	return &ListIter{
+		curr: l.lastNode(),
+		list: l,
 	}
+}
+
+// seek returns the skipNode with the smallest key >= |key|.
+func (l *List) seek(key []byte) (node skipNode) {
+	ptr := l.head
+	for h := int64(highest); h >= 0; h-- {
+		node = l.getNode(ptr[h])
+		for l.compareKeys(key, node.key) > 0 {
+			ptr = node.next
+			node = l.getNode(ptr[h])
+		}
+	}
+	return
 }
 
 func (l *List) firstNode() skipNode {
 	return l.getNode(l.head[0])
+}
+
+func (l *List) lastNode() skipNode {
+	s := l.getNode(sentinelId)
+	return l.getNode(s.prev)
 }
 
 func (l *List) getNode(id nodeId) skipNode {
@@ -212,6 +253,8 @@ func (l *List) makeNode(key, val []byte) (n skipNode) {
 		key:    key,
 		val:    val,
 		height: rollHeight(l.src),
+		next:   skipPointer{},
+		prev:   sentinelId,
 	}
 	l.nodes = append(l.nodes, n)
 
@@ -219,19 +262,19 @@ func (l *List) makeNode(key, val []byte) (n skipNode) {
 }
 
 const (
-	pattern1 = uint64(1<<3 - 1)
-	pattern2 = uint64(1<<6 - 1)
-	pattern3 = uint64(1<<9 - 1)
-	pattern4 = uint64(1<<12 - 1)
+	pattern0 = uint64(1<<3 - 1)
+	pattern1 = uint64(1<<6 - 1)
+	pattern2 = uint64(1<<9 - 1)
+	pattern3 = uint64(1<<12 - 1)
 )
 
 func rollHeight(r rand.Source) (h uint8) {
 	roll := r.Int63()
 	patterns := []uint64{
+		pattern0,
 		pattern1,
 		pattern2,
 		pattern3,
-		pattern4,
 	}
 
 	for _, pat := range patterns {

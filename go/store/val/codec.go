@@ -17,7 +17,6 @@ package val
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math"
 )
 
@@ -29,6 +28,23 @@ type Type struct {
 
 type ByteSize uint16
 
+const (
+	int8Size    ByteSize = 1
+	uint8Size   ByteSize = 1
+	int16Size   ByteSize = 2
+	uint16Size  ByteSize = 2
+	int24Size   ByteSize = 3
+	uint24Size  ByteSize = 3
+	int32Size   ByteSize = 4
+	uint32Size  ByteSize = 4
+	int48Size   ByteSize = 6
+	uint48Size  ByteSize = 6
+	int64Size   ByteSize = 8
+	uint64Size  ByteSize = 8
+	float32Size ByteSize = 4
+	float64Size ByteSize = 8
+)
+
 type Collation uint16
 
 const (
@@ -37,7 +53,7 @@ const (
 
 type Encoding uint8
 
-// Fixed Width Encodings
+// Constant Size Encodings
 const (
 	NullEnc    Encoding = 0
 	Int8Enc    Encoding = 1
@@ -53,84 +69,104 @@ const (
 	Float32Enc Encoding = 11
 	Float64Enc Encoding = 12
 
-	// TimeEnc    Encoding = 13
-	// TimestampEnc
-	// DateEnc
-	// TimeEnc
-	// DatetimeEnc
-	// YearEnc
+	// TODO
+	//  TimeEnc
+	//  TimestampEnc
+	//  DateEnc
+	//  TimeEnc
+	//  DatetimeEnc
+	//  YearEnc
 
 	sentinel Encoding = 127
 )
 
-// Variable Width Encodings
+// Variable Size Encodings
 const (
 	StringEnc Encoding = 128
 	BytesEnc  Encoding = 129
 
-	// DecimalEnc
-	// BitEnc
-	// CharEnc
-	// VarCharEnc
-	// TextEnc
-	// BinaryEnc
-	// VarBinaryEnc
-	// BlobEnc
-	// JSONEnc
-	// EnumEnc
-	// SetEnc
-	// ExpressionEnc
-	// GeometryEnc
+	// TODO
+	//  DecimalEnc
+	//  BitEnc
+	//  CharEnc
+	//  VarCharEnc
+	//  TextEnc
+	//  BinaryEnc
+	//  VarBinaryEnc
+	//  BlobEnc
+	//  JSONEnc
+	//  EnumEnc
+	//  SetEnc
+	//  ExpressionEnc
+	//  GeometryEnc
 )
 
-func FixedWidth(t Encoding) bool {
-	return t >= sentinel
-}
-
-func readBool(val []byte) bool {
+func ReadBool(val []byte) bool {
+	expectSize(val, int8Size)
 	return val[0] == 1
 }
-func readInt8(val []byte) int8 {
+func ReadInt8(val []byte) int8 {
+	expectSize(val, int8Size)
 	return int8(val[0])
 }
 
-func readUint8(val []byte) uint8 {
+func ReadUint8(val []byte) uint8 {
+	expectSize(val, uint8Size)
 	return val[0]
 }
 
-func readInt16(val []byte) int16 {
+func ReadInt16(val []byte) int16 {
+	expectSize(val, int16Size)
 	return int16(binary.LittleEndian.Uint16(val))
 }
 
-func readUint16(val []byte) uint16 {
+func ReadUint16(val []byte) uint16 {
+	expectSize(val, uint16Size)
 	return binary.LittleEndian.Uint16(val)
 }
 
-func readInt32(val []byte) int32 {
+func ReadInt32(val []byte) int32 {
+	expectSize(val, int32Size)
 	return int32(binary.LittleEndian.Uint32(val))
 }
 
-func readUint32(val []byte) uint32 {
+func ReadUint32(val []byte) uint32 {
+	expectSize(val, uint32Size)
 	return binary.LittleEndian.Uint32(val)
 }
 
-func readInt64(val []byte) int64 {
+func ReadUint48(val []byte) (u uint64) {
+	expectSize(val, uint48Size)
+	var tmp [8]byte
+	// copy |val| to |tmp|
+	tmp[5], tmp[4] = val[5], val[4]
+	tmp[3], tmp[2] = val[3], val[2]
+	tmp[1], tmp[0] = val[1], val[0]
+	u = binary.LittleEndian.Uint64(tmp[:])
+	return
+}
+
+func ReadInt64(val []byte) int64 {
+	expectSize(val, int64Size)
 	return int64(binary.LittleEndian.Uint64(val))
 }
 
-func readUint64(val []byte) uint64 {
+func ReadUint64(val []byte) uint64 {
+	expectSize(val, uint64Size)
 	return binary.LittleEndian.Uint64(val)
 }
 
-func readFloat32(val []byte) float32 {
-	return math.Float32frombits(readUint32(val))
+func ReadFloat32(val []byte) float32 {
+	expectSize(val, float32Size)
+	return math.Float32frombits(ReadUint32(val))
 }
 
-func readFloat64(val []byte) float64 {
-	return math.Float64frombits(readUint64(val))
+func ReadFloat64(val []byte) float64 {
+	expectSize(val, float64Size)
+	return math.Float64frombits(ReadUint64(val))
 }
 
-func readString(val []byte, coll Collation) string {
+func ReadString(val []byte, coll Collation) string {
 	// todo(andy): fix allocation
 	return string(val)
 }
@@ -140,6 +176,7 @@ func readBytes(val []byte, coll Collation) []byte {
 }
 
 func writeBool(buf []byte, val bool) {
+	expectSize(buf, 1)
 	if val {
 		buf[0] = byte(1)
 	} else {
@@ -147,90 +184,135 @@ func writeBool(buf []byte, val bool) {
 	}
 }
 
-func writeInt8(buf []byte, val int8) {
+func WriteInt8(buf []byte, val int8) {
+	expectSize(buf, int8Size)
 	buf[0] = byte(val)
 }
 
-func writeUint8(buf []byte, val uint8) {
+func WriteUint8(buf []byte, val uint8) {
+	expectSize(buf, uint8Size)
 	buf[0] = byte(val)
 }
 
-func writeInt16(buf []byte, val int16) {
+func WriteInt16(buf []byte, val int16) {
+	expectSize(buf, int16Size)
 	binary.LittleEndian.PutUint16(buf, uint16(val))
 }
 
-func writeUint16(buf []byte, val uint16) {
+func WriteUint16(buf []byte, val uint16) {
+	expectSize(buf, uint16Size)
 	binary.LittleEndian.PutUint16(buf, val)
 }
 
-func writeInt32(buf []byte, val int32) {
+func WriteInt32(buf []byte, val int32) {
+	expectSize(buf, int32Size)
 	binary.LittleEndian.PutUint32(buf, uint32(val))
 }
 
-func writeUint32(buf []byte, val uint32) {
+func WriteUint32(buf []byte, val uint32) {
+	expectSize(buf, uint32Size)
 	binary.LittleEndian.PutUint32(buf, val)
 }
 
-func writeInt64(buf []byte, val int64) {
+func WriteUint48(buf []byte, u uint64) {
+	const maxUint48 = uint64(1<<48 - 1)
+
+	expectSize(buf, uint48Size)
+	if u > maxUint48 {
+		panic("uint is greater than max uint48")
+	}
+	var tmp [8]byte
+	binary.LittleEndian.PutUint64(tmp[:], u)
+	// copy |tmp| to |buf|
+	buf[5], buf[4] = tmp[5], tmp[4]
+	buf[3], buf[2] = tmp[3], tmp[2]
+	buf[1], buf[0] = tmp[1], tmp[0]
+}
+
+func WriteInt64(buf []byte, val int64) {
+	expectSize(buf, int64Size)
 	binary.LittleEndian.PutUint64(buf, uint64(val))
 }
 
-func writeUint64(buf []byte, val uint64) {
+func WriteUint64(buf []byte, val uint64) {
+	expectSize(buf, uint64Size)
 	binary.LittleEndian.PutUint64(buf, val)
 }
 
-func writeFloat32(buf []byte, val float32) {
+func WriteFloat32(buf []byte, val float32) {
+	expectSize(buf, float32Size)
 	binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
 }
 
-func writeFloat64(buf []byte, val float64) {
+func WriteFloat64(buf []byte, val float64) {
+	expectSize(buf, float64Size)
 	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
 }
 
 func writeString(buf []byte, val string, coll Collation) {
+	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
 }
 
 func writeBytes(buf, val []byte, coll Collation) {
+	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
 }
 
-func compare(typ Type, left, right []byte) (cmp int) {
-	// todo(andy): handle NULLs
+func expectSize(buf []byte, sz ByteSize) {
+	if ByteSize(len(buf)) != sz {
+		panic("byte slice is not of expected size")
+	}
+}
+
+func compare(typ Type, left, right []byte) int {
+	// order NULLs last
+	if left == nil {
+		if right == nil {
+			return 0
+		} else {
+			return 1
+		}
+	} else if right == nil {
+		if left == nil {
+			return 0
+		} else {
+			return -1
+		}
+	}
 
 	switch typ.Enc {
 	case Int8Enc:
-		cmp = compareInt8(readInt8(left), readInt8(right))
+		return compareInt8(ReadInt8(left), ReadInt8(right))
 	case Uint8Enc:
-		cmp = compareUint8(readUint8(left), readUint8(right))
+		return compareUint8(ReadUint8(left), ReadUint8(right))
 	case Int16Enc:
-		cmp = compareInt16(readInt16(left), readInt16(right))
+		return compareInt16(ReadInt16(left), ReadInt16(right))
 	case Uint16Enc:
-		cmp = compareUint16(readUint16(left), readUint16(right))
+		return compareUint16(ReadUint16(left), ReadUint16(right))
 	case Int24Enc:
-		panic("unimplemented")
+		panic("24 bit")
 	case Uint24Enc:
-		panic("unimplemented")
+		panic("24 bit")
 	case Int32Enc:
-		cmp = compareInt32(readInt32(left), readInt32(right))
+		return compareInt32(ReadInt32(left), ReadInt32(right))
 	case Uint32Enc:
-		cmp = compareUint32(readUint32(left), readUint32(right))
+		return compareUint32(ReadUint32(left), ReadUint32(right))
 	case Int64Enc:
-		cmp = compareInt64(readInt64(left), readInt64(right))
+		return compareInt64(ReadInt64(left), ReadInt64(right))
 	case Uint64Enc:
-		cmp = compareUint64(readUint64(left), readUint64(right))
+		return compareUint64(ReadUint64(left), ReadUint64(right))
 	case Float32Enc:
-		cmp = compareFloat32(readFloat32(left), readFloat32(right))
+		return compareFloat32(ReadFloat32(left), ReadFloat32(right))
 	case Float64Enc:
-		cmp = compareFloat64(readFloat64(left), readFloat64(right))
+		return compareFloat64(ReadFloat64(left), ReadFloat64(right))
 	case StringEnc:
-		cmp = compareString(readString(left, typ.Coll), readString(right, typ.Coll), typ.Coll)
+		return compareString(ReadString(left, typ.Coll), ReadString(right, typ.Coll), typ.Coll)
 	case BytesEnc:
-		cmp = compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
+		return compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
 	default:
-		panic(fmt.Sprintf("unknown encoding %d", typ.Enc))
+		panic("unknown encoding")
 	}
-	return
 }
 
 // false is less that true
@@ -354,10 +436,31 @@ func compareBytes(l, r []byte, coll Collation) int {
 	return bytes.Compare(l, r)
 }
 
-type comparisonMapping []int
+// rawCmp is an array of indexes used to perform raw Tuple comparisons.
+// Under certain conditions, Tuple comparisons can be optimized by
+// directly comparing Tuples as byte slices, rather than accessing
+// and deserializing each field.
+// If each of these conditions is met, raw comparisons can be used:
+//   (1) All fields in the Tuple must be non-nullable.
+//   (2) All fields in the Tuple must be of constant size
+//  	  (eg Ints, Uints, Floats, Time types, etc.)
+//
+type rawCmp []int
 
-// compareRaw compares Tuples without accessing and decoding fields.
-func compareRaw(left, right Tuple, mapping comparisonMapping) Comparison {
+var rawCmpLookup = map[Encoding]rawCmp{
+	Int8Enc:   {0},
+	Uint8Enc:  {0},
+	Int16Enc:  {1, 0},
+	Uint16Enc: {1, 0},
+	Int24Enc:  {2, 1, 0},
+	Uint24Enc: {2, 1, 0},
+	Int32Enc:  {3, 2, 1, 0},
+	Uint32Enc: {3, 2, 1, 0},
+	Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},
+	Uint64Enc: {7, 6, 5, 4, 3, 2, 1, 0},
+}
+
+func compareRaw(left, right Tuple, mapping rawCmp) int {
 	var l, r byte
 	for _, idx := range mapping {
 		l, r = left[idx], right[idx]
@@ -367,50 +470,30 @@ func compareRaw(left, right Tuple, mapping comparisonMapping) Comparison {
 	}
 	if l > r {
 		return 1
-	}
-	if l < r {
+	} else if l < r {
 		return -1
 	}
 	return 0
 }
 
-func maybeGetRawComparison(types ...Type) comparisonMapping {
-	// todo(andy): add back
-	return nil
+func maybeGetRawComparison(types ...Type) rawCmp {
+	var raw []int
+	offset := 0
+	for _, typ := range types {
+		if typ.Nullable {
+			return nil
+		}
 
-	//var raw []int
-	//offset := 0
-	//for _, typ := range Types {
-	//	mapping, ok := rawComparisonMap(typ.Enc)
-	//	if !ok {
-	//		// every type in |Types| must be
-	//		// raw-comparable to use a mapping
-	//		return nil
-	//	}
-	//	for i := range mapping {
-	//		mapping[i] += offset
-	//	}
-	//	raw = append(raw, mapping...)
-	//	offset += len(mapping)
-	//}
-	//return raw
-}
+		mapping, ok := rawCmpLookup[typ.Enc]
+		if !ok {
+			return nil
+		}
 
-func rawComparisonMap(enc Encoding) (mapping []int, ok bool) {
-	// todo(andy): add fixed width char and byte encodings
-	lookup := map[Encoding][]int{
-		Int8Enc:   {0},
-		Uint8Enc:  {0},
-		Int16Enc:  {1, 0},
-		Uint16Enc: {1, 0},
-		Int24Enc:  {2, 1, 0},
-		Uint24Enc: {2, 1, 0},
-		Int32Enc:  {3, 2, 1, 0},
-		Uint32Enc: {3, 2, 1, 0},
-		Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},
-		Uint64Enc: {7, 6, 5, 4, 3, 2, 1, 0},
+		for i := range mapping {
+			mapping[i] += offset
+		}
+		raw = append(raw, mapping...)
+		offset += len(mapping)
 	}
-
-	mapping, ok = lookup[enc]
-	return
+	return raw
 }
