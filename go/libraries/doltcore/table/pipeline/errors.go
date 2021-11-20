@@ -15,15 +15,16 @@
 package pipeline
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 )
 
 // TransformRowFailure is an error implementation that stores the row that failed to transform, the transform that
 // failed and some details of the error
 type TransformRowFailure struct {
 	Row           row.Row
-	SqlRow		  sql.Row
+	SqlRow        sql.Row
 	TransformName string
 	Details       string
 }

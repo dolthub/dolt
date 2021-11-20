@@ -20,12 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
+	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -36,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
@@ -55,10 +55,10 @@ type JSONOptions struct {
 }
 
 type MoverOptions struct {
-	ContinueOnErr bool
-	Force bool
+	ContinueOnErr  bool
+	Force          bool
 	TableToWriteTo string
-	Operation TableImportOp
+	Operation      TableImportOp
 }
 
 type DataMoverOptions interface {
@@ -377,4 +377,3 @@ const (
 	ReplaceOp TableImportOp = "replace"
 	UpdateOp  TableImportOp = "update"
 )
-

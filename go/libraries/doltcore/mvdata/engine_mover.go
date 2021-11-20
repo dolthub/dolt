@@ -3,6 +3,14 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"io"
+	"strings"
+	"sync/atomic"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -11,27 +19,21 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/plan"
-	"io"
-	"strings"
-	"sync/atomic"
 )
 
 type sqlEngineMover struct {
-	se *engine.SqlEngine
+	se     *engine.SqlEngine
 	sqlCtx *sql.Context
 
 	tableName string
-	database string
-	wrSch sql.Schema
+	database  string
+	wrSch     sql.Schema
 	contOnErr bool
-	force bool // TODO: Refactor all of these parameters
+	force     bool // TODO: Refactor all of these parameters
 
-	statsCB   noms.StatsCB
-	stats     types.AppliedEditStats
-	statOps   int32
+	statsCB noms.StatsCB
+	stats   types.AppliedEditStats
+	statOps int32
 
 	importOption TableImportOp
 }
@@ -74,13 +76,13 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 	return &sqlEngineMover{
 		se:        se,
 		contOnErr: options.ContinueOnErr,
-		force: options.Force,
+		force:     options.Force,
 
-		database: dbName,
+		database:  dbName,
 		tableName: options.TableToWriteTo,
-		wrSch: doltSchema,
+		wrSch:     doltSchema,
 
-		statsCB: statsCB,
+		statsCB:      statsCB,
 		importOption: options.Operation,
 	}, nil
 }
@@ -102,7 +104,7 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 		return err
 	}
 
-	errorHandler := func (err error) {
+	errorHandler := func(err error) {
 		if err == io.EOF {
 			return
 		}
@@ -231,10 +233,10 @@ func (s *sqlEngineMover) createTable() error {
 	return err
 }
 
-func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandler func (err error)) (sql.Node, error) {
+func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandler func(err error)) (sql.Node, error) {
 	switch s.importOption {
 	case CreateOp, ReplaceOp:
-		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr,false, errorHandler) // contonerr translates to ignore
+		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, false, errorHandler) // contonerr translates to ignore
 	case UpdateOp:
 		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, false, true, errorHandler)
 	default:
