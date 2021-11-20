@@ -31,10 +31,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -113,7 +113,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		}
 	}
 
-	dbs, err := cliengine.CollectDBs(ctx, mrEnv)
+	dbs, err := engine.CollectDBs(ctx, mrEnv)
 	if err != nil {
 		return err, nil
 	}

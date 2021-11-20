@@ -3,10 +3,10 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
@@ -20,7 +20,7 @@ import (
 )
 
 type sqlEngineMover struct {
-	se *cliengine.SqlEngine
+	se *engine.SqlEngine
 	sqlCtx *sql.Context
 
 	tableName string
@@ -49,7 +49,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return true, nil
 	})
 
-	se, err := cliengine.NewSqlEngine(ctx, mrEnv, cliengine.FormatCsv, dbName)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName)
 	if err != nil {
 		return nil, err
 	}

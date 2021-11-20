@@ -31,7 +31,7 @@ require (
 	github.com/go-openapi/errors v0.19.6 // indirect
 	github.com/go-openapi/strfmt v0.19.5 // indirect
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/gocraft/dbr/v2 v2.7.0
+	github.com/gocraft/dbr/v2 v2.7.2
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.1
@@ -110,6 +110,7 @@ require (
 )
 
 replace github.com/dolthub/go-mysql-server => /Users/vinairachakonda/go/src/dolthub/go-mysql-server
+
 replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474

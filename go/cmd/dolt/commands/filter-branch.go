@@ -31,13 +31,13 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -232,7 +232,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 // The SQL engine returned has transactions disabled. This is to prevent transactions starts from overwriting the root
 // we set manually with the one at the working set of the HEAD being rebased.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
-func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *cliengine.SqlEngine, error) {
+func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *engine.SqlEngine, error) {
 	sess := dsess.DefaultSession().NewDoltSession(config.NewMapConfig(make(map[string]string)))
 
 	sqlCtx := sql.NewContext(ctx,
@@ -258,8 +258,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	parallelism := runtime.GOMAXPROCS(0)
 	azr := analyzer.NewBuilder(pro).WithParallelism(parallelism).Build()
-
-	engine := sqle.New(azr, &sqle.Config{Auth: new(auth.None)})
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
@@ -297,7 +295,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	sqlCtx.SetCurrentDatabase(dbName)
 
-	se := cliengine.NewRebasedSqlEngine(engine, map[string]dsqle.SqlDatabase{dbName: db})
+	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{Auth: new(auth.None)}), map[string]dsqle.SqlDatabase{dbName: db})
 
 	return sqlCtx, se, nil
 }
