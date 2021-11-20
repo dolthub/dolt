@@ -54,6 +54,13 @@ type JSONOptions struct {
 	SchFile   string
 }
 
+type MoverOptions struct {
+	ContinueOnErr bool
+	Force bool
+	TableToWriteTo string
+	Operation TableImportOp
+}
+
 type DataMoverOptions interface {
 	WritesToTable() bool
 	SrcName() string

@@ -27,6 +27,7 @@ type sqlEngineMover struct {
 	database string
 	wrSch sql.Schema
 	contOnErr bool
+	force bool // TODO: Refactor all of these parameters
 
 	statsCB   noms.StatsCB
 	stats     types.AppliedEditStats
@@ -35,7 +36,7 @@ type sqlEngineMover struct {
 	importOption TableImportOp
 }
 
-func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.Schema, operation TableImportOp, cont bool, tableName string, statsCB noms.StatsCB) (*sqlEngineMover, error) {
+func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineMover, error) {
 	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
 	if err != nil {
 		return nil, err
@@ -65,27 +66,33 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	doltSchema, err := sqlutil.FromDoltSchema(tableName, writeSch)
+	doltSchema, err := sqlutil.FromDoltSchema(options.TableToWriteTo, writeSch)
 	if err != nil {
 		return nil, err
 	}
 
 	return &sqlEngineMover{
 		se:        se,
-		contOnErr: cont,
+		contOnErr: options.ContinueOnErr,
+		force: options.Force,
 
 		database: dbName,
-		tableName: tableName,
+		tableName: options.TableToWriteTo,
 		wrSch: doltSchema,
 
 		statsCB: statsCB,
-		importOption: operation,
+		importOption: options.Operation,
 	}, nil
 }
 
 func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error {
 	var err error
 	s.sqlCtx, err = s.se.NewContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = s.forceDropTableIfNeeded()
 	if err != nil {
 		return err
 	}
@@ -112,6 +119,7 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 		case <-ctx.Done():
 			return
 		default:
+			s.stats.Additions-- // Reduce the addition count
 			badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "create", Details: err.Error()}
 		}
 	}
@@ -140,7 +148,6 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 			_ = atomic.AddInt32(&s.statOps, 1)
 			s.stats.Additions++
 		} else if err == io.EOF {
-			_ = iter.Close(s.sqlCtx)
 			atomic.LoadInt32(&s.statOps)
 			atomic.StoreInt32(&s.statOps, 0)
 			s.statsCB(s.stats)
@@ -154,6 +161,15 @@ func (s *sqlEngineMover) Commit(ctx context.Context) error {
 	// TODO: Move this to the actual import code
 	_, _, err := s.se.Query(s.sqlCtx, "COMMIT")
 	return err
+}
+
+func (s *sqlEngineMover) forceDropTableIfNeeded() error {
+	if s.force {
+		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("DROP TABLE IF EXISTS %s", s.tableName))
+		return err
+	}
+
+	return nil
 }
 
 func (s *sqlEngineMover) createOrEmptyTableIfNeeded() error {
@@ -239,12 +255,7 @@ func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbnam
 	analyzed, err = plan.TransformUp(analyzed, func(node sql.Node) (sql.Node, error) {
 		switch n := node.(type) {
 		case *plan.InsertInto:
-			strat := plan.Propagate
-			if ignore {
-				strat = plan.Ignore
-			}
-			withError := plan.NewErrorHandlerNode(n, strat, errorHandler)
-			return withError, nil
+			return plan.NewErrorHandlerNode(n, errorHandler), nil
 		default:
 			return n, nil
 		}

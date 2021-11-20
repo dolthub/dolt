@@ -385,7 +385,13 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	wr, nDMErr := newImportDataWriter(ctx, root, dEnv, rd.GetSchema(), mvOpts)
+	wrSch, nDMErr := getWriterSchema(ctx, root, dEnv, rd.GetSchema(), mvOpts)
+	if nDMErr != nil {
+		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	wr, nDMErr := newImportDataWriter(ctx, dEnv, wrSch, mvOpts)
 	if nDMErr != nil {
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -393,7 +399,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	skipped, err := move(ctx, rd, wr, mvOpts)
 	if err != nil {
-		verr = errhand.BuildDError(err.Error()).Build()
+		verr = errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
@@ -412,7 +418,7 @@ var displayStrLen int
 func importStatsCB(stats types.AppliedEditStats) {
 	noEffect := stats.NonExistentDeletes + stats.SameVal
 	total := noEffect + stats.Modifications + stats.Additions
-	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
+	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d \n", total, stats.Additions, stats.Modifications, noEffect)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
@@ -437,7 +443,7 @@ func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 	return rd, nil
 }
 
-func newImportDataWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (mvdata.DataWriter, *mvdata.DataMoverCreationError) {
+func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
 	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, imOpts)
 	if dmce != nil {
 		return nil, dmce
@@ -455,8 +461,13 @@ func newImportDataWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	// TODO: Use impopts to create a DataReader and DataWriter
-	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, wrSch, imOpts.operation, imOpts.contOnErr, imOpts.dest.Name, importStatsCB)
+	return wrSch, nil
+}
+
+func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema schema.Schema, imOpts *importOptions) (mvdata.DataWriter, *mvdata.DataMoverCreationError) {
+	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.tableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation}
+
+	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, wrSchema, moveOps, importStatsCB)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err} // TODO: Fix
 	}
@@ -500,7 +511,9 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that reads rows from the reader
 	g.Go(func() error {
-		defer close(parsedRowChan)
+		defer func(){
+			close(parsedRowChan)
+		}()
 
 		for {
 			r, err := rd.ReadRow(ctx)
@@ -530,15 +543,13 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that writes rows
 	g.Go(func() error {
-		c := func() {
-			close(badRowChan)
-		}
-		defer c()
+		defer close(badRowChan)
 
 		err := wr.StartWriting(ctx, parsedRowChan, badRowChan)
 		if err != nil {
 			return err
 		}
+
 		return nil
 	})
 
@@ -546,8 +557,6 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	g.Go(func() error {
 		for bRow := range badRowChan {
 			select {
-			case <-ctx.Done():
-				return nil
 			default:
 				quit := badRowCB(bRow)
 
@@ -556,6 +565,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 				}
 			}
 		}
+
 		return nil
 	})
 
