@@ -480,7 +480,7 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.V
 	if fromCreateStmt != toCreateStmt {
 		cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
 	}
-	
+
 	return nil
 }
 
