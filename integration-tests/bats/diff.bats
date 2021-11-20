@@ -179,20 +179,19 @@ ALTER TABLE test DROP FOREIGN KEY fk1;
 ALTER TABLE parent DROP INDEX c1;
 ALTER TABLE test ADD CONSTRAINT fk2 FOREIGN KEY (c2) REFERENCES parent(c2);
 SQL
+    
     dolt diff test
     run dolt diff test
     [ "$status" -eq 0 ]
-    # TODO: the diff here is wrong, the old foreign key is wrong
-    [[ "$output" =~ "-  CONSTRAINT \`\` FOREIGN KEY (\`c1\`) REFERENCES \`\` parent(\`c1\`)" ]] || false
-    [[ "$output" =~ "+  KEY \`c2\` (\`c2\`)," ]] || false
-    [[ "$output" =~ "+  CONSTRAINT \`fk2\` FOREIGN KEY (\`c2\`) REFERENCES \`parent\` (\`c2\`)" ]] || false
-    [[ "$output" =~ "+    INDEX \`c2\` (\`c2\`)" ]] || false
+    [[ "$output" =~ '-  CONSTRAINT `fk1` FOREIGN KEY (`c1`) REFERENCES `parent` (`c1`)' ]] || false
+    [[ "$output" =~ '+  KEY `c2` (`c2`),' ]] || false
+    [[ "$output" =~ '+  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`c2`)' ]] || false
 
     dolt diff parent
     run dolt diff parent
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-    INDEX \`c1\` (\`c1\`)" ]] || false
-    [[ "$output" =~ "+    INDEX \`c2\` (\`c2\`)" ]] || false
+    [[ "$output" =~ '-  KEY `c1` (`c1`)' ]] || false
+    [[ "$output" =~ '+  KEY `c2` (`c2`)' ]] || false
 }
 
 @test "diff: summary comparing working table to last commit" {
