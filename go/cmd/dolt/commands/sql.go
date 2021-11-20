@@ -50,7 +50,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -283,14 +282,7 @@ func savedQueryMode(
 	format resultFormat,
 	usage cli.UsagePrinter,
 ) int {
-	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
-
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, currentDb), usage)
+	return 0
 }
 
 func queryMode(
@@ -760,12 +752,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 
 // Saves the query given to the catalog with the name and message given.
 func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name string, message string) (*doltdb.RootValue, errhand.VerboseError) {
-	_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
-	if err != nil {
-		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
-	}
-
-	return newRoot, nil
+	return nil, nil
 }
 
 // runMultiStatementMode alows for the execution of more than one query, but it doesn't attempt any batch optimizations

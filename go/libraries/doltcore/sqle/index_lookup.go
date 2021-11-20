@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
@@ -35,13 +34,8 @@ type IndexLookupKeyIterator interface {
 
 type doltIndexLookup struct {
 	idx    DoltIndex
-	ranges []lookup.Range // The collection of ranges that represent this lookup.
+	ranges []prolly.Range // The collection of ranges that represent this lookup.
 }
-
-// nomsRangeCheck is used to compare a tuple against a set of comparisons in the noms row iterator.
-type nomsRangeCheck []columnBounds
-
-var _ noms.InRangeCheck = nomsRangeCheck{}
 
 func (il *doltIndexLookup) String() string {
 	// TODO: this could be expanded with additional info (like the expression used to create the index lookup)
@@ -59,19 +53,19 @@ func (il *doltIndexLookup) Index() sql.Index {
 
 // Intersection implements sql.MergeableIndexLookup
 func (il *doltIndexLookup) Intersection(indexLookups ...sql.IndexLookup) (sql.IndexLookup, error) {
-	rangeCombinations := make([][]lookup.Range, len(il.ranges))
+	rangeCombinations := make([][]prolly.Range, len(il.ranges))
 	for i, ilRange := range il.ranges {
-		rangeCombinations[i] = []lookup.Range{ilRange}
+		rangeCombinations[i] = []prolly.Range{ilRange}
 	}
 	for _, indexLookup := range indexLookups {
 		otherIl, ok := indexLookup.(*doltIndexLookup)
 		if !ok {
 			return nil, fmt.Errorf("failed to intersect sql.IndexLookup with type '%T'", indexLookup)
 		}
-		var newRangeCombination [][]lookup.Range
+		var newRangeCombination [][]prolly.Range
 		for _, rangeCombination := range rangeCombinations {
 			for _, ilRange := range otherIl.ranges {
-				rc := make([]lookup.Range, len(rangeCombination)+1)
+				rc := make([]prolly.Range, len(rangeCombination)+1)
 				copy(rc, rangeCombination)
 				rc[len(rangeCombination)] = ilRange
 				newRangeCombination = append(newRangeCombination, rc)
@@ -79,7 +73,7 @@ func (il *doltIndexLookup) Intersection(indexLookups ...sql.IndexLookup) (sql.In
 		}
 		rangeCombinations = newRangeCombination
 	}
-	var newRanges []lookup.Range
+	var newRanges []prolly.Range
 	var err error
 	var ok bool
 	for _, rangeCombination := range rangeCombinations {
@@ -109,12 +103,12 @@ func (il *doltIndexLookup) Intersection(indexLookups ...sql.IndexLookup) (sql.In
 
 // Union implements sql.MergeableIndexLookup
 func (il *doltIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.IndexLookup, error) {
-	var ranges []lookup.Range
+	var ranges []prolly.Range
 	var err error
 	if len(il.ranges) == 0 {
-		ranges = []lookup.Range{lookup.EmptyRange()}
+		ranges = []prolly.Range{lookup.EmptyRange()}
 	} else {
-		ranges = make([]lookup.Range, len(il.ranges))
+		ranges = make([]prolly.Range, len(il.ranges))
 		copy(ranges, il.ranges)
 	}
 	for _, indexLookup := range indexLookups {
@@ -156,7 +150,7 @@ func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
 	return covers
 }
 
-func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData types.Map, ranges []lookup.Range, columns []string) (sql.RowIter, error) {
+func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData types.Map, ranges []prolly.Range, columns []string) (sql.RowIter, error) {
 	readRanges := make([]*noms.ReadRange, len(ranges))
 	for i, lookupRange := range ranges {
 		readRanges[i] = lookupRange.ToReadRange()

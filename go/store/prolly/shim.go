@@ -51,7 +51,7 @@ func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) M
 		root:    NodeFromValue(v),
 		keyDesc: keyDescriptorFromSchema(sch),
 		valDesc: valueDescriptorFromSchema(sch),
-		nrw:     NewNodeStore(ChunkStoreFromVRW(vrw)),
+		ns:      NewNodeStore(ChunkStoreFromVRW(vrw)),
 	}
 }
 
@@ -65,8 +65,8 @@ func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
 	panic("unknown ValueReadWriter")
 }
 
-func EmptyTreeChunkerFromMap(ctx context.Context, m Map) *TreeChunker {
-	ch, err := newEmptyTreeChunker(ctx, m.nrw, newDefaultNodeSplitter)
+func EmptyTreeChunkerFromMap(ctx context.Context, m Map) *treeChunker {
+	ch, err := newEmptyTreeChunker(ctx, m.ns, newDefaultNodeSplitter)
 	if err != nil {
 		panic(err)
 	}
