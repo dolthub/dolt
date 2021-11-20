@@ -154,8 +154,8 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta, e
 			ToSch:            t.ToSch,
 			FromFks:          f.FromFks,
 			ToFks:            t.ToFks,
+			FromFksParentSch: f.FromFksParentSch,
 			ToFksParentSch:   t.ToFksParentSch,
-			FromFksParentSch: t.FromFksParentSch,
 		}
 	}
 
