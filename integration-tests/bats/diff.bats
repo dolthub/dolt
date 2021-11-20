@@ -65,6 +65,35 @@ teardown() {
     [[ "$output" =~ "+  | 0" ]] || false
 }
 
+@test "diff: data diff only" {
+    dolt commit -am "First commit"
+
+    dolt sql -q "insert into test (pk) values (10);"
+
+    dolt diff
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "CREATE TABLE" ]]
+    [[ "$output" =~ "|     | pk | c1   | c2   | c3   | c4   | c5   |" ]] || false
+    [[ "$output" =~ "|  +  | 10 | NULL | NULL | NULL | NULL | NULL |" ]] || false
+}
+
+@test "diff: schema diff only" {
+    dolt commit -am "First commit"
+
+    dolt sql -q "alter table test drop column c1"
+
+    dolt diff
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE" ]]
+
+    # TODO: column ordering on the first line should respect original
+    # schema order, seems to be putting non-common columns at end
+    [[ "$output" =~ "|  <  | pk | c2 | c3 | c4 | c5 | c1 |" ]] || false
+    [[ "$output" =~ "|  >  | pk | c2 | c3 | c4 | c5 |    |" ]] || false
+}
+
 @test "diff: with table args" {
     dolt sql -q 'create table other (pk int not null primary key)'
     dolt add .

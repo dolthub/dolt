@@ -477,7 +477,10 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.V
 	sqlCtx, engine, _ = sqle.PrepareCreateTableStmt(ctx, sqlDb)
 	toCreateStmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
 
-	cli.Print(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
+	if fromCreateStmt != toCreateStmt {
+		cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
+	}
+	
 	return nil
 }
 
