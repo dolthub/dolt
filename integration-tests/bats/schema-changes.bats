@@ -28,10 +28,12 @@ teardown() {
     dolt commit -m 'made table'
     dolt sql -q 'alter table test drop column c1'
     dolt sql -q 'alter table test add column c1 longtext'
+
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "BIGINT" ]] || false
-    [[ "$output" =~ "LONGTEXT" ]] || false
+    [[ "$output" =~ "bigint" ]] || false
+    [[ "$output" =~ "longtext" ]] || false
     [[ ! "$ouput" =~ "Merge failed" ]] || false
 }
 
@@ -189,14 +191,15 @@ SQL
     [[ "$output" =~ "test2,v1,10579" ]] || false
     [[ "$output" =~ "test2,v2,7704" ]] || false
 
+    dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '<   `pk2`  BIGINT NOT NULL' ]] || false
-    [[ "$output" =~ '>   `pk2` TINYINT NOT NULL' ]] || false
-    [[ "$output" =~ '<   `v1` VARCHAR(100) NOT NULL' ]] || false
-    [[ "$output" =~ '>   `v1` VARCHAR(300) NOT NULL' ]] || false
-    [[ "$output" =~ '<   `v2`  VARCHAR(120)' ]] || false
-    [[ "$output" =~ '>   `v2` VARCHAR(1024)' ]] || false
+    [[ "$output" =~ '-  `pk2` bigint NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `v1` varchar(100) NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `v2` varchar(120),' ]] || false
+    [[ "$output" =~ '+  `pk2` tinyint NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `v1` varchar(300) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `v2` varchar(1024) NOT NULL,' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 
     dolt add .
@@ -244,13 +247,14 @@ SQL
     [[ "$output" =~ '2,2,abc,def' ]] || false
 
     # make sure diff works as expected for schema change on clone
+    dolt diff HEAD~2
     run dolt diff HEAD~2
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '<   `pk2`  BIGINT NOT NULL' ]] || false
-    [[ "$output" =~ '>   `pk2` TINYINT NOT NULL' ]] || false
-    [[ "$output" =~ '<   `v1` VARCHAR(100) NOT NULL' ]] || false
-    [[ "$output" =~ '>   `v1` VARCHAR(300) NOT NULL' ]] || false
-    [[ "$output" =~ '<   `v2`  VARCHAR(120)' ]] || false
-    [[ "$output" =~ '>   `v2` VARCHAR(1024)' ]] || false
+    [[ "$output" =~ '-  `pk2` bigint NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `v1` varchar(100) NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `v2` varchar(120),' ]] || false
+    [[ "$output" =~ '+  `pk2` tinyint NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `v1` varchar(300) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `v2` varchar(1024) NOT NULL,' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 }
