@@ -1268,9 +1268,9 @@ func GetGCKeepers(ctx context.Context, env *DoltEnv) ([]hash.Hash, error) {
 }
 
 func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
-	return editor.NewDbEaFactory(dEnv.TempTableFilesDir(), dEnv.DoltDB.ValueReadWriter())
+	panic("unimplemented")
 }
 
 func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
-	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), dEnv.TempTableFilesDir())
+	panic("unimplemented")
 }

@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 // SingleTableInfoDatabase is intended to allow a sole schema to make use of any display functionality in `go-mysql-server`.
@@ -43,12 +42,8 @@ var _ sql.IndexedTable = (*SingleTableInfoDatabase)(nil)
 var _ sql.ForeignKeyTable = (*SingleTableInfoDatabase)(nil)
 
 func NewSingleTableDatabase(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) *SingleTableInfoDatabase {
-	return &SingleTableInfoDatabase{
-		tableName:   tableName,
-		sch:         sch,
-		foreignKeys: foreignKeys,
-		parentSchs:  parentSchs,
-	}
+	panic("unimplemented")
+
 }
 
 // Name implements sql.Table and sql.Database.
@@ -129,25 +124,27 @@ func (db *SingleTableInfoDatabase) WithIndexLookup(sql.IndexLookup) sql.Table {
 
 // GetIndexes implements sql.IndexedTable.
 func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	var sqlIndexes []sql.Index
-	for _, index := range db.sch.Indexes().AllIndexes() {
-		cols := make([]schema.Column, index.Count())
-		for i, tag := range index.IndexedColumnTags() {
-			cols[i], _ = index.GetColumn(tag)
-		}
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			db:        db,
-			id:        index.Name(),
-			indexRows: prolly.NewEmptyMap(db.sch),
-			indexSch:  index.Schema(),
-			table:     nil,
-			tableRows: prolly.NewEmptyMap(db.sch),
-			tableName: db.tableName,
-			tableSch:  db.sch,
-			unique:    index.IsUnique(),
-			comment:   index.Comment(),
-			generated: false,
-		})
-	}
-	return sqlIndexes, nil
+	panic("unimplemented")
+
+	//var sqlIndexes []sql.Index
+	//for _, index := range db.sch.Indexes().AllIndexes() {
+	//	cols := make([]schema.Column, index.Count())
+	//	for i, tag := range index.IndexedColumnTags() {
+	//		cols[i], _ = index.GetColumn(tag)
+	//	}
+	//	sqlIndexes = append(sqlIndexes, &doltIndex{
+	//		db:        db,
+	//		id:        index.Name(),
+	//		indexRows: prolly.NewEmptyMap(db.sch),
+	//		indexSch:  index.Schema(),
+	//		table:     nil,
+	//		tableRows: prolly.NewEmptyMap(db.sch),
+	//		tableName: db.tableName,
+	//		tableSch:  db.sch,
+	//		unique:    index.IsUnique(),
+	//		comment:   index.Comment(),
+	//		generated: false,
+	//	})
+	//}
+	//return sqlIndexes, nil
 }

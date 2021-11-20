@@ -29,7 +29,7 @@ import (
 
 type sqlRowIter struct {
 	ctx  context.Context
-	iter prolly.MapIter
+	iter prolly.MapRangeIter
 
 	rowLen  int
 	keyDesc val.TupleDesc
@@ -41,35 +41,37 @@ type sqlRowIter struct {
 var _ sql.RowIter = sqlRowIter{}
 
 func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projections []string, partition *doltTablePartition) (sql.RowIter, error) {
-	rows := partition.rowData
-	rng := prolly.IndexRange{
-		Low:  partition.start,
-		High: partition.end - 1,
-	}
-	if partition.end == NoUpperBound {
-		rng.Low, rng.High = 0, rows.Count()-1
-	}
+	panic("unimplemented")
 
-	iter, err := rows.IterIndexRange(ctx, rng)
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return rowIterFromMapIter(ctx, sch, projections, rows, iter)
+	//rows := partition.rowData
+	//rng := prolly.IndexRange{
+	//	Low:  partition.start,
+	//	High: partition.end - 1,
+	//}
+	//if partition.end == NoUpperBound {
+	//	rng.Low, rng.High = 0, rows.Count()-1
+	//}
+	//
+	//iter, err := rows.IterIndexRange(ctx, rng)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//sch, err := tbl.GetSchema(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//return rowIterFromMapIter(ctx, sch, projections, rows, iter)
 }
 
-func rowIterFromMapIter(ctx context.Context, sch schema.Schema, projs []string, m prolly.Map, iter prolly.MapIter) (sql.RowIter, error) {
+func rowIterFromMapIter(ctx context.Context, sch schema.Schema, projs []string, m prolly.Map, iter prolly.MapRangeIter) (sql.RowIter, error) {
 	if projs == nil {
 		projs = sch.GetAllCols().GetColumnNames()
 	}
 	keyProj, valProj := projectionMappings(sch, projs)
 
-	kd, vd := m.TupleDescriptors()
+	kd, vd := m.Descriptors()
 
 	return sqlRowIter{
 		ctx:     ctx,
@@ -147,5 +149,5 @@ func tupleFromSqlValues(bld *val.TupleBuilder, vals ...interface{}) val.Tuple {
 	for i, v := range vals {
 		bld.PutField(i, v)
 	}
-	return bld.Tuple(shared)
+	return bld.Build(shared)
 }

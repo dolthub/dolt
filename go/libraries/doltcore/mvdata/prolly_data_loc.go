@@ -17,9 +17,9 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -57,7 +57,7 @@ func (pl ProllyDataLocation) NewReader(ctx context.Context, root *doltdb.RootVal
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (pl ProllyDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOptions, _ *env.DoltEnv, root *doltdb.RootValue, _ bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error) {
+func (pl ProllyDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOptions, root *doltdb.RootValue, _ bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options, _ io.WriteCloser) (table.TableWriteCloser, error) {
 	root, err := root.CreateEmptyTable(ctx, pl.Name, outSch)
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func (pl ProllyDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverO
 	if err != nil {
 		return nil, err
 	}
-	keyDesc, valDesc := rows.TupleDescriptors()
+	keyDesc, valDesc := rows.Descriptors()
 
 	nrw := prolly.NewNodeStore(prolly.ChunkStoreFromVRW(root.VRW()))
 	chunker := prolly.EmptyTreeChunkerFromMap(ctx, rows)
@@ -93,13 +93,13 @@ func (pl ProllyDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverO
 
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
-func (pl ProllyDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, wrSch schema.Schema, statsCB noms.StatsCB, rdTags []uint64, opts editor.Options) (table.TableWriteCloser, error) {
+func (pl ProllyDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOptions, root *doltdb.RootValue, _ bool, wrSch schema.Schema, statsCB noms.StatsCB, rdTags []uint64, opts editor.Options) (table.TableWriteCloser, error) {
 	panic("unimplemented")
 }
 
 // NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
 // preserving schema
-func (pl ProllyDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverOptions, _ *env.DoltEnv, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB, _ editor.Options) (table.TableWriteCloser, error) {
+func (pl ProllyDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverOptions, _ *doltdb.RootValue, _ bool, _ schema.Schema, _ noms.StatsCB, _ editor.Options) (table.TableWriteCloser, error) {
 	panic("unimplemented")
 }
 
@@ -151,7 +151,7 @@ func (pw *prollyWriteCloser) WriteRow(ctx context.Context, r row.Row) (err error
 	k, v := pw.kb.Desc.Format(key), pw.vb.Desc.Format(value)
 	fmt.Println(k, v)
 
-	_, err = pw.ch.Append(ctx, key, value)
+	_, err = pw.ch.Append(ctx, []byte(key), []byte(value))
 	return
 }
 
@@ -181,8 +181,8 @@ func (pw *prollyWriteCloser) tuplesFromRow(r row.Row) (key, value val.Tuple) {
 		return
 	})
 
-	key = pw.kb.Tuple(shared)
-	value = pw.vb.Tuple(shared)
+	key = pw.kb.Build(shared)
+	value = pw.vb.Build(shared)
 	return
 }
 

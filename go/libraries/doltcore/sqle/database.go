@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -815,35 +814,37 @@ func (db Database) createTempDoltTable(ctx *sql.Context, tableName string, root 
 
 // RenameTable implements sql.TableRenamer
 func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
-	root, err := db.GetRoot(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	if doltdb.IsReadOnlySystemTable(oldName) {
-		return ErrSystemTableAlter.New(oldName)
-	}
-
-	if doltdb.HasDoltPrefix(newName) {
-		return ErrReservedTableName.New(newName)
-	}
-
-	if !doltdb.IsValidTableName(newName) {
-		return ErrInvalidTableName.New(newName)
-	}
-
-	if _, ok, _ := db.GetTableInsensitive(ctx, newName); ok {
-		return sql.ErrTableAlreadyExists.New(newName)
-	}
-
-	newRoot, err := alterschema.RenameTable(ctx, root, oldName, newName)
-
-	if err != nil {
-		return err
-	}
-
-	return db.SetRoot(ctx, newRoot)
+	panic("unimplemented")
+	//
+	//root, err := db.GetRoot(ctx)
+	//
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//if doltdb.IsReadOnlySystemTable(oldName) {
+	//	return ErrSystemTableAlter.New(oldName)
+	//}
+	//
+	//if doltdb.HasDoltPrefix(newName) {
+	//	return ErrReservedTableName.New(newName)
+	//}
+	//
+	//if !doltdb.IsValidTableName(newName) {
+	//	return ErrInvalidTableName.New(newName)
+	//}
+	//
+	//if _, ok, _ := db.GetTableInsensitive(ctx, newName); ok {
+	//	return sql.ErrTableAlreadyExists.New(newName)
+	//}
+	//
+	//newRoot, err := alterschema.RenameTable(ctx, root, oldName, newName)
+	//
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//return db.SetRoot(ctx, newRoot)
 }
 
 // Flush flushes the current batch of outstanding changes and returns any errors.

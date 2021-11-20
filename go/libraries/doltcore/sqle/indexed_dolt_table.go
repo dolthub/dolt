@@ -23,8 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 // IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
@@ -75,9 +74,9 @@ func (idt *IndexedDoltTable) IsTemporary() bool {
 }
 
 type rangePartition struct {
-	partitionRange *noms.ReadRange
 	keyBytes       []byte
-	rowData        types.Map
+	partitionRange []prolly.Range
+	rowData        prolly.Map
 }
 
 func (rp rangePartition) Key() []byte {
@@ -85,13 +84,13 @@ func (rp rangePartition) Key() []byte {
 }
 
 type rangePartitionIter struct {
-	ranges  []*noms.ReadRange
+	ranges  []prolly.Range
 	curr    int
 	mu      *sync.Mutex
-	rowData types.Map
+	rowData prolly.Map
 }
 
-func NewRangePartitionIter(ranges []*noms.ReadRange, rowData types.Map) *rangePartitionIter {
+func NewRangePartitionIter(ranges []prolly.Range, rowData prolly.Map) *rangePartitionIter {
 	return &rangePartitionIter{
 		ranges:  ranges,
 		curr:    0,
@@ -116,7 +115,8 @@ func (itr *rangePartitionIter) Next() (sql.Partition, error) {
 
 	var bytes [4]byte
 	binary.BigEndian.PutUint32(bytes[:], uint32(itr.curr))
-	part := rangePartition{itr.ranges[itr.curr], bytes[:], itr.rowData}
+	//part := rangePartition{bytes[:], itr.ranges[itr.curr], itr.rowData}
+	part := rangePartition{bytes[:], itr.ranges, itr.rowData}
 	itr.curr += 1
 
 	return part, nil
@@ -148,7 +148,7 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
 	switch typed := part.(type) {
 	case rangePartition:
-		return t.indexLookup.RowIterForRanges(ctx, typed.rowData, []*noms.ReadRange{typed.partitionRange}, projectedCols)
+		return t.indexLookup.RowIterForRanges(ctx, typed.rowData, typed.partitionRange, projectedCols)
 	case sqlutil.SinglePartition:
 		return t.indexLookup.RowIter(ctx, typed.RowData, projectedCols)
 	}

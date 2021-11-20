@@ -78,6 +78,10 @@ func (m Map) Count() uint64 {
 	return m.root.cumulativeCount() / 2
 }
 
+func (m Map) Descriptors() (keyDesc, valueDesc val.TupleDesc) {
+	return m.keyDesc, m.valDesc
+}
+
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
 // If |key| is not present in the map, a nil key-value pair are passed.
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
