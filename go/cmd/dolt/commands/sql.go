@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
-	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -337,14 +336,15 @@ func queryMode(
 // getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
 func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cmd SqlCmd) (*env.MultiRepoEnv, errhand.VerboseError) {
 	var mrEnv *env.MultiRepoEnv
-	var err error
 	multiDir, multiDbMode := apr.GetValue(multiDBDirFlag)
 	if multiDbMode {
-		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.FS, multiDir, cmd.VersionStr)
+		var err error
+		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), dEnv.FS, multiDir, cmd.VersionStr)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	} else {
+		var err error
 		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -360,7 +360,7 @@ func execShell(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -380,7 +380,7 @@ func execBatch(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -392,11 +392,6 @@ func execBatch(
 
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
-	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
 	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr)
 	if err != nil {
 		// If we encounter an error, attempt to flush what we have so far to disk before exiting
@@ -419,7 +414,7 @@ func execMultiStatements(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -445,7 +440,7 @@ func execQuery(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1354,5 +1349,3 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 		}
 	}
 }
-
-var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")

@@ -3,6 +3,7 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"strings"
 	"sync/atomic"
@@ -51,17 +52,18 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return true, nil
 	})
 
-	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, false)
 	if err != nil {
 		return nil, err
 	}
-
-	se.SetBatchMode()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: Verify this is correct Enable batch mode
+	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
 	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
 	if err != nil {
