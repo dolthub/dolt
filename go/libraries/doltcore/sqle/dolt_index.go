@@ -105,6 +105,7 @@ RangeLoop:
 			}
 
 			cb := columnBounds{}
+			// We promote each type as the value has already been validated against the type
 			promotedType := di.cols[i].TypeInfo.Promote()
 			if rangeColumnExpr.HasLowerBound() {
 				key := sql.GetRangeCutKey(rangeColumnExpr.LowerBound)
@@ -112,13 +113,16 @@ RangeLoop:
 				if err != nil {
 					return nil, err
 				}
-				cb.lowerbound.equals = rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed
-				cb.lowerbound.infinity = false
-				cb.lowerbound.val = val
+				if rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed {
+					// For each lowerbound case, we set the upperbound to infinity, as the upperbound can increment to
+					// get to the desired overall case while retaining whatever was set for the lowerbound.
+					cb.boundsCase = boundsCase_greaterEquals_infinity
+				} else {
+					cb.boundsCase = boundsCase_greater_infinity
+				}
+				cb.lowerbound = val
 			} else {
-				cb.lowerbound.equals = false
-				cb.lowerbound.infinity = true
-				cb.lowerbound.val = nil
+				cb.boundsCase = boundsCase_infinity_infinity
 			}
 			if rangeColumnExpr.HasUpperBound() {
 				key := sql.GetRangeCutKey(rangeColumnExpr.UpperBound)
@@ -126,13 +130,14 @@ RangeLoop:
 				if err != nil {
 					return nil, err
 				}
-				cb.upperbound.equals = rangeColumnExpr.UpperBound.TypeAsUpperBound() == sql.Closed
-				cb.upperbound.infinity = false
-				cb.upperbound.val = val
-			} else {
-				cb.upperbound.equals = false
-				cb.upperbound.infinity = true
-				cb.upperbound.val = nil
+				if rangeColumnExpr.UpperBound.TypeAsUpperBound() == sql.Closed {
+					// Bounds cases are enum aliases on bytes, and they're arranged such that we can increment the case
+					// that was previously set when evaluating the lowerbound to get the proper overall case.
+					cb.boundsCase += 1
+				} else {
+					cb.boundsCase += 2
+				}
+				cb.upperbound = val
 			}
 			rangeCheck[i] = cb
 		}

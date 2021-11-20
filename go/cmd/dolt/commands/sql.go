@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
-	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -337,14 +336,15 @@ func queryMode(
 // getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
 func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cmd SqlCmd) (*env.MultiRepoEnv, errhand.VerboseError) {
 	var mrEnv *env.MultiRepoEnv
-	var err error
 	multiDir, multiDbMode := apr.GetValue(multiDBDirFlag)
 	if multiDbMode {
-		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.FS, multiDir, cmd.VersionStr)
+		var err error
+		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), dEnv.FS, multiDir, cmd.VersionStr)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	} else {
+		var err error
 		mrEnv, err = env.DoltEnvAsMultiEnv(ctx, dEnv)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -1349,5 +1349,3 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 		}
 	}
 }
-
-var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")

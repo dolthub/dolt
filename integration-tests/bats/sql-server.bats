@@ -598,16 +598,15 @@ SQL
     start_sql_server repo1
 
     multi_query repo1 1 "
-    CREATE DATABASE memdb;
-    USE memdb;
+    CREATE DATABASE test;
+    USE test;
     CREATE TABLE pk(pk int primary key);
     INSERT INTO pk (pk) VALUES (0);
     "
 
-    server_query repo1 1 "SELECT * FROM memdb.pk ORDER BY pk" "pk\n0"
-    server_query repo1 1 "DROP DATABASE memdb" ""
+    server_query repo1 1 "SELECT * FROM test.pk ORDER BY pk" "pk\n0"
+    server_query repo1 1 "DROP DATABASE test" ""
     server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nrepo1"
-
 }
 
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
@@ -1114,11 +1113,60 @@ while True:
     [[ "$output" =~ "b" ]] || false
 
     cd ..
+
+    server_query "" 1 "create database test3"
+    server_query "test3" 1 "create table c(x int)"
+    server_query "test3" 1 "insert into c values (1), (2)"
+    run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table c')"
+
+    server_query "" 1 "drop database test2"
+
+    [ -d test3 ]
+    [ ! -d test2 ]
     
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2"
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest3"
+}
+
+@test "sql-server: create and drop database with --multi-db-dir" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir no_dolt && cd no_dolt
+    mkdir db_dir
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --multi-db-dir=db_dir
+
+    server_query "" 1 "create database test1"
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    server_query "test1" 1 "create table a(x int)"
+    server_query "test1" 1 "insert into a values (1), (2)"
+    # not bothering to check the results of the commit here
+    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
+
+    [ -d db_dir/test1 ]
+    
+    cd db_dir/test1
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table a" ]] || false
+
+    cd ../..
+
+    server_query "" 1 "create database test3"
+    server_query "test3" 1 "create table c(x int)"
+    server_query "test3" 1 "insert into c values (1), (2)"
+    run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table c')"
+
+    server_query "" 1 "drop database test1"
+
+    [ -d db_dir/test3 ]
+    [ ! -d db_dir/test1 ]
+    
+    # make sure the databases exist on restart
+    stop_sql_server
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --multi-db-dir=db_dir
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest3"
 }
 
 @test "sql-server: create database errors" {
