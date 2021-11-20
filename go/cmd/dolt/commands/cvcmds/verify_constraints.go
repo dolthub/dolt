@@ -22,11 +22,11 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -141,7 +141,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 			if cvMap.Len() > 50 {
 				cli.Printf("Over 50 constraint violations were found. Please query '%s' to see them all.\n", doltdb.DoltConstViolTablePrefix+tableName)
 			} else {
-				err = cliengine.PrettyPrintResults(sql.NewEmptyContext(), cliengine.FormatTabular, sqlSchema, rowIter, false)
+				err = engine.PrettyPrintResults(sql.NewEmptyContext(), engine.FormatTabular, sqlSchema, rowIter, false)
 				if err != nil {
 					return commands.HandleVErrAndExitCode(errhand.BuildDError("Error outputting rows").AddCause(err).Build(), nil)
 				}

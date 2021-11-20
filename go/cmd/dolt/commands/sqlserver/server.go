@@ -28,8 +28,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cliengine"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
@@ -132,7 +132,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	sqlEngine, err := cliengine.NewSqlEngine(ctx, mrEnv, cliengine.FormatTabular, "", serverConfig.AutoCommit())
+	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", serverConfig.AutoCommit())
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(se *cliengine.SqlEngine) server.SessionBuilder {
+func newSessionBuilder(se *engine.SqlEngine) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
 		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
 		mysqlSess := sql.NewBaseSessionWithClientServer(host, client, conn.ConnectionID)
