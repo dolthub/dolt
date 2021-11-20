@@ -31,6 +31,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -173,14 +174,14 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	}
 
 	itr := sql.RowsToRowIter() // empty RowIter
-	switch s := sqlStatement.(type) {
+	switch sqlStatement.(type) {
 	case *sqlparser.Insert, *sqlparser.Update:
-		_, itr, err = eng.query(sqlCtx, query)
+		_, itr, err = eng.Query(sqlCtx, query)
 
 	case *sqlparser.Delete:
-		_, itr, err = eng.query(sqlCtx, query)
+		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.MultiAlterDDL:
-		_, itr, err = eng.query(sqlCtx, query)
+		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if se, ok := vterrors.AsSyntaxError(err); ok {
@@ -189,9 +190,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		if err != nil {
 			return nil, fmt.Errorf("error parsing DDL: %v", err.Error())
 		}
-		// ddl returns a nil itr
-		_, _, err = eng.ddl(sqlCtx, s, query)
-
+		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
 		return nil, fmt.Errorf("filter-branch queries must be write queries: '%s'", query)
 
@@ -221,7 +220,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		return nil, err
 	}
 
-	roots, err := eng.getRoots(sqlCtx)
+	roots, err := eng.GetRoots(sqlCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +232,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 // The SQL engine returned has transactions disabled. This is to prevent transactions starts from overwriting the root
 // we set manually with the one at the working set of the HEAD being rebased.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
-func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *sqlEngine, error) {
+func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *engine.SqlEngine, error) {
 	sess := dsess.DefaultSession().NewDoltSession(config.NewMapConfig(make(map[string]string)))
 
 	sqlCtx := sql.NewContext(ctx,
@@ -259,8 +258,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	parallelism := runtime.GOMAXPROCS(0)
 	azr := analyzer.NewBuilder(pro).WithParallelism(parallelism).Build()
-
-	engine := sqle.New(azr, &sqle.Config{Auth: new(auth.None)})
 
 	head := dEnv.RepoStateReader().CWBHeadSpec()
 	headCommit, err := dEnv.DoltDB.Resolve(ctx, head, dEnv.RepoStateReader().CWBHeadRef())
@@ -298,10 +295,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	sqlCtx.SetCurrentDatabase(dbName)
 
-	se := &sqlEngine{
-		dbs:    map[string]dsqle.SqlDatabase{dbName: db},
-		engine: engine,
-	}
+	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{Auth: new(auth.None)}), map[string]dsqle.SqlDatabase{dbName: db})
 
 	return sqlCtx, se, nil
 }
