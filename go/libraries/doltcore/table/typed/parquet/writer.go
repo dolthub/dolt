@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@ package parquet
 import (
 	"context"
 	"fmt"
-
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/source"
 	"github.com/xitongsys/parquet-go/writer"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -28,30 +28,48 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
-var WriteBufSize = 256 * 1024
-
 type ParquetWriter struct {
 	filewriter source.ParquetFile
 	pwriter    *writer.CSVWriter
 	sch        schema.Schema
 }
 
-func NewParquetWriter(outSch schema.Schema, destName string) (*ParquetWriter, error) {
-	allCols := outSch.GetAllCols()
-	columns := allCols.GetColumns()
+var typeMap = map[typeinfo.Identifier]string{
+	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIME_MICROS",
+	typeinfo.DecimalTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.EnumTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.InlineBlobTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.SetTypeIdentifier:        "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.TimeTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.TupleTypeIdentifier:      "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.UuidTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.VarBinaryTypeIdentifier:  "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.YearTypeIdentifier:       "type=INT32, convertedtype=DATE",
+	typeinfo.UnknownTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.JSONTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.BlobStringTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
 
-	ColTypeMap := getTypeMap()
+	typeinfo.BitTypeIdentifier:       "type=BYTE_ARRAY",
+	typeinfo.BoolTypeIdentifier:      "type=BOOLEAN",
+	typeinfo.VarStringTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.UintTypeIdentifier:      "type=INT64, convertedtype=UINT_64",
+	typeinfo.IntTypeIdentifier:       "type=INT64, convertedtype=INT_64",
+	typeinfo.FloatTypeIdentifier:     "type=DOUBLE",
+}
+
+func NewParquetWriter(outSch schema.Schema, destName string) (*ParquetWriter, error) {
+	columns := outSch.GetAllCols().GetColumns()
+
 	var csvSchema []string
 	var repetitionType string
+	// creates csv schema for handling parquet format using NewCSVWriter
 	for _, col := range columns {
-		colName := col.Name
+		repetitionType = ""
 		colType := col.TypeInfo.GetTypeIdentifier()
 		if col.IsNullable() {
-			repetitionType = `, repetitiontype=OPTIONAL`
-		} else {
-			repetitionType = ``
+			repetitionType = ", repetitiontype=OPTIONAL"
 		}
-		csvSchema = append(csvSchema, fmt.Sprintf("name=%s, %s%s", colName, ColTypeMap[colType], repetitionType))
+		csvSchema = append(csvSchema, fmt.Sprintf("name=%s, %s%s", col.Name, typeMap[colType], repetitionType))
 	}
 
 	fw, err := local.NewLocalFileWriter(destName)
@@ -59,13 +77,13 @@ func NewParquetWriter(outSch schema.Schema, destName string) (*ParquetWriter, er
 		return nil, err
 	}
 
-	// np configures the degree of concurrency for our Reader and Writers
-	// TODO: not sure what default value to set 'np' to
+	// default np (degree of concurrency) is 4 recommended from the package
 	pw, err := writer.NewCSVWriter(csvSchema, fw, 4)
 	if err != nil {
 		return nil, err
 	}
 
+	// pw.CompressionType defaults to parquet.CompressionCodec_SNAPPY
 	return &ParquetWriter{filewriter: fw, pwriter: pw, sch: outSch}, nil
 }
 
@@ -75,8 +93,7 @@ func (pwr *ParquetWriter) GetSchema() schema.Schema {
 
 // WriteRow will write a row to a table
 func (pwr *ParquetWriter) WriteRow(ctx context.Context, r row.Row) error {
-	allCols := pwr.sch.GetAllCols()
-	colValStrs := make([]*string, allCols.Size())
+	colValStrs := make([]*string, pwr.sch.GetAllCols().Size())
 
 	sqlRow, err := sqlutil.DoltRowToSqlRow(r, pwr.GetSchema())
 	if err != nil {
@@ -87,6 +104,10 @@ func (pwr *ParquetWriter) WriteRow(ctx context.Context, r row.Row) error {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
+			switch val.(type) {
+			case time.Time:
+				val = val.(time.Time).Unix()
+			}
 			v := sqlutil.SqlColToStr(ctx, val)
 			colValStrs[i] = &v
 		}
@@ -108,30 +129,4 @@ func (pwr *ParquetWriter) Close(ctx context.Context) error {
 	}
 	pwr.filewriter.Close()
 	return nil
-}
-
-func getTypeMap() map[typeinfo.Identifier]string {
-
-	typeMap := map[typeinfo.Identifier]string{
-		typeinfo.DatetimeTypeIdentifier:   `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.DecimalTypeIdentifier:    `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.EnumTypeIdentifier:       `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.InlineBlobTypeIdentifier: `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.SetTypeIdentifier:        `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.TimeTypeIdentifier:       `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.TupleTypeIdentifier:      `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.UuidTypeIdentifier:       `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.VarBinaryTypeIdentifier:  `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.YearTypeIdentifier:       `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.BlobStringTypeIdentifier: `type=BYTE_ARRAY, convertedtype=UTF8`,
-
-		typeinfo.BitTypeIdentifier:       `type=BYTE_ARRAY`,
-		typeinfo.BoolTypeIdentifier:      `type=BOOLEAN`,
-		typeinfo.VarStringTypeIdentifier: `type=BYTE_ARRAY, convertedtype=UTF8`,
-		typeinfo.UintTypeIdentifier:      `type=INT64, convertedtype=UINT_64`,
-		typeinfo.IntTypeIdentifier:       `type=INT64, convertedtype=INT_64`,
-		typeinfo.FloatTypeIdentifier:     `type=DOUBLE`,
-	}
-
-	return typeMap
 }

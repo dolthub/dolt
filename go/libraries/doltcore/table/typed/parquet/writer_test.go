@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package parquet
 import (
 	"context"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -99,14 +100,13 @@ func writeToParquet(pWr *ParquetWriter, rows []row.Row, t *testing.T) {
 }
 
 func TestWriter(t *testing.T) {
-	const root = ""
 	const expected = `Bill Billerson,32,Senior Dufus
 Rob Robertson,25,Dufus
 John Johnson,21,
 Andy Anderson,27,
 `
 
-	file, err := ioutil.TempFile(root, "parquet")
+	file, err := ioutil.TempFile("", "parquet")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,6 +133,7 @@ Andy Anderson,27,
 	}
 
 	num := int(pr.GetNumRows())
+	assert.Equal(t, num, 4)
 
 	res, err := pr.ReadByNumber(num)
 	if err != nil {
@@ -148,8 +149,5 @@ Andy Anderson,27,
 		result += fmt.Sprintf("%s,%d,%s\n", p.Name, p.Age, p.Title)
 	}
 
-	if result != expected {
-		t.Errorf(`%s != %s`, result, expected)
-	}
-
+	assert.Equal(t, expected, result)
 }
