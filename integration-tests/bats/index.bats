@@ -2112,13 +2112,6 @@ SQL
     [[ "$output" =~ "pk1" ]] || false
     [[ "$output" =~ "5" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
-    dolt sql <<SQL
-DELETE FROM onepk;
-INSERT INTO onepk VALUES (6, 11, 55);
-SQL
-    run dolt table import -u onepk `batshelper index_onepk.csv`
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "duplicate unique key" ]] || false
 }
 
 @test "index: UNIQUE dolt table import -r" {
