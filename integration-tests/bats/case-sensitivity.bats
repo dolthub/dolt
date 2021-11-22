@@ -43,7 +43,7 @@ teardown() {
     run dolt sql -q "SELECT * FROM dOlT_hIsToRy_tEsT"
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM dOlT_cOnFlIcTs_tEsT"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     run dolt sql -q "SELECT * FROM dOlT_cOnStRaInT_vIoLaTiOnS_tEsT"
     [ "$status" -eq 0 ]
 }
