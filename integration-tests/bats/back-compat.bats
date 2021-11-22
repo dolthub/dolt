@@ -16,7 +16,7 @@ teardown() {
         dolt status
         run dolt migrate
         [ "$status" -eq "0" ]
-        [[ "$output" =~ "Migrating repository to the latest format" ]] || false
+        [[ "$output" =~ "Migrating database to the latest data format" ]] || false
         run dolt branch
         [ "$status" -eq "0" ]
         [[ "$output" =~ "master" ]] || false
@@ -87,7 +87,7 @@ teardown() {
         cd "$testdir"
         run dolt migrate
         [ "$status" -eq "0" ]
-        [[ "$output" =~ "Migrating repository to the latest format" ]] || false
+        [[ "$output" =~ "Migrating database to the latest data format" ]] || false
         dolt sql -q "insert into abc values (2, 'text', '2020-01-15 20:49:22.28427')"
         dolt add .
         dolt commit -m "Add value during test"
@@ -129,7 +129,7 @@ teardown() {
         cd "$testdir"
         run dolt migrate
         [ "$status" -eq "0" ]
-        [[ "$output" =~ "Migrating repository to the latest format" ]] || false
+        [[ "$output" =~ "Migrating database to the latest data format" ]] || false
         dolt checkout conflict
         run dolt merge newcolumn
         [ "$status" -eq "0" ]
