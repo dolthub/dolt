@@ -338,16 +338,18 @@ SQL
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f result.parquet ]
 
-    echo "import pandas as pd" > panda.py
-    echo "df = pd.read_parquet('result.parquet')" >> panda.py
-    echo "print(df)" >> panda.py
-    python3 panda.py > pandas.txt
+    echo "import pandas as pd
+df = pd.read_parquet('result.parquet')
+print(df)
+" > pandas.py
+    run python3 pandas.py > pandas.txt
     [ -f pandas.txt ]
 
-    echo "import pyarrow.parquet as pq" > arrow.py
-    echo "table = pq.read_table('result.parquet')" >> arrow.py
-    echo "print(table.to_pandas())" >> arrow.py
-    python3 arrow.py > pyarrow.txt
+    echo "import pyarrow.parquet as pq
+table = pq.read_table('result.parquet')
+print(table.to_pandas())
+" > arrow.py
+    run python3 arrow.py > pyarrow.txt
     [ -f pyarrow.txt ]
 
     run diff pandas.txt pyarrow.txt
