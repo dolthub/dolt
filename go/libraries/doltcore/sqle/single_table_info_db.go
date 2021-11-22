@@ -37,10 +37,7 @@ type SingleTableInfoDatabase struct {
 	parentSchs  map[string]schema.Schema
 }
 
-var _ sql.Database = (*SingleTableInfoDatabase)(nil)
-var _ sql.Table = (*SingleTableInfoDatabase)(nil)
-var _ sql.IndexedTable = (*SingleTableInfoDatabase)(nil)
-var _ sql.ForeignKeyTable = (*SingleTableInfoDatabase)(nil)
+var _ doltReadOnlyTableInterface = (*SingleTableInfoDatabase)(nil)
 
 func NewSingleTableDatabase(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) *SingleTableInfoDatabase {
 	return &SingleTableInfoDatabase{
@@ -151,4 +148,22 @@ func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, er
 		})
 	}
 	return sqlIndexes, nil
+}
+
+func (db *SingleTableInfoDatabase) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
+	return checksInSchema(db.sch), nil
+}
+
+func (db *SingleTableInfoDatabase) IsTemporary() bool {
+	return false
+}
+
+func (db *SingleTableInfoDatabase) NumRows(context *sql.Context) (uint64, error) {
+	// TODO: to answer this accurately, we need the table as well as the schema
+	return 0, nil
+}
+
+func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) {
+	// TODO: to answer this accurately, we need the table as well as the schema
+	return 0, nil
 }

@@ -14,7 +14,11 @@
 
 package schema
 
-import "github.com/dolthub/dolt/go/store/types"
+import (
+	"strings"
+
+	"github.com/dolthub/dolt/go/store/types"
+)
 
 // Schema is an interface for retrieving the columns that make up a schema
 type Schema interface {
@@ -119,26 +123,26 @@ func VerifyInSchema(inSch, outSch Schema) (bool, error) {
 	return match, nil
 }
 
-// GetSharedCols returns a name -> tag mapping for name/kind matches
-func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) map[string]uint64 {
-	existingColKinds := make(map[string]types.NomsKind)
-	existingColTags := make(map[string]uint64)
+// GetSharedCols return all columns in the schema that match the names and types given, which are parallel arrays
+// specifying columns to match.
+func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) []Column {
+	existingCols := make(map[string]Column)
 
+	var shared []Column
 	_ = schema.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
-		existingColKinds[col.Name] = col.Kind
-		existingColTags[col.Name] = col.Tag
+		existingCols[col.Name] = col
 		return false, nil
 	})
 
-	reuseTags := make(map[string]uint64)
-	for i, col := range cmpNames {
-		if val, ok := existingColKinds[col]; ok {
-			if val == cmpKinds[i] {
-				reuseTags[col] = existingColTags[col]
+	for i, colName := range cmpNames {
+		if col, ok := existingCols[colName]; ok {
+			if col.Kind == cmpKinds[i] && strings.ToLower(col.Name) == strings.ToLower(cmpNames[i]) {
+				shared = append(shared, col)
 			}
 		}
 	}
-	return reuseTags
+
+	return shared
 }
 
 // ArePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the passed in schema are from the same table
