@@ -511,7 +511,6 @@ pk,c1,c2,c3,c4,c5
 2
 DELIM
     run dolt table import test -u badline.csv
-    echo $output
     [ "$status" -eq 1 ]
     [[ "${lines[0]}" =~ "Additions" ]] || false
     [[ "${lines[1]}" =~ "A bad row was encountered" ]] || false

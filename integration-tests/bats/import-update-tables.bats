@@ -217,18 +217,12 @@ DELIM
 
     dolt sql < 1pk5col-ints-sch.sql
     run dolt table import -u test 1pk5col-rpt-ints.csv
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row: [1,1,2,3,4,5]" ]] || false
-
-    # Works with --continue
-    run dolt table import -u --continue test 1pk5col-rpt-ints.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "The following rows were skipped:" ]] || false
-    [[ "$output" =~ "1,1,2,3,4,5" ]] || false
-    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
-    [[ "$output" =~ "Lines skipped: 1" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[1]}" =~ "1,1,2,3,4,5" ]] || false
 }
 
 @test "import-update-tables: importing into new table renders bad rows" {
@@ -242,20 +236,11 @@ DELIM
     dolt sql < 1pk5col-ints-sch.sql
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "The following rows were skipped:" ]] || false
-    [[ "$output" =~ "1,1,2,3,4,7" ]] || false
-    [[ "$output" =~ "1,1,2,3,4,8" ]] || false
-    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
-    [[ "$output" =~ "Lines skipped: 2" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
-    # Output to a file from the error stderr
-    dolt sql -q "DELETE FROM test WHERE pk = 1"
-    run dolt table import -u --continue test 1pk5col-rpt-ints.csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "The following rows were skipped:" ]] || false
-    [[ "$output" =~ "1,1,2,3,4,7" ]] || false
-    [[ "$output" =~ "1,1,2,3,4,8" ]] || false
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[1]}" =~ "1,1,2,3,4,8" ]] || false
 }
 
 @test "import-update-tables: subsequent runs of same import with duplicate keys produces no modifications" {

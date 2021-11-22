@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -251,18 +252,20 @@ func (s *sqlEngineMover) createTable() error {
 
 func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandler func(err error)) (sql.Node, error) {
 	switch s.importOption {
-	case CreateOp, ReplaceOp, UpdateOp:
-		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, false, errorHandler) // contonerr translates to ignore
+	case CreateOp, ReplaceOp:
+		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, false, nil, errorHandler) // contonerr translates to ignore
+	case UpdateOp:
+		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.wrSch), errorHandler) // contonerr translates to ignore
 	default:
 		return nil, fmt.Errorf("unsupported")
 	}
 }
 
-func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, replace bool, errorHandler plan.ErrorHandler) (sql.Node, error) {
+func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler plan.ErrorHandler) (sql.Node, error) {
 	src := plan.NewRowIterSource(schema, source)
 	dest := plan.NewUnresolvedTable(tableName, dbname)
 
-	insert := plan.NewInsertInto(sql.UnresolvedDatabase(dbname), dest, src, replace, nil, nil, ignore)
+	insert := plan.NewInsertInto(sql.UnresolvedDatabase(dbname), dest, src, replace, nil, onDuplicateExpression, ignore)
 	analyzed, err := analyzer.Analyze(ctx, insert, nil)
 	if err != nil {
 		return nil, err
@@ -290,6 +293,17 @@ func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbnam
 	accumulatorNode := analyzedQueryProcess.Child
 
 	return accumulatorNode.(*plan.RowUpdateAccumulator).Child, nil
+}
+
+func generateOnDuplicateKeyExpressions(sch sql.Schema) []sql.Expression {
+	ret := make([]sql.Expression, len(sch))
+	for i, col := range sch {
+		columnExpression := expression.NewUnresolvedColumn(col.Name)
+		functionExpression := expression.NewUnresolvedFunction("values", false, nil, expression.NewUnresolvedColumn(col.Name))
+		ret[i] = expression.NewSetField(columnExpression, functionExpression)
+	}
+
+	return ret
 }
 
 func quoteIdentifiers(ids []string) []string {
