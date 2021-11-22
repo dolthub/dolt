@@ -802,7 +802,6 @@ SQL
 }
 
 @test "foreign-keys: dolt table import" {
-    skip "trigger support"
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2);

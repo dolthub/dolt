@@ -2118,7 +2118,7 @@ INSERT INTO onepk VALUES (6, 11, 55);
 SQL
     run dolt table import -u onepk `batshelper index_onepk.csv`
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "duplicate key" ]] || false
+    [[ "$output" =~ "duplicate unique key" ]] || false
 }
 
 @test "index: UNIQUE dolt table import -r" {
@@ -2150,7 +2150,7 @@ SQL
     dolt sql -q "DELETE FROM onepk"
     run dolt table import -r onepk `batshelper index_onepk_non_unique.csv`
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "duplicate key" ]] || false
+    [[ "$output" =~ "duplicate unique key" ]] || false
 }
 
 @test "index: Merge without conflicts" {

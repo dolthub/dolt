@@ -209,7 +209,6 @@ DELIM
 }
 
 @test "import-update-tables: update table with repeat pk in csv throws error" {
-    skip "not sure if this is correct behavior"
     cat <<DELIM > 1pk5col-rpt-ints.csv
 pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
@@ -220,7 +219,7 @@ DELIM
     run dolt table import -u test 1pk5col-rpt-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row: c4:4 | pk:1 | c3:3 | c5:5 | c1:1 | c2:2" ]] || false
+    [[ "$output" =~ "Bad Row: [1,1,2,3,4,5]" ]] || false
 
     # Works with --continue
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv
@@ -233,7 +232,6 @@ DELIM
 }
 
 @test "import-update-tables: importing into new table renders bad rows" {
-    skip "not sure if this is correct behavior"
     cat <<DELIM > 1pk5col-rpt-ints.csv
 pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5

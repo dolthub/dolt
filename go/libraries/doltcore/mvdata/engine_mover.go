@@ -251,10 +251,8 @@ func (s *sqlEngineMover) createTable() error {
 
 func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandler func(err error)) (sql.Node, error) {
 	switch s.importOption {
-	case CreateOp, ReplaceOp:
+	case CreateOp, ReplaceOp, UpdateOp:
 		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, false, errorHandler) // contonerr translates to ignore
-	case UpdateOp:
-		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, false, true, errorHandler)
 	default:
 		return nil, fmt.Errorf("unsupported")
 	}
