@@ -572,7 +572,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 			if quit {
 				close(badRowChan)
-				return nil
+				return io.EOF
 			}
 		}
 

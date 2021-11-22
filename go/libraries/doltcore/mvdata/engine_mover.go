@@ -177,7 +177,6 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 }
 
 func (s *sqlEngineMover) Commit(ctx context.Context) error {
-	// TODO: Move this to the actual import code
 	_, _, err := s.se.Query(s.sqlCtx, "COMMIT")
 	return err
 }
@@ -257,12 +256,12 @@ func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandle
 	case UpdateOp:
 		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.wrSch), errorHandler) // contonerr translates to ignore
 	default:
-		return nil, fmt.Errorf("unsupported")
+		return nil, fmt.Errorf("unsupported import type")
 	}
 }
 
-func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler plan.ErrorHandler) (sql.Node, error) {
-	src := plan.NewRowIterSource(schema, source)
+func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler plan.ErrorHandlerFunc) (sql.Node, error) {
+	src := plan.NewChannelRowSource(schema, source) // TODO: Change the name of this
 	dest := plan.NewUnresolvedTable(tableName, dbname)
 
 	insert := plan.NewInsertInto(sql.UnresolvedDatabase(dbname), dest, src, replace, nil, onDuplicateExpression, ignore)

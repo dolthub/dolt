@@ -534,7 +534,6 @@ pk1,pk2,v1
 1,,1
 DELIM
     run dolt table import -c --pk=pk test null-pk-1.csv
-    echo $output
     [ "$status" -eq 1 ]
     [[ "$output" =~ "pk" ]]
     run dolt table import -c --pk=pk1,pk2 test null-pk-2.csv
