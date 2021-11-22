@@ -426,7 +426,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 	cli.PrintErrln(color.CyanString("Import completed successfully."))
 
-	return commands.HandleVErrAndExitCode(verr, usage)
+	return 0
 }
 
 var displayStrLen int
@@ -484,7 +484,7 @@ func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema schema
 
 	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, wrSchema, moveOps, importStatsCB)
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err} // TODO: Fix
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}
 
 	return mv, nil
@@ -556,26 +556,23 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that writes rows
 	g.Go(func() error {
-		defer close(badRowChan)
+		defer func() { recover() }() // recover in case badRowChan is closed twice
 
 		err := wr.StartWriting(ctx, parsedRowChan, badRowChan)
-		if err != nil {
-			return err
-		}
+		close(badRowChan)
 
-		return nil
+		return err
 	})
 
 	// Start the group that handles the bad row callback
 	g.Go(func() error {
+		defer func() { recover() }() // recover in case badRowChan is closed twice
 		for bRow := range badRowChan {
-			select {
-			default:
-				quit := badRowCB(bRow)
+			quit := badRowCB(bRow)
 
-				if quit {
-					return nil
-				}
+			if quit {
+				close(badRowChan)
+				return nil
 			}
 		}
 
@@ -729,7 +726,6 @@ func writeBadRowToCli(ctx context.Context, sqlRow sql.Row, b *bytes.Buffer) erro
 
 	str := b.String()
 	cli.PrintErr(str)
-	// TODO: this is not actually printing the error properly
 	b.Reset()
 
 	return nil
