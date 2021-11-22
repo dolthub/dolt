@@ -50,7 +50,7 @@ teardown() {
     [[ "$output" =~ "schema - Commands for showing and importing table schemas." ]] || false
     [[ "$output" =~ "table - Commands for copying, renaming, deleting, and exporting tables." ]] || false
     [[ "$output" =~ "conflicts - Commands for viewing and resolving merge conflicts." ]] || false
-    [[ "$output" =~ "migrate - Executes a repository migration to update to the latest format." ]] || false
+    [[ "$output" =~ "migrate - Executes a database migration to use the latest Dolt data format." ]] || false
     [[ "$output" =~ "gc - Cleans up unreferenced data from the repository." ]] || false
     [[ "$output" =~ "filter-branch - Edits the commit history using the provided query." ]] || false
     [[ "$output" =~ "merge-base - Find the common ancestor of two commits." ]] || false
