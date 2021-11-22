@@ -399,6 +399,22 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	skipped, err := move(ctx, rd, wr, mvOpts)
 	if err != nil {
+		if pipeline.IsTransformFailure(err) {
+			bdr := errhand.BuildDError("\nA bad row was encountered while moving data.")
+			r := pipeline.GetTransFailureSqlRow(err)
+
+			if r != nil {
+				bdr.AddDetails("Bad Row: " + sql.FormatRow(r))
+			}
+
+			details := pipeline.GetTransFailureDetails(err)
+
+			bdr.AddDetails(details)
+			bdr.AddDetails("These can be ignored using the '--continue'")
+
+			return commands.HandleVErrAndExitCode(bdr.Build(), usage)
+		}
+
 		verr = errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
@@ -510,9 +526,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that reads rows from the reader
 	g.Go(func() error {
-		defer func() {
-			close(parsedRowChan)
-		}()
+		defer close(parsedRowChan)
 
 		for {
 			r, err := rd.ReadRow(ctx)
@@ -525,17 +539,17 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 				} else {
 					return err
 				}
-			}
+			} else {
+				dRow, err := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+				if err != nil {
+					return err
+				}
 
-			dRow, err := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-			if err != nil {
-				return err
-			}
-
-			select {
-			case parsedRowChan <- dRow:
-			case <-ctx.Done():
-				return ctx.Err()
+				select {
+				case parsedRowChan <- dRow:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 		}
 	})
