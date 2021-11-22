@@ -258,3 +258,73 @@ SQL
     [[ "$output" =~ '+  `v2` varchar(1024) NOT NULL,' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 }
+
+@test "schema-changes: drop then add column" {
+    dolt sql <<SQL
+CREATE TABLE test2(
+  pk1 BIGINT,
+  pk2 BIGINT,
+  v1 BIGINT,
+  PRIMARY KEY(pk1, pk2)
+);
+insert into test2 values (1, 1, 1), (2, 2, 2);
+SQL
+
+    # Commit is important here because we are testing column reuse on
+    # drop / add, we want to be sure that we don't re-use any old
+    # values from before the column was dropped
+    dolt commit -am "Committing test table"
+
+    dolt sql -q "alter table test2 drop column v1"
+    dolt sql -q "alter table test2 add column v1 bigint"
+
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ modified:[[:space:]]+test2 ]] || false
+    
+    dolt sql -q "select * from test2 where pk1 = 1"
+    run dolt sql -q "select * from test2 where pk1 = 1"
+    [ "$status" -eq 0 ]
+    [[  "$output" =~ "| 1   | 1   | NULL |" ]] || false
+}
+
+@test "schema-changes: drop then add column show no schema diff" {
+    dolt sql <<SQL
+CREATE TABLE test2(
+  pk1 BIGINT,
+  pk2 BIGINT,
+  v1 BIGINT,
+  PRIMARY KEY(pk1, pk2)
+);
+insert into test2 values (1, 1, 1), (2, 2, 2);
+SQL
+
+    # Commit is important here because we are testing column reuse on
+    # drop / add, we want to be sure that we don't re-use any old
+    # values from before the column was dropped
+    dolt commit -am "Committing test table"
+
+    dolt sql -q "alter table test2 drop column v1"
+    dolt sql -q "alter table test2 add column v1 bigint"
+
+    dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ modified:[[:space:]]+test2 ]] || false
+    
+    dolt sql -q "select * from test2 where pk1 = 1"
+    run dolt sql -q "select * from test2 where pk1 = 1"
+    [ "$status" -eq 0 ]
+    [[  "$output" =~ "| 1   | 1   | NULL |" ]] || false
+
+    dolt diff --data
+    run dolt diff --data
+    [ "$status" -eq 0 ]
+
+    skip "dolt incorrectly considers there to be two different columns named v1"
+    skip "output should have a single column named v1 https://github.com/dolthub/dolt/issues/2430"
+    
+    [[ ! "$output" =~ '|  <  | pk1 | pk2 |      | v1   |' ]] || false
+    [[ ! "$output" =~ '|  >  | pk1 | pk2 | v1   |      |' ]] || false
+}
