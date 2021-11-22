@@ -21,9 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -314,37 +312,38 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}
 
 	rowData, err := table.GetRowData(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
-	numElements := rowData.Count()
-
-	if numElements == 0 {
-		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 0, rowData}), nil
+	if rowData.Count() == 0 {
+		p := doltTablePartition{rowRange: prolly.UnboundRange, rowData: rowData}
+		return newDoltTablePartitionIter(rowData, p), nil
 	}
 
-	itemsPerPartition := MaxRowsPerPartition
-	numPartitions := (numElements / itemsPerPartition) + 1
-	if numPartitions < uint64(partitionMultiplier*runtime.NumCPU()) {
-		itemsPerPartition = numElements / uint64(partitionMultiplier*runtime.NumCPU())
+	// naively divide map by top-level keys
+	keys := prolly.PartitionKeysFromMap(rowData)
+	first := prolly.Range{
+		Start:   prolly.RangeCut{Unbound: true},
+		Stop:    prolly.RangeCut{Key: keys[0], Inclusive: true},
+		KeyDesc: rowData.KeyDesc(),
+	}
 
-		if itemsPerPartition == 0 {
-			itemsPerPartition = numElements
-			numPartitions = 1
-		} else {
-			numPartitions = (numElements / itemsPerPartition) + 1
+	parts := make([]doltTablePartition, len(keys))
+	parts[0] = doltTablePartition{rowRange: first, rowData: rowData}
+	for i := range parts {
+		if i == 0 {
+			continue
 		}
+		rng := prolly.Range{
+			Start:   prolly.RangeCut{Key: keys[i-1], Inclusive: false},
+			Stop:    prolly.RangeCut{Key: keys[i], Inclusive: true},
+			KeyDesc: rowData.KeyDesc(),
+		}
+		parts[i] = doltTablePartition{rowRange: rng, rowData: rowData}
 	}
 
-	partitions := make([]doltTablePartition, numPartitions)
-	for i := uint64(0); i < numPartitions-1; i++ {
-		partitions[i] = doltTablePartition{i * itemsPerPartition, (i + 1) * itemsPerPartition, rowData}
-	}
-	partitions[numPartitions-1] = doltTablePartition{(numPartitions - 1) * itemsPerPartition, numElements, rowData}
-
-	return newDoltTablePartitionIter(rowData, partitions...), nil
+	return newDoltTablePartitionIter(rowData, parts...), nil
 }
 
 func (t *DoltTable) IsTemporary() bool {
@@ -410,13 +409,10 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
-		if typedPartition.end == 0 {
-			return emptyRowIterator{}, nil
-		}
-
 		return newRowIterator(ctx, t, projCols, &typedPartition)
 	case sqlutil.SinglePartition:
-		return newRowIterator(ctx, t, projCols, &doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
+		p := &doltTablePartition{rowRange: prolly.UnboundRange, rowData: typedPartition.RowData}
+		return newRowIterator(ctx, t, projCols, p)
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -693,16 +689,13 @@ var _ sql.Partition = (*doltTablePartition)(nil)
 const NoUpperBound = 0xffffffffffffffff
 
 type doltTablePartition struct {
-	// start is the first index of this partition (inclusive)
-	start uint64
-	// all elements in the partition will be less than end (exclusive)
-	end     uint64
-	rowData prolly.Map
+	rowRange prolly.Range
+	rowData  prolly.Map
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition.
 func (p doltTablePartition) Key() []byte {
-	return []byte(strconv.FormatUint(p.start, 10) + " >= i < " + strconv.FormatUint(p.end, 10))
+	return []byte(prolly.FormatRange(p.rowRange))
 }
 
 // IteratorForPartition returns a prolly.MapIterator implementation which will iterate through the values

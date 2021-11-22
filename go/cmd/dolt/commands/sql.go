@@ -455,9 +455,7 @@ func execMultiStatements(
 }
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
-	opts := editor.Options{
-		Deaf: dEnv.DbEaFactory(),
-	}
+	opts := editor.Options{}
 	return dsqle.NewDatabase(name, dEnv.DbData(), opts)
 }
 

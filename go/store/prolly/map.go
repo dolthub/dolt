@@ -82,6 +82,10 @@ func (m Map) Descriptors() (keyDesc, valueDesc val.TupleDesc) {
 	return m.keyDesc, m.valDesc
 }
 
+func (m Map) KeyDesc() val.TupleDesc {
+	return m.keyDesc
+}
+
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
 // If |key| is not present in the map, a nil key-value pair are passed.
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
@@ -128,11 +132,11 @@ func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 		KeyDesc: m.keyDesc,
 		Reverse: false,
 	}
-	return m.IterValueRange(ctx, rng)
+	return m.IterRange(ctx, rng)
 }
 
 // IterValueRange returns a MapRangeIter that iterates over a Range.
-func (m Map) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var cur *nodeCursor
 	var err error
 

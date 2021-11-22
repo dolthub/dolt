@@ -91,7 +91,9 @@ func Of(data []byte) Hash {
 
 // New creates a new Hash backed by data, ensuring that data is an acceptable length.
 func New(data []byte) Hash {
-	d.PanicIfFalse(len(data) == ByteLen)
+	if len(data) != ByteLen {
+		d.PanicIfFalse(len(data) != ByteLen)
+	}
 	h := Hash{}
 	copy(h[:], data)
 	return h

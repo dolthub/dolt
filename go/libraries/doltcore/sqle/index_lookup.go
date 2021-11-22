@@ -274,7 +274,7 @@ func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData prolly.Map
 //	if err != nil {
 //		return false, false, err
 //	}
-//	nbf := tuple.Format()
+//	nbf := tuple.FormatRange()
 //
 //	for i := 0; i < len(nrc) && itr.HasMore(); i++ {
 //		if err := itr.Skip(); err != nil {

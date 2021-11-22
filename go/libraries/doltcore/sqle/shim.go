@@ -41,28 +41,19 @@ type sqlRowIter struct {
 var _ sql.RowIter = sqlRowIter{}
 
 func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projections []string, partition *doltTablePartition) (sql.RowIter, error) {
-	panic("unimplemented")
+	rows := partition.rowData
 
-	//rows := partition.rowData
-	//rng := prolly.IndexRange{
-	//	Low:  partition.start,
-	//	High: partition.end - 1,
-	//}
-	//if partition.end == NoUpperBound {
-	//	rng.Low, rng.High = 0, rows.Count()-1
-	//}
-	//
-	//iter, err := rows.IterIndexRange(ctx, rng)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//sch, err := tbl.GetSchema(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//return rowIterFromMapIter(ctx, sch, projections, rows, iter)
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	iter, err := rows.IterRange(ctx, partition.rowRange)
+	if err != nil {
+		return nil, err
+	}
+
+	return rowIterFromMapIter(ctx, sch, projections, rows, iter)
 }
 
 func rowIterFromMapIter(ctx context.Context, sch schema.Schema, projs []string, m prolly.Map, iter prolly.MapRangeIter) (sql.RowIter, error) {
