@@ -79,8 +79,6 @@ func getSampleRows() (rows []row.Row) {
 		mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 			nameColTag: types.String("Andy Anderson"),
 			ageColTag:  types.Uint(27),
-			//titleColTag: types.String(""),
-
 			/* title = NULL */})),
 	}
 }
@@ -91,7 +89,6 @@ func writeToParquet(pWr *ParquetWriter, rows []row.Row, t *testing.T) {
 
 		for _, row := range rows {
 			err := pWr.WriteRow(context.Background(), row)
-
 			if err != nil {
 				t.Fatal("Failed to write row")
 			}
