@@ -167,7 +167,7 @@ func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	if t.temporary {
 		root, ok := t.db.GetTemporaryTablesRoot(ctx)
 		if !ok {
-			return nil, fmt.Errorf("error: manipulating temporary table root when it does not exist")
+			return nil, fmt.Errorf("error: manipulating tempTable table root when it does not exist")
 		}
 
 		return root, nil
@@ -421,7 +421,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partiti
 type WritableDoltTable struct {
 	*DoltTable
 	db Database
-	ed *sqlTableEditor
+	ed *tableEditor
 }
 
 var _ sql.UpdatableTable = (*WritableDoltTable)(nil)
@@ -469,7 +469,7 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, error) {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*tableEditor, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
@@ -527,39 +527,42 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 
 // AutoIncrementSetter implements sql.AutoIncrementTable
 func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrementSetter {
-	te, err := t.getTableEditor(ctx)
-	if err != nil {
-		return sqlutil.NewStaticErrorEditor(err)
-	}
-	return te
+	panic("unimplemented")
+	//te, err := t.getTableEditor(ctx)
+	//if err != nil {
+	//	return sqlutil.NewStaticErrorEditor(err)
+	//}
+	//return te
 }
 
 // PeekNextAutoIncrementValue implements sql.AutoIncrementTable
 func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	if !t.autoIncCol.AutoIncrement {
-		return nil, sql.ErrNoAutoIncrementCol
-	}
-
-	return t.getTableAutoIncrementValue(ctx)
+	panic("unimplemented")
+	//if !t.autoIncCol.AutoIncrement {
+	//	return nil, sql.ErrNoAutoIncrementCol
+	//}
+	//
+	//return t.getTableAutoIncrementValue(ctx)
 }
 
 // GetNextAutoIncrementValue implements sql.AutoIncrementTable
 func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentialVal interface{}) (interface{}, error) {
-	if !t.autoIncCol.AutoIncrement {
-		return nil, sql.ErrNoAutoIncrementCol
-	}
-
-	ed, err := t.getTableEditor(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	tableVal, err := t.getTableAutoIncrementValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return ed.aiTracker.Next(t.tableName, potentialVal, tableVal)
+	panic("unimplemented")
+	//if !t.autoIncCol.AutoIncrement {
+	//	return nil, sql.ErrNoAutoIncrementCol
+	//}
+	//
+	//ed, err := t.getTableEditor(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//tableVal, err := t.getTableAutoIncrementValue(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//return ed.aiTracker.Next(t.tableName, potentialVal, tableVal)
 }
 
 func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
