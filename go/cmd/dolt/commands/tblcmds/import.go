@@ -751,7 +751,7 @@ func transformDoltRow(row sql.Row, wrSchema sql.Schema) sql.Row {
 
 func stringToBoolean(s string) (result bool, canConvert bool) {
 	lower := strings.ToLower(s)
-	switch lower{
+	switch lower {
 	case "true":
 		return true, true
 	case "false":
