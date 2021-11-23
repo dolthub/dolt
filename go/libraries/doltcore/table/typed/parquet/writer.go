@@ -36,8 +36,8 @@ type ParquetWriter struct {
 }
 
 var typeMap = map[typeinfo.Identifier]string{
-	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIME_MICROS",
-	typeinfo.DecimalTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=DECIMAL, scale=2, precision=20" +
+	typeinfo.DatetimeTypeIdentifier: "type=INT64, convertedtype=TIME_MICROS",
+	typeinfo.DecimalTypeIdentifier: "type=BYTE_ARRAY, convertedtype=DECIMAL, scale=2, precision=20" +
 		"",
 	typeinfo.EnumTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.InlineBlobTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
