@@ -420,3 +420,22 @@ SQL
     [[ "$output" =~ "$row2" ]] || false
     [[ "$output" =~ "$row3" ]] || false
 }
+
+@test "export-tables: table export decimal and bit types to parquet" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    dolt sql -q "CREATE TABLE more (pk BIGINT NOT NULL,v DECIMAL(9,5),b BIT(10),PRIMARY KEY (pk));"
+    dolt sql -q "INSERT INTO more VALUES (1, 1234.56789, 511);"
+    dolt sql -q "INSERT INTO more VALUES (2, 5235.66789, 514);"
+
+    run dolt table export more more.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f more.parquet ]
+
+    run parquet-tools cat --json more.parquet > output.json
+    [ "$status" -eq 0 ]
+    row1='{"pk":1,"v":1234.57,"b":511}'
+    row2='{"pk":2,"v":5235.67,"b":514}'
+    [[ "$output" =~ "$row1" ]] || false
+    [[ "$output" =~ "$row2" ]] || false
+}

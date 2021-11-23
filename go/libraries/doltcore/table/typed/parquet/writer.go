@@ -37,7 +37,8 @@ type ParquetWriter struct {
 
 var typeMap = map[typeinfo.Identifier]string{
 	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIME_MICROS",
-	typeinfo.DecimalTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.DecimalTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=DECIMAL, scale=2, precision=20" +
+		"",
 	typeinfo.EnumTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.InlineBlobTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.SetTypeIdentifier:        "type=BYTE_ARRAY, convertedtype=UTF8",
@@ -50,7 +51,7 @@ var typeMap = map[typeinfo.Identifier]string{
 	typeinfo.JSONTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.BlobStringTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
 
-	typeinfo.BitTypeIdentifier:       "type=BYTE_ARRAY",
+	typeinfo.BitTypeIdentifier:       "type=INT32, convertedtype=INT_16",
 	typeinfo.BoolTypeIdentifier:      "type=BOOLEAN",
 	typeinfo.VarStringTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.UintTypeIdentifier:      "type=INT64, convertedtype=UINT_64",
