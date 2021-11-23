@@ -47,6 +47,14 @@ CREATE TABLE employees (
 );
 SQL
 
+  cat <<SQL > check-constraint-sch.sql
+CREATE TABLE persons (
+    ID int NOT NULL,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255),
+    Age int CHECK (Age>=18)
+);
+SQL
 }
 
 teardown() {
@@ -211,7 +219,7 @@ SQL
     [[ "${lines[6]}" =~ "end date" ]]   || false
 }
 
-@test "import-update-tables: update table with incorrect length char throws bad row error" {
+@test "import-update-tables: updating table by inputting string longer than char column throws an error" {
     cat <<DELIM > 1pk1col-rpt-chars.csv
 pk,c
 1,"123456"
@@ -225,7 +233,7 @@ DELIM
     [[ "$output" =~ 'string is too large for column' ]] || false
 }
 
-@test "import-update-tables: update table with repeat pk in csv throws error" {
+@test "import-update-tables: update table with repeat pk in csv does not throw an error" {
     cat <<DELIM > 1pk5col-rpt-ints.csv
 pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
@@ -243,21 +251,31 @@ DELIM
 }
 
 @test "import-update-tables: importing into new table renders bad rows" {
-    cat <<DELIM > 1pk5col-rpt-ints.csv
-pk,c1,c2,c3,c4,c5
-1,1,2,3,4,5
-1,1,2,3,4,7
-1,1,2,3,4,8
+     cat <<DELIM > persons.csv
+ID,LastName,FirstName,Age
+1,"jon","doe", 20
+2,"little","doe", 10
 DELIM
 
-    dolt sql < 1pk5col-ints-sch.sql
-    run dolt table import -u --continue test 1pk5col-rpt-ints.csv
+    dolt sql < check-constraint-sch.sql
+    run dolt table import -u persons persons.csv
+    [ "$status" -eq 1 ]
+
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "Bad Row:" ]] || false
+    [[ "$output" =~ "[2,little,doe,10]" ]] || false
+
+    run dolt table import -u --continue persons persons.csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "The following rows were skipped:" ]] || false
+    [[ "$output" =~ "[2,little,doe,10]" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
-    run dolt sql -r csv -q "select * from test"
+    run dolt sql -r csv -q "select * from persons"
     [ "${#lines[@]}" -eq 2 ]
-    [[ "${lines[1]}" =~ "1,1,2,3,4,8" ]] || false
+    [[ "$output" =~ "ID,LastName,FirstName,Age" ]] || false
+    [[ "$output" =~ "1,jon,doe,20" ]] || false
 }
 
 @test "import-update-tables: subsequent runs of same import with duplicate keys produces no difference in final data" {

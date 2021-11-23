@@ -43,7 +43,7 @@ type sqlEngineMover struct {
 	database  string
 	wrSch     sql.Schema
 	contOnErr bool
-	force     bool // TODO: Refactor all of these parameters
+	force     bool
 
 	statsCB noms.StatsCB
 	stats   types.AppliedEditStats
@@ -274,7 +274,7 @@ func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandle
 // createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped
 // with an error handler.
 func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler plan.ErrorHandlerFunc) (sql.Node, error) {
-	src := plan.NewChannelRowSource(s.wrSch, source) // TODO: Change the name of this
+	src := plan.NewChannelRowSource(s.wrSch, source)
 	dest := plan.NewUnresolvedTable(s.tableName, s.database)
 
 	insert := plan.NewInsertInto(sql.UnresolvedDatabase(s.database), dest, src, replace, nil, onDuplicateExpression, ignore)

@@ -493,7 +493,8 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Setup the necessary data points for the import job
 	parsedRowChan := make(chan sql.Row)
-	badRowChan := make(chan *pipeline.TransformRowFailure)
+	readRowErrChan := make(chan *pipeline.TransformRowFailure)
+	writeRowErrChan := make(chan *pipeline.TransformRowFailure)
 	var rowErr error
 	var printStarted bool
 	var badCount int64
@@ -521,6 +522,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	// Start the group that reads rows from the reader
 	g.Go(func() error {
 		defer close(parsedRowChan)
+		defer close(readRowErrChan)
 
 		for {
 			r, err := rd.ReadRow(ctx)
@@ -529,7 +531,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return nil
 				} else if table.IsBadRow(err) {
 					dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-					badRowChan <- &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
+					readRowErrChan <- &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
 				} else {
 					return err
 				}
@@ -550,27 +552,37 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that writes rows
 	g.Go(func() error {
-		defer func() { recover() }() // recover in case badRowChan is closed twice
+		defer close(writeRowErrChan)
+		err := wr.StartWriting(ctx, parsedRowChan, writeRowErrChan)
+		if err != nil {
+			return err
+		}
 
-		err := wr.StartWriting(ctx, parsedRowChan, badRowChan)
-		close(badRowChan)
-
-		return err
+		return nil
 	})
 
 	// Start the group that handles the bad row callback
 	g.Go(func() error {
-		defer func() { recover() }() // recover in case badRowChan is closed twice
-		for bRow := range badRowChan {
-			quit := badRowCB(bRow)
-
-			if quit {
-				close(badRowChan)
-				return io.EOF
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case bRow, ok := <-readRowErrChan:
+				if ok {
+					quit := badRowCB(bRow)
+					if quit {
+						return io.EOF
+					}
+				}
+			case bRow, ok := <-writeRowErrChan:
+				if ok {
+					quit := badRowCB(bRow)
+					if quit {
+						return io.EOF
+					}
+				}
 			}
 		}
-
-		return nil
 	})
 
 	err := g.Wait()

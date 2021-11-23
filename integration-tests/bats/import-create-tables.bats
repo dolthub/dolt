@@ -15,7 +15,7 @@ pk,headerOne,headerTwo
 a,"""""",1
 b,"",2
 c,,3
-d,row four,
+d,row four,""
 e,row five,
 f,row six,6
 g, ,
@@ -470,7 +470,7 @@ SQL
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
     [ "${lines[5]}" = "| c  | NULL      | 3         |" ]
-    [ "${lines[6]}" = "| d  | row four  | NULL      |" ]
+    [ "${lines[6]}" = "| d  | row four  |           |" ]
     [ "${lines[7]}" = "| e  | row five  | NULL      |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
     [ "${lines[9]}" = "| g  | NULL      | NULL      |" ]
