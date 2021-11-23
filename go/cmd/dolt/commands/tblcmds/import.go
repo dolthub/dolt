@@ -15,8 +15,6 @@
 package tblcmds
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -498,7 +496,6 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	badRowChan := make(chan *pipeline.TransformRowFailure)
 	var rowErr error
 	var printStarted bool
-	var b bytes.Buffer
 	var badCount int64
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !options.contOnErr {
@@ -514,10 +511,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 		r := pipeline.GetTransFailureSqlRow(trf)
 
 		if r != nil {
-			err := writeBadRowToCli(ctx, r, &b)
-			if err != nil {
-				return true
-			}
+			cli.PrintErr(sql.FormatRow(r))
 		}
 
 		atomic.AddInt64(&badCount, 1)
@@ -581,7 +575,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	err := g.Wait()
 	if err != nil && err != io.EOF {
-		return badCount, err // get the count right
+		return badCount, err
 	}
 	if rowErr != nil {
 		return badCount, rowErr
@@ -699,29 +693,8 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	panic("Unhandled Error type")
 }
 
-// writeBadRowToCli prints a bad row in a csv form to STDERR.
-func writeBadRowToCli(ctx context.Context, sqlRow sql.Row, b *bytes.Buffer) error {
-	wr := bufio.NewWriter(b)
-	_, err := wr.WriteString(sql.FormatRow(sqlRow))
-	if err != nil {
-		return err
-	}
-
-	err = wr.Flush()
-	if err != nil {
-		return err
-	}
-
-	str := b.String()
-	cli.PrintErr(str)
-	b.Reset()
-
-	return nil
-}
-
-// transformDoltRow seeks to 1) Match and subset the read and write schema. 2)
+// transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
 func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
-	// match columns // TODO: Assumes same to same schema. Need to fix later
 	doltRow, err := sqlutil.DoltRowToSqlRow(row, rdSchema)
 	if err != nil {
 		return nil, err
@@ -769,7 +742,7 @@ func matchReadSchemaToWriteSchema(row sql.Row, rdSchema, wrSchema sql.Schema, na
 	for _, wCol := range wrSchema {
 		seen := false
 		for rIdx, rCol := range rdSchema {
-			if strings.ToLower(rCol.Name) == strings.ToLower(nameMapper.PreImage(wCol.Name)) {
+			if rCol.Name == nameMapper.PreImage(wCol.Name) {
 				returnRow = append(returnRow, row[rIdx])
 				seen = true
 			}

@@ -282,7 +282,7 @@ DELIM
 }
 
 @test "import-update-tables: importing some columns does not overwrite columns not part of the import" {
-  skip "don't allow subsetting"
+  skip "These types of partials should not be allowed. It is inconsistent with the mysql standard"
   dolt sql <1pk5col-ints-sch.sql
   echo -e 'pk,c1\n1,1\n2,6'|dolt table import -u test
   echo -e 'pk,c2\n1,2\n2,7'|dolt table import -u test
