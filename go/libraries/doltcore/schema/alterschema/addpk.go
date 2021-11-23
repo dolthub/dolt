@@ -47,6 +47,7 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		for _, c := range columns {
 			if strings.ToLower(c.Name) == strings.ToLower(col.Name) {
 				col.IsPartOfPK = true
+				col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
 				return col
 			}
 		}
