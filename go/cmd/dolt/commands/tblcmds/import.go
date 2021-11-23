@@ -432,7 +432,7 @@ var displayStrLen int
 func importStatsCB(stats types.AppliedEditStats) {
 	noEffect := stats.NonExistentDeletes + stats.SameVal
 	total := noEffect + stats.Modifications + stats.Additions
-	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d \n", total, stats.Additions, stats.Modifications, noEffect)
+	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
