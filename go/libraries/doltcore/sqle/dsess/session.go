@@ -147,7 +147,7 @@ type DatabaseSessionState struct {
 	headRoot             *doltdb.RootValue
 	WorkingSet           *doltdb.WorkingSet
 	dbData               env.DbData
-	EditSession          *editor.TableEditSession
+	EditSession          EditSession
 	detachedHead         bool
 	readOnly             bool
 	dirty                bool
@@ -340,7 +340,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, tCharacteristic), nil
+	return NewDoltTransaction(ws, wsRef, sessionState.dbData, tCharacteristic), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -871,7 +871,7 @@ func (sess *Session) SwitchWorkingSet(
 			tCharacteristic = sql.ReadOnly
 		}
 	}
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, tCharacteristic))
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, tCharacteristic))
 
 	return nil
 }
@@ -978,26 +978,6 @@ func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value inte
 }
 
 func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
-	convertedVal, err := sql.Int64.Convert(value)
-	if err != nil {
-		return err
-	}
-	intVal := int64(0)
-	if convertedVal != nil {
-		intVal = convertedVal.(int64)
-	}
-	if intVal == 0 {
-		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Opts.ForeignKeyChecksDisabled = true
-		}
-	} else if intVal == 1 {
-		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Opts.ForeignKeyChecksDisabled = false
-		}
-	} else {
-		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
-	}
-
 	return sess.Session.SetSessionVariable(ctx, key, value)
 }
 
@@ -1098,8 +1078,8 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.readOnly, sessionState.detachedHead, sessionState.readReplica = dbState.ReadOnly, dbState.DetachedHead, dbState.ReadReplica
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
-	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
+
+	sessionState.EditSession = NewEditSession()
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
@@ -1139,18 +1119,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 // temporary tables. This should only be used on demand. That is only when a temporary table is created should we
 // create the root map and edit session map.
 func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error {
-	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
-	if err != nil {
-		return err
-	}
-
-	dbState, _, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-	dbState.TempTableEditSession = editor.CreateTableEditSession(newRoot, dbState.EditSession.Opts)
-
-	return sess.SetTempTableRoot(ctx, dbName, newRoot)
+	panic("unimplemented")
 }
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named

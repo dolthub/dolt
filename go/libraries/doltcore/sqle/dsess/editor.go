@@ -12,76 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dsess
 
 import (
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
-type tableEditor struct {
-	deps      []editDependency
-	tempTable bool
+type TableEditor struct {
+	deps []indexEditor
 }
 
-var _ sql.RowReplacer = (*tableEditor)(nil)
-var _ sql.RowUpdater = (*tableEditor)(nil)
-var _ sql.RowInserter = (*tableEditor)(nil)
-var _ sql.RowDeleter = (*tableEditor)(nil)
+var _ sql.RowReplacer = TableEditor{}
+var _ sql.RowUpdater = TableEditor{}
+var _ sql.RowInserter = TableEditor{}
+var _ sql.RowDeleter = TableEditor{}
 
-type editDependency interface {
-	sql.RowReplacer
-	sql.RowUpdater
-	sql.RowInserter
-	sql.RowDeleter
-}
-
-func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*tableEditor, error) {
-	ds := dsess.DSessFromSess(ctx.Session)
-	ws, err := ds.WorkingSet(ctx, t.db.name)
+func newSqlTableEditor(ctx *sql.Context, sqlSch sql.Schema, tbl *doltdb.Table) (TableEditor, error) {
+	deps, err := indexEditorsFromTable(ctx, sqlSch, tbl)
 	if err != nil {
-		return nil, err
+		return TableEditor{}, err
 	}
 
-	tbl, _, err :=  ws.WorkingRoot().GetTable(ctx, t.tableName)
-	if err != nil {
-		return nil, err
-	}
-
-	deps, err := indexDependenciesFromTable(ctx, t.sqlSch, tbl)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tableEditor{
-		deps:      deps,
-		tempTable: t.IsTemporary(),
+	return TableEditor{
+		deps: deps,
 	}, nil
 }
 
-func indexDependenciesFromTable(ctx *sql.Context, schSch sql.Schema, tbl *doltdb.Table) ([]editDependency, error) {
-	rows, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, nil
-}
-
 // StatementBegin implements the interface sql.TableEditor.
-func (ed *tableEditor) StatementBegin(ctx *sql.Context) {
+func (ed TableEditor) StatementBegin(ctx *sql.Context) {
 	for _, dep := range ed.deps {
 		dep.StatementBegin(ctx)
 	}
 }
 
 // Insert implements the interface sql.TableEditor.
-func (ed *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
+func (ed TableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	for _, dep := range ed.deps {
 		if err = dep.Insert(ctx, sqlRow); err != nil {
 			return err
@@ -91,7 +62,7 @@ func (ed *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
 }
 
 // Delete implements the interface sql.TableEditor.
-func (ed *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
+func (ed TableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	for _, dep := range ed.deps {
 		if err = dep.Delete(ctx, sqlRow); err != nil {
 			return err
@@ -101,7 +72,7 @@ func (ed *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
 }
 
 // Update implements the interface sql.TableEditor.
-func (ed *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
+func (ed TableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
 	for _, dep := range ed.deps {
 		if err = dep.Update(ctx, oldRow, newRow); err != nil {
 			return err
@@ -111,7 +82,7 @@ func (ed *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 }
 
 // DiscardChanges implements the interface sql.TableEditor.
-func (ed *tableEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) (err error) {
+func (ed TableEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) (err error) {
 	for _, dep := range ed.deps {
 		if err = dep.DiscardChanges(ctx, errorEncountered); err != nil {
 			return err
@@ -121,7 +92,7 @@ func (ed *tableEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) 
 }
 
 // StatementComplete implements the interface sql.TableEditor.
-func (ed *tableEditor) StatementComplete(ctx *sql.Context) (err error) {
+func (ed TableEditor) StatementComplete(ctx *sql.Context) (err error) {
 	for _, dep := range ed.deps {
 		if err = dep.StatementComplete(ctx); err != nil {
 			return err
@@ -131,26 +102,30 @@ func (ed *tableEditor) StatementComplete(ctx *sql.Context) (err error) {
 }
 
 // GetAutoIncrementValue implements the interface sql.TableEditor.
-func (ed *tableEditor) GetAutoIncrementValue() (interface{}, error) {
+func (ed TableEditor) GetAutoIncrementValue() (interface{}, error) {
 	panic("unimplemented")
 }
 
 // SetAutoIncrementValue implements the interface sql.TableEditor.
-func (ed *tableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
+func (ed TableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
 	panic("unimplemented")
 }
 
 // Close implements Closer
-func (ed *tableEditor) Close(ctx *sql.Context) (err error) {
+func (ed TableEditor) Close(ctx *sql.Context) (err error) {
 	return
 }
 
-func (ed *tableEditor) flush(ctx *sql.Context) (err error) {
+func (ed TableEditor) flush(ctx *sql.Context) (err error) {
 	return
 }
 
-func (ed *tableEditor) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+func (ed TableEditor) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	panic("unimplemented")
+}
+
+func indexEditorsFromTable(ctx *sql.Context, schSch sql.Schema, tbl *doltdb.Table) ([]indexEditor, error) {
+	return nil, nil
 }
 
 type indexEditor struct {
@@ -210,5 +185,36 @@ func (ed indexEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) e
 
 // Close implements Closer
 func (ed indexEditor) Close(ctx *sql.Context) (err error) {
+	return
+}
+
+var shimPool = pool.NewBuffPool()
+
+func newRowConverter(sqlSch sql.Schema, sch schema.Schema, kd, vd val.TupleDesc) (rc rowConv) {
+	rc = rowConv{
+		keyMap: nil,
+		valMap: nil,
+		keyBld: val.TupleBuilder{},
+		valBld: val.TupleBuilder{},
+	}
+	return
+}
+
+type rowConv struct {
+	keyMap, valMap []int
+	keyBld, valBld val.TupleBuilder
+}
+
+func (rc rowConv) ConvertRow(row sql.Row) (key, value val.Tuple) {
+	for i, j := range rc.keyMap {
+		rc.keyBld.PutField(i, row[j])
+	}
+	key = rc.keyBld.Build(shimPool)
+
+	for i, j := range rc.valMap {
+		rc.valBld.PutField(i, row[j])
+	}
+	value = rc.valBld.Build(shimPool)
+
 	return
 }

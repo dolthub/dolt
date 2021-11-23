@@ -1172,20 +1172,6 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 	return deleter.Close(ctx)
 }
 
-// TableEditSession returns the TableEditSession for this database from the given context.
-func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (*editor.TableEditSession, error) {
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := sess.LookupDbState(ctx, db.Name())
-	if err != nil {
-		return nil, err
-	}
-
-	if isTemporary {
-		return dbState.TempTableEditSession, nil
-	}
-	return dbState.EditSession, nil
-}
-
 // GetAllTemporaryTables returns all temporary tables
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
 	sess := dsess.DSessFromSess(ctx.Session)

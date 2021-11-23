@@ -421,7 +421,6 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partiti
 type WritableDoltTable struct {
 	*DoltTable
 	db Database
-	ed *tableEditor
 }
 
 var _ sql.UpdatableTable = (*WritableDoltTable)(nil)
@@ -456,7 +455,6 @@ func (t *WritableDoltTable) WithProjection(colNames []string) sql.Table {
 	return &WritableDoltTable{
 		DoltTable: t.DoltTable.WithProjection(colNames).(*DoltTable),
 		db:        t.db,
-		ed:        t.ed,
 	}
 }
 
@@ -469,27 +467,22 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*tableEditor, error) {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (dsess.TableEditor, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-
-	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
-	if sess.BatchMode() == dsess.Batched {
-		if t.ed != nil {
-			return t.ed, nil
-		}
-		var err error
-		t.ed, err = newSqlTableEditor(ctx, t)
-		return t.ed, err
+	state, _, err := sess.LookupDbState(ctx, t.db.name)
+	if err != nil {
+		return dsess.TableEditor{}, err
 	}
-	return newSqlTableEditor(ctx, t)
+
+	tbl, err := t.doltTable(ctx)
+	if err != nil {
+		return dsess.TableEditor{}, err
+	}
+
+	return state.EditSession.GetTableEditor(ctx, t.sqlSch, tbl)
 }
 
 func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
-	if t.ed != nil {
-		err := t.ed.flush(ctx)
-		t.ed = nil
-		return err
-	}
 	return nil
 }
 
@@ -566,10 +559,7 @@ func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentia
 }
 
 func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	if t.ed != nil {
-		return t.ed.GetAutoIncrementValue()
-	}
-	return t.DoltTable.GetAutoIncrementValue(ctx)
+	panic("unimplemented")
 }
 
 func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {

@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -64,11 +63,7 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, d
 		dbs[strings.ToLower(db.Name())] = db
 	}
 
-	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
-	for _, fn := range dfunctions.DoltFunctions {
-		funcs[strings.ToLower(fn.FunctionName())] = fn
-	}
-
+	funcs := make(map[string]sql.Function, 0)
 	return DoltDatabaseProvider{
 		databases:    dbs,
 		functions:    funcs,
@@ -81,7 +76,7 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, d
 
 // WithFunctions returns a copy of this provider with the functions given. Any previous functions are removed.
 func (p DoltDatabaseProvider) WithFunctions(fns []sql.Function) DoltDatabaseProvider {
-	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
+	funcs := make(map[string]sql.Function, len(fns))
 	for _, fn := range fns {
 		funcs[strings.ToLower(fn.FunctionName())] = fn
 	}
