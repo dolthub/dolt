@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
@@ -48,7 +47,6 @@ type SqlDatabase interface {
 
 	StartTransaction(ctx *sql.Context, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error)
 	Flush(*sql.Context) error
-	EditOptions() editor.Options
 }
 
 func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
@@ -82,12 +80,6 @@ type Database struct {
 	//   correctly handle persisted sequences
 	//   that must be coordinated across txs
 	gs globalstate.GlobalState
-
-	editOpts editor.Options
-}
-
-func (db Database) EditOptions() editor.Options {
-	return db.editOpts
 }
 
 var _ sql.Database = Database{}
@@ -160,15 +152,14 @@ var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Database {
+func NewDatabase(name string, dbData env.DbData) Database {
 	return Database{
-		name:     name,
-		ddb:      dbData.Ddb,
-		rsr:      dbData.Rsr,
-		rsw:      dbData.Rsw,
-		drw:      dbData.Drw,
-		gs:       globalstate.NewGlobalStateStore(),
-		editOpts: editOpts,
+		name: name,
+		ddb:  dbData.Ddb,
+		rsr:  dbData.Rsr,
+		rsw:  dbData.Rsw,
+		drw:  dbData.Drw,
+		gs:   globalstate.NewGlobalStateStore(),
 	}
 }
 
@@ -508,7 +499,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 
 	var table sql.Table
 
-	readonlyTable := NewDoltTable(tableName, sch, tbl, db, temporary, db.editOpts)
+	readonlyTable := NewDoltTable(tableName, sch, tbl, db, temporary)
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {

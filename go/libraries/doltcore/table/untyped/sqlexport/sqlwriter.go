@@ -94,7 +94,7 @@ func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
-		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
+		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root))
 		createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)
 		if err != nil {
 			return err

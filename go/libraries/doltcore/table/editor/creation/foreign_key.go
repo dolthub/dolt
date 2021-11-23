@@ -22,7 +22,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -32,7 +31,6 @@ func ResolveForeignKey(
 	root *doltdb.RootValue,
 	table *doltdb.Table,
 	foreignKey doltdb.ForeignKey,
-	opts editor.Options,
 ) (*doltdb.RootValue, doltdb.ForeignKey, error) {
 	// There's a logic error if we attempt to resolve an already-resolved foreign key at this point. This should only
 	// be called on unresolved foreign keys.
@@ -109,7 +107,7 @@ func ResolveForeignKey(
 	tableIndex, ok := sch.Indexes().GetIndexByTags(colTags...)
 	if !ok {
 		// if child index doesn't exist, create it
-		ret, err := CreateIndex(ctx, table, "", actualColNames, false, false, "", opts)
+		ret, err := CreateIndex(ctx, table, "", actualColNames, false, false, "")
 		if err != nil {
 			return nil, doltdb.ForeignKey{}, err
 		}
@@ -136,7 +134,7 @@ func ResolveForeignKey(
 				c, _ := refSch.GetAllCols().GetByTag(t)
 				colNames = append(colNames, c.Name)
 			}
-			ret, err := CreateIndex(ctx, refTbl, "", colNames, true, false, "", opts)
+			ret, err := CreateIndex(ctx, refTbl, "", colNames, true, false, "")
 			if err != nil {
 				return nil, doltdb.ForeignKey{}, err
 			}

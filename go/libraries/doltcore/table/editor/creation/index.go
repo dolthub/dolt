@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type CreateIndexReturn struct {
@@ -40,7 +39,6 @@ func CreateIndex(
 	isUnique bool,
 	isUserDefined bool,
 	comment string,
-	opts editor.Options,
 ) (*CreateIndexReturn, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {

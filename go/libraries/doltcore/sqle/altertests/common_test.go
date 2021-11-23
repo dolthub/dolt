@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type ModifyTypeTest struct {
@@ -117,8 +116,7 @@ func parseTime(timestampLayout bool, value string) time.Time {
 
 func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]interface{}, error) {
 	var err error
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := sqle.NewDatabase("dolt", dEnv.DbData(), opts)
+	db := sqle.NewDatabase("dolt", dEnv.DbData())
 	engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
 	if err != nil {
 		return nil, err
@@ -146,8 +144,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 }
 
 func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := sqle.NewDatabase("dolt", dEnv.DbData(), opts)
+	db := sqle.NewDatabase("dolt", dEnv.DbData())
 	engine, sqlCtx, err := sqle.NewTestEngine(t, dEnv, ctx, db, root)
 	if err != nil {
 		return nil, err

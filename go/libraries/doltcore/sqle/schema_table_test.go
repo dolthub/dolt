@@ -27,15 +27,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestSchemaTableRecreation(t *testing.T) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := NewDatabase("dolt", dEnv.DbData(), opts)
+	db := NewDatabase("dolt", dEnv.DbData())
 	dbState := getDbState(t, db, dEnv)
 	err := dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)
 	require.NoError(t, err)

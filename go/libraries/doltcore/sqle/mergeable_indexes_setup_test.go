@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
@@ -40,8 +39,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := NewDatabase("dolt", dEnv.DbData(), opts)
+	db := NewDatabase("dolt", dEnv.DbData())
 	engine, sqlCtx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	require.NoError(t, err)
 
@@ -289,11 +287,6 @@ type testIndexDb struct {
 	t           *testing.T
 	tbl         *AlterableDoltTable
 	finalRanges func([]*noms.ReadRange) // We return the final range set to compare to the expected ranges
-	editOpts    editor.Options
-}
-
-func (db *testIndexDb) EditOptions() editor.Options {
-	return db.editOpts
 }
 
 func (db *testIndexDb) Name() string {

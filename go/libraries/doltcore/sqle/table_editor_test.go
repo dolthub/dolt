@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type tableEditorTest struct {
@@ -159,8 +158,7 @@ func TestTableEditor(t *testing.T) {
 
 			ctx := NewTestSQLCtx(context.Background())
 			root, _ := dEnv.WorkingRoot(context.Background())
-			opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-			db := NewDatabase("dolt", dEnv.DbData(), opts)
+			db := NewDatabase("dolt", dEnv.DbData())
 			err := dsess.DSessFromSess(ctx.Session).AddDB(ctx, getDbState(t, db, dEnv))
 			require.NoError(t, err)
 

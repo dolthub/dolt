@@ -50,7 +50,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -455,19 +454,14 @@ func execMultiStatements(
 }
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
-	opts := editor.Options{}
-	return dsqle.NewDatabase(name, dEnv.DbData(), opts)
+	return dsqle.NewDatabase(name, dEnv.DbData())
 }
 
 // newReplicaDatabase creates a new dsqle.ReadReplicaDatabase. If the doltdb.SkipReplicationErrorsKey global variable is set,
 // skip errors related to database construction only and return a partially functional dsqle.ReadReplicaDatabase
 // that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (dsqle.ReadReplicaDatabase, error) {
-	opts := editor.Options{
-		Deaf: dEnv.DbEaFactory(),
-	}
-
-	db := dsqle.NewDatabase(name, dEnv.DbData(), opts)
+	db := dsqle.NewDatabase(name, dEnv.DbData())
 
 	rrd, err := dsqle.NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {

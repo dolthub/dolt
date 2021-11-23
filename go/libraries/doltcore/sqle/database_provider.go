@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -170,18 +169,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 
-	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
-	if err != nil {
-		return err
-	}
-
-	opts := editor.Options{
-		Deaf: newEnv.DbEaFactory(),
-		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
-		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
-	}
-
-	db := NewDatabase(name, newEnv.DbData(), opts)
+	db := NewDatabase(name, newEnv.DbData())
 	p.databases[strings.ToLower(db.Name())] = db
 
 	dbstate, err := GetInitialDBState(ctx, db)
@@ -385,24 +373,22 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 	switch v := srcDb.(type) {
 	case Database:
 		db = Database{
-			name:     dbName,
-			ddb:      v.ddb,
-			rsw:      static,
-			rsr:      static,
-			drw:      static,
-			gs:       v.gs,
-			editOpts: v.editOpts,
+			name: dbName,
+			ddb:  v.ddb,
+			rsw:  static,
+			rsr:  static,
+			drw:  static,
+			gs:   v.gs,
 		}
 	case ReadReplicaDatabase:
 		db = ReadReplicaDatabase{
 			Database: Database{
-				name:     dbName,
-				ddb:      v.ddb,
-				rsw:      static,
-				rsr:      static,
-				drw:      static,
-				gs:       v.gs,
-				editOpts: v.editOpts,
+				name: dbName,
+				ddb:  v.ddb,
+				rsw:  static,
+				rsr:  static,
+				drw:  static,
+				gs:   v.gs,
 			},
 			headRef:        v.headRef,
 			remoteTrackRef: v.remoteTrackRef,
@@ -440,13 +426,12 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 
 	name := srcDb.Name() + dbRevisionDelimiter + revSpec
 	db := ReadOnlyDatabase{Database: Database{
-		name:     name,
-		ddb:      srcDb.DbData().Ddb,
-		rsw:      srcDb.DbData().Rsw,
-		rsr:      srcDb.DbData().Rsr,
-		drw:      srcDb.DbData().Drw,
-		gs:       nil,
-		editOpts: srcDb.editOpts,
+		name: name,
+		ddb:  srcDb.DbData().Ddb,
+		rsw:  srcDb.DbData().Rsw,
+		rsr:  srcDb.DbData().Rsr,
+		drw:  srcDb.DbData().Drw,
+		gs:   nil,
 	}}
 	init := dsess.InitialDbState{
 		Db:           db,

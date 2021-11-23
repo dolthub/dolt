@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -81,11 +80,9 @@ type DoltTable struct {
 
 	projectedCols []string
 	temporary     bool
-
-	opts editor.Options
 }
 
-func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool, opts editor.Options) *DoltTable {
+func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool) *DoltTable {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
@@ -103,7 +100,6 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		autoIncCol:    autoCol,
 		projectedCols: nil,
 		temporary:     isTemporary,
-		opts:          opts,
 	}
 }
 
@@ -761,16 +757,7 @@ func (t *AlterableDoltTable) CreateIndex(
 		return err
 	}
 
-	ret, err := creation.CreateIndex(
-		ctx,
-		table,
-		indexName,
-		columns,
-		constraint == sql.IndexConstraint_Unique,
-		true,
-		comment,
-		t.opts,
-	)
+	ret, err := creation.CreateIndex(ctx, table, indexName, columns, constraint == sql.IndexConstraint_Unique, true, comment)
 	if err != nil {
 		return err
 	}
@@ -953,7 +940,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		return err
 	}
 	if fkChecks.(int8) == 1 {
-		root, foreignKey, err = creation.ResolveForeignKey(ctx, root, table, foreignKey, t.opts)
+		root, foreignKey, err = creation.ResolveForeignKey(ctx, root, table, foreignKey)
 		if err != nil {
 			return err
 		}
@@ -1090,7 +1077,6 @@ func createIndexForTable(
 	columns []sql.IndexColumn,
 	isUserDefined bool,
 	comment string,
-	opts editor.Options,
 ) (*createIndexReturn, error) {
 	panic("unimplemented")
 

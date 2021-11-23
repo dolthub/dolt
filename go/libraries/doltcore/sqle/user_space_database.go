@@ -19,20 +19,17 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // UserSpaceDatabase in an implementation of sql.Database for root values. Does not expose any of the internal dolt tables.
 type UserSpaceDatabase struct {
 	*doltdb.RootValue
-
-	editOpts editor.Options
 }
 
 var _ SqlDatabase = (*UserSpaceDatabase)(nil)
 
-func NewUserSpaceDatabase(root *doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
-	return &UserSpaceDatabase{RootValue: root, editOpts: editOpts}
+func NewUserSpaceDatabase(root *doltdb.RootValue) *UserSpaceDatabase {
+	return &UserSpaceDatabase{RootValue: root}
 }
 
 func (db *UserSpaceDatabase) Name() string {
@@ -54,7 +51,7 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 	if err != nil {
 		return nil, false, err
 	}
-	dt := NewDoltTable(tableName, sch, table, db, false, db.editOpts)
+	dt := NewDoltTable(tableName, sch, table, db, false)
 	return dt, true, nil
 }
 
@@ -90,8 +87,4 @@ func (db *UserSpaceDatabase) StartTransaction(ctx *sql.Context, tCharacteristic 
 
 func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
 	panic("UserSpaceDatabase cannot flush")
-}
-
-func (db *UserSpaceDatabase) EditOptions() editor.Options {
-	panic("UserSpaceDatabase does not have edit options")
 }

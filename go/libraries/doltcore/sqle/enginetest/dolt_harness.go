@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 const (
@@ -174,8 +173,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
 	d.databaseGlobalStates = nil
 	for _, name := range names {
-		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-		db := sqle.NewDatabase(name, dEnv.DbData(), opts)
+		db := sqle.NewDatabase(name, dEnv.DbData())
 		d.databases = append(d.databases, db)
 
 		globalState := globalstate.NewGlobalStateStore()

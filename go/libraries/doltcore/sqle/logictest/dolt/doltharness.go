@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -340,8 +339,7 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 }
 
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := dsql.NewDatabase("dolt", dEnv.DbData(), opts)
+	db := dsql.NewDatabase("dolt", dEnv.DbData())
 	pro := dsql.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, db)
 	engine := sqle.NewDefault(pro)
 

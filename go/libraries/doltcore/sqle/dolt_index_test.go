@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -1293,8 +1292,7 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, ind
 func doltIndexSetup(t *testing.T) map[string]DoltIndex {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := NewDatabase("dolt", dEnv.DbData(), opts)
+	db := NewDatabase("dolt", dEnv.DbData())
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		panic(err)

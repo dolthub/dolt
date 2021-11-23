@@ -30,15 +30,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := NewDatabase("dolt", dEnv.DbData(), opts)
+	db := NewDatabase("dolt", dEnv.DbData())
 
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
@@ -156,8 +154,7 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 		Drw: dEnv.DocsReadWriter(),
 	}
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	db := NewDatabase("dolt", dbData, opts)
+	db := NewDatabase("dolt", dbData)
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	if err != nil {
 		return nil, err
