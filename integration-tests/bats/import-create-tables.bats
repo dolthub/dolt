@@ -98,7 +98,6 @@ teardown() {
 
 @test "import-create-tables: import data from csv and create the table" {
     run dolt table import -c --pk=pk test 1pk5col-ints.csv
-    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
