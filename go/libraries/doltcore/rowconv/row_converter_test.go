@@ -136,10 +136,9 @@ func TestSpecialBoolHandling(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, row.AreEqual(outData, expected, mapping.DestSch))
 
-	// TODO: Error because of string handling of "true" and "false" in gms
-	//rconvNoHandle, err := NewRowConverter(context.Background(), vrw, mapping)
-	//require.NoError(t, err)
-	////results, errStr := rconvNoHandle.Convert(inRow)
-	////assert.Nil(t, results)
-	////assert.NotEmpty(t, errStr)
+	rconvNoHandle, err := NewRowConverter(context.Background(), vrw, mapping)
+	require.NoError(t, err)
+	results, errStr := rconvNoHandle.Convert(inRow)
+	assert.Nil(t, results)
+	assert.NotEmpty(t, errStr)
 }

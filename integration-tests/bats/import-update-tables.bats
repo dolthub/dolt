@@ -30,6 +30,11 @@ pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
 DELIM
 
+    cat <<DELIM > 1pk5col-ints-updt.csv
+pk,c1,c2,c3,c4,c5
+0,1,2,3,4,6
+DELIM
+
     cat <<SQL > employees-sch.sql
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -58,6 +63,18 @@ teardown() {
 
     # Validate that a successful import with no bad rows does not print the following
     ! [[ "$output" =~ "The following rows were skipped:" ]] || false
+
+    # Run again to get correct Had No Effect amount
+    run dolt table import -u test `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 2, Additions: 0, Modifications: 0, Had No Effect: 2" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    # Run another update for the correct modification amount
+    run dolt table import -u test 1pk5col-ints-updt.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
 @test "import-update-tables: update table using csv with null (blank) values" {
@@ -243,7 +260,7 @@ DELIM
     [[ "${lines[1]}" =~ "1,1,2,3,4,8" ]] || false
 }
 
-@test "import-update-tables: subsequent runs of same import with duplicate keys produces no modifications" {
+@test "import-update-tables: subsequent runs of same import with duplicate keys produces no difference in final data" {
     cat <<DELIM > 1pk5col-rpt-ints.csv
 pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
@@ -253,10 +270,15 @@ DELIM
 
     dolt sql < 1pk5col-ints-sch.sql
     dolt table import -u --continue test 1pk5col-rpt-ints.csv
+    dolt commit -am "cm1"
+
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv
     [ "$status" -eq 0 ]
-    skip "Running this file on repeat produces modifications"
-    ! [[ "$output" =~ "Modifications: 2" ]] || falsa 
+    [[ "$output" =~ "Modifications: 3" ]] || falsa
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 }
 
 @test "import-update-tables: importing some columns does not overwrite columns not part of the import" {

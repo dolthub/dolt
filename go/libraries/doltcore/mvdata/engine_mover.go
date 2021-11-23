@@ -138,8 +138,28 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 		case <-ctx.Done():
 			return
 		default:
-			s.stats.Additions-- // Reduce the addition count
+			// s.stats.Additions-- // Reduce the addition count
 			badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "create", Details: err.Error()}
+		}
+	}
+	updateStats := func(row sql.Row) {
+		if row == nil {
+			return
+		}
+		// This is an update operation then
+		if len(row) != len(s.wrSch) {
+			oldRow := row[:len(row)/2]
+			newRow := row[len(row)/2:]
+
+			if ok, err := oldRow.Equals(newRow, s.wrSch); err == nil {
+				if ok {
+					s.stats.SameVal++
+				} else {
+					s.stats.Modifications++
+				}
+			}
+		} else {
+			s.stats.Additions++
 		}
 	}
 
@@ -160,12 +180,12 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 			s.statsCB(s.stats)
 		}
 
-		_, err := iter.Next()
+		row, err := iter.Next()
 
 		// All other errors are handled by the errorHandler
 		if err == nil {
 			_ = atomic.AddInt32(&s.statOps, 1)
-			s.stats.Additions++
+			updateStats(row)
 		} else if err == io.EOF {
 			atomic.LoadInt32(&s.statOps)
 			atomic.StoreInt32(&s.statOps, 0)
@@ -203,6 +223,7 @@ func (s *sqlEngineMover) createOrEmptyTableIfNeeded() error {
 	}
 }
 
+// TODO: Move this to engine logic
 func (s *sqlEngineMover) createTable() error {
 	colStmts := make([]string, len(s.wrSch))
 	var primaryKeyCols []string
@@ -258,6 +279,14 @@ func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandle
 	default:
 		return nil, fmt.Errorf("unsupported import type")
 	}
+}
+
+func (s *sqlEngineMover) GetSchema() sql.Schema {
+	return s.wrSch
+}
+
+func (s *sqlEngineMover) getLastInsertId() int64 {
+	return s.sqlCtx.GetLastQueryInfo(sql.LastInsertId)
 }
 
 func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler plan.ErrorHandlerFunc) (sql.Node, error) {

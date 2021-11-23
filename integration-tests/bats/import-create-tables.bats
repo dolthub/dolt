@@ -590,6 +590,7 @@ DELIM
     [[ "$output" =~ "The following rows were skipped:" ]] || false
     [[ "$output" =~ "1,1,2,3,4,7" ]] || false
     [[ "$output" =~ "1,1,2,3,4,8" ]] || false
+    echo $output
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Lines skipped: 2" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false

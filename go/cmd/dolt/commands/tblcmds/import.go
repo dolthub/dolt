@@ -545,6 +545,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 
+				dRow = transformDoltRow(dRow, wr.GetSchema())
 				select {
 				case parsedRowChan <- dRow:
 				case <-ctx.Done():
@@ -729,4 +730,37 @@ func writeBadRowToCli(ctx context.Context, sqlRow sql.Row, b *bytes.Buffer) erro
 	b.Reset()
 
 	return nil
+}
+
+// transformDoltRow seeks to 1) Match and subset the read and write schema. 2)
+func transformDoltRow(row sql.Row, wrSchema sql.Schema) sql.Row {
+	// match columns // TODO: Assumes same to same schema. Need to fix later
+
+	for i, col := range wrSchema {
+		switch col.Type {
+		case sql.Boolean, sql.MustCreateBitType(1):
+			val, ok := stringToBoolean(row[i].(string))
+			if ok {
+				row[i] = val
+			}
+		}
+	}
+
+	return row
+}
+
+func stringToBoolean(s string) (result bool, canConvert bool) {
+	lower := strings.ToLower(s)
+	switch lower{
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	case "0":
+		return false, true
+	case "1":
+		return true, false
+	default:
+		return false, false
+	}
 }
