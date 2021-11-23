@@ -18,11 +18,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 
@@ -77,7 +75,6 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return nil, err
 	}
 
-	// TODO: Verify this is correct Enable batch mode
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
 	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
@@ -104,6 +101,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 	}, nil
 }
 
+// StartWriting implements the DataMover interface.
 func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error {
 	var err error
 	s.sqlCtx, err = s.se.NewContext(ctx)
@@ -112,6 +110,11 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 	}
 
 	err = s.forceDropTableIfNeeded()
+	if err != nil {
+		return err
+	}
+
+	_, _, err = s.se.Query(s.sqlCtx, fmt.Sprintf("START TRANSACTION"))
 	if err != nil {
 		return err
 	}
@@ -138,15 +141,15 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 		case <-ctx.Done():
 			return
 		default:
-			// s.stats.Additions-- // Reduce the addition count
-			badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "create", Details: err.Error()}
+			badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "write", Details: err.Error()}
 		}
 	}
 	updateStats := func(row sql.Row) {
 		if row == nil {
 			return
 		}
-		// This is an update operation then
+
+		// If the length of the row does not match the schema then we have an update operation.
 		if len(row) != len(s.wrSch) {
 			oldRow := row[:len(row)/2]
 			newRow := row[len(row)/2:]
@@ -196,11 +199,18 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 	}
 }
 
+// Commit implements the DataMover interface.
 func (s *sqlEngineMover) Commit(ctx context.Context) error {
 	_, _, err := s.se.Query(s.sqlCtx, "COMMIT")
 	return err
 }
 
+// GetSchema implements the DataMover interface.
+func (s *sqlEngineMover) GetSchema() sql.Schema {
+	return s.wrSch
+}
+
+// forceDropTableIfNeeded drop the given table in case the -f parameter is passed.
 func (s *sqlEngineMover) forceDropTableIfNeeded() error {
 	if s.force {
 		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("DROP TABLE IF EXISTS %s", s.tableName))
@@ -210,6 +220,7 @@ func (s *sqlEngineMover) forceDropTableIfNeeded() error {
 	return nil
 }
 
+// createOrEmptyTableIfNeeded either creates or truncates the table given a -c or -r parameter.
 func (s *sqlEngineMover) createOrEmptyTableIfNeeded() error {
 	switch s.importOption {
 	case CreateOp:
@@ -218,83 +229,56 @@ func (s *sqlEngineMover) createOrEmptyTableIfNeeded() error {
 		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("TRUNCATE TABLE %s", s.tableName))
 		return err
 	default:
-		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("START TRANSACTION"))
+		return nil
+	}
+}
+
+// createTable creates a table.
+func (s *sqlEngineMover) createTable() error {
+	cr := plan.NewCreateTable(sql.UnresolvedDatabase(s.database), s.tableName, false, false, &plan.TableSpec{Schema: s.wrSch})
+	analyzed, err := s.se.GetAnalyzer().Analyze(s.sqlCtx, cr, nil)
+	if err != nil {
 		return err
 	}
-}
 
-// TODO: Move this to engine logic
-func (s *sqlEngineMover) createTable() error {
-	colStmts := make([]string, len(s.wrSch))
-	var primaryKeyCols []string
-
-	for i, col := range s.wrSch {
-		stmt := fmt.Sprintf("  `%s` %s", col.Name, strings.ToLower(col.Type.String()))
-
-		if !col.Nullable {
-			stmt = fmt.Sprintf("%s NOT NULL", stmt)
-		}
-
-		if col.AutoIncrement {
-			stmt = fmt.Sprintf("%s AUTO_INCREMENT", stmt)
-		}
-
-		// TODO: The columns that are rendered in defaults should be backticked
-		if col.Default != nil {
-			stmt = fmt.Sprintf("%s DEFAULT %s", stmt, col.Default.String())
-		}
-
-		if col.Comment != "" {
-			stmt = fmt.Sprintf("%s COMMENT '%s'", stmt, col.Comment)
-		}
-
-		if col.PrimaryKey {
-			primaryKeyCols = append(primaryKeyCols, col.Name)
-		}
-
-		colStmts[i] = stmt
+	analyzedQueryProcess, ok := analyzed.(*plan.QueryProcess)
+	if !ok {
+		return fmt.Errorf("internal error: unknown analyzed result type `%T`", analyzed)
 	}
 
-	if len(primaryKeyCols) > 0 {
-		primaryKey := fmt.Sprintf("  PRIMARY KEY (%s)", strings.Join(quoteIdentifiers(primaryKeyCols), ","))
-		colStmts = append(colStmts, primaryKey)
+	ri, err := analyzedQueryProcess.Child.RowIter(s.sqlCtx, nil)
+	if err != nil {
+		return err
 	}
 
-	query := fmt.Sprintf(
-		"CREATE TABLE `%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-		s.tableName,
-		strings.Join(colStmts, ",\n"),
-	)
-
-	_, _, err := s.se.Query(s.sqlCtx, query)
-	return err
+	for {
+		_, err = ri.Next()
+		if err != nil {
+			return ri.Close(s.sqlCtx)
+		}
+	}
 }
 
+// getNodeOperation returns the sql.Node to be iterated on given the import option.
 func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandler func(err error)) (sql.Node, error) {
 	switch s.importOption {
 	case CreateOp, ReplaceOp:
-		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, false, nil, errorHandler) // contonerr translates to ignore
+		return s.createInsertImportNode(inputChannel, s.contOnErr, false, nil, errorHandler) // contonerr translates to ignore
 	case UpdateOp:
-		return createInsertImportNode(s.sqlCtx, s.se.GetAnalyzer(), s.database, s.tableName, inputChannel, s.wrSch, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.wrSch), errorHandler) // contonerr translates to ignore
+		return s.createInsertImportNode(inputChannel, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.wrSch), errorHandler) // contonerr translates to ignore
 	default:
 		return nil, fmt.Errorf("unsupported import type")
 	}
 }
 
-func (s *sqlEngineMover) GetSchema() sql.Schema {
-	return s.wrSch
-}
+// createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped
+// with an error handler.
+func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler plan.ErrorHandlerFunc) (sql.Node, error) {
+	src := plan.NewChannelRowSource(s.wrSch, source) // TODO: Change the name of this
+	dest := plan.NewUnresolvedTable(s.tableName, s.database)
 
-func (s *sqlEngineMover) getLastInsertId() int64 {
-	return s.sqlCtx.GetLastQueryInfo(sql.LastInsertId)
-}
-
-func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbname string, tableName string, source chan sql.Row, schema sql.Schema, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler plan.ErrorHandlerFunc) (sql.Node, error) {
-	src := plan.NewChannelRowSource(schema, source) // TODO: Change the name of this
-	dest := plan.NewUnresolvedTable(tableName, dbname)
-
-	insert := plan.NewInsertInto(sql.UnresolvedDatabase(dbname), dest, src, replace, nil, onDuplicateExpression, ignore)
-	analyzed, err := analyzer.Analyze(ctx, insert, nil)
+	insert := plan.NewInsertInto(sql.UnresolvedDatabase(s.database), dest, src, replace, nil, onDuplicateExpression, ignore)
+	analyzed, err := s.se.GetAnalyzer().Analyze(s.sqlCtx, insert, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -323,6 +307,7 @@ func createInsertImportNode(ctx *sql.Context, analyzer *analyzer.Analyzer, dbnam
 	return accumulatorNode.(*plan.RowUpdateAccumulator).Child, nil
 }
 
+// generateOnDuplicateKeyExpressions generates the duplicate key expressions needed for the update import option.
 func generateOnDuplicateKeyExpressions(sch sql.Schema) []sql.Expression {
 	ret := make([]sql.Expression, len(sch))
 	for i, col := range sch {
@@ -332,12 +317,4 @@ func generateOnDuplicateKeyExpressions(sch sql.Schema) []sql.Expression {
 	}
 
 	return ret
-}
-
-func quoteIdentifiers(ids []string) []string {
-	quoted := make([]string, len(ids))
-	for i, id := range ids {
-		quoted[i] = fmt.Sprintf("`%s`", id)
-	}
-	return quoted
 }

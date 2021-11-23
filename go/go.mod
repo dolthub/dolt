@@ -19,7 +19,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
-	github.com/dolthub/go-mysql-server v0.11.1-0.20211122233652-b7a08f95e212
+	github.com/dolthub/go-mysql-server v0.11.1-0.20211123033837-9fe48c6557ae
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
@@ -109,7 +109,6 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 )
 
-replace github.com/dolthub/go-mysql-server => /Users/vinairachakonda/go/src/dolthub/go-mysql-server
 replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
