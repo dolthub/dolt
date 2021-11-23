@@ -31,7 +31,8 @@ teardown() {
 }
 
 @test "sql-conflicts: read from empty table" {
-    dolt sql -q "SELECT * FROM dolt_conflicts_empty"
+    run dolt sql -q "SELECT * FROM dolt_conflicts_empty"
+    [ $status -eq 1 ] || false
 }
 
 @test "sql-conflicts: add conflict" {
