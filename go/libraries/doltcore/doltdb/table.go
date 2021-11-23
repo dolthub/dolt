@@ -155,6 +155,7 @@ func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData
 	return &Table{t.vrw, updatedSt}, nil
 }
 
+// GetConflicts returns a map built from ValueReadWriter when there are no
 func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
 	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
 	if err != nil {
