@@ -31,8 +31,10 @@ type IndexLookupKeyIterator interface {
 }
 
 type doltIndexLookup struct {
-	idx    DoltIndex
-	ranges []prolly.Range // The collection of ranges that represent this lookup.
+	idx DoltIndex
+	// The collection of ranges that represent this lookup.
+	ranges    []prolly.Range
+	sqlRanges sql.RangeCollection
 }
 
 var _ sql.IndexLookup = &doltIndexLookup{}
@@ -156,24 +158,19 @@ func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
 	return covers
 }
 
-func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData prolly.Map, ranges []prolly.Range, columns []string) (sql.RowIter, error) {
-	panic("unimplemented")
-	//readRanges := make([]*noms.ReadRange, len(ranges))
-	//for i, lookupRange := range ranges {
-	//	readRanges[i] = lookupRange.ToReadRange()
-	//}
-	//
-	//nrr := noms.NewNomsRangeReader(il.idx.IndexSchema(), rowData, readRanges)
-	//
-	//covers := il.indexCoversCols(columns)
-	//if covers {
-	//	return NewCoveringIndexRowIterAdapter(ctx, il.idx, nrr, columns), nil
-	//} else {
-	//	return NewIndexLookupRowIterAdapter(ctx, il.idx, nrr), nil
-	//}
-	//sch := il.idx.Schema()
-	//
-	//return rowIterFromMapIter(ctx, sch, projs, rows, iter)
+func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rows prolly.Map, ranges []prolly.Range, projs []string) (sql.RowIter, error) {
+	if len(ranges) > 1 {
+		panic("too many ranges!")
+	}
+
+	iter, err := rows.IterRange(ctx, ranges[0])
+	if err != nil {
+		return nil, err
+	}
+
+	sch := il.idx.IndexSchema()
+
+	return rowIterFromMapIter(ctx, sch, rows, iter, projs)
 }
 
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
@@ -314,4 +311,79 @@ func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData prolly.Map
 
 type keyIter interface {
 	ReadKey(ctx context.Context) (val.Tuple, error)
+}
+
+func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
+	pruned = make([]sql.Range, 0, len(sqlRanges))
+	for _, sr := range sqlRanges {
+		empty := false
+		for _, colExpr := range sr {
+			empty, err = colExpr.IsEmpty()
+			if err != nil {
+				return nil, err
+			} else if empty {
+				// one of the RangeColumnExprs in |sr|
+				// is empty: prune the entire range
+				break
+			}
+		}
+		if !empty {
+			pruned = append(pruned, sr)
+		}
+	}
+	return pruned, nil
+}
+
+func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prolly.Range, err error) {
+	var lower, upper []sql.RangeCut
+	for _, expr := range sqlRange {
+		lower = append(lower, expr.LowerBound)
+		upper = append(upper, expr.UpperBound)
+	}
+
+	start := prolly.RangeCut{Inclusive: true}
+	startFields := sql.Row{}
+	for _, sc := range lower {
+		if !isBindingCut(sc) {
+			start = prolly.RangeCut{Unbound: true, Inclusive: false}
+			break
+		}
+		start.Inclusive = start.Inclusive && sc.TypeAsLowerBound() == sql.Closed
+		startFields = append(startFields, sql.GetRangeCutKey(sc))
+	}
+	if !start.Unbound {
+		start.Key = tupleFromKeys(startFields, tb)
+	}
+
+	stop := prolly.RangeCut{Inclusive: true}
+	stopFields := sql.Row{}
+	for _, sc := range upper {
+		if !isBindingCut(sc) {
+			stop = prolly.RangeCut{Unbound: true, Inclusive: false}
+			break
+		}
+		stop.Inclusive = stop.Inclusive && sc.TypeAsUpperBound() == sql.Closed
+		stopFields = append(stopFields, sql.GetRangeCutKey(sc))
+	}
+	if !stop.Unbound {
+		stop.Key = tupleFromKeys(stopFields, tb)
+	}
+
+	return prolly.Range{
+		Start:   start,
+		Stop:    stop,
+		KeyDesc: tb.Desc,
+		Reverse: false,
+	}, nil
+}
+
+func isBindingCut(cut sql.RangeCut) bool {
+	return cut != sql.BelowAll{} && cut != sql.AboveAll{}
+}
+
+func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) val.Tuple {
+	for i, v := range keys {
+		tb.PutField(i, v)
+	}
+	return tb.Build(shimPool)
 }

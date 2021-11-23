@@ -31,11 +31,11 @@ type sqlRowIter struct {
 	ctx  context.Context
 	iter prolly.MapRangeIter
 
-	rowLen  int
 	keyDesc val.TupleDesc
-	keyProj []int
 	valDesc val.TupleDesc
+	keyProj []int
 	valProj []int
+	rowLen  int
 }
 
 var _ sql.RowIter = sqlRowIter{}
@@ -53,25 +53,32 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projections []strin
 		return nil, err
 	}
 
-	return rowIterFromMapIter(ctx, sch, projections, rows, iter)
+	return rowIterFromMapIter(ctx, sch, rows, iter, projections)
 }
 
-func rowIterFromMapIter(ctx context.Context, sch schema.Schema, projs []string, m prolly.Map, iter prolly.MapRangeIter) (sql.RowIter, error) {
-	if projs == nil {
-		projs = sch.GetAllCols().GetColumnNames()
+func rowIterFromMapIter(
+	ctx context.Context,
+	sch schema.Schema,
+	m prolly.Map,
+	iter prolly.MapRangeIter,
+	projections []string,
+) (sql.RowIter, error) {
+
+	if projections == nil {
+		projections = sch.GetAllCols().GetColumnNames()
 	}
-	keyProj, valProj := projectionMappings(sch, projs)
+	keyProj, valProj := projectionMappings(sch, projections)
 
 	kd, vd := m.Descriptors()
 
 	return sqlRowIter{
 		ctx:     ctx,
 		iter:    iter,
-		rowLen:  len(projs),
 		keyDesc: kd,
 		valDesc: vd,
 		keyProj: keyProj,
 		valProj: valProj,
+		rowLen:  len(projections),
 	}, nil
 }
 
@@ -131,7 +138,7 @@ func (it sqlRowIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
-var shared = pool.NewBuffPool()
+var shimPool = pool.NewBuffPool()
 
 func tupleFromSqlValues(bld *val.TupleBuilder, vals ...interface{}) val.Tuple {
 	if len(vals) != bld.Desc.Count() {
@@ -140,5 +147,5 @@ func tupleFromSqlValues(bld *val.TupleBuilder, vals ...interface{}) val.Tuple {
 	for i, v := range vals {
 		bld.PutField(i, v)
 	}
-	return bld.Build(shared)
+	return bld.Build(shimPool)
 }

@@ -23,7 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -38,11 +38,11 @@ var resultBufferPool = &sync.Pool{
 }
 
 type indexLookupRowIterAdapter struct {
-	idx        DoltIndex
-	keyIter    keyIter
-	lookupTags map[uint64]int
-	ctx        *sql.Context
-	cancelF    func()
+	keyIter keyIter
+	rows    prolly.Map
+
+	ctx     *sql.Context
+	cancelF func()
 
 	read  uint64
 	count uint64
@@ -53,9 +53,6 @@ type indexLookupRowIterAdapter struct {
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
 func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter keyIter) *indexLookupRowIterAdapter {
 	lookupTags := make(map[uint64]int)
-	for i, tag := range idx.Schema().GetPKCols().Tags {
-		lookupTags[tag] = i
-	}
 
 	// handle keyless case, where no columns are pk's and rowIdTag is the only lookup tag
 	if len(lookupTags) == 0 {
@@ -68,12 +65,10 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter keyIt
 	queueCtx, cancelF := context.WithCancel(ctx)
 
 	iter := &indexLookupRowIterAdapter{
-		idx:        idx,
-		keyIter:    keyIter,
-		lookupTags: lookupTags,
-		ctx:        ctx,
-		cancelF:    cancelF,
-		resultBuf:  resBuf,
+		keyIter:   keyIter,
+		ctx:       ctx,
+		cancelF:   cancelF,
+		resultBuf: resBuf,
 	}
 
 	go iter.queueRows(queueCtx, epoch)
@@ -230,35 +225,37 @@ type coveringIndexRowIterAdapter struct {
 }
 
 func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter keyIter, resultCols []string) *coveringIndexRowIterAdapter {
-	idxCols := idx.IndexSchema().GetPKCols()
-	tblPKCols := idx.Schema().GetPKCols()
-	sch := idx.Schema()
-	cols := sch.GetAllCols().GetColumns()
-	tagToSqlColIdx := make(map[uint64]int)
-
-	resultColSet := set.NewCaseInsensitiveStrSet(resultCols)
-	for i, col := range cols {
-		_, partOfIdxKey := idxCols.GetByNameCaseInsensitive(col.Name)
-		if partOfIdxKey && (len(resultCols) == 0 || resultColSet.Contains(col.Name)) {
-			tagToSqlColIdx[col.Tag] = i
-		}
-	}
-
-	for i, col := range cols {
-		_, partOfIndexKey := idxCols.GetByTag(col.Tag)
-		_, partOfTableKeys := tblPKCols.GetByTag(col.Tag)
-		if partOfIndexKey != partOfTableKeys {
-			cols[i], _ = schema.NewColumnWithTypeInfo(col.Name, col.Tag, col.TypeInfo, partOfIndexKey, col.Default, col.AutoIncrement, col.Comment, col.Constraints...)
-		}
-	}
-
-	return &coveringIndexRowIterAdapter{
-		ctx:       ctx,
-		idx:       idx,
-		keyIter:   keyIter,
-		pkCols:    sch.GetPKCols(),
-		nonPKCols: sch.GetNonPKCols(),
-	}
+	panic("unimplemented")
+	//
+	//idxCols := idx.IndexSchema().GetPKCols()
+	//tblPKCols := idx.Schema().GetPKCols()
+	//sch := idx.Schema()
+	//cols := sch.GetAllCols().GetColumns()
+	//tagToSqlColIdx := make(map[uint64]int)
+	//
+	//resultColSet := set.NewCaseInsensitiveStrSet(resultCols)
+	//for i, col := range cols {
+	//	_, partOfIdxKey := idxCols.GetByNameCaseInsensitive(col.Name)
+	//	if partOfIdxKey && (len(resultCols) == 0 || resultColSet.Contains(col.Name)) {
+	//		tagToSqlColIdx[col.Tag] = i
+	//	}
+	//}
+	//
+	//for i, col := range cols {
+	//	_, partOfIndexKey := idxCols.GetByTag(col.Tag)
+	//	_, partOfTableKeys := tblPKCols.GetByTag(col.Tag)
+	//	if partOfIndexKey != partOfTableKeys {
+	//		cols[i], _ = schema.NewColumnWithTypeInfo(col.Name, col.Tag, col.TypeInfo, partOfIndexKey, col.Default, col.AutoIncrement, col.Comment, col.Constraints...)
+	//	}
+	//}
+	//
+	//return &coveringIndexRowIterAdapter{
+	//	ctx:       ctx,
+	//	idx:       idx,
+	//	keyIter:   keyIter,
+	//	pkCols:    sch.GetPKCols(),
+	//	nonPKCols: sch.GetNonPKCols(),
+	//}
 }
 
 // Next returns the next row from the iterator.

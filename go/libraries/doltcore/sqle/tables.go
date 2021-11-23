@@ -198,15 +198,14 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 	if len(cols) > 0 {
 		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           t.db,
 			id:           "PRIMARY",
+			db:           t.db,
 			indexRowData: rowData,
 			indexSch:     sch,
-			table:        tbl,
+			cols:         cols,
+			keyBuilder:   val.NewTupleBuilder(rowData.KeyDesc()),
 			tableData:    rowData,
 			tableName:    t.Name(),
-			tableSch:     sch,
 			unique:       true,
 			generated:    false,
 		})
@@ -221,16 +220,16 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		for i, tag := range index.IndexedColumnTags() {
 			cols[i], _ = index.GetColumn(tag)
 		}
+
 		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           t.db,
 			id:           index.Name(),
+			db:           t.db,
 			indexRowData: indexRowData,
 			indexSch:     index.Schema(),
-			table:        tbl,
+			cols:         cols,
+			keyBuilder:   val.NewTupleBuilder(indexRowData.KeyDesc()),
 			tableData:    rowData,
 			tableName:    t.Name(),
-			tableSch:     sch,
 			unique:       index.IsUnique(),
 			comment:      index.Comment(),
 			generated:    false,
@@ -442,16 +441,15 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 }
 
 func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	panic("unimplemented")
-
-	//dil, ok := lookup.(*doltIndexLookup)
-	//if !ok {
-	//	return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
-	//}
-	//return &WritableIndexedDoltTable{
-	//	WritableDoltTable: t,
-	//	indexLookup:       dil,
-	//}
+	dil, ok := lookup.(*doltIndexLookup)
+	if !ok {
+		msg := fmt.Errorf("Unrecognized indexLookup %T", lookup)
+		return sqlutil.NewStaticErrorTable(t, msg)
+	}
+	return &WritableIndexedDoltTable{
+		WritableDoltTable: t,
+		indexLookup:       dil,
+	}
 }
 
 func (t *WritableDoltTable) WithProjection(colNames []string) sql.Table {
