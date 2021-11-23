@@ -54,10 +54,6 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		base, err = tbl.GetSchema(ctx)
 		sch, mergeSch = base, base
 	}
-	//if err == doltdb.ErrNoConflicts {
-	//	base, err = tbl.GetSchema(ctx)
-	//	sch, mergeSch = base, base
-	//}
 	if err != nil {
 		return nil, err
 	}
@@ -78,9 +74,6 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 	}
 
 	_, confData, err := tbl.GetConflicts(ctx)
-	//if err == doltdb.ErrNoConflicts {
-	//	return nil, err
-	//}
 	if err != nil {
 		return nil, err
 	}

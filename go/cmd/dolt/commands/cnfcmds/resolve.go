@@ -137,12 +137,6 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	}
 
 	if err != nil {
-		// TODO: do I need this?
-		//if err == doltdb.ErrNoConflicts {
-		//	cli.Println("no conflicts to resolve.")
-		//	return nil
-		//}
-
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
 	}
 
