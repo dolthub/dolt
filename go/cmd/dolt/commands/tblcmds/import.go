@@ -36,12 +36,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -540,12 +540,11 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 			} else {
-				dRow, err := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+				dRow, err := transformToDoltRow(r, rd.GetSchema(), wr.GetSchema(), options.nameMapper)
 				if err != nil {
 					return err
 				}
 
-				dRow = transformDoltRow(dRow, wr.GetSchema())
 				select {
 				case parsedRowChan <- dRow:
 				case <-ctx.Done():
@@ -703,19 +702,7 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 // writeBadRowToCli prints a bad row in a csv form to STDERR.
 func writeBadRowToCli(ctx context.Context, sqlRow sql.Row, b *bytes.Buffer) error {
 	wr := bufio.NewWriter(b)
-
-	colValStrs := make([]*string, len(sqlRow))
-
-	for colNum, col := range sqlRow {
-		if col != nil {
-			str := sqlutil.SqlColToStr(ctx, col)
-			colValStrs[colNum] = &str
-		} else {
-			colValStrs[colNum] = nil
-		}
-	}
-
-	err := csv.WriteCSVRow(wr, colValStrs, ",", false)
+	_, err := wr.WriteString(sql.FormatRow(sqlRow))
 	if err != nil {
 		return err
 	}
@@ -733,25 +720,35 @@ func writeBadRowToCli(ctx context.Context, sqlRow sql.Row, b *bytes.Buffer) erro
 }
 
 // transformDoltRow seeks to 1) Match and subset the read and write schema. 2)
-func transformDoltRow(row sql.Row, wrSchema sql.Schema) sql.Row {
+func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	// match columns // TODO: Assumes same to same schema. Need to fix later
+	doltRow, err := sqlutil.DoltRowToSqlRow(row, rdSchema)
+	if err != nil {
+		return nil, err
+	}
 
 	for i, col := range wrSchema {
 		switch col.Type {
 		case sql.Boolean, sql.MustCreateBitType(1):
-			val, ok := stringToBoolean(row[i].(string))
+			val, ok := stringToBoolean(doltRow[i].(string))
 			if ok {
-				row[i] = val
+				doltRow[i] = val
 			}
 		}
 	}
 
-	return row
+	rdSchemaAsDoltSchema, err := sqlutil.FromDoltSchema(wrSchema[0].Source, rdSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchemaAsDoltSchema, wrSchema, nameMapper)
+	return doltRow, nil
 }
 
 func stringToBoolean(s string) (result bool, canConvert bool) {
 	lower := strings.ToLower(s)
-	switch lower{
+	switch lower {
 	case "true":
 		return true, true
 	case "false":
@@ -763,4 +760,25 @@ func stringToBoolean(s string) (result bool, canConvert bool) {
 	default:
 		return false, false
 	}
+}
+
+// matchReadSchemaToWriteSchema takes the read schema and accounts for subsetting and mapper (-m) differences.
+func matchReadSchemaToWriteSchema(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) sql.Row {
+	returnRow := sql.Row{}
+
+	for _, wCol := range wrSchema {
+		seen := false
+		for rIdx, rCol := range rdSchema {
+			if strings.ToLower(rCol.Name) == strings.ToLower(nameMapper.PreImage(wCol.Name)) {
+				returnRow = append(returnRow, row[rIdx])
+				seen = true
+			}
+		}
+
+		if !seen {
+			returnRow = append(returnRow, nil)
+		}
+	}
+
+	return returnRow
 }
