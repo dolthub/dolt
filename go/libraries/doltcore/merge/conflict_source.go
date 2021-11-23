@@ -81,9 +81,6 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 	//if err == doltdb.ErrNoConflicts {
 	//	return nil, err
 	//}
-	if confData == types.EmptyMap {
-		confData, err = types.NewMap(ctx, tbl.ValueReadWriter())
-	}
 	if err != nil {
 		return nil, err
 	}

@@ -161,7 +161,8 @@ func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
 		return Conflict{}, types.EmptyMap, err
 	}
 	if !ok {
-		return Conflict{}, types.EmptyMap, nil
+		confMap, _ := types.NewMap(ctx, t.ValueReadWriter())
+		return Conflict{}, confMap, nil
 		//return Conflict{}, types.EmptyMap, ErrNoConflicts
 	}
 
