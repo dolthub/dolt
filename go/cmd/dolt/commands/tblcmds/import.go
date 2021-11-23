@@ -395,7 +395,17 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	skipped, err := move(ctx, rd, wr, mvOpts)
+	mapper, err := rowconv.NameMapping(rd.GetSchema(), wrSch, mvOpts.nameMapper)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("").AddCause(err).Build(), usage)
+	}
+
+	rowConverter, err := rowconv.NewImportRowConverter(ctx, root.VRW(), mapper)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("").AddCause(err).Build(), usage)
+	}
+
+	skipped, err := move(ctx, rd, wr, rowConverter, mvOpts)
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
 			bdr := errhand.BuildDError("\nA bad row was encountered while moving data.")
@@ -488,7 +498,7 @@ func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema schema
 	return mv, nil
 }
 
-func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, options *importOptions) (int64, error) {
+func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, rowConverter *rowconv.RowConverter, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Setup the necessary data points for the import job
@@ -536,7 +546,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 			} else {
-				dRow, err := transformToDoltRow(r, rd.GetSchema(), wr.GetSchema(), options.nameMapper)
+				dRow, err := transformToDoltRow(r, rowConverter)
 				if err != nil {
 					return err
 				}
@@ -706,64 +716,17 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 }
 
 // transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
-func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
-	doltRow, err := sqlutil.DoltRowToSqlRow(row, rdSchema)
+// 3) Addresses any type inconsistencies.
+func transformToDoltRow(row row.Row, rowConverter *rowconv.RowConverter) (sql.Row, error) {
+	row, err := rowConverter.Convert(row)
 	if err != nil {
 		return nil, err
 	}
 
-	for i, col := range wrSchema {
-		switch col.Type {
-		case sql.Boolean, sql.MustCreateBitType(1):
-			val, ok := stringToBoolean(doltRow[i].(string))
-			if ok {
-				doltRow[i] = val
-			}
-		}
-	}
-
-	rdSchemaAsDoltSchema, err := sqlutil.FromDoltSchema(wrSchema[0].Source, rdSchema)
+	doltRow, err := sqlutil.DoltRowToSqlRow(row, rowConverter.DestSch)
 	if err != nil {
 		return nil, err
 	}
 
-	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchemaAsDoltSchema, wrSchema, nameMapper)
 	return doltRow, nil
-}
-
-func stringToBoolean(s string) (result bool, canConvert bool) {
-	lower := strings.ToLower(s)
-	switch lower {
-	case "true":
-		return true, true
-	case "false":
-		return false, true
-	case "0":
-		return false, true
-	case "1":
-		return true, false
-	default:
-		return false, false
-	}
-}
-
-// matchReadSchemaToWriteSchema takes the read schema and accounts for subsetting and mapper (-m) differences.
-func matchReadSchemaToWriteSchema(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) sql.Row {
-	returnRow := sql.Row{}
-
-	for _, wCol := range wrSchema {
-		seen := false
-		for rIdx, rCol := range rdSchema {
-			if rCol.Name == nameMapper.PreImage(wCol.Name) {
-				returnRow = append(returnRow, row[rIdx])
-				seen = true
-			}
-		}
-
-		if !seen {
-			returnRow = append(returnRow, nil)
-		}
-	}
-
-	return returnRow
 }
