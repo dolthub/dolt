@@ -161,7 +161,8 @@ func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
 		return Conflict{}, types.EmptyMap, err
 	}
 	if !ok {
-		return Conflict{}, types.EmptyMap, ErrNoConflicts
+		return Conflict{}, types.EmptyMap, nil
+		//return Conflict{}, types.EmptyMap, ErrNoConflicts
 	}
 
 	schemas, err := ConflictFromTuple(schemasVal.(types.Tuple))
@@ -271,7 +272,8 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 
 		return baseSch, sch, mergeSch, err
 	}
-	return nil, nil, nil, ErrNoConflicts
+	return nil, nil, nil, nil
+	//return nil, nil, nil, ErrNoConflicts
 }
 
 // GetConstraintViolationsSchema returns the schema for the dolt_constraint_violations system table belonging to this

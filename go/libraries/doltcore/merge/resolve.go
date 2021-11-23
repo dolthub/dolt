@@ -41,7 +41,8 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 	if has, err := tbl.HasConflicts(); err != nil {
 		return err
 	} else if !has {
-		return doltdb.ErrNoConflicts
+		return nil
+		//return doltdb.ErrNoConflicts
 	}
 
 	tblSch, err := tbl.GetSchema(ctx)
