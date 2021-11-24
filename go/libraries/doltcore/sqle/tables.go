@@ -75,7 +75,7 @@ type projected interface {
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	tableName    string
-	sqlSch       sql.Schema
+	sqlSch       sql.PrimaryKeySchema
 	db           SqlDatabase
 	lockedToRoot *doltdb.RootValue
 	nbf          *types.NomsBinFormat
@@ -296,11 +296,11 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
-	return t.sqlSchema()
+	return t.sqlSchema().Schema
 }
 
-func (t *DoltTable) sqlSchema() sql.Schema {
-	if t.sqlSch != nil {
+func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
+	if len(t.sqlSch.Schema) > 0 {
 		return t.sqlSch
 	}
 
@@ -799,6 +799,10 @@ func (p *partitionIter) Next(ctx context.Context) (k, v types.Value, err error) 
 // AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
 type AlterableDoltTable struct {
 	WritableDoltTable
+}
+
+func (t *AlterableDoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+	panic("implement me")
 }
 
 // Internal interface for declaring the interfaces that dolt tables with an alterable schema are expected to implement
@@ -1804,4 +1808,14 @@ func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *d
 		}
 	}
 	return fkUpdates, nil
+}
+
+func (t *AlterableDoltTable) Pks() []sql.IndexColumn {
+	sch := t.sqlSchema()
+	pkCols := make([]sql.IndexColumn, len(sch.PkOrdinals()))
+	for i, j := range sch.PkOrdinals() {
+		col := sch.Schema[j]
+		pkCols[i] = sql.IndexColumn{Name: col.Name}
+	}
+	return pkCols
 }

@@ -77,7 +77,7 @@ func (db *SingleTableInfoDatabase) Schema() sql.Schema {
 	if err != nil {
 		panic(err)
 	}
-	return sqlSch
+	return sqlSch.Schema
 }
 
 // Partitions implements sql.Table.

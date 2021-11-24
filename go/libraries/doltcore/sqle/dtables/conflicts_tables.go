@@ -30,7 +30,7 @@ var _ sql.Table = ConflictsTable{}
 // ConflictsTable is a sql.Table implementation that provides access to the conflicts that exist for a user table
 type ConflictsTable struct {
 	tblName string
-	sqlSch  sql.Schema
+	sqlSch  sql.PrimaryKeySchema
 	root    *doltdb.RootValue
 	tbl     *doltdb.Table
 	rd      *merge.ConflictReader
@@ -82,7 +82,7 @@ func (ct ConflictsTable) String() string {
 
 // Schema returns the sql.Schema of the table
 func (ct ConflictsTable) Schema() sql.Schema {
-	return ct.sqlSch
+	return ct.sqlSch.Schema
 }
 
 // Partitions returns a PartitionIter which can be used to get all the data partitions

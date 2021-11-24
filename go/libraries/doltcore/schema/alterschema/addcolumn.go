@@ -197,7 +197,7 @@ func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, t
 		if err != nil {
 			return true, err
 		}
-		newRow, err := sqlutil.ApplyDefaults(ctx, tbl.ValueReadWriter(), newSchema, newSqlSchema, []int{columnIndex}, oldRow)
+		newRow, err := sqlutil.ApplyDefaults(ctx, tbl.ValueReadWriter(), newSchema, newSqlSchema.Schema, []int{columnIndex}, oldRow)
 		if err != nil {
 			return true, err
 		}

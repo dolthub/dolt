@@ -27,9 +27,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
+func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
 	cols := make([]*sqle.ColumnWithRawDefault, sch.GetAllCols().Size())
 
+	colOrds := make(map[uint64]int)
 	var i int
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		sqlType := col.TypeInfo.ToSqlType()
@@ -37,6 +38,8 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 		if col.AutoIncrement {
 			extra = "auto_increment"
 		}
+
+		colOrds[tag] = i
 
 		cols[i] = &sqle.ColumnWithRawDefault{
 			SqlColumn: &sql.Column{
@@ -56,7 +59,22 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 		return false, nil
 	})
 
-	return sqle.ResolveDefaults(tableName, cols)
+	// The Dolt schema implicitly ordered columns by ordinal at init
+	// We need to extract the pk orderings to create a sql.PrimaryKeySchema
+	pkOrds := make([]int, sch.GetPKCols().Size())
+	i = 0
+	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		pkOrds[colOrds[tag]] = i
+		i++
+		return false, nil
+	})
+
+	sqlSch, err := sqle.ResolveDefaults(tableName, cols)
+	if err != nil {
+		return sql.PrimaryKeySchema{}, err
+	}
+
+	return sql.NewPrimaryKeySchema(sqlSch, pkOrds), nil
 }
 
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
@@ -65,16 +83,13 @@ func ToDoltSchema(
 	ctx context.Context,
 	root *doltdb.RootValue,
 	tableName string,
-	sqlSchema sql.Schema,
+	sqlSchema sql.PrimaryKeySchema,
 	headRoot *doltdb.RootValue,
 ) (schema.Schema, error) {
-	var cols []schema.Column
-	var err error
-
 	// generate tags for all columns
 	var names []string
 	var kinds []types.NomsKind
-	for _, col := range sqlSchema {
+	for _, col := range sqlSchema.Schema {
 		names = append(names, col.Name)
 		ti, err := typeinfo.FromSqlType(col.Type)
 		if err != nil {
@@ -88,26 +103,37 @@ func ToDoltSchema(
 		return nil, err
 	}
 
-	if len(tags) != len(sqlSchema) {
+	if len(tags) != len(sqlSchema.Schema) {
 		return nil, fmt.Errorf("number of tags should equal number of columns")
 	}
 
-	for i, col := range sqlSchema {
+	var otherCols []schema.Column
+	var allCols []schema.Column
+	for i, col := range sqlSchema.Schema {
 		convertedCol, err := ToDoltCol(tags[i], col)
 		if err != nil {
 			return nil, err
 		}
-		cols = append(cols, convertedCol)
+		if !col.PrimaryKey {
+			otherCols = append(otherCols, convertedCol)
+		}
+		allCols = append(allCols, convertedCol)
 	}
 
-	colColl := schema.NewColCollection(cols...)
+	pkCols := make([]schema.Column, len(allCols)-len(otherCols))
+	for i, j := range sqlSchema.PkOrdinals() {
+		pkCols[i] = allCols[j]
+	}
 
-	err = schema.ValidateForInsert(colColl)
+	allColl := schema.NewColCollection(allCols...)
+	err = schema.ValidateForInsert(allColl)
 	if err != nil {
 		return nil, err
 	}
 
-	return schema.SchemaFromCols(colColl)
+	pkColl := schema.NewColCollection(allCols...)
+	otherColl := schema.NewColCollection(otherCols...)
+	return schema.SchemaFromColCollections(allColl, pkColl, otherColl), nil
 }
 
 // ToDoltCol returns the dolt column corresponding to the SQL column given
