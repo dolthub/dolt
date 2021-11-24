@@ -474,6 +474,29 @@ func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dolt
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
+	// allow subsetting of the final write schema only if it is an update operation. Every other operation must
+	// match perfectly.
+	if wrSch.GetAllCols().Size() != rdSchema.GetAllCols().Size() && imOpts.operation == mvdata.UpdateOp {
+		ret := schema.NewColCollection()
+
+		rdSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			wrColName := imOpts.nameMapper.Map(col.Name)
+			wrCol, ok := wrSch.GetAllCols().GetByName(wrColName)
+			if ok {
+				ret = ret.Append(wrCol)
+			}
+
+			return false, nil
+		})
+
+		newSch, err := schema.SchemaFromCols(ret)
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+		}
+
+		return newSch, nil
+	}
+
 	return wrSch, nil
 }
 

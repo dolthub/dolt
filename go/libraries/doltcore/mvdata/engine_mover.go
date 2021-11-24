@@ -277,7 +277,12 @@ func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool
 	src := plan.NewChannelRowSource(s.wrSch, source)
 	dest := plan.NewUnresolvedTable(s.tableName, s.database)
 
-	insert := plan.NewInsertInto(sql.UnresolvedDatabase(s.database), dest, src, replace, nil, onDuplicateExpression, ignore)
+	colNames := make([]string, 0)
+	for _, col := range s.wrSch {
+		colNames = append(colNames, col.Name)
+	}
+
+	insert := plan.NewInsertInto(sql.UnresolvedDatabase(s.database), dest, src, replace, colNames, onDuplicateExpression, ignore)
 	analyzed, err := s.se.GetAnalyzer().Analyze(s.sqlCtx, insert, nil)
 	if err != nil {
 		return nil, err
