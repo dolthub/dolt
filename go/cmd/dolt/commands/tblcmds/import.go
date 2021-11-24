@@ -195,6 +195,8 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
 		} else if val.Format == mvdata.JsonFile {
 			srcOpts = mvdata.JSONOptions{TableName: tableName, SchFile: schemaFile}
+		} else if val.Format == mvdata.ParquetFile {
+			srcOpts = mvdata.ParquetOptions{TableName: tableName, SchFile: schemaFile}
 		}
 
 	case mvdata.StreamDataLocation:

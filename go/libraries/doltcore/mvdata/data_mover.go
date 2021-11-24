@@ -53,6 +53,11 @@ type JSONOptions struct {
 	SchFile   string
 }
 
+type ParquetOptions struct {
+	TableName string
+	SchFile   string
+}
+
 type DataMoverOptions interface {
 	WritesToTable() bool
 	SrcName() string
