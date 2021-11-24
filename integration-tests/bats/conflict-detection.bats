@@ -517,3 +517,25 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 }
+
+@test "conflict-detection: adding primary key also adds not null constraint. merge. no conflict" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk INT,
+  c1 INT,
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch other
+    dolt checkout other
+    dolt sql -q "alter table test modify pk int not null"
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "nothing to commit" ]] || false
+    dolt checkout main
+    run dolt merge other
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "CONFLICT" ]] || false
+}
