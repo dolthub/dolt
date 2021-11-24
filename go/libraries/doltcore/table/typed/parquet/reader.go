@@ -33,7 +33,6 @@ type ParquetReader struct {
 	fileReader 		source.ParquetFile
 	pReader    		*reader.ParquetReader
 	sch        		schema.Schema
-	isDone 			bool
 	vrw        		types.ValueReadWriter
 	numRow			int
 	rowReadCounter	int
@@ -78,36 +77,25 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 		fileReader: 	fr,
 		pReader:		pr,
 		sch: 			sche,
-		isDone: 		false,
 		vrw: 			vrw,
 		numRow:			int(num),
 		rowReadCounter:	0,
-		columnName:		colName,
 		fileData:		data,
+		columnName:		colName,
 	}, nil
 }
 
 func (pr *ParquetReader) ReadRow(ctx context.Context) (row.Row, error) {
-	var err error
-	if pr.isDone {
-		return nil, io.EOF
-	}
-
-	if err == io.EOF {
-		pr.isDone = true
-		return nil, io.EOF
-	}
-
 	if pr.rowReadCounter >= pr.numRow {
 		return nil, io.EOF
 	}
 
 	rowData := make(map[string]interface{})
-
 	for _, name := range pr.columnName {
 		rowData[name] = pr.fileData[name][pr.rowReadCounter]
 	}
 	pr.rowReadCounter++
+
 	return pr.convToRow(ctx, rowData)
 }
 
@@ -127,7 +115,6 @@ func (r *ParquetReader) convToRow(ctx context.Context, rowMap map[string]interfa
 	allCols := r.sch.GetAllCols()
 
 	taggedVals := make(row.TaggedValues, allCols.Size())
-
 	for k, v := range rowMap {
 		col, ok := allCols.GetByName(k)
 		if !ok {
@@ -138,7 +125,6 @@ func (r *ParquetReader) convToRow(ctx context.Context, rowMap map[string]interfa
 		case int64, int32, string, bool, float64:
 			taggedVals[col.Tag], _ = col.TypeInfo.ConvertValueToNomsValue(ctx, r.vrw, v)
 		}
-
 	}
 
 	// todo: move null value checks to pipeline

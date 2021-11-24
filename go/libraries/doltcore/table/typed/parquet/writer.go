@@ -17,7 +17,6 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/source"
 	"github.com/xitongsys/parquet-go/writer"
@@ -36,12 +35,12 @@ type ParquetWriter struct {
 }
 
 var typeMap = map[typeinfo.Identifier]string{
-	typeinfo.DatetimeTypeIdentifier: 	"type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.DatetimeTypeIdentifier: 	"type=INT64, convertedtype=TIME_MICROS",
 	typeinfo.DecimalTypeIdentifier: 	"type=BYTE_ARRAY, convertedtype=DECIMAL, scale=2, precision=20",
 	typeinfo.EnumTypeIdentifier:       	"type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.InlineBlobTypeIdentifier: 	"type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.SetTypeIdentifier:        	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.TimeTypeIdentifier:       	"type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.TimeTypeIdentifier:       	"type=INT64, convertedtype=TIME_MICROS",
 	typeinfo.TupleTypeIdentifier:      	"type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.UuidTypeIdentifier:       	"type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.VarBinaryTypeIdentifier:  	"type=BYTE_ARRAY, convertedtype=UTF8",
@@ -106,17 +105,16 @@ func (pwr *ParquetWriter) WriteRow(ctx context.Context, r row.Row) error {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
+			// convert datetime and time types to int64
 			switch colT.TypeInfo.GetTypeIdentifier() {
 			case typeinfo.DatetimeTypeIdentifier:
 				val = val.(time.Time).Unix()
-
 			case typeinfo.TimeTypeIdentifier:
-				//r.GetColVal(colT.Tag)
-
-				// TODO : get microseconds representation of timeType
-				timetype := colT.TypeInfo.ToSqlType()
-				dur, _ := sql.TimeType.ConvertToTimeDuration(timetype, val)
-				val = dur.Microseconds()
+				colVal, ok := r.GetColVal(colT.Tag)
+				if !ok {
+					return fmt.Errorf("could not get row value")
+				}
+				val = colVal
 			}
 			v := sqlutil.SqlColToStr(ctx, val)
 			colValStrs[i] = &v
