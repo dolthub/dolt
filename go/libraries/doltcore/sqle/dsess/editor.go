@@ -21,111 +21,48 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type TableEditor struct {
-	deps []indexEditor
-}
-
-var _ sql.RowReplacer = TableEditor{}
-var _ sql.RowUpdater = TableEditor{}
-var _ sql.RowInserter = TableEditor{}
-var _ sql.RowDeleter = TableEditor{}
-
-func newSqlTableEditor(ctx *sql.Context, sqlSch sql.Schema, tbl *doltdb.Table) (TableEditor, error) {
-	deps, err := indexEditorsFromTable(ctx, sqlSch, tbl)
+func indexEditorsFromTable(ctx *sql.Context, tbl *doltdb.Table) (indexEditor, map[string]indexEditor, error) {
+	var primary indexEditor
+	tblSch, err := tbl.GetSchema(ctx)
 	if err != nil {
-		return TableEditor{}, err
+		return primary, nil, err
 	}
 
-	return TableEditor{
-		deps: deps,
-	}, nil
-}
-
-// StatementBegin implements the interface sql.TableEditor.
-func (ed TableEditor) StatementBegin(ctx *sql.Context) {
-	for _, dep := range ed.deps {
-		dep.StatementBegin(ctx)
+	rows, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return primary, nil, err
 	}
-}
+	primary = newIndexEditor(tblSch, tblSch, rows)
 
-// Insert implements the interface sql.TableEditor.
-func (ed TableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
-	for _, dep := range ed.deps {
-		if err = dep.Insert(ctx, sqlRow); err != nil {
+	indexes, err := tbl.GetIndexData(ctx)
+	if err != nil {
+		return indexEditor{}, nil, err
+	}
+	secondary := make(map[string]indexEditor, indexes.Len())
+
+	err = indexes.IterAll(ctx, func(key, value types.Value) error {
+		vrw := tbl.ValueReadWriter()
+		tv, err := value.(types.Ref).TargetValue(ctx, vrw)
+		if err != nil {
 			return err
 		}
+
+		idxName := string(key.(types.String))
+		idxSch := tblSch.Indexes().GetByName(idxName).Schema()
+		index := prolly.MapFromValue(tv, idxSch, vrw)
+
+		secondary[idxName] = newIndexEditor(idxSch, tblSch, index)
+		return nil
+	})
+	if err != nil {
+		return primary, secondary, err
 	}
-	return nil
-}
 
-// Delete implements the interface sql.TableEditor.
-func (ed TableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
-	for _, dep := range ed.deps {
-		if err = dep.Delete(ctx, sqlRow); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Update implements the interface sql.TableEditor.
-func (ed TableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
-	for _, dep := range ed.deps {
-		if err = dep.Update(ctx, oldRow, newRow); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// DiscardChanges implements the interface sql.TableEditor.
-func (ed TableEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) (err error) {
-	for _, dep := range ed.deps {
-		if err = dep.DiscardChanges(ctx, errorEncountered); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// StatementComplete implements the interface sql.TableEditor.
-func (ed TableEditor) StatementComplete(ctx *sql.Context) (err error) {
-	for _, dep := range ed.deps {
-		if err = dep.StatementComplete(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// GetAutoIncrementValue implements the interface sql.TableEditor.
-func (ed TableEditor) GetAutoIncrementValue() (interface{}, error) {
-	panic("unimplemented")
-}
-
-// SetAutoIncrementValue implements the interface sql.TableEditor.
-func (ed TableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
-	panic("unimplemented")
-}
-
-// Close implements Closer
-func (ed TableEditor) Close(ctx *sql.Context) (err error) {
-	return
-}
-
-func (ed TableEditor) flush(ctx *sql.Context) (err error) {
-	return
-}
-
-func (ed TableEditor) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	panic("unimplemented")
-}
-
-func indexEditorsFromTable(ctx *sql.Context, schSch sql.Schema, tbl *doltdb.Table) ([]indexEditor, error) {
-	return nil, nil
+	return primary, nil, nil
 }
 
 type indexEditor struct {
@@ -134,9 +71,9 @@ type indexEditor struct {
 	conv rowConv
 }
 
-func newIndexEditor(rowSch sql.Schema, sch schema.Schema, rows prolly.Map) (ed indexEditor) {
+func newIndexEditor(sch, idxSch schema.Schema, rows prolly.Map) (ed indexEditor) {
 	kd, vd := rows.Descriptors()
-	conv := newRowConverter(rowSch, sch, kd, vd)
+	conv := newRowConverter(sch, idxSch, kd, vd)
 
 	return indexEditor{
 		mut:  rows.Mutate(),
@@ -190,14 +127,8 @@ func (ed indexEditor) Close(ctx *sql.Context) (err error) {
 
 var shimPool = pool.NewBuffPool()
 
-func newRowConverter(sqlSch sql.Schema, sch schema.Schema, kd, vd val.TupleDesc) (rc rowConv) {
-	rc = rowConv{
-		keyMap: nil,
-		valMap: nil,
-		keyBld: val.TupleBuilder{},
-		valBld: val.TupleBuilder{},
-	}
-	return
+func newRowConverter(sch, idxSch schema.Schema, kd, vd val.TupleDesc) (rc rowConv) {
+	panic("unimplemented")
 }
 
 type rowConv struct {

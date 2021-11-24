@@ -52,7 +52,7 @@ func TestEditorOptions(vrw types.ValueReadWriter) Options {
 }
 
 // CreateTableEditSession creates and returns a TableEditSession. Inserting a nil root is not an error, as there are
-// locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
+// locations that do not have a root at the time of this call. However, a root must be set through CloseEditors before any
 // table editors are returned.
 func CreateTableEditSession(root *doltdb.RootValue, opts Options) *TableEditSession {
 	return &TableEditSession{
@@ -159,7 +159,7 @@ func (tes *TableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 // getTableEditor is the inner implementation for GetTableEditor, allowing recursive calls
 func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (*sessionedTableEditor, error) {
 	if tes.root == nil {
-		return nil, fmt.Errorf("must call SetRoot before a table editor will be returned")
+		return nil, fmt.Errorf("must call CloseEditors before a table editor will be returned")
 	}
 
 	var t *doltdb.Table

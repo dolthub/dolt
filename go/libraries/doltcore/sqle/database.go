@@ -835,7 +835,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 	//	return err
 	//}
 	//
-	//return db.SetRoot(ctx, newRoot)
+	//return db.CloseEditors(ctx, newRoot)
 }
 
 // Flush flushes the current batch of outstanding changes and returns any errors.
@@ -847,7 +847,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 	}
 	editSession := dbState.EditSession
 
-	newRoot, err := editSession.Flush(ctx)
+	newRoot, err := editSession.Flush(ctx, dbState.GetRoots().Working)
 	if err != nil {
 		return err
 	}

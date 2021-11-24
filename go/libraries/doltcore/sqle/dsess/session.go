@@ -292,7 +292,7 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	newRoot, err := dbState.EditSession.Flush(ctx)
+	newRoot, err := dbState.EditSession.Flush(ctx, dbState.GetRoots().Working)
 	if err != nil {
 		return err
 	}
@@ -712,7 +712,7 @@ func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	err = sessionState.EditSession.SetRoot(ctx, newRoot)
+	err = sessionState.EditSession.CloseEditors(ctx)
 	if err != nil {
 		return err
 	}
@@ -1102,7 +1102,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 		sessionState.headRoot = headRoot
 	}
 
-	// This has to happen after SetRoot above, since it does a stale check before its work
+	// This has to happen after CloseEditors above, since it does a stale check before its work
 	// TODO: this needs to be kept up to date as the working set ref changes
 	sessionState.headCommit = dbState.HeadCommit
 

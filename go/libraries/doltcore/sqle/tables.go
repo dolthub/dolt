@@ -475,7 +475,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (dsess.TableEditor,
 		return dsess.TableEditor{}, err
 	}
 
-	return state.EditSession.GetTableEditor(ctx, t.sqlSch, tbl)
+	return state.EditSession.GetTableEditor(ctx, t.tableName, tbl)
 }
 
 func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
