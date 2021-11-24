@@ -93,6 +93,28 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
+@test "triggers: import with triggers" {
+       dolt sql <<SQL
+CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);
+CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = new.v1 + 1;
+INSERT INTO test VALUES (1, 1);
+SQL
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    echo -e 'pk,v1\n2,2\n3,3'|dolt table import -u test
+
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
+    [[ "$output" =~ "3,4" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+}
+
 @test "triggers: Writing directly into dolt_schemas" {
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
     dolt sql -q "CREATE VIEW view1 AS SELECT v1 FROM test;"
