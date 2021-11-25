@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"sync/atomic"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -140,7 +141,7 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 		select {
 		case <-ctx.Done():
 			return
-		default:
+		case <-time.After(time.Millisecond):
 			badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "write", Details: err.Error()}
 		}
 	}

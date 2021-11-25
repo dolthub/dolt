@@ -255,6 +255,8 @@ DELIM
 ID,LastName,FirstName,Age
 1,"jon","doe", 20
 2,"little","doe", 10
+3,"little","doe",4
+4,"little","doe",1
 DELIM
 
     dolt sql < check-constraint-sch.sql
@@ -269,6 +271,8 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "The following rows were skipped:" ]] || false
     [[ "$output" =~ "[2,little,doe,10]" ]] || false
+    [[ "$output" =~ "[3,little,doe,4]" ]] || false
+    [[ "$output" =~ "[4,little,doe,1]" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -309,4 +313,24 @@ DELIM
   run dolt sql -r csv -q 'SELECT * FROM test'
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
+}
+
+@test "import-update-tables: poorly written file correctly errors" {
+   cat <<DELIM > bad-updates.csv
+pk,v1
+5,5,
+6,6,
+DELIM
+
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT DEFAULT 2 NOT NULL, v2 int)"
+    dolt sql -q "INSERT INTO test (pk, v1, v2) VALUES (1, 2, 3), (2, 3, 4)"
+
+    run dolt table import -u test bad-updates.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "csv reader's schema expects 2 fields, but line only has 3 values" ]] || false
+
+    run dolt table import -u --continue test bad-updates.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
 }

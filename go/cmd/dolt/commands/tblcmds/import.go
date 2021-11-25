@@ -17,14 +17,14 @@ package tblcmds
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"strings"
 	"sync/atomic"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
-	"golang.org/x/sync/errgroup"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -553,8 +553,13 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 				if err == io.EOF {
 					return nil
 				} else if table.IsBadRow(err) {
-					dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-					readRowErrChan <- &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-time.After(time.Millisecond): // used as the send routine could block on exit by pipeline. could also use buffered channel
+						dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+						readRowErrChan <- &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
+					}
 				} else {
 					return err
 				}
@@ -565,9 +570,9 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 				}
 
 				select {
-				case parsedRowChan <- dRow:
 				case <-ctx.Done():
 					return ctx.Err()
+				case parsedRowChan <- dRow:
 				}
 			}
 		}
