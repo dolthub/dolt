@@ -744,7 +744,7 @@ func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema
 
 	for i, col := range wrSchema {
 		switch col.Type {
-		case sql.Boolean, sql.Int8:
+		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
 			val, ok := stringToBoolean(doltRow[i].(string))
 			if ok {
 				doltRow[i] = val

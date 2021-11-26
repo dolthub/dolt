@@ -305,10 +305,10 @@ func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool
 
 	analyzed = analyzer.StripQueryProcess(analyzed)
 
-	// Get the first insert
+	// Get the first insert (wrapped with the error handler)
 	plan.Inspect(analyzed, func(node sql.Node) bool {
 		switch n := node.(type) {
-		case *plan.InsertInto:
+		case *ErrorHandler:
 			analyzed = n
 			return false
 		default:
