@@ -229,7 +229,7 @@ DELIM
     run dolt table import -u test 1pk1col-rpt-chars.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
-    [[ "$output" =~ "Bad Row:" ]] || false
+    [[ "$output" =~ "Bad Row: [1,123456]" ]] || false
     [[ "$output" =~ 'string is too large for column' ]] || false
 }
 

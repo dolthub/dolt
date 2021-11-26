@@ -70,14 +70,10 @@ type DataMoverCloser interface {
 	Flush(context.Context) (*doltdb.RootValue, error)
 }
 
-type DataReader interface {
-	StartReading(ctx context.Context, readSchema schema.Schema, outputChannel chan sql.Row)
-}
-
 type DataWriter interface {
-	StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error
+	WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error
 	Commit(ctx context.Context) error
-	GetSchema() sql.Schema
+	Schema() sql.Schema
 }
 
 type DataMover struct {

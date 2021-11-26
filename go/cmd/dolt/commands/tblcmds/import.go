@@ -17,14 +17,15 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -408,7 +409,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 			details := pipeline.GetTransFailureDetails(err)
 
 			bdr.AddDetails(details)
-			bdr.AddDetails("These can be ignored using the '--continue'")
+			bdr.AddDetails("These can be ignored using '--continue'")
 
 			return commands.HandleVErrAndExitCode(bdr.Build(), usage)
 		}
@@ -564,7 +565,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 			} else {
-				dRow, err := transformToDoltRow(r, rd.GetSchema(), wr.GetSchema(), options.nameMapper)
+				dRow, err := transformToDoltRow(r, rd.GetSchema(), wr.Schema(), options.nameMapper)
 				if err != nil {
 					return err
 				}
@@ -581,7 +582,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	// Start the group that writes rows
 	g.Go(func() error {
 		defer close(writeRowErrChan)
-		err := wr.StartWriting(ctx, parsedRowChan, writeRowErrChan)
+		err := wr.WriteRows(ctx, parsedRowChan, writeRowErrChan)
 		if err != nil {
 			return err
 		}
@@ -743,7 +744,7 @@ func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema
 
 	for i, col := range wrSchema {
 		switch col.Type {
-		case sql.Boolean, sql.MustCreateBitType(1):
+		case sql.Boolean, sql.Int8:
 			val, ok := stringToBoolean(doltRow[i].(string))
 			if ok {
 				doltRow[i] = val

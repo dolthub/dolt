@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 
@@ -102,8 +103,8 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 	}, nil
 }
 
-// StartWriting implements the DataMover interface.
-func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error {
+// StartWriting implements the DataWriter interface.
+func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error {
 	var err error
 	s.sqlCtx, err = s.se.NewContext(ctx)
 	if err != nil {
@@ -167,7 +168,7 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 		}
 	}
 
-	insertOrUpdateOperation, err := s.getNodeOperation(inputChannel, errorHandler)
+	insertOrUpdateOperation, err := s.getInsertNode(inputChannel, errorHandler)
 	if err != nil {
 		return err
 	}
@@ -200,14 +201,14 @@ func (s *sqlEngineMover) StartWriting(ctx context.Context, inputChannel chan sql
 	}
 }
 
-// Commit implements the DataMover interface.
+// Commit implements the DataWriter interface.
 func (s *sqlEngineMover) Commit(ctx context.Context) error {
 	_, _, err := s.se.Query(s.sqlCtx, "COMMIT")
 	return err
 }
 
-// GetSchema implements the DataMover interface.
-func (s *sqlEngineMover) GetSchema() sql.Schema {
+// GetSchema implements the DataWriter interface.
+func (s *sqlEngineMover) Schema() sql.Schema {
 	return s.wrSch
 }
 
@@ -237,7 +238,7 @@ func (s *sqlEngineMover) createOrEmptyTableIfNeeded() error {
 // createTable creates a table.
 func (s *sqlEngineMover) createTable() error {
 	cr := plan.NewCreateTable(sql.UnresolvedDatabase(s.database), s.tableName, false, false, &plan.TableSpec{Schema: s.wrSch})
-	analyzed, err := s.se.GetAnalyzer().Analyze(s.sqlCtx, cr, nil)
+	analyzed, err := s.se.Analyze(s.sqlCtx, cr)
 	if err != nil {
 		return err
 	}
@@ -260,8 +261,8 @@ func (s *sqlEngineMover) createTable() error {
 	}
 }
 
-// getNodeOperation returns the sql.Node to be iterated on given the import option.
-func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandler func(err error)) (sql.Node, error) {
+// getInsertNode returns the sql.Node to be iterated on given the import option.
+func (s *sqlEngineMover) getInsertNode(inputChannel chan sql.Row, errorHandler func(err error)) (sql.Node, error) {
 	switch s.importOption {
 	case CreateOp, ReplaceOp:
 		return s.createInsertImportNode(inputChannel, s.contOnErr, false, nil, errorHandler) // contonerr translates to ignore
@@ -274,8 +275,8 @@ func (s *sqlEngineMover) getNodeOperation(inputChannel chan sql.Row, errorHandle
 
 // createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped
 // with an error handler.
-func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler plan.ErrorHandlerFunc) (sql.Node, error) {
-	src := plan.NewChannelRowSource(s.wrSch, source)
+func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler errorHandlerFunc) (sql.Node, error) {
+	src := NewChannelRowSource(s.wrSch, source)
 	dest := plan.NewUnresolvedTable(s.tableName, s.database)
 
 	colNames := make([]string, 0)
@@ -284,7 +285,7 @@ func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool
 	}
 
 	insert := plan.NewInsertInto(sql.UnresolvedDatabase(s.database), dest, src, replace, colNames, onDuplicateExpression, ignore)
-	analyzed, err := s.se.GetAnalyzer().Analyze(s.sqlCtx, insert, nil)
+	analyzed, err := s.se.Analyze(s.sqlCtx, insert)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +293,7 @@ func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool
 	analyzed, err = plan.TransformUp(analyzed, func(node sql.Node) (sql.Node, error) {
 		switch n := node.(type) {
 		case *plan.InsertInto:
-			return plan.NewErrorHandlerNode(n, errorHandler), nil
+			return NewErrorHandlerNode(n, errorHandler), nil
 		default:
 			return n, nil
 		}
@@ -302,15 +303,20 @@ func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool
 		return nil, err
 	}
 
-	analyzedQueryProcess, ok := analyzed.(*plan.QueryProcess)
-	if !ok {
-		return nil, fmt.Errorf("internal error: unknown analyzed result type `%T`", analyzed)
-	}
+	analyzed = analyzer.StripQueryProcess(analyzed)
 
-	// We don't want the accumulator node wrapping the analyzed insert.
-	accumulatorNode := analyzedQueryProcess.Child
+	// Get the first insert
+	plan.Inspect(analyzed, func(node sql.Node) bool {
+		switch n := node.(type) {
+		case *plan.InsertInto:
+			analyzed = n
+			return false
+		default:
+			return true
+		}
+	})
 
-	return accumulatorNode.(*plan.RowUpdateAccumulator).Child, nil
+	return analyzed, nil
 }
 
 // generateOnDuplicateKeyExpressions generates the duplicate key expressions needed for the update import option.
