@@ -227,7 +227,6 @@ DELIM
 
     dolt sql < 1pk1col-char-sch.sql
     run dolt table import -u test 1pk1col-rpt-chars.csv
-    echo $output
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
     [[ "$output" =~ "Bad Row: [1,123456]" ]] || false

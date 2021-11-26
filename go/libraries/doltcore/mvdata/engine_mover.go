@@ -104,8 +104,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 }
 
 // StartWriting implements the DataWriter interface.
-func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error {
-	var err error
+func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) (err error) {
 	s.sqlCtx, err = s.se.NewContext(ctx)
 	if err != nil {
 		return err
@@ -177,7 +176,9 @@ func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Ro
 	if err != nil {
 		return err
 	}
-	defer iter.Close(s.sqlCtx)
+	defer func() {
+		err = iter.Close(s.sqlCtx)
+	}()
 
 	for {
 		if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {

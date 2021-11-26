@@ -541,7 +541,6 @@ pk,str,int,bool,float, date, time, datetime
 0,abc,123,false,3.14,2020-02-02,12:12:12.12,2020-02-02 12:12:12
 DELIM
     run dolt table import -c --pk=pk test types.csv
-    echo $output
     [ "$status" -eq 0 ]
     run dolt schema show test
     [ "$status" -eq 0 ]
