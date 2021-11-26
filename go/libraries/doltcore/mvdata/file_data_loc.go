@@ -22,6 +22,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/parquet"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -47,6 +49,8 @@ func DFFromString(dfStr string) DataFormat {
 		return JsonFile
 	case "sql", ".sql":
 		return SqlFile
+	case "parquet", ".parquet":
+		return ParquetFile
 	default:
 		return InvalidDataFormat
 	}
@@ -157,6 +161,8 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMov
 		return json.NewJSONWriter(wr, outSch)
 	case SqlFile:
 		return sqlexport.OpenSQLExportWriter(ctx, wr, root, mvOpts.SrcName(), outSch, opts)
+	case ParquetFile:
+		return parquet.NewParquetWriter(outSch, mvOpts.DestName())
 	}
 
 	panic("Invalid Data Format." + string(dl.Format))
