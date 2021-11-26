@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"sync/atomic"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
@@ -104,7 +103,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 }
 
 // StartWriting implements the DataWriter interface.
-func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) (err error) {
+func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) (err error) {
 	s.sqlCtx, err = s.se.NewContext(ctx)
 	if err != nil {
 		return err
@@ -125,26 +124,6 @@ func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Ro
 		return err
 	}
 
-	errorHandler := func(err error) {
-		if err == io.EOF {
-			return
-		}
-
-		var offendingRow sql.Row
-		switch n := err.(type) {
-		case sql.WrappedInsertError:
-			offendingRow = n.OffendingRow
-		case sql.ErrInsertIgnore:
-			offendingRow = n.OffendingRow
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(time.Millisecond):
-			badRowChannel <- &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "write", Details: err.Error()}
-		}
-	}
 	updateStats := func(row sql.Row) {
 		if row == nil {
 			return
@@ -167,7 +146,7 @@ func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Ro
 		}
 	}
 
-	insertOrUpdateOperation, err := s.getInsertNode(inputChannel, errorHandler)
+	insertOrUpdateOperation, err := s.getInsertNode(inputChannel)
 	if err != nil {
 		return err
 	}
@@ -177,7 +156,11 @@ func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Ro
 		return err
 	}
 	defer func() {
-		err = iter.Close(s.sqlCtx)
+		if err != nil {
+			iter.Close(s.sqlCtx) // save the error that should be propagated.
+		} else {
+			err = iter.Close(s.sqlCtx)
+		}
 	}()
 
 	for {
@@ -198,6 +181,20 @@ func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Ro
 			s.statsCB(s.stats)
 
 			return err
+		} else {
+			var offendingRow sql.Row
+			switch n := err.(type) {
+			case sql.WrappedInsertError:
+				offendingRow = n.OffendingRow
+			case sql.ErrInsertIgnore:
+				offendingRow = n.OffendingRow
+			}
+
+			trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: offendingRow, TransformName: "write", Details: err.Error()}
+			quit := badRowCb(trf)
+			if quit {
+				return trf
+			}
 		}
 	}
 }
@@ -263,12 +260,12 @@ func (s *sqlEngineMover) createTable() error {
 }
 
 // getInsertNode returns the sql.Node to be iterated on given the import option.
-func (s *sqlEngineMover) getInsertNode(inputChannel chan sql.Row, errorHandler func(err error)) (sql.Node, error) {
+func (s *sqlEngineMover) getInsertNode(inputChannel chan sql.Row) (sql.Node, error) {
 	switch s.importOption {
 	case CreateOp, ReplaceOp:
-		return s.createInsertImportNode(inputChannel, s.contOnErr, false, nil, errorHandler) // contonerr translates to ignore
+		return s.createInsertImportNode(inputChannel, s.contOnErr, false, nil) // contonerr translates to ignore
 	case UpdateOp:
-		return s.createInsertImportNode(inputChannel, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.wrSch), errorHandler) // contonerr translates to ignore
+		return s.createInsertImportNode(inputChannel, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.wrSch)) // contonerr translates to ignore
 	default:
 		return nil, fmt.Errorf("unsupported import type")
 	}
@@ -276,7 +273,7 @@ func (s *sqlEngineMover) getInsertNode(inputChannel chan sql.Row, errorHandler f
 
 // createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped
 // with an error handler.
-func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression, errorHandler errorHandlerFunc) (sql.Node, error) {
+func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression) (sql.Node, error) {
 	src := NewChannelRowSource(s.wrSch, source)
 	dest := plan.NewUnresolvedTable(s.tableName, s.database)
 
@@ -291,25 +288,12 @@ func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool
 		return nil, err
 	}
 
-	analyzed, err = plan.TransformUp(analyzed, func(node sql.Node) (sql.Node, error) {
-		switch n := node.(type) {
-		case *plan.InsertInto:
-			return NewErrorHandlerNode(n, errorHandler), nil
-		default:
-			return n, nil
-		}
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
 	analyzed = analyzer.StripQueryProcess(analyzed)
 
 	// Get the first insert (wrapped with the error handler)
 	plan.Inspect(analyzed, func(node sql.Node) bool {
 		switch n := node.(type) {
-		case *ErrorHandler:
+		case *plan.InsertInto:
 			analyzed = n
 			return false
 		default:

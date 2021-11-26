@@ -21,7 +21,6 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
@@ -517,8 +516,6 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Setup the necessary data points for the import job
 	parsedRowChan := make(chan sql.Row)
-	readRowErrChan := make(chan *pipeline.TransformRowFailure)
-	writeRowErrChan := make(chan *pipeline.TransformRowFailure)
 	var rowErr error
 	var printStarted bool
 	var badCount int64
@@ -546,7 +543,6 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	// Start the group that reads rows from the reader
 	g.Go(func() error {
 		defer close(parsedRowChan)
-		defer close(readRowErrChan)
 
 		for {
 			r, err := rd.ReadRow(ctx)
@@ -554,12 +550,11 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 				if err == io.EOF {
 					return nil
 				} else if table.IsBadRow(err) {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case <-time.After(time.Millisecond): // used as the send routine could block on exit by pipeline. could also use buffered channel
-						dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-						readRowErrChan <- &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
+					dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+					trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
+					quit := badRowCB(trf)
+					if quit {
+						return trf
 					}
 				} else {
 					return err
@@ -581,37 +576,12 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 	// Start the group that writes rows
 	g.Go(func() error {
-		defer close(writeRowErrChan)
-		err := wr.WriteRows(ctx, parsedRowChan, writeRowErrChan)
+		err := wr.WriteRows(ctx, parsedRowChan, badRowCB)
 		if err != nil {
 			return err
 		}
 
 		return nil
-	})
-
-	// Start the group that handles the bad row callback
-	g.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case bRow, ok := <-readRowErrChan:
-				if ok {
-					quit := badRowCB(bRow)
-					if quit {
-						return io.EOF
-					}
-				}
-			case bRow, ok := <-writeRowErrChan:
-				if ok {
-					quit := badRowCB(bRow)
-					if quit {
-						return io.EOF
-					}
-				}
-			}
-		}
 	})
 
 	err := g.Wait()

@@ -71,7 +71,7 @@ type DataMoverCloser interface {
 }
 
 type DataWriter interface {
-	WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowChannel chan *pipeline.TransformRowFailure) error
+	WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) error
 	Commit(ctx context.Context) error
 	Schema() sql.Schema
 }
