@@ -241,12 +241,9 @@ func (s *sqlEngineMover) createTable() error {
 		return err
 	}
 
-	analyzedQueryProcess, ok := analyzed.(*plan.QueryProcess)
-	if !ok {
-		return fmt.Errorf("internal error: unknown analyzed result type `%T`", analyzed)
-	}
+	analyzedQueryProcess := analyzer.StripQueryProcess(analyzed.(*plan.QueryProcess))
 
-	ri, err := analyzedQueryProcess.Child.RowIter(s.sqlCtx, nil)
+	ri, err := analyzedQueryProcess.RowIter(s.sqlCtx, nil)
 	if err != nil {
 		return err
 	}
