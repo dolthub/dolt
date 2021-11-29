@@ -306,6 +306,8 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		_, hasSchema := apr.GetValue(schemaParam)
 		if srcFileLoc.Format == mvdata.JsonFile && apr.Contains(createParam) && !hasSchema {
 			return errhand.BuildDError("Please specify schema file for .json tables.").Build()
+		} else if srcFileLoc.Format == mvdata.ParquetFile && apr.Contains(createParam) && !hasSchema {
+			return errhand.BuildDError("Please specify schema file for .parquet tables.").Build()
 		}
 	}
 

@@ -103,7 +103,7 @@ func (ti *datetimeType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 		return types.NullValue, nil
 	}
 	switch v.(type) {
-	case string:
+	case string, time.Time:
 		timeVal, err := ti.sqlDatetimeType.Convert(v)
 		if err != nil {
 			return nil, err

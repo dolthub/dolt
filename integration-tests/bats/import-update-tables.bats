@@ -285,3 +285,29 @@ DELIM
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
 }
+
+@test "import: compare tables in database with table imported from parquet file" {
+    dolt sql -q "CREATE TABLE testTypes (pk BIGINT PRIMARY KEY, v1 TIME, v2 YEAR, v4 BOOL, v5 ENUM('one', 'two', 'three'));"
+    dolt add .
+    dolt commit -m "create table"
+
+    dolt branch new_branch
+
+    dolt sql -q "INSERT INTO testTypes VALUES (1,'11:11:11','2020',true,'one'),(2,'12:12:12','2020',false,'three'),(3,'04:12:34','2019',true,NULL),(4,NULL,'2020',false,'two');"
+
+    dolt add .
+    dolt commit -m "add rows"
+
+    run dolt table export testTypes test.parquet
+    [ "$status" -eq 0 ]
+    [ -f test.parquet ]
+
+    dolt checkout new_branch
+    dolt table import -r testTypes test.parquet
+    dolt add .
+    dolt commit --allow-empty -m "update table from parquet file"
+
+    run dolt diff --summary main new_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}

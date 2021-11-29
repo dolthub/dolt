@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -65,7 +66,7 @@ func (ti *timeType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 	}
 	var val int64
 	switch v.(type) {
-	case string:
+	case string, time.Time:
 		value, err := ti.sqlTimeType.Marshal(v)
 		if err != nil {
 			return nil, err

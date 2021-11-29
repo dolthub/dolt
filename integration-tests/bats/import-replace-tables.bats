@@ -286,3 +286,29 @@ SQL
     [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
+
+@test "import-replace-tables: compare tables in database with table imported from parquet file" {
+    dolt sql -q "CREATE TABLE testTypes (pk BIGINT PRIMARY KEY, v1 TIME, v2 YEAR, v3 BOOL, v4 ENUM('one', 'two', 'three'), v5 TEXT);"
+    dolt add .
+    dolt commit -m "create table"
+
+    dolt branch new_branch
+
+    dolt sql -q "INSERT INTO testTypes VALUES (1,'11:11:11','2020',true,'one','first row'),(2,'12:12:12','2020',false,'three','second row'),(3,'04:12:34','2019',true,NULL,'third row'),(4,NULL,'2020',false,'two','fourth row');"
+
+    dolt add .
+    dolt commit -m "add rows"
+
+    run dolt table export testTypes test.parquet
+    [ "$status" -eq 0 ]
+    [ -f test.parquet ]
+
+    dolt checkout new_branch
+    dolt table import -r testTypes test.parquet
+    dolt add .
+    dolt commit --allow-empty -m "update table from parquet file"
+
+    run dolt diff --summary main new_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
