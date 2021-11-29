@@ -608,7 +608,7 @@ SQL
     [ "${lines[3]}" = 'warning: skipping data diff due to primary key set change' ]
 }
 
-@test "adding and removing primary key should leave not null constraint" {
+@test "diff: adding and removing primary key should leave not null constraint" {
     dolt sql -q "create table t(pk int, val int)"
     dolt commit -am "creating table"
 
