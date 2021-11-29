@@ -730,62 +730,63 @@ func (t *AlterableDoltTable) CreateIndex(
 	indexColumns []sql.IndexColumn,
 	comment string,
 ) error {
-	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
-	}
-	columns := make([]string, len(indexColumns))
-	for i, indexCol := range indexColumns {
-		columns[i] = indexCol.Name
-	}
-
-	table, err := t.doltTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	ret, err := creation.CreateIndex(ctx, table, indexName, columns, constraint == sql.IndexConstraint_Unique, true, comment)
-	if err != nil {
-		return err
-	}
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-	if ret.OldIndex != nil && ret.OldIndex != ret.NewIndex { // old index was replaced, so we update foreign keys
-		fkc, err := root.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return err
-		}
-		for _, fk := range fkc.AllKeys() {
-			newFk := fk
-			if t.tableName == fk.TableName && fk.TableIndex == ret.OldIndex.Name() {
-				newFk.TableIndex = ret.NewIndex.Name()
-			}
-			if t.tableName == fk.ReferencedTableName && fk.ReferencedTableIndex == ret.OldIndex.Name() {
-				newFk.ReferencedTableIndex = ret.NewIndex.Name()
-			}
-			fkc.RemoveKeys(fk)
-			err = fkc.AddKeys(newFk)
-			if err != nil {
-				return err
-			}
-		}
-		root, err = root.PutForeignKeyCollection(ctx, fkc)
-		if err != nil {
-			return err
-		}
-	}
-	newRoot, err := root.PutTable(ctx, t.tableName, ret.NewTable)
-	if err != nil {
-		return err
-	}
-
-	err = t.setRoot(ctx, newRoot)
-
-	if err != nil {
-		return err
-	}
-	return t.updateFromRoot(ctx, newRoot)
+	return nil
+	//if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
+	//	return fmt.Errorf("only the following types of index constraints are supported: none, unique")
+	//}
+	//columns := make([]string, len(indexColumns))
+	//for i, indexCol := range indexColumns {
+	//	columns[i] = indexCol.Name
+	//}
+	//
+	//table, err := t.doltTable(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//ret, err := creation.CreateIndex(ctx, table, indexName, columns, constraint == sql.IndexConstraint_Unique, true, comment)
+	//if err != nil {
+	//	return err
+	//}
+	//root, err := t.getRoot(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//if ret.OldIndex != nil && ret.OldIndex != ret.NewIndex { // old index was replaced, so we update foreign keys
+	//	fkc, err := root.GetForeignKeyCollection(ctx)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	for _, fk := range fkc.AllKeys() {
+	//		newFk := fk
+	//		if t.tableName == fk.TableName && fk.TableIndex == ret.OldIndex.Name() {
+	//			newFk.TableIndex = ret.NewIndex.Name()
+	//		}
+	//		if t.tableName == fk.ReferencedTableName && fk.ReferencedTableIndex == ret.OldIndex.Name() {
+	//			newFk.ReferencedTableIndex = ret.NewIndex.Name()
+	//		}
+	//		fkc.RemoveKeys(fk)
+	//		err = fkc.AddKeys(newFk)
+	//		if err != nil {
+	//			return err
+	//		}
+	//	}
+	//	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
+	//newRoot, err := root.PutTable(ctx, t.tableName, ret.NewTable)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//err = t.setRoot(ctx, newRoot)
+	//
+	//if err != nil {
+	//	return err
+	//}
+	//return t.updateFromRoot(ctx, newRoot)
 }
 
 // DropIndex implements sql.IndexAlterableTable
