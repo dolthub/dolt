@@ -519,7 +519,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			case diff.SchDiffAdded:
 				cli.Println(sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
 			case diff.SchDiffRemoved:
-				cli.Print(sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
+				cli.Println(sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
 			case diff.SchDiffModified:
 				// Ignore any primary key set changes here
 				if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
