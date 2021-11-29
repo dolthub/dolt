@@ -102,18 +102,12 @@ func (ti *datetimeType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	if v == nil {
 		return types.NullValue, nil
 	}
-	switch v.(type) {
-	case string, time.Time:
-		timeVal, err := ti.sqlDatetimeType.Convert(v)
-		if err != nil {
-			return nil, err
-		}
-		val, ok := timeVal.(time.Time)
-		if ok {
-			return types.Timestamp(val), nil
-		}
-	case int64:
-		val := time.Unix(v.(int64), 0)
+	timeVal, err := ti.sqlDatetimeType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := timeVal.(time.Time)
+	if ok {
 		return types.Timestamp(val), nil
 	}
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)

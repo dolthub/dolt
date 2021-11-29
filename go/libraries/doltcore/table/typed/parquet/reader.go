@@ -17,12 +17,12 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"io"
-
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/source"
+	"io"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -92,8 +92,21 @@ func (pr *ParquetReader) ReadRow(ctx context.Context) (row.Row, error) {
 	}
 
 	rowData := make(map[string]interface{})
-	for _, name := range pr.columnName {
-		rowData[name] = pr.fileData[name][pr.rowReadCounter]
+	//for _, name := range pr.columnName {
+	//	rowData[name] = pr.fileData[name][pr.rowReadCounter]
+	//}
+
+	// TODO : instead of getting column name, loop through schema column
+	allCols := pr.sch.GetAllCols().GetColumns()
+	for _, col := range allCols {
+		colT := col.TypeInfo.GetTypeIdentifier()
+		name := col.Name
+		val := pr.fileData[name][pr.rowReadCounter]
+		if colT == "datetime" {
+			val = time.Unix(val.(int64), 0)
+		}
+		rowData[name] = val
+		fmt.Println(colT)
 	}
 	pr.rowReadCounter++
 
@@ -121,10 +134,8 @@ func (r *ParquetReader) convToRow(ctx context.Context, rowMap map[string]interfa
 			return nil, fmt.Errorf("column %s not found in schema", k)
 		}
 
-		switch v.(type) {
-		case int64, int32, string, bool, float64:
-			taggedVals[col.Tag], _ = col.TypeInfo.ConvertValueToNomsValue(ctx, r.vrw, v)
-		}
+		taggedVals[col.Tag], _ = col.TypeInfo.ConvertValueToNomsValue(ctx, r.vrw, v)
+
 	}
 
 	// todo: move null value checks to pipeline
