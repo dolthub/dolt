@@ -593,3 +593,28 @@ SQL
     run dolt sql -q "alter table t add primary key(pk)"
     [ $status -eq 1 ]
 }
+
+@test "primary-key-changes: create table with primary key adds not null constraint" {
+    dolt sql -q "create table t (pk int primary key)"
+    run dolt sql -q "show create table t"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "NOT NULL" ]] || false
+}
+
+@test "primary-key-changes: adding primary key also adds not null constraint" {
+    dolt sql -q "create table t (pk int)"
+    dolt sql -q "alter table t add primary key (pk)"
+    run dolt sql -q "show create table t"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "NOT NULL" ]] || false
+}
+
+@test "primary-key-changes: dropping primary key retains not null constraint" {
+    dolt sql -q "create table t (pk int)"
+    dolt sql -q "alter table t add primary key (pk)"
+    dolt sql -q "alter table t drop primary key"
+    run dolt sql -q "show create table t"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "NOT NULL" ]] || false
+    [[ ! "$output" =~ "PRIMARY KEY" ]] || false
+}
