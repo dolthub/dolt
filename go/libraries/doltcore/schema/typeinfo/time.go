@@ -17,11 +17,8 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"time"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // This is a dolt implementation of the MySQL type Time, thus most of the functionality
@@ -66,14 +63,14 @@ func (ti *timeType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 	}
 	var val int64
 	switch v.(type) {
-	case string, time.Time:
+	case int64:
+		val = v.(int64)
+	default:
 		value, err := ti.sqlTimeType.Marshal(v)
 		if err != nil {
 			return nil, err
 		}
 		val = value
-	case int64:
-		val = v.(int64)
 	}
 
 	return types.Int(val), nil
