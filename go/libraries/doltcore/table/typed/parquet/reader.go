@@ -17,27 +17,28 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/xitongsys/parquet-go/common"
+	"io"
 
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/xitongsys/parquet-go-source/local"
+	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/source"
-	"io"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // ParquetReader implements TableReader.  It reads parquet files and returns rows.
 type ParquetReader struct {
-	fileReader 		source.ParquetFile
-	pReader    		*reader.ParquetReader
-	sch        		schema.Schema
-	vrw        		types.ValueReadWriter
-	numRow			int
-	rowReadCounter	int
-	fileData		map[string][]interface{}
-	columnName		[]string
+	fileReader     source.ParquetFile
+	pReader        *reader.ParquetReader
+	sch            schema.Schema
+	vrw            types.ValueReadWriter
+	numRow         int
+	rowReadCounter int
+	fileData       map[string][]interface{}
+	columnName     []string
 }
 
 // OpenParquetReader opens a reader at a given path within local filesystem.
@@ -74,14 +75,14 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 	}
 
 	return &ParquetReader{
-		fileReader: 	fr,
-		pReader:		pr,
-		sch: 			sche,
-		vrw: 			vrw,
-		numRow:			int(num),
-		rowReadCounter:	0,
-		fileData:		data,
-		columnName:		colName,
+		fileReader:     fr,
+		pReader:        pr,
+		sch:            sche,
+		vrw:            vrw,
+		numRow:         int(num),
+		rowReadCounter: 0,
+		fileData:       data,
+		columnName:     colName,
 	}, nil
 }
 
@@ -109,7 +110,6 @@ func (pr *ParquetReader) Close(ctx context.Context) error {
 	pr.fileReader.Close()
 	return nil
 }
-
 
 func (r *ParquetReader) convToRow(ctx context.Context, rowMap map[string]interface{}) (row.Row, error) {
 	allCols := r.sch.GetAllCols()

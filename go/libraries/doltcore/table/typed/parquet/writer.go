@@ -17,10 +17,11 @@ package parquet
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/source"
 	"github.com/xitongsys/parquet-go/writer"
-	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -35,26 +36,26 @@ type ParquetWriter struct {
 }
 
 var typeMap = map[typeinfo.Identifier]string{
-	typeinfo.DatetimeTypeIdentifier: 	"type=INT64, convertedtype=TIME_MICROS",
-	typeinfo.DecimalTypeIdentifier: 	"type=BYTE_ARRAY, convertedtype=DECIMAL, scale=2, precision=20",
-	typeinfo.EnumTypeIdentifier:       	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.InlineBlobTypeIdentifier: 	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.SetTypeIdentifier:        	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.TimeTypeIdentifier:       	"type=INT64, convertedtype=TIME_MICROS",
-	typeinfo.TupleTypeIdentifier:      	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.UuidTypeIdentifier:       	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.VarBinaryTypeIdentifier:  	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.YearTypeIdentifier:       	"type=INT32, convertedtype=DATE",
-	typeinfo.UnknownTypeIdentifier:    	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.JSONTypeIdentifier:       	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.BlobStringTypeIdentifier: 	"type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIME_MICROS",
+	typeinfo.DecimalTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=DECIMAL, scale=2, precision=20",
+	typeinfo.EnumTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.InlineBlobTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.SetTypeIdentifier:        "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.TimeTypeIdentifier:       "type=INT64, convertedtype=TIME_MICROS",
+	typeinfo.TupleTypeIdentifier:      "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.UuidTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.VarBinaryTypeIdentifier:  "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.YearTypeIdentifier:       "type=INT32, convertedtype=DATE",
+	typeinfo.UnknownTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.JSONTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.BlobStringTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
 
-	typeinfo.BitTypeIdentifier:       	"type=INT32, convertedtype=INT_16",
-	typeinfo.BoolTypeIdentifier:      	"type=BOOLEAN",
-	typeinfo.VarStringTypeIdentifier: 	"type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.UintTypeIdentifier:      	"type=INT64, convertedtype=UINT_64",
-	typeinfo.IntTypeIdentifier:       	"type=INT64, convertedtype=INT_64",
-	typeinfo.FloatTypeIdentifier:     	"type=DOUBLE",
+	typeinfo.BitTypeIdentifier:       "type=INT32, convertedtype=INT_16",
+	typeinfo.BoolTypeIdentifier:      "type=BOOLEAN",
+	typeinfo.VarStringTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.UintTypeIdentifier:      "type=INT64, convertedtype=UINT_64",
+	typeinfo.IntTypeIdentifier:       "type=INT64, convertedtype=INT_64",
+	typeinfo.FloatTypeIdentifier:     "type=DOUBLE",
 }
 
 func NewParquetWriter(outSch schema.Schema, destName string) (*ParquetWriter, error) {
