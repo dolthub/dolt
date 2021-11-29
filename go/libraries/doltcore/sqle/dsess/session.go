@@ -368,11 +368,9 @@ func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSet
 // CommitTransaction commits the in-progress transaction for the database named. Depending on session settings, this
 // may write only a new working set, or may additionally create a new dolt commit for the current HEAD.
 func (sess *Session) CommitTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if sess.BatchMode() == Batched {
-		err := sess.Flush(ctx, dbName)
-		if err != nil {
-			return err
-		}
+	err := sess.Flush(ctx, dbName)
+	if err != nil {
+		return err
 	}
 
 	if TransactionsDisabled(ctx) {

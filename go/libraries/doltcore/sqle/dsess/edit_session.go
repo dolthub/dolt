@@ -149,7 +149,10 @@ func (ed TableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
 			return err
 		}
 	}
-	return nil
+	if err = ed.primary.Insert(ctx, sqlRow); err != nil {
+		return err
+	}
+	return
 }
 
 // Delete implements the interface sql.TableWriter.
@@ -162,7 +165,10 @@ func (ed TableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
 			return err
 		}
 	}
-	return nil
+	if err = ed.primary.Delete(ctx, sqlRow); err != nil {
+		return err
+	}
+	return
 }
 
 // Update implements the interface sql.TableWriter.
@@ -175,7 +181,10 @@ func (ed TableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (
 			return err
 		}
 	}
-	return nil
+	if err = ed.primary.Update(ctx, oldRow, newRow); err != nil {
+		return err
+	}
+	return
 }
 
 // DiscardChanges implements the interface sql.TableWriter.
@@ -188,7 +197,10 @@ func (ed TableWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) (
 			return err
 		}
 	}
-	return nil
+	if err = ed.primary.DiscardChanges(ctx, errorEncountered); err != nil {
+		return err
+	}
+	return
 }
 
 // StatementComplete implements the interface sql.TableWriter.
@@ -201,7 +213,10 @@ func (ed TableWriter) StatementComplete(ctx *sql.Context) (err error) {
 			return err
 		}
 	}
-	return nil
+	if err = ed.primary.StatementComplete(ctx); err != nil {
+		return err
+	}
+	return
 }
 
 // GetAutoIncrementValue implements the interface sql.TableWriter.
