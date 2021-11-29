@@ -92,21 +92,12 @@ func (pr *ParquetReader) ReadRow(ctx context.Context) (row.Row, error) {
 	}
 
 	rowData := make(map[string]interface{})
-	//for _, name := range pr.columnName {
-	//	rowData[name] = pr.fileData[name][pr.rowReadCounter]
-	//}
-
-	// TODO : instead of getting column name, loop through schema column
-	allCols := pr.sch.GetAllCols().GetColumns()
-	for _, col := range allCols {
-		colT := col.TypeInfo.GetTypeIdentifier()
-		name := col.Name
-		val := pr.fileData[name][pr.rowReadCounter]
-		if colT == "datetime" {
+	for _, col := range pr.sch.GetAllCols().GetColumns() {
+		val := pr.fileData[col.Name][pr.rowReadCounter]
+		if col.TypeInfo.GetTypeIdentifier() == "datetime" {
 			val = time.Unix(val.(int64), 0)
 		}
-		rowData[name] = val
-		fmt.Println(colT)
+		rowData[col.Name] = val
 	}
 	pr.rowReadCounter++
 
