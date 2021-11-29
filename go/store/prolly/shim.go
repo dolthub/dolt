@@ -29,8 +29,8 @@ import (
 func NewEmptyMap(sch schema.Schema) Map {
 	return Map{
 		root:    emptyNode,
-		keyDesc: keyDescriptorFromSchema(sch),
-		valDesc: valueDescriptorFromSchema(sch),
+		keyDesc: KeyDescriptorFromSchema(sch),
+		valDesc: ValueDescriptorFromSchema(sch),
 	}
 }
 
@@ -59,8 +59,8 @@ func ValueFromMap(m Map) types.Value {
 func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) Map {
 	return Map{
 		root:    NodeFromValue(v),
-		keyDesc: keyDescriptorFromSchema(sch),
-		valDesc: valueDescriptorFromSchema(sch),
+		keyDesc: KeyDescriptorFromSchema(sch),
+		valDesc: ValueDescriptorFromSchema(sch),
 		ns:      NewNodeStore(ChunkStoreFromVRW(vrw)),
 	}
 }
@@ -83,7 +83,7 @@ func EmptyTreeChunkerFromMap(ctx context.Context, m Map) *TreeChunker {
 	return ch
 }
 
-func keyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
+func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	var tt []val.Type
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
@@ -95,7 +95,7 @@ func keyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	return val.NewTupleDescriptor(tt...)
 }
 
-func valueDescriptorFromSchema(sch schema.Schema) (vd val.TupleDesc) {
+func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	var tt []val.Type
 	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{

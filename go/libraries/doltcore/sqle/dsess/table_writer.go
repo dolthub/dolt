@@ -127,13 +127,32 @@ func (ed indexWriter) Close(ctx *sql.Context) (err error) {
 
 var shimPool = pool.NewBuffPool()
 
-func newRowConverter(tblSch, idxSch schema.Schema, kd, vd val.TupleDesc) (rc rowConv) {
+func newRowConverter(tblSch, idxSch schema.Schema, _, _ val.TupleDesc) (rc rowConv) {
+	kd := prolly.KeyDescriptorFromSchema(idxSch)
+	vd := prolly.ValueDescriptorFromSchema(idxSch)
 
+	if !schema.ColCollsAreEqual(tblSch.GetAllCols(), idxSch.GetAllCols()) {
+		panic("bad schema")
+	}
+
+	rc = rowConv{
+		keyBld: val.NewTupleBuilder(kd),
+		valBld: val.NewTupleBuilder(vd),
+	}
+
+	for i := range idxSch.GetPKCols().GetColumns() {
+		rc.keyMap = append(rc.keyMap, i)
+	}
+	for i := range idxSch.GetNonPKCols().GetColumns() {
+		rc.valMap = append(rc.valMap, i)
+	}
+
+	return rc
 }
 
 type rowConv struct {
 	keyMap, valMap []int
-	keyBld, valBld val.TupleBuilder
+	keyBld, valBld *val.TupleBuilder
 }
 
 func (rc rowConv) ConvertRow(row sql.Row) (key, value val.Tuple) {

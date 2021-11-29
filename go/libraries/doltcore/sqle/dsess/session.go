@@ -147,7 +147,7 @@ type DatabaseSessionState struct {
 	headRoot             *doltdb.RootValue
 	WorkingSet           *doltdb.WorkingSet
 	dbData               env.DbData
-	EditSession          WriteSession
+	WriteSession         WriteSession
 	detachedHead         bool
 	readOnly             bool
 	dirty                bool
@@ -292,7 +292,7 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	newRoot, err := dbState.EditSession.Flush(ctx, dbState.GetRoots().Working)
+	newRoot, err := dbState.WriteSession.Flush(ctx, dbState.GetRoots().Working)
 	if err != nil {
 		return err
 	}
@@ -712,7 +712,7 @@ func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	err = sessionState.EditSession.CloseEditors(ctx)
+	err = sessionState.WriteSession.CloseEditors(ctx)
 	if err != nil {
 		return err
 	}
@@ -1079,7 +1079,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 
-	sessionState.EditSession = NewWriteSession()
+	sessionState.WriteSession = NewWriteSession()
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {

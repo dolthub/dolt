@@ -845,7 +845,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	editSession := dbState.EditSession
+	editSession := dbState.WriteSession
 
 	newRoot, err := editSession.Flush(ctx, dbState.GetRoots().Working)
 	if err != nil {
