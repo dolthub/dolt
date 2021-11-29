@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -140,12 +141,70 @@ func (it sqlRowIter) Close(ctx *sql.Context) error {
 
 var shimPool = pool.NewBuffPool()
 
-func tupleFromSqlValues(bld *val.TupleBuilder, vals ...interface{}) val.Tuple {
-	if len(vals) != bld.Desc.Count() {
-		panic("column mismatch")
+func NewAutoThing(current interface{}) (at *autoThing) {
+	at = &autoThing{
+		current: coerceInt64(current),
+		mu:      sync.Mutex{},
 	}
-	for i, v := range vals {
-		bld.PutField(i, v)
+	return
+}
+
+type autoThing struct {
+	current int64
+	mu      sync.Mutex
+}
+
+var _ sql.AutoIncrementSetter = &autoThing{}
+
+func (at *autoThing) SetAutoIncrementValue(_ *sql.Context, value interface{}) (err error) {
+	at.Set(value)
+	return
+}
+
+func (at *autoThing) Close(*sql.Context) (err error) {
+	return
+}
+
+func (at *autoThing) Next(passed interface{}) int64 {
+	at.mu.Lock()
+	defer at.mu.Unlock()
+
+	var value int64
+	if passed != nil {
+		coerceInt64(passed)
 	}
-	return bld.Build(shimPool)
+	if value > at.current {
+		at.current = value
+	}
+
+	current := at.current
+	at.current++
+	return current
+}
+
+func (at *autoThing) Peek() int64 {
+	at.mu.Lock()
+	defer at.mu.Unlock()
+	return at.current
+}
+
+func (at *autoThing) Set(value interface{}) {
+	at.current = coerceInt64(value)
+}
+
+func coerceInt64(value interface{}) int64 {
+	switch v := value.(type) {
+	case int:
+		return int64(v)
+	case int8:
+		return int64(v)
+	case int16:
+		return int64(v)
+	case int32:
+		return int64(v)
+	case int64:
+		return int64(v)
+	default:
+		panic(value)
+	}
 }

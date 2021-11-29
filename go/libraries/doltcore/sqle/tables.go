@@ -78,6 +78,8 @@ type DoltTable struct {
 	sch          schema.Schema
 	autoIncCol   schema.Column
 
+	autoThing *autoThing
+
 	projectedCols []string
 	temporary     bool
 }
@@ -92,12 +94,25 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		return
 	})
 
+	v, err := tbl.GetAutoIncrementValue(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
+	i, err := autoCol.TypeInfo.ConvertNomsValueToValue(v)
+	if err != nil {
+		panic(err)
+	}
+
+	thing := NewAutoThing(i)
+
 	return &DoltTable{
 		tableName:     name,
 		db:            db,
 		nbf:           tbl.Format(),
 		sch:           sch,
 		autoIncCol:    autoCol,
+		autoThing:     thing,
 		projectedCols: nil,
 		temporary:     isTemporary,
 	}
@@ -516,42 +531,17 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 
 // AutoIncrementSetter implements sql.AutoIncrementTable
 func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrementSetter {
-	panic("unimplemented")
-	//te, err := t.getTableEditor(ctx)
-	//if err != nil {
-	//	return sqlutil.NewStaticErrorEditor(err)
-	//}
-	//return te
+	return t.autoThing
 }
 
 // PeekNextAutoIncrementValue implements sql.AutoIncrementTable
 func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	panic("unimplemented")
-	//if !t.autoIncCol.AutoIncrement {
-	//	return nil, sql.ErrNoAutoIncrementCol
-	//}
-	//
-	//return t.getTableAutoIncrementValue(ctx)
+	return t.autoThing.Peek(), nil
 }
 
 // GetNextAutoIncrementValue implements sql.AutoIncrementTable
 func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentialVal interface{}) (interface{}, error) {
-	panic("unimplemented")
-	//if !t.autoIncCol.AutoIncrement {
-	//	return nil, sql.ErrNoAutoIncrementCol
-	//}
-	//
-	//ed, err := t.getTableEditor(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//tableVal, err := t.getTableAutoIncrementValue(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//return ed.aiTracker.Next(t.tableName, potentialVal, tableVal)
+	return t.autoThing.Next(potentialVal), nil
 }
 
 func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
