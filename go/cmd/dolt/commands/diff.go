@@ -526,7 +526,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 					continue
 				}
 
-				cli.Print(sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+				cli.Println(sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
 			}
 		}
 
