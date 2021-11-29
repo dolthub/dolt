@@ -59,22 +59,12 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 		return false, nil
 	})
 
-	// The Dolt schema implicitly ordered columns by ordinal at init
-	// We need to extract the pk orderings to create a sql.PrimaryKeySchema
-	pkOrds := make([]int, sch.GetPKCols().Size())
-	i = 0
-	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		pkOrds[colOrds[tag]] = i
-		i++
-		return false, nil
-	})
-
 	sqlSch, err := sqle.ResolveDefaults(tableName, cols)
 	if err != nil {
 		return sql.PrimaryKeySchema{}, err
 	}
 
-	return sql.NewPrimaryKeySchema(sqlSch, pkOrds), nil
+	return sql.NewPrimaryKeySchema(sqlSch, sch.GetPkOrdinals()), nil
 }
 
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
@@ -86,6 +76,9 @@ func ToDoltSchema(
 	sqlSchema sql.PrimaryKeySchema,
 	headRoot *doltdb.RootValue,
 ) (schema.Schema, error) {
+	var cols []schema.Column
+	var err error
+
 	// generate tags for all columns
 	var names []string
 	var kinds []types.NomsKind
@@ -107,33 +100,28 @@ func ToDoltSchema(
 		return nil, fmt.Errorf("number of tags should equal number of columns")
 	}
 
-	var otherCols []schema.Column
-	var allCols []schema.Column
 	for i, col := range sqlSchema.Schema {
 		convertedCol, err := ToDoltCol(tags[i], col)
 		if err != nil {
 			return nil, err
 		}
-		if !col.PrimaryKey {
-			otherCols = append(otherCols, convertedCol)
-		}
-		allCols = append(allCols, convertedCol)
+		cols = append(cols, convertedCol)
 	}
 
-	pkCols := make([]schema.Column, len(allCols)-len(otherCols))
-	for i, j := range sqlSchema.PkOrdinals() {
-		pkCols[i] = allCols[j]
-	}
+	colColl := schema.NewColCollection(cols...)
 
-	allColl := schema.NewColCollection(allCols...)
-	err = schema.ValidateForInsert(allColl)
+	err = schema.ValidateForInsert(colColl)
 	if err != nil {
 		return nil, err
 	}
 
-	pkColl := schema.NewColCollection(allCols...)
-	otherColl := schema.NewColCollection(otherCols...)
-	return schema.SchemaFromColCollections(allColl, pkColl, otherColl), nil
+	sch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		return nil, err
+	}
+
+	sch.AddPkOrdinals(sqlSchema.PkOrdinals())
+	return sch, nil
 }
 
 // ToDoltCol returns the dolt column corresponding to the SQL column given

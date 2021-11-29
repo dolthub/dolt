@@ -118,6 +118,7 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 		return nil, err
 	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
+	newSch.AddPkOrdinals(sch.GetPkOrdinals())
 
 	return newSch, nil
 }

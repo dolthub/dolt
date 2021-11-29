@@ -33,6 +33,7 @@ type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
 	indexCollection            IndexCollection
 	checkCollection            CheckCollection
+	pkOrdinals                 []int
 }
 
 // SchemaFromCols creates a Schema from a collection of columns
@@ -173,6 +174,19 @@ func (si *schemaImpl) GetNonPKCols() *ColCollection {
 // GetPKCols gets the collection of columns which make the primary key.
 func (si *schemaImpl) GetPKCols() *ColCollection {
 	return si.pkCols
+}
+
+func (si *schemaImpl) GetPkOrdinals() []int {
+	return si.pkOrdinals
+}
+
+func (si *schemaImpl) AddPkOrdinals(o []int) {
+	si.pkOrdinals = o
+	newPks := make([]Column, si.pkCols.Size())
+	for i, j := range si.pkOrdinals {
+		newPks[i] = si.allCols.GetByIndex(j)
+	}
+	si.pkCols = NewColCollection(newPks...)
 }
 
 func (si *schemaImpl) String() string {

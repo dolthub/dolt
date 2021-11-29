@@ -92,9 +92,80 @@ func SqlRowToDoltRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, 
 	return pkDoltRowFromSqlRow(ctx, vrw, r, doltSchema)
 }
 
+func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, types.Tuple, map[uint64]types.Value, error) {
+	numCols := doltSchema.GetAllCols().Size()
+	vals := make([]types.Value, numCols*2)
+	tagToVal := make(map[uint64]types.Value, numCols)
+
+	nonPKCols := doltSchema.GetNonPKCols()
+	numNonPKVals := nonPKCols.Size() * 2
+	nonPKVals := vals[:numNonPKVals]
+	pkVals := vals[numNonPKVals:]
+
+	for i, c := range doltSchema.GetAllCols().GetColumns() {
+		val := r[i]
+		if val == nil {
+			if !c.IsNullable() {
+				return types.Tuple{}, types.Tuple{}, nil, fmt.Errorf("column <%v> received nil but is non-nullable", c.Name)
+			}
+			continue
+		}
+		tag := c.Tag
+		nomsVal, err := c.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, nil, err
+		}
+
+		tagToVal[tag] = nomsVal
+	}
+
+	// non pk values in tag sorted order
+	nonPKIdx := 0
+	//nonPKTags := len(tagToVal) - (pkIdx / 2)
+	//for i := 0; i < len(nonPKCols.SortedTags) && nonPKIdx < (nonPKTags*2); i++ {
+	for _, tag := range nonPKCols.SortedTags {
+		//tag := nonPKCols.SortedTags[i]
+		val, ok := tagToVal[tag]
+
+		if ok {
+			nonPKVals[nonPKIdx] = types.Uint(tag)
+			nonPKVals[nonPKIdx+1] = val
+			nonPKIdx += 2
+		}
+	}
+
+	pkIdx := 0
+	for _, tag := range doltSchema.GetPKCols().Tags {
+		val, ok := tagToVal[tag]
+
+		if ok {
+			pkVals[pkIdx] = types.Uint(tag)
+			pkVals[pkIdx+1] = val
+			pkIdx += 2
+		}
+	}
+
+	nonPKVals = nonPKVals[:nonPKIdx]
+
+	nbf := vrw.Format()
+	keyTuple, err := types.NewTuple(nbf, pkVals...)
+
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, nil, err
+	}
+
+	valTuple, err := types.NewTuple(nbf, nonPKVals...)
+
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, nil, err
+	}
+
+	return keyTuple, valTuple, tagToVal, nil
+}
+
 // DoltKeyValueAndMappingFromSqlRow converts a sql.Row to key and value tuples and keeps a mapping from tag to value that
 // can be used to speed up index key generation for foreign key checks.
-func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, types.Tuple, map[uint64]types.Value, error) {
+func DoltKeyValueAndMappingFromSqlRow1(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, types.Tuple, map[uint64]types.Value, error) {
 	allCols := doltSchema.GetAllCols()
 	nonPKCols := doltSchema.GetNonPKCols()
 

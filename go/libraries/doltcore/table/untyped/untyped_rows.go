@@ -93,7 +93,9 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 
 	colColl := schema.NewColCollection(cols...)
 
-	return schema.SchemaFromCols(colColl)
+	newSch, err := schema.SchemaFromCols(colColl)
+	newSch.AddPkOrdinals(sch.GetPkOrdinals())
+	return newSch, nil
 }
 
 // UnkeySchema takes a schema and returns a schema with the same columns and types, but stripped of constraints and

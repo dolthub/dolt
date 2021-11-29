@@ -154,10 +154,13 @@ type encodedCheck struct {
 	Enforced   bool   `noms:"enforced" json:"enforced"`
 }
 
+//type encodedPkOrdinals []int
+
 type schemaData struct {
 	Columns          []encodedColumn `noms:"columns" json:"columns"`
 	IndexCollection  []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
 	CheckConstraints []encodedCheck  `noms:"checks,omitempty" json:"checks,omitempty"`
+	PKOrdinals       []int           `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
 }
 
 func (sd *schemaData) Copy() *schemaData {
@@ -189,10 +192,19 @@ func (sd *schemaData) Copy() *schemaData {
 		}
 	}
 
+	var pkOrdinals []int
+	if sd.PKOrdinals != nil {
+		pkOrdinals = make([]int, len(sd.PKOrdinals))
+		for i, j := range sd.PKOrdinals {
+			pkOrdinals[i] = j
+		}
+	}
+
 	return &schemaData{
 		Columns:          columns,
 		IndexCollection:  idxCol,
 		CheckConstraints: checks,
+		PKOrdinals:       pkOrdinals,
 	}
 }
 
@@ -237,6 +249,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		Columns:          encCols,
 		IndexCollection:  encodedIndexes,
 		CheckConstraints: encodedChecks,
+		PKOrdinals:       sch.GetPkOrdinals(),
 	}, nil
 }
 
@@ -259,7 +272,7 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	err = sd.addChecksAndIndexesToSchema(sch)
+	err = sd.addChecksIndexesAndPkOrderingToSchema(sch)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +280,7 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 	return sch, nil
 }
 
-func (sd schemaData) addChecksAndIndexesToSchema(sch schema.Schema) error {
+func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) error {
 	for _, encodedIndex := range sd.IndexCollection {
 		_, err := sch.Indexes().UnsafeAddIndexByColTags(
 			encodedIndex.Name,
@@ -293,6 +306,9 @@ func (sd schemaData) addChecksAndIndexesToSchema(sch schema.Schema) error {
 			return err
 		}
 	}
+
+	sch.AddPkOrdinals(sd.PKOrdinals)
+
 	return nil
 }
 
@@ -348,7 +364,7 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	if ok {
 		cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
 		sd := cachedData.sd.Copy()
-		err := sd.addChecksAndIndexesToSchema(cachedSch)
+		err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
 		if err != nil {
 			return nil, err
 		}

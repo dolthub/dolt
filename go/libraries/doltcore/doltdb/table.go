@@ -302,7 +302,12 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	colColl = colColl.Append(typeCol)
 	colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
 	colColl = colColl.Append(infoCol)
-	return schema.SchemaFromCols(colColl)
+	newSch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		return nil, err
+	}
+	newSch.AddPkOrdinals(sch.GetPkOrdinals())
+	return newSch, nil
 }
 
 // GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating

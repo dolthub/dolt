@@ -91,6 +91,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		return nil, err
 	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
+	newSch.AddPkOrdinals(sch.GetPkOrdinals())
 
 	return tbl.UpdateSchema(ctx, newSch)
 }

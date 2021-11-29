@@ -348,5 +348,6 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 			return nil, err
 		}
 	}
+	newSch.AddPkOrdinals(sch.GetPkOrdinals())
 	return newSch, nil
 }
