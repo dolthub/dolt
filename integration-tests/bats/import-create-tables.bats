@@ -91,7 +91,8 @@ teardown() {
 @test "import-create-tables: create a table with json import. bad schema." {
     run dolt table import -c -s `batshelper employees-sch-bad.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error determining the output schema" ]] || false
+    [[ "$output" =~ "Error creating reader for json file" ]] || false
+    [[ "$output" =~ "employees-tbl.json" ]] || false
     [[ "$output" =~ "employees-sch-bad.sql" ]] || false
 }
 
@@ -159,13 +160,9 @@ DELIM
     run dolt table import -c --pk=id fktest 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fktest already exists. Use -f to overwrite." ]] || false
-    run dolt table import -f -c --pk=pk fktest other.csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Import completed successfully." ]] || false
-    run dolt schema show fktest
-    skip "cannot overwrite a table with foreign key constraints"
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "FOREIGN KEY" ]] || false
+    run dolt table import -c --pk=pk test 1pk5col-ints.csv -f
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ 'since it is referenced from table `fktest`' ]] || false
 }
 
 @test "import-create-tables: try to create a table with a bad csv" {

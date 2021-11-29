@@ -54,7 +54,7 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
 						return
 					}
 				} else if table.IsBadRow(err) {
-					badRowChan <- &TransformRowFailure{table.GetBadRowRow(err), "reader", err.Error()}
+					badRowChan <- &TransformRowFailure{table.GetBadRowRow(err), nil, "reader", err.Error()}
 				} else {
 					p.StopWithErr(err)
 					return
@@ -106,7 +106,7 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 							sql.ErrPrimaryKeyViolation.Is(err) ||
 							sql.ErrUniqueKeyViolation.Is(err) ||
 							errors.Is(err, editor.ErrDuplicateKey) {
-							badRowChan <- &TransformRowFailure{r.Row, "writer", err.Error()}
+							badRowChan <- &TransformRowFailure{r.Row, nil, "writer", err.Error()}
 						} else {
 							p.StopWithErr(err)
 							return
