@@ -72,9 +72,7 @@ type indexWriter struct {
 }
 
 func newIndexWriter(sch, idxSch schema.Schema, rows prolly.Map) (ed indexWriter) {
-	kd, vd := rows.Descriptors()
-	conv := newRowConverter(sch, idxSch, kd, vd)
-
+	conv := newRowConverter(sch, idxSch)
 	return indexWriter{
 		mut:  rows.Mutate(),
 		sch:  sch,
@@ -127,7 +125,7 @@ func (ed indexWriter) Close(ctx *sql.Context) (err error) {
 
 var shimPool = pool.NewBuffPool()
 
-func newRowConverter(tblSch, idxSch schema.Schema, _, _ val.TupleDesc) (rc rowConv) {
+func newRowConverter(tblSch, idxSch schema.Schema) (rc rowConv) {
 	kd := prolly.KeyDescriptorFromSchema(idxSch)
 	vd := prolly.ValueDescriptorFromSchema(idxSch)
 
@@ -143,8 +141,9 @@ func newRowConverter(tblSch, idxSch schema.Schema, _, _ val.TupleDesc) (rc rowCo
 	for i := range idxSch.GetPKCols().GetColumns() {
 		rc.keyMap = append(rc.keyMap, i)
 	}
+	offset := len(rc.keyMap)
 	for i := range idxSch.GetNonPKCols().GetColumns() {
-		rc.valMap = append(rc.valMap, i)
+		rc.valMap = append(rc.valMap, i+offset)
 	}
 
 	return rc
