@@ -288,13 +288,13 @@ SQL
 }
 
 @test "import-replace-tables: compare tables in database with table imported from parquet file" {
-    dolt sql -q "CREATE TABLE testTypes (pk BIGINT PRIMARY KEY, v1 TIME, v2 YEAR, v3 BOOL, v4 ENUM('one', 'two', 'three'), v5 TEXT);"
+    dolt sql -q "CREATE TABLE testTypes (pk BIGINT PRIMARY KEY, v1 TIME, v2 YEAR, v3 DATETIME, v4 BOOL, v5 ENUM('one', 'two', 'three'));"
     dolt add .
     dolt commit -m "create table"
 
     dolt branch new_branch
 
-    dolt sql -q "INSERT INTO testTypes VALUES (1,'11:11:11','2020',true,'one','first row'),(2,'12:12:12','2020',false,'three','second row'),(3,'04:12:34','2019',true,NULL,'third row'),(4,NULL,'2020',false,'two','fourth row');"
+    dolt sql -q "INSERT INTO testTypes VALUES (1,'11:11:11','2020','2020-04-09 11:11:11',true,'one'),(2,'12:12:12','2020','2020-04-09 12:12:12',false,'three'),(3,'04:12:34','2019','2019-10-10 04:12:34',true,NULL),(4,NULL,'2020','2011-09-19 23:23:14',false,'two');"
 
     dolt add .
     dolt commit -m "add rows"
