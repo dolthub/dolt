@@ -142,7 +142,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	//			}
 	//		}
 	//		// force load the table editor since this counts as a change
-	//		_, err := sess.GetTableEditor(ctx, tblName, nil)
+	//		_, err := sess.GetTableWriter(ctx, tblName, nil)
 	//		if err != nil {
 	//			return nil, nil, err
 	//		}
@@ -190,7 +190,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	//	return nil, nil, err
 	//}
 	//
-	//updatedTblEditor, err := sess.GetTableEditor(ctx, tblName, nil)
+	//updatedTblEditor, err := sess.GetTableWriter(ctx, tblName, nil)
 	//if err != nil {
 	//	return nil, nil, err
 	//}

@@ -25,21 +25,21 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type EditSession struct {
-	editors map[string]TableEditor
+type WriteSession struct {
+	editors map[string]TableWriter
 	mu      *sync.Mutex
 }
 
-func NewEditSession() EditSession {
-	return EditSession{
-		editors: make(map[string]TableEditor),
+func NewWriteSession() WriteSession {
+	return WriteSession{
+		editors: make(map[string]TableWriter),
 		mu:      &sync.Mutex{},
 	}
 }
 
-// GetTableEditor returns a TableEditor for the given table. If a schema is provided and it does not match the one
+// GetTableWriter returns a TableWriter for the given table. If a schema is provided and it does not match the one
 // that is used for currently open editors (if any), then those editors will reload the table from the root.
-func (es EditSession) GetTableEditor(ctx *sql.Context, name string, tbl *doltdb.Table) (TableEditor, error) {
+func (es WriteSession) GetTableWriter(ctx *sql.Context, name string, tbl *doltdb.Table) (TableWriter, error) {
 	es.mu.Lock()
 	defer es.mu.Unlock()
 
@@ -59,7 +59,7 @@ func (es EditSession) GetTableEditor(ctx *sql.Context, name string, tbl *doltdb.
 }
 
 // Flush applies all pending edits to |root| and returns the result.
-func (es EditSession) Flush(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+func (es WriteSession) Flush(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 	es.mu.Lock()
 	defer es.mu.Unlock()
 
@@ -84,7 +84,7 @@ func (es EditSession) Flush(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 }
 
 // CloseEditors closes all editors in the session.
-func (es EditSession) CloseEditors(ctx *sql.Context) (err error) {
+func (es WriteSession) CloseEditors(ctx *sql.Context) (err error) {
 	es.mu.Lock()
 	defer es.mu.Unlock()
 
@@ -97,50 +97,50 @@ func (es EditSession) CloseEditors(ctx *sql.Context) (err error) {
 	return err
 }
 
-type TableEditor struct {
-	primary indexEditor
-	indexes map[string]indexEditor
+type TableWriter struct {
+	primary indexWriter
+	indexes map[string]indexWriter
 
 	// todo(andy): don't love it
 	signal *struct{ closed bool }
 }
 
-var _ sql.RowReplacer = TableEditor{}
-var _ sql.RowUpdater = TableEditor{}
-var _ sql.RowInserter = TableEditor{}
-var _ sql.RowDeleter = TableEditor{}
+var _ sql.RowReplacer = TableWriter{}
+var _ sql.RowUpdater = TableWriter{}
+var _ sql.RowInserter = TableWriter{}
+var _ sql.RowDeleter = TableWriter{}
 
-func newTableEditor(ctx *sql.Context, tbl *doltdb.Table) (TableEditor, error) {
-	primary, indexes, err := indexEditorsFromTable(ctx, tbl)
+func newTableEditor(ctx *sql.Context, tbl *doltdb.Table) (TableWriter, error) {
+	primary, indexes, err := indexWriterFromTable(ctx, tbl)
 	if err != nil {
-		return TableEditor{}, err
+		return TableWriter{}, err
 	}
 
 	signal := struct{ closed bool }{closed: false}
 
-	return TableEditor{
+	return TableWriter{
 		primary: primary,
 		indexes: indexes,
 		signal:  &signal,
 	}, nil
 }
 
-func (ed TableEditor) checkClosed() (err error) {
+func (ed TableWriter) checkClosed() (err error) {
 	if ed.signal.closed {
 		err = errors.New("table editor was closed")
 	}
 	return
 }
 
-// StatementBegin implements the interface sql.TableEditor.
-func (ed TableEditor) StatementBegin(ctx *sql.Context) {
+// StatementBegin implements the interface sql.TableWriter.
+func (ed TableWriter) StatementBegin(ctx *sql.Context) {
 	for _, dep := range ed.indexes {
 		dep.StatementBegin(ctx)
 	}
 }
 
-// Insert implements the interface sql.TableEditor.
-func (ed TableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
+// Insert implements the interface sql.TableWriter.
+func (ed TableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	if err = ed.checkClosed(); err != nil {
 		return err
 	}
@@ -152,8 +152,8 @@ func (ed TableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	return nil
 }
 
-// Delete implements the interface sql.TableEditor.
-func (ed TableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
+// Delete implements the interface sql.TableWriter.
+func (ed TableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	if err = ed.checkClosed(); err != nil {
 		return err
 	}
@@ -165,8 +165,8 @@ func (ed TableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	return nil
 }
 
-// Update implements the interface sql.TableEditor.
-func (ed TableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
+// Update implements the interface sql.TableWriter.
+func (ed TableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
 	if err = ed.checkClosed(); err != nil {
 		return err
 	}
@@ -178,8 +178,8 @@ func (ed TableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (
 	return nil
 }
 
-// DiscardChanges implements the interface sql.TableEditor.
-func (ed TableEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) (err error) {
+// DiscardChanges implements the interface sql.TableWriter.
+func (ed TableWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) (err error) {
 	if err = ed.checkClosed(); err != nil {
 		return err
 	}
@@ -191,8 +191,8 @@ func (ed TableEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) (
 	return nil
 }
 
-// StatementComplete implements the interface sql.TableEditor.
-func (ed TableEditor) StatementComplete(ctx *sql.Context) (err error) {
+// StatementComplete implements the interface sql.TableWriter.
+func (ed TableWriter) StatementComplete(ctx *sql.Context) (err error) {
 	if err = ed.checkClosed(); err != nil {
 		return err
 	}
@@ -204,18 +204,18 @@ func (ed TableEditor) StatementComplete(ctx *sql.Context) (err error) {
 	return nil
 }
 
-// GetAutoIncrementValue implements the interface sql.TableEditor.
-func (ed TableEditor) GetAutoIncrementValue() (interface{}, error) {
+// GetAutoIncrementValue implements the interface sql.TableWriter.
+func (ed TableWriter) GetAutoIncrementValue() (interface{}, error) {
 	panic("unimplemented")
 }
 
-// SetAutoIncrementValue implements the interface sql.TableEditor.
-func (ed TableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
+// SetAutoIncrementValue implements the interface sql.TableWriter.
+func (ed TableWriter) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
 	panic("unimplemented")
 }
 
 // Flush applies pending edits to |tbl| and returns the result.
-func (ed TableEditor) Flush(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table, error) {
+func (ed TableWriter) Flush(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table, error) {
 	p, err := ed.primary.mut.Map(ctx)
 	if err != nil {
 		return nil, err
@@ -252,7 +252,7 @@ func (ed TableEditor) Flush(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table,
 }
 
 // Close implements Closer
-func (ed TableEditor) Close(ctx *sql.Context) (err error) {
+func (ed TableWriter) Close(ctx *sql.Context) (err error) {
 	for _, ie := range ed.indexes {
 		if cerr := ie.Close(ctx); cerr != nil {
 			err = nil

@@ -463,19 +463,19 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (dsess.TableEditor, error) {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (dsess.TableWriter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	state, _, err := sess.LookupDbState(ctx, t.db.name)
 	if err != nil {
-		return dsess.TableEditor{}, err
+		return dsess.TableWriter{}, err
 	}
 
 	tbl, err := t.doltTable(ctx)
 	if err != nil {
-		return dsess.TableEditor{}, err
+		return dsess.TableWriter{}, err
 	}
 
-	return state.EditSession.GetTableEditor(ctx, t.tableName, tbl)
+	return state.EditSession.GetTableWriter(ctx, t.tableName, tbl)
 }
 
 func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {

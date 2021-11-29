@@ -147,7 +147,7 @@ type DatabaseSessionState struct {
 	headRoot             *doltdb.RootValue
 	WorkingSet           *doltdb.WorkingSet
 	dbData               env.DbData
-	EditSession          EditSession
+	EditSession          WriteSession
 	detachedHead         bool
 	readOnly             bool
 	dirty                bool
@@ -1079,7 +1079,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 
-	sessionState.EditSession = NewEditSession()
+	sessionState.EditSession = NewWriteSession()
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {

@@ -1100,7 +1100,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	//	return err
 	//}
 	//
-	//te, err := ts.GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
+	//te, err := ts.GetTableWriter(ctx, doltdb.SchemasTableName, tbl.sch)
 	//if err != nil {
 	//	return err
 	//}
