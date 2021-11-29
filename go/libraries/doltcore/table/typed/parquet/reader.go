@@ -17,12 +17,13 @@ package parquet
 import (
 	"context"
 	"fmt"
+	"io"
+	"time"
+
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/source"
-	"io"
-	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
