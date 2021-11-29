@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
+	"github.com/dolthub/dolt/go/store/types"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -260,6 +262,29 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 	}
 
 	return newRoot, badCount, nil
+}
+
+// TODO: Remove once import/export are completely rewritten. Left for dolthubapi purposes.
+func NameMapTransform(ctx context.Context, vrw types.ValueReadWriter, inSch schema.Schema, outSch schema.Schema, mapper rowconv.NameMapper) (*pipeline.TransformCollection, *rowconv.FieldMapping, error) {
+	mapping, err := rowconv.NameMapping(inSch, outSch, mapper)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rconv, err := rowconv.NewImportRowConverter(ctx, vrw, mapping)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	transforms := pipeline.NewTransformCollection()
+	if !rconv.IdentityConverter {
+		nt := pipeline.NewNamedTransform("Mapping transform", pipeline.GetRowConvTransformFunc(rconv))
+		transforms.AppendTransforms(nt)
+	}
+
+	return transforms, mapping, nil
 }
 
 func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts DataMoverOptions) (int64, errhand.VerboseError) {
