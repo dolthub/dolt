@@ -30,7 +30,7 @@ func TestTransformRowFailure(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	err = &TransformRowFailure{r, "transform_name", "details"}
+	err = &TransformRowFailure{r, nil, "transform_name", "details"}
 
 	if !IsTransformFailure(err) {
 		t.Error("should be transform failure")

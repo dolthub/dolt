@@ -18,9 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -42,7 +41,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 	if has, err := tbl.HasConflicts(); err != nil {
 		return err
 	} else if !has {
-		return doltdb.ErrNoConflicts
+		return nil
 	}
 
 	tblSch, err := tbl.GetSchema(ctx)
@@ -73,6 +72,18 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 		tbl, err = tbl.SetConflicts(ctx, schemas, m)
 		if err != nil {
 			return nil, err
+		}
+
+		numRowsInConflict, err := tbl.NumRowsInConflict(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if numRowsInConflict == 0 {
+			tbl, err = tbl.ClearConflicts()
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		return root.PutTable(ctx, tblName, tbl)

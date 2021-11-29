@@ -454,3 +454,36 @@ teardown() {
     run dolt sql -q "ALTER TABLE test ADD COLUMN v1 BIGINT DEFAULT (pk) AFTER v3"
     [ "$status" -eq "1" ]
 }
+
+@test "default-values: Import with default values" {
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT DEFAULT 2 NOT NULL, v2 int)"
+    dolt sql -q "INSERT INTO test (pk, v2) VALUES (1, 3), (2, 4)"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2,3" ]] || false
+    [[ "$output" =~ "2,2,4" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    echo -e 'pk,v2\n3,5\n4,6'| dolt table import -u test
+
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,2,3" ]] || false
+    [[ "$output" =~ "2,2,4" ]] || false
+    [[ "$output" =~ "3,2,5" ]] || false
+    [[ "$output" =~ "4,2,6" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+
+    # validate that nulls are not accepted for a not null import
+    cat <<DELIM > bad-update.csv
+pk,v1,v2
+5,,5
+6,,6
+DELIM
+    run dolt table import -u test bad-update.csv
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Bad Row: [5,<nil>,5]" ]] || false
+    [[ "$output" =~ "column name 'v1' is non-nullable but attempted to set a value of null" ]] || false
+}
