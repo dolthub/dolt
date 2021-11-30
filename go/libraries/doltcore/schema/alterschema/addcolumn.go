@@ -101,7 +101,7 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 		newCols = append(newCols, col)
 		if order != nil && order.After == col.Name {
 			newCols = append(newCols, newCol)
-			addIdx = i+1
+			addIdx = i + 1
 		}
 	}
 
