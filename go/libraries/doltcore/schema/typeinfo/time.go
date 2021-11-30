@@ -63,23 +63,10 @@ func (ti *timeType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 	if v == nil {
 		return types.NullValue, nil
 	}
-	//var val int64
-	//switch v.(type) {
-	//case int64:
-	//	val = v.(int64)
-	//default:
-	//	value, err := ti.sqlTimeType.Marshal(v)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	val = value
-	//}
-
 	val, err := ti.sqlTimeType.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
-
 	return types.Int(val), nil
 }
 

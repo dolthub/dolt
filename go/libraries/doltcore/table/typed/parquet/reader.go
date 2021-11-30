@@ -95,8 +95,12 @@ func (pr *ParquetReader) ReadRow(ctx context.Context) (row.Row, error) {
 	rowData := make(map[string]interface{})
 	for _, col := range pr.sch.GetAllCols().GetColumns() {
 		val := pr.fileData[col.Name][pr.rowReadCounter]
-		if col.TypeInfo.GetTypeIdentifier() == "datetime" {
-			val = time.Unix(val.(int64), 0)
+		if val != nil {
+			if col.TypeInfo.GetTypeIdentifier() == "datetime" {
+				val = time.Unix(val.(int64), 0)
+			} else if col.TypeInfo.GetTypeIdentifier() == "time" {
+				val, _ = col.TypeInfo.ConvertNomsValueToValue(types.Int(val.(int64)))
+			}
 		}
 		rowData[col.Name] = val
 	}
