@@ -78,6 +78,42 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 }
 
+@test "sql-server: read-only flag prevents modification" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+log_level: debug
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+behavior:
+  read_only: true
+EOF
+
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --config ./config.yml &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    # No tables at the start
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    # attempt to create table (autocommit on), expect either some exception or no table to be created
+    server_query repo1 1 "CREATE TABLE t (
+        c0 INT
+    )" ""
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+}
+
 @test "sql-server: test command line modification" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
