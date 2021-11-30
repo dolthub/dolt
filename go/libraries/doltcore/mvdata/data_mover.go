@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -38,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type CsvOptions struct {
@@ -262,29 +260,6 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 	}
 
 	return newRoot, badCount, nil
-}
-
-// TODO: Remove once import/export are completely rewritten. Left for dolthubapi purposes.
-func NameMapTransform(ctx context.Context, vrw types.ValueReadWriter, inSch schema.Schema, outSch schema.Schema, mapper rowconv.NameMapper) (*pipeline.TransformCollection, *rowconv.FieldMapping, error) {
-	mapping, err := rowconv.NameMapping(inSch, outSch, mapper)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rconv, err := rowconv.NewImportRowConverter(ctx, vrw, mapping)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	transforms := pipeline.NewTransformCollection()
-	if !rconv.IdentityConverter {
-		nt := pipeline.NewNamedTransform("Mapping transform", pipeline.GetRowConvTransformFunc(rconv))
-		transforms.AppendTransforms(nt)
-	}
-
-	return transforms, mapping, nil
 }
 
 func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts DataMoverOptions) (int64, errhand.VerboseError) {
