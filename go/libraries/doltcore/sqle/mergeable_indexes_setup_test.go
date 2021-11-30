@@ -165,7 +165,7 @@ func customRange(tpl1, tpl2 types.Tuple, bt1, bt2 sql.RangeBoundType) *noms.Read
 	})
 	return &noms.ReadRange{
 		Start:     tpl1,
-		Inclusive: bt1 == sql.Closed,
+		Inclusive: true,
 		Reverse:   false,
 		Check:     nrc,
 	}
@@ -185,7 +185,7 @@ func greaterThanRange(tpl types.Tuple) *noms.ReadRange {
 	})
 	return &noms.ReadRange{
 		Start:     tpl,
-		Inclusive: false,
+		Inclusive: true,
 		Reverse:   false,
 		Check:     nrc,
 	}
@@ -205,7 +205,7 @@ func lessThanRange(tpl types.Tuple) *noms.ReadRange {
 	})
 	return &noms.ReadRange{
 		Start:     types.EmptyTuple(types.Format_Default),
-		Inclusive: false,
+		Inclusive: true,
 		Reverse:   false,
 		Check:     nrc,
 	}
@@ -245,28 +245,18 @@ func lessOrEqualRange(tpl types.Tuple) *noms.ReadRange {
 	})
 	return &noms.ReadRange{
 		Start:     types.EmptyTuple(types.Format_Default),
-		Inclusive: false,
+		Inclusive: true,
 		Reverse:   false,
 		Check:     nrc,
 	}
 }
 
-func allRange(tpl types.Tuple) *noms.ReadRange {
-	var nrc nomsRangeCheck
-	_ = tpl.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
-		if tupleIndex%2 == 0 {
-			return false, nil
-		}
-		nrc = append(nrc, columnBounds{
-			boundsCase: boundsCase_infinity_infinity,
-		})
-		return false, nil
-	})
+func allRange() *noms.ReadRange {
 	return &noms.ReadRange{
 		Start:     types.EmptyTuple(types.Format_Default),
-		Inclusive: false,
+		Inclusive: true,
 		Reverse:   false,
-		Check:     nrc,
+		Check:     nomsRangeCheck{},
 	}
 }
 
