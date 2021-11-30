@@ -307,7 +307,10 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 		}
 	}
 
-	sch.AddPkOrdinals(sd.PKOrdinals)
+	err := sch.AddPkOrdinals(sd.PKOrdinals)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

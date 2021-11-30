@@ -41,7 +41,7 @@ type Schema interface {
 	GetPkOrdinals() []int
 
 	// AddPkOrdinals adds a non-default primary key column ordering
-	AddPkOrdinals([]int)
+	AddPkOrdinals([]int) error
 }
 
 // ColFromTag returns a schema.Column from a schema and a tag
@@ -179,6 +179,14 @@ func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
 		c1 := cc1.GetAtIndex(i)
 		c2 := cc2.GetAtIndex(i)
 		if (c1.Tag != c2.Tag) || (c1.IsPartOfPK != c2.IsPartOfPK) {
+			return false
+		}
+	}
+
+	ords1 := fromSch.GetPkOrdinals()
+	ords2 := toSch.GetPkOrdinals()
+	for i := 0; i < len(ords1) && i < len(ords2); i++ {
+		if ords1[i] != ords2[i] {
 			return false
 		}
 	}

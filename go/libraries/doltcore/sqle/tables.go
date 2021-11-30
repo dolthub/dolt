@@ -802,7 +802,7 @@ type AlterableDoltTable struct {
 }
 
 func (t *AlterableDoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
-	panic("implement me")
+	return t.sqlSch
 }
 
 // Internal interface for declaring the interfaces that dolt tables with an alterable schema are expected to implement

@@ -39,32 +39,21 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, sql.ErrMultiplePrimaryKeysDefined.New() // Also caught in GMS
 	}
 
-	// Map function for converting columns to a primary key
-	newCols := make(map[string]int, len(columns))
+	pkColOrdering := make(map[string]int, len(columns))
 	for i, newCol := range columns {
-		newCols[newCol.Name] = i
+		pkColOrdering[newCol.Name] = i
 	}
 
 	newColl := make([]schema.Column, sch.GetAllCols().Size())
 	pkOrdinals := make([]int, len(columns))
-	for i, col := range sch.GetAllCols().GetColumns() {
-		if pos, ok := newCols[col.Name]; ok {
-			pkOrdinals[pos] = i
+	for ord, col := range sch.GetAllCols().GetColumns() {
+		if i, ok := pkColOrdering[col.Name]; ok {
+			pkOrdinals[i] = ord
 			col.IsPartOfPK = true
 		}
-		newColl[i] = col
+		newColl[ord] = col
 	}
 	newCollection := schema.NewColCollection(newColl...)
-	//newCollection := schema.MapColCollection(sch.GetAllCols(), func(col schema.Column) schema.Column {
-	//	for _, c := range columns {
-	//		if strings.ToLower(c.Name) == strings.ToLower(col.Name) {
-	//			col.IsPartOfPK = true
-	//			return col
-	//		}
-	//	}
-	//
-	//	return col
-	//})
 
 	rows, err := table.GetRowData(ctx)
 	if err != nil {
@@ -106,51 +95,14 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, err
 	}
 
-	// TODO is this needed?
-	if !pkInCorrectOrder(newSchema, columns) {
-		newSchema, err = rearrangeSchema(newSchema, columns)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
-	newSchema.AddPkOrdinals(pkOrdinals)
+	err = newSchema.AddPkOrdinals(pkOrdinals)
+	if err != nil {
+		return nil, err
+	}
 
 	// Rebuild all of the indexes now that the primary key has been changed
 	return insertKeyedData(ctx, nbf, table, newSchema, tableName, opts)
-}
-
-func pkInCorrectOrder(sch schema.Schema, cols []sql.IndexColumn) bool {
-	pks := sch.GetPKCols()
-
-	if pks.Size() != len(cols) {
-		return false
-	}
-
-	for i, c := range cols {
-		if strings.ToLower(c.Name) != strings.ToLower(pks.GetAtIndex(i).Name) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func rearrangeSchema(sch schema.Schema, cols []sql.IndexColumn) (schema.Schema, error) {
-	currPks := sch.GetPKCols()
-	newPks := schema.NewColCollection()
-
-	for _, c := range cols {
-		foundCol, ok := currPks.GetByNameCaseInsensitive(c.Name)
-		if !ok {
-			return nil, fmt.Errorf("error: column %s was not found", foundCol.Name)
-		}
-
-		newPks = newPks.Append(foundCol)
-	}
-
-	return schema.SchemaFromCols(newPks.AppendColl(sch.GetNonPKCols()))
 }
 
 func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *doltdb.Table, newSchema schema.Schema, name string, opts editor.Options) (*doltdb.Table, error) {

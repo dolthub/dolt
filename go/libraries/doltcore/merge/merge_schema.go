@@ -122,9 +122,11 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return false, nil
 	})
 
-	// pick our primary key ordering
-	sch.AddPkOrdinals(ourSch.GetPkOrdinals())
-
+	//// pick our primary key ordering
+	//err = sch.AddPkOrdinals(ourSch.GetPkOrdinals())
+	//if err != nil {
+	//	return nil, EmptySchConflicts, err
+	//}
 	return sch, sc, nil
 }
 

@@ -172,7 +172,7 @@ func mustSqlSchema(sch schema.Schema) sql.Schema {
 		panic(err)
 	}
 
-	return sqlSchema
+	return sqlSchema.Schema
 }
 
 // Convenience function to return a row or panic on an error

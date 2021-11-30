@@ -40,6 +40,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		return nil, ErrKeylessAltTbl
 	}
 
+	var dropIdx int
 	var dropTag uint64
 	if col, ok := sch.GetAllCols().GetByName(colName); !ok {
 		return nil, schema.ErrColNotFound
@@ -74,15 +75,12 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	}
 
 	cols := make([]schema.Column, 0)
-	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.Name != colName {
-			cols = append(cols, col)
+	for i, col := range sch.GetAllCols().GetColumns() {
+		if col.Name == colName {
+			dropIdx = i
+			continue
 		}
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
+		cols = append(cols, col)
 	}
 
 	colColl := schema.NewColCollection(cols...)
@@ -91,7 +89,22 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		return nil, err
 	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
-	newSch.AddPkOrdinals(sch.GetPkOrdinals())
+
+	newPkOrds := sch.GetPkOrdinals()
+	for i := 0; i < len(newPkOrds); i++ {
+		if dropIdx <= newPkOrds[i] {
+			newPkOrds[i]--
+		}
+	}
+
+	err = newSch.AddPkOrdinals(newPkOrds)
+	if err != nil {
+		return nil, err
+	}
+	err = newSch.AddPkOrdinals(sch.GetPkOrdinals())
+	if err != nil {
+		return nil, err
+	}
 
 	return tbl.UpdateSchema(ctx, newSch)
 }

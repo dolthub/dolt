@@ -15,6 +15,8 @@
 package schema
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -41,9 +43,11 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	var pkCols []Column
 	var nonPKCols []Column
 
-	for _, c := range allCols.cols {
+	defaultPkOrds := make([]int, 0)
+	for i, c := range allCols.cols {
 		if c.IsPartOfPK {
 			pkCols = append(pkCols, c)
+			defaultPkOrds = append(defaultPkOrds, i)
 		} else {
 			nonPKCols = append(nonPKCols, c)
 		}
@@ -56,7 +60,13 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	pkColColl := NewColCollection(pkCols...)
 	nonPKColColl := NewColCollection(nonPKCols...)
 
-	return SchemaFromColCollections(allCols, pkColColl, nonPKColColl), nil
+	sch := SchemaFromColCollections(allCols, pkColColl, nonPKColColl)
+	err := sch.AddPkOrdinals(defaultPkOrds)
+	if err != nil {
+		return nil, err
+	}
+	return sch, nil
+
 }
 
 func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) Schema {
@@ -180,13 +190,26 @@ func (si *schemaImpl) GetPkOrdinals() []int {
 	return si.pkOrdinals
 }
 
-func (si *schemaImpl) AddPkOrdinals(o []int) {
+func (si *schemaImpl) AddPkOrdinals(o []int) error {
+	if si.pkCols.Size() == 0 {
+		return nil
+	} else if o == nil || len(o) != si.pkCols.Size() {
+		var found int
+		if o == nil {
+			found = 0
+		} else {
+			found = len(o)
+		}
+		return errors.New(fmt.Sprintf("incorrect number of pk ordinals: expected '%d', found '%d'", si.pkCols.Size(), found))
+	}
+
 	si.pkOrdinals = o
 	newPks := make([]Column, si.pkCols.Size())
 	for i, j := range si.pkOrdinals {
 		newPks[i] = si.allCols.GetByIndex(j)
 	}
 	si.pkCols = NewColCollection(newPks...)
+	return nil
 }
 
 func (si *schemaImpl) String() string {

@@ -46,12 +46,12 @@ type ColumnOrder struct {
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
 func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal, comment string, order *ColumnOrder) (*doltdb.Table, error) {
-	sch, err := tbl.GetSchema(ctx)
+	oldSchema, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if schema.IsKeyless(sch) {
+	if schema.IsKeyless(oldSchema) {
 		return nil, ErrKeylessAltTbl
 	}
 
@@ -59,24 +59,24 @@ func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.T
 		return nil, err
 	}
 
-	newSchema, err := addColumnToSchema(sch, tag, newColName, typeInfo, nullable, order, defaultVal, comment)
+	newSchema, err := addColumnToSchema(oldSchema, tag, newColName, typeInfo, nullable, order, defaultVal, comment)
 	if err != nil {
 		return nil, err
 	}
 
-	return updateTableWithNewSchema(ctx, tblName, tbl, tag, newSchema, defaultVal)
+	return updateTableWithNewSchema(ctx, tblName, tbl, tag, oldSchema, newSchema, defaultVal)
 }
 
 // updateTableWithNewSchema updates the existing table with a new schema and new values for the new column as necessary,
 // and returns the new table.
-func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, newSchema schema.Schema, defaultVal string) (*doltdb.Table, error) {
+func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, oldSchema, newSchema schema.Schema, defaultVal string) (*doltdb.Table, error) {
 	var err error
 	tbl, err = tbl.UpdateSchema(ctx, newSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, newSchema)
+	tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, oldSchema, newSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -91,19 +91,23 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 		return nil, err
 	}
 
+	var addIdx int
 	var newCols []schema.Column
 	if order != nil && order.First {
+		addIdx = 0
 		newCols = append(newCols, newCol)
 	}
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	for i, col := range sch.GetAllCols().GetColumns() {
 		newCols = append(newCols, col)
 		if order != nil && order.After == col.Name {
 			newCols = append(newCols, newCol)
+			addIdx = i+1
 		}
-		return false, nil
-	})
+	}
+
 	if order == nil {
 		newCols = append(newCols, newCol)
+		addIdx = len(newCols) - 1
 	}
 
 	collection := schema.NewColCollection(newCols...)
@@ -118,8 +122,18 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 		return nil, err
 	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
-	newSch.AddPkOrdinals(sch.GetPkOrdinals())
 
+	newPkOrds := sch.GetPkOrdinals()
+	for i := 0; i < len(newPkOrds); i++ {
+		if addIdx <= newPkOrds[i] {
+			newPkOrds[i]++
+		}
+	}
+
+	err = newSch.AddPkOrdinals(newPkOrds)
+	if err != nil {
+		return nil, err
+	}
 	return newSch, nil
 }
 
@@ -169,7 +183,7 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 	return nil
 }
 
-func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, newSchema schema.Schema) (*doltdb.Table, error) {
+func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, oldSchema, newSchema schema.Schema) (*doltdb.Table, error) {
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err

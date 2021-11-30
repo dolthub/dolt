@@ -282,44 +282,47 @@ func updateRowDataWithNewType(
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
 func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schema.Column, order *ColumnOrder) (schema.Schema, error) {
 	// If no order is specified, insert in the same place as the existing column
-	if order == nil {
-		prevColumn := ""
-		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if col.Name == oldCol.Name {
-				if prevColumn == "" {
+	var oldIdx int
+	prevColumn := ""
+	for i, col := range sch.GetAllCols().GetColumns() {
+		if col.Name == oldCol.Name {
+			if prevColumn == "" {
+				if order == nil {
 					order = &ColumnOrder{First: true}
 				}
-				return true, nil
-			} else {
-				prevColumn = col.Name
 			}
-			return false, nil
-		})
-
-		if order == nil {
-			if prevColumn != "" {
-				order = &ColumnOrder{After: prevColumn}
-			} else {
-				return nil, fmt.Errorf("Couldn't find column %s", oldCol.Name)
-			}
+			oldIdx = i
+			break
+		} else {
+			prevColumn = col.Name
 		}
 	}
 
+	if order == nil {
+		if prevColumn != "" {
+			order = &ColumnOrder{After: prevColumn}
+		} else {
+			return nil, fmt.Errorf("Couldn't find column %s", oldCol.Name)
+		}
+	}
+
+	var newIdx int
 	var newCols []schema.Column
 	if order.First {
 		newCols = append(newCols, newCol)
+		newIdx = 0
 	}
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+
+	for _, col := range sch.GetAllCols().GetColumns() {
 		if col.Name != oldCol.Name {
 			newCols = append(newCols, col)
 		}
 
 		if order.After == col.Name {
+			newIdx = len(newCols)
 			newCols = append(newCols, newCol)
 		}
-
-		return false, nil
-	})
+	}
 
 	collection := schema.NewColCollection(newCols...)
 
@@ -348,6 +351,35 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 			return nil, err
 		}
 	}
-	newSch.AddPkOrdinals(sch.GetPkOrdinals())
+
+	pkOrdinals := sch.GetPkOrdinals()
+	if newIdx != oldIdx {
+		if newIdx > oldIdx {
+			for i, ord := range pkOrdinals {
+				if ord == oldIdx {
+					// special case if pk was transposed
+					pkOrdinals[i] = newIdx
+				} else if ord > oldIdx && ord <= newIdx {
+					// shift backwards if pk in range (oldIdx, newIdx]
+					pkOrdinals[i] = ord +1
+				}
+			}
+		} else {
+			for i, ord := range pkOrdinals {
+				if ord == oldIdx {
+					// special case if pk was transposed
+					pkOrdinals[i] = newIdx
+				} else if ord >= newIdx && ord < oldIdx {
+					// shift forward if pk in range [newIdx, oldIdx)
+					pkOrdinals[i] = ord +1
+				}
+			}
+		}
+	}
+
+	err = newSch.AddPkOrdinals(pkOrdinals)
+	if err != nil {
+		return nil, err
+	}
 	return newSch, nil
 }

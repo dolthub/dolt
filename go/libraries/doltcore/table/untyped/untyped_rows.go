@@ -94,7 +94,10 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 	colColl := schema.NewColCollection(cols...)
 
 	newSch, err := schema.SchemaFromCols(colColl)
-	newSch.AddPkOrdinals(sch.GetPkOrdinals())
+	err = newSch.AddPkOrdinals(sch.GetPkOrdinals())
+	if err != nil {
+		return nil, err
+	}
 	return newSch, nil
 }
 
