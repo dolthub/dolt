@@ -41,7 +41,7 @@ func newIdentityConverter(mapping *FieldMapping) *RowConverter {
 
 // NewRowConverter creates a row converter from a given FieldMapping.
 func NewRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *FieldMapping) (*RowConverter, error) {
-	if nec, err := isNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest); err != nil {
+	if nec, err := IsNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest); err != nil {
 		return nil, err
 	} else if !nec {
 		return newIdentityConverter(mapping), nil
@@ -118,7 +118,7 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 	return row.New(inRow.Format(), rc.DestSch, outTaggedVals)
 }
 
-func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) (bool, error) {
+func IsNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) (bool, error) {
 	srcCols := srcSch.GetAllCols()
 	destCols := destSch.GetAllCols()
 
