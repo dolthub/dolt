@@ -113,7 +113,7 @@ func (pwr *ParquetWriter) WriteRow(ctx context.Context, r row.Row) error {
 			case typeinfo.TimeTypeIdentifier:
 				colVal, ok := r.GetColVal(colT.Tag)
 				if !ok {
-					return fmt.Errorf("could not get row value")
+					return fmt.Errorf("error: could not get column value for timeType value")
 				}
 				val = colVal
 			}

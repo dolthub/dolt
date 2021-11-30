@@ -722,11 +722,17 @@ func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema
 		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
 			switch doltRow[i].(type) {
 			case int8:
-				doltRow[i] = strconv.Itoa(int(doltRow[i].(int8)))
-			}
-			val, ok := stringToBoolean(doltRow[i].(string))
-			if ok {
-				doltRow[i] = val
+				val, ok := stringToBoolean(strconv.Itoa(int(doltRow[i].(int8))))
+				if ok {
+					doltRow[i] = val
+				}
+			case string:
+				val, ok := stringToBoolean(doltRow[i].(string))
+				if ok {
+					doltRow[i] = val
+				}
+			case bool:
+				doltRow[i] = doltRow[i].(bool)
 			}
 		}
 

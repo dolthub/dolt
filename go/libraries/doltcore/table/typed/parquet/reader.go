@@ -63,10 +63,10 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 	columns := sche.GetAllCols().GetColumns()
 	num := pr.GetNumRows()
 
+	// TODO : need to solve for getting single row data in readRow (storing all columns data in memory right now)
 	data := make(map[string][]interface{})
 	var colName []string
 	for _, col := range columns {
-		// table.Values, table.RepetitionLevels, table.DefinitionLevels, nil
 		colData, _, _, cErr := pr.ReadColumnByPath(common.ReformPathStr(fmt.Sprintf("parquet_go_root.%s", col.Name)), num)
 		if cErr != nil {
 			return nil, err
