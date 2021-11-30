@@ -3,10 +3,20 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    cd $BATS_TMPDIR
+    mkdir remotes-$$
+    mkdir remotes-$$/empty
+    echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
+    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv_pid=$!
+    cd dolt-repo-$$
+    mkdir "dolt-repo-clones"
 }
 
 teardown() {
     teardown_common
+    kill $remotesrv_pid
+    rm -rf $BATS_TMPDIR/remotes-$$
 }
 
 # Create a single primary key table and do stuff
@@ -102,3 +112,43 @@ SQL
     [[ "$output" =~ "some error" ]] || false
 }
 
+@test "checkout: dolt checkout with -f flag" {
+    # create main remote branch
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt sql -q 'create table test (id int primary key);'
+    dolt sql -q 'insert into test (id) values (10);'
+    dolt add .
+    dolt commit -m 'create test table.'
+    dolt push origin main:main
+
+    # create remote branch "branch1"
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values to branch 1.'
+    dolt push --set-upstream origin branch1
+
+    dolt sql -q 'insert into test (id) values (4), (5), (6);'
+    run dolt checkout -f main
+    [ "$status" -eq 0 ]
+
+    run dolt table export test test1.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f test1.sql ]
+
+    run grep INSERT test1.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    dolt checkout branch1
+    run dolt table export test test2.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f test2.sql ]
+
+    run grep INSERT test2.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+
+}
