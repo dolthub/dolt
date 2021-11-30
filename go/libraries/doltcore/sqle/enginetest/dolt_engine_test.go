@@ -208,6 +208,10 @@ func TestScripts(t *testing.T) {
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
+func TestComplexIndexQueries(t *testing.T) {
+	enginetest.TestComplexIndexQueries(t, newDoltHarness(t))
+}
+
 func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
