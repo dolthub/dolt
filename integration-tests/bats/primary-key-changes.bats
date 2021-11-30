@@ -618,3 +618,8 @@ SQL
     [[ "$output" =~ "NOT NULL" ]] || false
     [[ ! "$output" =~ "PRIMARY KEY" ]] || false
 }
+
+@test "primary-key-changes: creating table with null and primary key column throws error" {
+    run dolt sql -q "create table t (pk int null primary key)"
+    [ $status -eq 1 ]
+}
