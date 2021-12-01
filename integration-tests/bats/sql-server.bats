@@ -1011,6 +1011,103 @@ while True:
 '
 }
 
+@test "sql-server: disable_client_multi_statements makes create trigger work" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    dolt sql -q 'create table test (id int primary key)'
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+log_level: debug
+behavior:
+  disable_client_multi_statements: true
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+EOF
+    dolt sql-server --config ./config.yml &
+    SERVER_PID=$!
+    # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
+    python3 -c '
+import mysql.connector
+import sys
+import time
+i=0
+while True:
+  try:
+    with mysql.connector.connect(host="127.0.0.1", user="dolt", port='"$PORT"', database="repo1", connection_timeout=1) as c:
+      cursor = c.cursor()
+      cursor.execute("""
+CREATE TRIGGER test_on_insert BEFORE INSERT ON test
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '\''45000'\'' SET MESSAGE_TEXT = '\''You cannot insert into this table'\'';
+END""")
+      for (t) in cursor:
+        print(t)
+      sys.exit(0)
+  except mysql.connector.Error as err:
+    if err.errno != 2003:
+      raise err
+    else:
+      i += 1
+      time.sleep(1)
+      if i == 10:
+        raise err
+'
+}
+
+@test "sql-server: client_multi_statements is currently broken" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    dolt sql -q 'create table test (id int primary key)'
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+log_level: debug
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+EOF
+    dolt sql-server --config ./config.yml &
+    SERVER_PID=$!
+    # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
+    run python3 -c '
+import mysql.connector
+import sys
+import time
+i=0
+while True:
+  try:
+    with mysql.connector.connect(host="127.0.0.1", user="dolt", port='"$PORT"', database="repo1", connection_timeout=1) as c:
+      cursor = c.cursor()
+      cursor.execute("""
+CREATE TRIGGER test_on_insert BEFORE INSERT ON test
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '\''45000'\'' SET MESSAGE_TEXT = '\''You cannot insert into this table'\'';
+END""")
+      for (t) in cursor:
+        print(t)
+      sys.exit(0)
+  except mysql.connector.Error as err:
+    if err.errno != 2003:
+      raise err
+    else:
+      i += 1
+      time.sleep(1)
+      if i == 10:
+        raise err
+'
+    # TODO: This currently fails because mysql.connector enables
+    # MULTI_STATEMENTS by default and dolt sql-server parses the above
+    # statement incorrectly. Once this is fixed, change the test name above and
+    # remove the `run` from the python3 invocation.
+    [ "$status" -ne 0 ]
+}
+
 @test "sql-server: auto increment for a table should reset between drops" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 

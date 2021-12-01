@@ -92,6 +92,8 @@ func Serve(
 		}
 	}
 
+	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
+
 	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
 	var mrEnv *env.MultiRepoEnv
