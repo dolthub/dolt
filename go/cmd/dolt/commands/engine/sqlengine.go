@@ -53,9 +53,11 @@ func NewSqlEngine(
 	mrEnv *env.MultiRepoEnv,
 	format PrintResultFormat,
 	initialDb string,
+	au auth.Auth,
 	autocommit bool) (*SqlEngine, error) {
 
-	au := new(auth.None)
+	// TODO: why are you none?
+	//au := new(auth.None)
 
 	parallelism := runtime.GOMAXPROCS(0)
 

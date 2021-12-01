@@ -17,6 +17,7 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/auth"
 	"io"
 	"sync/atomic"
 
@@ -66,7 +67,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return true, nil
 	})
 
-	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, false)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, new(auth.None),false)
 	if err != nil {
 		return nil, err
 	}
