@@ -20,13 +20,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -102,43 +99,4 @@ func TestUnneccessaryConversion(t *testing.T) {
 	if !rconv.IdentityConverter {
 		t.Fatal("expected identity converter")
 	}
-}
-
-func TestSpecialBoolHandling(t *testing.T) {
-	col1, err := schema.NewColumnWithTypeInfo("pk", 0, typeinfo.Int64Type, true, "", false, "")
-	require.NoError(t, err)
-	col2, err := schema.NewColumnWithTypeInfo("v", 1, typeinfo.PseudoBoolType, false, "", false, "")
-	require.NoError(t, err)
-	colColl := schema.NewColCollection(col1, col2)
-	sch, err := schema.SchemaFromCols(colColl)
-	require.NoError(t, err)
-	untypedSch, err := untyped.UntypeSchema(sch)
-	require.NoError(t, err)
-
-	mapping, err := TagMapping(untypedSch, sch)
-	require.NoError(t, err)
-	vrw := types.NewMemoryValueStore()
-	rconv, err := NewImportRowConverter(context.Background(), vrw, mapping)
-	require.NoError(t, err)
-	inRow, err := row.New(vrw.Format(), untypedSch, row.TaggedValues{
-		0: types.String("76"),
-		1: types.String("true"),
-	})
-	require.NoError(t, err)
-	outData, err := rconv.Convert(inRow)
-	require.NoError(t, err)
-	require.NotNil(t, outData)
-
-	expected, err := row.New(vrw.Format(), mapping.DestSch, row.TaggedValues{
-		0: types.Int(76),
-		1: types.Uint(1),
-	})
-	require.NoError(t, err)
-	assert.True(t, row.AreEqual(outData, expected, mapping.DestSch))
-
-	rconvNoHandle, err := NewRowConverter(context.Background(), vrw, mapping)
-	require.NoError(t, err)
-	results, errStr := rconvNoHandle.Convert(inRow)
-	assert.Nil(t, results)
-	assert.NotEmpty(t, errStr)
 }

@@ -54,6 +54,7 @@ func NewSqlEngine(
 	format PrintResultFormat,
 	initialDb string,
 	autocommit bool) (*SqlEngine, error) {
+
 	au := new(auth.None)
 
 	parallelism := runtime.GOMAXPROCS(0)
@@ -68,8 +69,7 @@ func NewSqlEngine(
 
 	pro := dsqle.NewDoltDatabaseProvider(mrEnv.Config(), mrEnv.FileSystem(), all...)
 
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(
-		parallelism).Build(), &gms.Config{Auth: au})
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{Auth: au})
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true

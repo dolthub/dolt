@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -78,14 +77,11 @@ RangeLoop:
 			return nil, nil
 		}
 
-		inclusive := true
 		var lowerKeys []interface{}
 		for _, rangeColumnExpr := range rang {
 			if rangeColumnExpr.HasLowerBound() {
-				inclusive = inclusive && rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed
 				lowerKeys = append(lowerKeys, sql.GetRangeCutKey(rangeColumnExpr.LowerBound))
 			} else {
-				inclusive = false
 				break
 			}
 		}
@@ -142,9 +138,19 @@ RangeLoop:
 			rangeCheck[i] = cb
 		}
 
+		// If the suffix checks will always succeed (both bounds are infinity) then they can be removed to reduce the
+		// number of checks that are called per-row.
+		for i := len(rangeCheck) - 1; i >= 0; i-- {
+			if rangeCheck[i].boundsCase == boundsCase_infinity_infinity {
+				rangeCheck = rangeCheck[:i]
+			} else {
+				break
+			}
+		}
+
 		readRanges = append(readRanges, &noms.ReadRange{
 			Start:     lowerboundTuple,
-			Inclusive: inclusive,
+			Inclusive: true, // The checks handle whether a value is included or not
 			Reverse:   false,
 			Check:     rangeCheck,
 		})
@@ -219,20 +225,6 @@ func (di *doltIndex) TableData() types.Map {
 // IndexRowData returns the map of index row data.
 func (di *doltIndex) IndexRowData() types.Map {
 	return di.indexRowData
-}
-
-// prefix returns a copy of this index with only the first n columns. If n is >= the number of columns present, then
-// the exact index is returned without copying.
-func (di *doltIndex) prefix(n int) *doltIndex {
-	if n >= len(di.cols) {
-		return di
-	}
-	ndi := *di
-	ndi.cols = di.cols[:n]
-	ndi.id = fmt.Sprintf("%s_PREFIX_%d", di.id, n)
-	ndi.comment = fmt.Sprintf("prefix of %s multi-column index on %d column(s)", di.id, n)
-	ndi.generated = true
-	return &ndi
 }
 
 // keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to

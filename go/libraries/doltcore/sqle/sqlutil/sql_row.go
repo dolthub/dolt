@@ -66,6 +66,10 @@ func MapToSqlIter(ctx context.Context, sch schema.Schema, data types.Map) (sql.R
 
 // DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
 func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
+	if doltRow == nil {
+		return nil, nil
+	}
+
 	colVals := make(sql.Row, sch.GetAllCols().Size())
 	i := 0
 

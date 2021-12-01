@@ -88,7 +88,7 @@ func newRowTransformer(name string, transRowFunc TransformRowFunc) TransformFunc
 					}
 
 					if badRowDetails != "" {
-						badRowChan <- &TransformRowFailure{r.Row, name, badRowDetails}
+						badRowChan <- &TransformRowFailure{r.Row, nil, name, badRowDetails}
 					}
 				} else {
 					return
