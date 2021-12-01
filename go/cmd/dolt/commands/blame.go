@@ -151,12 +151,12 @@ type RowMap struct {
 
 type RowMapList []RowMap
 
-func (p RowMapList) Len() int           { return len(p) }
-func (p RowMapList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p RowMapList) Len() int      { return len(p) }
+func (p RowMapList) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
 func (p RowMapList) Less(i, j int) bool {
 	if len(p[i].Key) < len(p[j].Key) {
 		return true
-	} else if len(p[i].Key) == len(p[j].Key){
+	} else if len(p[i].Key) == len(p[j].Key) {
 		return p[i].Key < p[j].Key
 	} else {
 		return false
