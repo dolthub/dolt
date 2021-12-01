@@ -40,6 +40,10 @@ func (rdr pkTableReader) GetSchema() schema.Schema {
 	return rdr.sch
 }
 
+func (rdr pkTableReader) GetSqlSchema() sql.Schema {
+	panic("Should not be called for sql reader")
+}
+
 // ReadRow implements the TableReader interface.
 func (rdr pkTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 	key, val, err := rdr.iter.Next(ctx)

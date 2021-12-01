@@ -21,6 +21,8 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"strings"
 	"unicode"
@@ -178,9 +180,53 @@ func (csvr *CSVReader) ReadRow(ctx context.Context) (row.Row, error) {
 	return row.New(csvr.nbf, csvr.sch, taggedVals)
 }
 
+func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
+	if csvr.isDone {
+		return nil, io.EOF
+	}
+
+	colVals, err := csvr.csvReadRecords(nil)
+
+	if err == io.EOF {
+		csvr.isDone = true
+		return nil, io.EOF
+	}
+
+	allCols := csvr.sch.GetAllCols()
+
+	if len(colVals) != allCols.Size() {
+		var out strings.Builder
+		for _, cv := range colVals {
+			if cv != nil {
+				out.WriteString(*cv)
+			}
+			out.WriteRune(',')
+		}
+		return nil, table.NewBadRow(nil,
+			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", allCols.Size(), len(colVals)),
+			fmt.Sprintf("line: '%s'", out.String()),
+		)
+	}
+
+	if err != nil {
+		return nil, table.NewBadRow(nil, err.Error())
+	}
+
+	var sqlRow sql.Row
+	for _, colVal := range colVals {
+		sqlRow = append(sqlRow, *colVal)
+	}
+
+	return sqlRow, nil
+}
+
 // GetSchema gets the schema of the rows that this reader will return
 func (csvr *CSVReader) GetSchema() schema.Schema {
 	return csvr.sch
+}
+
+func (csvr *CSVReader) ReturnSQLSchema() (sql.Schema, error) {
+	return sqlutil.FromDoltSchema("", csvr.sch)
 }
 
 // VerifySchema checks that the in schema matches the original schema

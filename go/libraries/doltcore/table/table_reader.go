@@ -35,6 +35,8 @@ type TableReader interface {
 	// IsBadRow(err) will be return true. This is a potentially non-fatal error and callers can decide if they want to
 	// continue on a bad row, or fail.
 	ReadRow(ctx context.Context) (row.Row, error)
+	GetSqlSchema() sql.Schema
+	ReadSqlRow(ctx context.Context) (sql.Row, error)
 }
 
 // TableCloser is an interface for a table stream that can be closed to release resources

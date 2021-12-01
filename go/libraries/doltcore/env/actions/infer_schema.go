@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ import (
 )
 
 type typeInfoSet map[typeinfo.TypeInfo]struct{}
+type sqlTypeInfoSet map[sql.Type]struct{}
 
 const (
 	maxUint24 = 1<<24 - 1

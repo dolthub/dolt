@@ -45,6 +45,10 @@ func (rdr *keylessTableReader) GetSchema() schema.Schema {
 	return rdr.sch
 }
 
+func (rdr *keylessTableReader) GetSqlSchema() sql.Schema {
+	panic("cant do this")
+}
+
 // ReadSqlRow implements the SqlTableReader interface.
 func (rdr *keylessTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 	if rdr.remainingCopies <= 0 {
