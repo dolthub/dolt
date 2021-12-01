@@ -105,21 +105,12 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
 
-    # Create table
+    # attempt to create table (autocommit on), expect either some exception
     server_query repo1 1 "CREATE TABLE i_should_not_exist (
             c0 INT
-        )" ""
+        )" "" "not authorized: user does not have permission: write"
 
-    # Incorrectly expect that table now exists
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "i_should_not_exist" ]] || false
-
-    # attempt to create table (autocommit on), expect either some exception or no table to be created
-    skip "dolt allows a table to be created and committed despite being in read-only mode"
-    server_query repo1 1 "CREATE TABLE t (
-        c0 INT
-    )" ""
+    # Expect that there are still no tables
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
