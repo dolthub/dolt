@@ -17,10 +17,10 @@ package mvdata
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/auth"
 	"io"
 	"sync/atomic"
 
+	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -67,7 +67,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return true, nil
 	})
 
-	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, new(auth.None),false)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, new(auth.None), false)
 	if err != nil {
 		return nil, err
 	}
