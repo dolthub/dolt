@@ -361,7 +361,7 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 					pkOrdinals[i] = newIdx
 				} else if ord > oldIdx && ord <= newIdx {
 					// shift backwards if pk in range (oldIdx, newIdx]
-					pkOrdinals[i] = ord +1
+					pkOrdinals[i] = ord + 1
 				}
 			}
 		} else {
@@ -371,7 +371,7 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 					pkOrdinals[i] = newIdx
 				} else if ord >= newIdx && ord < oldIdx {
 					// shift forward if pk in range [newIdx, oldIdx)
-					pkOrdinals[i] = ord +1
+					pkOrdinals[i] = ord + 1
 				}
 			}
 		}
