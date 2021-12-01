@@ -95,7 +95,6 @@ listener:
 behavior:
   read_only: true
 EOF
-
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --config ./config.yml &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
