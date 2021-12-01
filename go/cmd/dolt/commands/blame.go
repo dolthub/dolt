@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -141,6 +142,25 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	return 0
+}
+
+type RowMap struct {
+	Key   string
+	Value []interface{}
+}
+
+type RowMapList []RowMap
+
+func (p RowMapList) Len() int           { return len(p) }
+func (p RowMapList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p RowMapList) Less(i, j int) bool {
+	if len(p[i].Key) < len(p[j].Key) {
+		return true
+	} else if len(p[i].Key) == len(p[j].Key){
+		return p[i].Key < p[j].Key
+	} else {
+		return false
+	}
 }
 
 func parseCommitSpecAndTableName(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, string, error) {
@@ -543,6 +563,7 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 
 	t := pretty.NewWriter()
 	t.AppendHeader(header)
+	p := make(RowMapList, len(*bg))
 	for _, v := range *bg {
 		pkVals := getPKStrs(ctx, v.Key)
 		dataVals := []string{
@@ -559,7 +580,13 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 		for _, cellText := range dataVals {
 			row = append(row, cellText)
 		}
-		t.AppendRow(row)
+		p = append(p, RowMap{pkVals[0], row})
 	}
+
+	sort.Sort(p)
+	for _, k := range p {
+		t.AppendRow(k.Value)
+	}
+
 	return t.Render()
 }

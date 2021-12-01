@@ -136,3 +136,12 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "no table named blame_test found" ]] || false
 }
+
+@test "blame: pk ordered output" {
+    run dolt blame blame_test
+    [ "$status" -eq 0 ]
+    [[ "${lines[3]}" =~ "| 1  | create blame_test table       | Thomas Foolery, |" ]] || false
+    [[ "${lines[4]}" =~ "| 2  | replace richard with harry    | Harry Wombat,   |" ]] || false
+    [[ "${lines[5]}" =~ "| 3  | add more people to blame_test | Johnny Moolah,  |" ]] || false
+    [[ "${lines[6]}" =~ "| 4  | add more people to blame_test | Johnny Moolah,  |" ]] || false
+}
