@@ -88,7 +88,7 @@ type DoltTable struct {
 	opts editor.Options
 }
 
-func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool, opts editor.Options) *DoltTable {
+func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool, opts editor.Options) (*DoltTable, error) {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
@@ -98,16 +98,22 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		return
 	})
 
+	sqlSch, err := sqlutil.FromDoltSchema(name, sch)
+	if err != nil {
+		return nil, err
+	}
+
 	return &DoltTable{
 		tableName:     name,
 		db:            db,
 		nbf:           tbl.Format(),
 		sch:           sch,
+		sqlSch:        sqlSch,
 		autoIncCol:    autoCol,
 		projectedCols: nil,
 		temporary:     isTemporary,
 		opts:          opts,
-	}
+	}, nil
 }
 
 // LockedToRoot returns a version of this table with its root value locked to the given value. The table's values will

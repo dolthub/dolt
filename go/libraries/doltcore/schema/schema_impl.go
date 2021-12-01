@@ -76,6 +76,7 @@ func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) S
 		allCols:         allCols,
 		indexCollection: NewIndexCollection(allCols),
 		checkCollection: NewCheckCollection(),
+		pkOrdinals:      []int{},
 	}
 }
 
