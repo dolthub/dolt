@@ -92,16 +92,14 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 
 	newPkOrds := sch.GetPkOrdinals()
 	for i := 0; i < len(newPkOrds); i++ {
+		// deleting a column will shift subsequent column indices left
+		// PK ordinals after dropIdx bumped down
 		if dropIdx <= newPkOrds[i] {
 			newPkOrds[i]--
 		}
 	}
 
 	err = newSch.AddPkOrdinals(newPkOrds)
-	if err != nil {
-		return nil, err
-	}
-	err = newSch.AddPkOrdinals(sch.GetPkOrdinals())
 	if err != nil {
 		return nil, err
 	}

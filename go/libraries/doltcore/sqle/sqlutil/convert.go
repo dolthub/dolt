@@ -30,7 +30,6 @@ import (
 func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
 	cols := make([]*sqle.ColumnWithRawDefault, sch.GetAllCols().Size())
 
-	colOrds := make(map[uint64]int)
 	var i int
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		sqlType := col.TypeInfo.ToSqlType()
@@ -38,8 +37,6 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 		if col.AutoIncrement {
 			extra = "auto_increment"
 		}
-
-		colOrds[tag] = i
 
 		cols[i] = &sqle.ColumnWithRawDefault{
 			SqlColumn: &sql.Column{
@@ -124,6 +121,7 @@ func ToDoltSchema(
 	if err != nil {
 		return nil, err
 	}
+
 	return sch, nil
 }
 

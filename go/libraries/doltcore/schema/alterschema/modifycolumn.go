@@ -353,26 +353,26 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 	}
 
 	pkOrdinals := sch.GetPkOrdinals()
+
 	if newIdx != oldIdx {
+		var shift, loIdx, hiIdx int
 		if newIdx > oldIdx {
-			for i, ord := range pkOrdinals {
-				if ord == oldIdx {
-					// special case if pk was transposed
-					pkOrdinals[i] = newIdx
-				} else if ord > oldIdx && ord <= newIdx {
-					// shift backwards if pk in range (oldIdx, newIdx]
-					pkOrdinals[i] = ord + 1
-				}
-			}
+			shift = -1
+			loIdx = oldIdx
+			hiIdx = newIdx
 		} else {
-			for i, ord := range pkOrdinals {
-				if ord == oldIdx {
-					// special case if pk was transposed
-					pkOrdinals[i] = newIdx
-				} else if ord >= newIdx && ord < oldIdx {
-					// shift forward if pk in range [newIdx, oldIdx)
-					pkOrdinals[i] = ord + 1
-				}
+			shift = 1
+			loIdx = newIdx
+			hiIdx = oldIdx
+		}
+
+		for i, ord := range pkOrdinals {
+			if ord == oldIdx {
+				// special case if pk was transposed
+				pkOrdinals[i] = newIdx
+			} else if ord >= loIdx && ord <= hiIdx {
+				// shift if pk in range [loIdx, hiIdx]
+				pkOrdinals[i] = ord + shift
 			}
 		}
 	}

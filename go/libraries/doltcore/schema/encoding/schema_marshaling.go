@@ -154,13 +154,11 @@ type encodedCheck struct {
 	Enforced   bool   `noms:"enforced" json:"enforced"`
 }
 
-//type encodedPkOrdinals []int
-
 type schemaData struct {
 	Columns          []encodedColumn `noms:"columns" json:"columns"`
 	IndexCollection  []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
 	CheckConstraints []encodedCheck  `noms:"checks,omitempty" json:"checks,omitempty"`
-	PKOrdinals       []int           `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
+	PkOrdinals       []int           `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
 }
 
 func (sd *schemaData) Copy() *schemaData {
@@ -193,9 +191,9 @@ func (sd *schemaData) Copy() *schemaData {
 	}
 
 	var pkOrdinals []int
-	if sd.PKOrdinals != nil {
-		pkOrdinals = make([]int, len(sd.PKOrdinals))
-		for i, j := range sd.PKOrdinals {
+	if sd.PkOrdinals != nil {
+		pkOrdinals = make([]int, len(sd.PkOrdinals))
+		for i, j := range sd.PkOrdinals {
 			pkOrdinals[i] = j
 		}
 	}
@@ -204,7 +202,7 @@ func (sd *schemaData) Copy() *schemaData {
 		Columns:          columns,
 		IndexCollection:  idxCol,
 		CheckConstraints: checks,
-		PKOrdinals:       pkOrdinals,
+		PkOrdinals:       pkOrdinals,
 	}
 }
 
@@ -249,7 +247,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		Columns:          encCols,
 		IndexCollection:  encodedIndexes,
 		CheckConstraints: encodedChecks,
-		PKOrdinals:       sch.GetPkOrdinals(),
+		PkOrdinals:       sch.GetPkOrdinals(),
 	}, nil
 }
 
@@ -307,8 +305,8 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 		}
 	}
 
-	if sd.PKOrdinals != nil {
-		err := sch.AddPkOrdinals(sd.PKOrdinals)
+	if sd.PkOrdinals != nil {
+		err := sch.AddPkOrdinals(sd.PkOrdinals)
 		if err != nil {
 			return err
 		}

@@ -94,6 +94,7 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 	}
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
+	// TODO: decide how to merge different orders of PKS
 	if !schema.ArePrimaryKeySetsDiffable(ourSch, theirSch) {
 		return nil, SchemaConflict{}, ErrMergeWithDifferentPkSets
 	}
@@ -122,11 +123,6 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return false, nil
 	})
 
-	//// pick our primary key ordering
-	//err = sch.AddPkOrdinals(ourSch.GetPkOrdinals())
-	//if err != nil {
-	//	return nil, EmptySchConflicts, err
-	//}
 	return sch, sc, nil
 }
 

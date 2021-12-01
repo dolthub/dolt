@@ -64,19 +64,19 @@ func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.T
 		return nil, err
 	}
 
-	return updateTableWithNewSchema(ctx, tblName, tbl, tag, oldSchema, newSchema, defaultVal)
+	return updateTableWithNewSchema(ctx, tblName, tbl, tag, newSchema, defaultVal)
 }
 
 // updateTableWithNewSchema updates the existing table with a new schema and new values for the new column as necessary,
 // and returns the new table.
-func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, oldSchema, newSchema schema.Schema, defaultVal string) (*doltdb.Table, error) {
+func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, newSchema schema.Schema, defaultVal string) (*doltdb.Table, error) {
 	var err error
 	tbl, err = tbl.UpdateSchema(ctx, newSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, oldSchema, newSchema)
+	tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, newSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +125,8 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 
 	newPkOrds := sch.GetPkOrdinals()
 	for i := 0; i < len(newPkOrds); i++ {
+		// added column shifts the index of every column after
+		// all ordinals above addIdx will be bumped
 		if addIdx <= newPkOrds[i] {
 			newPkOrds[i]++
 		}
@@ -183,7 +185,7 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 	return nil
 }
 
-func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, oldSchema, newSchema schema.Schema) (*doltdb.Table, error) {
+func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, newSchema schema.Schema) (*doltdb.Table, error) {
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
