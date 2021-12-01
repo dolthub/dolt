@@ -748,7 +748,7 @@ func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema
 		return nil, err
 	}
 
-	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchemaAsDoltSchema, wrSchema, nameMapper)
+	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchemaAsDoltSchema.Schema, wrSchema, nameMapper)
 	return doltRow, nil
 }
 
