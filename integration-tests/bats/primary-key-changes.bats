@@ -623,3 +623,20 @@ SQL
     run dolt sql -q "create table t (pk int null primary key)"
     [ $status -eq 1 ]
 }
+
+@test "primary-key-changes: creating table with null and primary key column throws error again" {
+    run dolt sql -q "create table t (pk int null, primary key(pk))"
+    [ $status -eq 1 ]
+}
+
+@test "primary-key-changes: can't modify column with conflicting constraints" {
+    dolt sql -q "create table t (pk int)"
+    run dolt sql -q "alter table t modify (pk int null primary key)"
+    [ $status -eq 1 ]
+}
+
+@test "primary-key-changes: can't add column with conflicting constraints" {
+    dolt sql -q "create table t (c0 int)"
+    run dolt sql -q "alter table t add (pk int null primary key)"
+    [ $status -eq 1 ]
+}
