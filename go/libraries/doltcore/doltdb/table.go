@@ -306,10 +306,6 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	if err != nil {
 		return nil, err
 	}
-	err = newSch.AddPkOrdinals(sch.GetPkOrdinals())
-	if err != nil {
-		return nil, err
-	}
 
 	return newSch, nil
 }

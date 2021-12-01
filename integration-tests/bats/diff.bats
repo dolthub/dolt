@@ -503,9 +503,10 @@ SQL
     dolt checkout another-branch
     dolt sql <<SQL
 CREATE TABLE a (
-  id int primary key,
-  cv1 int primary key,
-  cv2 int
+  id int,
+  cv1 int,
+  cv2 int,
+  primary key (id, cv1)
 );
 SQL
     dolt add -A
