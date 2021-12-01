@@ -142,6 +142,37 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 
 		rd, err := json.OpenJSONReader(root.VRW(), dl.Path, fs, sch)
 		return rd, false, err
+
+	case ParquetFile:
+		var tableSch schema.Schema
+		parquetOpts, _ := opts.(ParquetOptions)
+		if parquetOpts.SchFile != "" {
+			tn, s, tnErr := SchAndTableNameFromFile(ctx, parquetOpts.SchFile, fs, root)
+			if tnErr != nil {
+				return nil, false, tnErr
+			}
+			if tn != parquetOpts.TableName {
+				return nil, false, fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, parquetOpts.SchFile, parquetOpts.TableName)
+			}
+			tableSch = s
+		} else {
+			if opts == nil {
+				return nil, false, errors.New("Unable to determine table name on JSON import")
+			}
+			tbl, tableExists, tErr := root.GetTable(context.TODO(), parquetOpts.TableName)
+			if !tableExists {
+				return nil, false, errors.New(fmt.Sprintf("The following table could not be found:\n%v", parquetOpts.TableName))
+			}
+			if tErr != nil {
+				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
+			}
+			tableSch, err = tbl.GetSchema(context.TODO())
+			if err != nil {
+				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
+			}
+		}
+		rd, rErr := parquet.OpenParquetReader(root.VRW(), dl.Path, tableSch)
+		return rd, false, rErr
 	}
 
 	return nil, false, errors.New("unsupported format")
