@@ -158,6 +158,10 @@ func (rd *InMemTableReader) GetSchema() schema.Schema {
 	return rd.tt.sch
 }
 
+func (rd *InMemTableReader) GetSqlSchema() sql.Schema {
+	panic("dont call this")
+}
+
 // VerifySchema checks that the incoming schema matches the schema from the existing table
 func (rd *InMemTableReader) VerifySchema(outSch schema.Schema) (bool, error) {
 	return schema.VerifyInSchema(rd.tt.sch, outSch)

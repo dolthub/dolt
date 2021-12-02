@@ -148,6 +148,14 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 	return row.FromNoms(nrr.sch, k, v)
 }
 
+func (nrr *NomsRangeReader) GetSqlSchema() sql.Schema {
+	panic("dont call this")
+}
+
+func (nrr *NomsRangeReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
+	panic("dont call this")
+}
+
 func (nrr *NomsRangeReader) ReadKey(ctx context.Context) (types.Tuple, error) {
 	k, _, err := nrr.ReadKV(ctx)
 

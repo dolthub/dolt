@@ -28,9 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
@@ -53,7 +51,7 @@ type sqlEngineMover struct {
 	importOption TableImportOp
 }
 
-func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineMover, error) {
+func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch sql.Schema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineMover, error) {
 	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
 	if err != nil {
 		return nil, err
@@ -83,11 +81,6 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	doltSchema, err := sqlutil.FromDoltSchema(options.TableToWriteTo, writeSch)
-	if err != nil {
-		return nil, err
-	}
-
 	return &sqlEngineMover{
 		se:        se,
 		contOnErr: options.ContinueOnErr,
@@ -95,7 +88,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 
 		database:  dbName,
 		tableName: options.TableToWriteTo,
-		wrSch:     doltSchema,
+		wrSch:     writeSch,
 
 		statsCB:      statsCB,
 		importOption: options.Operation,

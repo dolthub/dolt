@@ -16,6 +16,7 @@ package table
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -49,6 +50,14 @@ func (tr *AsyncReadAheadTableReader) Start(ctx context.Context) error {
 // GetSchema gets the schema of the rows that this reader will return
 func (tr *AsyncReadAheadTableReader) GetSchema() schema.Schema {
 	return tr.backingReader.GetSchema()
+}
+
+func (tr *AsyncReadAheadTableReader) GetSqlSchema() sql.Schema {
+	panic("dont call plxxx")
+}
+
+func (tr *AsyncReadAheadTableReader) ReadSqlRow(ctx context.Context) (sql.Row,error) {
+	panic("please dont call plxx")
 }
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and calling

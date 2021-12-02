@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // CompositeTableReader is a TableReader implementation which will concatenate the results
@@ -89,4 +90,13 @@ func (rd *CompositeTableReader) Close(ctx context.Context) error {
 	}
 
 	return firstErr
+}
+
+
+func (rd *CompositeTableReader) GetSqlSchema() sql.Schema {
+	panic("cant do this")
+}
+
+func (rd *CompositeTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
+	panic("cant do this")
 }

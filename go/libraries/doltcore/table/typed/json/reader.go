@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var ReadBufSize = 256 * 1024
@@ -140,4 +141,12 @@ func (r *JSONReader) convToRow(ctx context.Context, rowMap map[string]interface{
 	}
 
 	return row.New(r.vrw.Format(), r.sch, taggedVals)
+}
+
+func (r *JSONReader) GetSqlSchema() sql.Schema {
+	panic("cant do this")
+}
+
+func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
+	panic("cant do this")
 }

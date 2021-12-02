@@ -16,6 +16,7 @@ package noms
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -70,3 +71,12 @@ func (nmr *NomsMapReader) Close(ctx context.Context) error {
 func (nmr *NomsMapReader) VerifySchema(outSch schema.Schema) (bool, error) {
 	return schema.VerifyInSchema(nmr.sch, outSch)
 }
+
+func (nmr *NomsMapReader) GetSqlSchema() sql.Schema {
+	panic("cant do this")
+}
+
+func (nmr *NomsMapReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
+	panic("cant do this")
+}
+

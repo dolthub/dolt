@@ -225,8 +225,9 @@ func (csvr *CSVReader) GetSchema() schema.Schema {
 	return csvr.sch
 }
 
-func (csvr *CSVReader) ReturnSQLSchema() (sql.Schema, error) {
-	return sqlutil.FromDoltSchema("", csvr.sch)
+func (csvr *CSVReader) GetSqlSchema() sql.Schema {
+	sch, _ := sqlutil.FromDoltSchema("", csvr.sch)
+	return sch
 }
 
 // VerifySchema checks that the in schema matches the original schema

@@ -373,6 +373,7 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 	return findCommonChronoType(ts)
 }
 
+
 func findCommonNumericType(nums typeInfoSet) typeinfo.TypeInfo {
 	// find a common numeric type
 	// iterate through types from most to least permissive

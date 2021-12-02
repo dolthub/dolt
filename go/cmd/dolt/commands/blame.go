@@ -544,7 +544,7 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 	t := pretty.NewWriter()
 	t.AppendHeader(header)
 	for _, v := range *bg {
-		pkVals := getPKStrs(ctx, v.Key)
+		pkVals  := getPKStrs(ctx, v.Key)
 		dataVals := []string{
 			truncateString(v.Description, 50),
 			v.Author,

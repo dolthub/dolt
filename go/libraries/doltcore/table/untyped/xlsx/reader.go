@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var ReadBufSize = 256 * 1024
@@ -148,4 +149,11 @@ func (xlsxr *XLSXReader) ReadRow(ctx context.Context) (row.Row, error) {
 	xlsxr.ind++
 
 	return outRow, nil
+}
+
+func (xlsxr *XLSXReader)  GetSqlSchema() sql.Schema {
+	panic("")
+}
+func (xlsxr *XLSXReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
+	panic("")
 }
