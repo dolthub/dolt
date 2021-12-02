@@ -181,7 +181,7 @@ CSV
     run dolt table import -c --pk=pk test duplicate-names.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "name" ]] || false
-    [[ "$output" =~ "invalid schema" ]] || false
+    [[ "$output" =~ "Duplicate column name" ]] || false
 }
 
 @test "import-create-tables: try to create a table with dolt table import with a bad file name" {
@@ -269,6 +269,7 @@ DELIM
 
 @test "import-create-tables: create a table with a name map" {
     run dolt table import -c -pk=pk -m=name-map.json test name-map-data.csv
+    echo $output
     [ "$status" -eq 0 ]
     run dolt sql -r csv -q 'select * from test'
     [ "$status" -eq 0 ]

@@ -17,7 +17,6 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"io"
 	"os"
 	"strings"
@@ -487,6 +486,11 @@ func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dolt
 		return ret, nil
 	}
 
+	// Update the source the schema
+	for _, col := range wrSch {
+		col.Source = imOpts.tableName
+	}
+
 	return wrSch, nil
 }
 
@@ -627,11 +631,10 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 		}
 
 		// TODO: Handle all edge cases here
-		outSch, err := actions.InferSqlSchemaFromTableReader(ctx, rd, impOpts)
+		outSch, err := mvdata.InferSchema(ctx, rd, impOpts.DestName(), impOpts.primaryKeys, impOpts)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
-		// outSch, err := mvdata.InferSchema(ctx, root, rd, impOpts.tableName, impOpts.primaryKeys, impOpts)
 
 		return outSch, nil
 	}
