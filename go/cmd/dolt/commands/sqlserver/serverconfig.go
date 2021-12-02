@@ -112,6 +112,10 @@ type ServerConfig interface {
 	RequireSecureTransport() bool
 	// PersistenceBehavior is "load" if we include persisted system globals on server init
 	PersistenceBehavior() string
+	// DisableClientMultiStatements is true if we want the server to not
+	// process incoming ComQuery packets as if they had multiple queries in
+	// them, even if the client advertises support for MULTI_STATEMENTS.
+	DisableClientMultiStatements() bool
 }
 
 type commandLineServerConfig struct {
@@ -205,6 +209,10 @@ func (cfg *commandLineServerConfig) TLSCert() string {
 
 func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 	return cfg.requireSecureTransport
+}
+
+func (cfg *commandLineServerConfig) DisableClientMultiStatements() bool {
+	return false
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in

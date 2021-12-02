@@ -16,6 +16,30 @@ teardown() {
     [[ "$output" =~ "Initialize data repository" ]] || false
 }
 
+@test "log: log respects branches" {
+    dolt branch branch1
+    dolt commit --allow-empty -m "commit 1 main"
+    dolt commit	--allow-empty -m "commit 2 main"
+    dolt commit	--allow-empty -m "commit 3 main"
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "branch1" ]] || false
+    dolt checkout branch1
+    dolt commit	--allow-empty -m "commit 1 branch1"
+    dolt commit --allow-empty -m "commit 2 branch1"
+    dolt commit --allow-empty -m "commit 3 branch1"
+    run	dolt log
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "main" ]] || false
+    [[ "$output" =~ "branch1" ]] || false
+    dolt checkout main
+    run	dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "branch1" ]] || false
+}
+
 @test "log: with -n specified" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
