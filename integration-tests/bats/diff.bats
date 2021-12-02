@@ -607,3 +607,20 @@ SQL
     [ "${lines[2]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk,val);' ]
     [ "${lines[3]}" = 'warning: skipping data diff due to primary key set change' ]
 }
+
+@test "diff: adding and removing primary key should leave not null constraint" {
+    dolt sql -q "create table t(pk int, val int)"
+    dolt commit -am "creating table"
+
+    dolt sql -q "alter table t add primary key (pk)"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
+    [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
+    [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+
+    dolt sql -q "alter table t drop primary key"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `pk` TO `pk`;' ]
+}

@@ -43,6 +43,10 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 	newCollection := schema.MapColCollection(sch.GetAllCols(), func(col schema.Column) schema.Column {
 		for _, c := range columns {
 			if strings.ToLower(c.Name) == strings.ToLower(col.Name) {
+				// Add not null constraint if currently nullable
+				if col.IsNullable() {
+					col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
+				}
 				col.IsPartOfPK = true
 				return col
 			}
