@@ -61,7 +61,7 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 		return sql.PrimaryKeySchema{}, err
 	}
 
-	return sql.NewPrimaryKeySchema(sqlSch, sch.GetPkOrdinals()), nil
+	return sql.NewPrimaryKeySchema(sqlSch, sch.GetPkOrdinals()...), nil
 }
 
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
