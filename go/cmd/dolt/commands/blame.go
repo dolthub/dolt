@@ -144,44 +144,6 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return 0
 }
 
-type rowMap struct {
-	Key   types.Value
-	Value []interface{}
-}
-
-type rowMapList []rowMap
-
-func (p rowMapList) Len() int      { return len(p) }
-func (p rowMapList) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
-func (p rowMapList) Less(i, j int) bool {
-	it, err := types.TypeOf(p[i].Key)
-	if err != nil {
-		return false
-	}
-	jt, err := types.TypeOf(p[j].Key)
-	if err != nil {
-		return false
-	}
-	if it != jt {
-		return false
-	}
-	if !types.IsPrimitiveKind(p[i].Key.Kind()) {
-		return false
-	}
-	switch p[i].Key.(type) {
-	case types.Float:
-		return p[i].Key.(types.Float) < p[j].Key.(types.Float)
-	case types.String:
-		return p[i].Key.(types.String) < p[j].Key.(types.String)
-	case types.Int:
-		return p[i].Key.(types.Int) < p[j].Key.(types.Int)
-	case types.Uint:
-		return p[i].Key.(types.Uint) < p[j].Key.(types.Uint)
-	default:
-		return false
-	}
-}
-
 func parseCommitSpecAndTableName(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, string, error) {
 	// if passed a single arg, assume it's a table name and revision is HEAD
 	if apr.NArg() == 1 {
@@ -211,7 +173,17 @@ func runBlame(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, tab
 		return err
 	}
 
-	blameGraph, err := blameGraphFromCommit(ctx, dEnv, commit, tableName)
+	tbl, err := maybeTableFromCommit(ctx, commit, tableName)
+	if err != nil {
+		return err
+	}
+	if tbl == nil {
+		return fmt.Errorf("no table named %s found", tableName)
+	}
+
+	nbf := tbl.Format()
+
+	blameGraph, err := blameGraphFromCommit(ctx, dEnv, commit, tableName, nbf)
 	if err != nil {
 		return err
 	}
@@ -221,7 +193,7 @@ func runBlame(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, tab
 		return err
 	}
 
-	cli.Println(blameGraph.String(ctx, pkColNames))
+	cli.Println(blameGraph.String(ctx, pkColNames, nbf))
 	return nil
 }
 
@@ -237,7 +209,7 @@ type blameInput struct {
 	Schema       schema.Schema
 }
 
-func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb.Commit, tableName string) (*blameGraph, error) {
+func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb.Commit, tableName string, nbf *types.NomsBinFormat) (*blameGraph, error) {
 	// get the commits in reverse topological order ending with `commit`
 	hash, err := commit.HashOf()
 	if err != nil {
@@ -252,16 +224,6 @@ func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb
 	if err != nil {
 		return nil, err
 	}
-
-	tbl, err := maybeTableFromCommit(ctx, commit, tableName)
-	if err != nil {
-		return nil, err
-	}
-	if tbl == nil {
-		return nil, fmt.Errorf("no table named %s found", tableName)
-	}
-
-	nbf := tbl.Format()
 
 	blameGraph, err := blameGraphFromRows(ctx, nbf, rows)
 	if err != nil {
@@ -586,8 +548,13 @@ func truncateString(str string, maxLength int) string {
 
 var dataColNames = []string{"Commit Msg", "Author", "Time", "Commit"}
 
+type rowMap struct {
+	Key   types.Value
+	Value []interface{}
+}
+
 // String returns the string representation of this blame graph
-func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
+func (bg *blameGraph) String(ctx context.Context, pkColNames []string, nbf *types.NomsBinFormat) string {
 	// here we have two []string and need one []interface{} (aka table.Row)
 	// this works but is not beautiful. if you know a better way, have at it!
 	header := []interface{}{}
@@ -597,8 +564,7 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 
 	t := pretty.NewWriter()
 	t.AppendHeader(header)
-	p := make(rowMapList, len(*bg))
-	i := 0
+	var p []rowMap
 	for _, v := range *bg {
 		pkVals := getPKStrs(ctx, v.Key)
 		pkVal := getPKVal(ctx, v.Key)
@@ -616,11 +582,20 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 		for _, cellText := range dataVals {
 			row = append(row, cellText)
 		}
-		p[i] = rowMap{pkVal[0], row}
-		i++
+		p = append(p, rowMap{pkVal[0], row})
 	}
 
-	sort.Sort(p)
+	sort.Slice(p, func(i, j int) bool {
+		isLess, err := p[i].Key.Less(nbf, p[j].Key)
+		if err != nil {
+			return false
+		} else if isLess {
+			return true
+		} else {
+			return false
+		}
+	})
+
 	for _, k := range p {
 		t.AppendRow(k.Value)
 	}
