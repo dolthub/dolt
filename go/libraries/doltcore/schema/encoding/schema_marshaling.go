@@ -270,6 +270,7 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
+	// for backwards-compat, this will be a no-op
 	err = sd.addChecksIndexesAndPkOrderingToSchema(sch)
 	if err != nil {
 		return nil, err
@@ -385,6 +386,12 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	sch, err := sd.decodeSchema()
 	if err != nil {
 		return nil, err
+	}
+
+	if sd.PkOrdinals == nil {
+		// schemaData will not have PK ordinals in old versions of Dolt
+		// this sets the default PK ordinates for subsequent cache lookups
+		sd.PkOrdinals = sch.GetPkOrdinals()
 	}
 
 	d := schCacheData{
