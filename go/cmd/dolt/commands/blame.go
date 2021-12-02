@@ -144,21 +144,40 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return 0
 }
 
-type RowMap struct {
-	Key   string
+type rowMap struct {
+	Key   types.Value
 	Value []interface{}
 }
 
-type RowMapList []RowMap
+type rowMapList []rowMap
 
-func (p RowMapList) Len() int      { return len(p) }
-func (p RowMapList) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
-func (p RowMapList) Less(i, j int) bool {
-	if len(p[i].Key) < len(p[j].Key) {
-		return true
-	} else if len(p[i].Key) == len(p[j].Key) {
-		return p[i].Key < p[j].Key
-	} else {
+func (p rowMapList) Len() int      { return len(p) }
+func (p rowMapList) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
+func (p rowMapList) Less(i, j int) bool {
+	it, err := types.TypeOf(p[i].Key)
+	if err != nil {
+		return false
+	}
+	jt, err := types.TypeOf(p[j].Key)
+	if err != nil {
+		return false
+	}
+	if it != jt {
+		return false
+	}
+	if !types.IsPrimitiveKind(p[i].Key.Kind()) {
+		return false
+	}
+	switch p[i].Key.(type) {
+	case types.Float:
+		return p[i].Key.(types.Float) < p[j].Key.(types.Float)
+	case types.String:
+		return p[i].Key.(types.String) < p[j].Key.(types.String)
+	case types.Int:
+		return p[i].Key.(types.Int) < p[j].Key.(types.Int)
+	case types.Uint:
+		return p[i].Key.(types.Uint) < p[j].Key.(types.Uint)
+	default:
 		return false
 	}
 }
@@ -534,6 +553,21 @@ func getPKStrs(ctx context.Context, pk types.Value) (strs []string) {
 	return strs
 }
 
+func getPKVal(ctx context.Context, pk types.Value) (vals []types.Value) {
+	i := 0
+	pk.WalkValues(ctx, func(val types.Value) error {
+		// even-indexed values are index numbers. they aren't useful, don't print them.
+		if i%2 == 1 {
+			v, _ := val.Value(ctx)
+			vals = append(vals, v)
+		}
+		i++
+		return nil
+	})
+
+	return vals
+}
+
 func truncateString(str string, maxLength int) string {
 	if maxLength < 0 || len(str) <= maxLength {
 		return str
@@ -563,9 +597,11 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 
 	t := pretty.NewWriter()
 	t.AppendHeader(header)
-	p := make(RowMapList, len(*bg))
+	p := make(rowMapList, len(*bg))
+	i := 0
 	for _, v := range *bg {
 		pkVals := getPKStrs(ctx, v.Key)
+		pkVal := getPKVal(ctx, v.Key)
 		dataVals := []string{
 			truncateString(v.Description, 50),
 			v.Author,
@@ -580,7 +616,8 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 		for _, cellText := range dataVals {
 			row = append(row, cellText)
 		}
-		p = append(p, RowMap{pkVals[0], row})
+		p[i] = rowMap{pkVal[0], row}
+		i++
 	}
 
 	sort.Sort(p)
