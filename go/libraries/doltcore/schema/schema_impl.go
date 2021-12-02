@@ -38,6 +38,8 @@ type schemaImpl struct {
 	pkOrdinals                 []int
 }
 
+var ErrInvalidPkOrdinals = errors.New("incorrect number of primary key ordinals")
+
 // SchemaFromCols creates a Schema from a collection of columns
 func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	var pkCols []Column
@@ -201,7 +203,7 @@ func (si *schemaImpl) SetPkOrdinals(o []int) error {
 		} else {
 			found = len(o)
 		}
-		return errors.New(fmt.Sprintf("incorrect number of pk ordinals: expected '%d', found '%d'", si.pkCols.Size(), found))
+		return fmt.Errorf("%w: expected '%d', found '%d'", ErrInvalidPkOrdinals, si.pkCols.Size(), found)
 	}
 
 	si.pkOrdinals = o

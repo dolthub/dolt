@@ -37,10 +37,10 @@ type Schema interface {
 	// Checks returns a collection of all check constraints on the table that this schema belongs to.
 	Checks() CheckCollection
 
-	// GetPkOrdinals returns a slice of the primary key ordering indexes relative to the schemaSql_row column ordering
+	// GetPkOrdinals returns a slice of the primary key ordering indexes relative to the schema column ordering
 	GetPkOrdinals() []int
 
-	// SetPkOrdinals specifies a non-default primary key column ordering
+	// SetPkOrdinals specifies a primary key column ordering
 	SetPkOrdinals([]int) error
 }
 
