@@ -132,7 +132,7 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 		}
 	}
 
-	err = newSch.AddPkOrdinals(newPkOrds)
+	err = newSch.SetPkOrdinals(newPkOrds)
 	if err != nil {
 		return nil, err
 	}

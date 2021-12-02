@@ -96,7 +96,7 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 	}
 
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
-	err = newSchema.AddPkOrdinals(pkOrdinals)
+	err = newSchema.SetPkOrdinals(pkOrdinals)
 	if err != nil {
 		return nil, err
 	}

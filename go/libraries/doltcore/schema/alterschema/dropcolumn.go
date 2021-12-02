@@ -99,7 +99,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		}
 	}
 
-	err = newSch.AddPkOrdinals(newPkOrds)
+	err = newSch.SetPkOrdinals(newPkOrds)
 	if err != nil {
 		return nil, err
 	}

@@ -167,3 +167,11 @@ func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) 
 	// TODO: to answer this accurately, we need the table as well as the schema
 	return 0, nil
 }
+
+func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
+	sqlSch, err := sqlutil.FromDoltSchema(db.tableName, db.sch)
+	if err != nil {
+		panic(err)
+	}
+	return sqlSch
+}

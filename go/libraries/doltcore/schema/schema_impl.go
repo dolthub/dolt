@@ -61,7 +61,7 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	nonPKColColl := NewColCollection(nonPKCols...)
 
 	sch := SchemaFromColCollections(allCols, pkColColl, nonPKColColl)
-	err := sch.AddPkOrdinals(defaultPkOrds)
+	err := sch.SetPkOrdinals(defaultPkOrds)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (si *schemaImpl) GetPkOrdinals() []int {
 	return si.pkOrdinals
 }
 
-func (si *schemaImpl) AddPkOrdinals(o []int) error {
+func (si *schemaImpl) SetPkOrdinals(o []int) error {
 	if si.pkCols.Size() == 0 {
 		return nil
 	} else if o == nil || len(o) != si.pkCols.Size() {

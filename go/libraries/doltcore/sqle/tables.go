@@ -133,6 +133,7 @@ type doltReadOnlyTableInterface interface {
 	sql.ForeignKeyTable
 	sql.StatisticsTable
 	sql.CheckTable
+	sql.PrimaryKeyTable
 }
 
 var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
@@ -399,6 +400,10 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	}
 
 	return numBytesPerRow * numRows, nil
+}
+
+func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+	return t.sqlSchema()
 }
 
 type emptyRowIterator struct{}
@@ -1814,14 +1819,4 @@ func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *d
 		}
 	}
 	return fkUpdates, nil
-}
-
-func (t *AlterableDoltTable) Pks() []sql.IndexColumn {
-	sch := t.sqlSchema()
-	pkCols := make([]sql.IndexColumn, len(sch.PkOrdinals()))
-	for i, j := range sch.PkOrdinals() {
-		col := sch.Schema[j]
-		pkCols[i] = sql.IndexColumn{Name: col.Name}
-	}
-	return pkCols
 }

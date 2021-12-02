@@ -117,7 +117,7 @@ func ToDoltSchema(
 		return nil, err
 	}
 
-	err = sch.AddPkOrdinals(sqlSchema.PkOrdinals())
+	err = sch.SetPkOrdinals(sqlSchema.PkOrdinals)
 	if err != nil {
 		return nil, err
 	}

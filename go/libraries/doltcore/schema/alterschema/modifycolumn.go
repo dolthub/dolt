@@ -377,7 +377,7 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		}
 	}
 
-	err = newSch.AddPkOrdinals(pkOrdinals)
+	err = newSch.SetPkOrdinals(pkOrdinals)
 	if err != nil {
 		return nil, err
 	}

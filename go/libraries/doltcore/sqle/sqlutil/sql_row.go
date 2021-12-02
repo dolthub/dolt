@@ -116,17 +116,18 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 			}
 			continue
 		}
-		tag := c.Tag
+
 		nomsVal, err := c.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
 		if err != nil {
 			return types.Tuple{}, types.Tuple{}, nil, err
 		}
 
-		tagToVal[tag] = nomsVal
+		tagToVal[c.Tag] = nomsVal
 	}
 
 	nonPKIdx := 0
 	for _, tag := range nonPKCols.SortedTags {
+		// nonPkCols sorted by ascending tag order
 		if val, ok := tagToVal[tag]; ok {
 			nonPKVals[nonPKIdx] = types.Uint(tag)
 			nonPKVals[nonPKIdx+1] = val
