@@ -14,6 +14,7 @@
 
 // WARNING: This file was is automatically generated. DO NOT EDIT BY HAND.
 
+
 syntax = "proto3";
 
 package dolt.services.eventsapi.v1alpha1;
@@ -82,6 +83,7 @@ enum ClientEventType {
     TAG = 51;
     GARBAGE_COLLECTION = 52;
     FILTER_BRANCH = 53;
+    DUMP = 54;
 }
 
 enum MetricID {
