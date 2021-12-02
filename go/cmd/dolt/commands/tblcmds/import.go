@@ -549,6 +549,11 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	g.Go(func() error {
 		defer close(parsedRowChan)
 
+		rdSqlSch, err := sqlutil.FromDoltSchema(options.tableName, rd.GetSchema())
+		if err != nil {
+			return err
+		}
+
 		for {
 			r, err := rd.ReadRow(ctx)
 			if err != nil {
@@ -565,7 +570,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 			} else {
-				dRow, err := transformToDoltRow(r, rd.GetSchema(), wr.Schema(), options.nameMapper)
+				dRow, err := transformToDoltRow(r, rd.GetSchema(), rdSqlSch, wr.Schema(), options.nameMapper)
 				if err != nil {
 					return err
 				}
@@ -711,7 +716,7 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 // transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
 // 3) Addresses any type inconsistencies.
-func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
+func transformToDoltRow(row row.Row, rdSchema schema.Schema, rdSqlSch, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	doltRow, err := sqlutil.DoltRowToSqlRow(row, rdSchema)
 	if err != nil {
 		return nil, err
@@ -743,12 +748,7 @@ func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema
 		}
 	}
 
-	rdSchemaAsDoltSchema, err := sqlutil.FromDoltSchema(wrSchema[0].Source, rdSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchemaAsDoltSchema, wrSchema, nameMapper)
+	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSqlSch, wrSchema, nameMapper)
 	return doltRow, nil
 }
 

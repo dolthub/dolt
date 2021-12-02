@@ -18,6 +18,7 @@ fi
 
 # Generate the test file
 cd $WD
+echo "generating test file"
 python3 csv_gen.py '{
     "cols": [
         {"name":"pk", "type":"int", "generator":"shuffled_sequential"},
