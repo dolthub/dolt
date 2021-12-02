@@ -31,6 +31,7 @@ behavior:
     read_only: false
     autocommit: true
     persistence_behavior: load
+    disable_client_multi_statements: false
 
 user:
     name: root
@@ -115,6 +116,7 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, "", cfg.TLSKey())
 	assert.Equal(t, "", cfg.TLSCert())
 	assert.Equal(t, false, cfg.RequireSecureTransport())
+	assert.Equal(t, false, cfg.DisableClientMultiStatements())
 
 	c, err := LoadTLSConfig(cfg)
 	assert.NoError(t, err)
