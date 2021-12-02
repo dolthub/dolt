@@ -1424,7 +1424,7 @@ setup_ref_test() {
     dolt commit -m 'add some values to branch 1.'
     dolt push --set-upstream origin branch1
 
-    dolt sql -q 'insert into test (id) values (4), (5), (6);'
+    dolt sql -q 'insert into test (id) values (4);'
     run dolt checkout main
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Please commit your changes or stash them before you switch branches." ]] || false
@@ -1433,22 +1433,14 @@ setup_ref_test() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Switched to branch 'main'" ]] || false
 
-    run dolt table export test test1.sql
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully exported data." ]] || false
-    [ -f test1.sql ]
-
-    run grep INSERT test1.sql
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "10" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
 
     dolt checkout branch1
-    run dolt table export test test2.sql
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully exported data." ]] || false
-    [ -f test2.sql ]
-
-    run grep INSERT test2.sql
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
 }

@@ -31,7 +31,7 @@ SQL
     [[ "$output" =~ "modified" ]] || false
 
     dolt checkout main
-    
+
     run dolt sql -q "select count(*) from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2" ]] || false
@@ -43,7 +43,7 @@ SQL
     # Making additional changes to main, should carry them to feature without any problem
     dolt sql -q "insert into test values (3)"
     dolt checkout feature
-    
+
     run dolt sql -q "select count(*) from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
@@ -97,7 +97,74 @@ SQL
     # With a dirty working set, dolt checkout should fail
     dolt sql -q "insert into test values (5)"
     run dolt checkout feature
-    
+
     [ "$status" -eq 1 ]
     [[ "$output" =~ "some error" ]] || false
+}
+
+@test "checkout: with -f flag without conflict" {
+    dolt sql -q 'create table test (id int primary key);'
+    dolt sql -q 'insert into test (id) values (10);'
+    dolt add .
+    dolt commit -m 'create test table.'
+
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values to branch 1.'
+
+    run dolt checkout -f main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'main'" ]] || false
+
+    run dolt table export test test1.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f test1.sql ]
+
+    run grep INSERT test1.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    dolt checkout branch1
+    run dolt table export test test2.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f test2.sql ]
+
+    run grep INSERT test2.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+}
+
+@test "checkout: with -f flag with conflict" {
+    dolt sql -q 'create table test (id int primary key);'
+    dolt sql -q 'insert into test (id) values (10);'
+    dolt add .
+    dolt commit -m 'create test table.'
+
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values to branch 1.'
+
+    dolt sql -q 'insert into test (id) values (4);'
+    run dolt checkout main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Please commit your changes or stash them before you switch branches." ]] || false
+
+    run dolt checkout -f main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'main'" ]] || false
+
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "10" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
+
+    dolt checkout branch1
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
 }
