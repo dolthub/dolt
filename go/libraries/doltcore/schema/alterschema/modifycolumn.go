@@ -282,16 +282,14 @@ func updateRowDataWithNewType(
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
 func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schema.Column, order *ColumnOrder) (schema.Schema, error) {
 	// If no order is specified, insert in the same place as the existing column
-	var oldIdx int
 	prevColumn := ""
-	for i, col := range sch.GetAllCols().GetColumns() {
+	for _, col := range sch.GetAllCols().GetColumns() {
 		if col.Name == oldCol.Name {
 			if prevColumn == "" {
 				if order == nil {
 					order = &ColumnOrder{First: true}
 				}
 			}
-			oldIdx = i
 			break
 		} else {
 			prevColumn = col.Name
@@ -306,11 +304,9 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		}
 	}
 
-	var newIdx int
 	var newCols []schema.Column
 	if order.First {
 		newCols = append(newCols, newCol)
-		newIdx = 0
 	}
 
 	for _, col := range sch.GetAllCols().GetColumns() {
@@ -319,7 +315,6 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		}
 
 		if order.After == col.Name {
-			newIdx = len(newCols)
 			newCols = append(newCols, newCol)
 		}
 	}
@@ -352,29 +347,13 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		}
 	}
 
-	pkOrdinals := sch.GetPkOrdinals()
-
-	if newIdx != oldIdx {
-		var shift, loIdx, hiIdx int
-		if newIdx > oldIdx {
-			shift = -1
-			loIdx = oldIdx
-			hiIdx = newIdx
-		} else {
-			shift = 1
-			loIdx = newIdx
-			hiIdx = oldIdx
-		}
-
-		for i, ord := range pkOrdinals {
-			if ord == oldIdx {
-				// special case if pk was transposed
-				pkOrdinals[i] = newIdx
-			} else if ord >= loIdx && ord <= hiIdx {
-				// shift if pk in range [loIdx, hiIdx]
-				pkOrdinals[i] = ord + shift
-			}
-		}
+	pkOrdinals := make([]int, len(sch.GetPkOrdinals()))
+	for _, col := range newSch.GetPKCols().GetColumns() {
+		// oldIdx is the primary key order, which stays the same but is not yet valid in newSch
+		oldIdx := sch.GetPKCols().TagToIdx[col.Tag]
+		// ord is the schema ordering index, which may have changed in newSch
+		ord := newSch.GetAllCols().TagToIdx[col.Tag]
+		pkOrdinals[oldIdx] = ord
 	}
 
 	err = newSch.SetPkOrdinals(pkOrdinals)
