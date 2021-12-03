@@ -63,7 +63,7 @@ func newSQLInferrer(ctx context.Context, readerSch sql.Schema, args InferenceArg
 func (inf *sqlInferrer) inferColumnTypes(ctx context.Context) sql.Schema {
 	inferredTypes := make(map[string]sql.Type)
 	for colName, typ := range inf.inferSets {
-		inferredTypes[colName] = findCommonSQlType(typ)
+		inferredTypes[inf.mapper.Map(colName)] = findCommonSQlType(typ)
 	}
 
 	var ret sql.Schema
@@ -121,8 +121,12 @@ func InferSqlSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser
 					return err
 				}
 
-				typ := sqlLeastPermissiveType(strVal.(string), inferrer.floatThreshold)
-				inferrer.inferSets[col.Name][typ] = struct{}{}
+				if strVal == nil {
+					inferrer.inferSets[col.Name][sql.Null] = struct{}{}
+				} else {
+					typ := sqlLeastPermissiveType(strVal.(string), inferrer.floatThreshold) // TODO: This is sus
+					inferrer.inferSets[col.Name][typ] = struct{}{}
+				}
 			}
 		}
 

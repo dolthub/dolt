@@ -462,7 +462,12 @@ func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dolt
 		return nil, dmce
 	}
 
+	// Update the source to the table name to use schema.Contains and schema.IndexOf.
 	rdSchema := rd.GetSqlSchema()
+	for _, col := range rdSchema {
+		col.Source = imOpts.tableName
+	}
+
 	for _, wCol := range wrSch {
 		preImage := imOpts.nameMapper.PreImage(wCol.Name)
 		if !rdSchema.Contains(preImage, wCol.Source) {

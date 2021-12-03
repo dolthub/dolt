@@ -301,9 +301,13 @@ func InferSchema(ctx context.Context, rd table.TableReadCloser, tableName string
 		return nil, err
 	}
 
+	for _, col := range outSch {
+		col.Source = tableName
+	}
+
 	// Update the primary keys and source of the schema
 	for _, pk := range pks {
-		idx := outSch.IndexOf(pk, "")
+		idx := outSch.IndexOf(pk, tableName)
 		if idx < 0 {
 			return nil, ErrProvidedPkNotFound
 		}

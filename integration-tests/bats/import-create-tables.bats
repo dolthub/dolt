@@ -412,6 +412,7 @@ SQL
 
 @test "import-create-tables: create a table with null values from csv import" {
     run dolt table import -c -pk=pk test empty-strings-null-values.csv
+    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -529,6 +530,7 @@ pk1,pk2,v1
 1,,1
 DELIM
     run dolt table import -c --pk=pk test null-pk-1.csv
+    echo $output
     [ "$status" -eq 1 ]
     [[ "$output" =~ "pk" ]]
     run dolt table import -c --pk=pk1,pk2 test null-pk-2.csv

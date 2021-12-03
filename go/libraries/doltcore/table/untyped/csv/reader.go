@@ -214,7 +214,11 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 
 	var sqlRow sql.Row
 	for _, colVal := range colVals {
-		sqlRow = append(sqlRow, *colVal)
+		if colVal == nil {
+			sqlRow = append(sqlRow, nil)
+		} else {
+			sqlRow = append(sqlRow, *colVal)
+		}
 	}
 
 	return sqlRow, nil
