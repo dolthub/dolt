@@ -1372,7 +1372,7 @@ setup_ref_test() {
     # create main remote branch
     dolt remote add origin http://localhost:50051/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
-    dolt sql -q 'insert into test (id) values (10);'
+    dolt sql -q 'insert into test (id) values (8);'
     dolt add .
     dolt commit -m 'create test table.'
     dolt push origin main:main
@@ -1388,31 +1388,25 @@ setup_ref_test() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Switched to branch 'main'" ]] || false
 
-    run dolt table export test test1.sql
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully exported data." ]] || false
-    [ -f test1.sql ]
-
-    run grep INSERT test1.sql
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "8" ]] || false
+    [[ ! "$output" =~ "1" ]] || false
+    [[ ! "$output" =~ "2" ]] || false
+    [[ ! "$output" =~ "3" ]] || false
 
     dolt checkout branch1
-    run dolt table export test test2.sql
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully exported data." ]] || false
-    [ -f test2.sql ]
-
-    run grep INSERT test2.sql
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "8" ]] || false
 }
 
 @test "remotes: checkout with -f flag with conflict" {
     # create main remote branch
     dolt remote add origin http://localhost:50051/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
-    dolt sql -q 'insert into test (id) values (10);'
+    dolt sql -q 'insert into test (id) values (8);'
     dolt add .
     dolt commit -m 'create test table.'
     dolt push origin main:main
@@ -1434,7 +1428,7 @@ setup_ref_test() {
     [[ "$output" =~ "Switched to branch 'main'" ]] || false
 
     run dolt sql -q "select * from test;"
-    [[ "$output" =~ "10" ]] || false
+    [[ "$output" =~ "8" ]] || false
     [[ ! "$output" =~ "4" ]] || false
 
     dolt checkout branch1
@@ -1442,5 +1436,6 @@ setup_ref_test() {
     [[ "$output" =~ "1" ]] || false
     [[ "$output" =~ "2" ]] || false
     [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "8" ]] || false
     [[ ! "$output" =~ "4" ]] || false
 }
