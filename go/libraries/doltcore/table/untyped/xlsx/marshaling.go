@@ -18,11 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"strings"
 
 	"github.com/tealeg/xlsx"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -66,10 +66,8 @@ func openBinary(content []byte) (*xlsx.File, error) {
 	return data, nil
 }
 
-func decodeXLSXRows(ctx context.Context, vrw types.ValueReadWriter, xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
-	var rows []row.Row
-
-	var err error
+func decodeXLSXRows(ctx context.Context, vrw types.ValueReadWriter, xlData [][][]string, sch schema.Schema) ([]sql.Row, error) {
+	var rows []sql.Row
 
 	cols := sch.GetAllCols()
 	numSheets := len(xlData)
@@ -77,28 +75,18 @@ func decodeXLSXRows(ctx context.Context, vrw types.ValueReadWriter, xlData [][][
 	header := dataVals[0]
 	numRows := len(dataVals) - 1
 
-	taggedVals := make(row.TaggedValues, len(header))
-
 	for j := 0; j < numSheets; j++ {
 		for i := 0; i < numRows; i++ {
+			var row sql.Row
 			for k, v := range header {
-				col, ok := cols.GetByName(v)
+				_, ok := cols.GetByName(v)
 				if !ok {
 					return nil, errors.New(v + "is not a valid column")
 				}
 				valString := dataVals[i+1][k]
-				taggedVals[col.Tag], err = col.TypeInfo.ParseValue(ctx, vrw, &valString)
-				if err != nil {
-					return nil, err
-				}
+				row = append(row, valString)
 			}
-			r, err := row.New(vrw.Format(), sch, taggedVals)
-
-			if err != nil {
-				return nil, err
-			}
-
-			rows = append(rows, r)
+			rows = append(rows, row)
 		}
 
 	}

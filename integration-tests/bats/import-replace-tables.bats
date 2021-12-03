@@ -42,6 +42,7 @@ CREATE TABLE test (
 SQL
     run dolt table import -r test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 1 ]
+    echo $output
     [[ "$output" =~ "Error determining the output schema." ]] || false
     [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }

@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -468,12 +467,14 @@ func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dolt
 		col.Source = imOpts.tableName
 	}
 
+	// Validate the primary keys are aligned between the read schema and write schema
 	for _, wCol := range wrSch {
-		preImage := imOpts.nameMapper.PreImage(wCol.Name)
-		if !rdSchema.Contains(preImage, wCol.Source) {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("input primary keys do not match primary keys of existing table")}
+		if wCol.PrimaryKey {
+			preImage := imOpts.nameMapper.PreImage(wCol.Name)
+			if !rdSchema.Contains(preImage, wCol.Source) {
+				return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("input primary keys do not match primary keys of existing table")}
+			}
 		}
-
 	}
 
 	// allow subsetting of the final write schema only if it is an update operation. Every other operation must
@@ -544,13 +545,12 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 		defer close(parsedRowChan)
 
 		for {
-			r, err := rd.ReadRow(ctx)
+			r, err := rd.ReadSqlRow(ctx)
 			if err != nil {
 				if err == io.EOF {
 					return nil
 				} else if table.IsBadRow(err) {
-					dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-					trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
+					trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: r, TransformName: "reader", Details: err.Error()}
 					quit := badRowCB(trf)
 					if quit {
 						return trf
@@ -716,12 +716,7 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 // transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
 // 3) Addresses any type inconsistencies.
-func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
-	doltRow, err := sqlutil.DoltRowToSqlRow(row, rdSchema)
-	if err != nil {
-		return nil, err
-	}
-
+func transformToDoltRow(doltRow sql.Row, rdSchema schema.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	for i, col := range wrSchema {
 		switch col.Type {
 		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType

@@ -343,6 +343,7 @@ DELIM
 
 @test "import-create-tables: create a table from excel import with multiple sheets" {
     run dolt table import -c --pk=id employees `batshelper employees.xlsx`
+    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -385,6 +386,8 @@ DELIM
 
 @test "import-create-tables: import a table with non UTF-8 characters in it" {
     skiponwindows "windows can't find bad-characters.csv"
+    skip "non utf-8 should not be supported"
+
     run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
     [ "$status" -eq 0 ]
     dolt sql -q 'select * from test'

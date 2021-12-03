@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -36,7 +37,7 @@ type XLSXReader struct {
 	info   *XLSXFileInfo
 	sch    schema.Schema
 	ind    int
-	rows   []row.Row
+	rows   []sql.Row
 }
 
 func OpenXLSXReaderFromBinary(ctx context.Context, vrw types.ValueReadWriter, r io.ReadCloser, info *XLSXFileInfo) (*XLSXReader, error) {
@@ -140,7 +141,17 @@ func (xlsxr *XLSXReader) Close(ctx context.Context) error {
 	}
 }
 
+// TODO: Deprecate this
 func (xlsxr *XLSXReader) ReadRow(ctx context.Context) (row.Row, error) {
+	panic("Deprecated. Will be removed soon")
+}
+
+func (xlsxr *XLSXReader) GetSqlSchema() sql.Schema {
+	sch, _ := sqlutil.FromDoltSchema("", xlsxr.GetSchema())
+	return sch
+}
+
+func (xlsxr *XLSXReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	if xlsxr.ind == len(xlsxr.rows) {
 		return nil, io.EOF
 	}
@@ -149,11 +160,4 @@ func (xlsxr *XLSXReader) ReadRow(ctx context.Context) (row.Row, error) {
 	xlsxr.ind++
 
 	return outRow, nil
-}
-
-func (xlsxr *XLSXReader)  GetSqlSchema() sql.Schema {
-	panic("")
-}
-func (xlsxr *XLSXReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
-	panic("")
 }

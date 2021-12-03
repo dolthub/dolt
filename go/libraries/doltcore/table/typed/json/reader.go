@@ -17,7 +17,7 @@ package json
 import (
 	"context"
 	"errors"
-	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"io"
 
 	"github.com/bcicen/jstream"
@@ -86,17 +86,20 @@ func (r *JSONReader) VerifySchema(sch schema.Schema) (bool, error) {
 }
 
 func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
-	if r.sampleRow != nil {
-		ret := r.sampleRow
-		r.sampleRow = nil
-		return ret, nil
-	}
+	panic("deprecated")
+}
 
+func (r *JSONReader) GetSqlSchema() sql.Schema {
+	sch, _ := sqlutil.FromDoltSchema("", r.sch)
+	return sch
+}
+
+func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	if r.rowChan == nil {
 		r.rowChan = r.jsonStream.Stream()
 	}
 
-	row, ok := <-r.rowChan
+	metaRow, ok := <-r.rowChan
 	if !ok {
 		if r.jsonStream.Err() != nil {
 			return nil, r.jsonStream.Err()
@@ -104,49 +107,16 @@ func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
 		return nil, io.EOF
 	}
 
-	m, ok := row.Value.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("Unexpected json value: %v", row.Value)
-	}
-	return r.convToRow(ctx, m)
+	return r.convToSqlRow(metaRow.Value.(map[string]interface{})), nil
 }
 
-func (r *JSONReader) convToRow(ctx context.Context, rowMap map[string]interface{}) (row.Row, error) {
-	allCols := r.sch.GetAllCols()
+func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) sql.Row {
+	sqlSchema := r.GetSqlSchema()
+	ret := make(sql.Row, len(sqlSchema))
 
-	taggedVals := make(row.TaggedValues, allCols.Size())
-
-	for k, v := range rowMap {
-		col, ok := allCols.GetByName(k)
-		if !ok {
-			return nil, fmt.Errorf("column %s not found in schema", k)
-		}
-
-		switch v.(type) {
-		case int, string, bool, float64:
-			taggedVals[col.Tag], _ = col.TypeInfo.ConvertValueToNomsValue(ctx, r.vrw, v)
-		}
-
+	for i, col := range sqlSchema {
+		ret[i] = rowMap[col.Name]
 	}
 
-	// todo: move null value checks to pipeline
-	err := r.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if val, ok := taggedVals.Get(tag); !col.IsNullable() && (!ok || types.IsNull(val)) {
-			return true, fmt.Errorf("column `%s` does not allow null values", col.Name)
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return row.New(r.vrw.Format(), r.sch, taggedVals)
-}
-
-func (r *JSONReader) GetSqlSchema() sql.Schema {
-	panic("cant do this")
-}
-
-func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
-	panic("cant do this")
+	return ret
 }
