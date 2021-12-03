@@ -15,10 +15,14 @@ teardown() {
     stop_sql_server
 }
 
-@test "config: make sure no dolt configuration for simulated fresh user" {
-    run dolt config --list
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+@test "config: try to initialize a repository with no configuration with correct hint" {
+    run dolt init
+    [ "$status" -eq 1 ]
+    name='dolt config --global --add user.email "you@example.com"'
+    email='dolt config --global --add user.name "Your Name"'
+    [[ "$output" =~ "Please tell me who you are" ]] || false
+    [[ "$output" =~ "$name" ]] || false
+    [[ "$output" =~ "$email" ]] || false
 }
 
 @test "config: try to initialize a repository with no configuration" {
