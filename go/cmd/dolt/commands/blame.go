@@ -252,7 +252,12 @@ ROWLOOP:
 			}
 		}
 		// didn't find blame for a row...something's wrong
-		return nil, fmt.Errorf("couldn't find blame for row with primary key %v", strings.Join(getPKStrs(ctx, node.Key), ", "))
+		var v []string
+		pkVals := getPKVal(ctx, node.Key)
+		for _, cellValue := range pkVals {
+			v = append(v, fmt.Sprintf("%v", cellValue))
+		}
+		return nil, fmt.Errorf("couldn't find blame for row with primary key %v", strings.Join(v, ", "))
 	}
 
 	return blameGraph, nil
@@ -501,33 +506,18 @@ func (bg *blameGraph) AssignBlame(rowPK types.Value, nbf *types.NomsBinFormat, c
 	return nil
 }
 
-func getPKStrs(ctx context.Context, pk types.Value) (strs []string) {
+func getPKVal(ctx context.Context, pk types.Value) (values []types.Value) {
 	i := 0
 	pk.WalkValues(ctx, func(val types.Value) error {
 		// even-indexed values are index numbers. they aren't useful, don't print them.
 		if i%2 == 1 {
-			strs = append(strs, fmt.Sprintf("%v", val))
+			values = append(values, val)
 		}
 		i++
 		return nil
 	})
 
-	return strs
-}
-
-func getPKVal(ctx context.Context, pk types.Value) (vals []types.Value) {
-	i := 0
-	pk.WalkValues(ctx, func(val types.Value) error {
-		// even-indexed values are index numbers. they aren't useful, don't print them.
-		if i%2 == 1 {
-			v, _ := val.Value(ctx)
-			vals = append(vals, v)
-		}
-		i++
-		return nil
-	})
-
-	return vals
+	return values
 }
 
 func truncateString(str string, maxLength int) string {
@@ -566,8 +556,7 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string, nbf *type
 	t.AppendHeader(header)
 	var p []rowMap
 	for _, v := range *bg {
-		pkVals := getPKStrs(ctx, v.Key)
-		pkVal := getPKVal(ctx, v.Key)
+		pkVals := getPKVal(ctx, v.Key)
 		dataVals := []string{
 			truncateString(v.Description, 50),
 			v.Author,
@@ -576,13 +565,14 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string, nbf *type
 		}
 
 		row := []interface{}{}
-		for _, cellText := range pkVals {
-			row = append(row, cellText)
+		for _, cellValue := range pkVals {
+			row = append(row, fmt.Sprintf("%v", cellValue))
 		}
 		for _, cellText := range dataVals {
 			row = append(row, cellText)
 		}
-		p = append(p, rowMap{pkVal[0], row})
+		pkV, _ := pkVals[0].Value(ctx)
+		p = append(p, rowMap{pkV, row})
 	}
 
 	sort.Slice(p, func(i, j int) bool {
