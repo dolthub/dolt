@@ -116,8 +116,6 @@ type InMemTableReader struct {
 	current int
 }
 
-var _ SqlTableReader = &InMemTableReader{}
-
 // NewInMemTableReader creates an instance of a TableReader from an InMemTable
 func NewInMemTableReader(imt *InMemTable) *InMemTableReader {
 	return &InMemTableReader{imt, 0}
@@ -159,7 +157,7 @@ func (rd *InMemTableReader) GetSchema() schema.Schema {
 }
 
 func (rd *InMemTableReader) GetSqlSchema() sql.Schema {
-	panic("dont call this")
+	panic("todo")
 }
 
 // VerifySchema checks that the incoming schema matches the schema from the existing table

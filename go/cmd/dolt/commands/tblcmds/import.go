@@ -472,7 +472,7 @@ func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dolt
 		if wCol.PrimaryKey {
 			preImage := imOpts.nameMapper.PreImage(wCol.Name)
 			if !rdSchema.Contains(preImage, wCol.Source) {
-				return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("input primary keys do not match primary keys of existing table")}
+				return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: fmt.Errorf("input primary keys do not match primary keys of existing table")}
 			}
 		}
 	}

@@ -16,11 +16,12 @@ package actions
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/google/uuid"
 
@@ -372,7 +373,6 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 
 	return findCommonChronoType(ts)
 }
-
 
 func findCommonNumericType(nums typeInfoSet) typeinfo.TypeInfo {
 	// find a common numeric type

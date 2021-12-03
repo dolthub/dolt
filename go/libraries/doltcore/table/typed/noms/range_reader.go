@@ -149,11 +149,11 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 }
 
 func (nrr *NomsRangeReader) GetSqlSchema() sql.Schema {
-	panic("dont call this")
+	panic("todo")
 }
 
 func (nrr *NomsRangeReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
-	panic("dont call this")
+	panic("todo")
 }
 
 func (nrr *NomsRangeReader) ReadKey(ctx context.Context) (types.Tuple, error) {

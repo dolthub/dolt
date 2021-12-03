@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -56,13 +55,6 @@ func (k *keylessRowIter) Next() (sql.Row, error) {
 
 func (k keylessRowIter) Close(ctx *sql.Context) error {
 	return k.keyedIter.Close(ctx)
-}
-
-// An iterator over the rows of a table.
-type doltTableRowIter struct {
-	sql.RowIter
-	ctx    context.Context
-	reader table.SqlTableReader
 }
 
 // Returns a new row iterator for the table given
@@ -152,14 +144,4 @@ func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []s
 		}
 	}
 	return cols, tagToSqlColIdx, nil
-}
-
-// Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.
-func (itr *doltTableRowIter) Next() (sql.Row, error) {
-	return itr.reader.ReadSqlRow(itr.ctx)
-}
-
-// Close required by sql.RowIter interface
-func (itr *doltTableRowIter) Close(*sql.Context) error {
-	return nil
 }

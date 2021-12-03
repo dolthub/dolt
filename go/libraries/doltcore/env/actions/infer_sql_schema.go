@@ -16,22 +16,23 @@ package actions
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/google/uuid"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"math"
 	"strconv"
 	"strings"
 	"time"
-)
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
+)
 
 type sqlInferrer struct {
 	readerSch      sql.Schema
@@ -58,7 +59,6 @@ func newSQLInferrer(ctx context.Context, readerSch sql.Schema, args InferenceArg
 		floatThreshold: args.FloatThreshold(),
 	}
 }
-
 
 func (inf *sqlInferrer) inferColumnTypes(ctx context.Context) sql.Schema {
 	inferredTypes := make(map[string]sql.Type)
@@ -99,7 +99,6 @@ func InferSqlSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser
 				return err
 			}
 
-
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -107,7 +106,6 @@ func InferSqlSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser
 			}
 		}
 	})
-
 
 	g.Go(func() error {
 		for r := range parsedRowChan {
@@ -255,7 +253,6 @@ func leastPermissiveSqlChronoType(strVal string) (sql.Type, bool) {
 	return sql.Datetime, true
 }
 
-
 // TOOD: Move this to the engine
 func sqlChronoTypes() []sql.Type {
 	return []sql.Type{
@@ -324,7 +321,7 @@ func findCommonSQlType(ts sqlTypeInfoSet) sql.Type {
 	if hasNumeric && hasNonNumeric {
 		return sql.Text
 	}
- 
+
 	if hasNumeric {
 		return findCommonSqlNumericType(ts)
 	}
@@ -410,12 +407,7 @@ func findCommonSqlChronoType(chronos sqlTypeInfoSet) sql.Type {
 	panic("unreachable")
 }
 
-
 func sqlSetHasType(ts sqlTypeInfoSet, t sql.Type) bool {
 	_, found := ts[t]
 	return found
 }
-
-
-
-

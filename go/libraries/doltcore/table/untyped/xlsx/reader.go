@@ -18,15 +18,17 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"io"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var ReadBufSize = 256 * 1024

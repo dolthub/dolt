@@ -16,6 +16,7 @@ package table
 
 import (
 	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -56,7 +57,7 @@ func (tr *AsyncReadAheadTableReader) GetSqlSchema() sql.Schema {
 	panic("dont call plxxx")
 }
 
-func (tr *AsyncReadAheadTableReader) ReadSqlRow(ctx context.Context) (sql.Row,error) {
+func (tr *AsyncReadAheadTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	panic("please dont call plxx")
 }
 

@@ -17,16 +17,19 @@ package json
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"fmt"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+
 	"github.com/bcicen/jstream"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var ReadBufSize = 256 * 1024
@@ -107,16 +110,21 @@ func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	return r.convToSqlRow(metaRow.Value.(map[string]interface{})), nil
+	return r.convToSqlRow(metaRow.Value.(map[string]interface{}))
 }
 
-func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) sql.Row {
+func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) (sql.Row, error) {
 	sqlSchema := r.GetSqlSchema()
 	ret := make(sql.Row, len(sqlSchema))
 
-	for i, col := range sqlSchema {
-		ret[i] = rowMap[col.Name]
+	for k, v := range rowMap {
+		idx := sqlSchema.IndexOf(k, sqlSchema[0].Source)
+		if idx < 0 {
+			return nil, fmt.Errorf("column %s not found in schema", k)
+		}
+
+		ret[idx] = v
 	}
 
-	return ret
+	return ret, nil
 }
