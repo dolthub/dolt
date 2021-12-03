@@ -47,6 +47,9 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 	newColl := make([]schema.Column, sch.GetAllCols().Size())
 	pkOrdinals := make([]int, len(columns))
 	for ord, col := range sch.GetAllCols().GetColumns() {
+		if col.IsNullable() {
+			col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
+		}
 		if i, ok := pkColOrdering[col.Name]; ok {
 			pkOrdinals[i] = ord
 			col.IsPartOfPK = true
