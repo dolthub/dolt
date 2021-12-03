@@ -77,7 +77,7 @@ type indexCollectionImpl struct {
 	pks           []uint64
 }
 
-func NewIndexCollection(cols *ColCollection) IndexCollection {
+func NewIndexCollection(cols *ColCollection, pkCols *ColCollection) IndexCollection {
 	ixc := &indexCollectionImpl{
 		colColl:       cols,
 		indexes:       make(map[string]*indexImpl),
@@ -89,6 +89,11 @@ func NewIndexCollection(cols *ColCollection) IndexCollection {
 			if col.IsPartOfPK {
 				ixc.pks = append(ixc.pks, col.Tag)
 			}
+		}
+	}
+	if pkCols != nil {
+		for i, col := range pkCols.cols {
+			ixc.pks[i] = col.Tag
 		}
 	}
 	return ixc

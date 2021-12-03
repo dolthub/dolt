@@ -525,6 +525,8 @@ SQL
 }
 
 @test "primary-key-changes: correct diff is returned even with a new added column" {
+    skip "TODO implement PK ordering for SHOW CREATE TABLE"
+
     dolt sql -q "CREATE table t (pk int, val int, primary key (pk, val))"
     dolt commit -am "cm1"
 

@@ -39,43 +39,42 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, sql.ErrMultiplePrimaryKeysDefined.New() // Also caught in GMS
 	}
 
-	// Map function for converting columns to a primary key
-	newCollection := schema.MapColCollection(sch.GetAllCols(), func(col schema.Column) schema.Column {
-		for _, c := range columns {
-			if strings.ToLower(c.Name) == strings.ToLower(col.Name) {
-				// Add not null constraint if currently nullable
-				if col.IsNullable() {
-					col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
-				}
-				col.IsPartOfPK = true
-				return col
-			}
+	pkColOrdering := make(map[string]int, len(columns))
+	for i, newCol := range columns {
+		pkColOrdering[newCol.Name] = i
+	}
+
+	newColl := make([]schema.Column, sch.GetAllCols().Size())
+	pkOrdinals := make([]int, len(columns))
+	for ord, col := range sch.GetAllCols().GetColumns() {
+		if col.IsNullable() {
+			col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
 		}
+		if i, ok := pkColOrdering[col.Name]; ok {
+			pkOrdinals[i] = ord
+			col.IsPartOfPK = true
+		}
+		newColl[ord] = col
+	}
+	newCollection := schema.NewColCollection(newColl...)
 
-		return col
-	})
-
-	// Get Row Data out of Table
-	rowData, err := table.GetRowData(ctx)
+	rows, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Go through every row
-	err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+	// enforce primary key nullability
+	err = rows.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 		r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
 		if err != nil {
 			return false, err
 		}
 
-		// Go through every column of row
 		err = newCollection.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			// Skip if they are not part of primary key
 			if !col.IsPartOfPK {
 				return false, nil
 			}
 
-			// Check if column value is null
 			val, ok := r.GetColVal(tag)
 			if !ok || val == nil || val == types.NullValue {
 				return true, fmt.Errorf("primary key cannot have NULL values")
@@ -99,49 +98,14 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, err
 	}
 
-	if !pkInCorrectOrder(newSchema, columns) {
-		newSchema, err = rearrangeSchema(newSchema, columns)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
+	err = newSchema.SetPkOrdinals(pkOrdinals)
+	if err != nil {
+		return nil, err
+	}
 
 	// Rebuild all of the indexes now that the primary key has been changed
 	return insertKeyedData(ctx, nbf, table, newSchema, tableName, opts)
-}
-
-func pkInCorrectOrder(sch schema.Schema, cols []sql.IndexColumn) bool {
-	pks := sch.GetPKCols()
-
-	if pks.Size() != len(cols) {
-		return false
-	}
-
-	for i, c := range cols {
-		if strings.ToLower(c.Name) != strings.ToLower(pks.GetAtIndex(i).Name) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func rearrangeSchema(sch schema.Schema, cols []sql.IndexColumn) (schema.Schema, error) {
-	currPks := sch.GetPKCols()
-	newPks := schema.NewColCollection()
-
-	for _, c := range cols {
-		foundCol, ok := currPks.GetByNameCaseInsensitive(c.Name)
-		if !ok {
-			return nil, fmt.Errorf("error: column %s was not found", foundCol.Name)
-		}
-
-		newPks = newPks.Append(foundCol)
-	}
-
-	return schema.SchemaFromCols(newPks.AppendColl(sch.GetNonPKCols()))
 }
 
 func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *doltdb.Table, newSchema schema.Schema, name string, opts editor.Options) (*doltdb.Table, error) {

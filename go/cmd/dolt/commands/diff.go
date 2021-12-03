@@ -525,8 +525,9 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 				if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
 					continue
 				}
-
-				cli.Println(sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+				if cd.Old.Name != cd.New.Name {
+					cli.Println(sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+				}
 			}
 		}
 
