@@ -270,16 +270,19 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	// for backwards-compat, this will be a no-op
-	err = sd.addChecksIndexesAndPkOrderingToSchema(sch)
-	if err != nil {
-		return nil, err
-	}
-
 	return sch, nil
 }
 
 func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) error {
+
+	// initialize pk order before adding indexes
+	if sd.PkOrdinals != nil {
+		err := sch.SetPkOrdinals(sd.PkOrdinals)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, encodedIndex := range sd.IndexCollection {
 		_, err := sch.Indexes().UnsafeAddIndexByColTags(
 			encodedIndex.Name,
@@ -301,13 +304,6 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 			encodedCheck.Expression,
 			encodedCheck.Enforced,
 		)
-		if err != nil {
-			return err
-		}
-	}
-
-	if sd.PkOrdinals != nil {
-		err := sch.SetPkOrdinals(sd.PkOrdinals)
 		if err != nil {
 			return err
 		}
@@ -392,6 +388,11 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		// schemaData will not have PK ordinals in old versions of Dolt
 		// this sets the default PK ordinates for subsequent cache lookups
 		sd.PkOrdinals = sch.GetPkOrdinals()
+	}
+
+	err = sd.addChecksIndexesAndPkOrderingToSchema(sch)
+	if err != nil {
+		return nil, err
 	}
 
 	d := schCacheData{

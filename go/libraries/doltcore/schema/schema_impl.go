@@ -28,7 +28,7 @@ var EmptySchema = &schemaImpl{
 	pkCols:          EmptyColColl,
 	nonPKCols:       EmptyColColl,
 	allCols:         EmptyColColl,
-	indexCollection: NewIndexCollection(nil),
+	indexCollection: NewIndexCollection(nil, nil),
 }
 
 type schemaImpl struct {
@@ -76,7 +76,7 @@ func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) S
 		pkCols:          pkColColl,
 		nonPKCols:       nonPKColColl,
 		allCols:         allCols,
-		indexCollection: NewIndexCollection(allCols),
+		indexCollection: NewIndexCollection(allCols, pkColColl),
 		checkCollection: NewCheckCollection(),
 		pkOrdinals:      []int{},
 	}
@@ -142,7 +142,7 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 		pkCols:          pkColColl,
 		nonPKCols:       nonPKColColl,
 		allCols:         nonPKColColl,
-		indexCollection: NewIndexCollection(nil),
+		indexCollection: NewIndexCollection(nil, nil),
 		checkCollection: NewCheckCollection(),
 	}
 }
@@ -212,6 +212,7 @@ func (si *schemaImpl) SetPkOrdinals(o []int) error {
 		newPks[i] = si.allCols.GetByIndex(j)
 	}
 	si.pkCols = NewColCollection(newPks...)
+
 	return nil
 }
 

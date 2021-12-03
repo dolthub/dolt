@@ -16,11 +16,13 @@ package alterschema
 
 import (
 	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestNewPkOrdinals(t *testing.T) {
@@ -33,14 +35,14 @@ func TestNewPkOrdinals(t *testing.T) {
 			schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 		),
 	)
-	err := oldSch.SetPkOrdinals([]int{3,1})
+	err := oldSch.SetPkOrdinals([]int{3, 1})
 	require.NoError(t, err)
 
-	tests := []struct{
-		name string
-		newSch schema.Schema
+	tests := []struct {
+		name          string
+		newSch        schema.Schema
 		expPkOrdinals []int
-		err error
+		err           error
 	}{
 		{
 			name: "remove column",

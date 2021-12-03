@@ -333,7 +333,7 @@ func mergeIndexes(mergedCC *schema.ColCollection, ourSch, theirSch, ancSch schem
 }
 
 func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.IndexCollection) (common schema.IndexCollection, conflicts []IdxConflict) {
-	common = schema.NewIndexCollection(mergedCC)
+	common = schema.NewIndexCollection(mergedCC, nil)
 	_ = ours.Iter(func(ourIdx schema.Index) (stop bool, err error) {
 		idxTags := ourIdx.IndexedColumnTags()
 		for _, t := range idxTags {
@@ -409,7 +409,7 @@ func indexesInCommon(mergedCC *schema.ColCollection, ours, theirs, anc schema.In
 }
 
 func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCollection) (d schema.IndexCollection) {
-	d = schema.NewIndexCollection(cc)
+	d = schema.NewIndexCollection(cc, nil)
 	_ = left.Iter(func(idx schema.Index) (stop bool, err error) {
 		idxTags := idx.IndexedColumnTags()
 		for _, t := range idxTags {

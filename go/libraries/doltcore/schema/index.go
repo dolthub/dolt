@@ -174,7 +174,7 @@ func (ix *indexImpl) Schema() Schema {
 		pkCols:          allCols,
 		nonPKCols:       nonPkCols,
 		allCols:         allCols,
-		indexCollection: NewIndexCollection(nil),
+		indexCollection: NewIndexCollection(nil, nil),
 		checkCollection: NewCheckCollection(),
 	}
 }
