@@ -103,6 +103,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	name := apr.Arg(0)
+	force := apr.Contains(cli.ForceFlag)
 
 	if len(name) == 0 {
 		verr := errhand.BuildDError("error: cannot checkout empty string").Build()
@@ -113,7 +114,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		verr := errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usagePrt)
 	} else if isBranch {
-		verr := checkoutBranch(ctx, dEnv, name)
+		verr := checkoutBranch(ctx, dEnv, name, force)
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
@@ -160,7 +161,7 @@ func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBra
 		return errhand.BuildDError(err.Error()).Build()
 	}
 
-	return checkoutBranch(ctx, dEnv, newBranch)
+	return checkoutBranch(ctx, dEnv, newBranch, false)
 }
 
 func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string, apr *argparser.ArgParseResults) errhand.VerboseError {
@@ -175,7 +176,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 		return errhand.BuildDError(err.Error()).Build()
 	}
 
-	return checkoutBranch(ctx, dEnv, newBranch)
+	return checkoutBranch(ctx, dEnv, newBranch, false)
 }
 
 func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs doltdocs.Docs) errhand.VerboseError {
@@ -206,8 +207,8 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []stri
 	return nil
 }
 
-func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	err := actions.CheckoutBranch(ctx, dEnv, name)
+func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force bool) errhand.VerboseError {
+	err := actions.CheckoutBranch(ctx, dEnv, name, force)
 
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {

@@ -1367,3 +1367,75 @@ setup_ref_test() {
    [ "$status" -eq 1 ]
    [[ "$output" =~ "invalid ref spec: 'dadasdfasdfa'" ]] || false
 }
+
+@test "remotes: checkout with -f flag without conflict" {
+    # create main remote branch
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt sql -q 'create table test (id int primary key);'
+    dolt sql -q 'insert into test (id) values (8);'
+    dolt add .
+    dolt commit -m 'create test table.'
+    dolt push origin main:main
+
+    # create remote branch "branch1"
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values to branch 1.'
+    dolt push --set-upstream origin branch1
+
+    run dolt checkout -f main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'main'" ]] || false
+
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "8" ]] || false
+    [[ ! "$output" =~ "1" ]] || false
+    [[ ! "$output" =~ "2" ]] || false
+    [[ ! "$output" =~ "3" ]] || false
+
+    dolt checkout branch1
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "8" ]] || false
+}
+
+@test "remotes: checkout with -f flag with conflict" {
+    # create main remote branch
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt sql -q 'create table test (id int primary key);'
+    dolt sql -q 'insert into test (id) values (8);'
+    dolt add .
+    dolt commit -m 'create test table.'
+    dolt push origin main:main
+
+    # create remote branch "branch1"
+    dolt checkout -b branch1
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values to branch 1.'
+    dolt push --set-upstream origin branch1
+
+    dolt sql -q 'insert into test (id) values (4);'
+    run dolt checkout main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Please commit your changes or stash them before you switch branches." ]] || false
+
+    run dolt checkout -f main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'main'" ]] || false
+
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "8" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
+
+    dolt checkout branch1
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "8" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
+}

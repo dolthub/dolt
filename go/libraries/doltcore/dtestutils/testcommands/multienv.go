@@ -157,7 +157,7 @@ func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
 
 func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
 	dEnv := mr.MrEnv.GetEnv(dbName)
-	err := actions.CheckoutBranch(context.Background(), dEnv, branchName)
+	err := actions.CheckoutBranch(context.Background(), dEnv, branchName, false)
 	if err != nil {
 		mr.Errhand(err)
 	}
