@@ -40,7 +40,6 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		return nil, ErrKeylessAltTbl
 	}
 
-	var dropIdx int
 	var dropTag uint64
 	if col, ok := sch.GetAllCols().GetByName(colName); !ok {
 		return nil, schema.ErrColNotFound
@@ -75,9 +74,8 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	}
 
 	cols := make([]schema.Column, 0)
-	for i, col := range sch.GetAllCols().GetColumns() {
+	for _, col := range sch.GetAllCols().GetColumns() {
 		if col.Name == colName {
-			dropIdx = i
 			continue
 		}
 		cols = append(cols, col)
@@ -90,16 +88,11 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
-	newPkOrds := sch.GetPkOrdinals()
-	for i := 0; i < len(newPkOrds); i++ {
-		// deleting a column will shift subsequent column indices left
-		// PK ordinals after dropIdx bumped down
-		if dropIdx <= newPkOrds[i] {
-			newPkOrds[i]--
-		}
+	pkOrds, err := modifyPkOrdinals(sch, newSch)
+	if err != nil {
+		return nil, err
 	}
-
-	err = newSch.SetPkOrdinals(newPkOrds)
+	err = newSch.SetPkOrdinals(pkOrds)
 	if err != nil {
 		return nil, err
 	}

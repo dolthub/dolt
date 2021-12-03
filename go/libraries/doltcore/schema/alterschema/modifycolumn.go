@@ -16,6 +16,7 @@ package alterschema
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -27,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+var ErrPrimaryKeySetsIncompatible = errors.New("primary key sets incompatible")
 
 // ModifyColumn modifies the column with the name given, replacing it with the new definition provided. A column with
 // the name given must exist in the schema of the table.
@@ -347,18 +350,43 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		}
 	}
 
-	pkOrdinals := make([]int, len(sch.GetPkOrdinals()))
-	for _, col := range newSch.GetPKCols().GetColumns() {
-		// oldIdx is the primary key order, which stays the same but is not yet valid in newSch
-		oldIdx := sch.GetPKCols().TagToIdx[col.Tag]
-		// ord is the schema ordering index, which may have changed in newSch
-		ord := newSch.GetAllCols().TagToIdx[col.Tag]
-		pkOrdinals[oldIdx] = ord
+	pkOrds, err := modifyPkOrdinals(sch, newSch)
+	if err != nil {
+		return nil, err
 	}
-
-	err = newSch.SetPkOrdinals(pkOrdinals)
+	err = newSch.SetPkOrdinals(pkOrds)
 	if err != nil {
 		return nil, err
 	}
 	return newSch, nil
+}
+
+// modifyPkOrdinals tries to create primary key ordinals for a newSch maintaining
+// the relative positions of PKs from the oldSch. Return an ErrPrimaryKeySetsIncompatible
+// error if the two schemas have a different number of primary keys, or a primary
+// key column's tag changed between the two sets.
+func modifyPkOrdinals(oldSch, newSch schema.Schema) ([]int, error) {
+	if newSch.GetPKCols().Size() != oldSch.GetPKCols().Size() {
+		return nil, ErrPrimaryKeySetsIncompatible
+	}
+
+	newPkOrdinals := make([]int, len(newSch.GetPkOrdinals()))
+	for _, col := range newSch.GetPKCols().GetColumns() {
+		// oldIdx is the primary key order, which stays the same but is not valid (yet) in newSch
+		oldIdx, ok := oldSch.GetPKCols().TagToIdx[col.Tag]
+		if !ok {
+			// if pk tag changed, use name to find the new col tag
+			oldCol, ok := oldSch.GetPKCols().NameToCol[col.Name]
+			if !ok {
+				return nil, ErrPrimaryKeySetsIncompatible
+			}
+			oldIdx = oldSch.GetPKCols().TagToIdx[oldCol.Tag]
+		}
+
+		// ord is the schema ordering index, which may have changed in newSch
+		ord := newSch.GetAllCols().TagToIdx[col.Tag]
+		newPkOrdinals[oldIdx] = ord
+	}
+
+	return newPkOrdinals, nil
 }

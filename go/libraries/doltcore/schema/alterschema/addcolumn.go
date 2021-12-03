@@ -91,23 +91,19 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 		return nil, err
 	}
 
-	var addIdx int
 	var newCols []schema.Column
 	if order != nil && order.First {
-		addIdx = 0
 		newCols = append(newCols, newCol)
 	}
-	for i, col := range sch.GetAllCols().GetColumns() {
+	for _, col := range sch.GetAllCols().GetColumns() {
 		newCols = append(newCols, col)
 		if order != nil && order.After == col.Name {
 			newCols = append(newCols, newCol)
-			addIdx = i + 1
 		}
 	}
 
 	if order == nil {
 		newCols = append(newCols, newCol)
-		addIdx = len(newCols) - 1
 	}
 
 	collection := schema.NewColCollection(newCols...)
@@ -123,16 +119,11 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
-	newPkOrds := sch.GetPkOrdinals()
-	for i := 0; i < len(newPkOrds); i++ {
-		// added column shifts the index of every column after
-		// all ordinals above addIdx will be bumped
-		if addIdx <= newPkOrds[i] {
-			newPkOrds[i]++
-		}
+	pkOrds, err := modifyPkOrdinals(sch, newSch)
+	if err != nil {
+		return nil, err
 	}
-
-	err = newSch.SetPkOrdinals(newPkOrds)
+	err = newSch.SetPkOrdinals(pkOrds)
 	if err != nil {
 		return nil, err
 	}
