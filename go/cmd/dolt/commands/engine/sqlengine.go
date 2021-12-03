@@ -56,9 +56,6 @@ func NewSqlEngine(
 	au auth.Auth,
 	autocommit bool) (*SqlEngine, error) {
 
-	// TODO: why are you none?
-	//au := new(auth.None)
-
 	parallelism := runtime.GOMAXPROCS(0)
 
 	dbs, err := CollectDBs(ctx, mrEnv)
