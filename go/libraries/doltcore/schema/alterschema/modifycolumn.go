@@ -371,21 +371,21 @@ func modifyPkOrdinals(oldSch, newSch schema.Schema) ([]int, error) {
 	}
 
 	newPkOrdinals := make([]int, len(newSch.GetPkOrdinals()))
-	for _, col := range newSch.GetPKCols().GetColumns() {
-		// oldIdx is the primary key order, which stays the same but is not valid (yet) in newSch
-		oldIdx, ok := oldSch.GetPKCols().TagToIdx[col.Tag]
+	for _, newCol := range newSch.GetPKCols().GetColumns() {
+		// ordIdx is the relative primary key order (that stays the same)
+		ordIdx, ok := oldSch.GetPKCols().TagToIdx[newCol.Tag]
 		if !ok {
-			// if pk tag changed, use name to find the new col tag
-			oldCol, ok := oldSch.GetPKCols().NameToCol[col.Name]
+			// if pk tag changed, use name to find the new newCol tag
+			oldCol, ok := oldSch.GetPKCols().NameToCol[newCol.Name]
 			if !ok {
 				return nil, ErrPrimaryKeySetsIncompatible
 			}
-			oldIdx = oldSch.GetPKCols().TagToIdx[oldCol.Tag]
+			ordIdx = oldSch.GetPKCols().TagToIdx[oldCol.Tag]
 		}
 
 		// ord is the schema ordering index, which may have changed in newSch
-		ord := newSch.GetAllCols().TagToIdx[col.Tag]
-		newPkOrdinals[oldIdx] = ord
+		ord := newSch.GetAllCols().TagToIdx[newCol.Tag]
+		newPkOrdinals[ordIdx] = ord
 	}
 
 	return newPkOrdinals, nil

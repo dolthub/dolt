@@ -134,6 +134,19 @@ func TestNewPkOrdinals(t *testing.T) {
 			expPkOrdinals: []int{3, 1},
 		},
 		{
+			name: "change PK name",
+			newSch: schema.MustSchemaFromCols(
+				schema.NewColCollection(
+					schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("new", dtestutils.IsMarriedTag, types.BoolKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
+				),
+			),
+			expPkOrdinals: []int{3, 1},
+		},
+		{
 			name: "changing PK tag and name is the same as dropping a PK",
 			newSch: schema.MustSchemaFromCols(
 				schema.NewColCollection(
