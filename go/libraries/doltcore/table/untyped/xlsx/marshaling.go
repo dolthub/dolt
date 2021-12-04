@@ -15,7 +15,6 @@
 package xlsx
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -23,9 +22,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/tealeg/xlsx"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrTableNameMatchSheetName = errors.New("table name must match excel sheet name.")
@@ -67,10 +63,9 @@ func openBinary(content []byte) (*xlsx.File, error) {
 	return data, nil
 }
 
-func decodeXLSXRows(ctx context.Context, vrw types.ValueReadWriter, xlData [][][]string, sch schema.Schema) ([]sql.Row, error) {
+func decodeXLSXRows(xlData [][][]string, sch sql.Schema) ([]sql.Row, error) {
 	var rows []sql.Row
 
-	cols := sch.GetAllCols()
 	numSheets := len(xlData)
 	dataVals := xlData[0]
 	header := dataVals[0]
@@ -80,9 +75,8 @@ func decodeXLSXRows(ctx context.Context, vrw types.ValueReadWriter, xlData [][][
 		for i := 0; i < numRows; i++ {
 			var row sql.Row
 			for k, v := range header {
-				_, ok := cols.GetByName(v)
-				if !ok {
-					return nil, errors.New(v + "is not a valid column")
+				if !sch.Contains(v, "") {
+					return nil, errors.New(v + " is not a valid column")
 				}
 				valString := dataVals[i+1][k]
 				row = append(row, valString)

@@ -53,7 +53,6 @@ func TestNewUntypedSchema(t *testing.T) {
 		i++
 		return false, nil
 	})
-	assert.Equal(t, 1, i, "Exactly one PK column expected")
 
 	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Name != colNames[i] {

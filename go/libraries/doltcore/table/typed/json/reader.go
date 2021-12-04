@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-
 	"github.com/bcicen/jstream"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -29,37 +27,35 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ReadBufSize = 256 * 1024
 
 type JSONReader struct {
-	vrw        types.ValueReadWriter
 	closer     io.Closer
-	sch        schema.Schema
+	sch        sql.Schema
 	jsonStream *jstream.Decoder
 	rowChan    chan *jstream.MetaValue
-	sampleRow  row.Row
 }
 
-func OpenJSONReader(vrw types.ValueReadWriter, path string, fs filesys.ReadableFS, sch schema.Schema) (*JSONReader, error) {
+func OpenJSONReader(path string, fs filesys.ReadableFS, sch sql.Schema) (*JSONReader, error) {
 	r, err := fs.OpenForRead(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewJSONReader(vrw, r, sch)
+	return NewJSONReader(r, sch)
 }
 
-func NewJSONReader(vrw types.ValueReadWriter, r io.ReadCloser, sch schema.Schema) (*JSONReader, error) {
+// TODO: Deprecate the use of schema.Schema from file data loc
+func NewJSONReader(r io.ReadCloser, sch sql.Schema) (*JSONReader, error) {
 	if sch == nil {
 		return nil, errors.New("schema must be provided to JsonReader")
 	}
 
-	decoder := jstream.NewDecoder(r, 2) // extract JSON values at a depth level of 1
+	decoder := jstream.NewDecoder(r, 2) // extract JSON values at a depth level of 1 }
 
-	return &JSONReader{vrw: vrw, closer: r, sch: sch, jsonStream: decoder}, nil
+	return &JSONReader{closer: r, sch: sch, jsonStream: decoder}, nil
 }
 
 // Close should release resources being held
@@ -75,17 +71,7 @@ func (r *JSONReader) Close(ctx context.Context) error {
 
 // GetSchema gets the schema of the rows that this reader will return
 func (r *JSONReader) GetSchema() schema.Schema {
-	return r.sch
-}
-
-// VerifySchema checks that the incoming schema matches the schema from the existing table
-func (r *JSONReader) VerifySchema(sch schema.Schema) (bool, error) {
-	if r.sampleRow == nil {
-		var err error
-		r.sampleRow, err = r.ReadRow(context.Background())
-		return err == nil, nil
-	}
-	return true, nil
+	panic("deprecated")
 }
 
 func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
@@ -93,8 +79,7 @@ func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
 }
 
 func (r *JSONReader) GetSqlSchema() sql.Schema {
-	sch, _ := sqlutil.FromDoltSchema("", r.sch)
-	return sch
+	return r.sch
 }
 
 func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
@@ -121,6 +106,11 @@ func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) (sql.Row, error
 		idx := sqlSchema.IndexOf(k, sqlSchema[0].Source)
 		if idx < 0 {
 			return nil, fmt.Errorf("column %s not found in schema", k)
+		}
+
+		v, err := sqlSchema[idx].Type.Convert(v)
+		if err != nil {
+			return nil, err
 		}
 
 		ret[idx] = v

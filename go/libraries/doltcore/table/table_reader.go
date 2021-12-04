@@ -68,3 +68,16 @@ func NewDoltTableReader(ctx context.Context, tbl *doltdb.Table) (TableReadCloser
 	}
 	return newPkTableReader(ctx, tbl, sch, false)
 }
+
+// NewBufferedTableReader creates a buffered SqlTableReader from |tbl| starting from the first record.
+func NewBufferedTableReader(ctx context.Context, tbl *doltdb.Table) (TableReadCloser, error) {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if schema.IsKeyless(sch) {
+		return newKeylessTableReader(ctx, tbl, sch, true)
+	}
+	return newPkTableReader(ctx, tbl, sch, true)
+}

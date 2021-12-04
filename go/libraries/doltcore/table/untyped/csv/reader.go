@@ -21,6 +21,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"io"
 	"strings"
 	"unicode"
@@ -28,12 +29,9 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
@@ -47,7 +45,7 @@ var ReadBufSize = 256 * 1024
 type CSVReader struct {
 	closer io.Closer
 	bRd    *bufio.Reader
-	sch    schema.Schema
+	sch    sql.Schema
 	isDone bool
 	nbf    *types.NomsBinFormat
 
@@ -89,7 +87,10 @@ func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) 
 		return nil, err
 	}
 
-	_, sch := untyped.NewUntypedSchema(colStrs...)
+	var sch sql.Schema
+	for _, colStr := range colStrs {
+		sch = append(sch, &sql.Column{Name: colStr, Type: sql.Null})
+	}
 
 	return &CSVReader{
 		closer:          r,
@@ -98,7 +99,7 @@ func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) 
 		isDone:          false,
 		nbf:             nbf,
 		delim:           []byte(info.Delim),
-		fieldsPerRecord: sch.GetAllCols().Size(),
+		fieldsPerRecord: len(sch),
 	}, nil
 }
 
@@ -138,6 +139,7 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (csvr *CSVReader) ReadRow(ctx context.Context) (row.Row, error) {
+	// TODO: This needs to be deprecated as soon as soon as export is converted to using sql.Row
 	if csvr.isDone {
 		return nil, io.EOF
 	}
@@ -149,8 +151,8 @@ func (csvr *CSVReader) ReadRow(ctx context.Context) (row.Row, error) {
 		return nil, io.EOF
 	}
 
-	allCols := csvr.sch.GetAllCols()
-
+	doltSch := csvr.GetSchema()
+	allCols := doltSch.GetAllCols()
 	if len(colVals) != allCols.Size() {
 		var out strings.Builder
 		for _, cv := range colVals {
@@ -179,7 +181,7 @@ func (csvr *CSVReader) ReadRow(ctx context.Context) (row.Row, error) {
 		taggedVals[col.Tag] = types.String(*colVals[i])
 	}
 
-	return row.New(csvr.nbf, csvr.sch, taggedVals)
+	return row.New(csvr.nbf, doltSch, taggedVals)
 }
 
 func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
@@ -194,9 +196,7 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	allCols := csvr.sch.GetAllCols()
-
-	if len(colVals) != allCols.Size() {
+	if len(colVals) != len(csvr.sch) {
 		var out strings.Builder
 		for _, cv := range colVals {
 			if cv != nil {
@@ -205,7 +205,7 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 			out.WriteRune(',')
 		}
 		return nil, table.NewBadRow(nil,
-			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", allCols.Size(), len(colVals)),
+			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", len(csvr.sch), len(colVals)),
 			fmt.Sprintf("line: '%s'", out.String()),
 		)
 	}
@@ -228,17 +228,17 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 
 // GetSchema gets the schema of the rows that this reader will return
 func (csvr *CSVReader) GetSchema() schema.Schema {
-	return csvr.sch
-}
+	colNames := make([]string, len(csvr.sch))
+	for i, col := range csvr.sch {
+		colNames[i] = col.Name
+	}
 
-func (csvr *CSVReader) GetSqlSchema() sql.Schema {
-	sch, _ := sqlutil.FromDoltSchema("", csvr.sch)
+	_, sch := untyped.NewUntypedSchema(colNames...)
 	return sch
 }
 
-// VerifySchema checks that the in schema matches the original schema
-func (csvr *CSVReader) VerifySchema(outSch schema.Schema) (bool, error) {
-	return schema.VerifyInSchema(csvr.sch, outSch)
+func (csvr *CSVReader) GetSqlSchema() sql.Schema {
+	return csvr.sch
 }
 
 // Close should release resources being held

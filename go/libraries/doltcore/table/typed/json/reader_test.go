@@ -16,17 +16,15 @@ package json
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestReader(t *testing.T) {
@@ -48,44 +46,34 @@ func TestReader(t *testing.T) {
 	fs := filesys.EmptyInMemFS("/")
 	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON)))
 
-	colColl := schema.NewColCollection(
-		schema.Column{
-			Name:       "id",
-			Tag:        0,
-			Kind:       types.IntKind,
-			IsPartOfPK: true,
-			TypeInfo:   typeinfo.Int64Type,
+	sch := sql.Schema{
+		&sql.Column{
+			Name: "id",
+			Type: sql.Int64,
+			PrimaryKey: true,
 		},
-		schema.Column{
-			Name:       "first name",
-			Tag:        1,
-			Kind:       types.StringKind,
-			IsPartOfPK: false,
-			TypeInfo:   typeinfo.StringDefaultType,
+		&sql.Column{
+			Name: "first name",
+			Type: sql.Text,
+			PrimaryKey: false,
 		},
-		schema.Column{
-			Name:       "last name",
-			Tag:        2,
-			Kind:       types.StringKind,
-			IsPartOfPK: false,
-			TypeInfo:   typeinfo.StringDefaultType,
+		&sql.Column{
+			Name: "last name",
+			Type: sql.Text,
+			PrimaryKey: false,
 		},
-	)
+	}
 
-	sch, err := schema.SchemaFromCols(colColl)
+	reader, err := OpenJSONReader("file.json", fs, sch)
 	require.NoError(t, err)
 
-	vrw := types.NewMemoryValueStore()
-	reader, err := OpenJSONReader(vrw, "file.json", fs, sch)
-	require.NoError(t, err)
+	for i, col := range reader.GetSqlSchema() {
+		assert.True(t, col.Equals(sch[i]))
+	}
 
-	verifySchema, err := reader.VerifySchema(sch)
-	require.NoError(t, err)
-	assert.True(t, verifySchema)
-
-	var rows []row.Row
+	var rows []sql.Row
 	for {
-		r, err := reader.ReadRow(context.Background())
+		r, err := reader.ReadSqlRow(context.Background())
 		if err == io.EOF {
 			break
 		} else {
@@ -94,12 +82,12 @@ func TestReader(t *testing.T) {
 		rows = append(rows, r)
 	}
 
-	expectedRows := []row.Row{
-		newRow(sch, 0, "tim", "sehn"),
-		newRow(sch, 1, "brian", "hendriks"),
+	expectedRows := []sql.Row{
+		{0, "tim", "sehn"},
+		{1, "brian", "hendriks"},
 	}
 
-	assert.Equal(t, expectedRows, rows)
+	require.Equal(t, enginetest.WidenRows(sch, expectedRows), enginetest.WidenRows(sch, rows))
 }
 
 func TestReaderBadJson(t *testing.T) {
@@ -128,60 +116,34 @@ func TestReaderBadJson(t *testing.T) {
 	fs := filesys.EmptyInMemFS("/")
 	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON)))
 
-	colColl := schema.NewColCollection(
-		schema.Column{
-			Name:       "id",
-			Tag:        0,
-			Kind:       types.IntKind,
-			IsPartOfPK: true,
-			TypeInfo:   typeinfo.Int64Type,
+	sch := sql.Schema{
+		&sql.Column{
+			Name: "id",
+			Type: sql.Int64,
+			PrimaryKey: true,
 		},
-		schema.Column{
-			Name:       "first name",
-			Tag:        1,
-			Kind:       types.StringKind,
-			IsPartOfPK: false,
-			TypeInfo:   typeinfo.StringDefaultType,
+		&sql.Column{
+			Name: "first name",
+			Type: sql.Text,
+			PrimaryKey: false,
 		},
-		schema.Column{
-			Name:       "last name",
-			Tag:        2,
-			Kind:       types.StringKind,
-			IsPartOfPK: false,
-			TypeInfo:   typeinfo.StringDefaultType,
+		&sql.Column{
+			Name: "last name",
+			Type: sql.Text,
+			PrimaryKey: false,
 		},
-	)
+	}
 
-	sch, err := schema.SchemaFromCols(colColl)
-	require.NoError(t, err)
-
-	vrw := types.NewMemoryValueStore()
-	reader, err := OpenJSONReader(vrw, "file.json", fs, sch)
+	reader, err := OpenJSONReader("file.json", fs, sch)
 	require.NoError(t, err)
 
 	err = nil
 	for {
-		_, err = reader.ReadRow(context.Background())
+		_, err = reader.ReadSqlRow(context.Background())
 		if err != nil {
 			break
 		}
 	}
 	assert.NotEqual(t, io.EOF, err)
 	assert.Error(t, err)
-}
-
-func newRow(sch schema.Schema, id int, first, last string) row.Row {
-	vals := row.TaggedValues{
-		0: types.Int(id),
-		1: types.String(first),
-		2: types.String(last),
-	}
-
-	r, err := row.New(types.Format_LD_1, sch, vals)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return r
 }

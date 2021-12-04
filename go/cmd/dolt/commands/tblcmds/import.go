@@ -634,7 +634,6 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 			return rd.GetSqlSchema(), nil
 		}
 
-		// TODO: Handle all edge cases here
 		outSch, err := mvdata.InferSchema(ctx, rd, impOpts.DestName(), impOpts.primaryKeys, impOpts)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}

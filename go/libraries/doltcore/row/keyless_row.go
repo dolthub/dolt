@@ -74,7 +74,7 @@ func keylessRowFromTaggedValued(nbf *types.NomsBinFormat, sch schema.Schema, tv 
 
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		v, ok := tv[tag]
-		if ok && v.Kind() != types.NullKind {
+		if ok && !types.IsNull(v) {
 			vals[i] = types.Uint(tag)
 			vals[i+1] = v
 			i += 2

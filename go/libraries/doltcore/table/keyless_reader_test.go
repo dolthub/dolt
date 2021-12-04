@@ -120,7 +120,7 @@ func TestKeylessTableReader(t *testing.T) {
 	require.NoError(t, err)
 	empty := dtu.MustMap(t, vrw)
 
-	compareRows := func(t *testing.T, expected []sql.Row, rdr table.SqlTableReader) {
+	compareRows := func(t *testing.T, expected []sql.Row, rdr table.TableReader) {
 		for _, exp := range expected {
 			act, err := rdr.ReadSqlRow(ctx)
 			assert.NoError(t, err)
@@ -136,7 +136,7 @@ func TestKeylessTableReader(t *testing.T) {
 			rowMap := makeBag(vrw, sch, test.rows...)
 			tbl, err := doltdb.NewTable(ctx, vrw, schVal, rowMap, empty, nil)
 			require.NoError(t, err)
-			rdr, err := table.NewTableReader(ctx, tbl)
+			rdr, err := table.NewDoltTableReader(ctx, tbl)
 			require.NoError(t, err)
 			compareRows(t, test.expected, rdr)
 		})

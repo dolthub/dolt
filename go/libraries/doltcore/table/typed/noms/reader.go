@@ -74,9 +74,9 @@ func (nmr *NomsMapReader) VerifySchema(outSch schema.Schema) (bool, error) {
 }
 
 func (nmr *NomsMapReader) GetSqlSchema() sql.Schema {
-	panic("cant do this")
+	panic("todo")
 }
 
 func (nmr *NomsMapReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
-	panic("cant do this")
+	panic("todo")
 }

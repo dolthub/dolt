@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"io"
 	"os"
 	"strings"
@@ -140,7 +141,12 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 			}
 		}
 
-		rd, err := json.OpenJSONReader(root.VRW(), dl.Path, fs, sch)
+		sqlSch, err := sqlutil.FromDoltSchema(jsonOpts.TableName, sch)
+		if err != nil {
+			return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
+		}
+
+		rd, err := json.OpenJSONReader(dl.Path, fs, sqlSch)
 		return rd, false, err
 	}
 

@@ -20,13 +20,10 @@ import (
 	"errors"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -37,38 +34,9 @@ type XLSXReader struct {
 	closer io.Closer
 	bRd    *bufio.Reader
 	info   *XLSXFileInfo
-	sch    schema.Schema
+	sch    sql.Schema
 	ind    int
 	rows   []sql.Row
-}
-
-func OpenXLSXReaderFromBinary(ctx context.Context, vrw types.ValueReadWriter, r io.ReadCloser, info *XLSXFileInfo) (*XLSXReader, error) {
-	br := bufio.NewReaderSize(r, ReadBufSize)
-
-	contents, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-
-	colStrs, err := getColHeadersFromBinary(contents, info.SheetName)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := getXlsxRowsFromBinary(contents, info.SheetName)
-	if err != nil {
-		return nil, err
-	}
-
-	_, sch := untyped.NewUntypedSchema(colStrs...)
-
-	decodedRows, err := decodeXLSXRows(ctx, vrw, data, sch)
-	if err != nil {
-		r.Close()
-		return nil, err
-	}
-
-	return &XLSXReader{r, br, info, sch, 0, decodedRows}, nil
 }
 
 func OpenXLSXReader(ctx context.Context, vrw types.ValueReadWriter, path string, fs filesys.ReadableFS, info *XLSXFileInfo) (*XLSXReader, error) {
@@ -90,9 +58,12 @@ func OpenXLSXReader(ctx context.Context, vrw types.ValueReadWriter, path string,
 		return nil, err
 	}
 
-	_, sch := untyped.NewUntypedSchema(colStrs...)
+	var sch sql.Schema
+	for _, col := range colStrs {
+		sch = append(sch, &sql.Column{Name: col})
+	}
 
-	decodedRows, err := decodeXLSXRows(ctx, vrw, data, sch)
+	decodedRows, err := decodeXLSXRows(data, sch)
 	if err != nil {
 		r.Close()
 		return nil, err
@@ -111,24 +82,9 @@ func getColHeadersFromPath(path string, sheetName string) ([]string, error) {
 	return colHeaders, nil
 }
 
-func getColHeadersFromBinary(content []byte, sheetName string) ([]string, error) {
-	data, err := getXlsxRowsFromBinary(content, sheetName)
-	if err != nil {
-		return nil, err
-	}
-
-	colHeaders := data[0][0]
-	return colHeaders, nil
-}
-
 // GetSchema gets the schema of the rows that this reader will return
 func (xlsxr *XLSXReader) GetSchema() schema.Schema {
-	return xlsxr.sch
-}
-
-// VerifySchema checks that the incoming schema matches the schema from the existing table
-func (xlsxr *XLSXReader) VerifySchema(outSch schema.Schema) (bool, error) {
-	return schema.VerifyInSchema(xlsxr.sch, outSch)
+	panic("deprecated")
 }
 
 // Close should release resources being held
@@ -143,14 +99,12 @@ func (xlsxr *XLSXReader) Close(ctx context.Context) error {
 	}
 }
 
-// TODO: Deprecate this
 func (xlsxr *XLSXReader) ReadRow(ctx context.Context) (row.Row, error) {
-	panic("Deprecated. Will be removed soon")
+	panic("deprecated")
 }
 
 func (xlsxr *XLSXReader) GetSqlSchema() sql.Schema {
-	sch, _ := sqlutil.FromDoltSchema("", xlsxr.GetSchema())
-	return sch
+	return xlsxr.sch
 }
 
 func (xlsxr *XLSXReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {

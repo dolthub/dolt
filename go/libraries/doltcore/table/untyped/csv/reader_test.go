@@ -16,13 +16,14 @@ package csv
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"strings"
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -67,24 +68,29 @@ func mustRow(r row.Row, err error) row.Row {
 	return r
 }
 
+// TODO: Rewrite these tests
 func TestReader(t *testing.T) {
 	colNames := []string{"name", "age", "title"}
-	_, sch := untyped.NewUntypedSchema(colNames...)
-	goodExpectedRows := []row.Row{
-		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Rob Robertson", "25", "Assistant, Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Jack Jackson", "27"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"John Johnson", "21", "Intern\nDufus"})),
+	var sch sql.Schema
+	for _, colName := range colNames {
+		sch = append(sch, &sql.Column{Name: colName, Type: sql.Null})
 	}
-	badExpectedRows := []row.Row{
-		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Rob Robertson", "25", "Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Jack Jackson", "27"})),
+
+	goodExpectedRows := []sql.Row{
+		{"Bill Billerson", "32", "Senior Dufus"},
+		{"Rob Robertson", "25", "Assistant, Dufus"},
+		{"Jack Jackson", "27", nil},
+		{"John Johnson", "21", "Intern\nDufus"},
+	}
+	badExpectedRows := []sql.Row{
+		{"Bill Billerson", "32", "Senior Dufus"},
+		{"Rob Robertson", "25", "Dufus"},
+		{"Jack Jackson", "27", nil},
 	}
 
 	tests := []struct {
 		inputStr     string
-		expectedRows []row.Row
+		expectedRows []sql.Row
 		info         *CSVFileInfo
 	}{
 		{PersonDB1, goodExpectedRows, NewCSVInfo()},
@@ -119,24 +125,22 @@ func TestReader(t *testing.T) {
 			t.Error("Unexpected bad rows count. expected:", expectedBad, "actual:", numBad)
 		}
 
-		if isv, err := row.IsValid(rows[0], sch); err != nil {
-			t.Fatal(err)
-		} else if !isv {
-			t.Fatal("Invalid Row for expected schema")
-		} else if len(rows) != len(test.expectedRows) {
+		if len(rows) != len(test.expectedRows) {
 			t.Error("Did not receive the correct number of rows. expected: ", len(test.expectedRows), "actual:", len(rows))
 		} else {
 			for i, r := range rows {
 				expectedRow := test.expectedRows[i]
-				if !row.AreEqual(r, expectedRow, sch) {
-					t.Error(row.Fmt(context.Background(), r, sch), "!=", row.Fmt(context.Background(), expectedRow, sch))
+				eq, err := r.Equals(expectedRow, sch)
+				assert.NoError(t, err)
+				if !eq {
+					t.Error(sql.FormatRow(r), "!=", sql.FormatRow(expectedRow))
 				}
 			}
 		}
 	}
 }
 
-func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, int, error) {
+func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]sql.Row, int, error) {
 	const root = "/"
 	const path = "/file.csv"
 
@@ -149,9 +153,9 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, 
 	}
 
 	badRows := 0
-	var rows []row.Row
+	var rows []sql.Row
 	for {
-		row, err := csvR.ReadRow(context.Background())
+		row, err := csvR.ReadSqlRow(context.Background())
 
 		if err != io.EOF && err != nil && !table.IsBadRow(err) {
 			return nil, -1, err
