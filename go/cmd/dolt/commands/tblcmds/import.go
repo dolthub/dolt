@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
@@ -559,7 +558,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 			} else {
-				dRow, err := transformToDoltRow(r, rd.GetSchema(), wr.Schema(), options.nameMapper)
+				dRow, err := transformToDoltRow(r, rd.GetSqlSchema(), wr.Schema(), options.nameMapper)
 				if err != nil {
 					return err
 				}
@@ -716,7 +715,7 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 // transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
 // 3) Addresses any type inconsistencies.
-func transformToDoltRow(doltRow sql.Row, rdSchema schema.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
+func transformToDoltRow(doltRow sql.Row, rdSchema sql.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	for i, col := range wrSchema {
 		switch col.Type {
 		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
@@ -733,12 +732,7 @@ func transformToDoltRow(doltRow sql.Row, rdSchema schema.Schema, wrSchema sql.Sc
 		}
 	}
 
-	rdSchemaAsDoltSchema, err := sqlutil.FromDoltSchema(wrSchema[0].Source, rdSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchemaAsDoltSchema, wrSchema, nameMapper)
+	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchema, wrSchema, nameMapper)
 	return doltRow, nil
 }
 

@@ -98,7 +98,7 @@ func TestLeastPermissiveNumericType(t *testing.T) {
 	}
 }
 
-func TestLeasPermissiveChronoType(t *testing.T) {
+func TestLeastPermissiveChronoType(t *testing.T) {
 	tests := []struct {
 		name    string
 		valStr  string

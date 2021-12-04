@@ -16,6 +16,7 @@ package table
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -52,4 +53,18 @@ type TableCloser interface {
 type TableReadCloser interface {
 	TableReader
 	TableCloser
+}
+
+
+// NewDoltTableReader creates a SqlTableReader from |tbl| starting from the first record.
+func NewDoltTableReader(ctx context.Context, tbl *doltdb.Table) (TableReadCloser, error) {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if schema.IsKeyless(sch) {
+		return newKeylessTableReader(ctx, tbl, sch, false)
+	}
+	return newPkTableReader(ctx, tbl, sch, false)
 }

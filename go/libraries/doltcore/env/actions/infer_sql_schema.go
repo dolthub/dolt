@@ -162,7 +162,12 @@ func sqlLeastPermissiveType(strVal string, floatThreshold float64) sql.Type {
 
 	_, err := uuid.Parse(strVal)
 	if err == nil {
-		return sql.MustCreateStringWithDefaults(sqltypes.VarChar, 36) // TODO: Return uuid function type??
+		return sql.UUID
+	}
+
+	strVal = strings.ToLower(strVal)
+	if strVal == "true" || strVal == "false" {
+		return sql.Boolean
 	}
 
 	return sql.Text // be more rigorous with string type
@@ -278,7 +283,6 @@ func sqlNumericTypes() []sql.Type {
 // findCommonType takes a set of types and finds the least permissive
 // (ie most specific) common type between all types in the set
 func findCommonSQlType(ts sqlTypeInfoSet) sql.Type {
-
 	// empty values were inferred as UnknownType
 	delete(ts, sql.Null)
 
@@ -314,7 +318,7 @@ func findCommonSQlType(ts sqlTypeInfoSet) sql.Type {
 			break
 		}
 	}
-	if sqlSetHasType(ts, sql.Boolean) || sqlSetHasType(ts, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 36)) {
+	if sqlSetHasType(ts, sql.Boolean) || sqlSetHasType(ts, sql.UUID) {
 		hasNonNumeric = true
 	}
 

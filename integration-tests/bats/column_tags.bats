@@ -221,6 +221,7 @@ SQL
 }
 
 @test "column_tags: dolt table import -c uses deterministic tag generation" {
+    skip "This test should be deprecated"
     cat <<DELIM > data.csv
 pk,c1,c2,c3,c4,c5
 0,1,2,3,4,5
