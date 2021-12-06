@@ -17,10 +17,10 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/reader"
@@ -120,6 +120,7 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 
 	return row, nil
 }
+
 // Close should release resources being held
 func (pr *ParquetReader) Close(ctx context.Context) error {
 	pr.pReader.ReadStop()
