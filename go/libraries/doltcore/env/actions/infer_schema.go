@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,32 +16,25 @@ package actions
 
 import (
 	"context"
+	"io"
 	"math"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type typeInfoSet map[typeinfo.TypeInfo]struct{}
 type sqlTypeInfoSet map[sql.Type]struct{}
-
-const (
-	maxUint24 = 1<<24 - 1
-	minInt24  = -1 << 23
-)
 
 // InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
 type InferenceArgs interface {
@@ -56,141 +49,156 @@ type InferenceArgs interface {
 	FloatThreshold() float64
 }
 
-// InferColumnTypesFromTableReader will infer a data types from a table reader.
-func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
-	inferrer := newInferrer(rd.GetSchema(), args)
-
-	var rowFailure *pipeline.TransformRowFailure
-	badRow := func(trf *pipeline.TransformRowFailure) (quit bool) {
-		rowFailure = trf
-		return false
-	}
-
-	rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
-	p := pipeline.NewAsyncPipeline(rdProcFunc, inferrer.sinkRow, nil, badRow)
-	p.Start()
-
-	err := p.Wait()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if rowFailure != nil {
-		return nil, rowFailure
-	}
-
-	return inferrer.inferColumnTypes(ctx, root)
-}
-
-type inferrer struct {
-	readerSch      schema.Schema
-	inferSets      map[uint64]typeInfoSet
-	nullable       *set.Uint64Set
+type sqlInferrer struct {
+	readerSch      sql.Schema
+	inferSets      map[string]sqlTypeInfoSet
+	nullable       *set.StrSet
 	mapper         rowconv.NameMapper
 	floatThreshold float64
 
 	//inferArgs *InferenceArgs
 }
 
-func newInferrer(readerSch schema.Schema, args InferenceArgs) *inferrer {
-	inferSets := make(map[uint64]typeInfoSet, readerSch.GetAllCols().Size())
-	_ = readerSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		inferSets[tag] = make(typeInfoSet)
-		return false, nil
-	})
+func newSQLInferrer(ctx context.Context, readerSch sql.Schema, args InferenceArgs) *sqlInferrer {
+	inferSets := make(map[string]sqlTypeInfoSet, len(readerSch))
 
-	return &inferrer{
+	for _, col := range readerSch {
+		inferSets[col.Name] = make(sqlTypeInfoSet) // can use id instead of name maybe?
+	}
+
+	return &sqlInferrer{
 		readerSch:      readerSch,
 		inferSets:      inferSets,
-		nullable:       set.NewUint64Set(nil),
+		nullable:       set.NewStrSet(nil),
 		mapper:         args.ColNameMapper(),
 		floatThreshold: args.FloatThreshold(),
 	}
 }
 
-// inferColumnTypes returns TableReader's columns with updated TypeInfo and columns names
-func (inf *inferrer) inferColumnTypes(ctx context.Context, root *doltdb.RootValue) (*schema.ColCollection, error) {
-
-	inferredTypes := make(map[uint64]typeinfo.TypeInfo)
-	for tag, ts := range inf.inferSets {
-		inferredTypes[tag] = findCommonType(ts)
+func (inf *sqlInferrer) inferColumnTypes(ctx context.Context) sql.Schema {
+	inferredTypes := make(map[string]sql.Type)
+	for colName, typ := range inf.inferSets {
+		inferredTypes[inf.mapper.Map(colName)] = findCommonSQlType(typ)
 	}
 
-	var cols []schema.Column
-	_ = inf.readerSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	var ret sql.Schema
+	for _, col := range inf.readerSch {
 		col.Name = inf.mapper.Map(col.Name)
-		col.Kind = inferredTypes[tag].NomsKind()
-		col.TypeInfo = inferredTypes[tag]
-		col.Tag = schema.ReservedTagMin + tag
-
-		col.Constraints = []schema.ColConstraint{schema.NotNullConstraint{}}
-		if inf.nullable.Contains(tag) {
-			col.Constraints = []schema.ColConstraint(nil)
+		col.Type = inferredTypes[col.Name]
+		// TODO: col.source
+		if inf.nullable.Contains(col.Name) {
+			col.Nullable = true
 		}
+		ret = append(ret, col)
+	}
 
-		cols = append(cols, col)
-		return false, nil
+	return ret
+}
+
+func InferSqlSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, args InferenceArgs) (sql.Schema, error) {
+	inferrer := newSQLInferrer(ctx, rd.GetSqlSchema(), args)
+
+	// start the pipeline
+	g, ctx := errgroup.WithContext(ctx)
+
+	parsedRowChan := make(chan sql.Row)
+	g.Go(func() error {
+		defer close(parsedRowChan)
+		for {
+			r, err := rd.ReadSqlRow(ctx)
+
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return err
+			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case parsedRowChan <- r:
+			}
+		}
 	})
 
-	return schema.NewColCollection(cols...), nil
-}
+	g.Go(func() error {
+		for r := range parsedRowChan {
+			for i, col := range rd.GetSqlSchema() {
+				val := r[i]
+				if val == nil {
+					inferrer.nullable.Add(col.Name)
+				}
+				strVal, err := sql.Text.Convert(val)
+				if err != nil {
+					return err
+				}
 
-func (inf *inferrer) sinkRow(p *pipeline.Pipeline, ch <-chan pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure) {
-	for r := range ch {
-		_, _ = r.Row.IterSchema(inf.readerSch, func(tag uint64, val types.Value) (stop bool, err error) {
-			if val == nil {
-				inf.nullable.Add(tag)
-				return false, nil
+				if strVal == nil {
+					inferrer.inferSets[col.Name][sql.Null] = struct{}{}
+				} else {
+					typ := sqlLeastPermissiveType(strVal.(string), inferrer.floatThreshold) // TODO: This is sus
+					inferrer.inferSets[col.Name][typ] = struct{}{}
+				}
 			}
-			strVal := string(val.(types.String))
-			typeInfo := leastPermissiveType(strVal, inf.floatThreshold)
-			inf.inferSets[tag][typeInfo] = struct{}{}
-			return false, nil
-		})
+		}
+
+		return nil
+	})
+
+	err := g.Wait()
+	if err != nil {
+		return nil, err
 	}
+
+	err = rd.Close(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return inferrer.inferColumnTypes(ctx), nil
 }
 
-func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInfo {
+func sqlLeastPermissiveType(strVal string, floatThreshold float64) sql.Type {
 	if len(strVal) == 0 {
-		return typeinfo.UnknownType
+		return sql.Null
 	}
 	strVal = strings.TrimSpace(strVal)
 
-	numType := leastPermissiveNumericType(strVal, floatThreshold)
-	if numType != typeinfo.UnknownType {
+	numType, ok := leastPermissiveSqlNumericType(strVal, floatThreshold)
+	if ok {
 		return numType
 	}
 
-	chronoType := leastPermissiveChronoType(strVal)
-	if chronoType != typeinfo.UnknownType {
+	chronoType, ok := leastPermissiveSqlChronoType(strVal)
+	if ok {
 		return chronoType
 	}
 
 	_, err := uuid.Parse(strVal)
 	if err == nil {
-		return typeinfo.UuidType
+		return sql.UUID
 	}
 
 	strVal = strings.ToLower(strVal)
 	if strVal == "true" || strVal == "false" {
-		return typeinfo.BoolType
+		return sql.Boolean
 	}
 
-	return typeinfo.StringDefaultType
+	return sql.Text // be more rigorous with string type
 }
 
-func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typeinfo.TypeInfo) {
+func leastPermissiveSqlNumericType(strVal string, floatThreshold float64) (ti sql.Type, ok bool) {
 	if strings.Contains(strVal, ".") {
 		f, err := strconv.ParseFloat(strVal, 64)
 		if err != nil {
-			return typeinfo.UnknownType
+			return sql.Null, false
 		}
 
 		if math.Abs(f) < math.MaxFloat32 {
-			ti = typeinfo.Float32Type
+			ti = sql.Float32
 		} else {
-			ti = typeinfo.Float64Type
+			ti = sql.Float64
 		}
 
 		if floatThreshold != 0.0 {
@@ -202,118 +210,100 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 			}
 
 			if decimalPart < floatThreshold {
-				if ti == typeinfo.Float32Type {
-					ti = typeinfo.Int32Type
+				if ti == sql.Float32 {
+					ti = sql.Int32
 				} else {
-					ti = typeinfo.Int64Type
+					ti = sql.Int64
 				}
 			}
 		}
-		return ti
+		return ti, true
 	}
 
 	if strings.Contains(strVal, "-") {
 		i, err := strconv.ParseInt(strVal, 10, 64)
 		if err != nil {
-			return typeinfo.UnknownType
+			return sql.Null, false
 		}
 		if i >= math.MinInt32 && i <= math.MaxInt32 {
-			return typeinfo.Int32Type
+			return sql.Int32, true
 		} else {
-			return typeinfo.Int64Type
+			return sql.Int64, true
 		}
 	} else {
 		ui, err := strconv.ParseUint(strVal, 10, 64)
 		if err != nil {
-			return typeinfo.UnknownType
+			return sql.Null, false
 		}
 
 		// handle leading zero case
 		if len(strVal) > 1 && strVal[0] == '0' {
-			return typeinfo.StringDefaultType
+			return sql.Text, true
 		}
 
 		if ui <= math.MaxUint32 {
-			return typeinfo.Uint32Type
+			return sql.Uint32, true
 		} else {
-			return typeinfo.Uint64Type
+			return sql.Uint64, true
 		}
 	}
 }
 
-func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
+func leastPermissiveSqlChronoType(strVal string) (sql.Type, bool) {
 	if strVal == "" {
-		return typeinfo.UnknownType
+		return sql.Null, false
 	}
+
+	// TODO: Replace this lololol
 	_, err := typeinfo.TimeType.ParseValue(context.Background(), nil, &strVal)
 	if err == nil {
-		return typeinfo.TimeType
+		return sql.Time, true
 	}
 
 	dt, err := typeinfo.DatetimeType.ParseValue(context.Background(), nil, &strVal)
 	if err != nil {
-		return typeinfo.UnknownType
+		return sql.Null, false
 	}
 
 	t := time.Time(dt.(types.Timestamp))
 	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
-		return typeinfo.DateType
+		return sql.Date, true
 	}
 
-	return typeinfo.DatetimeType
+	return sql.Datetime, true
 }
 
-func chronoTypes() []typeinfo.TypeInfo {
-	return []typeinfo.TypeInfo{
-		// chrono types YEAR, DATE, and TIME can also be parsed as DATETIME
-		// we prefer less permissive types if possible
-		typeinfo.YearType,
-		typeinfo.DateType,
-		typeinfo.TimeType,
-		typeinfo.TimestampType,
-		typeinfo.DatetimeType,
-	}
-}
-
-// ordered from least to most permissive
-func numericTypes() []typeinfo.TypeInfo {
-	// prefer:
-	//   ints over floats
-	//   unsigned over signed
-	//   smaller over larger
-	return []typeinfo.TypeInfo{
-		//typeinfo.Uint8Type,
-		//typeinfo.Uint16Type,
-		//typeinfo.Uint24Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint64Type,
-
-		//typeinfo.Int8Type,
-		//typeinfo.Int16Type,
-		//typeinfo.Int24Type,
-		typeinfo.Int32Type,
-		typeinfo.Int64Type,
-
-		typeinfo.Float32Type,
-		typeinfo.Float64Type,
+// TOOD: Move this to the engine
+func sqlChronoTypes() []sql.Type {
+	return []sql.Type{
+		sql.Year,
+		sql.Date,
+		sql.Datetime,
+		sql.Time,
+		sql.Timestamp,
 	}
 }
 
-func setHasType(ts typeInfoSet, t typeinfo.TypeInfo) bool {
-	_, found := ts[t]
-	return found
+func sqlNumericTypes() []sql.Type {
+	return []sql.Type{
+		sql.Int32,
+		sql.Uint32,
+		sql.Int64,
+		sql.Uint64,
+		sql.Float32,
+		sql.Float64,
+	}
 }
 
 // findCommonType takes a set of types and finds the least permissive
 // (ie most specific) common type between all types in the set
-func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
-
+func findCommonSQlType(ts sqlTypeInfoSet) sql.Type {
 	// empty values were inferred as UnknownType
-	delete(ts, typeinfo.UnknownType)
+	delete(ts, sql.Null)
 
 	if len(ts) == 0 {
 		// use strings if all values were empty
-		return typeinfo.StringDefaultType
+		return sql.Text
 	}
 
 	if len(ts) == 1 {
@@ -324,82 +314,82 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 
 	// len(ts) > 1
 
-	if setHasType(ts, typeinfo.StringDefaultType) {
-		return typeinfo.StringDefaultType
+	if _, found := ts[sql.Text]; found {
+		return sql.Text
 	}
 
 	hasNumeric := false
-	for _, nt := range numericTypes() {
-		if setHasType(ts, nt) {
+	for _, nt := range sqlNumericTypes() {
+		if _, found := ts[nt]; found {
 			hasNumeric = true
 			break
 		}
 	}
 
 	hasNonNumeric := false
-	for _, nnt := range chronoTypes() {
-		if setHasType(ts, nnt) {
+	for _, nnt := range sqlChronoTypes() {
+		if _, found := ts[nnt]; found {
 			hasNonNumeric = true
 			break
 		}
 	}
-	if setHasType(ts, typeinfo.BoolType) || setHasType(ts, typeinfo.UuidType) {
+	if sqlSetHasType(ts, sql.Boolean) || sqlSetHasType(ts, sql.UUID) {
 		hasNonNumeric = true
 	}
 
 	if hasNumeric && hasNonNumeric {
-		return typeinfo.StringDefaultType
+		return sql.Text
 	}
 
 	if hasNumeric {
-		return findCommonNumericType(ts)
+		return findCommonSqlNumericType(ts)
 	}
 
 	// find a common nonNumeric type
 
-	nonChronoTypes := []typeinfo.TypeInfo{
+	nonChronoTypes := []sql.Type{
 		// todo: BIT implementation parses all uint8
 		//typeinfo.PseudoBoolType,
-		typeinfo.BoolType,
-		typeinfo.UuidType,
+		sql.Boolean,
+		sql.MustCreateStringWithDefaults(sqltypes.VarChar, 36),
 	}
 	for _, nct := range nonChronoTypes {
-		if setHasType(ts, nct) {
+		if sqlSetHasType(ts, nct) {
 			// types in nonChronoTypes have only string
 			// as a common type with any other type
-			return typeinfo.StringDefaultType
+			return sql.Text
 		}
 	}
 
-	return findCommonChronoType(ts)
+	return findCommonSqlChronoType(ts)
 }
 
-func findCommonNumericType(nums typeInfoSet) typeinfo.TypeInfo {
+func findCommonSqlNumericType(nums sqlTypeInfoSet) sql.Type {
 	// find a common numeric type
 	// iterate through types from most to least permissive
 	// return the most permissive type found
 	//   ints are a subset of floats
 	//   uints are a subset of ints
 	//   smaller widths are a subset of larger widths
-	mostToLeast := []typeinfo.TypeInfo{
-		typeinfo.Float64Type,
-		typeinfo.Float32Type,
+	mostToLeast := []sql.Type{
+		sql.Float64,
+		sql.Float32,
 
 		// todo: can all Int64 fit in Float64?
-		typeinfo.Int64Type,
-		typeinfo.Int32Type,
-		typeinfo.Int24Type,
-		typeinfo.Int16Type,
-		typeinfo.Int8Type,
+		sql.Int64,
+		sql.Int32,
+		sql.Int24,
+		sql.Int16,
+		sql.Int8,
 
-		typeinfo.Uint64Type,
-		typeinfo.Uint32Type,
-		typeinfo.Uint24Type,
-		typeinfo.Uint16Type,
-		typeinfo.Uint8Type,
+		sql.Uint64,
+		sql.Uint32,
+		sql.Uint24,
+		sql.Uint16,
+		sql.Uint8,
 	}
 	for _, numType := range mostToLeast {
-		if setHasType(nums, numType) {
+		if sqlSetHasType(nums, numType) {
 			return numType
 		}
 	}
@@ -407,31 +397,36 @@ func findCommonNumericType(nums typeInfoSet) typeinfo.TypeInfo {
 	panic("unreachable")
 }
 
-func findCommonChronoType(chronos typeInfoSet) typeinfo.TypeInfo {
+func findCommonSqlChronoType(chronos sqlTypeInfoSet) sql.Type {
 	if len(chronos) == 1 {
 		for ct := range chronos {
 			return ct
 		}
 	}
 
-	if setHasType(chronos, typeinfo.DatetimeType) {
-		return typeinfo.DatetimeType
+	if sqlSetHasType(chronos, sql.Datetime) {
+		return sql.Datetime
 	}
 
-	hasTime := setHasType(chronos, typeinfo.TimeType) || setHasType(chronos, typeinfo.TimestampType)
-	hasDate := setHasType(chronos, typeinfo.DateType) || setHasType(chronos, typeinfo.YearType)
+	hasTime := sqlSetHasType(chronos, sql.Time) || sqlSetHasType(chronos, sql.Timestamp)
+	hasDate := sqlSetHasType(chronos, sql.Date) || sqlSetHasType(chronos, sql.Year)
 
 	if hasTime && !hasDate {
-		return typeinfo.TimeType
+		return sql.Time
 	}
 
 	if !hasTime && hasDate {
-		return typeinfo.DateType
+		return sql.Date
 	}
 
 	if hasDate && hasTime {
-		return typeinfo.DatetimeType
+		return sql.Datetime
 	}
 
 	panic("unreachable")
+}
+
+func sqlSetHasType(ts sqlTypeInfoSet, t sql.Type) bool {
+	_, found := ts[t]
+	return found
 }
