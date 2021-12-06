@@ -18,10 +18,12 @@ import (
 	"context"
 	"io"
 	"testing"
+
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
