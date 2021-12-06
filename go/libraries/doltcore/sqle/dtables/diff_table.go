@@ -66,7 +66,7 @@ type DiffTable struct {
 
 	ss               *schema.SuperSchema
 	joiner           *rowconv.Joiner
-	sqlSch           sql.Schema
+	sqlSch           sql.PrimaryKeySchema
 	partitionFilters []sql.Expression
 	rowFilters       []sql.Expression
 }
@@ -123,7 +123,7 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		return nil, err
 	}
 
-	sqlSch = append(sqlSch, &sql.Column{
+	sqlSch.Schema = append(sqlSch.Schema, &sql.Column{
 		Name:     diffTypeColName,
 		Type:     sql.Text,
 		Default:  defaultVal,
@@ -153,7 +153,7 @@ func (dt *DiffTable) String() string {
 }
 
 func (dt *DiffTable) Schema() sql.Schema {
-	return dt.sqlSch
+	return dt.sqlSch.Schema
 }
 
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {

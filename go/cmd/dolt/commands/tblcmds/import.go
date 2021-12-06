@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -187,6 +188,8 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
 		} else if val.Format == mvdata.JsonFile {
 			srcOpts = mvdata.JSONOptions{TableName: tableName, SchFile: schemaFile}
+		} else if val.Format == mvdata.ParquetFile {
+			srcOpts = mvdata.ParquetOptions{TableName: tableName, SchFile: schemaFile}
 		}
 
 	case mvdata.StreamDataLocation:
@@ -296,6 +299,8 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		_, hasSchema := apr.GetValue(schemaParam)
 		if srcFileLoc.Format == mvdata.JsonFile && apr.Contains(createParam) && !hasSchema {
 			return errhand.BuildDError("Please specify schema file for .json tables.").Build()
+		} else if srcFileLoc.Format == mvdata.ParquetFile && apr.Contains(createParam) && !hasSchema {
+			return errhand.BuildDError("Please specify schema file for .parquet tables.").Build()
 		}
 	}
 
@@ -615,7 +620,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
 
-		return sqlSchema, nil
+		return sqlSchema.Schema, nil
 	}
 
 	if impOpts.operation == mvdata.CreateOp {
@@ -654,7 +659,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	return sch, nil
+	return sch.Schema, nil
 }
 
 func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationError) errhand.VerboseError {
@@ -718,9 +723,19 @@ func transformToDoltRow(doltRow sql.Row, rdSchema sql.Schema, wrSchema sql.Schem
 	for i, col := range wrSchema {
 		switch col.Type {
 		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
-			val, ok := stringToBoolean(doltRow[i].(string))
-			if ok {
-				doltRow[i] = val
+			switch doltRow[i].(type) {
+			case int8:
+				val, ok := stringToBoolean(strconv.Itoa(int(doltRow[i].(int8))))
+				if ok {
+					doltRow[i] = val
+				}
+			case string:
+				val, ok := stringToBoolean(doltRow[i].(string))
+				if ok {
+					doltRow[i] = val
+				}
+			case bool:
+				doltRow[i] = doltRow[i].(bool)
 			}
 		}
 

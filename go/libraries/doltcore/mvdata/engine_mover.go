@@ -40,7 +40,7 @@ type sqlEngineMover struct {
 
 	tableName string
 	database  string
-	wrSch     sql.Schema
+	wrSch     sql.PrimaryKeySchema
 	contOnErr bool
 	force     bool
 
@@ -88,7 +88,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch sql.Sche
 
 		database:  dbName,
 		tableName: options.TableToWriteTo,
-		wrSch:     writeSch,
+		wrSch:     sql.NewPrimaryKeySchema(writeSch),
 
 		statsCB:      statsCB,
 		importOption: options.Operation,
@@ -123,11 +123,11 @@ func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Ro
 		}
 
 		// If the length of the row does not match the schema then we have an update operation.
-		if len(row) != len(s.wrSch) {
+		if len(row) != len(s.wrSch.Schema) {
 			oldRow := row[:len(row)/2]
 			newRow := row[len(row)/2:]
 
-			if ok, err := oldRow.Equals(newRow, s.wrSch); err == nil {
+			if ok, err := oldRow.Equals(newRow, s.wrSch.Schema); err == nil {
 				if ok {
 					s.stats.SameVal++
 				} else {
@@ -200,7 +200,7 @@ func (s *sqlEngineMover) Commit(ctx context.Context) error {
 
 // GetSchema implements the DataWriter interface.
 func (s *sqlEngineMover) Schema() sql.Schema {
-	return s.wrSch
+	return s.wrSch.Schema
 }
 
 // forceDropTableIfNeeded drop the given table in case the -f parameter is passed.
@@ -255,7 +255,7 @@ func (s *sqlEngineMover) getInsertNode(inputChannel chan sql.Row) (sql.Node, err
 	case CreateOp, ReplaceOp:
 		return s.createInsertImportNode(inputChannel, s.contOnErr, false, nil) // contonerr translates to ignore
 	case UpdateOp:
-		return s.createInsertImportNode(inputChannel, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.wrSch)) // contonerr translates to ignore
+		return s.createInsertImportNode(inputChannel, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.wrSch.Schema)) // contonerr translates to ignore
 	default:
 		return nil, fmt.Errorf("unsupported import type")
 	}
@@ -264,11 +264,11 @@ func (s *sqlEngineMover) getInsertNode(inputChannel chan sql.Row) (sql.Node, err
 // createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped
 // with an error handler.
 func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression) (sql.Node, error) {
-	src := NewChannelRowSource(s.wrSch, source)
+	src := NewChannelRowSource(s.wrSch.Schema, source)
 	dest := plan.NewUnresolvedTable(s.tableName, s.database)
 
 	colNames := make([]string, 0)
-	for _, col := range s.wrSch {
+	for _, col := range s.wrSch.Schema {
 		colNames = append(colNames, col.Name)
 	}
 

@@ -15,6 +15,8 @@
 package schema
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -26,23 +28,28 @@ var EmptySchema = &schemaImpl{
 	pkCols:          EmptyColColl,
 	nonPKCols:       EmptyColColl,
 	allCols:         EmptyColColl,
-	indexCollection: NewIndexCollection(nil),
+	indexCollection: NewIndexCollection(nil, nil),
 }
 
 type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
 	indexCollection            IndexCollection
 	checkCollection            CheckCollection
+	pkOrdinals                 []int
 }
+
+var ErrInvalidPkOrdinals = errors.New("incorrect number of primary key ordinals")
 
 // SchemaFromCols creates a Schema from a collection of columns
 func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	var pkCols []Column
 	var nonPKCols []Column
 
-	for _, c := range allCols.cols {
+	defaultPkOrds := make([]int, 0)
+	for i, c := range allCols.cols {
 		if c.IsPartOfPK {
 			pkCols = append(pkCols, c)
+			defaultPkOrds = append(defaultPkOrds, i)
 		} else {
 			nonPKCols = append(nonPKCols, c)
 		}
@@ -55,7 +62,13 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	pkColColl := NewColCollection(pkCols...)
 	nonPKColColl := NewColCollection(nonPKCols...)
 
-	return SchemaFromColCollections(allCols, pkColColl, nonPKColColl), nil
+	sch := SchemaFromColCollections(allCols, pkColColl, nonPKColColl)
+	err := sch.SetPkOrdinals(defaultPkOrds)
+	if err != nil {
+		return nil, err
+	}
+	return sch, nil
+
 }
 
 func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) Schema {
@@ -63,8 +76,9 @@ func SchemaFromColCollections(allCols, pkColColl, nonPKColColl *ColCollection) S
 		pkCols:          pkColColl,
 		nonPKCols:       nonPKColColl,
 		allCols:         allCols,
-		indexCollection: NewIndexCollection(allCols),
+		indexCollection: NewIndexCollection(allCols, pkColColl),
 		checkCollection: NewCheckCollection(),
+		pkOrdinals:      []int{},
 	}
 }
 
@@ -128,7 +142,7 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 		pkCols:          pkColColl,
 		nonPKCols:       nonPKColColl,
 		allCols:         nonPKColColl,
-		indexCollection: NewIndexCollection(nil),
+		indexCollection: NewIndexCollection(nil, nil),
 		checkCollection: NewCheckCollection(),
 	}
 }
@@ -173,6 +187,33 @@ func (si *schemaImpl) GetNonPKCols() *ColCollection {
 // GetPKCols gets the collection of columns which make the primary key.
 func (si *schemaImpl) GetPKCols() *ColCollection {
 	return si.pkCols
+}
+
+func (si *schemaImpl) GetPkOrdinals() []int {
+	return si.pkOrdinals
+}
+
+func (si *schemaImpl) SetPkOrdinals(o []int) error {
+	if si.pkCols.Size() == 0 {
+		return nil
+	} else if o == nil || len(o) != si.pkCols.Size() {
+		var found int
+		if o == nil {
+			found = 0
+		} else {
+			found = len(o)
+		}
+		return fmt.Errorf("%w: expected '%d', found '%d'", ErrInvalidPkOrdinals, si.pkCols.Size(), found)
+	}
+
+	si.pkOrdinals = o
+	newPks := make([]Column, si.pkCols.Size())
+	for i, j := range si.pkOrdinals {
+		newPks[i] = si.allCols.GetByIndex(j)
+	}
+	si.pkCols = NewColCollection(newPks...)
+
+	return nil
 }
 
 func (si *schemaImpl) String() string {

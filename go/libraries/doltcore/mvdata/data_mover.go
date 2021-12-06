@@ -51,6 +51,11 @@ type JSONOptions struct {
 	SchFile   string
 }
 
+type ParquetOptions struct {
+	TableName string
+	SchFile   string
+}
+
 type MoverOptions struct {
 	ContinueOnErr  bool
 	Force          bool

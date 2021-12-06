@@ -30,7 +30,7 @@ type ConstraintViolationsTable struct {
 	tblName string
 	root    *doltdb.RootValue
 	cvSch   schema.Schema
-	sqlSch  sql.Schema
+	sqlSch  sql.PrimaryKeySchema
 	tbl     *doltdb.Table
 	rs      RootSetter
 }
@@ -78,7 +78,7 @@ func (cvt *ConstraintViolationsTable) String() string {
 
 // Schema implements the interface sql.Table.
 func (cvt *ConstraintViolationsTable) Schema() sql.Schema {
-	return cvt.sqlSch
+	return cvt.sqlSch.Schema
 }
 
 // Partitions implements the interface sql.Table.

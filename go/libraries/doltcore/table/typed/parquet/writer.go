@@ -36,13 +36,12 @@ type ParquetWriter struct {
 }
 
 var typeMap = map[typeinfo.Identifier]string{
-	typeinfo.DatetimeTypeIdentifier: "type=INT64, convertedtype=TIME_MICROS",
-	typeinfo.DecimalTypeIdentifier: "type=BYTE_ARRAY, convertedtype=DECIMAL, scale=2, precision=20" +
-		"",
+	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIME_MICROS",
+	typeinfo.DecimalTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=DECIMAL, scale=2, precision=20",
 	typeinfo.EnumTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.InlineBlobTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.SetTypeIdentifier:        "type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.TimeTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.TimeTypeIdentifier:       "type=INT64, convertedtype=TIME_MICROS",
 	typeinfo.TupleTypeIdentifier:      "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.UuidTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.VarBinaryTypeIdentifier:  "type=BYTE_ARRAY, convertedtype=UTF8",
@@ -103,12 +102,20 @@ func (pwr *ParquetWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	for i, val := range sqlRow {
+		colT := pwr.sch.GetAllCols().GetByIndex(i)
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
-			switch val.(type) {
-			case time.Time:
+			// convert datetime and time types to int64
+			switch colT.TypeInfo.GetTypeIdentifier() {
+			case typeinfo.DatetimeTypeIdentifier:
 				val = val.(time.Time).Unix()
+			case typeinfo.TimeTypeIdentifier:
+				colVal, ok := r.GetColVal(colT.Tag)
+				if !ok {
+					return fmt.Errorf("error: could not get column value for timeType value")
+				}
+				val = colVal
 			}
 			v := sqlutil.SqlColToStr(ctx, val)
 			colValStrs[i] = &v

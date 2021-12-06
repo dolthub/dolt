@@ -74,15 +74,11 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	}
 
 	cols := make([]schema.Column, 0)
-	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.Name != colName {
-			cols = append(cols, col)
+	for _, col := range sch.GetAllCols().GetColumns() {
+		if col.Name == colName {
+			continue
 		}
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
+		cols = append(cols, col)
 	}
 
 	colColl := schema.NewColCollection(cols...)
@@ -91,6 +87,15 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		return nil, err
 	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
+
+	pkOrds, err := modifyPkOrdinals(sch, newSch)
+	if err != nil {
+		return nil, err
+	}
+	err = newSch.SetPkOrdinals(pkOrds)
+	if err != nil {
+		return nil, err
+	}
 
 	return tbl.UpdateSchema(ctx, newSch)
 }

@@ -154,8 +154,7 @@ CREATE TABLE test (
     c3 BIGINT,
     c4 BIGINT,
     c5 BIGINT,
-    PRIMARY KEY (pk1),
-    PRIMARY KEY (pk2)
+    PRIMARY KEY (pk1, pk2)
 );
 SQL
     [ "$status" -eq 0 ]
