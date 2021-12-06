@@ -42,7 +42,6 @@ var ErrAlreadyOnWorkspace = errors.New("Already on workspace")
 
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 
-var ErrNoConflicts = errors.New("no conflicts")
 var ErrUpToDate = errors.New("up to date")
 var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b already")
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")

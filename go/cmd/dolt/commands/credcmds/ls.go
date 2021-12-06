@@ -18,7 +18,6 @@ import (
 	"context"
 	"io"
 	"strings"
-	"sync"
 
 	"github.com/fatih/color"
 
@@ -77,7 +76,7 @@ func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd LsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

@@ -17,12 +17,10 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
@@ -30,21 +28,17 @@ import (
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
 
-func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *dsess.Session, error) {
+func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *dsess.Session) {
 	sess := dsess.DefaultSession()
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(sess),
 		sql.WithTracer(tracing.Tracer(ctx)))
 
 	var cfg config.ReadableConfig = nil
-	var wg sync.WaitGroup
-	pro, err := NewDoltDatabaseProvider(ctx, &wg, cfg, &env.MultiRepoEnv{}, nil, sqlDb)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	pro := NewDoltDatabaseProvider(cfg, nil, sqlDb)
 	engine := sqle.NewDefault(pro)
 	sqlCtx.SetCurrentDatabase(sqlDb.Name())
-	return sqlCtx, engine, sess, nil
+	return sqlCtx, engine, sess
 }
 
 func GetCreateTableStmt(ctx *sql.Context, engine *sqle.Engine, tableName string) (string, error) {

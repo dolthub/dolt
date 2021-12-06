@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"io"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -71,7 +70,7 @@ func (cmd FetchCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd FetchCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateFetchArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

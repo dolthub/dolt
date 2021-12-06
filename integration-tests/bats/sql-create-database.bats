@@ -8,94 +8,193 @@ teardown() {
     teardown_common
 }
 
-# These tests use batch mode since the in memory db spawned by CREATE DATABASE expire after each session.
 @test "sql-create-database: create new database" {
     run dolt sql << SQL
 CREATE DATABASE mydb;
-SHOW DATABASES;
 USE mydb;
 CREATE TABLE test (
     pk int primary key
 );
 INSERT INTO test VALUES (222);
-SELECT COUNT(*) FROM test WHERE pk=222;
-DROP DATABASE mydb;
 SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt_repo_$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "mydb" ]] || false
-    # From COUNT
+    
+    run dolt sql -b -q "use mydb; SELECT COUNT(*) FROM test WHERE pk=222;"
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
+}
 
-    run dolt sql -q "SHOW DATABASES"
-    [[ "$output" =~ "mydb" ]] || false
+@test "sql-create-database: drop database" {
+    skiponwindows "failing with file in use error"
+    
+    dolt sql <<SQL
+create database mydb;
+use mydb;
+create table test(a int primary key);
+select dolt_commit("-am", "first commit");
+SQL
+
+    [ -d mydb ]
+    cd mydb
+
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first commit" ]] || false
+
+    cd ..
+
+    dolt sql -q "drop database mydb"
+
+    [ ! -d mydb ]
+}
+
+@test "sql-create-database: with multi-db-dir" {
+    skiponwindows "failing with file in use error"
+
+    mkdir db_dir
+    
+    dolt sql --multi-db-dir db_dir <<SQL
+create database mydb1;
+create database mydb2;
+use mydb1;
+create table test(a int primary key);
+select dolt_commit("-am", "first commit mydb1");
+use mydb2;
+begin;
+create table test(a int primary key);
+select dolt_commit("-am", "first commit mydb2");
+SQL
+
+    [ -d db_dir/mydb1 ]
+    [ -d db_dir/mydb2 ]
+    cd db_dir/mydb1
+
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first commit mydb1" ]] || false
+
+    cd ../mydb2
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first commit mydb2" ]] || false
+
+    cd ../../
+    
+    dolt sql --multi-db-dir db_dir -q "drop database mydb1"
+    
+    [ ! -d db_dir/mydb1 ]
+    [ -d db_dir/mydb2 ]
+
+    run dolt sql --multi-db-dir db_dir -q "show databases"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "mydb2" ]] || false
+    [[ ! "$output" =~ "mydb1" ]] || false
+    [[ ! "$output" =~ "dolt_repo_$$" ]] || false
+
+    # multi-db-dir with abs path
+    absdir="/tmp/$$/db_dir"
+    mkdir -p "$absdir"
+
+    dolt sql --multi-db-dir "$absdir" <<SQL
+create database mydb1;
+create database mydb2;
+use mydb1;
+create table test(a int primary key);
+select dolt_commit("-am", "first commit mydb1");
+use mydb2;
+begin;
+create table test(a int primary key);
+select dolt_commit("-am", "first commit mydb2");
+SQL
+
+    [ -d "$absdir/mydb1" ]
+    [ -d "$absdir/mydb2" ]
+
+    dolt sql --multi-db-dir "$absdir" -q "drop database mydb1"
+
+    [ ! -d "$absdir/mydb1" ]
+    [ -d "$absdir/mydb2" ]
+}
+
+@test "sql-create-database: drop current database" {
+    skip "unsupported to drop the current DB, but need to have a way"
+    
+    dolt sql -q "drop database dolt_repo_$$"
+
+    [ ! -d mydb ]
 }
 
 @test "sql-create-database: create database that already exists throws an error" {
-    run dolt sql << SQL
-CREATE DATABASE mydb;
-CREATE DATABASE mydb;
-SQL
+    dolt sql -q "CREATE DATABASE mydb"
+    run dolt sql -q "CREATE DATABASE mydb"
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "can't create database mydb; database exists" ]] || false
+    [[ "$output" =~ "database exists" ]] || false
 }
 
 @test "sql-create-database: create database IF NOT EXISTS on database that already exists doesn't throw an error" {
-    run dolt sql << SQL
-CREATE DATABASE mydb;
-CREATE DATABASE IF NOT EXISTS mydb;
-SQL
+    dolt sql -q "CREATE DATABASE mydb"
+    run dolt sql -q "CREATE DATABASE IF NOT EXISTS mydb"
 
     [ "$status" -eq 0 ]
 }
 
-@test "sql-create-database: create and drop new database" {
-    skip "Drop database doesn't work right now"
+@test "sql-create-database: create and drop new database in same session" {
+    skiponwindows "failing with file in use error"
     
     run dolt sql << SQL
 CREATE DATABASE mydb;
-SHOW WARNINGS;
 DROP DATABASE mydb;
-USE mydb;
 SQL
-    # Validate that CREATE DATABASE throws a warning
-    [[ "$output" =~ 'CREATE DATABASE creates an inmemory database that does not persist after the server exits. Dolt currently only supports a single disk backed database created by `dolt init`' ]] || false
+    [ "$status" -eq 0 ]
+    
+    [ ! -d mydb ]
 
+    run dolt sql -q "use mydb"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database not found: mydb" ]] || false
 }
 
-@test "sql-create-database: create new database IF EXISTS works" {
+@test "sql-create-database: create new database IF NOT EXISTS" {
+    skiponwindows "failing with file in use error"
+    
     # Test bad syntax.
     run dolt sql -q "CREATE DATABASE IF EXISTS test;"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error parsing SQL" ]] || false
 
-    run dolt sql << SQL
-CREATE DATABASE IF NOT EXISTS test;
-SHOW DATABASES;
+    dolt sql -q "CREATE DATABASE IF NOT EXISTS test;"
+    run dolt sql -q "SHOW DATABASES;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ "$output" =~ "test" ]] || false
+
+    run dolt sql <<SQL
 USE test;
 CREATE TABLE test (
     pk int primary key
 );
 INSERT INTO test VALUES (222);
-SELECT COUNT(*) FROM test WHERE pk=222;
-DROP DATABASE test;
 SQL
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
-    [[ "$output" =~ "information_schema" ]] || false
-    [[ "$output" =~ "test" ]] || false
-    # From COUNT
+
+    run dolt sql <<SQL
+USE test;
+SELECT COUNT(*) FROM test WHERE pk=222;
+SQL
     [[ "$output" =~ "1" ]] || false
 
-    skip "Drop database doesn't work yet"
+    dolt sql -q "drop database test"
     
     run dolt sql << SQL
 CREATE DATABASE IF NOT EXISTS test;
-SHOW DATABASES;
 USE test;
 DROP DATABASE IF EXISTS test;
 DROP DATABASE IF EXISTS test;
@@ -127,24 +226,12 @@ SQL
 }
 
 @test "sql-create-database: create new database via SCHEMA alias" {
-    run dolt sql << SQL
-CREATE SCHEMA mydb;
-SHOW DATABASES;
-USE mydb;
-CREATE TABLE test (
-    pk int primary key
-);
-INSERT INTO test VALUES (222);
-SELECT COUNT(*) FROM test WHERE pk=222;
-DROP SCHEMA mydb;
-SQL
+    dolt sql -q "CREATE SCHEMA mydb"
+
+    run dolt sql -q "SHOW DATABASES;"
     [[ "$output" =~ "dolt_repo_$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
-    [[ "$output" =~ "mydb" ]] || false
-    [[ "$output" =~ "1" ]] || false
-
-    run dolt sql -q "SHOW DATABASES"
-    [[ "$output" =~ "mydb" ]] || false
+    [[ "$output" =~ "mydb" ]] || false    
 }
 
 @test "sql-create-database: use for non existing database throws an error" {
@@ -154,6 +241,8 @@ SQL
 }
 
 @test "sql-create-database: SHOW DATABASES works after CREATE and DROP" {
+    skiponwindows "failing with file in use error"
+    
     run dolt sql -q "SHOW DATABASES"
     before=$output
 

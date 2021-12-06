@@ -75,7 +75,7 @@ type projected interface {
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	tableName    string
-	sqlSch       sql.Schema
+	sqlSch       sql.PrimaryKeySchema
 	db           SqlDatabase
 	lockedToRoot *doltdb.RootValue
 	nbf          *types.NomsBinFormat
@@ -88,7 +88,7 @@ type DoltTable struct {
 	opts editor.Options
 }
 
-func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool, opts editor.Options) *DoltTable {
+func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool, opts editor.Options) (*DoltTable, error) {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
@@ -98,16 +98,22 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		return
 	})
 
+	sqlSch, err := sqlutil.FromDoltSchema(name, sch)
+	if err != nil {
+		return nil, err
+	}
+
 	return &DoltTable{
 		tableName:     name,
 		db:            db,
 		nbf:           tbl.Format(),
 		sch:           sch,
+		sqlSch:        sqlSch,
 		autoIncCol:    autoCol,
 		projectedCols: nil,
 		temporary:     isTemporary,
 		opts:          opts,
-	}
+	}, nil
 }
 
 // LockedToRoot returns a version of this table with its root value locked to the given value. The table's values will
@@ -118,11 +124,19 @@ func (t DoltTable) LockedToRoot(rootValue *doltdb.RootValue) *DoltTable {
 	return &t
 }
 
-var _ sql.Table = (*DoltTable)(nil)
-var _ sql.TemporaryTable = (*DoltTable)(nil)
-var _ sql.IndexedTable = (*DoltTable)(nil)
-var _ sql.ForeignKeyTable = (*DoltTable)(nil)
-var _ sql.StatisticsTable = (*DoltTable)(nil)
+// Internal interface for declaring the interfaces that read-only dolt tables are expected to implement
+// Add new interfaces supported here, rather than in separate type assertions
+type doltReadOnlyTableInterface interface {
+	sql.Table
+	sql.TemporaryTable
+	sql.IndexedTable
+	sql.ForeignKeyTable
+	sql.StatisticsTable
+	sql.CheckTable
+	sql.PrimaryKeyTable
+}
+
+var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 
 // projected tables disabled for now.  Looks like some work needs to be done in the analyzer as there are cases
 // where the projected columns do not contain every column needed.  Seed this with natural and other joins.  There
@@ -289,11 +303,11 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
-	return t.sqlSchema()
+	return t.sqlSchema().Schema
 }
 
-func (t *DoltTable) sqlSchema() sql.Schema {
-	if t.sqlSch != nil {
+func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
+	if len(t.sqlSch.Schema) > 0 {
 		return t.sqlSch
 	}
 
@@ -388,6 +402,10 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return numBytesPerRow * numRows, nil
 }
 
+func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+	return t.sqlSchema()
+}
+
 type emptyRowIterator struct{}
 
 func (itr emptyRowIterator) Next() (sql.Row, error) {
@@ -430,13 +448,17 @@ type WritableDoltTable struct {
 	ed *sqlTableEditor
 }
 
-var _ sql.UpdatableTable = (*WritableDoltTable)(nil)
-var _ sql.DeletableTable = (*WritableDoltTable)(nil)
-var _ sql.InsertableTable = (*WritableDoltTable)(nil)
-var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
-var _ sql.AutoIncrementTable = (*WritableDoltTable)(nil)
-var _ sql.TruncateableTable = (*WritableDoltTable)(nil)
-var _ sql.CheckTable = (*WritableDoltTable)(nil)
+var _ doltTableInterface = (*WritableDoltTable)(nil)
+
+// Internal interface for declaring the interfaces that writable dolt tables are expected to implement
+type doltTableInterface interface {
+	sql.UpdatableTable
+	sql.DeletableTable
+	sql.InsertableTable
+	sql.ReplaceableTable
+	sql.AutoIncrementTable
+	sql.TruncateableTable
+}
 
 func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	if t.temporary {
@@ -615,7 +637,7 @@ func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interf
 	return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
-func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
+func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
 	table, err := t.doltTable(ctx)
 	if err != nil {
 		return nil, err
@@ -626,6 +648,10 @@ func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, 
 		return nil, err
 	}
 
+	return checksInSchema(sch), nil
+}
+
+func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
 	checks := make([]sql.CheckDefinition, sch.Checks().Count())
 	for i, check := range sch.Checks().AllChecks() {
 		checks[i] = sql.CheckDefinition{
@@ -634,8 +660,7 @@ func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, 
 			Enforced:        check.Enforced(),
 		}
 	}
-
-	return checks, nil
+	return checks
 }
 
 // GetForeignKeys implements sql.ForeignKeyTable
@@ -787,12 +812,22 @@ type AlterableDoltTable struct {
 	WritableDoltTable
 }
 
-var _ sql.AlterableTable = (*AlterableDoltTable)(nil)
-var _ sql.IndexAlterableTable = (*AlterableDoltTable)(nil)
-var _ sql.ForeignKeyAlterableTable = (*AlterableDoltTable)(nil)
-var _ sql.ForeignKeyTable = (*AlterableDoltTable)(nil)
-var _ sql.CheckAlterableTable = (*AlterableDoltTable)(nil)
-var _ sql.PrimaryKeyAlterableTable = (*AlterableDoltTable)(nil)
+func (t *AlterableDoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+	return t.sqlSch
+}
+
+// Internal interface for declaring the interfaces that dolt tables with an alterable schema are expected to implement
+// Add new interfaces supported here, rather than in separate type assertions
+type doltAlterableTableInterface interface {
+	sql.AlterableTable
+	sql.IndexAlterableTable
+	sql.ForeignKeyAlterableTable
+	sql.ForeignKeyTable
+	sql.CheckAlterableTable
+	sql.PrimaryKeyAlterableTable
+}
+
+var _ doltAlterableTableInterface = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {

@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/fatih/color"
 	"google.golang.org/grpc/codes"
@@ -39,12 +38,24 @@ import (
 )
 
 const (
-	migrationPrompt = `Run "dolt migrate" to update this repository to the latest format`
-	migrationMsg    = "Migrating repository to the latest format"
+	migrationPrompt = `Run "dolt migrate" to update this database to the latest data format`
+	migrationMsg    = "Migrating database to the latest data format"
 
 	migratePushFlag = "push"
 	migratePullFlag = "pull"
 )
+
+var migrateDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Executes a database migration to use the latest Dolt data format.",
+	LongDesc: `Migrate is a multi-purpose command to update the data format of a Dolt database. Over time, development 
+on Dolt requires changes to the on-disk data format. These changes are necessary to improve Database performance amd 
+correctness. Migrating to the latest format is therefore necessary for compatibility with the latest Dolt clients, and
+to take advantage of the newly released Dolt features.`,
+
+	Synopsis: []string{
+		"[ --push ] [ --pull ]",
+	},
+}
 
 type MigrateCmd struct{}
 
@@ -55,7 +66,7 @@ func (cmd MigrateCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd MigrateCmd) Description() string {
-	return "Executes a repository migration to update to the latest format."
+	return migrateDocs.ShortDesc
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
@@ -66,7 +77,7 @@ func (cmd MigrateCmd) CreateMarkdown(_ io.Writer, _ string) error {
 func (cmd MigrateCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(migratePushFlag, "", "Push all migrated branches to the remote")
-	ap.SupportsFlag(migratePullFlag, "", "Update all remote refs for a migrated remote")
+	ap.SupportsFlag(migratePullFlag, "", "Update all local tracking refs for a migrated remote")
 	return ap
 }
 
@@ -76,9 +87,9 @@ func (cmd MigrateCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd MigrateCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, migrateDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.Contains(migratePushFlag) && apr.Contains(migratePullFlag) {

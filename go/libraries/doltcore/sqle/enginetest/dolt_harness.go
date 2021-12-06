@@ -18,14 +18,12 @@ import (
 	"context"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -62,8 +60,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
-	var wg sync.WaitGroup
-	pro, err := sqle.NewDoltDatabaseProvider(context.Background(), &wg, dEnv.Config, mrEnv, cli.CliOut)
+	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem())
 	require.NoError(t, err)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
@@ -209,8 +206,7 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), d.env)
 	require.NoError(d.t, err)
-	var wg sync.WaitGroup
-	pro, err := sqle.NewDoltDatabaseProvider(context.Background(), &wg, d.env.Config, mrEnv, cli.CliOut, dbs...)
+	pro := sqle.NewDoltDatabaseProvider(d.env.Config, mrEnv.FileSystem(), dbs...)
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
@@ -233,7 +229,7 @@ func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.Initial
 	}
 }
 
-func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) (sql.Table, error) {
+func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {
 	var err error
 	if ro, ok := db.(sqle.ReadOnlyDatabase); ok {
 		err = ro.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema)
@@ -252,7 +248,7 @@ func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) 
 
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
-func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.Schema, asOf interface{}) sql.Table {
+func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.PrimaryKeySchema, asOf interface{}) sql.Table {
 	table, err := d.NewTable(db, name, schema)
 	if err != nil {
 		require.True(d.t, sql.ErrTableAlreadyExists.Is(err))

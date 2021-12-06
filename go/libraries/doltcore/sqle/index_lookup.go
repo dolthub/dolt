@@ -38,16 +38,27 @@ type doltIndexLookup struct {
 
 var _ sql.IndexLookup = (*doltIndexLookup)(nil)
 
+// boundsCase determines the case upon which the bounds are tested.
+type boundsCase byte
+
+// For each boundsCase, the first element is the lowerbound and the second element is the upperbound
+const (
+	boundsCase_infinity_infinity boundsCase = iota
+	boundsCase_infinity_lessEquals
+	boundsCase_infinity_less
+	boundsCase_greaterEquals_infinity
+	boundsCase_greaterEquals_lessEquals
+	boundsCase_greaterEquals_less
+	boundsCase_greater_infinity
+	boundsCase_greater_lessEquals
+	boundsCase_greater_less
+)
+
 // columnBounds are used to compare a given value in the noms row iterator.
 type columnBounds struct {
-	lowerbound bound
-	upperbound bound
-}
-
-type bound struct {
-	equals   bool
-	infinity bool
-	val      types.Value
+	boundsCase
+	lowerbound types.Value
+	upperbound types.Value
 }
 
 // nomsRangeCheck is used to compare a tuple against a set of comparisons in the noms row iterator.
@@ -110,55 +121,88 @@ func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData types.Map,
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.
 func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, val types.Value) (ok bool, over bool, err error) {
-	if !cb.lowerbound.infinity {
-		if cb.lowerbound.equals {
-			ok, err := val.Less(nbf, cb.lowerbound.val)
-			if err != nil || ok {
-				return false, false, err
-			}
-		} else {
-			ok, err := cb.lowerbound.val.Less(nbf, val)
-			if err != nil || !ok {
-				return false, false, err
-			}
+	switch cb.boundsCase {
+	case boundsCase_infinity_infinity:
+		return true, false, nil
+	case boundsCase_infinity_lessEquals:
+		ok, err := cb.upperbound.Less(nbf, val)
+		if err != nil || ok {
+			return false, true, err
 		}
-	}
-	if !cb.upperbound.infinity {
-		if cb.upperbound.equals {
-			ok, err := cb.upperbound.val.Less(nbf, val)
-			if err != nil || ok {
-				return false, true, err
-			}
-		} else {
-			ok, err := val.Less(nbf, cb.upperbound.val)
-			if err != nil || !ok {
-				return false, true, err
-			}
+	case boundsCase_infinity_less:
+		ok, err := val.Less(nbf, cb.upperbound)
+		if err != nil || !ok {
+			return false, true, err
 		}
+	case boundsCase_greaterEquals_infinity:
+		ok, err := val.Less(nbf, cb.lowerbound)
+		if err != nil || ok {
+			return false, false, err
+		}
+	case boundsCase_greaterEquals_lessEquals:
+		ok, err := val.Less(nbf, cb.lowerbound)
+		if err != nil || ok {
+			return false, false, err
+		}
+		ok, err = cb.upperbound.Less(nbf, val)
+		if err != nil || ok {
+			return false, true, err
+		}
+	case boundsCase_greaterEquals_less:
+		ok, err := val.Less(nbf, cb.lowerbound)
+		if err != nil || ok {
+			return false, false, err
+		}
+		ok, err = val.Less(nbf, cb.upperbound)
+		if err != nil || !ok {
+			return false, true, err
+		}
+	case boundsCase_greater_infinity:
+		ok, err := cb.lowerbound.Less(nbf, val)
+		if err != nil || !ok {
+			return false, false, err
+		}
+	case boundsCase_greater_lessEquals:
+		ok, err := cb.lowerbound.Less(nbf, val)
+		if err != nil || !ok {
+			return false, false, err
+		}
+		ok, err = cb.upperbound.Less(nbf, val)
+		if err != nil || ok {
+			return false, true, err
+		}
+	case boundsCase_greater_less:
+		ok, err := cb.lowerbound.Less(nbf, val)
+		if err != nil || !ok {
+			return false, false, err
+		}
+		ok, err = val.Less(nbf, cb.upperbound)
+		if err != nil || !ok {
+			return false, true, err
+		}
+	default:
+		return false, false, fmt.Errorf("unknown bounds")
 	}
 	return true, false, nil
 }
 
 // Equals returns whether the calling columnBounds is equivalent to the given columnBounds.
 func (cb columnBounds) Equals(otherBounds columnBounds) bool {
-	if cb.lowerbound.infinity != otherBounds.lowerbound.infinity ||
-		cb.upperbound.infinity != otherBounds.upperbound.infinity ||
-		cb.lowerbound.equals != otherBounds.lowerbound.equals ||
-		cb.upperbound.equals != otherBounds.upperbound.equals {
+	if cb.boundsCase != otherBounds.boundsCase {
 		return false
 	}
-	if cb.lowerbound.val == nil || otherBounds.lowerbound.val == nil {
-		if cb.lowerbound.val != nil || otherBounds.lowerbound.val != nil {
+	if cb.lowerbound == nil || otherBounds.lowerbound == nil {
+		if cb.lowerbound != nil || otherBounds.lowerbound != nil {
 			return false
 		}
-	} else if !cb.lowerbound.val.Equals(otherBounds.lowerbound.val) {
+	} else if !cb.lowerbound.Equals(otherBounds.lowerbound) {
 		return false
 	}
-	if cb.upperbound.val == nil || otherBounds.upperbound.val == nil {
-		if cb.upperbound.val != nil || otherBounds.upperbound.val != nil {
+	if cb.upperbound == nil || otherBounds.upperbound == nil {
+		if cb.upperbound != nil || otherBounds.upperbound != nil {
 			return false
 		}
-	} else if !cb.upperbound.val.Equals(otherBounds.upperbound.val) {
+	} else if !cb.upperbound.Equals(otherBounds.upperbound) {
 		return false
 	}
 	return true
@@ -166,32 +210,35 @@ func (cb columnBounds) Equals(otherBounds columnBounds) bool {
 
 // Check implements the interface noms.InRangeCheck.
 func (nrc nomsRangeCheck) Check(ctx context.Context, tuple types.Tuple) (valid bool, skip bool, err error) {
-	valid = true
-	err = tuple.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
-		if tupleIndex%2 == 0 {
-			return false, nil
-		}
-		compIndex := (tupleIndex - 1) / 2
-		if compIndex >= uint64(len(nrc)) {
-			return true, nil
-		}
-		ok, over, err := nrc[compIndex].Between(ctx, tuple.Format(), tupleVal)
-		if err != nil {
-			return true, err
-		}
-		if !ok {
-			skip = true
-			if compIndex == 0 && over {
-				valid = false
-			}
-			return true, nil
-		}
-		return false, nil
-	})
+	itr := types.TupleItrPool.Get().(*types.TupleIterator)
+	defer types.TupleItrPool.Put(itr)
+	err = itr.InitForTuple(tuple)
 	if err != nil {
 		return false, false, err
 	}
-	return valid, skip, nil
+	nbf := tuple.Format()
+
+	for i := 0; i < len(nrc) && itr.HasMore(); i++ {
+		if err := itr.Skip(); err != nil {
+			return false, false, err
+		}
+		_, val, err := itr.Next()
+		if err != nil {
+			return false, false, err
+		}
+		if val == nil {
+			break
+		}
+
+		ok, over, err := nrc[i].Between(ctx, nbf, val)
+		if err != nil {
+			return false, false, err
+		}
+		if !ok {
+			return i != 0 || !over, true, nil
+		}
+	}
+	return true, false, nil
 }
 
 // Equals returns whether the calling nomsRangeCheck is equivalent to the given nomsRangeCheck.

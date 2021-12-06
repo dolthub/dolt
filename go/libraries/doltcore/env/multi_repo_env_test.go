@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
@@ -182,7 +183,7 @@ func TestLoadMultiEnv(t *testing.T) {
 		envNamesAndPaths[i] = EnvNameAndPath{name, filepath.Join(rootPath, name)}
 	}
 
-	mrEnv, err := LoadMultiEnv(context.Background(), hdp, filesys.LocalFS, "test", envNamesAndPaths...)
+	mrEnv, err := LoadMultiEnv(context.Background(), hdp, config.NewEmptyMapConfig(), filesys.LocalFS, "test", envNamesAndPaths...)
 	require.NoError(t, err)
 
 	for _, name := range names {
@@ -204,7 +205,7 @@ func TestLoadMultiEnvFromDir(t *testing.T) {
 	}
 
 	rootPath, hdp, envs := initMultiEnv(t, "TestLoadMultiEnvFromDir", names)
-	mrEnv, err := LoadMultiEnvFromDir(context.Background(), hdp, filesys.LocalFS, rootPath, "test")
+	mrEnv, err := LoadMultiEnvFromDir(context.Background(), hdp, config.NewEmptyMapConfig(), filesys.LocalFS, rootPath, "test")
 	require.NoError(t, err)
 
 	assert.Len(t, mrEnv.envs, len(names))

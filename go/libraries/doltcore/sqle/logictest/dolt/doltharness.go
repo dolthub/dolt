@@ -21,7 +21,6 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -31,7 +30,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -348,8 +346,8 @@ func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	var wg sync.WaitGroup
-	pro, err := dsql.NewDoltDatabaseProvider(context.Background(), &wg, dEnv.Config, mrEnv, cli.CliOut, db)
+
+	pro := dsql.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem(), db)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	engine := sqle.NewDefault(pro)

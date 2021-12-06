@@ -22,7 +22,6 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -122,11 +121,10 @@ func TestJsonValues(t *testing.T) {
 func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	var wg sync.WaitGroup
 
 	setup := append(setupCommon, test.setup...)
 	for _, c := range setup {
-		exitCode := c.cmd.Exec(ctx, &wg, c.cmd.Name(), c.args, dEnv)
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 		require.Equal(t, 0, exitCode)
 	}
 

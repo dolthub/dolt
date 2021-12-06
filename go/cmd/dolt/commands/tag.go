@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 
 	"github.com/fatih/color"
 
@@ -84,7 +83,7 @@ func (cmd TagCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd TagCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

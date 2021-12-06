@@ -17,7 +17,6 @@ package alterschema_test
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -92,8 +91,7 @@ func TestDropPk(t *testing.T) {
 		assert.False(t, originalMap.Empty())
 
 		// Drop the Primary Key
-		var wg sync.WaitGroup
-		exitCode := commands.SqlCmd{}.Exec(ctx, &wg, "sql", []string{"-q", "ALTER TABLE test DROP PRIMARY KEY"}, dEnv)
+		exitCode := commands.SqlCmd{}.Exec(ctx,"sql", []string{"-q", "ALTER TABLE test DROP PRIMARY KEY"}, dEnv)
 		require.Equal(t, 0, exitCode)
 
 		sch, err := table.GetSchema(ctx)

@@ -17,14 +17,12 @@ package schcmds
 import (
 	"context"
 	"fmt"
+	"github.com/fatih/color"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
-
-	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -162,7 +160,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 
 // Exec implements the import schema command that will take a file and infer it's schema, and then create a table matching that schema.
 // Exec executes the command
-func (cmd ImportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schImportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -285,10 +283,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	tblName := impArgs.tableName
 	// inferred schemas have no foreign keys
 	sqlDb := sqle.NewSingleTableDatabase(tblName, sch, nil, nil)
-	sqlCtx, engine, _, err := sqle.PrepareCreateTableStmt(ctx, sqlDb)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
+	sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 
 	stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, tblName)
 	if err != nil {

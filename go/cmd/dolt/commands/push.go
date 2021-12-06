@@ -84,7 +84,7 @@ func (cmd PushCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd PushCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

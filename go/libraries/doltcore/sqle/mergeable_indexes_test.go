@@ -97,7 +97,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11 OR v1 != 11",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -328,14 +328,14 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 != 11 OR v1 != 15",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 <> 11 OR v1 <> 15",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -360,28 +360,28 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 != 11 OR v1 != 15 OR v1 != 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 <> 11 OR v1 <> 15 OR v1 <> 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 AND v1 != 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 <> 11 OR v1 <> 15 AND v1 <> 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -423,7 +423,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 != 11 OR v1 != 15 OR v1 > 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -469,7 +469,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 != 11 OR v1 != 15 OR v1 >= 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -500,7 +500,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 != 11 OR v1 < 15",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -515,21 +515,21 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 != 11 OR v1 != 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -545,7 +545,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 != 11 OR v1 <= 15",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -560,21 +560,21 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 != 11 OR v1 != 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -674,7 +674,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 > 11 OR v1 < 15",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -688,7 +688,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 > 11 OR v1 > 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -702,7 +702,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 > 11 AND v1 > 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -716,7 +716,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 > 11 OR v1 <= 15",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -730,7 +730,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 > 11 OR v1 > 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -744,7 +744,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 > 11 AND v1 > 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -815,7 +815,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 >= 11 OR v1 < 15",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -829,7 +829,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 >= 11 OR v1 >= 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -843,7 +843,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 >= 11 AND v1 >= 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -857,7 +857,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 >= 11 OR v1 <= 15",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -871,7 +871,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 >= 11 OR v1 >= 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -885,7 +885,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 >= 11 AND v1 >= 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -1121,7 +1121,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 BETWEEN 11 AND 15 OR v1 != 13",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -1174,7 +1174,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 IN (11, 12, 13) OR v1 != 12",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -1254,7 +1254,7 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v2 = 21 OR v2 != 21",
 			[]*noms.ReadRange{
-				allRange(idxv2v1Gen.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -1337,8 +1337,8 @@ func TestMergeableIndexes(t *testing.T) {
 
 			if assert.Equal(t, len(test.finalRanges), len(finalRanges)) {
 				finalRangeMatches := make([]bool, len(finalRanges))
-				for _, finalRange := range finalRanges {
-					for i, testFinalRange := range test.finalRanges {
+				for i, testFinalRange := range test.finalRanges {
+					for _, finalRange := range finalRanges {
 						if readRangesEqual(finalRange, testFinalRange) {
 							if finalRangeMatches[i] {
 								require.FailNow(t, fmt.Sprintf("Duplicate ReadRange: `%v`", finalRange))
@@ -1444,7 +1444,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NULL OR v1 IS NOT NULL",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -1464,7 +1464,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NOT NULL OR v1 IS NULL",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -1484,7 +1484,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NOT NULL OR v1 > 16",
 			[]*noms.ReadRange{
-				allRange(idxv1.nilTuple()),
+				allRange(),
 			},
 			[]int64{0, 1, 3, 5, 7, 8, 9},
 		},

@@ -9,3 +9,5 @@ venv
 benchmark/perf_tools/dolt-builds/dolt
 benchmark/perf_tools/dolt-builds/working
 benchmark/perf_tools/output
+
+test.sh

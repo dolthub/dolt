@@ -26,7 +26,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/sloppy"
 
-	"github.com/kch42/buzhash"
+	"github.com/silvasur/buzhash"
 )
 
 const (

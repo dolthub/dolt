@@ -241,7 +241,7 @@ func (c Checkout) CommandString() string { return fmt.Sprintf("checkout: %s", c.
 
 // Exec executes a Checkout command on a test dolt environment.
 func (c Checkout) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
-	return actions.CheckoutBranch(context.Background(), dEnv, c.BranchName)
+	return actions.CheckoutBranch(context.Background(), dEnv, c.BranchName, false)
 }
 
 type Merge struct {
@@ -350,7 +350,7 @@ func (c ConflictsCat) CommandString() string { return fmt.Sprintf("conflicts_cat
 
 // Exec executes a ConflictsCat command on a test dolt environment.
 func (c ConflictsCat) Exec(t *testing.T, wg *sync.WaitGroup, dEnv *env.DoltEnv) error {
-	out := cnfcmds.CatCmd{}.Exec(context.Background(), wg, "dolt conflicts cat", []string{c.TableName}, dEnv)
+	out := cnfcmds.CatCmd{}.Exec(context.Background(), "dolt conflicts cat", []string{c.TableName}, dEnv)
 	require.Equal(t, 0, out)
 	return nil
 }

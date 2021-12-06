@@ -17,12 +17,11 @@ package schcmds
 import (
 	"context"
 	"io"
-	"sync"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -64,7 +63,7 @@ func (cmd TagsCmd) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd TagsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblTagsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -125,7 +124,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr stri
 
 	}
 
-	outputFmt := commands.FormatTabular
+	outputFmt := engine.FormatTabular
 
 	formatSr, ok := apr.GetValue(commands.FormatFlag)
 
@@ -139,7 +138,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr stri
 	}
 
 	sqlCtx := sql.NewContext(ctx)
-	err = commands.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...), false)
+	err = engine.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...), false)
 
 	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }

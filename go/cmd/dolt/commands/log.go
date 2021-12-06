@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 
 	"github.com/fatih/color"
 
@@ -136,7 +135,7 @@ func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd LogCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return cmd.logWithLoggerFunc(ctx, commandStr, args, dEnv, logToStdOutFunc)
 }
 

@@ -256,13 +256,16 @@ DELIM
     dolt commit -m "added table"
     run dolt schema import -pks=pk -u test abc-xyz.csv
     [ "$status" -eq 0 ]
+
+    dolt diff --schema
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+   \`x\` VARCHAR(16383)" ]] || false
-    [[ "$output" =~ "+   \`y\` FLOAT" ]] || false
-    [[ "$output" =~ "+   \`z\` INT" ]] || false
+    [[ "$output" =~ '+  `x` varchar(16383) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `y` float NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `z` int NOT NULL,' ]] || false
     # assert no columns were deleted/replaced
     [[ ! "$output" = "-    \`" ]] || false
+
     run dolt sql -r csv -q 'select * from test'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk,a,b,c,x,y,z" ]] || false
@@ -277,13 +280,16 @@ DELIM
     dolt commit -m "added table"
     run dolt schema import -pks=pk -r test abc-xyz.csv
     [ "$status" -eq 0 ]
+
+    dolt diff --schema
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+   \`x\` VARCHAR(16383)" ]] || false
-    [[ "$output" =~ "+   \`y\` FLOAT" ]] || false
-    [[ "$output" =~ "+   \`z\` INT" ]] || false
+    [[ "$output" =~ '+  `x` varchar(16383) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `y` float NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `z` int NOT NULL,' ]] || false
     # assert no columns were deleted/replaced
     [[ ! "$output" = "-    \`" ]] || false
+
     run dolt sql -r csv -q 'select count(*) from test'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "count(*)" ]] || false
@@ -301,11 +307,13 @@ DELIM
     dolt commit -m "added test"
     run dolt schema import -pks=pk -r test xyz.csv
     [ "$status" -eq 0 ]
+
+    dolt diff --schema
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-   \`a\`" ]] || false
-    [[ "$output" =~ "-   \`b\`" ]] || false
-    [[ "$output" =~ "-   \`c\`" ]] || false
+    [[ "$output" =~ '-  `a` varchar(16383) NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `b` float NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `c` bit(1) NOT NULL,' ]] || false
     # assert no columns were added
     [[ ! "$output" = "+    \`" ]] || false
 }

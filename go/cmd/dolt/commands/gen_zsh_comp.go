@@ -21,7 +21,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -48,7 +47,7 @@ func (z GenZshCompCmd) Description() string {
 	return "Creates a zsh autocomp file for all dolt commands"
 }
 
-func (z GenZshCompCmd) Exec(_ context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (z GenZshCompCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := z.ArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))

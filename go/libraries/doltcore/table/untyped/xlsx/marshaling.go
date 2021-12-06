@@ -99,7 +99,6 @@ func decodeXLSXRows(ctx context.Context, vrw types.ValueReadWriter, xlData [][][
 			}
 
 			rows = append(rows, r)
-			fmt.Println(rows)
 		}
 
 	}

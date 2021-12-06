@@ -20,7 +20,6 @@ import (
 	"io"
 	"log"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -77,7 +76,7 @@ func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
 
 // Exec is the implementation of the command that flushes the events to the grpc service
 // Exec executes the command
-func (cmd SendMetricsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))

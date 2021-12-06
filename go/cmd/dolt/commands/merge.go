@@ -21,7 +21,6 @@ import (
 	"io"
 	"sort"
 	"strconv"
-	"sync"
 
 	"github.com/fatih/color"
 
@@ -79,7 +78,7 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd MergeCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateMergeArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

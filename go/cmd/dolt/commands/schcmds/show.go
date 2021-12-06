@@ -17,7 +17,6 @@ package schcmds
 import (
 	"context"
 	"io"
-	"sync"
 
 	"github.com/fatih/color"
 
@@ -76,7 +75,7 @@ func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd ShowCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -137,10 +136,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 		}
 
 		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-		sqlCtx, engine, _, err := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
+		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
 
 		var notFound []string
 		for _, tblName := range tables {

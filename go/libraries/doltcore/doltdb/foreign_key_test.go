@@ -16,7 +16,6 @@ package doltdb_test
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,16 +44,15 @@ func TestForeignKeyErrors(t *testing.T) {
 
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	var wg sync.WaitGroup
 
 	for _, c := range cmds {
-		exitCode := c.cmd.Exec(ctx, &wg, c.cmd.Name(), c.args, dEnv)
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 		require.Equal(t, 0, exitCode)
 	}
 
-	exitCode := commands.SqlCmd{}.Exec(ctx, &wg, commands.SqlCmd{}.Name(), []string{"-q", `ALTER TABLE test MODIFY v1 INT;`}, dEnv)
+	exitCode := commands.SqlCmd{}.Exec(ctx, commands.SqlCmd{}.Name(), []string{"-q", `ALTER TABLE test MODIFY v1 INT;`}, dEnv)
 	require.Equal(t, 1, exitCode)
-	exitCode = commands.SqlCmd{}.Exec(ctx, &wg, commands.SqlCmd{}.Name(), []string{"-q", `ALTER TABLE test2 MODIFY v1 INT;`}, dEnv)
+	exitCode = commands.SqlCmd{}.Exec(ctx, commands.SqlCmd{}.Name(), []string{"-q", `ALTER TABLE test2 MODIFY v1 INT;`}, dEnv)
 	require.Equal(t, 1, exitCode)
 }
 
@@ -87,14 +85,13 @@ var fkSetupCommon = []testCommand{
 func testForeignKeys(t *testing.T, test foreignKeyTest) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	var wg sync.WaitGroup
 
 	for _, c := range fkSetupCommon {
-		exitCode := c.cmd.Exec(ctx, &wg, c.cmd.Name(), c.args, dEnv)
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 		require.Equal(t, 0, exitCode)
 	}
 	for _, c := range test.setup {
-		exitCode := c.cmd.Exec(ctx, &wg, c.cmd.Name(), c.args, dEnv)
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 		require.Equal(t, 0, exitCode)
 	}
 

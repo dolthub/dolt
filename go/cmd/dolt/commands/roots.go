@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -76,7 +75,7 @@ func (cmd RootsCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd RootsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RootsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

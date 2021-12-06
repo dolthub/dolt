@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package commands
+package engine
 
 import (
 	"bufio"
@@ -32,10 +32,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 )
 
-type resultFormat byte
+type PrintResultFormat byte
 
 const (
-	FormatTabular resultFormat = iota
+	FormatTabular PrintResultFormat = iota
 	FormatCsv
 	FormatJson
 	FormatNull // used for profiling
@@ -46,7 +46,8 @@ const (
 	writeBatchSize = 1
 )
 
-func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter, hasTopLevelOrderBy bool) (rerr error) {
+// PrettyPrintResults prints the result of a query (schema + row iter).
+func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, hasTopLevelOrderBy bool) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {

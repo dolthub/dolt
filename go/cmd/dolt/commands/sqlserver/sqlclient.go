@@ -21,7 +21,6 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/abiosoft/readline"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -86,7 +86,7 @@ func (cmd SqlClientCmd) Hidden() bool {
 	return false
 }
 
-func (cmd SqlClientCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlClientDocs, ap))
 
@@ -116,7 +116,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr
 
 		serverController = NewServerController()
 		go func() {
-			_, _ = Serve(ctx, wg, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
+			_, _ = Serve(ctx, SqlServerCmd{}.VersionStr, serverConfig, serverController, dEnv)
 		}()
 		err = serverController.WaitForStart()
 		if err != nil {
@@ -208,7 +208,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr
 			}
 			if wrapper.HasMoreRows() {
 				sqlCtx := sql.NewContext(ctx)
-				err = commands.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper, commands.HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper, commands.HasTopLevelOrderByClause(query))
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 					return

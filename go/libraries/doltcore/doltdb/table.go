@@ -155,13 +155,15 @@ func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData
 	return &Table{t.vrw, updatedSt}, nil
 }
 
+// GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table
 func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
 	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
 	if err != nil {
 		return Conflict{}, types.EmptyMap, err
 	}
 	if !ok {
-		return Conflict{}, types.EmptyMap, ErrNoConflicts
+		confMap, _ := types.NewMap(ctx, t.ValueReadWriter())
+		return Conflict{}, confMap, nil
 	}
 
 	schemas, err := ConflictFromTuple(schemasVal.(types.Tuple))
@@ -271,7 +273,7 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 
 		return baseSch, sch, mergeSch, err
 	}
-	return nil, nil, nil, ErrNoConflicts
+	return nil, nil, nil, nil
 }
 
 // GetConstraintViolationsSchema returns the schema for the dolt_constraint_violations system table belonging to this

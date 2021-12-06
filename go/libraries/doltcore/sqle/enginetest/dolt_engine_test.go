@@ -208,8 +208,16 @@ func TestScripts(t *testing.T) {
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
+func TestComplexIndexQueries(t *testing.T) {
+	enginetest.TestComplexIndexQueries(t, newDoltHarness(t))
+}
+
 func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, newDoltHarness(t))
+}
+
+func TestPkOrdinals(t *testing.T) {
+	enginetest.TestPkOrdinals(t, newDoltHarness(t))
 }
 
 func TestDropTable(t *testing.T) {
@@ -241,6 +249,7 @@ func TestCreateDatabase(t *testing.T) {
 }
 
 func TestDropDatabase(t *testing.T) {
+	t.Skip("Dolt doesn't yet support dropping the primary database, which these tests do")
 	enginetest.TestDropDatabase(t, newDoltHarness(t))
 }
 

@@ -31,7 +31,7 @@ func TestIndexCollectionAddIndex(t *testing.T) {
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
+	indexColl := NewIndexCollection(colColl, nil).(*indexCollectionImpl)
 
 	testIndexes := []*indexImpl{
 		{
@@ -144,7 +144,7 @@ func TestIndexCollectionAddIndexByColNames(t *testing.T) {
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
+	indexColl := NewIndexCollection(colColl, nil).(*indexCollectionImpl)
 
 	testIndexes := []struct {
 		cols  []string
@@ -242,7 +242,7 @@ func TestIndexCollectionAddIndexByColTags(t *testing.T) {
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
+	indexColl := NewIndexCollection(colColl, nil).(*indexCollectionImpl)
 
 	testIndexes := []*indexImpl{
 		{
@@ -325,7 +325,7 @@ func TestIndexCollectionAllIndexes(t *testing.T) {
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
+	indexColl := NewIndexCollection(colColl, nil).(*indexCollectionImpl)
 
 	indexColl.AddIndex(&indexImpl{
 		name: "idx_z",
@@ -372,7 +372,7 @@ func TestIndexCollectionRemoveIndex(t *testing.T) {
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
+	indexColl := NewIndexCollection(colColl, nil).(*indexCollectionImpl)
 
 	testIndexes := []Index{
 		&indexImpl{
@@ -425,7 +425,7 @@ func TestIndexCollectionRenameIndex(t *testing.T) {
 		NewColumn("v2", 4, types.UintKind, false),
 		NewColumn("v3", 5, types.StringKind, false),
 	)
-	indexColl := NewIndexCollection(colColl).(*indexCollectionImpl)
+	indexColl := NewIndexCollection(colColl, nil).(*indexCollectionImpl)
 	index := &indexImpl{
 		name:      "idx_a",
 		tags:      []uint64{3},

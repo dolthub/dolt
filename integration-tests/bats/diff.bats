@@ -65,6 +65,35 @@ teardown() {
     [[ "$output" =~ "+  | 0" ]] || false
 }
 
+@test "diff: data diff only" {
+    dolt commit -am "First commit"
+
+    dolt sql -q "insert into test (pk) values (10);"
+
+    dolt diff
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "CREATE TABLE" ]]
+    [[ "$output" =~ "|     | pk | c1   | c2   | c3   | c4   | c5   |" ]] || false
+    [[ "$output" =~ "|  +  | 10 | NULL | NULL | NULL | NULL | NULL |" ]] || false
+}
+
+@test "diff: schema diff only" {
+    dolt commit -am "First commit"
+
+    dolt sql -q "alter table test drop column c1"
+
+    dolt diff
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE" ]]
+
+    # TODO: column ordering on the first line should respect original
+    # schema order, seems to be putting non-common columns at end
+    [[ "$output" =~ "|  <  | pk | c2 | c3 | c4 | c5 | c1 |" ]] || false
+    [[ "$output" =~ "|  >  | pk | c2 | c3 | c4 | c5 |    |" ]] || false
+}
+
 @test "diff: with table args" {
     dolt sql -q 'create table other (pk int not null primary key)'
     dolt add .
@@ -150,20 +179,19 @@ ALTER TABLE test DROP FOREIGN KEY fk1;
 ALTER TABLE parent DROP INDEX c1;
 ALTER TABLE test ADD CONSTRAINT fk2 FOREIGN KEY (c2) REFERENCES parent(c2);
 SQL
+    
     dolt diff test
     run dolt diff test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+    INDEX \`c2\` (\`c2\`)" ]] || false
-    [[ "$output" =~ "-    CONSTRAINT \`fk1\` FOREIGN KEY (\`c1\`)" ]] || false
-    [[ "$output" =~ "    REFERENCES \`parent\` (\`c1\`)" ]] || false
-    [[ "$output" =~ "+    CONSTRAINT \`fk2\` FOREIGN KEY (\`c2\`)" ]] || false
-    [[ "$output" =~ "    REFERENCES \`parent\` (\`c2\`)" ]] || false
+    [[ "$output" =~ '-  CONSTRAINT `fk1` FOREIGN KEY (`c1`) REFERENCES `parent` (`c1`)' ]] || false
+    [[ "$output" =~ '+  KEY `c2` (`c2`),' ]] || false
+    [[ "$output" =~ '+  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`c2`)' ]] || false
 
     dolt diff parent
     run dolt diff parent
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-    INDEX \`c1\` (\`c1\`)" ]] || false
-    [[ "$output" =~ "+    INDEX \`c2\` (\`c2\`)" ]] || false
+    [[ "$output" =~ '-  KEY `c1` (`c1`)' ]] || false
+    [[ "$output" =~ '+  KEY `c2` (`c2`)' ]] || false
 }
 
 @test "diff: summary comparing working table to last commit" {
@@ -475,9 +503,10 @@ SQL
     dolt checkout another-branch
     dolt sql <<SQL
 CREATE TABLE a (
-  id int primary key,
-  cv1 int primary key,
-  cv2 int
+  id int,
+  cv1 int,
+  cv2 int,
+  primary key (id, cv1)
 );
 SQL
     dolt add -A
@@ -574,8 +603,26 @@ SQL
     dolt sql -q "alter table t add primary key (pk, val)"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'ALTER TABLE `t` ADD `pk2` INT;' ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` ADD `pk2` INT NOT NULL;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[2]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk,val);' ]
     [ "${lines[3]}" = 'warning: skipping data diff due to primary key set change' ]
+}
+
+@test "diff: adding and removing primary key should leave not null constraint" {
+    skip "TODO diff needs a better way to indicate constraint changes"
+    dolt sql -q "create table t(pk int, val int)"
+    dolt commit -am "creating table"
+
+    dolt sql -q "alter table t add primary key (pk)"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
+    [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
+    [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+
+    dolt sql -q "alter table t drop primary key"
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `pk` TO `pk`;' ]
 }

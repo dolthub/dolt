@@ -18,7 +18,6 @@ import (
 	"context"
 	"io"
 	"strings"
-	"sync"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -27,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -102,7 +100,7 @@ func (cmd ResolveCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd ResolveCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -139,11 +137,6 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	}
 
 	if err != nil {
-		if err == doltdb.ErrNoConflicts {
-			cli.Println("no conflicts to resolve.")
-			return nil
-		}
-
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
 	}
 

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -71,7 +70,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd ExportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -141,10 +140,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 }
 
 func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer, opts editor.Options) errhand.VerboseError {
-	sqlCtx, engine, _, err := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
+	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
 
 	stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, tblName)
 	if err != nil {

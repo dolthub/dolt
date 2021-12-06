@@ -797,8 +797,7 @@ SQL
     run cat README.md
     [[ ! $output =~ "test-b branch" ]] || false
     [[ $output =~ "test-a branch" ]] || false
-    # Only allow `dolt add dolt_docs` when dolt_docs is in conflict
-    dolt add dolt_docs
+    # No need for `dolt add dolt_docs` as table is already added
     dolt commit -m "Resolved docs conflict with --ours"
 
     # If the conflicts are resolved with --theirs, the working root and the docs on the filesystem are updated.

@@ -19,7 +19,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -94,7 +93,7 @@ func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd CloneCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

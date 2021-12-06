@@ -16,14 +16,17 @@ package commands
 
 import (
 	"context"
-	"sync"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -43,11 +46,10 @@ var tableName = "people"
 func TestSqlConsole(t *testing.T) {
 	t.Run("SQL console opens and exits", func(t *testing.T) {
 		dEnv := dtestutils.CreateEnvWithSeedData(t)
-		var wg sync.WaitGroup
 		args := []string{}
 		commandStr := "dolt sql"
 
-		result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
+		result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
 		assert.Equal(t, 0, result)
 	})
 
@@ -69,12 +71,11 @@ func TestSqlBatchMode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg sync.WaitGroup
 
 			args := []string{"-b", "-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -107,12 +108,11 @@ func TestSqlSelect(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -132,12 +132,11 @@ func TestSqlShow(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -161,7 +160,6 @@ func TestCreateTable(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			var wg sync.WaitGroup
 			working, err := dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
 			has, err := working.HasTable(context.Background(), tableName)
@@ -170,7 +168,7 @@ func TestCreateTable(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			working, err = dEnv.WorkingRoot(context.Background())
@@ -205,11 +203,10 @@ func TestShowTables(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -235,11 +232,10 @@ func TestAlterTable(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -261,11 +257,10 @@ func TestDropTable(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -378,12 +373,11 @@ func TestInsert(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(ctx, &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
@@ -463,12 +457,11 @@ func TestUpdate(t *testing.T) {
 		t.Run(test.query, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
-			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(ctx, &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
@@ -543,12 +536,11 @@ func TestDelete(t *testing.T) {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
 			ctx := context.Background()
-			var wg sync.WaitGroup
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(ctx, &wg, commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
@@ -569,5 +561,23 @@ func TestDelete(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCommitHooksNoErrors(t *testing.T) {
+	dEnv := dtestutils.CreateEnvWithSeedData(t)
+	sqle.AddDoltSystemVariables()
+	sql.SystemVariables.SetGlobal(sqle.SkipReplicationErrorsKey, true)
+	sql.SystemVariables.SetGlobal(sqle.ReplicateToRemoteKey, "unknown")
+	hooks, err := engine.GetCommitHooks(context.Background(), dEnv)
+	assert.NoError(t, err)
+	if len(hooks) < 1 {
+		t.Error("failed to produce noop hook")
+	} else {
+		switch h := hooks[0].(type) {
+		case *doltdb.LogHook:
+		default:
+			t.Errorf("expected LogHook, found: %s", h)
+		}
 	}
 }

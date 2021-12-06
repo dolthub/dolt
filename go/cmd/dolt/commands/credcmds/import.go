@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 
 	"google.golang.org/grpc"
 
@@ -91,7 +90,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd ImportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

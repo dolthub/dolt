@@ -22,22 +22,21 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
+	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type CsvOptions struct {
@@ -53,6 +52,18 @@ type JSONOptions struct {
 	SchFile   string
 }
 
+type ParquetOptions struct {
+	TableName string
+	SchFile   string
+}
+
+type MoverOptions struct {
+	ContinueOnErr  bool
+	Force          bool
+	TableToWriteTo string
+	Operation      TableImportOp
+}
+
 type DataMoverOptions interface {
 	WritesToTable() bool
 	SrcName() string
@@ -62,6 +73,12 @@ type DataMoverOptions interface {
 type DataMoverCloser interface {
 	table.TableWriteCloser
 	Flush(context.Context) (*doltdb.RootValue, error)
+}
+
+type DataWriter interface {
+	WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) error
+	Commit(ctx context.Context) error
+	Schema() sql.Schema
 }
 
 type DataMover struct {
@@ -262,29 +279,6 @@ func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts D
 	return badCount, nil
 }
 
-// NameMapTransform creates a pipeline transform that converts rows from inSch to outSch based on a name mapping.
-func NameMapTransform(ctx context.Context, vrw types.ValueReadWriter, inSch schema.Schema, outSch schema.Schema, mapper rowconv.NameMapper) (*pipeline.TransformCollection, *rowconv.FieldMapping, error) {
-	mapping, err := rowconv.NameMapping(inSch, outSch, mapper)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rconv, err := rowconv.NewImportRowConverter(ctx, vrw, mapping)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	transforms := pipeline.NewTransformCollection()
-	if !rconv.IdentityConverter {
-		nt := pipeline.NewNamedTransform("Mapping transform", pipeline.GetRowConvTransformFunc(rconv))
-		transforms.AppendTransforms(nt)
-	}
-
-	return transforms, mapping, nil
-}
-
 // SchAndTableNameFromFile reads a SQL schema file and creates a Dolt schema from it.
 func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.ReadableFS, root *doltdb.RootValue) (string, schema.Schema, error) {
 	if path != "" {
@@ -352,3 +346,11 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 
 	return schema.SchemaFromCols(newCols)
 }
+
+type TableImportOp string
+
+const (
+	CreateOp  TableImportOp = "overwrite"
+	ReplaceOp TableImportOp = "replace"
+	UpdateOp  TableImportOp = "update"
+)

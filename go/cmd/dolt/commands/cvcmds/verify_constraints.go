@@ -17,12 +17,12 @@ package cvcmds
 import (
 	"context"
 	"io"
-	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -69,7 +69,7 @@ func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -141,7 +141,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, co
 			if cvMap.Len() > 50 {
 				cli.Printf("Over 50 constraint violations were found. Please query '%s' to see them all.\n", doltdb.DoltConstViolTablePrefix+tableName)
 			} else {
-				err = commands.PrettyPrintResults(sql.NewEmptyContext(), commands.FormatTabular, sqlSchema, rowIter, false)
+				err = engine.PrettyPrintResults(sql.NewEmptyContext(), engine.FormatTabular, sqlSchema.Schema, rowIter, false)
 				if err != nil {
 					return commands.HandleVErrAndExitCode(errhand.BuildDError("Error outputting rows").AddCause(err).Build(), nil)
 				}

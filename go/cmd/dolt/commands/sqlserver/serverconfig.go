@@ -46,6 +46,7 @@ const (
 	defaultMaxConnections      = 100
 	defaultQueryParallelism    = 2
 	defaultPersistenceBahavior = loadPerisistentGlobals
+	defaultDataDir             = "."
 )
 
 const (
@@ -97,6 +98,8 @@ type ServerConfig interface {
 	// a multiple db configuration. If nil is returned the server will look for a database in the current directory and
 	// give it a name automatically.
 	DatabaseNamesAndPaths() []env.EnvNameAndPath
+	// DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
+	DataDir() string
 	// MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 	MaxConnections() uint64
 	// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
@@ -109,6 +112,10 @@ type ServerConfig interface {
 	RequireSecureTransport() bool
 	// PersistenceBehavior is "load" if we include persisted system globals on server init
 	PersistenceBehavior() string
+	// DisableClientMultiStatements is true if we want the server to not
+	// process incoming ComQuery packets as if they had multiple queries in
+	// them, even if the client advertises support for MULTI_STATEMENTS.
+	DisableClientMultiStatements() bool
 }
 
 type commandLineServerConfig struct {
@@ -120,6 +127,7 @@ type commandLineServerConfig struct {
 	readOnly               bool
 	logLevel               LogLevel
 	dbNamesAndPaths        []env.EnvNameAndPath
+	dataDir                string
 	autoCommit             bool
 	maxConnections         uint64
 	queryParallelism       int
@@ -128,6 +136,8 @@ type commandLineServerConfig struct {
 	requireSecureTransport bool
 	persistenceBehavior    string
 }
+
+var _ ServerConfig = (*commandLineServerConfig)(nil)
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
 func (cfg *commandLineServerConfig) Host() string {
@@ -201,11 +211,19 @@ func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 	return cfg.requireSecureTransport
 }
 
+func (cfg *commandLineServerConfig) DisableClientMultiStatements() bool {
+	return false
+}
+
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
 // a multiple db configuration. If nil is returned the server will look for a database in the current directory and
 // give it a name automatically.
 func (cfg *commandLineServerConfig) DatabaseNamesAndPaths() []env.EnvNameAndPath {
 	return cfg.dbNamesAndPaths
+}
+
+func (cfg *commandLineServerConfig) DataDir() string {
+	return cfg.dataDir
 }
 
 // withHost updates the host and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
@@ -268,6 +286,11 @@ func (cfg *commandLineServerConfig) withDBNamesAndPaths(dbNamesAndPaths []env.En
 	return cfg
 }
 
+func (cfg *commandLineServerConfig) withDataDir(dataDir string) *commandLineServerConfig {
+	cfg.dataDir = dataDir
+	return cfg
+}
+
 func (cfg *commandLineServerConfig) withPersistenceBehavior(persistenceBehavior string) *commandLineServerConfig {
 	cfg.persistenceBehavior = persistenceBehavior
 	return cfg
@@ -287,6 +310,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		maxConnections:      defaultMaxConnections,
 		queryParallelism:    defaultQueryParallelism,
 		persistenceBehavior: defaultPersistenceBahavior,
+		dataDir:             defaultDataDir,
 	}
 }
 

@@ -107,6 +107,17 @@ start_sql_server() {
     wait_for_connection $PORT 5000
 }
 
+# like start_sql_server, but the second argument is a string with all
+# arguments to dolt-sql-server (excluding --port, which is defined in
+# this func)
+start_sql_server_with_args() {
+    DEFAULT_DB=""
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server "$@" --port=$PORT &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+}
+
 start_sql_server_with_config() {
     DEFAULT_DB="$1"
     let PORT="$$ % (65536-1024) + 1024"

@@ -17,7 +17,6 @@ package cnfcmds
 import (
 	"context"
 	"io"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -75,7 +74,7 @@ func (cmd CatCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd CatCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, catDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -155,11 +154,17 @@ func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []stri
 				return errhand.BuildDError("error: unable to read database").AddCause(err).Build()
 			}
 
+			has, err := root.HasConflicts(ctx)
+			if err != nil {
+				return errhand.BuildDError("failed to read conflicts").AddCause(err).Build()
+			}
+			if !has {
+				return nil
+			}
+
 			cnfRd, err := merge.NewConflictReader(ctx, tbl)
 
-			if err == doltdb.ErrNoConflicts {
-				return nil
-			} else if err != nil {
+			if err != nil {
 				return errhand.BuildDError("failed to read conflicts").AddCause(err).Build()
 			}
 

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -68,7 +67,7 @@ func (cmd *DumpDocsCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd *DumpDocsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))

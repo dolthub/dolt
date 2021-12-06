@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -80,7 +79,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd LsCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

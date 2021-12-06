@@ -55,6 +55,9 @@ const (
 
 	// SqlFile is the format of a data location that is a .sql file
 	SqlFile DataFormat = ".sql"
+
+	// ParquetFile is the format of a data location that is a .paquet file
+	ParquetFile DataFormat = ".parquet"
 )
 
 // ReadableStr returns a human readable string for a DataFormat
@@ -72,6 +75,8 @@ func (df DataFormat) ReadableStr() string {
 		return "json file"
 	case SqlFile:
 		return "sql file"
+	case ParquetFile:
+		return "parquet file"
 	default:
 		return "invalid"
 	}
@@ -124,6 +129,8 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 				dataFmt = JsonFile
 			case string(SqlFile):
 				dataFmt = SqlFile
+			case string(ParquetFile):
+				dataFmt = ParquetFile
 			}
 		}
 	}

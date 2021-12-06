@@ -238,12 +238,15 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	defer initMu.Unlock()
 
 	var globals config.ReadWriteConfig
-	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); !ok {
-		cli.Println("warning: multi-db mode does not support persistable sessions")
-		globals = config.NewMapConfig(make(map[string]string))
-	} else {
+	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); ok {
 		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
+	} else if globalConf, ok := dEnv.Config.GetConfig(env.GlobalConfig); ok {
+		globals = config.NewPrefixConfig(globalConf, env.SqlServerGlobalsPrefix)
+	} else {
+		cli.Println("warning: no local or global Dolt configuration found; session is not persistable")
+		globals = config.NewMapConfig(make(map[string]string))
 	}
+
 	persistedGlobalVars, err := SystemVariablesInConfig(globals)
 	if err != nil {
 		return err

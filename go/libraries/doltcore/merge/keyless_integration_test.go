@@ -16,7 +16,6 @@ package merge_test
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -109,7 +108,6 @@ func TestKeylessMerge(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtu.CreateTestEnv()
-			var wg sync.WaitGroup
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
@@ -119,7 +117,7 @@ func TestKeylessMerge(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, c := range test.setup {
-				exitCode := c.cmd.Exec(ctx, &wg, c.cmd.Name(), c.args, dEnv)
+				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 				require.Equal(t, 0, exitCode)
 			}
 
@@ -247,10 +245,9 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)
-		var wg sync.WaitGroup
 
 		for _, c := range cc {
-			exitCode := c.cmd.Exec(ctx, &wg, c.cmd.Name(), c.args, dEnv)
+			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 			require.Equal(t, 0, exitCode)
 		}
 	}
@@ -291,13 +288,12 @@ func TestKeylessMergeConflicts(t *testing.T) {
 
 		t.Run(test.name+"_resolved_ours", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
-			var wg sync.WaitGroup
 
 			setupTest(t, ctx, dEnv, test.setup)
 
 			resolve := cnfcmds.ResolveCmd{}
 			args := []string{"--ours", tblName}
-			exitCode := resolve.Exec(ctx, &wg, resolve.Name(), args, dEnv)
+			exitCode := resolve.Exec(ctx, resolve.Name(), args, dEnv)
 			require.Equal(t, 0, exitCode)
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -309,13 +305,12 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		})
 		t.Run(test.name+"_resolved_theirs", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
-			var wg sync.WaitGroup
 
 			setupTest(t, ctx, dEnv, test.setup)
 
 			resolve := cnfcmds.ResolveCmd{}
 			args := []string{"--theirs", tblName}
-			exitCode := resolve.Exec(ctx, &wg, resolve.Name(), args, dEnv)
+			exitCode := resolve.Exec(ctx, resolve.Name(), args, dEnv)
 			require.Equal(t, 0, exitCode)
 
 			root, err := dEnv.WorkingRoot(ctx)

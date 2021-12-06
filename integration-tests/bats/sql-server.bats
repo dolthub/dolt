@@ -598,16 +598,15 @@ SQL
     start_sql_server repo1
 
     multi_query repo1 1 "
-    CREATE DATABASE memdb;
-    USE memdb;
+    CREATE DATABASE test;
+    USE test;
     CREATE TABLE pk(pk int primary key);
     INSERT INTO pk (pk) VALUES (0);
     "
 
-    server_query repo1 1 "SELECT * FROM memdb.pk ORDER BY pk" "pk\n0"
-    server_query repo1 1 "DROP DATABASE memdb" ""
+    server_query repo1 1 "SELECT * FROM test.pk ORDER BY pk" "pk\n0"
+    server_query repo1 1 "DROP DATABASE test" ""
     server_query repo1 1 "SHOW DATABASES" "Database\ninformation_schema\nrepo1"
-
 }
 
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
@@ -1012,6 +1011,103 @@ while True:
 '
 }
 
+@test "sql-server: disable_client_multi_statements makes create trigger work" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    dolt sql -q 'create table test (id int primary key)'
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+log_level: debug
+behavior:
+  disable_client_multi_statements: true
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+EOF
+    dolt sql-server --config ./config.yml &
+    SERVER_PID=$!
+    # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
+    python3 -c '
+import mysql.connector
+import sys
+import time
+i=0
+while True:
+  try:
+    with mysql.connector.connect(host="127.0.0.1", user="dolt", port='"$PORT"', database="repo1", connection_timeout=1) as c:
+      cursor = c.cursor()
+      cursor.execute("""
+CREATE TRIGGER test_on_insert BEFORE INSERT ON test
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '\''45000'\'' SET MESSAGE_TEXT = '\''You cannot insert into this table'\'';
+END""")
+      for (t) in cursor:
+        print(t)
+      sys.exit(0)
+  except mysql.connector.Error as err:
+    if err.errno != 2003:
+      raise err
+    else:
+      i += 1
+      time.sleep(1)
+      if i == 10:
+        raise err
+'
+}
+
+@test "sql-server: client_multi_statements is currently broken" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    dolt sql -q 'create table test (id int primary key)'
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+log_level: debug
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+EOF
+    dolt sql-server --config ./config.yml &
+    SERVER_PID=$!
+    # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
+    run python3 -c '
+import mysql.connector
+import sys
+import time
+i=0
+while True:
+  try:
+    with mysql.connector.connect(host="127.0.0.1", user="dolt", port='"$PORT"', database="repo1", connection_timeout=1) as c:
+      cursor = c.cursor()
+      cursor.execute("""
+CREATE TRIGGER test_on_insert BEFORE INSERT ON test
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '\''45000'\'' SET MESSAGE_TEXT = '\''You cannot insert into this table'\'';
+END""")
+      for (t) in cursor:
+        print(t)
+      sys.exit(0)
+  except mysql.connector.Error as err:
+    if err.errno != 2003:
+      raise err
+    else:
+      i += 1
+      time.sleep(1)
+      if i == 10:
+        raise err
+'
+    # TODO: This currently fails because mysql.connector enables
+    # MULTI_STATEMENTS by default and dolt sql-server parses the above
+    # statement incorrectly. Once this is fixed, change the test name above and
+    # remove the `run` from the python3 invocation.
+    [ "$status" -ne 0 ]
+}
+
 @test "sql-server: auto increment for a table should reset between drops" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
@@ -1114,11 +1210,60 @@ while True:
     [[ "$output" =~ "b" ]] || false
 
     cd ..
+
+    server_query "" 1 "create database test3"
+    server_query "test3" 1 "create table c(x int)"
+    server_query "test3" 1 "insert into c values (1), (2)"
+    run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table c')"
+
+    server_query "" 1 "drop database test2"
+
+    [ -d test3 ]
+    [ ! -d test2 ]
     
     # make sure the databases exist on restart
     stop_sql_server
     start_sql_server
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2"
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest3"
+}
+
+@test "sql-server: create and drop database with --multi-db-dir" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    mkdir no_dolt && cd no_dolt
+    mkdir db_dir
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --multi-db-dir=db_dir
+
+    server_query "" 1 "create database test1"
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
+    server_query "test1" 1 "create table a(x int)"
+    server_query "test1" 1 "insert into a values (1), (2)"
+    # not bothering to check the results of the commit here
+    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
+
+    [ -d db_dir/test1 ]
+    
+    cd db_dir/test1
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new table a" ]] || false
+
+    cd ../..
+
+    server_query "" 1 "create database test3"
+    server_query "test3" 1 "create table c(x int)"
+    server_query "test3" 1 "insert into c values (1), (2)"
+    run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table c')"
+
+    server_query "" 1 "drop database test1"
+
+    [ -d db_dir/test3 ]
+    [ ! -d db_dir/test1 ]
+    
+    # make sure the databases exist on restart
+    stop_sql_server
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --multi-db-dir=db_dir
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest3"
 }
 
 @test "sql-server: create database errors" {

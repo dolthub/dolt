@@ -18,12 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"io"
 	"strconv"
 	"strings"
-	"sync"
-
-	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -162,7 +160,7 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 }
 
 // Exec executes the command
-func (cmd SqlServerCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	controller := NewServerController()
 	newCtx, cancelF := context.WithCancel(context.Background())
 	go func() {
@@ -170,10 +168,10 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr
 		controller.StopServer()
 		cancelF()
 	}()
-	return startServer(newCtx, wg, cmd.VersionStr, commandStr, args, dEnv, controller)
+	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 }
 
-func startServer(ctx context.Context, wg *sync.WaitGroup, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
+func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 
@@ -196,7 +194,7 @@ func startServer(ctx context.Context, wg *sync.WaitGroup, versionStr, commandStr
 
 	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-	if startError, closeError := Serve(ctx, wg, versionStr, serverConfig, serverController, dEnv); startError != nil || closeError != nil {
+	if startError, closeError := Serve(ctx, versionStr, serverConfig, serverController, dEnv); startError != nil || closeError != nil {
 		if startError != nil {
 			cli.PrintErrln(startError)
 		}
@@ -253,7 +251,9 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 			return nil, errors.New("failed to read databases in path specified by --multi-db-dir. error: " + err.Error())
 		}
 
-		serverConfig.withDBNamesAndPaths(dbNamesAndPaths)
+		// We set datadir to multi-db-dir here too
+		// TODO: rename multi-db-dir to data_dir
+		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(multiDBDir)
 	}
 
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -28,7 +27,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -111,18 +109,11 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
 func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
-	if err != nil {
-		return nil, nil, err
-	}
-	var wg sync.WaitGroup
-	pro, err := NewDoltDatabaseProvider(context.Background(), &wg, dEnv.Config, mrEnv, cli.CliOut, db)
-	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
-	engine := sqle.NewDefault(pro)
+	engine := sqle.NewDefault(NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, db))
 
 	sqlCtx := NewTestSQLCtx(ctx)
 
-	err = dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
+	err := dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
 	if err != nil {
 		return nil, nil, err
 	}

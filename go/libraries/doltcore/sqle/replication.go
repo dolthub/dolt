@@ -99,7 +99,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 
 	db := NewDatabase(name, dEnv.DbData(), opts)
 
-	rrd, err := NewReadReplicaDatabase(ctx, db, remoteName, dEnv.RepoStateReader(), dEnv.TempTableFilesDir())
+	rrd, err := NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {
 		err = fmt.Errorf("%w from remote '%s'; %s", ErrFailedToLoadReplicaDB, remoteName, err.Error())
 		if !SkipReplicationWarnings() {

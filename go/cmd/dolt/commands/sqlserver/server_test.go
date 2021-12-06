@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -54,10 +53,9 @@ var (
 )
 
 func TestServerArgs(t *testing.T) {
-	var wg sync.WaitGroup
 	serverController := NewServerController()
 	go func() {
-		startServer(context.Background(), &wg, "test", "dolt sql-server", []string{
+		startServer(context.Background(),"test", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
 			"-u", "username",
@@ -95,12 +93,11 @@ listener:
     read_timeout_millis: 5000
     write_timeout_millis: 5000
 `
-	var wg sync.WaitGroup
 	serverController := NewServerController()
 	go func() {
 		dEnv := dtestutils.CreateEnvWithSeedData(t)
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
-		startServer(context.Background(), &wg, "test", "dolt sql-server", []string{
+		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"--config", "config.yaml",
 		}, dEnv, serverController)
 	}()
@@ -117,7 +114,6 @@ listener:
 
 func TestServerBadArgs(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
-	var wg sync.WaitGroup
 
 	tests := [][]string{
 		{"-H", "127.0.0.0.1"},
@@ -132,7 +128,7 @@ func TestServerBadArgs(t *testing.T) {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
 			serverController := NewServerController()
 			go func(serverController *ServerController) {
-				startServer(context.Background(), &wg, "test", "dolt sql-server", test, env, serverController)
+				startServer(context.Background(), "test", "dolt sql-server", test, env, serverController)
 			}(serverController)
 
 			// In the event that a test fails, we need to prevent a test from hanging due to a running server
@@ -147,7 +143,6 @@ func TestServerBadArgs(t *testing.T) {
 
 func TestServerGoodParams(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
-	var wg sync.WaitGroup
 
 	tests := []ServerConfig{
 		DefaultServerConfig(),
@@ -168,7 +163,7 @@ func TestServerGoodParams(t *testing.T) {
 		t.Run(ConfigInfo(test), func(t *testing.T) {
 			sc := NewServerController()
 			go func(config ServerConfig, sc *ServerController) {
-				_, _ = Serve(context.Background(), &wg, "", config, sc, env)
+				_, _ = Serve(context.Background(), "", config, sc, env)
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
@@ -186,12 +181,11 @@ func TestServerGoodParams(t *testing.T) {
 func TestServerSelect(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15300)
-	var wg sync.WaitGroup
 
 	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), &wg, "", serverConfig, sc, env)
+		_, _ = Serve(context.Background(), "", serverConfig, sc, env)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
@@ -242,10 +236,9 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 		Addr:    ":15200",
 		Handler: http.DefaultServeMux,
 	}
-	var wg sync.WaitGroup
 	go server.ListenAndServe()
 	go func() {
-		startServer(context.Background(), &wg, "test", "dolt sql-server", []string{
+		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
 			"-u", "username",
@@ -267,8 +260,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	sc := NewServerController()
 	defer sc.StopServer()
 	go func() {
-		var wg sync.WaitGroup
-		_, _ = Serve(context.Background(), &wg, "", serverConfig, sc, dEnv)
+		_, _ = Serve(context.Background(), "", serverConfig, sc, dEnv)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
@@ -418,8 +410,7 @@ func TestReadReplica(t *testing.T) {
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 		go func() {
-			var wg sync.WaitGroup
-			_, _ = Serve(context.Background(), &wg, "", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
+			_, _ = Serve(context.Background(), "", serverConfig, sc, multiSetup.MrEnv.GetEnv(readReplicaDbName))
 		}()
 		err = sc.WaitForStart()
 		require.NoError(t, err)

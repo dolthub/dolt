@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -62,8 +61,7 @@ func TestCommandsRequireInitializedDir(t *testing.T) {
 	}
 
 	dEnv := createUninitializedEnv()
-	var wg sync.WaitGroup
 	for _, test := range tests {
-		test.comm.Exec(context.Background(), &wg, test.cmdStr, test.args, dEnv)
+		test.comm.Exec(context.Background(), test.cmdStr, test.args, dEnv)
 	}
 }

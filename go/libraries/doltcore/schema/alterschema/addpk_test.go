@@ -16,7 +16,6 @@ package alterschema_test
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,8 +34,7 @@ type testCommand struct {
 }
 
 func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) {
-	var wg sync.WaitGroup
-	exitCode := tc.cmd.Exec(ctx, &wg, tc.cmd.Name(), tc.args, dEnv)
+	exitCode := tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv)
 	require.Equal(t, 0, exitCode)
 }
 
@@ -50,7 +48,6 @@ func TestAddPk(t *testing.T) {
 	t.Run("Add primary key to table with index", func(t *testing.T) {
 		dEnv := dtestutils.CreateTestEnv()
 		ctx := context.Background()
-		var wg sync.WaitGroup
 
 		for _, c := range setupAdd {
 			c.exec(t, ctx, dEnv)
@@ -64,7 +61,7 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, originalMap.Empty())
 
-		exitCode := commands.SqlCmd{}.Exec(ctx, &wg, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
+		exitCode := commands.SqlCmd{}.Exec(ctx,"sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
 		require.Equal(t, 0, exitCode)
 
 		table, err = getTable(ctx, dEnv, "test")
@@ -105,7 +102,6 @@ func TestAddPk(t *testing.T) {
 	t.Run("Add primary key with diff column set than before", func(t *testing.T) {
 		dEnv := dtestutils.CreateTestEnv()
 		ctx := context.Background()
-		var wg sync.WaitGroup
 
 		for _, c := range setupAdd {
 			c.exec(t, ctx, dEnv)
@@ -114,7 +110,7 @@ func TestAddPk(t *testing.T) {
 		table, err := getTable(ctx, dEnv, "test")
 		assert.NoError(t, err)
 
-		exitCode := commands.SqlCmd{}.Exec(ctx, &wg, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (c1)"}, dEnv)
+		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (c1)"}, dEnv)
 		require.Equal(t, 0, exitCode)
 
 		table, err = getTable(ctx, dEnv, "test")
@@ -147,5 +143,29 @@ func TestAddPk(t *testing.T) {
 		ok, err = newMap.Has(ctx, kr2Key)
 		assert.NoError(t, err)
 		assert.True(t, ok)
+	})
+
+	t.Run("Add primary key when one more cells contain NULL", func(t *testing.T) {
+		dEnv := dtestutils.CreateTestEnv()
+		ctx := context.Background()
+
+		for _, c := range setupAdd {
+			c.exec(t, ctx, dEnv)
+		}
+
+		_, err := getTable(ctx, dEnv, "test")
+		assert.NoError(t, err)
+
+		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (c1)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD COLUMN (c2 INT NULL)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test DROP PRIMARY KEY"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)"}, dEnv)
+		require.Equal(t, 1, exitCode)
 	})
 }

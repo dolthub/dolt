@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	pretty "github.com/jedib0t/go-pretty/table"
@@ -120,7 +120,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 //
 // When all nodes have blame information, stop iterating through commits and print the blame graph.
 // Exec executes the command
-func (cmd BlameCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, blameDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -173,7 +173,17 @@ func runBlame(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, tab
 		return err
 	}
 
-	blameGraph, err := blameGraphFromCommit(ctx, dEnv, commit, tableName)
+	tbl, err := maybeTableFromCommit(ctx, commit, tableName)
+	if err != nil {
+		return err
+	}
+	if tbl == nil {
+		return fmt.Errorf("no table named %s found", tableName)
+	}
+
+	nbf := tbl.Format()
+
+	blameGraph, err := blameGraphFromCommit(ctx, dEnv, commit, tableName, nbf)
 	if err != nil {
 		return err
 	}
@@ -183,7 +193,7 @@ func runBlame(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, tab
 		return err
 	}
 
-	cli.Println(blameGraph.String(ctx, pkColNames))
+	cli.Println(blameGraph.String(ctx, pkColNames, nbf))
 	return nil
 }
 
@@ -199,7 +209,7 @@ type blameInput struct {
 	Schema       schema.Schema
 }
 
-func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb.Commit, tableName string) (*blameGraph, error) {
+func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb.Commit, tableName string, nbf *types.NomsBinFormat) (*blameGraph, error) {
 	// get the commits in reverse topological order ending with `commit`
 	hash, err := commit.HashOf()
 	if err != nil {
@@ -214,16 +224,6 @@ func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb
 	if err != nil {
 		return nil, err
 	}
-
-	tbl, err := maybeTableFromCommit(ctx, commit, tableName)
-	if err != nil {
-		return nil, err
-	}
-	if tbl == nil {
-		return nil, fmt.Errorf("no table named %s found", tableName)
-	}
-
-	nbf := tbl.Format()
 
 	blameGraph, err := blameGraphFromRows(ctx, nbf, rows)
 	if err != nil {
@@ -252,7 +252,12 @@ ROWLOOP:
 			}
 		}
 		// didn't find blame for a row...something's wrong
-		return nil, fmt.Errorf("couldn't find blame for row with primary key %v", strings.Join(getPKStrs(ctx, node.Key), ", "))
+		var v []string
+		pkVals := getPKVal(ctx, node.Key)
+		for _, cellValue := range pkVals {
+			v = append(v, fmt.Sprintf("%v", cellValue))
+		}
+		return nil, fmt.Errorf("couldn't find blame for row with primary key %v", strings.Join(v, ", "))
 	}
 
 	return blameGraph, nil
@@ -501,18 +506,18 @@ func (bg *blameGraph) AssignBlame(rowPK types.Value, nbf *types.NomsBinFormat, c
 	return nil
 }
 
-func getPKStrs(ctx context.Context, pk types.Value) (strs []string) {
+func getPKVal(ctx context.Context, pk types.Value) (values []types.Value) {
 	i := 0
 	pk.WalkValues(ctx, func(val types.Value) error {
 		// even-indexed values are index numbers. they aren't useful, don't print them.
 		if i%2 == 1 {
-			strs = append(strs, fmt.Sprintf("%v", val))
+			values = append(values, val)
 		}
 		i++
 		return nil
 	})
 
-	return strs
+	return values
 }
 
 func truncateString(str string, maxLength int) string {
@@ -533,8 +538,13 @@ func truncateString(str string, maxLength int) string {
 
 var dataColNames = []string{"Commit Msg", "Author", "Time", "Commit"}
 
+type rowMap struct {
+	Key   types.Value
+	Value []interface{}
+}
+
 // String returns the string representation of this blame graph
-func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
+func (bg *blameGraph) String(ctx context.Context, pkColNames []string, nbf *types.NomsBinFormat) string {
 	// here we have two []string and need one []interface{} (aka table.Row)
 	// this works but is not beautiful. if you know a better way, have at it!
 	header := []interface{}{}
@@ -544,8 +554,9 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 
 	t := pretty.NewWriter()
 	t.AppendHeader(header)
+	var p []rowMap
 	for _, v := range *bg {
-		pkVals := getPKStrs(ctx, v.Key)
+		pkVals := getPKVal(ctx, v.Key)
 		dataVals := []string{
 			truncateString(v.Description, 50),
 			v.Author,
@@ -554,13 +565,30 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 		}
 
 		row := []interface{}{}
-		for _, cellText := range pkVals {
-			row = append(row, cellText)
+		for _, cellValue := range pkVals {
+			row = append(row, fmt.Sprintf("%v", cellValue))
 		}
 		for _, cellText := range dataVals {
 			row = append(row, cellText)
 		}
-		t.AppendRow(row)
+		pkV, _ := pkVals[0].Value(ctx)
+		p = append(p, rowMap{pkV, row})
 	}
+
+	sort.Slice(p, func(i, j int) bool {
+		isLess, err := p[i].Key.Less(nbf, p[j].Key)
+		if err != nil {
+			return false
+		} else if isLess {
+			return true
+		} else {
+			return false
+		}
+	})
+
+	for _, k := range p {
+		t.AppendRow(k.Value)
+	}
+
 	return t.Render()
 }

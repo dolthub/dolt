@@ -189,12 +189,38 @@ func (root *RootValue) GenerateTagsForNewColColl(ctx context.Context, tableName 
 
 // GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
 // the new columns are used to see the tag generator.
-func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName string, newColNames []string, newColKinds []types.NomsKind, headRoot *RootValue) ([]uint64, error) {
+func (root *RootValue) GenerateTagsForNewColumns(
+	ctx context.Context,
+	tableName string,
+	newColNames []string,
+	newColKinds []types.NomsKind,
+	headRoot *RootValue,
+) ([]uint64, error) {
 	if len(newColNames) != len(newColKinds) {
 		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
 	}
 
-	if headRoot != nil {
+	var existingCols []schema.Column
+	newTags := make([]uint64, len(newColNames))
+
+	// Get existing columns from the current root, or the head root if the table doesn't exist in the current root. The
+	// latter case is to support reusing table tags in the case of drop / create in the same session, which is common
+	// during import.
+	tbl, found, err := root.GetTable(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	if found {
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			existingCols = append(existingCols, col)
+			return false, nil
+		})
+	} else if headRoot != nil {
 		tbl, found, err := headRoot.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
@@ -206,42 +232,39 @@ func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName 
 				return nil, err
 			}
 
-			colOverlap := schema.GetSharedCols(sch, newColNames, newColKinds)
-			if len(colOverlap) == len(newColNames) {
-				var reusedTags []uint64
-				for _, k := range newColNames {
-					reusedTags = append(reusedTags, colOverlap[k])
+			existingCols = schema.GetSharedCols(sch, newColNames, newColKinds)
+		}
+	}
+
+	// If we found any existing columns set them in the newTags list.
+	// We only do this if we want to reuse columns from a previous existing table with the same name
+	if headRoot != nil {
+		for _, col := range existingCols {
+			for i := range newColNames {
+				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) {
+					newTags[i] = col.Tag
+					break
 				}
-				return reusedTags, nil
 			}
 		}
 	}
 
-	rootSuperSchema, err := GetRootValueSuperSchema(ctx, root)
-
-	if err != nil {
-		return nil, err
-	}
-
 	var existingColKinds []types.NomsKind
-	tbl, found, err := root.GetTable(ctx, tableName)
+	for _, col := range existingCols {
+		existingColKinds = append(existingColKinds, col.Kind)
+	}
+
+	rootSuperSchema, err := GetRootValueSuperSchema(ctx, root)
 	if err != nil {
 		return nil, err
 	}
-	if found {
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			existingColKinds = append(existingColKinds, col.Kind)
-			return false, nil
-		})
-	}
 
-	newTags := make([]uint64, len(newColNames))
 	existingTags := set.NewUint64Set(rootSuperSchema.AllTags())
 	for i := range newTags {
+		if newTags[i] > 0 {
+			continue
+		}
+
 		newTags[i] = schema.AutoGenerateTag(existingTags, tableName, existingColKinds, newColNames[i], newColKinds[i])
 		existingColKinds = append(existingColKinds, newColKinds[i])
 		existingTags.Add(newTags[i])

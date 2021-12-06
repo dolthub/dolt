@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -64,8 +63,7 @@ func TestInit(t *testing.T) {
 			gCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 			gCfg.SetStrings(test.GlobalConfig)
 
-			var wg sync.WaitGroup
-			result := InitCmd{}.Exec(context.Background(), &wg, "dolt init", test.Args, dEnv)
+			result := InitCmd{}.Exec(context.Background(), "dolt init", test.Args, dEnv)
 
 			if (result == 0) != test.ExpectSuccess {
 				t.Error(test.Name, "- Expected success:", test.ExpectSuccess, "result:", result == 0)
@@ -86,14 +84,13 @@ func TestInit(t *testing.T) {
 
 func TestInitTwice(t *testing.T) {
 	dEnv := createUninitializedEnv()
-	var wg sync.WaitGroup
-	result := InitCmd{}.Exec(context.Background(), &wg, "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
+	result := InitCmd{}.Exec(context.Background(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
 
 	if result != 0 {
 		t.Error("First init should succeed")
 	}
 
-	result = InitCmd{}.Exec(context.Background(), &wg, "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
+	result = InitCmd{}.Exec(context.Background(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
 
 	if result == 0 {
 		t.Error("Second init should fail")

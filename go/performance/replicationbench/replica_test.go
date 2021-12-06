@@ -22,7 +22,6 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/gocraft/dbr/v2"
@@ -170,8 +169,7 @@ func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, 
 
 	//b.Logf("Starting server with Config %v\n", srv.ConfigInfo(cfg))
 	eg.Go(func() (err error) {
-		var wg sync.WaitGroup
-		startErr, closeErr := srv.Serve(ctx, &wg, "", cfg, serverController, dEnv)
+		startErr, closeErr := srv.Serve(ctx, "", cfg, serverController, dEnv)
 		if startErr != nil {
 			return startErr
 		}

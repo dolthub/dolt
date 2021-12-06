@@ -17,7 +17,6 @@ package credcmds
 import (
 	"context"
 	"io"
-	"sync"
 
 	"github.com/fatih/color"
 
@@ -70,7 +69,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd RmCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rmDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -44,7 +44,7 @@ type DoltDatabaseProvider struct {
 	mu        *sync.RWMutex
 
 	dataRootDir string
-	mrEnv       *env.MultiRepoEnv
+	fs          filesys.Filesys
 	cfg         config.ReadableConfig
 
 	dbFactoryUrl string
@@ -58,7 +58,7 @@ var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 const createDbWC = 1105 // 1105 represents an unknown error.
 
 // NewDoltDatabaseProvider returns a provider for the databases given
-func NewDoltDatabaseProvider(ctx context.Context, wg *sync.WaitGroup, config config.ReadableConfig, mrEnv *env.MultiRepoEnv, logger io.Writer, databases ...sql.Database) (DoltDatabaseProvider, error) {
+func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
@@ -69,19 +69,14 @@ func NewDoltDatabaseProvider(ctx context.Context, wg *sync.WaitGroup, config con
 		funcs[strings.ToLower(fn.FunctionName())] = fn
 	}
 
-	dbs, err := applyReplicationConfig(ctx, wg, mrEnv, logger, dbs)
-	if err != nil {
-		return DoltDatabaseProvider{}, err
-	}
-
 	return DoltDatabaseProvider{
 		databases:    dbs,
 		functions:    funcs,
 		mu:           &sync.RWMutex{},
-		mrEnv:        mrEnv,
+		fs:           fs,
 		cfg:          config,
 		dbFactoryUrl: doltdb.LocalDirDoltDB,
-	}, nil
+	}
 }
 
 // WithFunctions returns a copy of this provider with the functions given. Any previous functions are removed.
@@ -153,19 +148,19 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	exists, isDir := p.mrEnv.FileSystem().Exists(name)
+	exists, isDir := p.fs.Exists(name)
 	if exists && isDir {
 		return sql.ErrDatabaseExists.New(name)
 	} else if exists {
 		return fmt.Errorf("Cannot create DB, file exists at %s", name)
 	}
 
-	err := p.mrEnv.FileSystem().MkDirs(name)
+	err := p.fs.MkDirs(name)
 	if err != nil {
 		return err
 	}
 
-	newFs, err := p.mrEnv.FileSystem().WithWorkingDir(name)
+	newFs, err := p.fs.WithWorkingDir(name)
 	if err != nil {
 		return err
 	}
@@ -205,6 +200,22 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	// Get the DB's directory
+	exists, isDir := p.fs.Exists(name)
+	if !exists {
+		// engine should already protect against this
+		return sql.ErrDatabaseNotFound.New(name)
+	} else if !isDir {
+		return fmt.Errorf("unexpected error: %s exists but is not a directory", name)
+	}
+
+	err := p.fs.Delete(name, true)
+	if err != nil {
+		return err
+	}
+
+	// TODO: delete database in current dir
 
 	delete(p.databases, strings.ToLower(name))
 	return nil

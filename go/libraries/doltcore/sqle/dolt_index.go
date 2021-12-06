@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -78,14 +77,11 @@ RangeLoop:
 			return nil, nil
 		}
 
-		inclusive := true
 		var lowerKeys []interface{}
 		for _, rangeColumnExpr := range rang {
 			if rangeColumnExpr.HasLowerBound() {
-				inclusive = inclusive && rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed
 				lowerKeys = append(lowerKeys, sql.GetRangeCutKey(rangeColumnExpr.LowerBound))
 			} else {
-				inclusive = false
 				break
 			}
 		}
@@ -105,6 +101,7 @@ RangeLoop:
 			}
 
 			cb := columnBounds{}
+			// We promote each type as the value has already been validated against the type
 			promotedType := di.cols[i].TypeInfo.Promote()
 			if rangeColumnExpr.HasLowerBound() {
 				key := sql.GetRangeCutKey(rangeColumnExpr.LowerBound)
@@ -112,13 +109,16 @@ RangeLoop:
 				if err != nil {
 					return nil, err
 				}
-				cb.lowerbound.equals = rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed
-				cb.lowerbound.infinity = false
-				cb.lowerbound.val = val
+				if rangeColumnExpr.LowerBound.TypeAsLowerBound() == sql.Closed {
+					// For each lowerbound case, we set the upperbound to infinity, as the upperbound can increment to
+					// get to the desired overall case while retaining whatever was set for the lowerbound.
+					cb.boundsCase = boundsCase_greaterEquals_infinity
+				} else {
+					cb.boundsCase = boundsCase_greater_infinity
+				}
+				cb.lowerbound = val
 			} else {
-				cb.lowerbound.equals = false
-				cb.lowerbound.infinity = true
-				cb.lowerbound.val = nil
+				cb.boundsCase = boundsCase_infinity_infinity
 			}
 			if rangeColumnExpr.HasUpperBound() {
 				key := sql.GetRangeCutKey(rangeColumnExpr.UpperBound)
@@ -126,20 +126,31 @@ RangeLoop:
 				if err != nil {
 					return nil, err
 				}
-				cb.upperbound.equals = rangeColumnExpr.UpperBound.TypeAsUpperBound() == sql.Closed
-				cb.upperbound.infinity = false
-				cb.upperbound.val = val
-			} else {
-				cb.upperbound.equals = false
-				cb.upperbound.infinity = true
-				cb.upperbound.val = nil
+				if rangeColumnExpr.UpperBound.TypeAsUpperBound() == sql.Closed {
+					// Bounds cases are enum aliases on bytes, and they're arranged such that we can increment the case
+					// that was previously set when evaluating the lowerbound to get the proper overall case.
+					cb.boundsCase += 1
+				} else {
+					cb.boundsCase += 2
+				}
+				cb.upperbound = val
 			}
 			rangeCheck[i] = cb
 		}
 
+		// If the suffix checks will always succeed (both bounds are infinity) then they can be removed to reduce the
+		// number of checks that are called per-row.
+		for i := len(rangeCheck) - 1; i >= 0; i-- {
+			if rangeCheck[i].boundsCase == boundsCase_infinity_infinity {
+				rangeCheck = rangeCheck[:i]
+			} else {
+				break
+			}
+		}
+
 		readRanges = append(readRanges, &noms.ReadRange{
 			Start:     lowerboundTuple,
-			Inclusive: inclusive,
+			Inclusive: true, // The checks handle whether a value is included or not
 			Reverse:   false,
 			Check:     rangeCheck,
 		})
@@ -214,20 +225,6 @@ func (di *doltIndex) TableData() types.Map {
 // IndexRowData returns the map of index row data.
 func (di *doltIndex) IndexRowData() types.Map {
 	return di.indexRowData
-}
-
-// prefix returns a copy of this index with only the first n columns. If n is >= the number of columns present, then
-// the exact index is returned without copying.
-func (di *doltIndex) prefix(n int) *doltIndex {
-	if n >= len(di.cols) {
-		return di
-	}
-	ndi := *di
-	ndi.cols = di.cols[:n]
-	ndi.id = fmt.Sprintf("%s_PREFIX_%d", di.id, n)
-	ndi.comment = fmt.Sprintf("prefix of %s multi-column index on %d column(s)", di.id, n)
-	ndi.generated = true
-	return &ndi
 }
 
 // keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to

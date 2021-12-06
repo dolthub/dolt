@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/fatih/color"
 
@@ -45,11 +44,12 @@ const (
 	directoryFlag = "directory"
 	filenameFlag  = "file-name"
 
-	sqlFileExt   = "sql"
-	csvFileExt   = "csv"
-	jsonFileExt  = "json"
-	emptyFileExt = ""
-	emptyStr     = ""
+	sqlFileExt     = "sql"
+	csvFileExt     = "csv"
+	jsonFileExt    = "json"
+	parquetFileExt = "parquet"
+	emptyFileExt   = ""
+	emptyStr       = ""
 )
 
 var dumpDocs = cli.CommandDocumentationContent{
@@ -99,7 +99,7 @@ func (cmd DumpCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd DumpCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, dumpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -162,6 +162,11 @@ func (cmd DumpCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr stri
 		}
 	case jsonFileExt:
 		err = dumpTables(ctx, root, dEnv, force, tblNames, jsonFileExt, name)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+	case parquetFileExt:
+		err = dumpTables(ctx, root, dEnv, force, tblNames, parquetFileExt, name)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -328,6 +333,11 @@ func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError)
 	case jsonFileExt:
 		if fnOk {
 			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, jsonFileExt).SetPrintUsage().Build()
+		}
+		return dn, nil
+	case parquetFileExt:
+		if fnOk {
+			return emptyStr, errhand.BuildDError("%s is not supported for %s exports", filenameFlag, parquetFileExt).SetPrintUsage().Build()
 		}
 		return dn, nil
 	default:

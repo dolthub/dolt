@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
@@ -68,7 +67,7 @@ func (cmd MergeBaseCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd MergeBaseCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeBaseDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

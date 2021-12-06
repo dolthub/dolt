@@ -17,14 +17,12 @@ package commands
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"os"
-	"strings"
-	"sync"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
+	"io"
+	"os"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -121,7 +119,7 @@ func (cmd BackupCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd BackupCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, backupDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

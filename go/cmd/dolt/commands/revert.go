@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"io"
-	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -68,7 +67,7 @@ func (cmd RevertCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements the interface cli.Command.
-func (cmd RevertCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateRevertArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -136,7 +135,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr st
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	res := AddCmd{}.Exec(ctx, wg, "add", []string{"-A"}, dEnv)
+	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv)
 	if res != 0 {
 		return res
 	}
@@ -148,5 +147,5 @@ func (cmd RevertCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr st
 		commitParams = append(commitParams, "--author", authorStr)
 	}
 
-	return CommitCmd{}.Exec(ctx, wg, "commit", commitParams, dEnv)
+	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv)
 }

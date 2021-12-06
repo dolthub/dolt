@@ -51,7 +51,7 @@ import (
 )
 
 const (
-	Version = "0.34.2"
+	Version = "0.34.7"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -306,18 +306,15 @@ func runMain() int {
 
 	defer tempfiles.MovableTempFileProvider.Clean()
 
-	if dEnv.DoltDB != nil {
-		err := dsess.InitPersistedSystemVars(dEnv)
-		if err != nil {
-			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
-		}
-		dEnv.DoltDB.SetCommitHookLogger(ctx, cli.OutStream)
+	err = dsess.InitPersistedSystemVars(dEnv)
+	if err != nil {
+		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
 	}
 
 	start := time.Now()
 	var wg sync.WaitGroup
 	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, &wg, "dolt", args, dEnv)
+	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 	stop()
 	wg.Wait()
 

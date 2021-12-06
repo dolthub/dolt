@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"sync"
 
 	"github.com/fatih/color"
 
@@ -91,7 +90,7 @@ func (cmd GarbageCollectionCmd) EventType() eventsapi.ClientEventType {
 
 // Version displays the version of the running dolt client
 // Exec executes the command
-func (cmd GarbageCollectionCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	var verr errhand.VerboseError
 
 	ap := cmd.ArgParser()

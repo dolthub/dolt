@@ -16,14 +16,16 @@ package tblcmds
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -33,11 +35,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -88,17 +91,8 @@ In create, update, and replace scenarios the file's extension is used to infer t
 	},
 }
 
-type tableImportOp string
-
-const (
-	CreateOp  tableImportOp = "overwrite"
-	ReplaceOp tableImportOp = "replace"
-	UpdateOp  tableImportOp = "update"
-	InvalidOp tableImportOp = "invalid"
-)
-
 type importOptions struct {
-	operation   tableImportOp
+	operation   mvdata.TableImportOp
 	tableName   string
 	contOnErr   bool
 	force       bool
@@ -137,7 +131,7 @@ func (m importOptions) FloatThreshold() float64 {
 }
 
 func (m importOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
-	if !m.force && m.operation == CreateOp {
+	if !m.force && m.operation == mvdata.CreateOp {
 		return m.dest.Exists(ctx, root, fs)
 	}
 	return false, nil
@@ -196,6 +190,8 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
 		} else if val.Format == mvdata.JsonFile {
 			srcOpts = mvdata.JSONOptions{TableName: tableName, SchFile: schemaFile}
+		} else if val.Format == mvdata.ParquetFile {
+			srcOpts = mvdata.ParquetOptions{TableName: tableName, SchFile: schemaFile}
 		}
 
 	case mvdata.StreamDataLocation:
@@ -209,17 +205,17 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		}
 	}
 
-	var moveOp tableImportOp
+	var moveOp mvdata.TableImportOp
 	switch {
 	case apr.Contains(createParam):
-		moveOp = CreateOp
+		moveOp = mvdata.CreateOp
 	case apr.Contains(replaceParam):
-		moveOp = ReplaceOp
+		moveOp = mvdata.ReplaceOp
 	default:
-		moveOp = UpdateOp
+		moveOp = mvdata.UpdateOp
 	}
 
-	if moveOp != CreateOp {
+	if moveOp != mvdata.CreateOp {
 		root, err := dEnv.WorkingRoot(ctx)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -305,6 +301,8 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		_, hasSchema := apr.GetValue(schemaParam)
 		if srcFileLoc.Format == mvdata.JsonFile && apr.Contains(createParam) && !hasSchema {
 			return errhand.BuildDError("Please specify schema file for .json tables.").Build()
+		} else if srcFileLoc.Format == mvdata.ParquetFile && apr.Contains(createParam) && !hasSchema {
+			return errhand.BuildDError("Please specify schema file for .parquet tables.").Build()
 		}
 	}
 
@@ -352,7 +350,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd ImportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
@@ -384,26 +382,54 @@ func (cmd ImportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr st
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mover, nDMErr := newImportDataMover(ctx, root, dEnv, mvOpts, importStatsCB)
-
+	rd, nDMErr := newImportDataReader(ctx, root, dEnv, mvOpts)
 	if nDMErr != nil {
-
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, mvOpts)
+	wrSch, nDMErr := getWriterSchema(ctx, root, dEnv, rd.GetSchema(), mvOpts)
+	if nDMErr != nil {
+		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	wr, nDMErr := newImportDataWriter(ctx, dEnv, wrSch, mvOpts)
+	if nDMErr != nil {
+		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	skipped, err := move(ctx, rd, wr, mvOpts)
+	if err != nil {
+		if pipeline.IsTransformFailure(err) {
+			bdr := errhand.BuildDError("\nA bad row was encountered while moving data.")
+			r := pipeline.GetTransFailureSqlRow(err)
+
+			if r != nil {
+				bdr.AddDetails("Bad Row: " + sql.FormatRow(r))
+			}
+
+			details := pipeline.GetTransFailureDetails(err)
+
+			bdr.AddDetails(details)
+			bdr.AddDetails("These can be ignored using '--continue'")
+
+			return commands.HandleVErrAndExitCode(bdr.Build(), usage)
+		}
+
+		verr = errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
 
 	cli.PrintErrln()
 
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 	}
-	if verr == nil {
-		cli.PrintErrln(color.CyanString("Import completed successfully."))
-	}
+	cli.PrintErrln(color.CyanString("Import completed successfully."))
 
-	return commands.HandleVErrAndExitCode(verr, usage)
+	return 0
 }
 
 var displayStrLen int
@@ -415,9 +441,10 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
+func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.TableReadCloser, *mvdata.DataMoverCreationError) {
 	var err error
 
+	// Checks whether import destination table already exists. This can probably be simplified to not need a root value...
 	ow, err := impOpts.checkOverwrite(ctx, root, dEnv.FS)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
@@ -426,83 +453,156 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
 	}
 
-	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, impOpts)
-	if dmce != nil {
-		return nil, dmce
-	}
-
-	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
+	rd, _, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
 
-	defer func() {
-		if rd != nil {
-			rd.Close(ctx)
-		}
-	}()
+	return rd, nil
+}
 
-	err = wrSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		preImage := impOpts.nameMapper.PreImage(col.Name)
-		_, found := rd.GetSchema().GetAllCols().GetByName(preImage)
+func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
+	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, imOpts)
+	if dmce != nil {
+		return nil, dmce
+	}
+
+	err := wrSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		preImage := imOpts.nameMapper.PreImage(col.Name)
+		_, found := rdSchema.GetAllCols().GetByName(preImage)
 		if !found {
 			err = fmt.Errorf("input primary keys do not match primary keys of existing table")
 		}
 		return err == nil, err
 	})
-
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	transforms, fieldMapping, err := mvdata.NameMapTransform(ctx, root.VRW(), rd.GetSchema(), wrSch, impOpts.nameMapper)
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err}
-	}
+	// allow subsetting of the final write schema only if it is an update operation. Every other operation must
+	// match perfectly.
+	if wrSch.GetAllCols().Size() != rdSchema.GetAllCols().Size() && imOpts.operation == mvdata.UpdateOp {
+		ret := schema.NewColCollection()
 
-	// read tags will be the tags of read rows which come from the imported data.  Being able to distinguish columns coming
-	// from the import data allows us to merge the data with existing rows
-	rdTags := make([]uint64, 0, len(fieldMapping.SrcToDest))
-	for _, tag := range fieldMapping.SrcToDest {
-		rdTags = append(rdTags, tag)
-	}
+		rdSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			wrColName := imOpts.nameMapper.Map(col.Name)
+			wrCol, ok := wrSch.GetAllCols().GetByName(wrColName)
+			if ok {
+				ret = ret.Append(wrCol)
+			}
 
-	bulkTeaf := editor.NewBulkImportTEAFactory(root.VRW().Format(), root.VRW(), dEnv.TempTableFilesDir())
-	opts := editor.Options{Deaf: bulkTeaf}
+			return false, nil
+		})
 
-	var wr table.TableWriteCloser
-	switch impOpts.operation {
-	case CreateOp:
-		filePath, err := dEnv.FS.Abs(impOpts.DestName())
+		newSch, err := schema.SchemaFromCols(ret)
 		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
-		writer, err := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
-		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
-		}
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts, writer)
-	case ReplaceOp:
-		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, opts)
-	case UpdateOp:
-		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, root, srcIsSorted, wrSch, statsCB, rdTags, opts)
-	default:
-		err = errors.New("invalid move operation")
+
+		return newSch, nil
 	}
 
+	return wrSch, nil
+}
+
+func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema schema.Schema, imOpts *importOptions) (mvdata.DataWriter, *mvdata.DataMoverCreationError) {
+	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.tableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation}
+
+	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, wrSchema, moveOps, importStatsCB)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}
 
-	imp := &mvdata.DataMover{
-		Rd:         rd,
-		Transforms: transforms,
-		Wr:         wr,
-		ContOnErr:  impOpts.contOnErr,
-	}
-	rd = nil
+	return mv, nil
+}
 
-	return imp, nil
+func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, options *importOptions) (int64, error) {
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Setup the necessary data points for the import job
+	parsedRowChan := make(chan sql.Row)
+	var rowErr error
+	var printStarted bool
+	var badCount int64
+	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
+		if !options.contOnErr {
+			rowErr = trf
+			return true
+		}
+
+		if !printStarted {
+			cli.PrintErrln("The following rows were skipped:")
+			printStarted = true
+		}
+
+		r := pipeline.GetTransFailureSqlRow(trf)
+
+		if r != nil {
+			cli.PrintErr(sql.FormatRow(r))
+		}
+
+		atomic.AddInt64(&badCount, 1)
+		return false
+	}
+
+	// Start the group that reads rows from the reader
+	g.Go(func() error {
+		defer close(parsedRowChan)
+
+		for {
+			r, err := rd.ReadRow(ctx)
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				} else if table.IsBadRow(err) {
+					dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+					trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
+					quit := badRowCB(trf)
+					if quit {
+						return trf
+					}
+				} else {
+					return err
+				}
+			} else {
+				dRow, err := transformToDoltRow(r, rd.GetSchema(), wr.Schema(), options.nameMapper)
+				if err != nil {
+					return err
+				}
+
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case parsedRowChan <- dRow:
+				}
+			}
+		}
+	})
+
+	// Start the group that writes rows
+	g.Go(func() error {
+		err := wr.WriteRows(ctx, parsedRowChan, badRowCB)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	err := g.Wait()
+	if err != nil && err != io.EOF {
+		return badCount, err
+	}
+	if rowErr != nil {
+		return badCount, rowErr
+	}
+
+	err = wr.Commit(ctx)
+	if err != nil {
+		return badCount, err
+	}
+
+	return badCount, nil
 }
 
 func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
@@ -520,7 +620,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 		return out, nil
 	}
 
-	if impOpts.operation == CreateOp {
+	if impOpts.operation == mvdata.CreateOp {
 		if impOpts.srcIsStream() {
 			// todo: capture stream data to file so we can use schema inferrence
 			return nil, nil
@@ -607,4 +707,98 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	}
 
 	panic("Unhandled Error type")
+}
+
+// transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
+// 3) Addresses any type inconsistencies.
+func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
+	doltRow, err := sqlutil.DoltRowToSqlRow(row, rdSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, col := range wrSchema {
+		switch col.Type {
+		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
+			switch doltRow[i].(type) {
+			case int8:
+				val, ok := stringToBoolean(strconv.Itoa(int(doltRow[i].(int8))))
+				if ok {
+					doltRow[i] = val
+				}
+			case string:
+				val, ok := stringToBoolean(doltRow[i].(string))
+				if ok {
+					doltRow[i] = val
+				}
+			case bool:
+				doltRow[i] = doltRow[i].(bool)
+			}
+		}
+
+		switch col.Type.(type) {
+		case sql.StringType:
+		default:
+			doltRow[i] = emptyStringToNil(doltRow[i])
+		}
+	}
+
+	rdSchemaAsDoltSchema, err := sqlutil.FromDoltSchema(wrSchema[0].Source, rdSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchemaAsDoltSchema.Schema, wrSchema, nameMapper)
+	return doltRow, nil
+}
+
+func stringToBoolean(s string) (result bool, canConvert bool) {
+	lower := strings.ToLower(s)
+	switch lower {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	case "0":
+		return false, true
+	case "1":
+		return true, false
+	default:
+		return false, false
+	}
+}
+
+func emptyStringToNil(val interface{}) interface{} {
+	if val == nil {
+		return val
+	}
+
+	if s, canConvert := val.(string); canConvert {
+		if s == "" {
+			return nil
+		}
+	}
+
+	return val
+}
+
+// matchReadSchemaToWriteSchema takes the read schema and accounts for subsetting and mapper (-m) differences.
+func matchReadSchemaToWriteSchema(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) sql.Row {
+	returnRow := sql.Row{}
+
+	for _, wCol := range wrSchema {
+		seen := false
+		for rIdx, rCol := range rdSchema {
+			if rCol.Name == nameMapper.PreImage(wCol.Name) {
+				returnRow = append(returnRow, row[rIdx])
+				seen = true
+			}
+		}
+
+		if !seen {
+			returnRow = append(returnRow, nil)
+		}
+	}
+
+	return returnRow
 }

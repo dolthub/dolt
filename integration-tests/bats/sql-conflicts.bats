@@ -87,9 +87,9 @@ SQL
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
 
-  # delete an already resolved conflict a 2nd time is an error
+  # delete an already resolved conflict a 2nd time is fine
   run dolt sql -q "DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0"
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 0 ]
 }
 
 

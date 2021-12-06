@@ -55,8 +55,8 @@ var ErrCannotCreateReplicaRevisionDbForCommit = errors.New("cannot create replic
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
-func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, rsr env.RepoStateReader, tmpDir string) (ReadReplicaDatabase, error) {
-	remotes, err := rsr.GetRemotes()
+func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string, dEnv *env.DoltEnv) (ReadReplicaDatabase, error) {
+	remotes, err := dEnv.GetRemotes()
 	if err != nil {
 		return EmptyReadReplica, err
 	}
@@ -74,9 +74,9 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 	return ReadReplicaDatabase{
 		Database: db,
 		remote:   remote,
-		tmpDir:   tmpDir,
+		tmpDir:   dEnv.TempTableFilesDir(),
 		srcDB:    srcDB,
-		headRef:  rsr.CWBHeadRef(),
+		headRef:  dEnv.RepoStateReader().CWBHeadRef(),
 	}, nil
 }
 

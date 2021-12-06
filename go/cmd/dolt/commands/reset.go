@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -79,7 +78,7 @@ func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd ResetCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateResetArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)

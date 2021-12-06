@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/fatih/color"
 
@@ -208,7 +207,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd ExportCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 

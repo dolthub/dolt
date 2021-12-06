@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -75,7 +74,7 @@ func (cmd MvCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd MvCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblMvDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -93,7 +92,7 @@ func (cmd MvCmd) Exec(ctx context.Context, wg *sync.WaitGroup, commandStr string
 	}
 	queryStr = fmt.Sprintf("%sRENAME TABLE `%s` TO `%s`;", queryStr, oldName, newName)
 
-	return commands.SqlCmd{}.Exec(ctx, wg, "", []string{
+	return commands.SqlCmd{}.Exec(ctx, "", []string{
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),
 		queryStr,
