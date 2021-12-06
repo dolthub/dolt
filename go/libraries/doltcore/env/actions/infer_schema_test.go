@@ -17,12 +17,12 @@ package actions
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 	"os"
 	"strconv"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -190,8 +190,8 @@ func testSqlFindCommonType(t *testing.T) {
 		{
 			name: "ints and bools",
 			inferSet: sqlTypeInfoSet{
-				sql.Int32: {},
-				sql.Boolean:  {},
+				sql.Int32:   {},
+				sql.Boolean: {},
 			},
 			expType: sql.Text,
 		},
@@ -199,7 +199,7 @@ func testSqlFindCommonType(t *testing.T) {
 			name: "floats and bools",
 			inferSet: sqlTypeInfoSet{
 				sql.Float32: {},
-				sql.Boolean:    {},
+				sql.Boolean: {},
 			},
 			expType: sql.Text,
 		},
@@ -257,7 +257,7 @@ func testSqlFindCommonTypeFromSingleType(t *testing.T) {
 			{
 				name: fmt.Sprintf("Unknown and %s", ti.String()),
 				inferSet: sqlTypeInfoSet{
-					ti:                   {},
+					ti:       {},
 					sql.Null: {},
 				},
 				expType: ti,
@@ -310,10 +310,10 @@ func testSqlFindCommonChronologicalType(t *testing.T) {
 
 func TestSqlInferSchema(t *testing.T) {
 	tests := []struct {
-		name         string
-		csvContents  string
-		infArgs      InferenceArgs
-		expTypes     map[string]sql.Type
+		name        string
+		csvContents string
+		infArgs     InferenceArgs
+		expTypes    map[string]sql.Type
 	}{
 		{
 			"one of each kind",
@@ -364,7 +364,7 @@ func TestSqlInferSchema(t *testing.T) {
 			},
 			map[string]sql.Type{
 				"float": sql.Int32,
-				"uuid": sql.UUID,
+				"uuid":  sql.UUID,
 			},
 		},
 		{
@@ -388,7 +388,7 @@ func TestSqlInferSchema(t *testing.T) {
 			},
 			map[string]sql.Type{
 				"float": sql.Float32,
-				"uuid": sql.UUID,
+				"uuid":  sql.UUID,
 			},
 		},
 	}

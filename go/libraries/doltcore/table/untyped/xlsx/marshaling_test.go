@@ -16,11 +16,12 @@ package xlsx
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/stretchr/testify/assert"
 )

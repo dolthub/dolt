@@ -16,14 +16,12 @@ package json
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/enginetest"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"testing"
-
+	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -48,18 +46,18 @@ func TestReader(t *testing.T) {
 
 	sch := sql.Schema{
 		&sql.Column{
-			Name: "id",
-			Type: sql.Int64,
+			Name:       "id",
+			Type:       sql.Int64,
 			PrimaryKey: true,
 		},
 		&sql.Column{
-			Name: "first name",
-			Type: sql.Text,
+			Name:       "first name",
+			Type:       sql.Text,
 			PrimaryKey: false,
 		},
 		&sql.Column{
-			Name: "last name",
-			Type: sql.Text,
+			Name:       "last name",
+			Type:       sql.Text,
 			PrimaryKey: false,
 		},
 	}
@@ -118,18 +116,18 @@ func TestReaderBadJson(t *testing.T) {
 
 	sch := sql.Schema{
 		&sql.Column{
-			Name: "id",
-			Type: sql.Int64,
+			Name:       "id",
+			Type:       sql.Int64,
 			PrimaryKey: true,
 		},
 		&sql.Column{
-			Name: "first name",
-			Type: sql.Text,
+			Name:       "first name",
+			Type:       sql.Text,
 			PrimaryKey: false,
 		},
 		&sql.Column{
-			Name: "last name",
-			Type: sql.Text,
+			Name:       "last name",
+			Type:       sql.Text,
 			PrimaryKey: false,
 		},
 	}
