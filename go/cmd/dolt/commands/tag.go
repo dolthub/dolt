@@ -51,7 +51,7 @@ const (
 
 type TagCmd struct{}
 
-// TaggerName returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd TagCmd) Name() string {
 	return "tag"
 }
@@ -64,7 +64,7 @@ func (cmd TagCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd TagCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tagDocs, ap))
 }
 
 func (cmd TagCmd) ArgParser() *argparser.ArgParser {

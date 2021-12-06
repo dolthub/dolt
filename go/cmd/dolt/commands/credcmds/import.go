@@ -38,7 +38,7 @@ var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Import a dolt credential from an existing .jwk file.",
 	LongDesc: `Imports a dolt credential from an existing .jwk file.
 
-Dolt credentials are stored in the creds subdirectory of the global dolt conifg
+Dolt credentials are stored in the creds subdirectory of the global dolt config
 directory as files with one key per file in JWK format. This command can import
 a JWK from a file or stdin and places the imported key in the correct place for
 dolt to find it as a valid credential.
