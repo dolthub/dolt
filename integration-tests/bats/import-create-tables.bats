@@ -533,7 +533,6 @@ pk1,pk2,v1
 1,,1
 DELIM
     run dolt table import -c --pk=pk test null-pk-1.csv
-    echo $output
     [ "$status" -eq 1 ]
     [[ "$output" =~ "pk" ]]
     run dolt table import -c --pk=pk1,pk2 test null-pk-2.csv
@@ -552,9 +551,9 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]]
     [[ "$output" =~ "\`pk\` int" ]]
-    [[ "$output" =~ "\`str\` varchar(16383)" ]]
+    [[ "$output" =~ "\`str\` text" ]]
     [[ "$output" =~ "\`int\` int unsigned" ]]
-    [[ "$output" =~ "\`bool\` bit(1)" ]]
+    [[ "$output" =~ "\`bool\` tinyint" ]]
     [[ "$output" =~ "\`float\` float" ]]
     [[ "$output" =~ "\`date\` date" ]]
     [[ "$output" =~ "\`time\` time" ]]

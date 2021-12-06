@@ -304,11 +304,12 @@ SQL
     [ -f test.parquet ]
 
     dolt checkout new_branch
-    dolt table import -r testTypes test.parquet
+    run dolt table import -r testTypes test.parquet
+    [ "$status" -eq 0 ]
     dolt add .
     dolt commit --allow-empty -m "update table from parquet file"
 
-    run dolt diff --summary main new_branch
+    run dolt diff  main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
