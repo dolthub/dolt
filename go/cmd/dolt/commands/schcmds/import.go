@@ -17,6 +17,8 @@ package schcmds
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"os"
 	"path/filepath"
@@ -371,13 +373,22 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts 
 
 	defer rd.Close(ctx)
 
-	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, impOpts)
-
+	inferredSqlSchema, err := actions.InferSqlSchemaFromTableReader(ctx, rd, impOpts)
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to infer schema").AddCause(err).Build()
 	}
 
-	return CombineColCollections(ctx, root, infCols, impOpts)
+	err = sql.ValidateSchema(inferredSqlSchema)
+	if err != nil {
+		return nil, errhand.BuildDError("error: invalid schema").AddCause(err).Build()
+	}
+
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, root, impOpts.tableName, inferredSqlSchema, nil)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to convert schema").AddCause(err).Build()
+	}
+
+	return CombineColCollections(ctx, root, doltSchema.GetAllCols(), impOpts)
 }
 
 func CombineColCollections(ctx context.Context, root *doltdb.RootValue, inferredCols *schema.ColCollection, impOpts *importOptions) (schema.Schema, errhand.VerboseError) {
