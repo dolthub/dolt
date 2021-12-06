@@ -60,7 +60,6 @@ is provided. The force flag forces the existing dump file to be overwritten.
 `,
 
 	Synopsis: []string{
-		"[options] [{{.LessThan}}commit{{.GreaterThan}}]",
 		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] ",
 	},
 }
@@ -80,7 +79,7 @@ func (cmd DumpCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the help text for the command at the given path
 func (cmd DumpCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, dumpDocs, ap))
 }
 
 func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
