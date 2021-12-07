@@ -148,7 +148,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 	return row.FromNoms(nrr.sch, k, v)
 }
 
-func (nrr *NomsRangeReader) GetSqlSchema() sql.Schema {
+func (nrr *NomsRangeReader) GetSqlSchema() sql.PrimaryKeySchema {
 	panic("todo")
 }
 

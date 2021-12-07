@@ -459,52 +459,52 @@ func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 	return rd, nil
 }
 
-func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rd table.TableReadCloser, imOpts *importOptions) (sql.Schema, *mvdata.DataMoverCreationError) {
+func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rd table.TableReadCloser, imOpts *importOptions) (sql.PrimaryKeySchema, *mvdata.DataMoverCreationError) {
 	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, imOpts)
 	if dmce != nil {
-		return nil, dmce
+		return sql.PrimaryKeySchema{}, dmce
 	}
 
 	// Update the source to the table name to use schema.Contains and schema.IndexOf.
-	rdSchema := rd.GetSqlSchema()
+	rdSchema := rd.GetSqlSchema().Schema
 	for _, col := range rdSchema {
 		col.Source = imOpts.tableName
 	}
 
 	// Validate the primary keys are aligned between the read schema and write schema
-	for _, wCol := range wrSch {
+	for _, wCol := range wrSch.Schema {
 		if wCol.PrimaryKey {
 			preImage := imOpts.nameMapper.PreImage(wCol.Name)
 			if !rdSchema.Contains(preImage, wCol.Source) {
-				return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: fmt.Errorf("input primary keys do not match primary keys of existing table")}
+				return sql.PrimaryKeySchema{}, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: fmt.Errorf("input primary keys do not match primary keys of existing table")}
 			}
 		}
 	}
 
 	// allow subsetting of the final write schema only if it is an update operation. Every other operation must
 	// match perfectly.
-	if len(wrSch) != len(rdSchema) && imOpts.operation == mvdata.UpdateOp {
+	if len(wrSch.Schema) != len(rdSchema) && imOpts.operation == mvdata.UpdateOp {
 		var ret sql.Schema
 
 		for _, rCol := range rdSchema {
 			wrColName := imOpts.nameMapper.Map(rCol.Name)
 			if wrSch.Contains(wrColName, rCol.Source) {
-				ret = append(ret, wrSch[wrSch.IndexOf(wrColName, rCol.Source)])
+				ret = append(ret, wrSch.Schema[wrSch.IndexOf(wrColName, rCol.Source)])
 			}
 		}
 
-		return ret, nil
+		return sql.NewPrimaryKeySchema(ret), nil
 	}
 
 	// Update the source the schema
-	for _, col := range wrSch {
+	for _, col := range wrSch.Schema {
 		col.Source = imOpts.tableName
 	}
 
 	return wrSch, nil
 }
 
-func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema sql.Schema, imOpts *importOptions) (mvdata.DataWriter, *mvdata.DataMoverCreationError) {
+func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema sql.PrimaryKeySchema, imOpts *importOptions) (mvdata.DataWriter, *mvdata.DataMoverCreationError) {
 	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.tableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation}
 
 	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, wrSchema, moveOps, importStatsCB)
@@ -563,7 +563,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 			} else {
-				dRow, err := namedAndTypeTransform(r, rd.GetSqlSchema(), wr.Schema(), options.nameMapper)
+				dRow, err := namedAndTypeTransform(r, rd.GetSqlSchema().Schema, wr.Schema(), options.nameMapper)
 				if err != nil {
 					return err
 				}
@@ -603,7 +603,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	return badCount, nil
 }
 
-func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (sql.Schema, *mvdata.DataMoverCreationError) {
+func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (sql.PrimaryKeySchema, *mvdata.DataMoverCreationError) {
 	if impOpts.schFile != "" {
 		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, fs)
 
@@ -612,21 +612,21 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 		}
 
 		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+			return sql.PrimaryKeySchema{}, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
 
-		return out.Schema, nil
+		return out, nil
 	}
 
 	if impOpts.operation == mvdata.CreateOp {
 		if impOpts.srcIsStream() {
 			// todo: capture stream data to file so we can use schema inferrence
-			return nil, nil
+			return sql.PrimaryKeySchema{}, nil
 		}
 
 		rd, _, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
 		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
+			return sql.PrimaryKeySchema{}, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 		}
 		defer rd.Close(ctx)
 
@@ -636,7 +636,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 
 		outSch, err := mvdata.InferSchema(ctx, rd, impOpts.DestName(), impOpts.primaryKeys, impOpts)
 		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+			return sql.PrimaryKeySchema{}, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
 
 		return outSch, nil
@@ -645,16 +645,16 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 	// UpdateOp || ReplaceOp
 	tblRd, _, err := impOpts.dest.NewReader(ctx, root, fs, nil) // TODO: Migrate away from this reader when export is rewritten
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
+		return sql.PrimaryKeySchema{}, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
 	defer tblRd.Close(ctx)
 
 	sch, err := sqlutil.FromDoltSchema(impOpts.DestName(), tblRd.GetSchema())
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+		return sql.PrimaryKeySchema{}, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	return sch.Schema, nil
+	return sch, nil
 }
 
 func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationError) errhand.VerboseError {

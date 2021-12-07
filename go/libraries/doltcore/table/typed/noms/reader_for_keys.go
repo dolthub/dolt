@@ -99,7 +99,7 @@ func (nmr *NomsMapReaderForKeys) ReadRow(ctx context.Context) (row.Row, error) {
 	return row.FromNoms(nmr.sch, key.(types.Tuple), value.(types.Tuple))
 }
 
-func (nmr *NomsMapReaderForKeys) GetSqlSchema() sql.Schema {
+func (nmr *NomsMapReaderForKeys) GetSqlSchema() sql.PrimaryKeySchema {
 	panic("todo")
 }
 

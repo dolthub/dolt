@@ -93,7 +93,7 @@ func (rd *CompositeTableReader) Close(ctx context.Context) error {
 	return firstErr
 }
 
-func (rd *CompositeTableReader) GetSqlSchema() sql.Schema {
+func (rd *CompositeTableReader) GetSqlSchema() sql.PrimaryKeySchema {
 	panic("todo")
 }
 

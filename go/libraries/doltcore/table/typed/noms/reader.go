@@ -73,7 +73,7 @@ func (nmr *NomsMapReader) VerifySchema(outSch schema.Schema) (bool, error) {
 	return schema.VerifyInSchema(nmr.sch, outSch)
 }
 
-func (nmr *NomsMapReader) GetSqlSchema() sql.Schema {
+func (nmr *NomsMapReader) GetSqlSchema() sql.PrimaryKeySchema {
 	panic("todo")
 }
 

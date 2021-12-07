@@ -53,7 +53,7 @@ func (tr *AsyncReadAheadTableReader) GetSchema() schema.Schema {
 	return tr.backingReader.GetSchema()
 }
 
-func (tr *AsyncReadAheadTableReader) GetSqlSchema() sql.Schema {
+func (tr *AsyncReadAheadTableReader) GetSqlSchema() sql.PrimaryKeySchema {
 	panic("dont call plxxx")
 }
 

@@ -470,8 +470,10 @@ func TestSqlInferSchema(t *testing.T) {
 			csvRd, err := csv.NewCSVReader(types.Format_Default, rdCl, csv.NewCSVInfo())
 			require.NoError(t, err)
 
-			sch, err := InferSqlSchemaFromTableReader(context.Background(), csvRd, test.infArgs)
+			pkSch, err := InferSqlSchemaFromTableReader(context.Background(), csvRd, test.infArgs)
 			require.NoError(t, err)
+
+			sch := pkSch.Schema
 
 			assert.Equal(t, len(test.expTypes), len(sch))
 			for _, col := range sch {

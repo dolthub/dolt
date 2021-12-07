@@ -299,13 +299,13 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 	}
 }
 
-func InferSchema(ctx context.Context, rd table.TableReadCloser, tableName string, pks []string, args actions.InferenceArgs) (sql.Schema, error) {
+func InferSchema(ctx context.Context, rd table.TableReadCloser, tableName string, pks []string, args actions.InferenceArgs) (sql.PrimaryKeySchema, error) {
 	outSch, err := actions.InferSqlSchemaFromTableReader(ctx, rd, args)
 	if err != nil {
-		return nil, err
+		return sql.PrimaryKeySchema{}, err
 	}
 
-	for _, col := range outSch {
+	for _, col := range outSch.Schema {
 		col.Source = tableName
 	}
 
@@ -313,15 +313,16 @@ func InferSchema(ctx context.Context, rd table.TableReadCloser, tableName string
 	for _, pk := range pks {
 		idx := outSch.IndexOf(pk, tableName)
 		if idx < 0 {
-			return nil, ErrProvidedPkNotFound
+			return sql.PrimaryKeySchema{}, ErrProvidedPkNotFound
 		}
 
-		outSch[idx].PrimaryKey = true
+		outSch.Schema[idx].PrimaryKey = true
+		outSch.PkOrdinals = append(outSch.PkOrdinals, idx)
 	}
 
-	err = sql.ValidateSchema(outSch)
+	err = sql.ValidateSchema(outSch.Schema)
 	if err != nil {
-		return nil, errhand.BuildDError("invalid schema").AddCause(err).Build()
+		return sql.PrimaryKeySchema{}, errhand.BuildDError("invalid schema").AddCause(err).Build()
 	}
 
 	return outSch, nil

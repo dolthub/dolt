@@ -34,7 +34,7 @@ type XLSXReader struct {
 	closer io.Closer
 	bRd    *bufio.Reader
 	info   *XLSXFileInfo
-	sch    sql.Schema
+	sch    sql.PrimaryKeySchema
 	ind    int
 	rows   []sql.Row
 }
@@ -69,7 +69,7 @@ func OpenXLSXReader(ctx context.Context, vrw types.ValueReadWriter, path string,
 		return nil, err
 	}
 
-	return &XLSXReader{r, br, info, sch, 0, decodedRows}, nil
+	return &XLSXReader{r, br, info, sql.NewPrimaryKeySchema(sch), 0, decodedRows}, nil
 }
 
 func getColHeadersFromPath(path string, sheetName string) ([]string, error) {
@@ -103,7 +103,7 @@ func (xlsxr *XLSXReader) ReadRow(ctx context.Context) (row.Row, error) {
 	panic("deprecated")
 }
 
-func (xlsxr *XLSXReader) GetSqlSchema() sql.Schema {
+func (xlsxr *XLSXReader) GetSqlSchema() sql.PrimaryKeySchema {
 	return xlsxr.sch
 }
 

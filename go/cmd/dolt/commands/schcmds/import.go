@@ -378,12 +378,12 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts 
 		return nil, errhand.BuildDError("error: failed to infer schema").AddCause(err).Build()
 	}
 
-	err = sql.ValidateSchema(inferredSqlSchema)
+	err = sql.ValidateSchema(inferredSqlSchema.Schema)
 	if err != nil {
 		return nil, errhand.BuildDError("error: invalid schema").AddCause(err).Build()
 	}
 
-	doltSchema, err := sqlutil.ToDoltSchema(ctx, root, impOpts.tableName, sql.NewPrimaryKeySchema(inferredSqlSchema), nil)
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, root, impOpts.tableName, inferredSqlSchema, nil)
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to convert schema").AddCause(err).Build()
 	}

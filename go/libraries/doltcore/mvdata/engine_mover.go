@@ -51,7 +51,7 @@ type sqlEngineMover struct {
 	importOption TableImportOp
 }
 
-func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch sql.Schema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineMover, error) {
+func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch sql.PrimaryKeySchema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineMover, error) {
 	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch sql.Sche
 
 		database:  dbName,
 		tableName: options.TableToWriteTo,
-		wrSch:     sql.NewPrimaryKeySchema(writeSch),
+		wrSch:     writeSch,
 
 		statsCB:      statsCB,
 		importOption: options.Operation,

@@ -39,7 +39,7 @@ func (rdr pkTableReader) GetSchema() schema.Schema {
 	return rdr.sch
 }
 
-func (rdr pkTableReader) GetSqlSchema() sql.Schema {
+func (rdr pkTableReader) GetSqlSchema() sql.PrimaryKeySchema {
 	panic("todo")
 }
 

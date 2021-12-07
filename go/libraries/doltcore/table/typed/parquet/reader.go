@@ -35,7 +35,7 @@ import (
 type ParquetReader struct {
 	fileReader     source.ParquetFile
 	pReader        *reader.ParquetReader
-	sch            sql.Schema
+	sch            sql.PrimaryKeySchema
 	vrw            types.ValueReadWriter
 	numRow         int
 	rowReadCounter int
@@ -44,7 +44,7 @@ type ParquetReader struct {
 }
 
 // OpenParquetReader opens a reader at a given path within local filesystem.
-func OpenParquetReader(vrw types.ValueReadWriter, path string, sch sql.Schema) (*ParquetReader, error) {
+func OpenParquetReader(vrw types.ValueReadWriter, path string, sch sql.PrimaryKeySchema) (*ParquetReader, error) {
 	fr, err := local.NewLocalFileReader(path)
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func OpenParquetReader(vrw types.ValueReadWriter, path string, sch sql.Schema) (
 
 // NewParquetReader creates a ParquetReader from a given fileReader.
 // The ParquetFileInfo should describe the parquet file being read.
-func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sql.Schema) (*ParquetReader, error) {
+func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sql.PrimaryKeySchema) (*ParquetReader, error) {
 	pr, err := reader.NewParquetColumnReader(fr, 4)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sql
 	// TODO : need to solve for getting single row data in readRow (storing all columns data in memory right now)
 	data := make(map[string][]interface{})
 	var colName []string
-	for _, col := range sche {
+	for _, col := range sche.Schema {
 		colData, _, _, cErr := pr.ReadColumnByPath(common.ReformPathStr(fmt.Sprintf("parquet_go_root.%s", col.Name)), num)
 		if cErr != nil {
 			return nil, err
@@ -95,7 +95,7 @@ func (pr *ParquetReader) GetSchema() schema.Schema {
 	panic("deprecated")
 }
 
-func (pr *ParquetReader) GetSqlSchema() sql.Schema {
+func (pr *ParquetReader) GetSqlSchema() sql.PrimaryKeySchema {
 	return pr.sch
 }
 
@@ -105,7 +105,7 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	}
 
 	var row sql.Row
-	for _, col := range pr.sch {
+	for _, col := range pr.sch.Schema {
 		val := pr.fileData[col.Name][pr.rowReadCounter]
 		if val != nil {
 			if _, ok := col.Type.(sql.DatetimeType); ok {

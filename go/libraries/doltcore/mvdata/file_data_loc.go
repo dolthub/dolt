@@ -147,7 +147,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 			}
 		}
 
-		rd, err := json.OpenJSONReader(dl.Path, fs, sch.Schema)
+		rd, err := json.OpenJSONReader(dl.Path, fs, sch)
 		return rd, false, err
 
 	case ParquetFile:
@@ -184,7 +184,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 			}
 		}
 
-		rd, rErr := parquet.OpenParquetReader(root.VRW(), dl.Path, tableSch.Schema)
+		rd, rErr := parquet.OpenParquetReader(root.VRW(), dl.Path, tableSch)
 		return rd, false, rErr
 	}
 

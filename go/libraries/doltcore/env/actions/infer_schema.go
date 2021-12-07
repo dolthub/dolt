@@ -94,8 +94,8 @@ func (inf *sqlInferrer) inferColumnTypes(ctx context.Context) sql.Schema {
 	return ret
 }
 
-func InferSqlSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, args InferenceArgs) (sql.Schema, error) {
-	inferrer := newSQLInferrer(ctx, rd.GetSqlSchema(), args)
+func InferSqlSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, args InferenceArgs) (sql.PrimaryKeySchema, error) {
+	inferrer := newSQLInferrer(ctx, rd.GetSqlSchema().Schema, args)
 
 	// start the pipeline
 	g, ctx := errgroup.WithContext(ctx)
@@ -123,7 +123,7 @@ func InferSqlSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser
 
 	g.Go(func() error {
 		for r := range parsedRowChan {
-			for i, col := range rd.GetSqlSchema() {
+			for i, col := range rd.GetSqlSchema().Schema {
 				val := r[i]
 				if val == nil {
 					inferrer.nullable.Add(col.Name)
@@ -147,15 +147,15 @@ func InferSqlSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser
 
 	err := g.Wait()
 	if err != nil {
-		return nil, err
+		return sql.PrimaryKeySchema{}, err
 	}
 
 	err = rd.Close(ctx)
 	if err != nil {
-		return nil, err
+		return sql.PrimaryKeySchema{}, err
 	}
 
-	return inferrer.inferColumnTypes(ctx), nil
+	return sql.NewPrimaryKeySchema(inferrer.inferColumnTypes(ctx)), nil
 }
 
 func sqlLeastPermissiveType(strVal string, floatThreshold float64) sql.Type {

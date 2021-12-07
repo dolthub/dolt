@@ -64,10 +64,10 @@ func TestReader(t *testing.T) {
 		},
 	}
 
-	reader, err := OpenJSONReader("file.json", fs, sch)
+	reader, err := OpenJSONReader("file.json", fs, sql.NewPrimaryKeySchema(sch))
 	require.NoError(t, err)
 
-	for i, col := range reader.GetSqlSchema() {
+	for i, col := range reader.GetSqlSchema().Schema {
 		assert.True(t, col.Equals(sch[i]))
 	}
 
@@ -134,7 +134,7 @@ func TestReaderBadJson(t *testing.T) {
 		},
 	}
 
-	reader, err := OpenJSONReader("file.json", fs, sch)
+	reader, err := OpenJSONReader("file.json", fs, sql.NewPrimaryKeySchema(sch))
 	require.NoError(t, err)
 
 	err = nil

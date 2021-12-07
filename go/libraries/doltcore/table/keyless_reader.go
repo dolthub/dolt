@@ -87,7 +87,7 @@ func (rdr *keylessTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) 
 	return sqlutil.DoltRowToSqlRow(r, rdr.sch)
 }
 
-func (rdr *keylessTableReader) GetSqlSchema() sql.Schema {
+func (rdr *keylessTableReader) GetSqlSchema() sql.PrimaryKeySchema {
 	panic("todo")
 }
 

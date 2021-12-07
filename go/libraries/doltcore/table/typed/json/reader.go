@@ -32,12 +32,12 @@ var ReadBufSize = 256 * 1024
 
 type JSONReader struct {
 	closer     io.Closer
-	sch        sql.Schema
+	sch        sql.PrimaryKeySchema
 	jsonStream *jstream.Decoder
 	rowChan    chan *jstream.MetaValue
 }
 
-func OpenJSONReader(path string, fs filesys.ReadableFS, sch sql.Schema) (*JSONReader, error) {
+func OpenJSONReader(path string, fs filesys.ReadableFS, sch sql.PrimaryKeySchema) (*JSONReader, error) {
 	r, err := fs.OpenForRead(path)
 	if err != nil {
 		return nil, err
@@ -47,8 +47,8 @@ func OpenJSONReader(path string, fs filesys.ReadableFS, sch sql.Schema) (*JSONRe
 }
 
 // TODO: Deprecate the use of schema.Schema from file data loc
-func NewJSONReader(r io.ReadCloser, sch sql.Schema) (*JSONReader, error) {
-	if sch == nil {
+func NewJSONReader(r io.ReadCloser, sch sql.PrimaryKeySchema) (*JSONReader, error) {
+	if sch.Schema == nil {
 		return nil, errors.New("schema must be provided to JsonReader")
 	}
 
@@ -77,7 +77,7 @@ func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
 	panic("deprecated")
 }
 
-func (r *JSONReader) GetSqlSchema() sql.Schema {
+func (r *JSONReader) GetSqlSchema() sql.PrimaryKeySchema {
 	return r.sch
 }
 
@@ -98,7 +98,7 @@ func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 }
 
 func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) (sql.Row, error) {
-	sqlSchema := r.GetSqlSchema()
+	sqlSchema := r.GetSqlSchema().Schema
 	ret := make(sql.Row, len(sqlSchema))
 
 	for k, v := range rowMap {

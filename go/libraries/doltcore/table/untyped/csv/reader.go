@@ -45,7 +45,7 @@ var ReadBufSize = 256 * 1024
 type CSVReader struct {
 	closer io.Closer
 	bRd    *bufio.Reader
-	sch    sql.Schema
+	sch    sql.PrimaryKeySchema
 	isDone bool
 	nbf    *types.NomsBinFormat
 
@@ -95,7 +95,7 @@ func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) 
 	return &CSVReader{
 		closer:          r,
 		bRd:             br,
-		sch:             sch,
+		sch:             sql.NewPrimaryKeySchema(sch),
 		isDone:          false,
 		nbf:             nbf,
 		delim:           []byte(info.Delim),
@@ -196,7 +196,7 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	if len(colVals) != len(csvr.sch) {
+	if len(colVals) != len(csvr.sch.Schema) {
 		var out strings.Builder
 		for _, cv := range colVals {
 			if cv != nil {
@@ -205,7 +205,7 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 			out.WriteRune(',')
 		}
 		return nil, table.NewBadRow(nil,
-			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", len(csvr.sch), len(colVals)),
+			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", len(csvr.sch.Schema), len(colVals)),
 			fmt.Sprintf("line: '%s'", out.String()),
 		)
 	}
@@ -228,8 +228,8 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 
 // GetSchema gets the schema of the rows that this reader will return
 func (csvr *CSVReader) GetSchema() schema.Schema {
-	colNames := make([]string, len(csvr.sch))
-	for i, col := range csvr.sch {
+	colNames := make([]string, len(csvr.sch.Schema))
+	for i, col := range csvr.sch.Schema {
 		colNames[i] = col.Name
 	}
 
@@ -237,7 +237,7 @@ func (csvr *CSVReader) GetSchema() schema.Schema {
 	return sch
 }
 
-func (csvr *CSVReader) GetSqlSchema() sql.Schema {
+func (csvr *CSVReader) GetSqlSchema() sql.PrimaryKeySchema {
 	return csvr.sch
 }
 

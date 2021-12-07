@@ -35,7 +35,7 @@ type TableReader interface {
 	ReadRow(ctx context.Context) (row.Row, error)
 
 	// GetSqlSchema gets the schema of the rows that this reader will return in sql.Schema form.
-	GetSqlSchema() sql.Schema
+	GetSqlSchema() sql.PrimaryKeySchema
 
 	// ReadSqlRow read a sql.Row from the table. If there is a bad row the returned error will be non nil, and calling
 	// IsBadRow(err) will be return true. This is a potentially non-fatal error and callers can decide if they want to

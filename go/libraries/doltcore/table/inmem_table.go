@@ -156,7 +156,7 @@ func (rd *InMemTableReader) GetSchema() schema.Schema {
 	return rd.tt.sch
 }
 
-func (rd *InMemTableReader) GetSqlSchema() sql.Schema {
+func (rd *InMemTableReader) GetSqlSchema() sql.PrimaryKeySchema {
 	panic("todo")
 }
 
