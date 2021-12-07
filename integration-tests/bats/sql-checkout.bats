@@ -22,10 +22,12 @@ teardown() {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
     [ $status -eq 0 ]
 
-    skip "This is an embarassingly bad test without this check which fails"
+    # dolt sql -q "select dolt_checkout() should not change the branch
+    # It changes the branch for that session which ends after the SQL
+    # statements are executed. 
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "feature-branch" ]] || false
+    [[ "$output" =~ "main" ]] || false
 
     run dolt sql -q "SELECT DOLT_CHECKOUT('main');"
     [ $status -eq 0 ]
