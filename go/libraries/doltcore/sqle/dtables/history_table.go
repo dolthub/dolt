@@ -53,7 +53,7 @@ type HistoryTable struct {
 	name                  string
 	ddb                   *doltdb.DoltDB
 	ss                    *schema.SuperSchema
-	sqlSch                sql.Schema
+	sqlSch                sql.PrimaryKeySchema
 	commitFilters         []sql.Expression
 	rowFilters            []sql.Expression
 	cmItr                 doltdb.CommitItr
@@ -247,7 +247,7 @@ func (ht *HistoryTable) String() string {
 
 // Schema returns the schema for the history table, which will be the super set of the schemas from the history
 func (ht *HistoryTable) Schema() sql.Schema {
-	return ht.sqlSch
+	return ht.sqlSch.Schema
 }
 
 // Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.

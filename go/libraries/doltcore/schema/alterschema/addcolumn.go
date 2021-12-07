@@ -46,12 +46,12 @@ type ColumnOrder struct {
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
 func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal, comment string, order *ColumnOrder) (*doltdb.Table, error) {
-	sch, err := tbl.GetSchema(ctx)
+	oldSchema, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if schema.IsKeyless(sch) {
+	if schema.IsKeyless(oldSchema) {
 		return nil, ErrKeylessAltTbl
 	}
 
@@ -59,7 +59,7 @@ func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.T
 		return nil, err
 	}
 
-	newSchema, err := addColumnToSchema(sch, tag, newColName, typeInfo, nullable, order, defaultVal, comment)
+	newSchema, err := addColumnToSchema(oldSchema, tag, newColName, typeInfo, nullable, order, defaultVal, comment)
 	if err != nil {
 		return nil, err
 	}
@@ -95,13 +95,13 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 	if order != nil && order.First {
 		newCols = append(newCols, newCol)
 	}
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	for _, col := range sch.GetAllCols().GetColumns() {
 		newCols = append(newCols, col)
 		if order != nil && order.After == col.Name {
 			newCols = append(newCols, newCol)
 		}
-		return false, nil
-	})
+	}
+
 	if order == nil {
 		newCols = append(newCols, newCol)
 	}
@@ -119,6 +119,14 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
+	pkOrds, err := modifyPkOrdinals(sch, newSch)
+	if err != nil {
+		return nil, err
+	}
+	err = newSch.SetPkOrdinals(pkOrds)
+	if err != nil {
+		return nil, err
+	}
 	return newSch, nil
 }
 
@@ -197,7 +205,7 @@ func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, t
 		if err != nil {
 			return true, err
 		}
-		newRow, err := sqlutil.ApplyDefaults(ctx, tbl.ValueReadWriter(), newSchema, newSqlSchema, []int{columnIndex}, oldRow)
+		newRow, err := sqlutil.ApplyDefaults(ctx, tbl.ValueReadWriter(), newSchema, newSqlSchema.Schema, []int{columnIndex}, oldRow)
 		if err != nil {
 			return true, err
 		}

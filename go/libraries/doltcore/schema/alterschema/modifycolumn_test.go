@@ -192,6 +192,7 @@ func TestModifyColumn(t *testing.T) {
 			index := sch.Indexes().GetByName(dtestutils.IndexName)
 			assert.NotNil(t, index)
 			tt.expectedSchema.Indexes().AddIndex(index)
+			tt.expectedSchema.SetPkOrdinals(sch.GetPkOrdinals())
 			require.Equal(t, tt.expectedSchema, sch)
 
 			rowData, err := updatedTable.GetRowData(ctx)

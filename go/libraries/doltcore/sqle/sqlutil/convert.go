@@ -27,7 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
+func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
 	cols := make([]*sqle.ColumnWithRawDefault, sch.GetAllCols().Size())
 
 	var i int
@@ -56,7 +56,12 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 		return false, nil
 	})
 
-	return sqle.ResolveDefaults(tableName, cols)
+	sqlSch, err := sqle.ResolveDefaults(tableName, cols)
+	if err != nil {
+		return sql.PrimaryKeySchema{}, err
+	}
+
+	return sql.NewPrimaryKeySchema(sqlSch, sch.GetPkOrdinals()...), nil
 }
 
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
@@ -65,7 +70,7 @@ func ToDoltSchema(
 	ctx context.Context,
 	root *doltdb.RootValue,
 	tableName string,
-	sqlSchema sql.Schema,
+	sqlSchema sql.PrimaryKeySchema,
 	headRoot *doltdb.RootValue,
 ) (schema.Schema, error) {
 	var cols []schema.Column
@@ -74,7 +79,7 @@ func ToDoltSchema(
 	// generate tags for all columns
 	var names []string
 	var kinds []types.NomsKind
-	for _, col := range sqlSchema {
+	for _, col := range sqlSchema.Schema {
 		names = append(names, col.Name)
 		ti, err := typeinfo.FromSqlType(col.Type)
 		if err != nil {
@@ -88,11 +93,11 @@ func ToDoltSchema(
 		return nil, err
 	}
 
-	if len(tags) != len(sqlSchema) {
+	if len(tags) != len(sqlSchema.Schema) {
 		return nil, fmt.Errorf("number of tags should equal number of columns")
 	}
 
-	for i, col := range sqlSchema {
+	for i, col := range sqlSchema.Schema {
 		convertedCol, err := ToDoltCol(tags[i], col)
 		if err != nil {
 			return nil, err
@@ -107,7 +112,17 @@ func ToDoltSchema(
 		return nil, err
 	}
 
-	return schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		return nil, err
+	}
+
+	err = sch.SetPkOrdinals(sqlSchema.PkOrdinals)
+	if err != nil {
+		return nil, err
+	}
+
+	return sch, nil
 }
 
 // ToDoltCol returns the dolt column corresponding to the SQL column given

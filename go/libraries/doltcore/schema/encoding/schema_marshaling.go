@@ -158,6 +158,7 @@ type schemaData struct {
 	Columns          []encodedColumn `noms:"columns" json:"columns"`
 	IndexCollection  []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
 	CheckConstraints []encodedCheck  `noms:"checks,omitempty" json:"checks,omitempty"`
+	PkOrdinals       []int           `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
 }
 
 func (sd *schemaData) Copy() *schemaData {
@@ -189,10 +190,19 @@ func (sd *schemaData) Copy() *schemaData {
 		}
 	}
 
+	var pkOrdinals []int
+	if sd.PkOrdinals != nil {
+		pkOrdinals = make([]int, len(sd.PkOrdinals))
+		for i, j := range sd.PkOrdinals {
+			pkOrdinals[i] = j
+		}
+	}
+
 	return &schemaData{
 		Columns:          columns,
 		IndexCollection:  idxCol,
 		CheckConstraints: checks,
+		PkOrdinals:       pkOrdinals,
 	}
 }
 
@@ -237,6 +247,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		Columns:          encCols,
 		IndexCollection:  encodedIndexes,
 		CheckConstraints: encodedChecks,
+		PkOrdinals:       sch.GetPkOrdinals(),
 	}, nil
 }
 
@@ -259,15 +270,19 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	err = sd.addChecksAndIndexesToSchema(sch)
-	if err != nil {
-		return nil, err
-	}
-
 	return sch, nil
 }
 
-func (sd schemaData) addChecksAndIndexesToSchema(sch schema.Schema) error {
+func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) error {
+
+	// initialize pk order before adding indexes
+	if sd.PkOrdinals != nil {
+		err := sch.SetPkOrdinals(sd.PkOrdinals)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, encodedIndex := range sd.IndexCollection {
 		_, err := sch.Indexes().UnsafeAddIndexByColTags(
 			encodedIndex.Name,
@@ -293,6 +308,7 @@ func (sd schemaData) addChecksAndIndexesToSchema(sch schema.Schema) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -348,7 +364,7 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	if ok {
 		cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
 		sd := cachedData.sd.Copy()
-		err := sd.addChecksAndIndexesToSchema(cachedSch)
+		err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
 		if err != nil {
 			return nil, err
 		}
@@ -364,6 +380,17 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	}
 
 	sch, err := sd.decodeSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	if sd.PkOrdinals == nil {
+		// schemaData will not have PK ordinals in old versions of Dolt
+		// this sets the default PK ordinates for subsequent cache lookups
+		sd.PkOrdinals = sch.GetPkOrdinals()
+	}
+
+	err = sd.addChecksIndexesAndPkOrderingToSchema(sch)
 	if err != nil {
 		return nil, err
 	}

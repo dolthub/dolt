@@ -216,6 +216,10 @@ func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
 
+func TestPkOrdinals(t *testing.T) {
+	enginetest.TestPkOrdinals(t, newDoltHarness(t))
+}
+
 func TestDropTable(t *testing.T) {
 	enginetest.TestDropTable(t, newDoltHarness(t))
 }

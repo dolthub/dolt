@@ -21,10 +21,14 @@ teardown() {
     [ "$output" = "" ]
 }
 
-@test "config: try to initialize a repository with no configuration" {
+@test "config: try to initialize a repository with no configuration with correct hint" {
     run dolt init
     [ "$status" -eq 1 ]
+    name='dolt config --global --add user.email "you@example.com"'
+    email='dolt config --global --add user.name "Your Name"'
     [[ "$output" =~ "Please tell me who you are" ]] || false
+    [[ "$output" =~ "$name" ]] || false
+    [[ "$output" =~ "$email" ]] || false
 }
 
 @test "config: set a global config variable" {
