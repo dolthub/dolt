@@ -570,7 +570,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 			} else {
-				dRow, err := transformToDoltRow(r, rd.GetSchema(), rdSqlSch, wr.Schema(), options.nameMapper)
+				dRow, err := transformToDoltRow(r, rd.GetSchema(), rdSqlSch.Schema, wr.Schema(), options.nameMapper)
 				if err != nil {
 					return err
 				}
