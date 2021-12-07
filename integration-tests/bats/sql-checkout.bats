@@ -29,6 +29,10 @@ teardown() {
     [ $status -eq 0 ]
     [[ "$output" =~ "main" ]] || false
 
+    run dolt branch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "feature-branch" ]] || false
+
     run dolt sql -q "SELECT DOLT_CHECKOUT('main');"
     [ $status -eq 0 ]
 
