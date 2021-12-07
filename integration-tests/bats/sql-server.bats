@@ -1058,7 +1058,7 @@ END""")
 '
 }
 
-@test "sql-server: client_multi_statements is currently broken" {
+@test "sql-server: client_multi_statements work" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
     cd repo1
     dolt sql -q 'create table test (id int primary key)'
@@ -1074,7 +1074,7 @@ EOF
     dolt sql-server --config ./config.yml &
     SERVER_PID=$!
     # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
-    run python3 -c '
+    python3 -c '
 import mysql.connector
 import sys
 import time
@@ -1101,11 +1101,6 @@ END""")
       if i == 10:
         raise err
 '
-    # TODO: This currently fails because mysql.connector enables
-    # MULTI_STATEMENTS by default and dolt sql-server parses the above
-    # statement incorrectly. Once this is fixed, change the test name above and
-    # remove the `run` from the python3 invocation.
-    [ "$status" -ne 0 ]
 }
 
 @test "sql-server: auto increment for a table should reset between drops" {
