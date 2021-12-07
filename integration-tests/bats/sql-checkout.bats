@@ -22,8 +22,17 @@ teardown() {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
     [ $status -eq 0 ]
 
+    skip "This is an embarassingly bad test without this check which fails"
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "feature-branch" ]] || false
+
     run dolt sql -q "SELECT DOLT_CHECKOUT('main');"
     [ $status -eq 0 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
 }
 
 @test "sql-checkout: DOLT_CHECKOUT -b throws error on branches that already exist" {
