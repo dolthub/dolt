@@ -300,7 +300,7 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 }
 
 func InferSchema(ctx context.Context, rd table.TableReadCloser, tableName string, pks []string, args actions.InferenceArgs) (sql.PrimaryKeySchema, error) {
-	outSch, err := actions.InferSqlSchemaFromTableReader(ctx, rd, args)
+	outSch, err := actions.InferSchemaFromTableReader(ctx, rd, args)
 	if err != nil {
 		return sql.PrimaryKeySchema{}, err
 	}

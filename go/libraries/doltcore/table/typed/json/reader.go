@@ -46,7 +46,6 @@ func OpenJSONReader(path string, fs filesys.ReadableFS, sch sql.PrimaryKeySchema
 	return NewJSONReader(r, sch)
 }
 
-// TODO: Deprecate the use of schema.Schema from file data loc
 func NewJSONReader(r io.ReadCloser, sch sql.PrimaryKeySchema) (*JSONReader, error) {
 	if sch.Schema == nil {
 		return nil, errors.New("schema must be provided to JsonReader")

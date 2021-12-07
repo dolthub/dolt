@@ -69,7 +69,6 @@ func mustRow(r row.Row, err error) row.Row {
 	return r
 }
 
-// TODO: Rewrite these tests
 func TestReader(t *testing.T) {
 	colNames := []string{"name", "age", "title"}
 	var sch sql.Schema

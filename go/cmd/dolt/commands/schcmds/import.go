@@ -373,7 +373,7 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts 
 
 	defer rd.Close(ctx)
 
-	inferredSqlSchema, err := actions.InferSqlSchemaFromTableReader(ctx, rd, impOpts)
+	inferredSqlSchema, err := actions.InferSchemaFromTableReader(ctx, rd, impOpts)
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to infer schema").AddCause(err).Build()
 	}

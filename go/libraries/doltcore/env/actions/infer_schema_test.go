@@ -32,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func TestSqlLeastPermissiveType(t *testing.T) {
+func TestLeastPermissiveType(t *testing.T) {
 	tests := []struct {
 		name           string
 		valStr         string
@@ -58,13 +58,13 @@ func TestSqlLeastPermissiveType(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualType := sqlLeastPermissiveType(test.valStr, test.floatThreshold)
+			actualType := leastPermissiveType(test.valStr, test.floatThreshold)
 			assert.Equal(t, test.expType, actualType, "val: %s, expected: %v, actual: %v", test.valStr, test.expType, actualType)
 		})
 	}
 }
 
-func TestSqlLeastPermissiveNumericType(t *testing.T) {
+func TestLeastPermissiveNumericType(t *testing.T) {
 	tests := []struct {
 		name           string
 		valStr         string
@@ -88,13 +88,13 @@ func TestSqlLeastPermissiveNumericType(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualType, _ := leastPermissiveSqlNumericType(test.valStr, test.floatThreshold)
+			actualType, _ := leastPermissiveNumericType(test.valStr, test.floatThreshold)
 			assert.Equal(t, test.expType, actualType, "val: %s, expected: %v, actual: %v", test.valStr, test.expType, actualType)
 		})
 	}
 }
 
-func TestSqlLeastPermissiveChronoType(t *testing.T) {
+func TestLeastPermissiveChronoType(t *testing.T) {
 	tests := []struct {
 		name    string
 		valStr  string
@@ -110,7 +110,7 @@ func TestSqlLeastPermissiveChronoType(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualType, _ := leastPermissiveSqlChronoType(test.valStr)
+			actualType, _ := leastPermissiveChronoType(test.valStr)
 			assert.Equal(t, test.expType, actualType, "val: %s, expected: %v, actual: %v", test.valStr, test.expType, actualType)
 		})
 	}
@@ -118,21 +118,21 @@ func TestSqlLeastPermissiveChronoType(t *testing.T) {
 
 type sqlCommonTypeTest struct {
 	name     string
-	inferSet sqlTypeInfoSet
+	inferSet typeInfoSet
 	expType  sql.Type
 }
 
-func TestSqlFindCommonType(t *testing.T) {
-	testSqlFindCommonType(t)
-	testSqlFindCommonTypeFromSingleType(t)
-	testSqlFindCommonChronologicalType(t)
+func TestFindCommonType(t *testing.T) {
+	testFindCommonType(t)
+	testFindCommonTypeFromSingleType(t)
+	testFindCommonChronologicalType(t)
 }
 
-func testSqlFindCommonType(t *testing.T) {
+func testFindCommonType(t *testing.T) {
 	tests := []sqlCommonTypeTest{
 		{
 			name: "all signed ints",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Int32: {},
 				sql.Int64: {},
 			},
@@ -140,7 +140,7 @@ func testSqlFindCommonType(t *testing.T) {
 		},
 		{
 			name: "all unsigned ints",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Uint32: {},
 				sql.Uint64: {},
 			},
@@ -148,7 +148,7 @@ func testSqlFindCommonType(t *testing.T) {
 		},
 		{
 			name: "all floats",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Float32: {},
 				sql.Float64: {},
 			},
@@ -156,7 +156,7 @@ func testSqlFindCommonType(t *testing.T) {
 		},
 		{
 			name: "32 bit ints and uints",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Int32:  {},
 				sql.Uint32: {},
 			},
@@ -164,7 +164,7 @@ func testSqlFindCommonType(t *testing.T) {
 		},
 		{
 			name: "64 bit ints and uints",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Int64:  {},
 				sql.Uint64: {},
 			},
@@ -172,7 +172,7 @@ func testSqlFindCommonType(t *testing.T) {
 		},
 		{
 			name: "32 bit ints, uints, and floats",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Int32:   {},
 				sql.Uint32:  {},
 				sql.Float32: {},
@@ -181,7 +181,7 @@ func testSqlFindCommonType(t *testing.T) {
 		},
 		{
 			name: "64 bit ints, uints, and floats",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Int64:   {},
 				sql.Uint64:  {},
 				sql.Float64: {},
@@ -190,7 +190,7 @@ func testSqlFindCommonType(t *testing.T) {
 		},
 		{
 			name: "ints and bools",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Int32:   {},
 				sql.Boolean: {},
 			},
@@ -198,7 +198,7 @@ func testSqlFindCommonType(t *testing.T) {
 		},
 		{
 			name: "floats and bools",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Float32: {},
 				sql.Boolean: {},
 			},
@@ -206,7 +206,7 @@ func testSqlFindCommonType(t *testing.T) {
 		},
 		{
 			name: "floats and uuids",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Float32: {},
 				sql.UUID:    {},
 			},
@@ -216,13 +216,13 @@ func testSqlFindCommonType(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualType := findCommonSQlType(test.inferSet)
+			actualType := findCommonType(test.inferSet)
 			assert.Equal(t, test.expType, actualType)
 		})
 	}
 }
 
-func testSqlFindCommonTypeFromSingleType(t *testing.T) {
+func testFindCommonTypeFromSingleType(t *testing.T) {
 	allTypes := []sql.Type{
 		sql.Uint8,
 		sql.Uint16,
@@ -250,14 +250,14 @@ func testSqlFindCommonTypeFromSingleType(t *testing.T) {
 		tests := []sqlCommonTypeTest{
 			{
 				name: fmt.Sprintf("only %s", ti.String()),
-				inferSet: sqlTypeInfoSet{
+				inferSet: typeInfoSet{
 					ti: {},
 				},
 				expType: ti,
 			},
 			{
 				name: fmt.Sprintf("Unknown and %s", ti.String()),
-				inferSet: sqlTypeInfoSet{
+				inferSet: typeInfoSet{
 					ti:       {},
 					sql.Null: {},
 				},
@@ -266,18 +266,18 @@ func testSqlFindCommonTypeFromSingleType(t *testing.T) {
 		}
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
-				actualType := findCommonSQlType(test.inferSet)
+				actualType := findCommonType(test.inferSet)
 				assert.Equal(t, test.expType, actualType)
 			})
 		}
 	}
 }
 
-func testSqlFindCommonChronologicalType(t *testing.T) {
+func testFindCommonChronologicalType(t *testing.T) {
 	tests := []sqlCommonTypeTest{
 		{
 			name: "date and time",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Date: {},
 				sql.Time: {},
 			},
@@ -285,7 +285,7 @@ func testSqlFindCommonChronologicalType(t *testing.T) {
 		},
 		{
 			name: "date and datetime",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Date: {},
 				sql.Date: {},
 			},
@@ -293,7 +293,7 @@ func testSqlFindCommonChronologicalType(t *testing.T) {
 		},
 		{
 			name: "time and datetime",
-			inferSet: sqlTypeInfoSet{
+			inferSet: typeInfoSet{
 				sql.Time:     {},
 				sql.Datetime: {},
 			},
@@ -303,7 +303,7 @@ func testSqlFindCommonChronologicalType(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualType := findCommonSQlType(test.inferSet)
+			actualType := findCommonType(test.inferSet)
 			assert.Equal(t, test.expType, actualType)
 		})
 	}
@@ -470,7 +470,7 @@ func TestSqlInferSchema(t *testing.T) {
 			csvRd, err := csv.NewCSVReader(types.Format_Default, rdCl, csv.NewCSVInfo())
 			require.NoError(t, err)
 
-			pkSch, err := InferSqlSchemaFromTableReader(context.Background(), csvRd, test.infArgs)
+			pkSch, err := InferSchemaFromTableReader(context.Background(), csvRd, test.infArgs)
 			require.NoError(t, err)
 
 			sch := pkSch.Schema
