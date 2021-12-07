@@ -89,5 +89,9 @@ func ParseCreateTableStatement(ctx context.Context, query string) (string, sql.P
 	tn.Format(buf)
 	tableName := buf.String()
 
+	for _, col := range s.Schema {
+		col.Source = tableName
+	}
+
 	return tableName, s, err
 }

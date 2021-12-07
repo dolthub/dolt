@@ -643,7 +643,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 	}
 
 	// UpdateOp || ReplaceOp
-	tblRd, _, err := impOpts.dest.NewReader(ctx, root, fs, nil) // TODO: Get rid of this reader or properly implement schema
+	tblRd, _, err := impOpts.dest.NewReader(ctx, root, fs, nil) // TODO: Migrate away from this reader when export is rewritten
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}

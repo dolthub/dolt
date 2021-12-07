@@ -269,7 +269,6 @@ DELIM
 
 @test "import-create-tables: create a table with a name map" {
     run dolt table import -c -pk=pk -m=name-map.json test name-map-data.csv
-    echo $output
     [ "$status" -eq 0 ]
     run dolt sql -r csv -q 'select * from test'
     [ "$status" -eq 0 ]
@@ -415,7 +414,6 @@ SQL
 
 @test "import-create-tables: create a table with null values from csv import" {
     run dolt table import -c -pk=pk test empty-strings-null-values.csv
-    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls

@@ -300,7 +300,6 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 }
 
 func InferSchema(ctx context.Context, rd table.TableReadCloser, tableName string, pks []string, args actions.InferenceArgs) (sql.Schema, error) {
-	// TODO: Handle all edge cases here
 	outSch, err := actions.InferSqlSchemaFromTableReader(ctx, rd, args)
 	if err != nil {
 		return nil, err
@@ -320,55 +319,13 @@ func InferSchema(ctx context.Context, rd table.TableReadCloser, tableName string
 		outSch[idx].PrimaryKey = true
 	}
 
+	err = sql.ValidateSchema(outSch)
+	if err != nil {
+		return nil, errhand.BuildDError("invalid schema").AddCause(err).Build()
+	}
+
 	return outSch, nil
 }
-
-//func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, tableName string, pks []string, args actions.InferenceArgs) (schema.Schema, error) {
-//	var err error
-//
-//	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, args)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	pkSet := set.NewStrSet(pks)
-//	newCols := schema.MapColCollection(infCols, func(col schema.Column) schema.Column {
-//		col.IsPartOfPK = pkSet.Contains(col.Name)
-//		if col.IsPartOfPK {
-//			hasNotNull := false
-//			for _, constraint := range col.Constraints {
-//				if _, ok := constraint.(schema.NotNullConstraint); ok {
-//					hasNotNull = true
-//					break
-//				}
-//			}
-//			if !hasNotNull {
-//				col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
-//			}
-//		}
-//		return col
-//	})
-//
-//	// check that all provided primary keys are being used
-//	for _, pk := range pks {
-//		col, ok := newCols.GetByName(pk)
-//		if !col.IsPartOfPK || !ok {
-//			return nil, ErrProvidedPkNotFound
-//		}
-//	}
-//
-//	newCols, err = root.GenerateTagsForNewColColl(ctx, tableName, newCols)
-//	if err != nil {
-//		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
-//	}
-//
-//	err = schema.ValidateForInsert(newCols)
-//	if err != nil {
-//		return nil, errhand.BuildDError("invalid schema").AddCause(err).Build()
-//	}
-//
-//	return schema.SchemaFromCols(newCols)
-//}
 
 type TableImportOp string
 

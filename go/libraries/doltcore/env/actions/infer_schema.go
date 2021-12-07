@@ -63,7 +63,7 @@ func newSQLInferrer(ctx context.Context, readerSch sql.Schema, args InferenceArg
 	inferSets := make(map[string]sqlTypeInfoSet, len(readerSch))
 
 	for _, col := range readerSch {
-		inferSets[col.Name] = make(sqlTypeInfoSet) // can use id instead of name maybe?
+		inferSets[col.Name] = make(sqlTypeInfoSet)
 	}
 
 	return &sqlInferrer{
@@ -85,7 +85,6 @@ func (inf *sqlInferrer) inferColumnTypes(ctx context.Context) sql.Schema {
 	for _, col := range inf.readerSch {
 		col.Name = inf.mapper.Map(col.Name)
 		col.Type = inferredTypes[col.Name]
-		// TODO: col.source
 		if inf.nullable.Contains(col.Name) {
 			col.Nullable = true
 		}
@@ -137,7 +136,7 @@ func InferSqlSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser
 				if strVal == nil {
 					inferrer.inferSets[col.Name][sql.Null] = struct{}{}
 				} else {
-					typ := sqlLeastPermissiveType(strVal.(string), inferrer.floatThreshold) // TODO: This is sus
+					typ := sqlLeastPermissiveType(strVal.(string), inferrer.floatThreshold)
 					inferrer.inferSets[col.Name][typ] = struct{}{}
 				}
 			}
@@ -185,7 +184,7 @@ func sqlLeastPermissiveType(strVal string, floatThreshold float64) sql.Type {
 		return sql.Boolean
 	}
 
-	return sql.Text // be more rigorous with string type
+	return sql.Text
 }
 
 func leastPermissiveSqlNumericType(strVal string, floatThreshold float64) (ti sql.Type, ok bool) {
@@ -273,7 +272,6 @@ func leastPermissiveSqlChronoType(strVal string) (sql.Type, bool) {
 	return sql.Datetime, true
 }
 
-// TOOD: Move this to the engine
 func sqlChronoTypes() []sql.Type {
 	return []sql.Type{
 		sql.Year,
@@ -348,8 +346,6 @@ func findCommonSQlType(ts sqlTypeInfoSet) sql.Type {
 	// find a common nonNumeric type
 
 	nonChronoTypes := []sql.Type{
-		// todo: BIT implementation parses all uint8
-		//typeinfo.PseudoBoolType,
 		sql.Boolean,
 		sql.MustCreateStringWithDefaults(sqltypes.VarChar, 36),
 	}
