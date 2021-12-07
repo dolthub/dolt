@@ -39,6 +39,38 @@ type XLSXReader struct {
 	rows   []sql.Row
 }
 
+func OpenXLSXReaderFromBinary(ctx context.Context, vrw types.ValueReadWriter, r io.ReadCloser, info *XLSXFileInfo) (*XLSXReader, error) {
+	br := bufio.NewReaderSize(r, ReadBufSize)
+
+	contents, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	colStrs, err := getColHeadersFromBinary(contents, info.SheetName)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := getXlsxRowsFromBinary(contents, info.SheetName)
+	if err != nil {
+		return nil, err
+	}
+
+	var sch sql.Schema
+	for _, col := range colStrs {
+		sch = append(sch, &sql.Column{Name: col})
+	}
+
+	decodedRows, err := decodeXLSXRows(data, sch)
+	if err != nil {
+		r.Close()
+		return nil, err
+	}
+
+	return &XLSXReader{r, br, info, sql.NewPrimaryKeySchema(sch), 0, decodedRows}, nil
+}
+
 func OpenXLSXReader(ctx context.Context, vrw types.ValueReadWriter, path string, fs filesys.ReadableFS, info *XLSXFileInfo) (*XLSXReader, error) {
 	r, err := fs.OpenForRead(path)
 
@@ -74,6 +106,16 @@ func OpenXLSXReader(ctx context.Context, vrw types.ValueReadWriter, path string,
 
 func getColHeadersFromPath(path string, sheetName string) ([]string, error) {
 	data, err := getXlsxRowsFromPath(path, sheetName)
+	if err != nil {
+		return nil, err
+	}
+
+	colHeaders := data[0][0]
+	return colHeaders, nil
+}
+
+func getColHeadersFromBinary(content []byte, sheetName string) ([]string, error) {
+	data, err := getXlsxRowsFromBinary(content, sheetName)
 	if err != nil {
 		return nil, err
 	}

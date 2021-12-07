@@ -380,13 +380,13 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	rd, nDMErr := newImportDataReader(ctx, root, dEnv, mvOpts)
+	rd, nDMErr := newImportDataReader(ctx, root, dEnv.FS, mvOpts)
 	if nDMErr != nil {
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	wrSch, nDMErr := getWriterSchema(ctx, root, dEnv, rd, mvOpts)
+	wrSch, nDMErr := getWriterSchema(ctx, root, dEnv.FS, rd, mvOpts)
 	if nDMErr != nil {
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -439,11 +439,11 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.TableReadCloser, *mvdata.DataMoverCreationError) {
+func newImportDataReader(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (table.TableReadCloser, *mvdata.DataMoverCreationError) {
 	var err error
 
 	// Checks whether import destination table already exists. This can probably be simplified to not need a root value...
-	ow, err := impOpts.checkOverwrite(ctx, root, dEnv.FS)
+	ow, err := impOpts.checkOverwrite(ctx, root, fs)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
@@ -451,7 +451,7 @@ func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
 	}
 
-	rd, _, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
+	rd, _, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
@@ -459,8 +459,8 @@ func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 	return rd, nil
 }
 
-func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rd table.TableReadCloser, imOpts *importOptions) (sql.PrimaryKeySchema, *mvdata.DataMoverCreationError) {
-	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, imOpts)
+func getWriterSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, rd table.TableReadCloser, imOpts *importOptions) (sql.PrimaryKeySchema, *mvdata.DataMoverCreationError) {
+	wrSch, dmce := getImportSchema(ctx, root, fs, imOpts)
 	if dmce != nil {
 		return sql.PrimaryKeySchema{}, dmce
 	}

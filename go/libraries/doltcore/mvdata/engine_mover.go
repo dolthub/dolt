@@ -20,6 +20,7 @@ import (
 	"io"
 	"sync/atomic"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -28,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
@@ -83,6 +85,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch sql.Prim
 
 	return &sqlEngineMover{
 		se:        se,
+		sqlCtx:    sqlCtx,
 		contOnErr: options.ContinueOnErr,
 		force:     options.Force,
 
@@ -95,18 +98,32 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch sql.Prim
 	}, nil
 }
 
+func NewSqlEngineMoverWithEngine(ctx *sql.Context, eng *sqle.Engine, db dsqle.Database, writeSch sql.PrimaryKeySchema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineMover, error) {
+	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
+
+	err := ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	return &sqlEngineMover{
+		se:        engine.NewRebasedSqlEngine(eng, map[string]dsqle.SqlDatabase{db.Name(): db}),
+		sqlCtx:    ctx,
+		contOnErr: options.ContinueOnErr,
+		force:     options.Force,
+
+		database:  db.Name(),
+		tableName: options.TableToWriteTo,
+		wrSch:     writeSch,
+
+		statsCB:      statsCB,
+		importOption: options.Operation,
+	}, nil
+}
+
 // StartWriting implements the DataWriter interface.
 func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) (err error) {
-	s.sqlCtx, err = s.se.NewContext(ctx)
-	if err != nil {
-		return err
-	}
-
 	err = s.forceDropTableIfNeeded()
-	if err != nil {
-		return err
-	}
-
 	_, _, err = s.se.Query(s.sqlCtx, fmt.Sprintf("START TRANSACTION"))
 	if err != nil {
 		return err
@@ -171,7 +188,9 @@ func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Ro
 		} else if err == io.EOF {
 			atomic.LoadInt32(&s.statOps)
 			atomic.StoreInt32(&s.statOps, 0)
-			s.statsCB(s.stats)
+			if s.statsCB != nil {
+				s.statsCB(s.stats)
+			}
 
 			return err
 		} else {
