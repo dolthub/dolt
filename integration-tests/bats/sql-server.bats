@@ -85,19 +85,9 @@ teardown() {
 
     DEFAULT_DB="$1"
     let PORT="$$ % (65536-1024) + 1024"
-    cat >config.yml <<EOF
-log_level: debug
-user:
-  name: dolt
-listener:
-  host: "0.0.0.0"
-  port: $PORT
-behavior:
-  read_only: true
-EOF
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --config ./config.yml &
-    SERVER_PID=$!
-    wait_for_connection $PORT 5000
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
 
     # No tables at the start
     run dolt ls
@@ -113,6 +103,39 @@ EOF
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
+}
+
+@test "sql-server: read-only flag still allows select" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt sql -q "create table t(c0 int)"
+    dolt sql -q "insert into t values (1)"
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # make a select query
+    server_query repo1 1 "select * from t" "c0\n1"
+}
+
+@test "sql-server: read-only flag prevents dolt_commit" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # make a dolt_commit query
+    skip "read-only flag does not prevent dolt_commit"
+    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "not authorized: user does not have permission: write"
 }
 
 @test "sql-server: test command line modification" {
