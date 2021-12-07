@@ -132,6 +132,23 @@ func schemaNewColumn(t *testing.T, name string, tag uint64, sqlType sql.Type, pa
 	return schemaNewColumnWDefVal(t, name, tag, sqlType, partOfPK, "", constraints...)
 }
 
+func sqlSchemaNewColumn(name string, typ sql.Type, isPrimaryKey, isNullable bool) *sql.Column {
+	return &sql.Column{Name: name, Type: typ, PrimaryKey: isPrimaryKey, Nullable: isNullable}
+}
+
+func mustCreateDefault(expr sql.Expression, outType sql.Type, representsLiteral bool, mayReturnNil bool) *sql.ColumnDefaultValue {
+	def, err := sql.NewColumnDefaultValue(expr, outType, representsLiteral, mayReturnNil)
+	if err != nil {
+		panic(err)
+	}
+	return def
+}
+
+func sqlSchemaNewColumnWithDefault(name string, typ sql.Type, isPrimaryKey, isNullable bool, expr sql.Expression, representsLiteral bool) *sql.Column {
+	def := mustCreateDefault(expr, nil, representsLiteral, true)
+	return &sql.Column{Name: name, Type: typ, PrimaryKey: isPrimaryKey, Nullable: isNullable, Default: def}
+}
+
 func schemaNewColumnWDefVal(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, defaultVal string, constraints ...schema.ColConstraint) schema.Column {
 	typeInfo, err := typeinfo.FromSqlType(sqlType)
 	require.NoError(t, err)

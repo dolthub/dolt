@@ -279,24 +279,23 @@ func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts D
 }
 
 // SchAndTableNameFromFile reads a SQL schema file and creates a Dolt schema from it.
-// TODO: Deprecate to use sql.Schema
-func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.ReadableFS, root *doltdb.RootValue) (string, schema.Schema, error) {
+func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.ReadableFS) (string, sql.PrimaryKeySchema, error) {
 	if path != "" {
 		data, err := fs.ReadFile(path)
 
 		if err != nil {
-			return "", nil, err
+			return "", sql.PrimaryKeySchema{}, err
 		}
 
-		tn, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, string(data))
+		tn, sch, err := sqlutil.ParseCreateTableStatement(ctx, string(data))
 
 		if err != nil {
-			return "", nil, fmt.Errorf("%s in schema file %s", err.Error(), path)
+			return "", sql.PrimaryKeySchema{}, fmt.Errorf("%s in schema file %s", err.Error(), path)
 		}
 
 		return tn, sch, nil
 	} else {
-		return "", nil, errors.New("no schema file to parse")
+		return "", sql.PrimaryKeySchema{}, errors.New("no schema file to parse")
 	}
 }
 

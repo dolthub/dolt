@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -69,32 +68,26 @@ func ApplyDefaults(ctx context.Context, vrw types.ValueReadWriter, doltSchema sc
 	return row.New(dRow.Format(), doltSchema, newRow)
 }
 
-// ParseCreateTableStatement will parse a CREATE TABLE ddl statement and use it to create a Dolt Schema. A RootValue
-// is used to generate unique tags for the Schema
-func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, query string) (string, schema.Schema, error) {
+// ParseCreateTableStatement will parse a CREATE TABLE ddl statement and use it to create a sql Schema.
+func ParseCreateTableStatement(ctx context.Context, query string) (string, sql.PrimaryKeySchema, error) {
 	// todo: verify create table statement
 	ddl, err := sqlparser.ParseStrictDDL(query)
 
 	if err != nil {
-		return "", nil, err
+		return "", sql.PrimaryKeySchema{}, err
 	}
 
 	ts := ddl.(*sqlparser.DDL).TableSpec
 	s, err := parse.TableSpecToSchema(sql.NewContext(ctx), ts)
 
 	if err != nil {
-		return "", nil, err
+		return "", sql.PrimaryKeySchema{}, err
 	}
 
 	tn := ddl.(*sqlparser.DDL).Table
 	buf := sqlparser.NewTrackedBuffer(nil)
 	tn.Format(buf)
 	tableName := buf.String()
-	sch, err := ToDoltSchema(ctx, root, tableName, s, nil)
 
-	if err != nil {
-		return "", nil, err
-	}
-
-	return tableName, sch, err
+	return tableName, s, err
 }

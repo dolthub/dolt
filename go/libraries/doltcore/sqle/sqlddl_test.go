@@ -19,12 +19,11 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -1228,23 +1227,23 @@ func TestParseCreateTableStatement(t *testing.T) {
 		name           string
 		query          string
 		expectedTable  string
-		expectedSchema schema.Schema
+		expectedSchema sql.PrimaryKeySchema
 		expectedErr    string
 	}{
 		{
-			name:          "Test create single column schema",
-			query:         "create table testTable (id int primary key)",
-			expectedTable: "testTable",
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{})),
+			name:           "Test create single column schema",
+			query:          "create table testTable (id int primary key)",
+			expectedTable:  "testTable",
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{sqlSchemaNewColumn("id", sql.Int32, true, false)}),
 		},
 		{
 			name:          "Test create two column schema",
 			query:         "create table testTable (id int primary key, age int)",
 			expectedTable: "testTable",
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 7208, sql.Int32, false)),
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{
+				sqlSchemaNewColumn("id", sql.Int32, true, false),
+				sqlSchemaNewColumn("age", sql.Int32, false, true),
+			}),
 		},
 		{
 			name:          "Test syntax error",
@@ -1265,11 +1264,11 @@ func TestParseCreateTableStatement(t *testing.T) {
 								first_name varchar(255), 
 								is_married boolean) `,
 			expectedTable: "testTable",
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 7208, sql.Int32, false),
-				schemaNewColumn(t, "first_name", 3264, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false),
-				schemaNewColumn(t, "is_married", 14626, sql.Boolean, false)),
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{
+				sqlSchemaNewColumn("id", sql.Int32, true, false),
+				sqlSchemaNewColumn("age", sql.Int32, false, true),
+				sqlSchemaNewColumn("first_name", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, true),
+				sqlSchemaNewColumn("is_married", sql.Boolean, false, true)}),
 		},
 		{
 			name:          "Test all supported types",
@@ -1298,34 +1297,30 @@ func TestParseCreateTableStatement(t *testing.T) {
 							c24 smallint unsigned,
 							c25 mediumint unsigned,
 							c26 bigint unsigned)`,
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "c0", 594, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "c1", 601, sql.Int8, false),
-				schemaNewColumn(t, "c2", 14542, sql.Int16, false),
-				schemaNewColumn(t, "c3", 13309, sql.Int24, false),
-				schemaNewColumn(t, "c4", 15884, sql.Int32, false),
-				schemaNewColumn(t, "c5", 14619, sql.Int64, false),
-				schemaNewColumn(t, "c6", 13192, sql.Boolean, false),
-				schemaNewColumn(t, "c7", 5981, sql.Boolean, false),
-				schemaNewColumn(t, "c8", 14871, sql.MustCreateBitType(10), false),
-				schemaNewColumn(t, "c9", 4167, sql.Text, false),
-				schemaNewColumn(t, "c10", 1965, sql.TinyText, false),
-				schemaNewColumn(t, "c11", 12860, sql.MediumText, false),
-				schemaNewColumn(t, "c12", 7155, sql.LongText, false),
-				//schemaNewColumn(t, "c13", 113, sql.TinyBlob, false),
-				//schemaNewColumn(t, "c14", 114, sql.Blob, false),
-				//schemaNewColumn(t, "c15", 115, sql.LongBlob, false),
-				schemaNewColumn(t, "c16", 15859, sql.MustCreateStringWithDefaults(sqltypes.Char, 5), false),
-				schemaNewColumn(t, "c17", 11710, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false),
-				schemaNewColumn(t, "c18", 6838, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
-				schemaNewColumn(t, "c19", 9377, sql.Float32, false),
-				schemaNewColumn(t, "c20", 15979, sql.Float64, false),
-				//schemaNewColumn(t, "c21", 121, sql.MustCreateDecimalType(10, 5), false),
-				schemaNewColumn(t, "c22", 2910, sql.Uint32, false),
-				schemaNewColumn(t, "c23", 8740, sql.Uint8, false),
-				schemaNewColumn(t, "c24", 8689, sql.Uint16, false),
-				schemaNewColumn(t, "c25", 5243, sql.Uint24, false),
-				schemaNewColumn(t, "c26", 9338, sql.Uint64, false),
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{
+				sqlSchemaNewColumn("c0", sql.Int32, true, false),
+				sqlSchemaNewColumn("c1", sql.Int8, false, true),
+				sqlSchemaNewColumn("c2", sql.Int16, false, true),
+				sqlSchemaNewColumn("c3", sql.Int24, false, true),
+				sqlSchemaNewColumn("c4", sql.Int32, false, true),
+				sqlSchemaNewColumn("c5", sql.Int64, false, true),
+				sqlSchemaNewColumn("c6", sql.Boolean, false, true),
+				sqlSchemaNewColumn("c7", sql.Boolean, false, true),
+				sqlSchemaNewColumn("c8", sql.MustCreateBitType(10), false, true),
+				sqlSchemaNewColumn("c9", sql.Text, false, true),
+				sqlSchemaNewColumn("c10", sql.TinyText, false, true),
+				sqlSchemaNewColumn("c11", sql.MediumText, false, true),
+				sqlSchemaNewColumn("c12", sql.LongText, false, true),
+				sqlSchemaNewColumn("c16", sql.MustCreateStringWithDefaults(sqltypes.Char, 5), false, true),
+				sqlSchemaNewColumn("c17", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, true),
+				sqlSchemaNewColumn("c18", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, true),
+				sqlSchemaNewColumn("c19", sql.Float32, false, true),
+				sqlSchemaNewColumn("c20", sql.Float64, false, true),
+				sqlSchemaNewColumn("c22", sql.Uint32, false, true),
+				sqlSchemaNewColumn("c23", sql.Uint8, false, true),
+				sqlSchemaNewColumn("c24", sql.Uint16, false, true),
+				sqlSchemaNewColumn("c25", sql.Uint24, false, true),
+				sqlSchemaNewColumn("c26", sql.Uint64, false, true)},
 			),
 		},
 		{
@@ -1337,11 +1332,11 @@ func TestParseCreateTableStatement(t *testing.T) {
 								is_married bool, 
 								primary key (id, age))`,
 			expectedTable: "testTable",
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 7208, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "first_name", 3264, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
-				schemaNewColumn(t, "is_married", 14626, sql.Boolean, false)),
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{
+				sqlSchemaNewColumn("id", sql.Int32, true, false),
+				sqlSchemaNewColumn("age", sql.Int32, true, false),
+				sqlSchemaNewColumn("first_name", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, true),
+				sqlSchemaNewColumn("is_married", sql.Boolean, false, true)}),
 		},
 		{
 			name: "Test not null constraints",
@@ -1352,11 +1347,11 @@ func TestParseCreateTableStatement(t *testing.T) {
 								is_married bool, 
 								primary key (id, age))`,
 			expectedTable: "testTable",
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 7208, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "first_name", 3264, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "is_married", 14626, sql.Boolean, false)),
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{
+				sqlSchemaNewColumn("id", sql.Int32, true, false),
+				sqlSchemaNewColumn("age", sql.Int32, true, false),
+				sqlSchemaNewColumn("first_name", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, false),
+				sqlSchemaNewColumn("is_married", sql.Boolean, false, true)}),
 		},
 		{
 			name: "Test quoted columns",
@@ -1367,20 +1362,20 @@ func TestParseCreateTableStatement(t *testing.T) {
 				"`is married` bool, " +
 				"primary key (`id`, `age`))",
 			expectedTable: "testTable",
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 7208, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "timestamp", 10168, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
-				schemaNewColumn(t, "is married", 14626, sql.Boolean, false)),
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{
+				sqlSchemaNewColumn("id", sql.Int32, true, false),
+				sqlSchemaNewColumn("age", sql.Int32, true, false),
+				sqlSchemaNewColumn("timestamp", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, true),
+				sqlSchemaNewColumn("is married", sql.Boolean, false, true)}),
 		},
 		{
 			name: "Test tag comments",
 			query: `create table testTable (
 								id int primary key, age int)`,
 			expectedTable: "testTable",
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 7208, sql.Int32, false)),
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{
+				sqlSchemaNewColumn("id", sql.Int32, true, false),
+				sqlSchemaNewColumn("age", sql.Int32, false, true)}),
 		},
 		// Real world examples for regression testing
 		{
@@ -1390,9 +1385,10 @@ func TestParseCreateTableStatement(t *testing.T) {
 							country char(2) NOT NULL default '',
 							PRIMARY KEY (ip));`,
 			expectedTable: "ip2nation",
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumnWDefVal(t, "ip", 7265, sql.Uint32, true, "0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "country", 6630, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, `""`, schema.NotNullConstraint{})),
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{
+				sqlSchemaNewColumnWithDefault("ip", sql.Uint32, true, false, expression.NewLiteral(int8(0), sql.Int8), true),
+				sqlSchemaNewColumnWithDefault("country", sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, false, expression.NewLiteral("", sql.LongText), true),
+			}),
 		},
 		{
 			name:          "Test ip2nationCountries",
@@ -1406,31 +1402,29 @@ func TestParseCreateTableStatement(t *testing.T) {
 							lat float NOT NULL default 0.0,
 							lon float NOT NULL default 0.0,
 							PRIMARY KEY (code));`,
-			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumnWDefVal(t, "code", 7802, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "iso_code_2", 9266, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "iso_code_3", 8427, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `""`),
-				schemaNewColumnWDefVal(t, "iso_country", 7151, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "country", 879, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lat", 3502, sql.Float32, false, "0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lon", 9907, sql.Float32, false, "0", schema.NotNullConstraint{})),
+			expectedSchema: sql.NewPrimaryKeySchema(sql.Schema{
+				sqlSchemaNewColumnWithDefault("code", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, false, expression.NewLiteral("", sql.LongText), true),
+				sqlSchemaNewColumnWithDefault("iso_code_2", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, false, expression.NewLiteral("", sql.LongText), true),
+				sqlSchemaNewColumnWithDefault("iso_code_3", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, true, expression.NewLiteral("", sql.LongText), true),
+				sqlSchemaNewColumnWithDefault("iso_country", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, false, expression.NewLiteral("", sql.LongText), true),
+				sqlSchemaNewColumnWithDefault("country", sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, false, expression.NewLiteral("", sql.LongText), true),
+				sqlSchemaNewColumnWithDefault("lat", sql.Float32, false, false, expression.NewLiteral(0.0, sql.Float64), true),
+				sqlSchemaNewColumnWithDefault("lon", sql.Float32, false, false, expression.NewLiteral(0.0, sql.Float64), true)}),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
 			ctx := context.Background()
-			root, _ := dEnv.WorkingRoot(ctx)
 
-			tblName, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, tt.query)
+			tblName, sch, err := sqlutil.ParseCreateTableStatement(ctx, tt.query)
 
 			if tt.expectedErr != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
 			} else {
 				require.NoError(t, err)
-				equalSchemas(t, tt.expectedSchema, sch)
+				assert.True(t, tt.expectedSchema.Equals(sch.Schema))
 				assert.Equal(t, tt.expectedTable, tblName)
 			}
 		})

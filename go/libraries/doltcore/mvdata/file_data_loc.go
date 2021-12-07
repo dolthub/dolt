@@ -22,6 +22,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -112,10 +114,10 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 		return rd, false, err
 
 	case JsonFile:
-		var sch schema.Schema
+		var sch sql.PrimaryKeySchema
 		jsonOpts, _ := opts.(JSONOptions)
 		if jsonOpts.SchFile != "" {
-			tn, s, err := SchAndTableNameFromFile(ctx, jsonOpts.SchFile, fs, root)
+			tn, s, err := SchAndTableNameFromFile(ctx, jsonOpts.SchFile, fs)
 			if err != nil {
 				return nil, false, err
 			}
@@ -134,25 +136,25 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 			if err != nil {
 				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
 			}
-			sch, err = tbl.GetSchema(context.TODO())
+			tSch, err := tbl.GetSchema(context.TODO())
+			if err != nil {
+				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
+			}
+
+			sch, err = sqlutil.FromDoltSchema(jsonOpts.TableName, tSch)
 			if err != nil {
 				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
 			}
 		}
 
-		sqlSch, err := sqlutil.FromDoltSchema(jsonOpts.TableName, sch)
-		if err != nil {
-			return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
-		}
-
-		rd, err := json.OpenJSONReader(dl.Path, fs, sqlSch.Schema)
+		rd, err := json.OpenJSONReader(dl.Path, fs, sch.Schema)
 		return rd, false, err
 
 	case ParquetFile:
-		var tableSch schema.Schema
+		var tableSch sql.PrimaryKeySchema
 		parquetOpts, _ := opts.(ParquetOptions)
 		if parquetOpts.SchFile != "" {
-			tn, s, tnErr := SchAndTableNameFromFile(ctx, parquetOpts.SchFile, fs, root)
+			tn, s, tnErr := SchAndTableNameFromFile(ctx, parquetOpts.SchFile, fs)
 			if tnErr != nil {
 				return nil, false, tnErr
 			}
@@ -171,18 +173,18 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 			if tErr != nil {
 				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
 			}
-			tableSch, err = tbl.GetSchema(context.TODO())
+			tSch, err := tbl.GetSchema(context.TODO())
+			if err != nil {
+				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
+			}
+
+			tableSch, err = sqlutil.FromDoltSchema(parquetOpts.TableName, tSch)
 			if err != nil {
 				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
 			}
 		}
 
-		sqlSch, err := sqlutil.FromDoltSchema(parquetOpts.TableName, tableSch)
-		if err != nil {
-			return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
-		}
-
-		rd, rErr := parquet.OpenParquetReader(root.VRW(), dl.Path, sqlSch.Schema)
+		rd, rErr := parquet.OpenParquetReader(root.VRW(), dl.Path, tableSch.Schema)
 		return rd, false, rErr
 	}
 

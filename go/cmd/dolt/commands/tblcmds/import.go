@@ -605,7 +605,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (sql.Schema, *mvdata.DataMoverCreationError) {
 	if impOpts.schFile != "" {
-		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, fs, root) // TODO: Fix the sql.Schema import here
+		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, fs)
 
 		if err == nil && tn != impOpts.tableName {
 			err = fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, impOpts.schFile, impOpts.tableName)
@@ -615,12 +615,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
 
-		sqlSchema, err := sqlutil.FromDoltSchema(tn, out)
-		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-		}
-
-		return sqlSchema.Schema, nil
+		return out.Schema, nil
 	}
 
 	if impOpts.operation == mvdata.CreateOp {
