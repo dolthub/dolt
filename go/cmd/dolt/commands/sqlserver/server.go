@@ -166,6 +166,7 @@ func Serve(
 	if err != nil {
 		return nil, err
 	}
+	defer sqlEngine.Close()
 
 	mySQLServer, startError = server.NewServer(
 		serverConf,

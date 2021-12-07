@@ -17,11 +17,8 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"io"
-	"strings"
-	"sync"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -31,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func getPushOnWriteHook(ctx context.Context, wg *sync.WaitGroup, dEnv *env.DoltEnv, logger io.Writer) (datas.CommitHook, error) {
+func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *env.DoltEnv, logger io.Writer) (datas.CommitHook, error) {
 	_, val, ok := sql.SystemVariables.GetGlobal(ReplicateToRemoteKey)
 	if !ok {
 		return nil, sql.ErrUnknownSystemVariable.New(ReplicateToRemoteKey)
@@ -61,7 +58,7 @@ func getPushOnWriteHook(ctx context.Context, wg *sync.WaitGroup, dEnv *env.DoltE
 
 	_, val, ok = sql.SystemVariables.GetGlobal(AsyncReplicationKey)
 	if _, val, ok = sql.SystemVariables.GetGlobal(AsyncReplicationKey); ok && val == SysVarTrue {
-		return doltdb.NewAsyncPushOnWriteHook(ctx, wg, ddb, dEnv.TempTableFilesDir(), logger), nil
+		return doltdb.NewAsyncPushOnWriteHook(ctx, bThreads, ddb, dEnv.TempTableFilesDir(), logger), nil
 	}
 
 	return doltdb.NewPushOnWriteHook(ddb, dEnv.TempTableFilesDir()), nil
@@ -69,10 +66,10 @@ func getPushOnWriteHook(ctx context.Context, wg *sync.WaitGroup, dEnv *env.DoltE
 
 // GetCommitHooks creates a list of hooks to execute on database commit. If doltdb.SkipReplicationErrorsKey is set,
 // replace misconfigured hooks with doltdb.LogHook instances that prints a warning when trying to execute.
-func GetCommitHooks(ctx context.Context, wg *sync.WaitGroup, dEnv *env.DoltEnv, logger io.Writer) ([]datas.CommitHook, error) {
+func GetCommitHooks(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *env.DoltEnv, logger io.Writer) ([]datas.CommitHook, error) {
 	postCommitHooks := make([]datas.CommitHook, 0)
 
-	if hook, err := getPushOnWriteHook(ctx, wg, dEnv, logger); err != nil {
+	if hook, err := getPushOnWriteHook(ctx, bThreads, dEnv, logger); err != nil {
 		err = fmt.Errorf("failure loading hook; %w", err)
 		if SkipReplicationWarnings() {
 			postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
@@ -111,16 +108,15 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 	return rrd, nil
 }
 
-func applyReplicationConfig(ctx context.Context, wg *sync.WaitGroup, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs map[string]sql.Database) (map[string]sql.Database, error) {
-	outputDbs := make(map[string]sql.Database, len(dbs))
-	for name, db := range dbs {
-		name = strings.ToLower(name)
-		dEnv := mrEnv.GetEnv(name)
+func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs ...SqlDatabase) ([]SqlDatabase, error) {
+	outputDbs := make([]SqlDatabase, len(dbs))
+	for _, db := range dbs {
+		dEnv := mrEnv.GetEnv(db.Name())
 		if dEnv == nil {
-			outputDbs[name] = db
+			outputDbs = append(outputDbs, db)
 			continue
 		}
-		postCommitHooks, err := GetCommitHooks(ctx, wg, dEnv, logger)
+		postCommitHooks, err := GetCommitHooks(ctx, bThreads, dEnv, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -131,13 +127,13 @@ func applyReplicationConfig(ctx context.Context, wg *sync.WaitGroup, mrEnv *env.
 			if !ok {
 				return nil, sql.ErrInvalidSystemVariableValue.New(remote)
 			}
-			db, err = newReplicaDatabase(ctx, name, remoteName, dEnv)
+			db, err = newReplicaDatabase(ctx, db.Name(), remoteName, dEnv)
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		outputDbs[name] = db
+		outputDbs = append(outputDbs, db)
 	}
 	return outputDbs, nil
 }

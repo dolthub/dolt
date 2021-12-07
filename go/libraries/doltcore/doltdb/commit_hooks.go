@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"sync"
 
@@ -106,14 +107,19 @@ type AsyncPushOnWriteHook struct {
 	ch  chan PushArg
 }
 
-const asyncPushBufferSize = 20
+const (
+	asyncPushBufferSize = 20
+	asyncPushProcessCommit = "async_push_process_commit"
+	asyncPushSyncReplica = "async_push_sync_replica"
+
+)
 
 var _ datas.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
-func NewAsyncPushOnWriteHook(ctx context.Context, wg *sync.WaitGroup, destDB *DoltDB, tmpDir string, logger io.Writer) *AsyncPushOnWriteHook {
+func NewAsyncPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, destDB *DoltDB, tmpDir string, logger io.Writer) *AsyncPushOnWriteHook {
 	ch := make(chan PushArg, asyncPushBufferSize)
-	RunAsyncReplicationThreads(ctx, wg, ch, destDB, tmpDir, logger)
+	RunAsyncReplicationThreads(ctx, bThreads, ch, destDB, tmpDir, logger)
 	return &AsyncPushOnWriteHook{ch: ch}
 }
 
@@ -185,34 +191,30 @@ func (lh *LogHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	return nil
 }
 
-func RunAsyncReplicationThreads(ctx context.Context, wg *sync.WaitGroup, ch chan PushArg, destDB *DoltDB, tmpDir string, logger io.Writer) {
+func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThreads, ch chan PushArg, destDB *DoltDB, tmpDir string, logger io.Writer) {
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
 	// stop first go routine before second
 	newCtx, stop := context.WithCancel(context.Background())
-	wg.Add(1)
-	go func() error {
-		defer wg.Done()
+	bThreads.Add(asyncPushProcessCommit, func(ctx context.Context) {
 		for {
 			select {
 			case p, ok := <-ch:
 				if !ok {
-					return ctx.Err()
+					return
 				}
 				mu.Lock()
 				newHeads[p.ds.ID()] = p
 				mu.Unlock()
 			case <-ctx.Done():
 				stop()
-				return ctx.Err()
+				return
 			}
 		}
-	}()
+	})
 
-	wg.Add(1)
-	go func() error {
-		defer wg.Done()
+	bThreads.Add(asyncPushSyncReplica, func(ctx context.Context) {
 		defer close(ch)
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
 		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
@@ -242,11 +244,10 @@ func RunAsyncReplicationThreads(ctx context.Context, wg *sync.WaitGroup, ch chan
 			select {
 			case <-newCtx.Done():
 				flush()
-				return newCtx.Err()
+				return
 			default:
 				flush()
 			}
 		}
-	}()
-
+	})
 }

@@ -364,6 +364,7 @@ func execShell(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	err = runShell(ctx, se, mrEnv)
 	if err != nil {
@@ -384,6 +385,7 @@ func execBatch(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -418,6 +420,7 @@ func execMultiStatements(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -444,6 +447,7 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
