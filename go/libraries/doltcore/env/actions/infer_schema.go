@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type typeInfoSet map[sql.Type]struct{}
@@ -262,7 +261,7 @@ func leastPermissiveChronoType(strVal string) (sql.Type, bool) {
 		return sql.Null, false
 	}
 
-	t := time.Time(dt.(types.Timestamp))
+	t := dt.(time.Time)
 	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
 		return sql.Date, true
 	}

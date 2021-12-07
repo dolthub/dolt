@@ -19,6 +19,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func toPointer(input []string) []*string {
@@ -52,7 +54,7 @@ func csvReaderRead(s string, delim string) ([]*string, error) {
 	csvr := CSVReader{
 		closer:          nil,
 		bRd:             br,
-		sch:             nil,
+		sch:             sql.PrimaryKeySchema{},
 		isDone:          false,
 		nbf:             nil,
 		delim:           []byte(delim),
