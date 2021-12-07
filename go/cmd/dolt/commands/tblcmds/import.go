@@ -563,7 +563,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 			} else {
-				dRow, err := transformToDoltRow(r, rd.GetSqlSchema(), wr.Schema(), options.nameMapper)
+				dRow, err := namedAndTypeTransform(r, rd.GetSqlSchema(), wr.Schema(), options.nameMapper)
 				if err != nil {
 					return err
 				}
@@ -712,9 +712,9 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	panic("Unhandled Error type")
 }
 
-// transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
-// 3) Addresses any type inconsistencies.
-func transformToDoltRow(doltRow sql.Row, rdSchema sql.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
+// namedAndTypeTransform does 1) Matches the read and write schema with subsetting and name matching. 2) Addresses any
+// type inconsistencies.
+func namedAndTypeTransform(doltRow sql.Row, rdSchema sql.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	for i, col := range wrSchema {
 		switch col.Type {
 		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType

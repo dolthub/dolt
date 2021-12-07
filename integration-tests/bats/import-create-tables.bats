@@ -342,7 +342,6 @@ DELIM
 
 @test "import-create-tables: create a table from excel import with multiple sheets" {
     run dolt table import -c --pk=id employees `batshelper employees.xlsx`
-    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
