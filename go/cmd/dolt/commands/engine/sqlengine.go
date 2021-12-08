@@ -64,7 +64,7 @@ func NewSqlEngine(
 	}
 
 	bThreads := sql.NewBackgroundThreads()
-	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, nil, dbs...)
+	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, cli.CliOut, dbs...)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +223,10 @@ func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
 }
 
 func (se *SqlEngine) Close() error {
-	return se.engine.Close()
+	if se.engine != nil {
+		return se.engine.Close()
+	}
+	return nil
 }
 
 func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {

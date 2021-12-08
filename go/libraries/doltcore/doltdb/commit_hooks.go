@@ -118,10 +118,13 @@ const (
 var _ datas.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
-func NewAsyncPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, destDB *DoltDB, tmpDir string, logger io.Writer) *AsyncPushOnWriteHook {
+func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *DoltDB, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, error) {
 	ch := make(chan PushArg, asyncPushBufferSize)
-	RunAsyncReplicationThreads(ctx, bThreads, ch, destDB, tmpDir, logger)
-	return &AsyncPushOnWriteHook{ch: ch}
+	err := RunAsyncReplicationThreads(bThreads, ch, destDB, tmpDir, logger)
+	if err != nil {
+		return nil, err
+	}
+	return &AsyncPushOnWriteHook{ch: ch}, nil
 }
 
 // Execute implements datas.CommitHook, replicates head updates to the destDb field
@@ -192,7 +195,7 @@ func (lh *LogHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	return nil
 }
 
-func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThreads, ch chan PushArg, destDB *DoltDB, tmpDir string, logger io.Writer) {
+func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg, destDB *DoltDB, tmpDir string, logger io.Writer) error {
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
@@ -212,7 +215,7 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 	// We do not track sequential commits because push follows historical
 	// dependencies. This does not account for reset --force, which
 	// breaks historical dependence.
-	bThreads.Add(asyncPushProcessCommit, func(ctx context.Context) {
+	err := bThreads.Add(asyncPushProcessCommit, func(ctx context.Context) {
 		for {
 			select {
 			case p, ok := <-ch:
@@ -226,6 +229,9 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 			}
 		}
 	})
+	if err != nil {
+		return err
+	}
 
 	getHeadsCopy := func() map[string]PushArg {
 		mu.Lock()
@@ -268,7 +274,7 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 	// The second goroutine pushes updates to a remote chunkstore.
 	// This goroutine waits for first goroutine to drain before closing
 	// the channel and exiting.
-	bThreads.Add(asyncPushSyncReplica, func(ctx context.Context) {
+	err = bThreads.Add(asyncPushSyncReplica, func(ctx context.Context) {
 		defer close(ch)
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
 		ticker := time.NewTicker(asyncPushInterval)
@@ -282,4 +288,9 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 			}
 		}
 	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

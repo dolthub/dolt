@@ -211,7 +211,10 @@ func TestAsyncPushOnWrite(t *testing.T) {
 
 	// setup hook
 	bThreads := sql.NewBackgroundThreads()
-	hook := NewAsyncPushOnWriteHook(ctx, bThreads, destDB, tmpDir, &buffer.Buffer{})
+	hook, err := NewAsyncPushOnWriteHook(bThreads, destDB, tmpDir, &buffer.Buffer{})
+	if err != nil {
+		t.Fatal("Unexpected error creating push hook", err)
+	}
 
 	t.Run("replicate to remote", func(t *testing.T) {
 		for i := 0; i < 200; i++ {

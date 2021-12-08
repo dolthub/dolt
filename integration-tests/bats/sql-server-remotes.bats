@@ -84,6 +84,9 @@ teardown() {
     multi_query repo1 1 "
         SELECT DOLT_COMMIT('-am', 'Step 1');"
 
+    # threads guarenteed to flush after we stop server
+    stop_sql_server
+
     cd ../repo2
     dolt pull remote1
     run dolt sql -q "select * from test" -r csv
