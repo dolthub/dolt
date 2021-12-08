@@ -21,11 +21,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-
 	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // usage: `go test -bench .`
@@ -65,6 +65,7 @@ func benchmarkAsyncPush(b *testing.B, test serverTest) {
 
 	// setup
 	dEnv, cfg = getAsyncEnvAndConfig(ctx, b)
+	dsess.InitPersistedSystemVars(dEnv)
 	executeServerQueries(ctx, b, dEnv, cfg, test.setup)
 
 	// bench
@@ -98,7 +99,7 @@ func getAsyncEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv,
 	if !ok {
 		b.Fatal("local config does not exist")
 	}
-	localCfg.SetStrings(map[string]string{sqle.ReplicateToRemoteKey: "remote1", sqle.AsyncReplicationKey: "1"})
+	localCfg.SetStrings(map[string]string{fmt.Sprintf("%s.%s", env.SqlServerGlobalsPrefix, sqle.ReplicateToRemoteKey): "remote1", fmt.Sprintf("%s.%s", env.SqlServerGlobalsPrefix, sqle.AsyncReplicationKey): "1"})
 
 	yaml := []byte(fmt.Sprintf(`
 log_level: warning

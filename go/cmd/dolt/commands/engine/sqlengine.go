@@ -70,7 +70,6 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 

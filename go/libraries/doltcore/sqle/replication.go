@@ -17,8 +17,9 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -110,7 +111,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 
 func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs ...SqlDatabase) ([]SqlDatabase, error) {
 	outputDbs := make([]SqlDatabase, len(dbs))
-	for _, db := range dbs {
+	for i, db := range dbs {
 		dEnv := mrEnv.GetEnv(db.Name())
 		if dEnv == nil {
 			outputDbs = append(outputDbs, db)
@@ -133,7 +134,7 @@ func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads
 			}
 		}
 
-		outputDbs = append(outputDbs, db)
+		outputDbs[i] = db
 	}
 	return outputDbs, nil
 }

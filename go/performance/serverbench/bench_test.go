@@ -181,7 +181,7 @@ func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, 
 
 	//b.Logf("Starting server with Config %v\n", srv.ConfigInfo(cfg))
 	eg.Go(func() (err error) {
-		startErr, closeErr := srv.Serve(ctx,"", cfg, serverController, dEnv)
+		startErr, closeErr := srv.Serve(ctx, "", cfg, serverController, dEnv)
 		if startErr != nil {
 			return startErr
 		}

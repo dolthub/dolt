@@ -55,7 +55,7 @@ var (
 func TestServerArgs(t *testing.T) {
 	serverController := NewServerController()
 	go func() {
-		startServer(context.Background(),"test", "dolt sql-server", []string{
+		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
 			"-u", "username",

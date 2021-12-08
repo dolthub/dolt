@@ -17,6 +17,7 @@ package schcmds
 import (
 	"context"
 	"io"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"

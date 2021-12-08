@@ -16,14 +16,14 @@ package doltdb
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type PushOnWriteHook struct {
@@ -108,10 +108,9 @@ type AsyncPushOnWriteHook struct {
 }
 
 const (
-	asyncPushBufferSize = 20
+	asyncPushBufferSize    = 20
 	asyncPushProcessCommit = "async_push_process_commit"
-	asyncPushSyncReplica = "async_push_sync_replica"
-
+	asyncPushSyncReplica   = "async_push_sync_replica"
 )
 
 var _ datas.CommitHook = (*AsyncPushOnWriteHook)(nil)
@@ -195,8 +194,22 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
-	// stop first go routine before second
+	updateHead := func(p PushArg) {
+		mu.Lock()
+		newHeads[p.ds.ID()] = p
+		mu.Unlock()
+	}
+
+	// newCtx lets first goroutine drain before the second goroutine finalizes
 	newCtx, stop := context.WithCancel(context.Background())
+
+	// The first goroutine amortizes commits into a map keyed by dataset id.
+	// When the parent context cancels, this goroutine drains and kills its
+	// dependent goroutine.
+	//
+	// We do not track sequential commits because push follows historical
+	// dependencies. This does not account for reset --force, which
+	// breaks historical dependence.
 	bThreads.Add(asyncPushProcessCommit, func(ctx context.Context) {
 		for {
 			select {
@@ -204,9 +217,7 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 				if !ok {
 					return
 				}
-				mu.Lock()
-				newHeads[p.ds.ID()] = p
-				mu.Unlock()
+				updateHead(p)
 			case <-ctx.Done():
 				stop()
 				return
@@ -214,39 +225,57 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 		}
 	})
 
+	copyHeads := func(newHeads map[string]PushArg) map[string]PushArg {
+		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
+		if len(newHeads) == 0 {
+			return newHeadsCopy
+		}
+
+		defer mu.Unlock()
+		mu.Lock()
+		for k, v := range newHeads {
+			newHeadsCopy[k] = v
+		}
+
+		return newHeadsCopy
+	}
+
+	isNewHeads := func(newHeads map[string]PushArg) bool {
+		defer mu.Unlock()
+		mu.Lock()
+		return len(newHeads) != 0
+	}
+
+	flush := func(newHeads map[string]PushArg, latestHeads map[string]hash.Hash) {
+		newHeadsCopy := copyHeads(newHeads)
+		if !isNewHeads(newHeadsCopy) {
+			return
+		}
+		for id, newCm := range newHeadsCopy {
+			if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
+				// use background context to drain after sql context is canceled
+				err := pushDataset(context.Background(), destDB.db, newCm.db, tmpDir, newCm.ds)
+				if err != nil {
+					logger.Write([]byte("replication failed: " + err.Error()))
+				}
+				latestHeads[id] = newCm.hash
+			}
+		}
+	}
+
+	// The second goroutine pushes updates to a remote chunkstore.
+	// This goroutine waits for first goroutine to drain before closing
+	// the channel and exiting.
 	bThreads.Add(asyncPushSyncReplica, func(ctx context.Context) {
 		defer close(ch)
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
-		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
-		flush := func() {
-			mu.Lock()
-			if len(newHeads) == 0 {
-				mu.Unlock()
-				return
-			}
-			for k, v := range newHeads {
-				newHeadsCopy[k] = v
-			}
-			mu.Unlock()
-			for id, newCm := range newHeadsCopy {
-				if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
-					// use background context to drain after sql context is canceled
-					err := pushDataset(context.Background(), destDB.db, newCm.db, tmpDir, newCm.ds)
-					if err != nil {
-						logger.Write([]byte("replication failed: " + err.Error()))
-					}
-					latestHeads[id] = newCm.hash
-				}
-			}
-		}
-
 		for {
 			select {
 			case <-newCtx.Done():
-				flush()
+				flush(newHeads, latestHeads)
 				return
 			default:
-				flush()
+				flush(newHeads, latestHeads)
 			}
 		}
 	})

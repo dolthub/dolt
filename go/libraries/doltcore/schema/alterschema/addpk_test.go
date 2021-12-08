@@ -61,7 +61,7 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, originalMap.Empty())
 
-		exitCode := commands.SqlCmd{}.Exec(ctx,"sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
+		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
 		require.Equal(t, 0, exitCode)
 
 		table, err = getTable(ctx, dEnv, "test")

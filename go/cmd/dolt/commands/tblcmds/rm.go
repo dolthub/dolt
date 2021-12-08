@@ -90,7 +90,7 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	cli.CliOut = io.Discard // display nothing on success
-	return commands.SqlCmd{}.Exec(ctx,"", []string{
+	return commands.SqlCmd{}.Exec(ctx, "", []string{
 		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),
 		queryStr,
