@@ -228,13 +228,13 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 	})
 
 	getHeadsCopy := func() map[string]PushArg {
-		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
+		mu.Lock()
+		defer mu.Unlock()
 		if len(newHeads) == 0 {
-			return newHeadsCopy
+			return nil
 		}
 
-		defer mu.Unlock()
-		mu.Lock()
+		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
 		for k, v := range newHeads {
 			newHeadsCopy[k] = v
 		}
