@@ -26,6 +26,7 @@ import (
 	"syscall"
 
 	"github.com/abiosoft/readline"
+	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -65,7 +66,7 @@ var sqlDocs = cli.CommandDocumentationContent{
 
 By default, {{.EmphasisLeft}}-q{{.EmphasisRight}} executes a single statement. To execute multiple SQL statements separated by semicolons, use {{.EmphasisLeft}}-b{{.EmphasisRight}} to enable batch mode. Queries can be saved with {{.EmphasisLeft}}-s{{.EmphasisRight}}. Alternatively {{.EmphasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name. Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update script. 
 
-By default this command uses the dolt data repository in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created are placed in the current directory as well. Running with {{.EmphasisLeft}}--multi-db-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
+By default this command uses the dolt data repository in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created with CREATE DATABASE are placed in the current directory as well. Running with {{.EmphasisLeft}}--multi-db-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
 
 	Synopsis: []string{
 		"",
@@ -360,7 +361,7 @@ func execShell(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, true)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, new(auth.None), true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -381,7 +382,7 @@ func execBatch(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, new(auth.None), false)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -416,7 +417,7 @@ func execMultiStatements(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, true)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, new(auth.None), true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -443,7 +444,7 @@ func execQuery(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, true)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, new(auth.None), true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

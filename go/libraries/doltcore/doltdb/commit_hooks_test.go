@@ -18,8 +18,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/dolthub/go-mysql-server/sql"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -210,8 +210,8 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	}
 
 	// setup hook
-	var wg sync.WaitGroup
-	hook := NewAsyncPushOnWriteHook(ctx, &wg, destDB, tmpDir, &buffer.Buffer{})
+	bThreads := sql.NewBackgroundThreads()
+	hook := NewAsyncPushOnWriteHook(ctx, bThreads, destDB, tmpDir, &buffer.Buffer{})
 
 	t.Run("replicate to remote", func(t *testing.T) {
 		for i := 0; i < 200; i++ {

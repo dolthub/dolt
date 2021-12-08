@@ -82,7 +82,7 @@ A mapping file can be used to map fields between the file being imported and the
 ` + schcmds.MappingFileHelp +
 
 		`
-In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimeter`,
+In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
 		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
@@ -340,7 +340,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
 	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
 	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
-	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimeter for a csv style file with a non-comma delimiter.")
+	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimiter for a csv style file with a non-comma delimiter.")
 	return ap
 }
 
@@ -549,6 +549,11 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	g.Go(func() error {
 		defer close(parsedRowChan)
 
+		rdSqlSch, err := sqlutil.FromDoltSchema(options.tableName, rd.GetSchema())
+		if err != nil {
+			return err
+		}
+
 		for {
 			r, err := rd.ReadRow(ctx)
 			if err != nil {
@@ -565,7 +570,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 					return err
 				}
 			} else {
-				dRow, err := transformToDoltRow(r, rd.GetSchema(), wr.Schema(), options.nameMapper)
+				dRow, err := transformToDoltRow(r, rd.GetSchema(), rdSqlSch.Schema, wr.Schema(), options.nameMapper)
 				if err != nil {
 					return err
 				}
@@ -711,7 +716,7 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 // transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
 // 3) Addresses any type inconsistencies.
-func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
+func transformToDoltRow(row row.Row, rdSchema schema.Schema, rdSqlSch, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	doltRow, err := sqlutil.DoltRowToSqlRow(row, rdSchema)
 	if err != nil {
 		return nil, err
@@ -743,13 +748,7 @@ func transformToDoltRow(row row.Row, rdSchema schema.Schema, wrSchema sql.Schema
 		}
 	}
 
-	rdSchemaAsDoltSchema, err := sqlutil.FromDoltSchema(wrSchema[0].Source, rdSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchemaAsDoltSchema.Schema, wrSchema, nameMapper)
-	return doltRow, nil
+	return matchReadSchemaToWriteSchema(doltRow, rdSqlSch, wrSchema, nameMapper), nil
 }
 
 func stringToBoolean(s string) (result bool, canConvert bool) {
