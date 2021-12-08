@@ -162,7 +162,7 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", serverConfig.AutoCommit())
+	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", serverConf.Auth, serverConfig.AutoCommit())
 	if err != nil {
 		return nil, err
 	}

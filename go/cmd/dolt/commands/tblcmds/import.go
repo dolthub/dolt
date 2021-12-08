@@ -741,8 +741,7 @@ func namedAndTypeTransform(doltRow sql.Row, rdSchema sql.Schema, wrSchema sql.Sc
 		}
 	}
 
-	doltRow = matchReadSchemaToWriteSchema(doltRow, rdSchema, wrSchema, nameMapper)
-	return doltRow, nil
+	return matchReadSchemaToWriteSchema(doltRow, rdSqlSch, wrSchema, nameMapper), nil
 }
 
 func stringToBoolean(s string) (result bool, canConvert bool) {

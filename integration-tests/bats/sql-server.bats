@@ -78,6 +78,66 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 }
 
+@test "sql-server: read-only flag prevents modification" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # No tables at the start
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    # attempt to create table (autocommit on), expect either some exception
+    server_query repo1 1 "CREATE TABLE i_should_not_exist (
+            c0 INT
+        )" "" "not authorized: user does not have permission: write"
+
+    # Expect that there are still no tables
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+}
+
+@test "sql-server: read-only flag still allows select" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt sql -q "create table t(c0 int)"
+    dolt sql -q "insert into t values (1)"
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # make a select query
+    server_query repo1 1 "select * from t" "c0\n1"
+}
+
+@test "sql-server: read-only flag prevents dolt_commit" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # make a dolt_commit query
+    skip "read-only flag does not prevent dolt_commit"
+    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "not authorized: user does not have permission: write"
+}
+
 @test "sql-server: test command line modification" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
