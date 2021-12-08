@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -108,7 +109,8 @@ type AsyncPushOnWriteHook struct {
 }
 
 const (
-	asyncPushBufferSize    = 20
+	asyncPushBufferSize    = 2048
+	asyncPushInterval      = 500 * time.Millisecond
 	asyncPushProcessCommit = "async_push_process_commit"
 	asyncPushSyncReplica   = "async_push_sync_replica"
 )
@@ -225,7 +227,7 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 		}
 	})
 
-	copyHeads := func(newHeads map[string]PushArg) map[string]PushArg {
+	getHeadsCopy := func() map[string]PushArg {
 		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
 		if len(newHeads) == 0 {
 			return newHeadsCopy
@@ -247,7 +249,7 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 	}
 
 	flush := func(newHeads map[string]PushArg, latestHeads map[string]hash.Hash) {
-		newHeadsCopy := copyHeads(newHeads)
+		newHeadsCopy := getHeadsCopy()
 		if !isNewHeads(newHeadsCopy) {
 			return
 		}
@@ -269,12 +271,13 @@ func RunAsyncReplicationThreads(ctx context.Context, bThreads *sql.BackgroundThr
 	bThreads.Add(asyncPushSyncReplica, func(ctx context.Context) {
 		defer close(ch)
 		var latestHeads = make(map[string]hash.Hash, asyncPushBufferSize)
+		ticker := time.NewTicker(asyncPushInterval)
 		for {
 			select {
 			case <-newCtx.Done():
 				flush(newHeads, latestHeads)
 				return
-			default:
+			case <-ticker.C:
 				flush(newHeads, latestHeads)
 			}
 		}
