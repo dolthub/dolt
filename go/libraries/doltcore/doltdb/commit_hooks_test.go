@@ -18,10 +18,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/dolthub/go-mysql-server/sql"
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/buffer"
 
