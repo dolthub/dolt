@@ -471,6 +471,11 @@ func getWriterSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 		col.Source = imOpts.tableName
 	}
 
+	// Update the source the schema
+	for _, col := range wrSch.Schema {
+		col.Source = imOpts.tableName
+	}
+
 	// Validate the primary keys are aligned between the read schema and write schema
 	for _, wCol := range wrSch.Schema {
 		if wCol.PrimaryKey {
@@ -494,11 +499,6 @@ func getWriterSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 		}
 
 		return sql.NewPrimaryKeySchema(ret), nil
-	}
-
-	// Update the source the schema
-	for _, col := range wrSch.Schema {
-		col.Source = imOpts.tableName
 	}
 
 	return wrSch, nil

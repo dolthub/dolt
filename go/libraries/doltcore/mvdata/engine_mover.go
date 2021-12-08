@@ -124,6 +124,10 @@ func NewSqlEngineMoverWithEngine(ctx *sql.Context, eng *sqle.Engine, db dsqle.Da
 // StartWriting implements the DataWriter interface.
 func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) (err error) {
 	err = s.forceDropTableIfNeeded()
+	if err != nil {
+		return err
+	}
+
 	_, _, err = s.se.Query(s.sqlCtx, fmt.Sprintf("START TRANSACTION"))
 	if err != nil {
 		return err
