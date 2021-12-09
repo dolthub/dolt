@@ -128,7 +128,7 @@ func InferSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, a
 				if val == nil {
 					inferrer.nullable.Add(col.Name)
 				}
-				strVal, err := stringDefaultType.Convert(val) // TODO: Susss
+				strVal, err := stringDefaultType.Convert(val)
 				if err != nil {
 					return err
 				}

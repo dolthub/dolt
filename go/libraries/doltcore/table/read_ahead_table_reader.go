@@ -54,11 +54,11 @@ func (tr *AsyncReadAheadTableReader) GetSchema() schema.Schema {
 }
 
 func (tr *AsyncReadAheadTableReader) GetSqlSchema() sql.PrimaryKeySchema {
-	panic("dont call plxxx")
+	panic("todo")
 }
 
 func (tr *AsyncReadAheadTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
-	panic("please dont call plxx")
+	panic("todo")
 }
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and calling
