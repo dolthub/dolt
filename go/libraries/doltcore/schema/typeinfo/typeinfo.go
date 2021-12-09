@@ -47,6 +47,7 @@ const (
 	VarBinaryTypeIdentifier  Identifier = "varbinary"
 	VarStringTypeIdentifier  Identifier = "varstring"
 	YearTypeIdentifier       Identifier = "year"
+	GeometryTypeIdentifier   Identifier = "geometry"
 )
 
 var Identifiers = map[Identifier]struct{}{
@@ -69,6 +70,7 @@ var Identifiers = map[Identifier]struct{}{
 	VarBinaryTypeIdentifier:  {},
 	VarStringTypeIdentifier:  {},
 	YearTypeIdentifier:       {},
+	GeometryTypeIdentifier:   {},
 }
 
 // TypeInfo is an interface used for encoding type information.
@@ -158,6 +160,8 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		return DatetimeType, nil
 	case sqltypes.Year:
 		return YearType, nil
+	case sqltypes.Geometry:
+		return GeometryType, nil
 	case sqltypes.Decimal:
 		decimalSQLType, ok := sqlType.(sql.DecimalType)
 		if !ok {
@@ -268,6 +272,8 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreateVarStringTypeFromParams(params)
 	case YearTypeIdentifier:
 		return YearType, nil
+	case GeometryTypeIdentifier:
+		return GeometryType, nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot be made from an identifier and params`, id)
 	}
