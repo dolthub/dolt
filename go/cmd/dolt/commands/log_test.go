@@ -16,12 +16,12 @@ package commands
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

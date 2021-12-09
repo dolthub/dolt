@@ -47,9 +47,9 @@ type logOpts struct {
 }
 
 type logNode struct {
-	commitMeta 		*doltdb.CommitMeta
-	commitHash 		hash.Hash
-	parentHashes 	[]hash.Hash
+	commitMeta   *doltdb.CommitMeta
+	commitHash   hash.Hash
+	parentHashes []hash.Hash
 }
 
 var logDocs = cli.CommandDocumentationContent{
