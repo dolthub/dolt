@@ -41,10 +41,10 @@ func TestLeastPermissiveType(t *testing.T) {
 	}{
 		{"empty string", "", 0.0, sql.Null},
 		{"valid uuid", "00000000-0000-0000-0000-000000000000", 0.0, sql.UUID},
-		{"invalid uuid", "00000000-0000-0000-0000-00000000000z", 0.0, sql.Text},
+		{"invalid uuid", "00000000-0000-0000-0000-00000000000z", 0.0, stringDefaultType},
 		{"lower bool", "true", 0.0, sql.Boolean},
 		{"upper bool", "FALSE", 0.0, sql.Boolean},
-		{"yes", "yes", 0.0, sql.Text},
+		{"yes", "yes", 0.0, stringDefaultType},
 		{"one", "1", 0.0, sql.Uint32},
 		{"negative one", "-1", 0.0, sql.Int32},
 		{"negative one point 0", "-1.0", 0.0, sql.Float32},
@@ -53,7 +53,7 @@ func TestLeastPermissiveType(t *testing.T) {
 		{"negative one point 999 with FT of 1.0", "-1.999", 1.0, sql.Int32},
 		{"zero point zero zero zero zero", "0.0000", 0.0, sql.Float32},
 		{"max int", strconv.FormatUint(math.MaxInt64, 10), 0.0, sql.Uint64},
-		{"bigger than max int", strconv.FormatUint(math.MaxUint64, 10) + "0", 0.0, sql.Text},
+		{"bigger than max int", strconv.FormatUint(math.MaxUint64, 10) + "0", 0.0, stringDefaultType},
 	}
 
 	for _, test := range tests {
@@ -78,8 +78,8 @@ func TestLeastPermissiveNumericType(t *testing.T) {
 		{"double decimal point", "0.00.0", 0.0, sql.Null},
 		{"leading zero floats", "05.78", 0.0, sql.Float32},
 		{"zero float with high precision", "0.0000", 0.0, sql.Float32},
-		{"all zeroes", "0000", 0.0, sql.Text},
-		{"leading zeroes", "01", 0.0, sql.Text},
+		{"all zeroes", "0000", 0.0, stringDefaultType},
+		{"leading zeroes", "01", 0.0, stringDefaultType},
 		{"negative int", "-1234", 0.0, sql.Int32},
 		{"fits in uint64 but not int64", strconv.FormatUint(math.MaxUint64, 10), 0.0, sql.Uint64},
 		{"negative less than math.MinInt64", "-" + strconv.FormatUint(math.MaxUint64, 10), 0.0, sql.Null},
@@ -194,7 +194,7 @@ func testFindCommonType(t *testing.T) {
 				sql.Int32:   {},
 				sql.Boolean: {},
 			},
-			expType: sql.Text,
+			expType: stringDefaultType,
 		},
 		{
 			name: "floats and bools",
@@ -202,7 +202,7 @@ func testFindCommonType(t *testing.T) {
 				sql.Float32: {},
 				sql.Boolean: {},
 			},
-			expType: sql.Text,
+			expType: stringDefaultType,
 		},
 		{
 			name: "floats and uuids",
@@ -210,7 +210,7 @@ func testFindCommonType(t *testing.T) {
 				sql.Float32: {},
 				sql.UUID:    {},
 			},
-			expType: sql.Text,
+			expType: stringDefaultType,
 		},
 	}
 
@@ -243,7 +243,7 @@ func testFindCommonTypeFromSingleType(t *testing.T) {
 		sql.Time,
 		sql.Timestamp,
 		sql.Date,
-		sql.Text,
+		stringDefaultType,
 	}
 
 	for _, ti := range allTypes {
@@ -386,7 +386,7 @@ func TestSqlInferSchema(t *testing.T) {
 				"uuid":   sql.UUID,
 				"float":  sql.Float32,
 				"bool":   sql.Boolean,
-				"string": sql.Text,
+				"string": stringDefaultType,
 			},
 		},
 		{

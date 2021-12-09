@@ -162,7 +162,6 @@ DELIM
     [[ "$output" =~ "fktest already exists. Use -f to overwrite." ]] || false
     run dolt table import -c --pk=pk test 1pk5col-ints.csv -f
     [ "$status" -eq 1 ]
-    echo $output
     [[ "$output" =~ 'since it is referenced from table `fktest`' ]] || false
 }
 
@@ -549,7 +548,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]]
     [[ "$output" =~ "\`pk\` int" ]]
-    [[ "$output" =~ "\`str\` text" ]]
+    [[ "$output" =~ "\`str\` varchar(16383)" ]]
     [[ "$output" =~ "\`int\` int unsigned" ]]
     [[ "$output" =~ "\`bool\` tinyint" ]]
     [[ "$output" =~ "\`float\` float" ]]

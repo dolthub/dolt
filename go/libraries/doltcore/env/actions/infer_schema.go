@@ -34,6 +34,8 @@ import (
 
 type typeInfoSet map[sql.Type]struct{}
 
+var stringDefaultType = sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)
+
 // InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
 type InferenceArgs interface {
 	// ColNameMapper allows columns named X in the schema to be named Y in the inferred schema.
@@ -126,7 +128,7 @@ func InferSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, a
 				if val == nil {
 					inferrer.nullable.Add(col.Name)
 				}
-				strVal, err := sql.Text.Convert(val)
+				strVal, err := stringDefaultType.Convert(val) // TODO: Susss
 				if err != nil {
 					return err
 				}
@@ -182,7 +184,7 @@ func leastPermissiveType(strVal string, floatThreshold float64) sql.Type {
 		return sql.Boolean
 	}
 
-	return sql.Text
+	return stringDefaultType
 }
 
 func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti sql.Type, ok bool) {
@@ -235,7 +237,7 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti sql.T
 
 		// handle leading zero case
 		if len(strVal) > 1 && strVal[0] == '0' {
-			return sql.Text, true
+			return stringDefaultType, true
 		}
 
 		if ui <= math.MaxUint32 {
@@ -298,7 +300,7 @@ func findCommonType(ts typeInfoSet) sql.Type {
 
 	if len(ts) == 0 {
 		// use strings if all values were empty
-		return sql.Text
+		return stringDefaultType
 	}
 
 	if len(ts) == 1 {
@@ -309,8 +311,8 @@ func findCommonType(ts typeInfoSet) sql.Type {
 
 	// len(ts) > 1
 
-	if _, found := ts[sql.Text]; found {
-		return sql.Text
+	if _, found := ts[stringDefaultType]; found {
+		return stringDefaultType
 	}
 
 	hasNumeric := false
@@ -333,7 +335,7 @@ func findCommonType(ts typeInfoSet) sql.Type {
 	}
 
 	if hasNumeric && hasNonNumeric {
-		return sql.Text
+		return stringDefaultType
 	}
 
 	if hasNumeric {
@@ -350,7 +352,7 @@ func findCommonType(ts typeInfoSet) sql.Type {
 		if setHasType(ts, nct) {
 			// types in nonChronoTypes have only string
 			// as a common type with any other type
-			return sql.Text
+			return stringDefaultType
 		}
 	}
 
