@@ -30,6 +30,7 @@ import (
 	flag "github.com/juju/gnuflag"
 	goisatty "github.com/mattn/go-isatty"
 
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/d"
 )
 
@@ -49,14 +50,23 @@ func Start() *Pager {
 		return &Pager{os.Stdout, nil, nil, nil, nil}
 	}
 
-	lessPath, err := exec.LookPath("less")
-	d.Chk.NoError(err)
+	var lessPath string
+	var err error
+	var cmd *exec.Cmd
 
-	// -F ... Quit if entire file fits on first screen.
-	// -S ... Chop (truncate) long lines rather than wrapping.
-	// -R ... Output "raw" control characters.
-	// -X ... Don't use termcap init/deinit strings.
-	cmd := exec.Command(lessPath, "-FSRX")
+	if osutil.IsWindows {
+		lessPath, err = exec.LookPath("more")
+		d.Chk.NoError(err)
+		cmd = exec.Command(lessPath)
+	} else {
+		lessPath, err = exec.LookPath("less")
+		d.Chk.NoError(err)
+		// -F ... Quit if entire file fits on first screen.
+		// -S ... Chop (truncate) long lines rather than wrapping.
+		// -R ... Output "raw" control characters.
+		// -X ... Don't use termcap init/deinit strings.
+		cmd = exec.Command(lessPath, "-FSRX")
+	}
 
 	stdin, stdout, err := os.Pipe()
 	d.Chk.NoError(err)

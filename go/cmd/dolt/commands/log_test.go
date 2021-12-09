@@ -16,11 +16,11 @@ package commands
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -35,6 +35,6 @@ func TestLog(t *testing.T) {
 
 	cs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	commit, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
-
-	cli.Println(commit)
+	meta, _ := commit.GetCommitMeta()
+	require.Equal(t, "Bill Billerson", meta.Name)
 }

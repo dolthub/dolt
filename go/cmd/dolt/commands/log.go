@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
 const (
@@ -45,6 +46,12 @@ type logOpts struct {
 	minParents  int
 }
 
+type logNode struct {
+	commitMeta 		*doltdb.CommitMeta
+	commitHash 		hash.Hash
+	parentHashes 	[]hash.Hash
+}
+
 var logDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Show commit logs`,
 	LongDesc: `Shows the commit logs
@@ -53,53 +60,6 @@ The command takes options to control what is shown and how.`,
 	Synopsis: []string{
 		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}commit{{.GreaterThan}}] [[--] {{.LessThan}}table{{.GreaterThan}}]`,
 	},
-}
-
-type commitLoggerFunc func(logOpts, *doltdb.CommitMeta, []hash.Hash, hash.Hash)
-
-func logToStdOutFunc(opts logOpts, cm *doltdb.CommitMeta, parentHashes []hash.Hash, ch hash.Hash) {
-	if len(parentHashes) < opts.minParents {
-		return
-	}
-
-	chStr := ch.String()
-	if opts.showParents {
-		for _, h := range parentHashes {
-			chStr += " " + h.String()
-		}
-	}
-
-	cli.Println(color.YellowString("commit %s", chStr))
-
-	if len(parentHashes) > 1 {
-		printMerge(parentHashes)
-	}
-
-	printAuthor(cm)
-	printDate(cm)
-	printDesc(cm)
-}
-
-func printMerge(hashes []hash.Hash) {
-	cli.Print("Merge:")
-	for _, h := range hashes {
-		cli.Print(" " + h.String())
-	}
-	cli.Println()
-}
-
-func printAuthor(cm *doltdb.CommitMeta) {
-	cli.Printf("Author: %s <%s>\n", cm.Name, cm.Email)
-}
-
-func printDate(cm *doltdb.CommitMeta) {
-	timeStr := cm.FormatTS()
-	cli.Println("Date:  ", timeStr)
-}
-
-func printDesc(cm *doltdb.CommitMeta) {
-	formattedDesc := "\n\t" + strings.Replace(cm.Description, "\n", "\n\t", -1) + "\n"
-	cli.Println(formattedDesc)
 }
 
 type LogCmd struct{}
@@ -136,10 +96,10 @@ func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return cmd.logWithLoggerFunc(ctx, commandStr, args, dEnv, logToStdOutFunc)
+	return cmd.logWithLoggerFunc(ctx, commandStr, args, dEnv)
 }
 
-func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
+func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, logDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -162,7 +122,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 
 	// Just dolt log
 	if apr.NArg() == 0 {
-		return logCommits(ctx, dEnv, dEnv.RepoStateReader().CWBHeadSpec(), opts, loggerFunc)
+		return logCommits(ctx, dEnv, dEnv.RepoStateReader().CWBHeadSpec(), opts)
 	} else if apr.NArg() == 1 { // dolt log <ref/table>
 		argIsRef := actions.ValidateIsRef(ctx, apr.Arg(0), dEnv.DoltDB, dEnv.RepoStateReader())
 
@@ -171,20 +131,20 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 			if err != nil {
 				cli.PrintErrln(color.HiRedString("invalid commit %s\n", apr.Arg(0)))
 			}
-			return logCommits(ctx, dEnv, cs, opts, loggerFunc)
+			return logCommits(ctx, dEnv, cs, opts)
 		} else {
-			return handleErrAndExit(logTableCommits(ctx, dEnv, opts, loggerFunc, dEnv.RepoStateReader().CWBHeadSpec(), apr.Arg(0)))
+			return handleErrAndExit(logTableCommits(ctx, dEnv, opts, dEnv.RepoStateReader().CWBHeadSpec(), apr.Arg(0)))
 		}
 	} else { // dolt log ref table
 		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
 		if err != nil {
 			cli.PrintErrln(color.HiRedString("invalid commit %s\n", apr.Arg(0)))
 		}
-		return handleErrAndExit(logTableCommits(ctx, dEnv, opts, loggerFunc, cs, apr.Arg(1)))
+		return handleErrAndExit(logTableCommits(ctx, dEnv, opts, cs, apr.Arg(1)))
 	}
 }
 
-func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, opts logOpts, loggerFunc commitLoggerFunc) int {
+func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, opts logOpts) int {
 	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 
 	if err != nil {
@@ -215,29 +175,30 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		return 1
 	}
 
+	var commitsInfo []logNode
 	for _, comm := range commits {
-		meta, err := comm.GetCommitMeta()
-
-		if err != nil {
+		meta, mErr := comm.GetCommitMeta()
+		if mErr != nil {
 			cli.PrintErrln("error: failed to get commit metadata")
 			return 1
 		}
 
-		pHashes, err := comm.ParentHashes(ctx)
-
-		if err != nil {
+		pHashes, pErr := comm.ParentHashes(ctx)
+		if pErr != nil {
 			cli.PrintErrln("error: failed to get parent hashes")
 			return 1
 		}
 
-		cmHash, err := comm.HashOf()
-
-		if err != nil {
+		cmHash, cErr := comm.HashOf()
+		if cErr != nil {
 			cli.PrintErrln("error: failed to get commit hash")
 			return 1
 		}
-		loggerFunc(opts, meta, pHashes, cmHash)
+
+		commitsInfo = append(commitsInfo, logNode{meta, cmHash, pHashes})
 	}
+
+	logToStdOut(opts, commitsInfo)
 
 	return 0
 }
@@ -256,7 +217,7 @@ func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (
 	return ok, nil
 }
 
-func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, loggerFunc commitLoggerFunc, cs *doltdb.CommitSpec, tableName string) error {
+func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *doltdb.CommitSpec, tableName string) error {
 	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
 		return err
@@ -331,7 +292,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, logge
 				return err
 			}
 
-			loggerFunc(opts, meta, ph, prevHash)
+			printToStdOutFunc(opts, meta, ph, prevHash)
 			numLines--
 		}
 
@@ -340,6 +301,78 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, logge
 	}
 
 	return nil
+}
+
+func logToStdOut(opts logOpts, commits []logNode) {
+	cli.ExecuteWithStdioRestored(func() {
+		pager := outputpager.Start()
+		defer pager.Stop()
+
+		for _, comm := range commits {
+			if len(comm.parentHashes) < opts.minParents {
+				return
+			}
+
+			chStr := comm.commitHash.String()
+			if opts.showParents {
+				for _, h := range comm.parentHashes {
+					chStr += " " + h.String()
+				}
+			}
+
+			pager.Writer.Write([]byte(color.YellowString(fmt.Sprintf("commit %s", chStr))))
+
+			if len(comm.parentHashes) > 1 {
+				//printMerge(parentHashes)
+				pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
+				for _, h := range comm.parentHashes {
+					pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
+				}
+			}
+
+			//printAuthor(cm)
+			pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
+
+			//printDate(cm)
+			timeStr := comm.commitMeta.FormatTS()
+			pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
+
+			//printDesc(cm)
+			formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
+			pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
+		}
+	})
+}
+
+func printToStdOutFunc(opts logOpts, cm *doltdb.CommitMeta, parentHashes []hash.Hash, ch hash.Hash) {
+	if len(parentHashes) < opts.minParents {
+		return
+	}
+
+	chStr := ch.String()
+	if opts.showParents {
+		for _, h := range parentHashes {
+			chStr += " " + h.String()
+		}
+	}
+
+	cli.Println(color.YellowString("commit %s", chStr))
+
+	if len(parentHashes) > 1 {
+		cli.Print("Merge:")
+		for _, h := range parentHashes {
+			cli.Print(" " + h.String())
+		}
+		cli.Println()
+	}
+
+	cli.Printf("Author: %s <%s>\n", cm.Name, cm.Email)
+
+	timeStr := cm.FormatTS()
+	cli.Println("Date:  ", timeStr)
+
+	formattedDesc := "\n\t" + strings.Replace(cm.Description, "\n", "\n\t", -1) + "\n"
+	cli.Println(formattedDesc)
 }
 
 func didTableChangeBetweenRootValues(ctx context.Context, child, parent *doltdb.RootValue, tableName string) (bool, error) {
