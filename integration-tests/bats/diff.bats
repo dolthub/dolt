@@ -626,3 +626,27 @@ SQL
     [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `pk` TO `pk`;' ]
 }
+
+@test "diff: large diff does not drop rows" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+
+    VALUES=""
+    for i in {1..1000}
+    do
+      if [ $i -eq 1 ]
+      then
+        VALUES="${VALUES}($i,$i)"
+      else
+        VALUES="${VALUES},($i,$i)"
+      fi
+    done
+
+    dolt sql -q "INSERT INTO t values $VALUES"
+    dolt commit -am "Add the initial rows"
+
+    dolt sql -q "UPDATE t set val = val + 1 WHERE pk < 10000"
+    dolt commit -am "make a bulk update creating a large diff"
+
+    run dolt diff HEAD~1
+    [ "${#lines[@]}" -eq 2007 ] # 2000 diffs + 6 for top rows before data + 1 for bottom row of table
+}
