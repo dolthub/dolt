@@ -622,7 +622,7 @@ func moveRows(
 				return err
 			}
 		} else {
-			sqlRow, err = namedAndTypeTransform(sqlRow, rdSqlSch.Schema, wr.Schema(), options.nameMapper)
+			sqlRow, err = NameAndTypeTransform(sqlRow, rdSqlSch.Schema, wr.Schema(), options.nameMapper)
 			if err != nil {
 				return err
 			}
@@ -740,9 +740,9 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	panic("Unhandled Error type")
 }
 
-// namedAndTypeTransform does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
-// 3) Addresses any type inconsistencies.
-func namedAndTypeTransform(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
+// NameAndTypeTransform does 1) matche the read and write schema with subsetting and name matching. 2_ Address any
+// type inconsistencies.
+func NameAndTypeTransform(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	for i, col := range wrSchema {
 		switch col.Type {
 		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
