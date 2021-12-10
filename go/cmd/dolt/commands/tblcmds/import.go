@@ -516,6 +516,8 @@ func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema schema
 	return mv, nil
 }
 
+type badRowFn func(trf *pipeline.TransformRowFailure) (quit bool)
+
 func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -549,39 +551,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	g.Go(func() error {
 		defer close(parsedRowChan)
 
-		rdSqlSch, err := sqlutil.FromDoltSchema(options.tableName, rd.GetSchema())
-		if err != nil {
-			return err
-		}
-
-		for {
-			r, err := rd.ReadRow(ctx)
-			if err != nil {
-				if err == io.EOF {
-					return nil
-				} else if table.IsBadRow(err) {
-					dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-					trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
-					quit := badRowCB(trf)
-					if quit {
-						return trf
-					}
-				} else {
-					return err
-				}
-			} else {
-				dRow, err := transformToDoltRow(r, rd.GetSchema(), rdSqlSch.Schema, wr.Schema(), options.nameMapper)
-				if err != nil {
-					return err
-				}
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case parsedRowChan <- dRow:
-				}
-			}
-		}
+		return moveRows(ctx, wr, rd, options, parsedRowChan, badRowCB)
 	})
 
 	// Start the group that writes rows
@@ -608,6 +578,56 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	}
 
 	return badCount, nil
+}
+
+func moveRows(
+	ctx context.Context,
+	wr mvdata.DataWriter,
+	rd table.TableReadCloser,
+	options *importOptions,
+	parsedRowChan chan sql.Row,
+	badRowCb badRowFn,
+) error {
+	rdSqlSch, err := sqlutil.FromDoltSchema(options.tableName, rd.GetSchema())
+	if err != nil {
+		return err
+	}
+
+	var sqlRow sql.Row
+	for {
+		if srd, ok := rd.(table.SqlRowReader); ok {
+			sqlRow, err = srd.ReadSqlRow(ctx)
+		} else {
+			var r row.Row
+			r, err = rd.ReadRow(ctx)
+			if err != nil {
+				return err
+			}
+			sqlRow, err = transformToDoltRow(r, rd.GetSchema(), rdSqlSch.Schema, wr.Schema(), options.nameMapper)
+		}
+
+		if err == io.EOF {
+			return nil
+		}
+
+		if err != nil {
+			if table.IsBadRow(err) {
+				trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: sqlRow, TransformName: "reader", Details: err.Error()}
+				quit := badRowCb(trf)
+				if quit {
+					return trf
+				}
+			} else {
+				return err
+			}
+		} else {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case parsedRowChan <- sqlRow:
+			}
+		}
+	}
 }
 
 func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
