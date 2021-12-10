@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -588,24 +587,26 @@ func moveRows(
 	parsedRowChan chan sql.Row,
 	badRowCb badRowFn,
 ) error {
+	getNextRow := func(rd table.TableReadCloser) (sql.Row, error) {
+		if srd, ok := rd.(table.SqlRowReader); ok {
+			return srd.ReadSqlRow(ctx)
+		} else {
+			r, err := rd.ReadRow(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			return sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+		}
+	}
+
 	rdSqlSch, err := sqlutil.FromDoltSchema(options.tableName, rd.GetSchema())
 	if err != nil {
 		return err
 	}
 
-	var sqlRow sql.Row
 	for {
-		if srd, ok := rd.(table.SqlRowReader); ok {
-			sqlRow, err = srd.ReadSqlRow(ctx)
-		} else {
-			var r row.Row
-			r, err = rd.ReadRow(ctx)
-			if err != nil {
-				return err
-			}
-			sqlRow, err = transformToDoltRow(r, rd.GetSchema(), rdSqlSch.Schema, wr.Schema(), options.nameMapper)
-		}
-
+		sqlRow, err := getNextRow(rd)
 		if err == io.EOF {
 			return nil
 		}
@@ -621,6 +622,11 @@ func moveRows(
 				return err
 			}
 		} else {
+			sqlRow, err = namedAndTypeTransform(sqlRow, rdSqlSch.Schema, wr.Schema(), options.nameMapper)
+			if err != nil {
+				return err
+			}
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -734,41 +740,36 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	panic("Unhandled Error type")
 }
 
-// transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
+// namedAndTypeTransform does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
 // 3) Addresses any type inconsistencies.
-func transformToDoltRow(row row.Row, rdSchema schema.Schema, rdSqlSch, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
-	doltRow, err := sqlutil.DoltRowToSqlRow(row, rdSchema)
-	if err != nil {
-		return nil, err
-	}
-
+func namedAndTypeTransform(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	for i, col := range wrSchema {
 		switch col.Type {
 		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
-			switch doltRow[i].(type) {
+			switch row[i].(type) {
 			case int8:
-				val, ok := stringToBoolean(strconv.Itoa(int(doltRow[i].(int8))))
+				val, ok := stringToBoolean(strconv.Itoa(int(row[i].(int8))))
 				if ok {
-					doltRow[i] = val
+					row[i] = val
 				}
 			case string:
-				val, ok := stringToBoolean(doltRow[i].(string))
+				val, ok := stringToBoolean(row[i].(string))
 				if ok {
-					doltRow[i] = val
+					row[i] = val
 				}
 			case bool:
-				doltRow[i] = doltRow[i].(bool)
+				row[i] = row[i].(bool)
 			}
 		}
 
 		switch col.Type.(type) {
 		case sql.StringType:
 		default:
-			doltRow[i] = emptyStringToNil(doltRow[i])
+			row[i] = emptyStringToNil(row[i])
 		}
 	}
 
-	return matchReadSchemaToWriteSchema(doltRow, rdSqlSch, wrSchema, nameMapper), nil
+	return matchReadSchemaToWriteSchema(row, rdSchema, wrSchema, nameMapper), nil
 }
 
 func stringToBoolean(s string) (result bool, canConvert bool) {

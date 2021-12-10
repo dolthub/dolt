@@ -15,16 +15,12 @@
 package xlsx
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/tealeg/xlsx"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/tealeg/xlsx"
 )
 
 var ErrTableNameMatchSheetName = errors.New("table name must match excel sheet name.")
@@ -66,39 +62,25 @@ func openBinary(content []byte) (*xlsx.File, error) {
 	return data, nil
 }
 
-func decodeXLSXRows(ctx context.Context, vrw types.ValueReadWriter, xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
-	var rows []row.Row
+func decodeXLSXRows(xlData [][][]string, sch schema.Schema) ([]sql.Row, error) {
+	var rows []sql.Row
 
-	var err error
-
-	cols := sch.GetAllCols()
 	numSheets := len(xlData)
 	dataVals := xlData[0]
 	header := dataVals[0]
 	numRows := len(dataVals) - 1
 
-	taggedVals := make(row.TaggedValues, len(header))
-
 	for j := 0; j < numSheets; j++ {
 		for i := 0; i < numRows; i++ {
+			var row sql.Row
 			for k, v := range header {
-				col, ok := cols.GetByName(v)
-				if !ok {
-					return nil, errors.New(v + "is not a valid column")
+				if _, found := sch.GetAllCols().NameToCol[v]; !found {
+					return nil, errors.New(v + " is not a valid column")
 				}
 				valString := dataVals[i+1][k]
-				taggedVals[col.Tag], err = col.TypeInfo.ParseValue(ctx, vrw, &valString)
-				if err != nil {
-					return nil, err
-				}
+				row = append(row, valString)
 			}
-			r, err := row.New(vrw.Format(), sch, taggedVals)
-
-			if err != nil {
-				return nil, err
-			}
-
-			rows = append(rows, r)
+			rows = append(rows, row)
 		}
 
 	}
