@@ -112,11 +112,6 @@ func (dmce *DataMoverCreationError) String() string {
 	return string(dmce.ErrType) + ": " + dmce.Cause.Error()
 }
 
-type GCTableWriteCloser interface {
-	table.TableWriteCloser
-	GC(ctx context.Context) error
-}
-
 // Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
 func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount int64, err error) {
@@ -125,12 +120,6 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 		closeErr := imp.Wr.Close(ctx)
 		if err == nil {
 			err = closeErr
-		}
-
-		if err == nil {
-			if gcTWC, ok := imp.Wr.(GCTableWriteCloser); ok {
-				err = gcTWC.GC(ctx)
-			}
 		}
 	}()
 
