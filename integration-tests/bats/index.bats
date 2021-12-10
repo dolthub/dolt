@@ -2586,7 +2586,6 @@ SQL
     [[ "$output" =~ "bBbb" ]] || false
 
     dolt sql -q "create index test2 on test2 (c1,c2)"
-    skip "This returns no results right now because uses the index"
     run dolt sql -q "select * from test2 where lower(c1)='aaaa' and lower(c2)='bbbb'"
     [ $status -eq 0 ]
     [[ "$output" =~ "Aaaa" ]] || false
