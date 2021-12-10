@@ -20,6 +20,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/reader"
@@ -88,25 +89,35 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 }
 
 func (pr *ParquetReader) ReadRow(ctx context.Context) (row.Row, error) {
+	panic("deprecated")
+}
+
+func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	if pr.rowReadCounter >= pr.numRow {
 		return nil, io.EOF
 	}
 
-	rowData := make(map[string]interface{})
-	for _, col := range pr.sch.GetAllCols().GetColumns() {
+	allCols := pr.sch.GetAllCols()
+	row := make(sql.Row, allCols.Size())
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val := pr.fileData[col.Name][pr.rowReadCounter]
 		if val != nil {
-			if col.TypeInfo.GetTypeIdentifier() == "datetime" {
+			sqlType := col.TypeInfo.ToSqlType()
+			if _, ok := sqlType.(sql.DatetimeType); ok {
 				val = time.Unix(val.(int64), 0)
-			} else if col.TypeInfo.GetTypeIdentifier() == "time" {
-				val, _ = col.TypeInfo.ConvertNomsValueToValue(types.Int(val.(int64)))
+			} else if _, ok := sqlType.(sql.TimeType); ok {
+				val = sql.Time.Unmarshal(val.(int64))
 			}
 		}
-		rowData[col.Name] = val
-	}
+
+		row[allCols.TagToIdx[tag]] = val
+
+		return false, nil
+	})
+
 	pr.rowReadCounter++
 
-	return pr.convToRow(ctx, rowData)
+	return row, nil
 }
 
 func (pr *ParquetReader) GetSchema() schema.Schema {

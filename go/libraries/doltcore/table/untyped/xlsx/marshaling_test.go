@@ -15,19 +15,16 @@
 package xlsx
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
 	"reflect"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestDecodeXLSXRows(t *testing.T) {
@@ -38,26 +35,14 @@ func TestDecodeXLSXRows(t *testing.T) {
 	first := [][]string{{"id", "first", "last", "age"}, {"1", "osheiza", "otori", "24"}}
 	second = append(second, first)
 
-	vrw := types.NewMemoryValueStore()
-	decoded, err := decodeXLSXRows(context.Background(), vrw, second, sch)
+	decoded, err := decodeXLSXRows(second, sch)
 	if err != nil {
 		fmt.Println(err)
 
 	}
-
-	taggedVals := make(row.TaggedValues, sch.GetAllCols().Size())
-	str := "1"
-	taggedVals[uint64(0)], _ = typeinfo.StringDefaultType.ParseValue(context.Background(), nil, &str)
-	str = "osheiza"
-	taggedVals[uint64(1)], _ = typeinfo.StringDefaultType.ParseValue(context.Background(), nil, &str)
-	str = "otori"
-	taggedVals[uint64(2)], _ = typeinfo.StringDefaultType.ParseValue(context.Background(), nil, &str)
-	str = "24"
-	taggedVals[uint64(3)], _ = typeinfo.StringDefaultType.ParseValue(context.Background(), nil, &str)
-
-	newRow, err := row.New(vrw.Format(), sch, taggedVals)
-
 	assert.NoError(t, err)
+
+	newRow := sql.Row{"1", "oshieza", "otori", 24}
 
 	if !reflect.DeepEqual(decoded[0], newRow) {
 		t.Log("error!")
