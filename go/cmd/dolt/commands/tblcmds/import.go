@@ -740,7 +740,7 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	panic("Unhandled Error type")
 }
 
-// NameAndTypeTransform does 1) matche the read and write schema with subsetting and name matching. 2_ Address any
+// NameAndTypeTransform does 1) match the read and write schema with subsetting and name matching. 2) Address any
 // type inconsistencies.
 func NameAndTypeTransform(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	for i, col := range wrSchema {

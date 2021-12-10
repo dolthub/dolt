@@ -93,6 +93,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 
 	return &sqlEngineMover{
 		se:        se,
+		sqlCtx:    sqlCtx,
 		contOnErr: options.ContinueOnErr,
 		force:     options.Force,
 
