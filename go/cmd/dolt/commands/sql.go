@@ -365,6 +365,7 @@ func execShell(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	err = runShell(ctx, se, mrEnv)
 	if err != nil {
@@ -385,6 +386,7 @@ func execBatch(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -419,6 +421,7 @@ func execMultiStatements(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -445,6 +448,7 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -1084,7 +1088,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 	}
 
 	currentBatchMode := invalidBatchMode
-	if v, err := ctx.GetSessionVariable(ctx, dsqle.CurrentBatchModeKey); err == nil {
+	if v, err := ctx.GetSessionVariable(ctx, dsess.CurrentBatchModeKey); err == nil {
 		currentBatchMode = batchMode(v.(int64))
 	} else {
 		return err
@@ -1104,7 +1108,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 		}
 	}
 
-	err = ctx.SetSessionVariable(ctx, dsqle.CurrentBatchModeKey, int64(newBatchMode))
+	err = ctx.SetSessionVariable(ctx, dsess.CurrentBatchModeKey, int64(newBatchMode))
 	if err != nil {
 		return err
 	}

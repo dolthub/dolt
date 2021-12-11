@@ -164,8 +164,9 @@ func Serve(
 
 	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", serverConf.Auth, serverConfig.AutoCommit())
 	if err != nil {
-		return nil, err
+		return err, nil
 	}
+	defer sqlEngine.Close()
 
 	mySQLServer, startError = server.NewServer(
 		serverConf,

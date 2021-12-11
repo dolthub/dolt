@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -311,7 +312,11 @@ func runMain() int {
 	}
 
 	start := time.Now()
+	var wg sync.WaitGroup
+	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
+	stop()
+	wg.Wait()
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()

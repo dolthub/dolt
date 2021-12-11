@@ -73,6 +73,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 	if err != nil {
 		return nil, err
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
