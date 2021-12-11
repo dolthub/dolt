@@ -16,9 +16,9 @@ package table
 
 import (
 	"context"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // TableWriteCloser is an interface for writing rows to a table
@@ -30,8 +30,14 @@ type TableWriter interface {
 	WriteRow(ctx context.Context, r row.Row) error
 }
 
+
 // TableWriteCloser is an interface for writing rows to a table, that can be closed
 type TableWriteCloser interface {
 	TableWriter
 	TableCloser
+}
+
+type SqlTableWriter interface {
+	TableWriteCloser
+	WriteSqlRow(ctx context.Context, r sql.Row) error
 }

@@ -16,6 +16,11 @@ package tblcmds
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
@@ -58,7 +62,6 @@ type exportOptions struct {
 	schFile     string
 	mappingFile string
 	primaryKeys []string
-	src         mvdata.TableDataLocation
 	dest        mvdata.DataLocation
 	srcOptions  interface{}
 }
@@ -78,13 +81,10 @@ func (m exportOptions) WritesToTable() bool {
 }
 
 func (m exportOptions) SrcName() string {
-	return m.src.Name
+	return m.tableName
 }
 
 func (m exportOptions) DestName() string {
-	if t, tblDest := m.dest.(mvdata.TableDataLocation); tblDest {
-		return t.Name
-	}
 	if f, fileDest := m.dest.(mvdata.FileDataLocation); fileDest {
 		return f.Path
 	}
@@ -144,7 +144,6 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 		return nil, errhand.BuildDError("invalid table name").Build()
 	}
 
-	tableLoc := mvdata.TableDataLocation{Name: tableName}
 	fileLoc := getExportDestination(apr)
 
 	if fileLoc == nil {
@@ -165,7 +164,6 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 		schFile:     schemaFile,
 		mappingFile: mappingFile,
 		primaryKeys: pks,
-		src:         tableLoc,
 		dest:        fileLoc,
 	}, nil
 }
@@ -221,31 +219,56 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mover, verr := NewExportDataMover(ctx, root, dEnv, exOpts, importStatsCB)
+	rd, err := mvdata.NewSqlEngineReader(ctx, dEnv, exOpts.tableName)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build(), usage)
+	}
 
+	wr, verr := getTableWriter(ctx, root, dEnv, rd.GetSchema(), exOpts, importStatsCB)
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, exOpts)
+	skipped, err := export(ctx, rd, wr, exOpts)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build(), usage)
+	}
 
 	cli.PrintErrln()
 
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 	}
-	if verr != nil {
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
 
 	cli.PrintErrln(color.CyanString("Successfully exported data."))
 	return 0
 }
 
-func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, exOpts *exportOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
-	var rd table.TableReadCloser
-	var err error
+func getTableWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, exOpts *exportOptions, statsCB noms.StatsCB) (table.TableWriteCloser, errhand.VerboseError) {
+	err := dEnv.FS.MkDirs(filepath.Dir(exOpts.DestName()))
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
 
+	filePath, err := dEnv.FS.Abs(exOpts.DestName())
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	writer, err := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
+	}
+
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, false, rdSchema, statsCB, editor.Options{Deaf: dEnv.DbEaFactory()}, writer)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
+	}
+
+	return wr, nil
+}
+
+func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, exOpts *exportOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
 	ow, err := exOpts.checkOverwrite(ctx, root, dEnv.FS)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -254,8 +277,7 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 		return nil, errhand.BuildDError("%s already exists. Use -f to overwrite.", exOpts.DestName()).Build()
 	}
 
-	rd, srcIsSorted, err := exOpts.src.NewReader(ctx, root, dEnv.FS, exOpts.srcOptions)
-
+	rd, err := mvdata.NewSqlEngineReader(ctx, dEnv, exOpts.tableName)
 	if err != nil {
 		return nil, errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build()
 	}
@@ -286,7 +308,7 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	}
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, srcIsSorted, outSch, statsCB, opts, writer)
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, false, outSch, statsCB, opts, writer)
 
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()
@@ -298,4 +320,84 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	rd = nil
 
 	return imp, nil
+}
+
+func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCloser, exOpts *exportOptions) (int64, error) {
+	g, ctx := errgroup.WithContext(ctx)
+
+	parsedRowChan := make(chan sql.Row)
+	getNextRow := func(rd table.TableReadCloser) (sql.Row, error) {
+		if srd, ok := rd.(table.SqlRowReader); ok {
+			return srd.ReadSqlRow(ctx)
+		} else {
+			r, err := rd.ReadRow(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			return sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+		}
+	}
+
+	writeRow := func(wr table.TableWriteCloser, row sql.Row) error {
+		if swr, ok := wr.(table.SqlTableWriter); ok {
+			return swr.WriteSqlRow(ctx, row)
+		} else {
+			panic("todo")
+		}
+	}
+
+
+	g.Go(func() error {
+		defer close(parsedRowChan)
+		defer rd.Close(ctx)
+
+		for {
+			row, err := getNextRow(rd)
+			if err == io.EOF {
+				return nil
+			}
+
+			if err != nil {
+				if table.IsBadRow(err) {
+					// trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: sqlRow, TransformName: "reader", Details: err.Error()} // TODO:
+					return err
+					//quit := badRowCb(trf)
+					//if quit {
+					//	return trf
+					//}
+				} else {
+					return err
+				}
+			}
+
+			select {
+			case <- ctx.Done():
+				return ctx.Err()
+			case parsedRowChan <- row:
+			}
+		}
+	})
+
+	g.Go(func() error {
+		defer wr.Close(ctx)
+		
+		for r := range parsedRowChan {
+			select {
+			case <- ctx.Done():
+				return ctx.Err()
+			default:
+				err := writeRow(wr, r)
+				if err != nil {
+					if err == io.EOF {
+						return nil
+					}
+				}
+			}
+		}
+
+		return nil
+	})
+
+	return 0, g.Wait()
 }

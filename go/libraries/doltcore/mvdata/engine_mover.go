@@ -298,7 +298,7 @@ func (s *sqlEngineMover) getInsertNode(inputChannel chan sql.Row) (sql.Node, err
 	}
 }
 
-// createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped
+// createInsertImportNode creates the relevant/analyzed insert iter given the import option. This insert iter is wrapped
 // with an error handler.
 func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression) (sql.Node, error) {
 	src := NewChannelRowSource(s.wrSch.Schema, source)

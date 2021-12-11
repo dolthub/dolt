@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"strings"
 	"unicode"
@@ -92,6 +93,20 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	for i, val := range sqlRow {
+		if val == nil {
+			colValStrs[i] = nil
+		} else {
+			v := sqlutil.SqlColToStr(ctx, val)
+			colValStrs[i] = &v
+		}
+	}
+
+	return csvw.write(colValStrs)
+}
+
+func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	colValStrs := make([]*string, csvw.sch.GetAllCols().Size())
+	for i, val := range r {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
