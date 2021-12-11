@@ -297,7 +297,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	sqlCtx.SetCurrentDatabase(dbName)
 
-	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{Auth: new(auth.None)}, sql.NewBackgroundThreads()), map[string]dsqle.SqlDatabase{dbName: db})
+	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{Auth: new(auth.None)}), map[string]dsqle.SqlDatabase{dbName: db})
 
 	return sqlCtx, se, nil
 }

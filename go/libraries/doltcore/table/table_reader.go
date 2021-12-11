@@ -49,6 +49,12 @@ type TableReadCloser interface {
 	TableCloser
 }
 
+type SqlRowReader interface {
+	TableReadCloser
+
+	ReadSqlRow(ctx context.Context) (sql.Row, error)
+}
+
 // SqlTableReader is a  TableReader that can read rows as sql.Row.
 type SqlTableReader interface {
 	// GetSchema gets the schema of the rows that this reader will return

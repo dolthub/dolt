@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"github.com/bcicen/jstream"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -36,7 +37,7 @@ type JSONReader struct {
 	sch        schema.Schema
 	jsonStream *jstream.Decoder
 	rowChan    chan *jstream.MetaValue
-	sampleRow  row.Row
+	sampleRow  sql.Row
 }
 
 func OpenJSONReader(vrw types.ValueReadWriter, path string, fs filesys.ReadableFS, sch schema.Schema) (*JSONReader, error) {
@@ -78,13 +79,17 @@ func (r *JSONReader) GetSchema() schema.Schema {
 func (r *JSONReader) VerifySchema(sch schema.Schema) (bool, error) {
 	if r.sampleRow == nil {
 		var err error
-		r.sampleRow, err = r.ReadRow(context.Background())
+		r.sampleRow, err = r.ReadSqlRow(context.Background())
 		return err == nil, nil
 	}
 	return true, nil
 }
 
 func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
+	panic("deprecated")
+}
+
+func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	if r.sampleRow != nil {
 		ret := r.sampleRow
 		r.sampleRow = nil
@@ -95,7 +100,7 @@ func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
 		r.rowChan = r.jsonStream.Stream()
 	}
 
-	row, ok := <-r.rowChan
+	metaRow, ok := <-r.rowChan
 	if !ok {
 		if r.jsonStream.Err() != nil {
 			return nil, r.jsonStream.Err()
@@ -103,41 +108,27 @@ func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
 		return nil, io.EOF
 	}
 
-	m, ok := row.Value.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("Unexpected json value: %v", row.Value)
-	}
-	return r.convToRow(ctx, m)
+	return r.convToSqlRow(metaRow.Value.(map[string]interface{}))
 }
 
-func (r *JSONReader) convToRow(ctx context.Context, rowMap map[string]interface{}) (row.Row, error) {
+func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) (sql.Row, error) {
 	allCols := r.sch.GetAllCols()
 
-	taggedVals := make(row.TaggedValues, allCols.Size())
-
+	ret := make(sql.Row, allCols.Size())
 	for k, v := range rowMap {
 		col, ok := allCols.GetByName(k)
 		if !ok {
 			return nil, fmt.Errorf("column %s not found in schema", k)
 		}
 
-		switch v.(type) {
-		case int, string, bool, float64:
-			taggedVals[col.Tag], _ = col.TypeInfo.ConvertValueToNomsValue(ctx, r.vrw, v)
+		v, err := col.TypeInfo.ToSqlType().Convert(v)
+		if err != nil {
+			return nil, err
 		}
 
+		idx := allCols.TagToIdx[col.Tag]
+		ret[idx] = v
 	}
 
-	// todo: move null value checks to pipeline
-	err := r.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if val, ok := taggedVals.Get(tag); !col.IsNullable() && (!ok || types.IsNull(val)) {
-			return true, fmt.Errorf("column `%s` does not allow null values", col.Name)
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return row.New(r.vrw.Format(), r.sch, taggedVals)
+	return ret, nil
 }
