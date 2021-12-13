@@ -84,8 +84,13 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map, autoIncVal types.Value) (*Table, error) {
-	schemaRef, err := WriteValAndGetRef(ctx, vrw, schemaVal)
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexData types.Map, autoIncVal types.Value) (*Table, error) {
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	schemaRef, err := WriteValAndGetRef(ctx, vrw, schVal)
 	if err != nil {
 		return nil, err
 	}
@@ -127,27 +132,23 @@ func (t *Table) ValueReadWriter() types.ValueReadWriter {
 	return t.vrw
 }
 
-func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData types.Map) (*Table, error) {
+func (t *Table) SetConflicts(ctx context.Context, schemas ConflictSchema, conflictData types.Map) (*Table, error) {
 	conflictsRef, err := WriteValAndGetRef(ctx, t.vrw, conflictData)
-
 	if err != nil {
 		return nil, err
 	}
 
-	tpl, err := schemas.ToNomsList(t.vrw)
-
+	tpl, err := ValueFromConflictSchema(ctx, t.vrw, schemas)
 	if err != nil {
 		return nil, err
 	}
 
 	updatedSt, err := t.tableStruct.Set(conflictSchemasKey, tpl)
-
 	if err != nil {
 		return nil, err
 	}
 
 	updatedSt, err = updatedSt.Set(conflictsKey, conflictsRef)
-
 	if err != nil {
 		return nil, err
 	}
@@ -156,24 +157,24 @@ func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData
 }
 
 // GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table
-func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
+func (t *Table) GetConflicts(ctx context.Context) (ConflictSchema, types.Map, error) {
 	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
 	if err != nil {
-		return Conflict{}, types.EmptyMap, err
+		return ConflictSchema{}, types.EmptyMap, err
 	}
 	if !ok {
 		confMap, _ := types.NewMap(ctx, t.ValueReadWriter())
-		return Conflict{}, confMap, nil
+		return ConflictSchema{}, confMap, nil
 	}
 
-	schemas, err := ConflictFromTuple(schemasVal.(types.Tuple))
+	schemas, err := ConflictSchemaFromValue(ctx, t.vrw, schemasVal)
 	if err != nil {
-		return Conflict{}, types.EmptyMap, err
+		return ConflictSchema{}, types.EmptyMap, err
 	}
 
 	conflictsVal, _, err := t.tableStruct.MaybeGet(conflictsKey)
 	if err != nil {
-		return Conflict{}, types.EmptyMap, err
+		return ConflictSchema{}, types.EmptyMap, err
 	}
 
 	confMap := types.EmptyMap
@@ -182,7 +183,7 @@ func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
 		v, err := confMapRef.TargetValue(ctx, t.vrw)
 
 		if err != nil {
-			return Conflict{}, types.EmptyMap, err
+			return ConflictSchema{}, types.EmptyMap, err
 		}
 
 		confMap = v.(types.Map)
@@ -373,18 +374,19 @@ func (t *Table) GetSchema(ctx context.Context) (schema.Schema, error) {
 	return RefToSchema(ctx, t.vrw, schemaRef)
 }
 
-func (t *Table) GetSchemaRef() (types.Ref, error) {
-	v, _, err := t.tableStruct.MaybeGet(schemaRefKey)
-
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	if v == nil {
-		return types.Ref{}, errors.New("missing schema")
-	}
-
-	return v.(types.Ref), nil
+func (t *Table) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
+	//v, _, err := t.tableStruct.MaybeGet(schemaRefKey)
+	//
+	//if err != nil {
+	//	return types.Ref{}, err
+	//}
+	//
+	//if v == nil {
+	//	return types.Ref{}, errors.New("missing schema")
+	//}
+	//
+	//return v.(types.Ref), nil
+	return hash.Hash{}, nil
 }
 
 // UpdateSchema updates the table with the schema given and returns the updated table. The original table is unchanged.

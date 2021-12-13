@@ -334,15 +334,12 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	schRef, err := tbl.GetSchemaRef()
-	schHash := schRef.TargetHash()
-
+	tblSch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tblSch, err := doltdb.RefToSchema(ctx, root.VRW(), schRef)
-
+	schHash, err := tbl.GetSchemaHash(ctx)
 	if err != nil {
 		return nil, err
 	}

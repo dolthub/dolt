@@ -210,23 +210,24 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 
 	if conflicts.Len() > 0 {
 
-		asr, err := ancTbl.GetSchemaRef()
+		ancSch, err := ancTbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		sr, err := tbl.GetSchemaRef()
+		sch, err := tbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		msr, err := mergeTbl.GetSchemaRef()
+		mergeSch, err := mergeTbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		schemas := doltdb.NewConflict(asr, sr, msr)
-		resultTbl, err = resultTbl.SetConflicts(ctx, schemas, conflicts)
+		cs := doltdb.NewConflictSchema(ancSch, sch, mergeSch)
+
+		resultTbl, err = resultTbl.SetConflicts(ctx, cs, conflicts)
 		if err != nil {
 			return nil, nil, err
 		}

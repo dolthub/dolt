@@ -59,7 +59,7 @@ type tableInConflict struct {
 	name    string
 	size    uint64
 	done    bool
-	schemas doltdb.Conflict
+	schemas doltdb.ConflictSchema
 	//cnfItr types.MapIterator
 }
 

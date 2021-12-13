@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -347,23 +346,20 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	)
 	require.NoError(t, err)
 
-	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, sch)
-	require.NoError(t, err)
-
 	emptyMap, err := types.NewMap(context.Background(), vrw)
 	require.NoError(t, err)
 
-	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows, emptyMap, nil)
+	tbl, err := doltdb.NewTable(context.Background(), vrw, sch, initialRows, emptyMap, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(context.Background(), tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows, emptyMap, nil)
+	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, sch, updatedRows, emptyMap, nil)
 	require.NoError(t, err)
 	updatedTbl, err = editor.RebuildAllIndexes(context.Background(), updatedTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows, emptyMap, nil)
+	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, sch, mergeRows, emptyMap, nil)
 	require.NoError(t, err)
 	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
@@ -436,17 +432,17 @@ func TestMergeCommits(t *testing.T) {
 
 	tbl, _, err := root.GetTable(context.Background(), tableName)
 	assert.NoError(t, err)
-	schRef, err := tbl.GetSchemaRef()
-	assert.NoError(t, err)
-	targVal, err := schRef.TargetValue(context.Background(), vrw)
+	sch, err := tbl.GetSchema(context.Background())
 	assert.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), vrw)
 	assert.NoError(t, err)
-	expected, err := doltdb.NewTable(context.Background(), vrw, targVal, expectedRows, emptyMap, nil)
+	expected, err := doltdb.NewTable(context.Background(), vrw, sch, expectedRows, emptyMap, nil)
 	assert.NoError(t, err)
 	expected, err = editor.RebuildAllIndexes(context.Background(), expected, editor.TestEditorOptions(vrw))
 	assert.NoError(t, err)
-	expected, err = expected.SetConflicts(context.Background(), doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)
+	conflictSchema := doltdb.NewConflictSchema(sch, sch, sch)
+	assert.NoError(t, err)
+	expected, err = expected.SetConflicts(context.Background(), conflictSchema, expectedConflicts)
 	assert.NoError(t, err)
 
 	h, err := merged.HashOf()
