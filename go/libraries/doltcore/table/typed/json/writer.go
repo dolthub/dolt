@@ -60,7 +60,67 @@ func (jsonw *JSONWriter) GetSchema() schema.Schema {
 
 // WriteRow will write a row to a table
 func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
-	panic("deprecated")
+	allCols := jsonw.sch.GetAllCols()
+	colValMap := make(map[string]interface{}, allCols.Size())
+	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		val, ok := r.GetColVal(tag)
+		if !ok || types.IsNull(val) {
+			return false, nil
+		}
+
+		switch col.TypeInfo.GetTypeIdentifier() {
+		case typeinfo.DatetimeTypeIdentifier,
+			typeinfo.DecimalTypeIdentifier,
+			typeinfo.EnumTypeIdentifier,
+			typeinfo.InlineBlobTypeIdentifier,
+			typeinfo.SetTypeIdentifier,
+			typeinfo.TimeTypeIdentifier,
+			typeinfo.TupleTypeIdentifier,
+			typeinfo.UuidTypeIdentifier,
+			typeinfo.VarBinaryTypeIdentifier,
+			typeinfo.YearTypeIdentifier:
+			v, err := col.TypeInfo.FormatValue(val)
+			if err != nil {
+				return true, err
+			}
+			val = types.String(*v)
+
+		case typeinfo.BitTypeIdentifier,
+			typeinfo.BoolTypeIdentifier,
+			typeinfo.VarStringTypeIdentifier,
+			typeinfo.UintTypeIdentifier,
+			typeinfo.IntTypeIdentifier,
+			typeinfo.FloatTypeIdentifier:
+			// use primitive type
+		}
+
+		colValMap[col.Name] = val
+
+		return false, nil
+	}); err != nil {
+		return err
+	}
+
+	data, err := marshalToJson(colValMap)
+	if err != nil {
+		return errors.New("marshaling did not work")
+	}
+
+	if jsonw.rowsWritten != 0 {
+		_, err := jsonw.bWr.WriteRune(',')
+
+		if err != nil {
+			return err
+		}
+	}
+
+	newErr := iohelp.WriteAll(jsonw.bWr, data)
+	if newErr != nil {
+		return newErr
+	}
+	jsonw.rowsWritten++
+
+	return nil
 }
 
 func (jsonw *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
@@ -84,12 +144,12 @@ func (jsonw *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 			typeinfo.YearTypeIdentifier:
 			val, err = defaultString.Convert(val)
 			if err != nil {
-				return false, err
+				return true, err
 			}
 		case typeinfo.DatetimeTypeIdentifier:
 			val, err = col.TypeInfo.FormatValue(types.Timestamp(val.(time.Time)))
 			if err != nil {
-				return false, err
+				return true, err
 			}
 
 		case typeinfo.BitTypeIdentifier,

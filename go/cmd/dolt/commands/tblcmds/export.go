@@ -339,9 +339,7 @@ func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCl
 			default:
 				err := writeRow(wr, r)
 				if err != nil {
-					if err == io.EOF {
-						return nil
-					}
+					return err
 				}
 			}
 		}
