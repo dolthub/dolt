@@ -294,7 +294,7 @@ func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.R
 		}
 
 		err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-			tbl, err = tbl.ClearConflicts()
+			tbl, err = tbl.ClearConflicts(ctx)
 			if err != nil {
 				return nil, err
 			}

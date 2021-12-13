@@ -331,16 +331,11 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema, err
 	if err != nil {
 		errhand(err)
 	}
-
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
-	if err != nil {
-		errhand(err)
-	}
 	empty, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		errhand(err)
 	}
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rowMap, empty, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, empty, nil)
 	if err != nil {
 		errhand(err)
 	}
@@ -374,12 +369,7 @@ func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
-	if err != nil {
-		return env.ErrMarshallingSchema
-	}
-
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, indexData, autoVal)
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, rows, indexData, autoVal)
 	if err != nil {
 		return err
 	}

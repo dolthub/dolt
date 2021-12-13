@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -120,12 +119,7 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 		return nil, err
 	}
 
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, DocsSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	newDocsTbl, err := doltdb.NewTable(ctx, vrw, schVal, rowMap, empty, nil)
+	newDocsTbl, err := doltdb.NewTable(ctx, vrw, DocsSchema, rowMap, empty, nil)
 	if err != nil {
 		return nil, err
 	}

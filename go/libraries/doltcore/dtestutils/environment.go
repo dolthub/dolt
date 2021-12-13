@@ -22,7 +22,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -76,15 +75,13 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	rowMap, err = me.Map(ctx)
 	require.NoError(t, err)
 
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
-	require.NoError(t, err)
-	empty, err := types.NewMap(ctx, vrw)
-	require.NoError(t, err)
-
 	ai := sch.Indexes().AllIndexes()
 	sch.Indexes().Merge(ai...)
 
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rowMap, empty, nil)
+	empty, err := types.NewMap(ctx, vrw)
+	require.NoError(t, err)
+
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, empty, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)

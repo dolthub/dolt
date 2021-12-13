@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/types"
@@ -534,16 +533,13 @@ func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 			require.NoError(t, err)
 		}
 
-		schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), sch)
-		require.NoError(t, err)
-
 		indexData, err := types.NewMap(ctx, root.VRW())
 		require.NoError(t, err)
 		if tbl != nil {
 			indexData, err = tbl.GetIndexData(ctx)
 			require.NoError(t, err)
 		}
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, rowData, indexData, nil)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), sch, rowData, indexData, nil)
 		require.NoError(t, err)
 
 		root, err = root.PutTable(ctx, tblName, tbl)
