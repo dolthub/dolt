@@ -397,7 +397,6 @@ func superSchemaFromCols(cols *schema.ColCollection) *schema.SuperSchema {
 	return ss
 }
 
-
 func columnCollection(cols ...schema.Column) *schema.ColCollection {
 	return schema.NewColCollection(cols...)
 }
