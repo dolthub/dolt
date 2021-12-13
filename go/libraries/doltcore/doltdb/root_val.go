@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -324,32 +326,6 @@ func (root *RootValue) getOrCreateSuperSchemaMap(ctx context.Context) (types.Map
 	return ssm, err
 }
 
-func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Struct, bool, error) {
-	tableMap, err := root.getTableMap()
-
-	if err != nil {
-		return nil, false, err
-	}
-
-	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
-	if err != nil {
-		return nil, false, err
-	}
-
-	if tVal == nil || !found {
-		return nil, false, nil
-	}
-
-	tValRef := tVal.(types.Ref)
-	val, err := tValRef.TargetValue(ctx, root.vrw)
-	if err != nil {
-		return nil, false, err
-	}
-
-	tableStruct := val.(types.Struct)
-	return &tableStruct, true, nil
-}
-
 func (root *RootValue) GetAllSchemas(ctx context.Context) (map[string]schema.Schema, error) {
 	m := make(map[string]schema.Schema)
 	err := root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
@@ -432,13 +408,26 @@ func (root *RootValue) ResolveTableName(ctx context.Context, tName string) (stri
 
 // GetTable will retrieve a table by its case-sensitive name.
 func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool, error) {
-	if st, ok, err := root.getTableSt(ctx, tName); err != nil {
+	tableMap, err := root.getTableMap()
+
+	if err != nil {
 		return nil, false, err
-	} else if ok {
-		return &Table{root.vrw, *st}, true, nil
 	}
 
-	return nil, false, nil
+	r, found, err := tableMap.MaybeGet(ctx, types.String(tName))
+	if err != nil {
+		return nil, false, err
+	}
+	if r == nil || !found {
+		return nil, false, nil
+	}
+
+	table, err := durable.NomsTableFromRef(ctx, root.VRW(), r.(types.Ref))
+	if err != nil {
+		return nil, false, err
+	}
+
+	return &Table{table: table}, true, err
 }
 
 // GetTableInsensitive will retrieve a table by its case-insensitive name.
@@ -527,66 +516,55 @@ func (root *RootValue) getTableMap() (types.Map, error) {
 }
 
 func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
-	tableMap, err := root.getTableMap()
-
+	names, err := root.GetTableNames(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	numTables := int(tableMap.Len())
-	names := make([]string, 0, numTables)
-
-	err = tableMap.Iter(ctx, func(key, tblRefVal types.Value) (stop bool, err error) {
-		tblVal, err := tblRefVal.(types.Ref).TargetValue(ctx, root.vrw)
-
+	conflicted := make([]string, 0, len(names))
+	for _, name := range names {
+		tbl, _, err := root.GetTable(ctx, name)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 
-		tblSt := tblVal.(types.Struct)
-		tbl := &Table{root.vrw, tblSt}
-		if has, err := tbl.HasConflicts(); err != nil {
-			return false, err
-		} else if has {
-			names = append(names, string(key.(types.String)))
+		ok, err := tbl.HasConflicts(ctx)
+		if err != nil {
+			return nil, err
 		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
+		if ok {
+			conflicted = append(conflicted, name)
+		}
 	}
 
-	return names, nil
+	return conflicted, nil
 }
 
 // TablesWithConstraintViolations returns all tables that have constraint violations.
 func (root *RootValue) TablesWithConstraintViolations(ctx context.Context) ([]string, error) {
-	tableMap, err := root.getTableMap()
+	names, err := root.GetTableNames(ctx)
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, 0, tableMap.Len())
 
-	err = tableMap.Iter(ctx, func(key, tblRefVal types.Value) (stop bool, err error) {
-		tblVal, err := tblRefVal.(types.Ref).TargetValue(ctx, root.vrw)
+	violating := make([]string, 0, len(names))
+	for _, name := range names {
+		tbl, _, err := root.GetTable(ctx, name)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
-		tblSt := tblVal.(types.Struct)
-		tbl := &Table{root.vrw, tblSt}
-		if cvMap, err := tbl.GetConstraintViolations(ctx); err != nil {
-			return false, err
-		} else if !cvMap.Empty() {
-			names = append(names, string(key.(types.String)))
+
+		cv, err := tbl.GetConstraintViolations(ctx)
+		if err != nil {
+			return nil, err
 		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
+
+		if cv.Len() > 0 {
+			violating = append(violating, name)
+		}
 	}
-	return names, nil
+
+	return violating, nil
 }
 
 func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
@@ -629,21 +607,19 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 			return err
 		}
 
-		tableStruct, err := tableRef.(types.Ref).TargetValue(ctx, root.vrw)
-
-		if err != nil {
-			return err
-		}
-
 		name := string(nm.(types.String))
-		table := &Table{root.vrw, tableStruct.(types.Struct)}
+		nt, err := durable.NomsTableFromRef(ctx, root.VRW(), tableRef.(types.Ref))
+		if err != nil {
+			return err
+		}
+		tbl := &Table{table: nt}
 
-		sch, err := table.GetSchema(ctx)
+		sch, err := tbl.GetSchema(ctx)
 		if err != nil {
 			return err
 		}
 
-		stop, err := cb(name, table, sch)
+		stop, err := cb(name, tbl, sch)
 
 		if err != nil || stop {
 			return err
@@ -710,13 +686,11 @@ func (root *RootValue) PutSuperSchema(ctx context.Context, tName string, ss *sch
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table) (*RootValue, error) {
 	err := validateTagUniqueness(ctx, root, tName, table)
-
 	if err != nil {
 		return nil, err
 	}
 
-	tableRef, err := WriteValAndGetRef(ctx, root.VRW(), table.tableStruct)
-
+	tableRef, err := durable.RefFromNomsTable(ctx, table.table)
 	if err != nil {
 		return nil, err
 	}

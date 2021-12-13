@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -329,12 +330,12 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	)
 	require.NoError(t, err)
 
-	updateConflict := doltdb.NewConflict(
+	updateConflict := conflict.NewConflict(
 		mustGetValue(initialRows.MaybeGet(context.Background(), keyTuples[8])),
 		mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[8])),
 		mustGetValue(mergeRows.MaybeGet(context.Background(), keyTuples[8])))
 
-	addConflict := doltdb.NewConflict(
+	addConflict := conflict.NewConflict(
 		nil,
 		valsToTestTupleWithoutPks([]types.Value{types.String("person thirteen"), types.NullValue}),
 		valsToTestTupleWithoutPks([]types.Value{types.String("person number thirteen"), types.NullValue}),
@@ -440,7 +441,7 @@ func TestMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	expected, err = editor.RebuildAllIndexes(context.Background(), expected, editor.TestEditorOptions(vrw))
 	assert.NoError(t, err)
-	conflictSchema := doltdb.NewConflictSchema(sch, sch, sch)
+	conflictSchema := conflict.NewConflictSchema(sch, sch, sch)
 	assert.NoError(t, err)
 	expected, err = expected.SetConflicts(context.Background(), conflictSchema, expectedConflicts)
 	assert.NoError(t, err)

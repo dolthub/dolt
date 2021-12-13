@@ -326,10 +326,13 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Could not retrieve test table")
 		}
 
-		has, err := readTable.HasTheSameSchema(tbl)
-		assert.NoError(t, err)
+		ts, err := tbl.GetSchema(context.Background())
+		require.NoError(t, err)
 
-		if !has {
+		rs, err := readTable.GetSchema(context.Background())
+		require.NoError(t, err)
+
+		if !schema.SchemasAreEqual(ts, rs) {
 			t.Error("Unexpected schema")
 		}
 	}

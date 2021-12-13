@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
@@ -203,12 +204,12 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	if err != nil {
 		return nil, nil, err
 	}
-	resultTbl, conflicts, stats, err := mergeTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, ancRows, updatedTblEditor, sess)
+	resultTbl, cons, stats, err := mergeTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, ancRows, updatedTblEditor, sess)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if conflicts.Len() > 0 {
+	if cons.Len() > 0 {
 
 		ancSch, err := ancTbl.GetSchema(ctx)
 		if err != nil {
@@ -225,9 +226,9 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 			return nil, nil, err
 		}
 
-		cs := doltdb.NewConflictSchema(ancSch, sch, mergeSch)
+		cs := conflict.NewConflictSchema(ancSch, sch, mergeSch)
 
-		resultTbl, err = resultTbl.SetConflicts(ctx, cs, conflicts)
+		resultTbl, err = resultTbl.SetConflicts(ctx, cs, cons)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -420,7 +421,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 
 				if isConflict {
 					stats.Conflicts++
-					conflictTuple, err := doltdb.NewConflict(ancRow, r, mergeRow).ToNomsList(vrw)
+					conflictTuple, err := conflict.NewConflict(ancRow, r, mergeRow).ToNomsList(vrw)
 					if err != nil {
 						return err
 					}
@@ -831,7 +832,7 @@ func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *dol
 	if less {
 		autoVal = mergeAutoVal
 	}
-	return resultTbl.SetAutoIncrementValue(autoVal)
+	return resultTbl.SetAutoIncrementValue(nil, autoVal)
 }
 
 func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*doltdb.RootValue, map[string]*MergeStats, error) {

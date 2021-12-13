@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
@@ -59,7 +60,7 @@ type tableInConflict struct {
 	name    string
 	size    uint64
 	done    bool
-	schemas doltdb.ConflictSchema
+	schemas conflict.ConflictSchema
 	//cnfItr types.MapIterator
 }
 

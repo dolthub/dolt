@@ -22,8 +22,9 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -79,202 +80,76 @@ func IsValidIndexName(name string) bool {
 
 // Table is a struct which holds row data, as well as a reference to it's schema.
 type Table struct {
-	vrw         types.ValueReadWriter
-	tableStruct types.Struct
+	table durable.Table
 }
 
 // NewTable creates a noms Struct which stores row data, index data, and schema.
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexData types.Map, autoIncVal types.Value) (*Table, error) {
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	dt, err := durable.NewNomsTable(ctx, vrw, sch, rowData, indexData, autoIncVal)
 	if err != nil {
 		return nil, err
 	}
 
-	schemaRef, err := WriteValAndGetRef(ctx, vrw, schVal)
-	if err != nil {
-		return nil, err
-	}
-
-	rowDataRef, err := WriteValAndGetRef(ctx, vrw, rowData)
-	if err != nil {
-		return nil, err
-	}
-
-	indexesRef, err := WriteValAndGetRef(ctx, vrw, indexData)
-	if err != nil {
-		return nil, err
-	}
-
-	sd := types.StructData{
-		schemaRefKey: schemaRef,
-		tableRowsKey: rowDataRef,
-		indexesKey:   indexesRef,
-	}
-
-	if autoIncVal != nil {
-		sd[autoIncrementKey] = autoIncVal
-	}
-
-	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Table{vrw, tableStruct}, nil
+	return &Table{table: dt}, nil
 }
 
 func (t *Table) Format() *types.NomsBinFormat {
-	return t.vrw.Format()
+	return t.ValueReadWriter().Format()
 }
 
 // ValueReadWriter returns the ValueReadWriter for this table.
 func (t *Table) ValueReadWriter() types.ValueReadWriter {
-	return t.vrw
+	return durable.VrwFromTable(t.table)
 }
 
-func (t *Table) SetConflicts(ctx context.Context, schemas ConflictSchema, conflictData types.Map) (*Table, error) {
-	conflictsRef, err := WriteValAndGetRef(ctx, t.vrw, conflictData)
+func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData types.Map) (*Table, error) {
+	table, err := t.table.SetConflicts(ctx, schemas, conflictData)
 	if err != nil {
 		return nil, err
 	}
-
-	tpl, err := ValueFromConflictSchema(ctx, t.vrw, schemas)
-	if err != nil {
-		return nil, err
-	}
-
-	updatedSt, err := t.tableStruct.Set(conflictSchemasKey, tpl)
-	if err != nil {
-		return nil, err
-	}
-
-	updatedSt, err = updatedSt.Set(conflictsKey, conflictsRef)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Table{t.vrw, updatedSt}, nil
+	return &Table{table: table}, nil
 }
 
 // GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table
-func (t *Table) GetConflicts(ctx context.Context) (ConflictSchema, types.Map, error) {
-	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
-	if err != nil {
-		return ConflictSchema{}, types.EmptyMap, err
-	}
-	if !ok {
-		confMap, _ := types.NewMap(ctx, t.ValueReadWriter())
-		return ConflictSchema{}, confMap, nil
-	}
-
-	schemas, err := ConflictSchemaFromValue(ctx, t.vrw, schemasVal)
-	if err != nil {
-		return ConflictSchema{}, types.EmptyMap, err
-	}
-
-	conflictsVal, _, err := t.tableStruct.MaybeGet(conflictsKey)
-	if err != nil {
-		return ConflictSchema{}, types.EmptyMap, err
-	}
-
-	confMap := types.EmptyMap
-	if conflictsVal != nil {
-		confMapRef := conflictsVal.(types.Ref)
-		v, err := confMapRef.TargetValue(ctx, t.vrw)
-
-		if err != nil {
-			return ConflictSchema{}, types.EmptyMap, err
-		}
-
-		confMap = v.(types.Map)
-	}
-
-	return schemas, confMap, nil
+func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error) {
+	return t.table.GetConflicts(ctx)
 }
 
-func (t *Table) HasConflicts() (bool, error) {
-	if t == nil {
-		return false, nil
-	}
-
-	_, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
-
-	return ok, err
+func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
+	return t.table.HasConflicts(ctx)
 }
 
 func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
-	if t == nil {
+	ok, err := t.table.HasConflicts(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
 		return 0, nil
 	}
 
-	conflictsVal, ok, err := t.tableStruct.MaybeGet(conflictsKey)
-
+	_, cons, err := t.table.GetConflicts(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	if !ok {
-		return 0, nil
-	}
-
-	confMap := types.EmptyMap
-	if conflictsVal != nil {
-		confMapRef := conflictsVal.(types.Ref)
-		v, err := confMapRef.TargetValue(ctx, t.vrw)
-
-		if err != nil {
-			return 0, err
-		}
-		confMap = v.(types.Map)
-	}
-
-	return confMap.Len(), nil
+	return cons.Len(), nil
 }
 
-func (t *Table) ClearConflicts() (*Table, error) {
-	tSt, err := t.tableStruct.Delete(conflictSchemasKey)
-
+func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
+	table, err := t.table.ClearConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	tSt, err = tSt.Delete(conflictsKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &Table{t.vrw, tSt}, nil
+	return &Table{table: table}, nil
 }
 
 func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
-	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
-
+	cs, _, err := t.table.GetConflicts(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
-	if ok {
-		schemas, err := ConflictFromTuple(schemasVal.(types.Tuple))
-
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		baseRef := schemas.Base.(types.Ref)
-		valRef := schemas.Value.(types.Ref)
-		mergeRef := schemas.MergeValue.(types.Ref)
-
-		var baseSch, sch, mergeSch schema.Schema
-		if baseSch, err = RefToSchema(ctx, t.vrw, baseRef); err == nil {
-			if sch, err = RefToSchema(ctx, t.vrw, valRef); err == nil {
-				mergeSch, err = RefToSchema(ctx, t.vrw, mergeRef)
-			}
-		}
-
-		return baseSch, sch, mergeSch, err
-	}
-	return nil, nil, nil, nil
+	return cs.Base, cs.Schema, cs.MergeSchema, nil
 }
 
 // GetConstraintViolationsSchema returns the schema for the dolt_constraint_violations system table belonging to this
@@ -309,69 +184,22 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 // GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
 // whether the table has any violations.
 func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) {
-	constraintViolationsRefVal, ok, err := t.tableStruct.MaybeGet(constraintViolationsKey)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	if !ok {
-		emptyMap, err := types.NewMap(ctx, t.vrw)
-		return emptyMap, err
-	}
-	constraintViolationsVal, err := constraintViolationsRefVal.(types.Ref).TargetValue(ctx, t.vrw)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	return constraintViolationsVal.(types.Map), nil
+	return t.table.GetConstraintViolations(ctx)
 }
 
 // SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
 // violations entry on the embedded struct is removed.
 func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (*Table, error) {
-	// We can't just call violationsMap.Empty() as we can't guarantee that the caller passed in an instantiated map
-	if violationsMap == types.EmptyMap || violationsMap.Len() == 0 {
-		updatedStruct, err := t.tableStruct.Delete(constraintViolationsKey)
-		if err != nil {
-			return nil, err
-		}
-		return &Table{t.vrw, updatedStruct}, nil
-	}
-	constraintViolationsRef, err := WriteValAndGetRef(ctx, t.vrw, violationsMap)
+	table, err := t.table.SetConstraintViolations(ctx, violationsMap)
 	if err != nil {
 		return nil, err
 	}
-	updatedStruct, err := t.tableStruct.Set(constraintViolationsKey, constraintViolationsRef)
-	if err != nil {
-		return nil, err
-	}
-	return &Table{t.vrw, updatedStruct}, nil
-}
-
-func RefToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
-	schemaVal, err := ref.TargetValue(ctx, vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	schema, err := encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), schemaVal)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return schema, nil
+	return &Table{table: table}, nil
 }
 
 // GetSchema will retrieve the schema being referenced from the table in noms and unmarshal it.
 func (t *Table) GetSchema(ctx context.Context) (schema.Schema, error) {
-	schemaRefVal, _, err := t.tableStruct.MaybeGet(schemaRefKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	schemaRef := schemaRefVal.(types.Ref)
-	return RefToSchema(ctx, t.vrw, schemaRef)
+	return t.table.GetSchema(ctx)
 }
 
 func (t *Table) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
@@ -391,91 +219,36 @@ func (t *Table) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
 
 // UpdateSchema updates the table with the schema given and returns the updated table. The original table is unchanged.
 func (t *Table) UpdateSchema(ctx context.Context, sch schema.Schema) (*Table, error) {
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.vrw, sch)
+	table, err := t.table.SetSchema(ctx, sch)
 	if err != nil {
 		return nil, err
 	}
-
-	schRef, err := WriteValAndGetRef(ctx, t.vrw, newSchemaVal)
-	if err != nil {
-		return nil, err
-	}
-
-	newTableStruct, err := t.tableStruct.Set(schemaRefKey, schRef)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Table{t.vrw, newTableStruct}, nil
-}
-
-// HasTheSameSchema tests the schema within 2 tables for equality
-func (t *Table) HasTheSameSchema(t2 *Table) (bool, error) {
-	schemaVal, _, err := t.tableStruct.MaybeGet(schemaRefKey)
-
-	if err != nil {
-		return false, err
-	}
-
-	schemaRef := schemaVal.(types.Ref)
-
-	schema2Val, _, err := t2.tableStruct.MaybeGet(schemaRefKey)
-
-	if err != nil {
-		return false, err
-	}
-
-	schema2Ref := schema2Val.(types.Ref)
-
-	return schemaRef.TargetHash() == schema2Ref.TargetHash(), nil
+	return &Table{table: table}, nil
 }
 
 // HashOf returns the hash of the underlying table struct
 func (t *Table) HashOf() (hash.Hash, error) {
-	return t.tableStruct.Hash(t.vrw.Format())
+	return t.table.HashOf()
 }
 
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
 func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
-	rowDataRef, err := WriteValAndGetRef(ctx, t.vrw, updatedRows)
-
+	table, err := t.table.SetTableRows(ctx, updatedRows)
 	if err != nil {
 		return nil, err
 	}
-
-	updatedSt, err := t.tableStruct.Set(tableRowsKey, rowDataRef)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &Table{t.vrw, updatedSt}, nil
+	return &Table{table: table}, nil
 }
 
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
 func (t *Table) GetRowData(ctx context.Context) (types.Map, error) {
-	val, _, err := t.tableStruct.MaybeGet(tableRowsKey)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	rowMapRef := val.(types.Ref)
-
-	val, err = rowMapRef.TargetValue(ctx, t.vrw)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	rowMap := val.(types.Map)
-	return rowMap, nil
+	return t.table.GetTableRows(ctx)
 }
 
 func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
 	removed := 0
-	_, confData, err := t.GetConflicts(ctx)
+	conflictSchema, confData, err := t.GetConflicts(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -501,69 +274,34 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 		return nil, nil, nil, err
 	}
 
-	conflictsRef, err := WriteValAndGetRef(ctx, t.vrw, conflicts)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	updatedSt, err := t.tableStruct.Set(conflictsKey, conflictsRef)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	newTbl := &Table{t.vrw, updatedSt}
-
-	// If we resolved the last conflict, mark the table conflict free
-	numRowsInConflict, err := newTbl.NumRowsInConflict(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	if numRowsInConflict == 0 {
-		newTbl, err = newTbl.ClearConflicts()
+	if conflicts.Len() == 0 {
+		table, err := t.table.ClearConflicts(ctx)
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		return invalid, notFound, &Table{table: table}, nil
 	}
 
-	return invalid, notFound, newTbl, nil
+	table, err := t.table.SetConflicts(ctx, conflictSchema, conflicts)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return invalid, notFound, &Table{table: table}, nil
 }
 
 // GetIndexData returns the internal index map which goes from index name to a ref of the row data map.
 func (t *Table) GetIndexData(ctx context.Context) (types.Map, error) {
-	indexesVal, ok, err := t.tableStruct.MaybeGet(indexesKey)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	if !ok {
-		newEmptyMap, err := types.NewMap(ctx, t.vrw)
-		if err != nil {
-			return types.EmptyMap, err
-		}
-		return newEmptyMap, nil
-	}
-
-	indexesMap, err := indexesVal.(types.Ref).TargetValue(ctx, t.vrw)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	return indexesMap.(types.Map), nil
+	return t.table.GetIndexes(ctx)
 }
 
 // SetIndexData replaces the current internal index map, and returns an updated Table.
 func (t *Table) SetIndexData(ctx context.Context, indexesMap types.Map) (*Table, error) {
-	indexesRef, err := WriteValAndGetRef(ctx, t.vrw, indexesMap)
+	table, err := t.table.SetIndexes(ctx, indexesMap)
 	if err != nil {
 		return nil, err
 	}
-
-	newTableStruct, err := t.tableStruct.Set(indexesKey, indexesRef)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Table{t.vrw, newTableStruct}, nil
+	return &Table{table: table}, nil
 }
 
 // GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
@@ -581,7 +319,7 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (types.Ma
 		return types.EmptyMap, fmt.Errorf("index `%s` is missing its data", indexName)
 	}
 
-	indexMap, err := indexMapRef.(types.Ref).TargetValue(ctx, t.vrw)
+	indexMap, err := indexMapRef.(types.Ref).TargetValue(ctx, t.ValueReadWriter())
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -596,7 +334,7 @@ func (t *Table) SetIndexRowData(ctx context.Context, indexName string, indexRowD
 		return nil, err
 	}
 
-	indexRowDataRef, err := WriteValAndGetRef(ctx, t.vrw, indexRowData)
+	indexRowDataRef, err := WriteValAndGetRef(ctx, t.ValueReadWriter(), indexRowData)
 	if err != nil {
 		return nil, err
 	}
@@ -681,7 +419,7 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 		return fmt.Errorf("index `%s` is missing its data", indexName)
 	}
 
-	indexMapValue, err := indexMapRef.(types.Ref).TargetValue(ctx, t.vrw)
+	indexMapValue, err := indexMapRef.(types.Ref).TargetValue(ctx, t.ValueReadWriter())
 	if err != nil {
 		return err
 	}
@@ -695,49 +433,13 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 }
 
 func (t *Table) GetAutoIncrementValue(ctx context.Context) (types.Value, error) {
-	val, ok, err := t.tableStruct.MaybeGet(autoIncrementKey)
-	if err != nil {
-		return nil, err
-	}
-	if ok {
-		return val, nil
-	}
-
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	kind := types.UnknownKind
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.AutoIncrement {
-			kind = col.Kind
-			stop = true
-		}
-		return
-	})
-	switch kind {
-	case types.IntKind:
-		return types.Int(1), nil
-	case types.UintKind:
-		return types.Uint(1), nil
-	case types.FloatKind:
-		return types.Float(1), nil
-	default:
-		return nil, ErrNoAutoIncrementValue
-	}
+	return t.table.GetAutoIncrement(ctx)
 }
 
-func (t *Table) SetAutoIncrementValue(val types.Value) (*Table, error) {
-	switch val.(type) {
-	case types.Int, types.Uint, types.Float:
-		st, err := t.tableStruct.Set(autoIncrementKey, val)
-		if err != nil {
-			return nil, err
-		}
-		return &Table{t.vrw, st}, nil
-
-	default:
-		return nil, fmt.Errorf("cannot set auto increment to non-numeric value")
+func (t *Table) SetAutoIncrementValue(ctx context.Context, val types.Value) (*Table, error) {
+	table, err := t.table.SetAutoIncrement(ctx, val)
+	if err != nil {
+		return nil, err
 	}
+	return &Table{table: table}, nil
 }
