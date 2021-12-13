@@ -16,6 +16,7 @@ package doltdb_test
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -99,6 +100,9 @@ var gcSetupCommon = []testCommand{
 func TestGarbageCollection(t *testing.T) {
 	require.True(t, true)
 	assert.True(t, true)
+
+	restoreIO := cli.InitIO()
+	defer restoreIO()
 
 	for _, gct := range gcTests {
 		t.Run(gct.name, func(t *testing.T) {

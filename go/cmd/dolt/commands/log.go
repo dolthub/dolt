@@ -198,12 +198,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		commitsInfo = append(commitsInfo, logNode{meta, cmHash, pHashes})
 	}
 
-	// TODO : gc_test.go uses 'dolt commit' which uses 'dolt log -n=1' --> causes nil pointer deference on 'cli.ExecuteWithStdioRestored'
-	if len(commitsInfo) == 1 {
-		printToStdOutFunc(opts, commitsInfo[0].commitMeta, commitsInfo[0].parentHashes, commitsInfo[0].commitHash)
-	} else {
-		logToStdOut(opts, commitsInfo)
-	}
+	logToStdOut(opts, commitsInfo)
 
 	return 0
 }
@@ -348,37 +343,6 @@ func logToStdOut(opts logOpts, commits []logNode) {
 			pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
 		}
 	})
-}
-
-func printToStdOutFunc(opts logOpts, cm *doltdb.CommitMeta, parentHashes []hash.Hash, ch hash.Hash) {
-	if len(parentHashes) < opts.minParents {
-		return
-	}
-
-	chStr := ch.String()
-	if opts.showParents {
-		for _, h := range parentHashes {
-			chStr += " " + h.String()
-		}
-	}
-
-	cli.Println(color.YellowString("commit %s", chStr))
-
-	if len(parentHashes) > 1 {
-		cli.Print("Merge:")
-		for _, h := range parentHashes {
-			cli.Print(" " + h.String())
-		}
-		cli.Println()
-	}
-
-	cli.Printf("Author: %s <%s>\n", cm.Name, cm.Email)
-
-	timeStr := cm.FormatTS()
-	cli.Println("Date:  ", timeStr)
-
-	formattedDesc := "\n\t" + strings.Replace(cm.Description, "\n", "\n\t", -1) + "\n"
-	cli.Println(formattedDesc)
 }
 
 func didTableChangeBetweenRootValues(ctx context.Context, child, parent *doltdb.RootValue, tableName string) (bool, error) {
