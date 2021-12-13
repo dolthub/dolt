@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -135,14 +134,8 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 }
 
 func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*doltdb.Table, error) {
-	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, tSchema)
-
-	if err != nil {
-		return nil, err
-	}
-
 	empty, _ := types.NewMap(context.Background(), vrw)
-	tbl, err := doltdb.NewTable(context.Background(), vrw, schemaVal, rowData, empty, nil)
+	tbl, err := doltdb.NewTable(context.Background(), vrw, tSchema, rowData, empty, nil)
 
 	if err != nil {
 		return nil, err

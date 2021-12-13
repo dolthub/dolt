@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	ndiff "github.com/dolthub/dolt/go/store/diff"
@@ -351,16 +350,6 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		rebasedSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, rebasedParentRoot.VRW(), rebasedSch)
-
-		if err != nil {
-			return nil, err
-		}
-
-		rsh, _ := rebasedSchVal.Hash(newRoot.VRW().Format())
-		rshs := rsh.String()
-		fmt.Println(rshs)
-
 		emptyMap, err := types.NewMap(ctx, root.VRW()) // migration predates secondary indexes
 		if err != nil {
 			return nil, err
@@ -370,7 +359,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		// so we don't need to copy the value here
 		var autoVal types.Value = nil
 
-		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, emptyMap, autoVal)
+		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSch, rebasedRows, emptyMap, autoVal)
 
 		if err != nil {
 			return nil, err
