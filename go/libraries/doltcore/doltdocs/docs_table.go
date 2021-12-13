@@ -125,8 +125,6 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 	}
 
 	return newDocsTbl, nil
-
-	return nil, nil
 }
 
 // CreateOrUpdateDocsTable takes a root value and a set of docs and either creates the docs table or updates it with docs.
