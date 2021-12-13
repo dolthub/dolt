@@ -875,7 +875,12 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	return t.setRoot(ctx, newRoot)
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }
 
 func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
@@ -937,13 +942,17 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 		return err
 	}
 
-	return t.setRoot(ctx, newRoot)
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }
 
 // ModifyColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	root, err := t.getRoot(ctx)
-
 	if err != nil {
 		return err
 	}
@@ -1017,7 +1026,12 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
-	return t.setRoot(ctx, newRoot)
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }
 
 // CreateIndex implements sql.IndexAlterableTable
@@ -1512,7 +1526,20 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 }
 
 func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) error {
-	sch := t.sch
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	if err != nil {
+		return err
+	}
+
+	sch, err := updatedTable.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
 
 	check = &(*check)
 	if check.Name == "" {
@@ -1523,7 +1550,7 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		}
 	}
 
-	_, err := sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
+	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
 	if err != nil {
 		return err
 	}
@@ -1534,11 +1561,6 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 	}
 
 	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
@@ -1557,9 +1579,22 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 }
 
 func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
-	sch := t.sch
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
 
-	err := sch.Checks().DropCheck(chName)
+	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	if err != nil {
+		return err
+	}
+
+	sch, err := updatedTable.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = sch.Checks().DropCheck(chName)
 	if err != nil {
 		return err
 	}
@@ -1570,11 +1605,6 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 	}
 
 	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
