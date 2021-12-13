@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -100,9 +99,6 @@ var gcSetupCommon = []testCommand{
 func TestGarbageCollection(t *testing.T) {
 	require.True(t, true)
 	assert.True(t, true)
-
-	restoreIO := cli.InitIO()
-	defer restoreIO()
 
 	for _, gct := range gcTests {
 		t.Run(gct.name, func(t *testing.T) {

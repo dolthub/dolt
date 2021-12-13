@@ -309,6 +309,9 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 }
 
 func logToStdOut(opts logOpts, commits []logNode) {
+	if cli.ExecuteWithStdioRestored == nil {
+		return
+	}
 	cli.ExecuteWithStdioRestored(func() {
 		pager := outputpager.Start()
 		defer pager.Stop()
