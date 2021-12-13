@@ -59,7 +59,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 
 	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM %s", tableName))
 	if err != nil {
-		return nil, err // TODO: Handle table not found error (Maybe use catalog instead)
+		return nil, err
 	}
 
 	root, err := dEnv.WorkingRoot(ctx)
