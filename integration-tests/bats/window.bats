@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "window: clean working set" {
+@test "window: no diff table window buffer sharing" {
     dolt sql -q "create table a (x int primary key, y varchar(1))"
     dolt add .
     dolt commit -m table
