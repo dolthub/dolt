@@ -19,7 +19,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 
@@ -33,7 +36,7 @@ const jsonHeader = `{"rows": [`
 const jsonFooter = `]}`
 
 var WriteBufSize = 256 * 1024
-
+var defaultString = sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)
 type JSONWriter struct {
 	closer      io.Closer
 	bWr         *bufio.Writer
@@ -56,17 +59,20 @@ func (jsonw *JSONWriter) GetSchema() schema.Schema {
 
 // WriteRow will write a row to a table
 func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
+	panic("deprecated")
+}
+
+func (jsonw *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 	allCols := jsonw.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		val, ok := r.GetColVal(tag)
-		if !ok || types.IsNull(val) {
+		val := row[allCols.TagToIdx[tag]]
+		if val == nil {
 			return false, nil
 		}
 
 		switch col.TypeInfo.GetTypeIdentifier() {
-		case typeinfo.DatetimeTypeIdentifier,
-			typeinfo.DecimalTypeIdentifier,
+		case typeinfo.DecimalTypeIdentifier,
 			typeinfo.EnumTypeIdentifier,
 			typeinfo.InlineBlobTypeIdentifier,
 			typeinfo.SetTypeIdentifier,
@@ -75,11 +81,15 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 			typeinfo.UuidTypeIdentifier,
 			typeinfo.VarBinaryTypeIdentifier,
 			typeinfo.YearTypeIdentifier:
-			v, err := col.TypeInfo.FormatValue(val)
+			val, err = defaultString.Convert(val)
 			if err != nil {
-				return true, err
+				return false, err
 			}
-			val = types.String(*v)
+		case typeinfo.DatetimeTypeIdentifier:
+			val, err = col.TypeInfo.FormatValue(types.Timestamp(val.(time.Time)))
+			if err != nil {
+				return false, err
+			}
 
 		case typeinfo.BitTypeIdentifier,
 			typeinfo.BoolTypeIdentifier,

@@ -19,14 +19,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -36,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -191,6 +190,7 @@ func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
+	// TODO: We shoould not support this for export
 	ap.SupportsFlag(contOnErrParam, "", "Continue exporting when row export errors are encountered.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
@@ -229,7 +229,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	skipped, err := export(ctx, rd, wr, exOpts)
+	skipped, err := export(ctx, rd, wr, root.VRW(), exOpts)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build(), usage)
 	}
@@ -245,7 +245,15 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 }
 
 func getTableWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, exOpts *exportOptions, statsCB noms.StatsCB) (table.TableWriteCloser, errhand.VerboseError) {
-	err := dEnv.FS.MkDirs(filepath.Dir(exOpts.DestName()))
+	ow, err := exOpts.checkOverwrite(ctx, root, dEnv.FS)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+	if ow {
+		return nil, errhand.BuildDError("%s already exists. Use -f to overwrite.", exOpts.DestName()).Build()
+	}
+
+	err = dEnv.FS.MkDirs(filepath.Dir(exOpts.DestName()))
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -268,64 +276,11 @@ func getTableWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltE
 	return wr, nil
 }
 
-func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, exOpts *exportOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
-	ow, err := exOpts.checkOverwrite(ctx, root, dEnv.FS)
-	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
-	}
-	if ow {
-		return nil, errhand.BuildDError("%s already exists. Use -f to overwrite.", exOpts.DestName()).Build()
-	}
-
-	rd, err := mvdata.NewSqlEngineReader(ctx, dEnv, exOpts.tableName)
-	if err != nil {
-		return nil, errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build()
-	}
-
-	// close on err exit
-	defer func() {
-		if rd != nil {
-			rd.Close(ctx)
-		}
-	}()
-
-	inSch := rd.GetSchema()
-	outSch := inSch
-
-	err = dEnv.FS.MkDirs(filepath.Dir(exOpts.DestName()))
-	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
-	}
-
-	filePath, err := dEnv.FS.Abs(exOpts.DestName())
-	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
-	}
-
-	writer, err := dEnv.FS.OpenForWrite(filePath, os.ModePerm)
-	if err != nil {
-		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
-	}
-
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, false, outSch, statsCB, opts, writer)
-
-	if err != nil {
-		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()
-	}
-
-	emptyTransColl := pipeline.NewTransformCollection()
-
-	imp := &mvdata.DataMover{Rd: rd, Transforms: emptyTransColl, Wr: wr, ContOnErr: exOpts.contOnErr}
-	rd = nil
-
-	return imp, nil
-}
-
-func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCloser, exOpts *exportOptions) (int64, error) {
+func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCloser, vrw types.ValueReadWriter, exOpts *exportOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	parsedRowChan := make(chan sql.Row)
+
 	getNextRow := func(rd table.TableReadCloser) (sql.Row, error) {
 		if srd, ok := rd.(table.SqlRowReader); ok {
 			return srd.ReadSqlRow(ctx)
@@ -343,11 +298,14 @@ func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCl
 		if swr, ok := wr.(table.SqlTableWriter); ok {
 			return swr.WriteSqlRow(ctx, row)
 		} else {
-			panic("todo")
+			dRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, row, wr.GetSchema())
+			if err != nil {
+				return err
+			}
+
+			return wr.WriteRow(ctx, dRow)
 		}
 	}
-
-
 	g.Go(func() error {
 		defer close(parsedRowChan)
 		defer rd.Close(ctx)
@@ -359,16 +317,7 @@ func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCl
 			}
 
 			if err != nil {
-				if table.IsBadRow(err) {
-					// trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: sqlRow, TransformName: "reader", Details: err.Error()} // TODO:
-					return err
-					//quit := badRowCb(trf)
-					//if quit {
-					//	return trf
-					//}
-				} else {
-					return err
-				}
+				return err
 			}
 
 			select {
@@ -381,7 +330,7 @@ func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCl
 
 	g.Go(func() error {
 		defer wr.Close(ctx)
-		
+
 		for r := range parsedRowChan {
 			select {
 			case <- ctx.Done():

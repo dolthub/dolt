@@ -17,6 +17,7 @@ package parquet
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"time"
 
 	"github.com/xitongsys/parquet-go-source/local"
@@ -123,6 +124,37 @@ func (pwr *ParquetWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	err = pwr.pwriter.WriteString(colValStrs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	colValStrs := make([]*string, pwr.sch.GetAllCols().Size())
+
+	for i, val := range r {
+		colT := pwr.sch.GetAllCols().GetByIndex(i)
+		if val == nil {
+			colValStrs[i] = nil
+		} else {
+			// convert datetime and time types to int64
+			switch colT.TypeInfo.GetTypeIdentifier() {
+			case typeinfo.DatetimeTypeIdentifier:
+				val = val.(time.Time).Unix()
+			case typeinfo.TimeTypeIdentifier:
+				colVal, err := sql.Time.Marshal(val)
+				if err != nil {
+					return err
+				}
+				val = colVal
+			}
+			v := sqlutil.SqlColToStr(ctx, val)
+			colValStrs[i] = &v
+		}
+	}
+
+	err := pwr.pwriter.WriteString(colValStrs)
 	if err != nil {
 		return err
 	}

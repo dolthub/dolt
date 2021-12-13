@@ -32,7 +32,6 @@ type sqlEngineTableReader struct {
 
 	sch       schema.Schema
 	iter      sql.RowIter
-	// contOnError // TODO
 }
 
 func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string) (*sqlEngineTableReader, error) {
