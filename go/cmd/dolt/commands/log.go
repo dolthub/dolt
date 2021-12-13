@@ -198,7 +198,12 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		commitsInfo = append(commitsInfo, logNode{meta, cmHash, pHashes})
 	}
 
-	logToStdOut(opts, commitsInfo)
+	// TODO : gc_test.go uses 'dolt commit' which uses 'dolt log -n=1' --> causes nil pointer deference on 'cli.ExecuteWithStdioRestored'
+	if len(commitsInfo) == 1 {
+		printToStdOutFunc(opts, commitsInfo[0].commitMeta, commitsInfo[0].parentHashes, commitsInfo[0].commitHash)
+	} else {
+		logToStdOut(opts, commitsInfo)
+	}
 
 	return 0
 }
@@ -245,6 +250,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 
 	var prevCommit *doltdb.Commit = nil
 	var prevHash hash.Hash
+	var commitsInfo []logNode
 
 	numLines := opts.numLines
 	for {
@@ -292,13 +298,17 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 				return err
 			}
 
-			printToStdOutFunc(opts, meta, ph, prevHash)
+			//printToStdOutFunc(opts, meta, ph, prevHash)
+			commitsInfo = append(commitsInfo, logNode{meta, prevHash, ph})
+
 			numLines--
 		}
 
 		prevCommit = c
 		prevHash = h
 	}
+
+	logToStdOut(opts, commitsInfo)
 
 	return nil
 }
@@ -320,24 +330,20 @@ func logToStdOut(opts logOpts, commits []logNode) {
 				}
 			}
 
-			pager.Writer.Write([]byte(color.YellowString(fmt.Sprintf("commit %s", chStr))))
+			pager.Writer.Write([]byte(fmt.Sprintf("commit %s", chStr)))
 
 			if len(comm.parentHashes) > 1 {
-				//printMerge(parentHashes)
 				pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
 				for _, h := range comm.parentHashes {
 					pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
 				}
 			}
 
-			//printAuthor(cm)
 			pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
 
-			//printDate(cm)
 			timeStr := comm.commitMeta.FormatTS()
 			pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
 
-			//printDesc(cm)
 			formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
 			pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
 		}
