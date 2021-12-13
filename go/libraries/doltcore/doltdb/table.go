@@ -31,16 +31,6 @@ import (
 )
 
 const (
-	tableStructName = "table"
-
-	schemaRefKey            = "schema_ref"
-	tableRowsKey            = "rows"
-	conflictsKey            = "conflicts"
-	conflictSchemasKey      = "conflict_schemas"
-	constraintViolationsKey = "constraint_violations"
-	indexesKey              = "indexes"
-	autoIncrementKey        = "auto_increment"
-
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z_]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
 	// ForeignKeyNameRegexStr is the regular expression that valid foreign keys must match.
@@ -78,7 +68,7 @@ func IsValidIndexName(name string) bool {
 	return indexNameRegex.MatchString(name)
 }
 
-// Table is a struct which holds row data, as well as a reference to it's schema.
+// Table is a struct which holds row data, as well as a reference to its schema.
 type Table struct {
 	table durable.Table
 }
@@ -93,6 +83,7 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema,
 	return &Table{table: dt}, nil
 }
 
+// Format returns the NomsBinFormat for this table.
 func (t *Table) Format() *types.NomsBinFormat {
 	return t.ValueReadWriter().Format()
 }
@@ -102,6 +93,7 @@ func (t *Table) ValueReadWriter() types.ValueReadWriter {
 	return durable.VrwFromTable(t.table)
 }
 
+// SetConflicts sets the merge conflicts for this table.
 func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData types.Map) (*Table, error) {
 	table, err := t.table.SetConflicts(ctx, schemas, conflictData)
 	if err != nil {
@@ -110,15 +102,17 @@ func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchem
 	return &Table{table: table}, nil
 }
 
-// GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table
+// GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table.
 func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error) {
 	return t.table.GetConflicts(ctx)
 }
 
+// HasConflicts returns true if this table contains merge conflicts.
 func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
 	return t.table.HasConflicts(ctx)
 }
 
+// NumRowsInConflict returns the number of rows with merge conflicts for this table.
 func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 	ok, err := t.table.HasConflicts(ctx)
 	if err != nil {
@@ -136,6 +130,7 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 	return cons.Len(), nil
 }
 
+// ClearConflicts deletes all merge conflicts for this table.
 func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
 	table, err := t.table.ClearConflicts(ctx)
 	if err != nil {
@@ -144,6 +139,7 @@ func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
 	return &Table{table: table}, nil
 }
 
+// GetConflictSchemas returns the merge conflict schemas for this table.
 func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
 	cs, _, err := t.table.GetConflicts(ctx)
 	if err != nil {
@@ -152,8 +148,7 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 	return cs.Base, cs.Schema, cs.MergeSchema, nil
 }
 
-// GetConstraintViolationsSchema returns the schema for the dolt_constraint_violations system table belonging to this
-// table.
+// GetConstraintViolationsSchema returns this table's dolt_constraint_violations system table schema.
 func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schema, error) {
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
@@ -202,19 +197,9 @@ func (t *Table) GetSchema(ctx context.Context) (schema.Schema, error) {
 	return t.table.GetSchema(ctx)
 }
 
+// GetSchemaHash returns the hash of this table's schema.
 func (t *Table) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
-	//v, _, err := t.tableStruct.MaybeGet(schemaRefKey)
-	//
-	//if err != nil {
-	//	return types.Ref{}, err
-	//}
-	//
-	//if v == nil {
-	//	return types.Ref{}, errors.New("missing schema")
-	//}
-	//
-	//return v.(types.Ref), nil
-	return hash.Hash{}, nil
+	return t.table.GetSchemaHash(ctx)
 }
 
 // UpdateSchema updates the table with the schema given and returns the updated table. The original table is unchanged.
@@ -226,7 +211,7 @@ func (t *Table) UpdateSchema(ctx context.Context, sch schema.Schema) (*Table, er
 	return &Table{table: table}, nil
 }
 
-// HashOf returns the hash of the underlying table struct
+// HashOf returns the hash of the underlying table struct.
 func (t *Table) HashOf() (hash.Hash, error) {
 	return t.table.HashOf()
 }
@@ -246,6 +231,7 @@ func (t *Table) GetRowData(ctx context.Context) (types.Map, error) {
 	return t.table.GetTableRows(ctx)
 }
 
+// ResolveConflicts resolves conflicts for this table.
 func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
 	removed := 0
 	conflictSchema, confData, err := t.GetConflicts(ctx)
@@ -432,10 +418,12 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 	return index.VerifyMap(ctx, iter, indexMapValue.(types.Map).Format())
 }
 
+// GetAutoIncrementValue returns the current AUTO_INCREMENT value for this table.
 func (t *Table) GetAutoIncrementValue(ctx context.Context) (types.Value, error) {
 	return t.table.GetAutoIncrement(ctx)
 }
 
+// SetAutoIncrementValue sets the current AUTO_INCREMENT value for this table.
 func (t *Table) SetAutoIncrementValue(ctx context.Context, val types.Value) (*Table, error) {
 	table, err := t.table.SetAutoIncrement(ctx, val)
 	if err != nil {

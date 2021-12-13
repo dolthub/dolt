@@ -39,36 +39,48 @@ const (
 )
 
 var (
-	ErrNoConflictsResolved  = errors.New("no conflicts resolved")
-	ErrNoAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
+	ErrUnknownAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
 )
 
-func VrwFromTable(t Table) types.ValueReadWriter {
-	return t.(nomsTable).vrw
-}
-
+// Table is a Dolt table that can be persisted.
 type Table interface {
+	// HashOf returns the hash.Hash of this table
 	HashOf() (hash.Hash, error)
 
+	// GetSchemaHash returns the hash.Hash of this table's schema.
 	GetSchemaHash(ctx context.Context) (hash.Hash, error)
+	// GetSchema returns this table's schema.
 	GetSchema(ctx context.Context) (schema.Schema, error)
+	// SetSchema sets this table's schema.
 	SetSchema(ctx context.Context, sch schema.Schema) (Table, error)
 
+	// GetTableRows returns this tables rows.
 	GetTableRows(ctx context.Context) (types.Map, error)
+	// SetTableRows sets this table's rows.
 	SetTableRows(ctx context.Context, rows types.Map) (Table, error)
 
+	// GetIndexes returns the secondary indexes for this table.
 	GetIndexes(ctx context.Context) (types.Map, error)
+	// SetIndexes sets the secondary indexes for this table.
 	SetIndexes(ctx context.Context, indexes types.Map) (Table, error)
 
+	// GetConflicts returns the merge conflicts for this table.
 	GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error)
+	// HasConflicts returns true if this table has conflicts.
 	HasConflicts(ctx context.Context) (bool, error)
+	// SetConflicts sets the merge conflicts for this table.
 	SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts types.Map) (Table, error)
+	// ClearConflicts removes all merge conflicts for this table.
 	ClearConflicts(ctx context.Context) (Table, error)
 
+	// GetConstraintViolations returns the constraint violations for this table.
 	GetConstraintViolations(ctx context.Context) (types.Map, error)
+	// SetConstraintViolations sets the constraint violations for this table.
 	SetConstraintViolations(ctx context.Context, violations types.Map) (Table, error)
 
+	// GetAutoIncrement returns the AUTO_INCREMENT sequence value for this table.
 	GetAutoIncrement(ctx context.Context) (types.Value, error)
+	// SetAutoIncrement sets the AUTO_INCREMENT sequence value for this table.
 	SetAutoIncrement(ctx context.Context, val types.Value) (Table, error)
 }
 
@@ -79,6 +91,7 @@ type nomsTable struct {
 
 var _ Table = nomsTable{}
 
+// NewNomsTable makes a new Table.
 func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexData types.Map, autoIncVal types.Value) (Table, error) {
 	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
 	if err != nil {
@@ -118,6 +131,7 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 	return nomsTable{vrw, tableStruct}, nil
 }
 
+// NomsTableFromRef deserializes the table referenced by |ref|.
 func NomsTableFromRef(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (Table, error) {
 	val, err := ref.TargetValue(ctx, vrw)
 	if err != nil {
@@ -133,25 +147,30 @@ func NomsTableFromRef(ctx context.Context, vrw types.ValueReadWriter, ref types.
 	return nomsTable{vrw: vrw, tableStruct: st}, nil
 }
 
+// RefFromNomsTable serialized |table|, and returns its types.Ref.
 func RefFromNomsTable(ctx context.Context, table Table) (types.Ref, error) {
 	nt := table.(nomsTable)
 	return refFromNomsValue(ctx, nt.vrw, nt.tableStruct)
 }
 
-func (t nomsTable) Format() *types.NomsBinFormat {
-	return t.vrw.Format()
+// VrwFromTable returns the types.ValueReadWriter used by |t|.
+// todo(andy): this is a temporary method that will be removed when there is a
+//  general-purpose abstraction to replace types.ValueReadWriter.
+func VrwFromTable(t Table) types.ValueReadWriter {
+	return t.(nomsTable).vrw
 }
 
-// ValueReadWriter returns the ValueReadWriter for this table.
-func (t nomsTable) ValueReadWriter() types.ValueReadWriter {
+// valueReadWriter returns the valueReadWriter for this table.
+func (t nomsTable) valueReadWriter() types.ValueReadWriter {
 	return t.vrw
 }
 
+// HashOf implements Table.
 func (t nomsTable) HashOf() (hash.Hash, error) {
 	return t.tableStruct.Hash(t.vrw.Format())
 }
 
-// GetSchema will retrieve the schema being referenced from the table in noms and unmarshal it.
+// GetSchema implements Table.
 func (t nomsTable) GetSchema(ctx context.Context) (schema.Schema, error) {
 	schemaRefVal, _, err := t.tableStruct.MaybeGet(schemaRefKey)
 
@@ -163,6 +182,7 @@ func (t nomsTable) GetSchema(ctx context.Context) (schema.Schema, error) {
 	return schemaFromRef(ctx, t.vrw, schemaRef)
 }
 
+// GetSchemaHash implements Table.
 func (t nomsTable) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
 	r, _, err := t.tableStruct.MaybeGet(schemaRefKey)
 	if err != nil {
@@ -171,7 +191,7 @@ func (t nomsTable) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
 	return r.Hash(t.vrw.Format())
 }
 
-// UpdateSchema updates the table with the schema given and returns the updated table. The original table is unchanged.
+// SetSchema implements Table.
 func (t nomsTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, error) {
 	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.vrw, sch)
 	if err != nil {
@@ -193,6 +213,7 @@ func (t nomsTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, err
 
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
+// SetTableRows implements Table.
 func (t nomsTable) SetTableRows(ctx context.Context, updatedRows types.Map) (Table, error) {
 	rowDataRef, err := refFromNomsValue(ctx, t.vrw, updatedRows)
 
@@ -209,7 +230,7 @@ func (t nomsTable) SetTableRows(ctx context.Context, updatedRows types.Map) (Tab
 	return nomsTable{t.vrw, updatedSt}, nil
 }
 
-// GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
+// GetTableRows implements Table.
 func (t nomsTable) GetTableRows(ctx context.Context) (types.Map, error) {
 	val, _, err := t.tableStruct.MaybeGet(tableRowsKey)
 
@@ -229,7 +250,7 @@ func (t nomsTable) GetTableRows(ctx context.Context) (types.Map, error) {
 	return rowMap, nil
 }
 
-// GetIndexData returns the internal index map which goes from index name to a ref of the row data map.
+// GetIndexes implements Table.
 func (t nomsTable) GetIndexes(ctx context.Context) (types.Map, error) {
 	indexesVal, ok, err := t.tableStruct.MaybeGet(indexesKey)
 	if err != nil {
@@ -251,7 +272,7 @@ func (t nomsTable) GetIndexes(ctx context.Context) (types.Map, error) {
 	return indexesMap.(types.Map), nil
 }
 
-// SetIndexData replaces the current internal index map, and returns an updated Table.
+// SetIndexes implements Table.
 func (t nomsTable) SetIndexes(ctx context.Context, indexesMap types.Map) (Table, error) {
 	indexesRef, err := refFromNomsValue(ctx, t.vrw, indexesMap)
 	if err != nil {
@@ -266,19 +287,20 @@ func (t nomsTable) SetIndexes(ctx context.Context, indexesMap types.Map) (Table,
 	return nomsTable{t.vrw, newTableStruct}, nil
 }
 
+// HasConflicts implements Table.
 func (t nomsTable) HasConflicts(ctx context.Context) (bool, error) {
 	_, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
 	return ok, err
 }
 
-// GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table
+// GetConflicts implements Table.
 func (t nomsTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error) {
 	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
 	if err != nil {
 		return conflict.ConflictSchema{}, types.EmptyMap, err
 	}
 	if !ok {
-		confMap, _ := types.NewMap(ctx, t.ValueReadWriter())
+		confMap, _ := types.NewMap(ctx, t.valueReadWriter())
 		return conflict.ConflictSchema{}, confMap, nil
 	}
 
@@ -307,6 +329,7 @@ func (t nomsTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, t
 	return schemas, confMap, nil
 }
 
+// SetConflicts implements Table.
 func (t nomsTable) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData types.Map) (Table, error) {
 	conflictsRef, err := refFromNomsValue(ctx, t.vrw, conflictData)
 	if err != nil {
@@ -331,6 +354,7 @@ func (t nomsTable) SetConflicts(ctx context.Context, schemas conflict.ConflictSc
 	return nomsTable{t.vrw, updatedSt}, nil
 }
 
+// GetConflictSchemas implements Table.
 func (t nomsTable) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
 	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
 
@@ -361,6 +385,7 @@ func (t nomsTable) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch 
 	return nil, nil, nil, nil
 }
 
+// ClearConflicts implements Table.
 func (t nomsTable) ClearConflicts(ctx context.Context) (Table, error) {
 	tSt, err := t.tableStruct.Delete(conflictSchemasKey)
 
@@ -377,8 +402,7 @@ func (t nomsTable) ClearConflicts(ctx context.Context) (Table, error) {
 	return nomsTable{t.vrw, tSt}, nil
 }
 
-// GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
-// whether the table has any violations.
+// GetConstraintViolations implements Table.
 func (t nomsTable) GetConstraintViolations(ctx context.Context) (types.Map, error) {
 	constraintViolationsRefVal, ok, err := t.tableStruct.MaybeGet(constraintViolationsKey)
 	if err != nil {
@@ -395,8 +419,7 @@ func (t nomsTable) GetConstraintViolations(ctx context.Context) (types.Map, erro
 	return constraintViolationsVal.(types.Map), nil
 }
 
-// SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
-// violations entry on the embedded struct is removed.
+// SetConstraintViolations implements Table.
 func (t nomsTable) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (Table, error) {
 	// We can't just call violationsMap.Empty() as we can't guarantee that the caller passed in an instantiated map
 	if violationsMap == types.EmptyMap || violationsMap.Len() == 0 {
@@ -417,6 +440,7 @@ func (t nomsTable) SetConstraintViolations(ctx context.Context, violationsMap ty
 	return nomsTable{t.vrw, updatedStruct}, nil
 }
 
+// GetAutoIncrement implements Table.
 func (t nomsTable) GetAutoIncrement(ctx context.Context) (types.Value, error) {
 	val, ok, err := t.tableStruct.MaybeGet(autoIncrementKey)
 	if err != nil {
@@ -447,10 +471,11 @@ func (t nomsTable) GetAutoIncrement(ctx context.Context) (types.Value, error) {
 	case types.FloatKind:
 		return types.Float(1), nil
 	default:
-		return nil, ErrNoAutoIncrementValue
+		return nil, ErrUnknownAutoIncrementValue
 	}
 }
 
+// SetAutoIncrement implements Table.
 func (t nomsTable) SetAutoIncrement(ctx context.Context, val types.Value) (Table, error) {
 	switch val.(type) {
 	case types.Int, types.Uint, types.Float:
