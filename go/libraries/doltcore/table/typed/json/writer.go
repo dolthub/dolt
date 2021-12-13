@@ -19,15 +19,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -37,6 +37,7 @@ const jsonFooter = `]}`
 
 var WriteBufSize = 256 * 1024
 var defaultString = sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)
+
 type JSONWriter struct {
 	closer      io.Closer
 	bWr         *bufio.Writer

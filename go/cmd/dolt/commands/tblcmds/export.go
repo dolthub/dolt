@@ -16,17 +16,14 @@ package tblcmds
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -35,12 +32,16 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var exportDocs = cli.CommandDocumentationContent{
@@ -321,7 +322,7 @@ func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCl
 			}
 
 			select {
-			case <- ctx.Done():
+			case <-ctx.Done():
 				return ctx.Err()
 			case parsedRowChan <- row:
 			}
@@ -333,7 +334,7 @@ func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCl
 
 		for r := range parsedRowChan {
 			select {
-			case <- ctx.Done():
+			case <-ctx.Done():
 				return ctx.Err()
 			default:
 				err := writeRow(wr, r)

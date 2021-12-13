@@ -17,21 +17,23 @@ package mvdata
 import (
 	"context"
 	"fmt"
+
+	"github.com/dolthub/go-mysql-server/auth"
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/go-mysql-server/auth"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type sqlEngineTableReader struct {
 	se     *engine.SqlEngine
 	sqlCtx *sql.Context
 
-	sch       schema.Schema
-	iter      sql.RowIter
+	sch  schema.Schema
+	iter sql.RowIter
 }
 
 func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string) (*sqlEngineTableReader, error) {
@@ -73,11 +75,11 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	}
 
 	return &sqlEngineTableReader{
-		se: se,
+		se:     se,
 		sqlCtx: sqlCtx,
 
-		sch:       doltSchema,
-		iter:      iter,
+		sch:  doltSchema,
+		iter: iter,
 	}, nil
 }
 
@@ -101,4 +103,3 @@ func (s *sqlEngineTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) 
 func (s *sqlEngineTableReader) Close(ctx context.Context) error {
 	return s.iter.Close(s.sqlCtx)
 }
-

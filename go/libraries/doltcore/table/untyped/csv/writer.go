@@ -18,16 +18,16 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 // writeBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all
