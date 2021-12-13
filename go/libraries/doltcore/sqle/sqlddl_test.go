@@ -1164,7 +1164,7 @@ func TestAlterSystemTables(t *testing.T) {
 		CreateTestDatabase(dEnv, t)
 
 		dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-			doltdocs.Schema,
+			doltdocs.DocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license")))
 		dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
 			dtables.DoltQueryCatalogSchema,

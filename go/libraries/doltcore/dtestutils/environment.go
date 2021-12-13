@@ -23,9 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -65,25 +63,28 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 
 	ctx := context.Background()
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(ctx, vrw, sch)
 
-	_, _, err := table.PipeRows(ctx, rd, wr, false)
+	rowMap, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	err = rd.Close(ctx)
+	me := rowMap.Edit()
+	for i := 0; i < imt.NumRows(); i++ {
+		r, err := imt.GetRow(i)
+		require.NoError(t, err)
+		k, v := r.NomsMapKey(sch), r.NomsMapValue(sch)
+		me.Set(k, v)
+	}
+	rowMap, err = me.Map(ctx)
 	require.NoError(t, err)
-	err = wr.Close(ctx)
-	require.NoError(t, err)
-
-	ai := sch.Indexes().AllIndexes()
-	sch = wr.GetSchema()
-	sch.Indexes().Merge(ai...)
 
 	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
 	require.NoError(t, err)
 	empty, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
+
+	ai := sch.Indexes().AllIndexes()
+	sch.Indexes().Merge(ai...)
+
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rowMap, empty, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
