@@ -1439,3 +1439,12 @@ setup_ref_test() {
     [[ "$output" =~ "8" ]] || false
     [[ ! "$output" =~ "4" ]] || false
 }
+
+@test "remotes: clone sets default upstream for main" {
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt push origin main
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt push
+}
