@@ -1,0 +1,9 @@
+#!/usr/bin/expect
+
+set timeout 2
+spawn dolt log
+expect {
+  "*commit* " { send "q\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}

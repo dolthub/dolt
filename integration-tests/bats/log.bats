@@ -310,3 +310,16 @@ teardown() {
     regex='commit .* .*\n'
     [[ "$output" =~ $regex ]] || false
 }
+
+@test "log: check pager" {
+    dolt commit --allow-empty -m "commit 1"
+    dolt commit	--allow-empty -m "commit 2"
+    dolt commit	--allow-empty -m "commit 3"
+    dolt commit --allow-empty -m "commit 4"
+    dolt commit	--allow-empty -m "commit 5"
+    dolt commit	--allow-empty -m "commit 6"
+
+    run expect $BATS_TEST_DIRNAME/log.expect
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ ":" ]] || false
+}
