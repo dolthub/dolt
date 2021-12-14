@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -707,23 +708,39 @@ func (t *Table) GetAutoIncrementValue(ctx context.Context) (types.Value, error) 
 	}
 
 	kind := types.UnknownKind
+	var autoTag uint64
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
 			kind = col.Kind
+			autoTag = tag
 			stop = true
 		}
 		return
 	})
+
+	var initialValue types.Value
 	switch kind {
 	case types.IntKind:
-		return types.Int(1), nil
+		initialValue = types.Int(1)
 	case types.UintKind:
-		return types.Uint(1), nil
+		initialValue =  types.Uint(1)
 	case types.FloatKind:
-		return types.Float(1), nil
+		initialValue = types.Float(1)
 	default:
 		return nil, ErrNoAutoIncrementValue
 	}
+
+	rows, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows.IterAll(ctx, func(key, value types.Value) error {
+		row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
+		return nil
+	})
+
+	return initialValue, nil
 }
 
 func (t *Table) SetAutoIncrementValue(val types.Value) (*Table, error) {

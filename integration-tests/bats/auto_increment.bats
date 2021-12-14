@@ -570,14 +570,34 @@ SQL
     [[ "$output" =~ "0,john,0" ]] || false
 }
 
-@test "auto_increment: alter table change column works" {
-    dolt sql -q "create table t(pk int primary key);"
+@test "auto_increment: alter table change column to auto inc works" {
+    dolt sql -q "create table t(pk int primary key, v int);"
+    dolt sql -q "insert into t values (1,1), (2,2), (3,3);"
     dolt sql -q "ALTER TABLE t CHANGE COLUMN pk pk int NOT NULL AUTO_INCREMENT PRIMARY KEY;"
 
-    dolt sql -q 'insert into t values (NULL), (NULL), (NULL)'
+    dolt sql -q 'insert into t(pk) values (NULL), (NULL), (NULL)'
+    run dolt sql -q "SELECT pk FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+    [[ "${lines[3]}" =~ "3" ]] || false
+    [[ "${lines[4]}" =~ "4" ]] || false
+    [[ "${lines[5]}" =~ "5" ]] || false
+    [[ "${lines[6]}" =~ "6" ]] || false
+}
+
+@test "auto_increment: alter table modify column to auto inc works" {
+    dolt sql -q "create table t(pk int primary key, v int);"
+    dolt sql -q "insert into t values (1,1), (2,2), (3,3);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk int NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL), (NULL), (NULL)'
     run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
     [[ "${lines[0]}" =~ "pk" ]] || false
     [[ "${lines[1]}" =~ "1" ]] || false
     [[ "${lines[2]}" =~ "2" ]] || false
     [[ "${lines[3]}" =~ "3" ]] || false
+    [[ "${lines[4]}" =~ "4" ]] || false
+    [[ "${lines[5]}" =~ "5" ]] || false
+    [[ "${lines[6]}" =~ "6" ]] || false
 }
