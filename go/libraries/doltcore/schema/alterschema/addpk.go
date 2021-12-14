@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -109,18 +108,13 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 }
 
 func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *doltdb.Table, newSchema schema.Schema, name string, opts editor.Options) (*doltdb.Table, error) {
-	marshalledSchema, err := encoding.MarshalSchemaAsNomsValue(context.Background(), oldTable.ValueReadWriter(), newSchema)
-	if err != nil {
-		return nil, err
-	}
-
 	empty, err := types.NewMap(ctx, oldTable.ValueReadWriter())
 	if err != nil {
 		return nil, err
 	}
 
 	// Create the new Table and rebuild all the indexes
-	newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), marshalledSchema, empty, empty, nil)
+	newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), newSchema, empty, empty, nil)
 	if err != nil {
 		return nil, err
 	}

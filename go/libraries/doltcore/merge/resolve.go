@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -27,18 +29,18 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type AutoResolver func(key types.Value, conflict doltdb.Conflict) (types.Value, error)
+type AutoResolver func(key types.Value, conflict conflict.Conflict) (types.Value, error)
 
-func Ours(key types.Value, cnf doltdb.Conflict) (types.Value, error) {
+func Ours(key types.Value, cnf conflict.Conflict) (types.Value, error) {
 	return cnf.Value, nil
 }
 
-func Theirs(key types.Value, cnf doltdb.Conflict) (types.Value, error) {
+func Theirs(key types.Value, cnf conflict.Conflict) (types.Value, error) {
 	return cnf.MergeValue, nil
 }
 
 func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string, tbl *doltdb.Table, autoResFunc AutoResolver, sess *editor.TableEditSession) error {
-	if has, err := tbl.HasConflicts(); err != nil {
+	if has, err := tbl.HasConflicts(ctx); err != nil {
 		return err
 	} else if !has {
 		return nil
@@ -80,7 +82,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 		}
 
 		if numRowsInConflict == 0 {
-			tbl, err = tbl.ClearConflicts()
+			tbl, err = tbl.ClearConflicts(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -107,7 +109,7 @@ func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *dol
 	}
 
 	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		cnf, err := doltdb.ConflictFromTuple(value.(types.Tuple))
+		cnf, err := conflict.ConflictFromTuple(value.(types.Tuple))
 		if err != nil {
 			return false, err
 		}
@@ -192,7 +194,7 @@ func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolv
 	edit := rowData.Edit()
 
 	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		cnf, err := doltdb.ConflictFromTuple(value.(types.Tuple))
+		cnf, err := conflict.ConflictFromTuple(value.(types.Tuple))
 		if err != nil {
 			return false, err
 		}
