@@ -645,7 +645,7 @@ func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 
 	te.setDirty(true)
 	te.autoIncVal = v
-	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
+	te.t, err = te.t.SetAutoIncrementValue(nil, te.autoIncVal)
 
 	return err
 }
@@ -658,7 +658,7 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 
 	var err error
 	if te.hasAutoInc {
-		te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
+		te.t, err = te.t.SetAutoIncrementValue(nil, te.autoIncVal)
 		if err != nil {
 			return nil, err
 		}

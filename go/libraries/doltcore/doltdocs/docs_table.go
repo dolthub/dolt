@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
@@ -115,18 +114,13 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 		rd.Close(context.Background())
 		wr.Close(context.Background())
 
-		schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, wr.GetSchema())
-
-		if err != nil {
-			return nil, ErrMarshallingSchema
-		}
-
 		empty, err := types.NewMap(ctx, vrw)
 		if err != nil {
 			return nil, err
 		}
+		sch := wr.GetSchema()
 
-		newDocsTbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
+		newDocsTbl, err := doltdb.NewTable(ctx, vrw, sch, wr.GetMap(), empty, nil)
 		if err != nil {
 			return nil, err
 		}

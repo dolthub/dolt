@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
@@ -110,11 +109,9 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	err = wr.Close(ctx)
 	require.NoError(t, err)
 
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
-	require.NoError(t, err)
 	empty, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, wr.GetMap(), empty, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
@@ -136,12 +133,7 @@ func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
-	if err != nil {
-		return env.ErrMarshallingSchema
-	}
-
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, indexData, autoVal)
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, rows, indexData, autoVal)
 	if err != nil {
 		return err
 	}
