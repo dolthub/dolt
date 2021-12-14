@@ -328,7 +328,7 @@ func logToStdOut(opts logOpts, commits []logNode) {
 				}
 			}
 
-			pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33mcommit %s \033[0m", chStr)))
+			pager.Writer.Write([]byte(fmt.Sprintf("commit %s", chStr)))
 
 			if len(comm.parentHashes) > 1 {
 				pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
