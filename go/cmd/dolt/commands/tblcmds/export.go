@@ -279,17 +279,19 @@ func writeRow(ctx context.Context, wr table.TableWriteCloser, vrw types.ValueRea
 	}
 }
 
-func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCloser, vrw types.ValueReadWriter) (err error) {
+func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCloser, vrw types.ValueReadWriter) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	parsedRowChan := make(chan sql.Row)
 
 	getNextRow := getNextRowFunc(rd)
 
-	g.Go(func() error {
-		defer close(parsedRowChan)
+	g.Go(func() (err error) {
 		defer func() {
-			err = rd.Close(ctx)
+			close(parsedRowChan)
+			if cerr := rd.Close(ctx); cerr != nil {
+				err = cerr
+			}
 		}()
 
 		for {
@@ -310,9 +312,11 @@ func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCl
 		}
 	})
 
-	g.Go(func() error {
+	g.Go(func() (err error) {
 		defer func() {
-			err = wr.Close(ctx)
+			if cerr := wr.Close(ctx); cerr != nil {
+				err = cerr
+			}
 		}()
 
 		for r := range parsedRowChan {
