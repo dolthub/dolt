@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -127,24 +128,23 @@ func (db *SingleTableInfoDatabase) WithIndexLookup(sql.IndexLookup) sql.Table {
 // GetIndexes implements sql.IndexedTable.
 func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	var sqlIndexes []sql.Index
-	for _, index := range db.sch.Indexes().AllIndexes() {
-		cols := make([]schema.Column, index.Count())
-		for i, tag := range index.IndexedColumnTags() {
-			cols[i], _ = index.GetColumn(tag)
+	for _, idx := range db.sch.Indexes().AllIndexes() {
+		cols := make([]schema.Column, idx.Count())
+		for i, tag := range idx.IndexedColumnTags() {
+			cols[i], _ = idx.GetColumn(tag)
 		}
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           db,
-			id:           index.Name(),
-			indexRowData: types.EmptyMap,
-			indexSch:     index.Schema(),
-			table:        nil,
-			tableData:    types.EmptyMap,
-			tableName:    db.tableName,
-			tableSch:     db.sch,
-			unique:       index.IsUnique(),
-			comment:      index.Comment(),
-			generated:    false,
+		sqlIndexes = append(sqlIndexes, &index.DoltIndexImpl{
+			Cols:          cols,
+			Db:            db,
+			Id:            idx.Name(),
+			RowIndexData:  types.EmptyMap,
+			IndexSch:      idx.Schema(),
+			TableRowData:  types.EmptyMap,
+			TableName:     db.tableName,
+			TableSch:      db.sch,
+			Unique:        idx.IsUnique(),
+			CommentStr:    idx.Comment(),
+			GeneratedBool: false,
 		})
 	}
 	return sqlIndexes, nil

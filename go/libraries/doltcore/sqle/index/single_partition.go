@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqlutil
+package index
 
 import (
 	"io"
@@ -30,7 +30,7 @@ type SinglePartition struct {
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition. We have only a single partition
-// per table, so we use a constant.
+// per Table, so we use a constant.
 func (sp SinglePartition) Key() []byte {
 	return []byte("single")
 }
@@ -42,7 +42,7 @@ type SinglePartitionIter struct {
 	RowData types.Map
 }
 
-func NewSinglePartitionIter(rowData types.Map) SinglePartitionIter {
+func SinglePartitionIterFromNomsMap(rowData types.Map) SinglePartitionIter {
 	return SinglePartitionIter{&sync.Once{}, rowData}
 }
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package index
 
 import (
 	"context"
@@ -91,7 +91,7 @@ func NewKVToSqlRowConverterForCols(nbf *types.NomsBinFormat, cols []schema.Colum
 	return NewKVToSqlRowConverter(nbf, tagToSqlColIdx, cols, len(cols))
 }
 
-// ConvertKVToSqlRow returns a sql.Row generated from the key and value provided.
+// ConvertKVToSqlRow returns a sql.Row GeneratedBool from the key and value provided.
 func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, error) {
 	keyTup, ok := k.(types.Tuple)
 
@@ -113,7 +113,7 @@ func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, e
 	return conv.ConvertKVTuplesToSqlRow(keyTup, valTup)
 }
 
-// ConvertKVToSqlRow returns a sql.Row generated from the key and value provided.
+// ConvertKVToSqlRow returns a sql.Row GeneratedBool from the key and value provided.
 func (conv *KVToSqlRowConverter) ConvertKVTuplesToSqlRow(k, v types.Tuple) (sql.Row, error) {
 	tupItr := types.TupleItrPool.Get().(*types.TupleIterator)
 	defer types.TupleItrPool.Put(tupItr)

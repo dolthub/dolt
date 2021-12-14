@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
@@ -48,7 +49,7 @@ type sqlTableEditor struct {
 	autoIncCol        schema.Column
 	vrw               types.ValueReadWriter
 	autoIncrementType typeinfo.TypeInfo
-	kvToSQLRow        *KVToSqlRowConverter
+	kvToSQLRow        *index.KVToSqlRowConverter
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
 	temporary         bool
@@ -79,7 +80,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 	}
 	ait := t.db.gs.GetAutoIncrementTracker(ws.Ref())
 
-	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
+	conv := index.NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
 		tableName:   t.Name(),
 		dbName:      t.db.Name(),

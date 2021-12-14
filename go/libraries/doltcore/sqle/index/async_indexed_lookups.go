@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package index
 
 import (
 	"context"
@@ -31,7 +31,7 @@ type lookupResult struct {
 	err error
 }
 
-// toLookup represents an table lookup that should be performed by one of the global asyncLookups instance's worker routines
+// toLookup represents an Table lookup that should be performed by one of the global asyncLookups instance's worker routines
 type toLookup struct {
 	idx        uint64
 	t          types.Tuple
@@ -40,7 +40,7 @@ type toLookup struct {
 	epoch      int
 }
 
-// asyncLookups is a pool of worker routines reading from a channel doing table lookups
+// asyncLookups is a pool of worker routines reading from a channel doing Table lookups
 type asyncLookups struct {
 	ctx        context.Context
 	toLookupCh chan toLookup

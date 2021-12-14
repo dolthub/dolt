@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -1055,7 +1056,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			}
 			indexLookup, err := sqlIndex.Build(ctx)
 			require.NoError(t, err)
-			dil, ok := indexLookup.(*doltIndexLookup)
+			dil, ok := indexLookup.(*index.doltIndexLookup)
 			require.True(t, ok)
 			indexIter, err := dil.RowIter(ctx, dil.IndexRowData(), nil)
 			require.NoError(t, err)
@@ -1275,7 +1276,7 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, ind
 	}
 	indexLookup, err := builder.Build(ctx)
 	require.NoError(t, err)
-	dil, ok := indexLookup.(*doltIndexLookup)
+	dil, ok := indexLookup.(*index.doltIndexLookup)
 	require.True(t, ok)
 	indexIter, err := dil.RowIter(ctx, dil.IndexRowData(), nil)
 	require.NoError(t, err)
@@ -1290,7 +1291,7 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, ind
 	requireUnorderedRowsEqual(t, convertSqlRowToInt64(expectedRows), readRows)
 }
 
-func doltIndexSetup(t *testing.T) map[string]DoltIndex {
+func doltIndexSetup(t *testing.T) map[string]index.DoltIndex {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
@@ -1374,8 +1375,8 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 	tableDataMap["types"], err = tableMap["types"].GetRowData(ctx)
 	require.NoError(t, err)
 
-	indexMap := map[string]DoltIndex{
-		"onepk:primaryKey": &doltIndex{
+	indexMap := map[string]index.DoltIndex{
+		"onepk:primaryKey": &index.doltIndex{
 			cols:         tableSchemaMap["onepk"].GetPKCols().GetColumns(),
 			db:           db,
 			id:           "onepk:primaryKey",
@@ -1386,7 +1387,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 			tableName:    "onepk",
 			tableSch:     tableSchemaMap["onepk"],
 		},
-		"twopk:primaryKey": &doltIndex{
+		"twopk:primaryKey": &index.doltIndex{
 			cols:         tableSchemaMap["twopk"].GetPKCols().GetColumns(),
 			db:           db,
 			id:           "twopk:primaryKey",
@@ -1397,7 +1398,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 			tableName:    "twopk",
 			tableSch:     tableSchemaMap["twopk"],
 		},
-		"types:primaryKey": &doltIndex{
+		"types:primaryKey": &index.doltIndex{
 			cols:         tableSchemaMap["types"].GetPKCols().GetColumns(),
 			db:           db,
 			id:           "types:primaryKey",
@@ -1468,7 +1469,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 		}
 
 		indexId := indexDetails.tableName + ":" + index.Name()
-		indexMap[indexId] = &doltIndex{
+		indexMap[indexId] = &index.doltIndex{
 			cols:         indexCols,
 			db:           db,
 			id:           indexId,
@@ -1481,7 +1482,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 		}
 		for i := 1; i < len(indexCols); i++ {
 			indexId := fmt.Sprintf("%s:%s_PARTIAL_%d", indexDetails.tableName, index.Name(), i)
-			indexMap[indexId] = &doltIndex{
+			indexMap[indexId] = &index.doltIndex{
 				cols:         indexCols[:i],
 				db:           db,
 				id:           indexId,

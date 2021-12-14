@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -228,7 +228,7 @@ func BenchmarkMapItr(b *testing.B) {
 		closeFunc = cl.Close
 	}
 
-	dmItr := sqle.NewDoltMapIter(ctx, itr.NextTuple, closeFunc, sqle.NewKVToSqlRowConverterForCols(m.Format(), testDataCols))
+	dmItr := index.NewDoltMapIter(ctx, itr.NextTuple, closeFunc, index.NewKVToSqlRowConverterForCols(m.Format(), testDataCols))
 
 	b.ResetTimer()
 	for {

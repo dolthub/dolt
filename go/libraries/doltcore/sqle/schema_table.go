@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -211,17 +212,18 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 	}
 
 	exprs := fragNameIndex.Expressions()
-	indexLookup, err := sql.NewIndexBuilder(ctx, fragNameIndex).Equals(ctx, exprs[0], fragType).Equals(ctx, exprs[1], name).Build(ctx)
+	lookup, err := sql.NewIndexBuilder(ctx, fragNameIndex).Equals(ctx, exprs[0], fragType).Equals(ctx, exprs[1], name).Build(ctx)
 	if err != nil {
 		return nil, false, err
 	}
-	dil := indexLookup.(*doltIndexLookup)
-	rowIter, err := dil.RowIter(ctx, dil.IndexRowData(), nil)
+
+	iter, err := index.RowIterForIndexLookup(ctx, lookup, nil)
 	if err != nil {
 		return nil, false, err
 	}
-	defer rowIter.Close(ctx)
-	sqlRow, err := rowIter.Next()
+
+	defer iter.Close(ctx)
+	sqlRow, err := iter.Next()
 	if err == nil {
 		return sqlRow, true, nil
 	} else if err == io.EOF {
