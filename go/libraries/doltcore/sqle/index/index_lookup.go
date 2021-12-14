@@ -65,6 +65,10 @@ type IndexLookupKeyIterator interface {
 	NextKey(ctx *sql.Context) (row.TaggedValues, error)
 }
 
+func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
+	return lookup.(*doltIndexLookup).idx
+}
+
 type doltIndexLookup struct {
 	idx       DoltIndex
 	ranges    []*noms.ReadRange

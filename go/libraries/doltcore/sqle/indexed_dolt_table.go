@@ -25,7 +25,6 @@ import (
 // the DoltTable WithIndexLookup function.
 type IndexedDoltTable struct {
 	table       *DoltTable
-	index       index.DoltIndex
 	indexLookup sql.IndexLookup
 }
 
@@ -53,7 +52,8 @@ func (idt *IndexedDoltTable) Schema() sql.Schema {
 }
 
 func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return index.SinglePartitionIterFromNomsMap(idt.index.IndexRowData()), nil
+	rows := index.DoltIndexFromLookup(idt.indexLookup).IndexRowData()
+	return index.SinglePartitionIterFromNomsMap(rows), nil
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
