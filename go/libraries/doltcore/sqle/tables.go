@@ -1016,6 +1016,61 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
+	// For auto columns modified to be auto increment, we have more work to do
+	if !existingCol.AutoIncrement && col.AutoIncrement {
+		updatedSch, err := updatedTable.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		initialValue := column.Type.Zero()
+
+		colIdx, err := updatedSch.GetAllCols().IndexOf(columnName)
+		if err != nil {
+			return err
+		}
+
+		rowData, err := updatedTable.GetRowData(ctx)
+		if err != nil {
+			return err
+		}
+
+		rowIter, err := t.PartitionRows(ctx, sqlutil.SinglePartition{rowData})
+		if err != nil {
+			return err
+		}
+
+		for {
+			r, err := rowIter.Next()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+
+			cmp, err := column.Type.Compare(initialValue, r[colIdx])
+			if err != nil {
+				return err
+			}
+
+			if cmp < 0 {
+				initialValue = r[colIdx]
+			}
+		}
+
+		initialValNoms, err := col.TypeInfo.ConvertValueToNomsValue(ctx, root.VRW(), initialValue)
+		if err != nil {
+			return err
+		}
+
+		initialValNoms = increment(initialValNoms)
+
+		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, initialValNoms)
+		if err != nil {
+			return err
+		}
+	}
+
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
 	if err != nil {
 		return err
@@ -1027,6 +1082,19 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
+}
+
+func increment(val types.Value) types.Value {
+	switch val := val.(type) {
+	case types.Int:
+		return val + 1
+	case types.Float:
+		return val + 1
+	case types.Uint:
+		return val + 1
+	default:
+		panic(fmt.Sprintf("unexpected auto inc column type %T", val))
+	}
 }
 
 // CreateIndex implements sql.IndexAlterableTable
