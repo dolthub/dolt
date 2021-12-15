@@ -4,7 +4,7 @@ set timeout 2
 spawn dolt log
 expect {
   "*Initialize data repository*" { exit 1; }
-  "*commit 6* " { send "q\r"; exit 0;}
+  "*commit 16* " { send "q\r"; exit 0;}
   timeout { exit 1; }
   failed { exit 1; }
 }
