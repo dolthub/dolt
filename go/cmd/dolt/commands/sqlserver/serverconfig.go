@@ -47,6 +47,8 @@ const (
 	defaultQueryParallelism    = 2
 	defaultPersistenceBahavior = loadPerisistentGlobals
 	defaultDataDir             = "."
+	defaultMetricsHost         = "localhost"
+	defaultMetricsPort         = 9090
 )
 
 const (
@@ -118,6 +120,8 @@ type ServerConfig interface {
 	DisableClientMultiStatements() bool
 	// MetricsLabels returns labels that are applied to all prometheus metrics
 	MetricsLabels() map[string]string
+	MetricsHost() string
+	MetricsPort() int
 }
 
 type commandLineServerConfig struct {
@@ -219,6 +223,14 @@ func (cfg *commandLineServerConfig) DisableClientMultiStatements() bool {
 
 func (cfg *commandLineServerConfig) MetricsLabels() map[string]string {
 	return nil
+}
+
+func (cfg *commandLineServerConfig) MetricsHost() string {
+	return defaultMetricsHost
+}
+
+func (cfg *commandLineServerConfig) MetricsPort() int {
+	return defaultMetricsPort
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in

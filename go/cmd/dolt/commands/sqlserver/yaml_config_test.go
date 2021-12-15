@@ -52,10 +52,13 @@ databases:
 
 data_dir: some nonsense
 
-labels:
-    label1: value1
-    label2: 2
-    label3: true
+metrics:
+    host: 123.45.67.89
+    port: 9091
+    labels:
+        label1: value1
+        label2: 2
+        label3: true
 `
 
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
@@ -69,13 +72,16 @@ labels:
 			Path: "/Users/brian/datasets/noaa",
 		},
 	}
-	expected.Labels = map[string]string{
-		"label1": "value1",
-		"label2": "2",
-		"label3": "true",
+	expected.MetricsConfig = MetricsYAMLConfig{
+		Host: strPtr("123.45.67.89"),
+		Port: intPtr(9091),
+		Labels: map[string]string{
+			"label1": "value1",
+			"label2": "2",
+			"label3": "true",
+		},
 	}
-	str := "some nonsense"
-	expected.DataDirStr = &str
+	expected.DataDirStr = strPtr("some nonsense")
 
 	config, err := NewYamlConfig([]byte(testStr))
 	require.NoError(t, err)
@@ -131,6 +137,9 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, "", cfg.TLSCert())
 	assert.Equal(t, false, cfg.RequireSecureTransport())
 	assert.Equal(t, false, cfg.DisableClientMultiStatements())
+	assert.Equal(t, defaultMetricsHost, cfg.MetricsHost())
+	assert.Equal(t, defaultMetricsPort, cfg.MetricsPort())
+	assert.Nil(t, cfg.MetricsConfig.Labels)
 
 	c, err := LoadTLSConfig(cfg)
 	assert.NoError(t, err)

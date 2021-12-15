@@ -18,16 +18,17 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/mysql"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -185,7 +186,27 @@ func Serve(
 		return
 	}
 
-	serverController.registerCloseFunction(startError, mySQLServer.Close)
+	var metSrv *http.Server
+	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
+		metSrv = &http.Server{
+			Addr: fmt.Sprintf("%s:%d", serverConfig.MetricsHost(), serverConfig.MetricsPort()),
+		}
+
+		http.Handle("/metrics", promhttp.Handler())
+
+		go func() {
+			_ = metSrv.ListenAndServe()
+		}()
+	}
+
+	serverController.registerCloseFunction(startError, func() error {
+		if metSrv != nil {
+			metSrv.Close()
+		}
+
+		return mySQLServer.Close()
+	})
+
 	closeError = mySQLServer.Start()
 	if closeError != nil {
 		cli.PrintErr(closeError)
