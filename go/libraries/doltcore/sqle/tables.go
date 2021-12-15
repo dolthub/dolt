@@ -1035,7 +1035,9 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		rowIter, err := t.PartitionRows(ctx, sqlutil.SinglePartition{rowData})
+		// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
+		// root, which hasn't been updated yet
+		rowIter, err := partitionRows(ctx, updatedTable, t.projectedCols, sqlutil.SinglePartition{RowData: rowData})
 		if err != nil {
 			return err
 		}

@@ -159,19 +159,6 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		return nil, err
 	}
 
-	// If we added an auto-increment column, find its initial value now
-	if schema.HasAutoIncrement(newSch) && !schema.HasAutoIncrement(oldSch) {
-		autoVal, err = updatedTable.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		updatedTable, err = doltdb.NewTable(ctx, vrw, newSch, rowData, indexData, autoVal)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
 		// If we're modifying the primary key then all indexes are affected. Otherwise we just want to update the
 		// touched ones.
