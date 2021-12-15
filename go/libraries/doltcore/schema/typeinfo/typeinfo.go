@@ -161,7 +161,11 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Year:
 		return YearType, nil
 	case sqltypes.Geometry:
-		return GeometryType, nil
+		pointSQLType, ok := sqlType.(sql.PointType)
+		if !ok {
+			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Point"`)
+		}
+		return &pointType{pointSQLType}, nil
 	case sqltypes.Decimal:
 		decimalSQLType, ok := sqlType.(sql.DecimalType)
 		if !ok {
@@ -273,7 +277,7 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 	case YearTypeIdentifier:
 		return YearType, nil
 	case GeometryTypeIdentifier:
-		return GeometryType, nil
+		return PointType, nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot be made from an identifier and params`, id)
 	}

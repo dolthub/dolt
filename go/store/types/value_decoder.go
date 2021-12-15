@@ -48,7 +48,7 @@ type CodecReader interface {
 	ReadDecimal() (decimal.Decimal, error)
 	ReadBlob() (Blob, error)
 	ReadJSON() (JSON, error)
-	ReadGeometry() (Geometry, error)
+	ReadGeometry() (Point, error)
 }
 
 var _ CodecReader = (*valueDecoder)(nil)
@@ -85,8 +85,8 @@ func (r *valueDecoder) ReadJSON() (JSON, error) {
 	return readJSON(r.vrw.Format(), r)
 }
 
-func (r *valueDecoder) ReadGeometry() (Geometry, error) {
-	return readGeometry(r.vrw.Format(), r)
+func (r *valueDecoder) ReadGeometry() (Point, error) {
+	return Point(1), nil
 }
 
 func (r *valueDecoder) readRef(nbf *NomsBinFormat) (Ref, error) {
@@ -361,6 +361,8 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return r.readTuple(nbf)
 	case JSONKind:
 		return r.ReadJSON()
+	case GeometryKind:
+		return r.ReadGeometry()
 	case TypeKind:
 		r.skipKind()
 		return r.readType()

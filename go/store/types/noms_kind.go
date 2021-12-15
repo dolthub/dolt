@@ -84,7 +84,7 @@ func init() {
 	KindToType[TimestampKind] = Timestamp{}
 	KindToType[DecimalKind] = Decimal{}
 	KindToType[JSONKind] = JSON{}
-	KindToType[GeometryKind] = Geometry{}
+	KindToType[GeometryKind] = Point("")
 
 	SupportedKinds[BlobKind] = true
 	SupportedKinds[BoolKind] = true
@@ -137,7 +137,7 @@ var KindToString = map[NomsKind]string{
 	TimestampKind:  "Timestamp",
 	DecimalKind:    "Decimal",
 	JSONKind:       "JSON",
-	GeometryKind:       "Geometry",
+	GeometryKind:   "Geometry",
 }
 
 // String returns the name of the kind.

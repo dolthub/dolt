@@ -21,7 +21,7 @@
 
 package types
 
-import (
+/*import (
 	"context"
 	"errors"
 	"fmt"
@@ -71,12 +71,17 @@ func readGeometry(nbf *NomsBinFormat, dec *valueDecoder) (Geometry, error) {
 		return Geometry{}, errors.New("current value is not a Geometry")
 	}
 
-	if err := skipJSON(nbf, dec); err != nil {
+	if err := skipGeometry(nbf, dec); err != nil {
 		return Geometry{}, err
 	}
 
 	end := dec.pos()
 	return Geometry{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}, nil
+}
+
+func skipGeometry(nbf *NomsBinFormat, dec *valueDecoder) error {
+	dec.skipKind()
+	return dec.SkipValue(nbf)
 }
 
 // Value implements the Value interface
@@ -183,3 +188,4 @@ func (v Geometry) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, erro
 }
 
 func (v Geometry) skip(nbf *NomsBinFormat, b *binaryNomsReader) {}
+*/

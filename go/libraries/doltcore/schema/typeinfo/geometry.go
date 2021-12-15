@@ -14,17 +14,7 @@
 
 package typeinfo
 
-import (
-	"context"
-	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/geometry"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/store/types"
-)
-
-// This is a dolt implementation of the MySQL type Geometry, thus most of the functionality
+/*// This is a dolt implementation of the MySQL type Geometry, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type geometryType struct {
 	geometryType sql.GeometryType
@@ -200,3 +190,4 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
 }
+*/

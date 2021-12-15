@@ -14,7 +14,7 @@
 
 package geometry
 
-import (
+/*import (
 	"context"
 	"errors"
 	"strings"
@@ -71,6 +71,8 @@ func marshalGeometry(ctx context.Context, vrw types.ValueReadWriter, val interfa
 	switch val := val.(type) {
 	case bool: // TODO: this is impossible?
 		return types.Bool(val), nil
+	case sql.PointType:
+		return nil, nil
 	default:
 		return nil, ErrUnexpectedGeometryTypeIn
 	}
@@ -140,3 +142,4 @@ func marshalToString(ctx context.Context, sb *strings.Builder, val types.Value) 
 	}
 	return
 }
+*/
