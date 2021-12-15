@@ -601,3 +601,50 @@ SQL
     [[ "${lines[5]}" =~ "5" ]] || false
     [[ "${lines[6]}" =~ "6" ]] || false
 }
+
+@test "auto_increment: alter table modify column to auto inc with different types" {
+    dolt sql -q "create table t(pk int unsigned primary key, v int);"
+    dolt sql -q "insert into t values (1,1);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk int unsigned NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL)'
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+
+    dolt sql -q "drop table t"
+    dolt sql -q "create table t(pk float primary key, v int);"
+    dolt sql -q "insert into t values (1,1);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk float NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL)'
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+
+    # type changes in the alter statement
+    dolt sql -q "drop table t"
+    dolt sql -q "create table t(pk int unsigned primary key, v int);"
+    dolt sql -q "insert into t values (1,1);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk int NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL)'
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false
+
+    dolt sql -q "drop table t"
+    dolt sql -q "create table t(pk float primary key, v int);"
+    dolt sql -q "insert into t values (1,1);"
+    dolt sql -q "ALTER TABLE t modify COLUMN pk int NOT NULL AUTO_INCREMENT;"
+
+    dolt sql -q 'insert into t(pk) values (NULL)'
+    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "1" ]] || false
+    [[ "${lines[2]}" =~ "2" ]] || false    
+}
+
