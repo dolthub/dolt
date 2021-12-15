@@ -400,11 +400,11 @@ SQL
 
     run dolt sql -q "alter table test1 rename column b to a"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "already exists" ]] || false
     
     run dolt sql -q "alter table test1 add column A int"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "already exists" ]] || false
 
     run dolt sql -q "alter table test1 change column b A bigint"
     [ "$status" -eq 1 ]
