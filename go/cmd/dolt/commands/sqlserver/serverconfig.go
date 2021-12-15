@@ -47,8 +47,8 @@ const (
 	defaultQueryParallelism    = 2
 	defaultPersistenceBahavior = loadPerisistentGlobals
 	defaultDataDir             = "."
-	defaultMetricsHost         = "localhost"
-	defaultMetricsPort         = 9090
+	defaultMetricsHost         = ""
+	defaultMetricsPort         = -1
 )
 
 const (
