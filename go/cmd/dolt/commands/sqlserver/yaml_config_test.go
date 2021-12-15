@@ -49,6 +49,13 @@ databases:
       path: ./datasets/irs-soi
     - name: noaa
       path: /Users/brian/datasets/noaa
+
+data_dir: some nonsense
+
+labels:
+    label1: value1
+    label2: 2
+    label3: true
 `
 
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
@@ -62,6 +69,13 @@ databases:
 			Path: "/Users/brian/datasets/noaa",
 		},
 	}
+	expected.Labels = map[string]string{
+		"label1": "value1",
+		"label2": "2",
+		"label3": "true",
+	}
+	str := "some nonsense"
+	expected.DataDirStr = &str
 
 	config, err := NewYamlConfig([]byte(testStr))
 	require.NoError(t, err)

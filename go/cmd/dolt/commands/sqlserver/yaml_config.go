@@ -109,7 +109,8 @@ type YAMLConfig struct {
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
 	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
-	dataDir           *string               `yaml:"data_dir"`
+	DataDirStr        *string               `yaml:"data_dir"`
+	Labels            map[string]string     `yaml:"labels"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -289,6 +290,10 @@ func (cfg YAMLConfig) DisableClientMultiStatements() bool {
 	return *cfg.BehaviorConfig.DisableClientMultiStatements
 }
 
+func (cfg YAMLConfig) MetricsLabels() map[string]string {
+	return cfg.Labels
+}
+
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
 func (cfg YAMLConfig) QueryParallelism() int {
 	if cfg.PerformanceConfig.QueryParallelism == nil {
@@ -327,8 +332,8 @@ func (cfg YAMLConfig) PersistenceBehavior() string {
 }
 
 func (cfg YAMLConfig) DataDir() string {
-	if cfg.dataDir != nil {
-		return *cfg.dataDir
+	if cfg.DataDirStr != nil {
+		return *cfg.DataDirStr
 	}
 	return ""
 }

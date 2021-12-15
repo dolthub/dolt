@@ -116,6 +116,8 @@ type ServerConfig interface {
 	// process incoming ComQuery packets as if they had multiple queries in
 	// them, even if the client advertises support for MULTI_STATEMENTS.
 	DisableClientMultiStatements() bool
+	// MetricsLabels returns labels that are applied to all prometheus metrics
+	MetricsLabels() map[string]string
 }
 
 type commandLineServerConfig struct {
@@ -213,6 +215,10 @@ func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 
 func (cfg *commandLineServerConfig) DisableClientMultiStatements() bool {
 	return false
+}
+
+func (cfg *commandLineServerConfig) MetricsLabels() map[string]string {
+	return nil
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
