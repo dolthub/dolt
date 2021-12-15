@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
@@ -182,6 +183,18 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 	}
 
 	return rows, nil
+}
+
+func DoltSchemaFromAlterableTable(t *AlterableDoltTable) schema.Schema {
+	return t.sch
+}
+
+func DoltTableFromAlterableTable(ctx *sql.Context, t *AlterableDoltTable) *doltdb.Table {
+	dt, err := t.doltTable(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return dt
 }
 
 func drainIter(ctx *sql.Context, iter sql.RowIter) error {
