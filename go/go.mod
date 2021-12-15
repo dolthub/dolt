@@ -19,7 +19,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
-	github.com/dolthub/go-mysql-server v0.11.1-0.20211215180350-2a0d21b49cc1
+	github.com/dolthub/go-mysql-server v0.11.1-0.20211215182641-3cfed7fa595c
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
@@ -58,6 +58,8 @@ require (
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
 	github.com/uber/jaeger-lib v2.4.0+incompatible // indirect
+	github.com/xitongsys/parquet-go v1.6.1
+	github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371
 	go.mongodb.org/mongo-driver v1.7.0 // indirect
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
@@ -70,14 +72,6 @@ require (
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.3.0
-)
-
-require (
-	github.com/fastly/go-utils v0.0.0-20180712184237-d95a45783239 // indirect
-	github.com/jehiah/go-strftime v0.0.0-20171201141054-1d33003b3869 // indirect
-	github.com/tebeka/strftime v0.1.4 // indirect
-	github.com/xitongsys/parquet-go v1.6.1
-	github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371
 )
 
 replace (
