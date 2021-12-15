@@ -413,7 +413,7 @@ DoltHub](https://docs.dolthub.com/). Some of the topics we didn't
 cover here:
 
 - [Querying past revisions of your
-  tables](https://docs.dolthub.com/reference/sql#querying-non-head-revisions-of-a-database)
+  tables](https://docs.dolthub.com/reference/sql/querying-history)
 - [Selecting the diff between two
   commits](https://docs.dolthub.com/reference/sql/dolt-system-tables#dolt_diff_usdtablename)
 - [Documentation for all CLI
