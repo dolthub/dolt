@@ -293,7 +293,6 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 				return err
 			}
 
-			//printToStdOutFunc(opts, meta, ph, prevHash)
 			commitsInfo = append(commitsInfo, logNode{meta, prevHash, ph})
 
 			numLines--
