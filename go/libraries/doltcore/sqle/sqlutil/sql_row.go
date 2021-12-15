@@ -302,6 +302,12 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			}
 		case time.Time:
 			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
+		case sql.PointValue:
+			s, err := typedCol.ToString(sql.NewContext(ctx)) // TODO: do I need sql.NewContext()
+			if err != nil {
+				s = err.Error()
+			}
+			return s
 		case sql.JSONValue:
 			s, err := typedCol.ToString(sql.NewContext(ctx))
 			if err != nil {
@@ -309,7 +315,7 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			}
 			return s
 		default:
-			return fmt.Sprintf("%v", typedCol)
+			return fmt.Sprintf("no match: %v", typedCol)
 		}
 	}
 

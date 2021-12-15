@@ -17,7 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strconv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/geometry"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -27,17 +27,16 @@ import (
 // This is a dolt implementation of the MySQL type Geometry, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type geometryType struct {
-	sqlGeometryType sql.GeometryType
+	geometryType sql.GeometryType
 }
 
 var _ TypeInfo = (*geometryType)(nil)
-
 var GeometryType = &geometryType{sql.Geometry}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.Int); ok {
-		return int16(val), nil
+	if val, ok := v.(types.Geometry); ok {
+		return geometry.NomsGeometry(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -49,9 +48,12 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 func (ti *geometryType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.IntKind:
-		val := reader.ReadInt()
-		return int16(val), nil
+	case types.GeometryKind:
+		gs, err := reader.ReadGeometry()
+		if err != nil {
+			return nil, err
+		}
+		return geometry.NomsGeometry(gs), nil
 	case types.NullKind:
 		return nil, nil
 	}
@@ -64,44 +66,44 @@ func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	if v == nil {
 		return types.NullValue, nil
 	}
-	intVal, err := ti.sqlGeometryType.Convert(v)
+
+	gsObj, err := ti.geometryType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-	val, ok := intVal.(int16)
-	if ok {
-		return types.Int(val), nil
+
+	gsVal, ok := gsObj.(sql.GeometryValue)
+	if !ok {
+		return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 	}
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+
+	noms, err := geometry.NomsGeometryFromGeometryValue(ctx, vrw, gsVal)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.Geometry(noms), err
 }
 
 // Equals implements TypeInfo interface.
 func (ti *geometryType) Equals(other TypeInfo) bool {
-	if other == nil {
-		return false
-	}
-	_, ok := other.(*geometryType)
-	return ok
+	return ti.GetTypeIdentifier() == other.GetTypeIdentifier()
 }
 
 // FormatValue implements TypeInfo interface.
 func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Int); ok {
-		convVal, err := ti.ConvertNomsValueToValue(val)
-		if err != nil {
-			return nil, err
-		}
-		val, ok := convVal.(int16)
-		if !ok {
-			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-		}
-		res := strconv.FormatInt(int64(val), 10)
-		return &res, nil
-	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+
+	if noms, ok := v.(types.Geometry); ok {
+		s, err := geometry.NomsGeometry(noms).ToString(sql.NewEmptyContext())
+		if err != nil {
+			return nil, err
+		}
+		return &s, nil
+	}
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
@@ -116,42 +118,35 @@ func (ti *geometryType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *geometryType) IsValid(v types.Value) bool {
-	if val, ok := v.(types.Int); ok {
-		_, err := ti.sqlGeometryType.Convert(int64(val))
-		if err != nil {
-			return false
-		}
+	if v == nil {
 		return true
 	}
-	if _, ok := v.(types.Null); ok || v == nil {
+	switch v.(type) {
+	case types.Geometry:
 		return true
+	case types.Null:
+		return true
+	default:
+		return false
 	}
-	return false
 }
 
 // NomsKind implements TypeInfo interface.
 func (ti *geometryType) NomsKind() types.NomsKind {
-	return types.IntKind
+	return types.GeometryKind
 }
 
 // ParseValue implements TypeInfo interface.
 func (ti *geometryType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
+	if str == nil {
 		return types.NullValue, nil
 	}
-	intVal, err := ti.sqlGeometryType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := intVal.(int16); ok {
-		return types.Int(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+	return ti.ConvertValueToNomsValue(ctx, vrw, *str)
 }
 
 // Promote implements TypeInfo interface.
 func (ti *geometryType) Promote() TypeInfo {
-	return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType)}
+	return &geometryType{ti.geometryType.Promote().(sql.GeometryType)}
 }
 
 // String implements TypeInfo interface.
@@ -161,7 +156,7 @@ func (ti *geometryType) String() string {
 
 // ToSqlType implements TypeInfo interface.
 func (ti *geometryType) ToSqlType() sql.Type {
-	return ti.sqlGeometryType
+	return ti.geometryType
 }
 
 // geometryTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
@@ -185,6 +180,8 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapIsValid(dest.IsValid, src, dest)
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
@@ -199,8 +196,6 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *varStringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *geometryType:
-		return identityTypeConverter, false, nil
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
