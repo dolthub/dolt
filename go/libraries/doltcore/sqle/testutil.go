@@ -185,10 +185,12 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 	return rows, nil
 }
 
+// DoltSchemaFromAlterableTable is a utility for integration tests
 func DoltSchemaFromAlterableTable(t *AlterableDoltTable) schema.Schema {
 	return t.sch
 }
 
+// DoltTableFromAlterableTable is a utility for integration tests
 func DoltTableFromAlterableTable(ctx *sql.Context, t *AlterableDoltTable) *doltdb.Table {
 	dt, err := t.doltTable(ctx)
 	if err != nil {

@@ -169,6 +169,7 @@ func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
 	return sqlSch
 }
 
+// noopIndex is used for CREATE TABLE statements.
 type noopIndex struct {
 	id  string
 	db  string

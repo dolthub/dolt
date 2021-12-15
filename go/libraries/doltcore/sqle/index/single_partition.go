@@ -30,7 +30,7 @@ type SinglePartition struct {
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition. We have only a single partition
-// per Table, so we use a constant.
+// per table, so we use a constant.
 func (sp SinglePartition) Key() []byte {
 	return []byte("single")
 }
