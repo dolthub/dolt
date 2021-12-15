@@ -106,7 +106,7 @@ func (w *sloppyWG) Done() {
 	}
 }
 
-func (w * sloppyWG) Wait() {
+func (w *sloppyWG) Wait() {
 	<-w.ch
 }
 
