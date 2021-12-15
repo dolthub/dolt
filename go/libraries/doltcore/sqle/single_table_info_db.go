@@ -22,9 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SingleTableInfoDatabase is intended to allow a sole schema to make use of any display functionality in `go-mysql-server`.
@@ -133,18 +131,13 @@ func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, er
 		for i, tag := range idx.IndexedColumnTags() {
 			cols[i], _ = idx.GetColumn(tag)
 		}
-		sqlIndexes = append(sqlIndexes, &index.DoltIndexImpl{
-			Cols:          cols,
-			Db:            db,
-			Id:            idx.Name(),
-			RowIndexData:  types.EmptyMap,
-			IndexSch:      idx.Schema(),
-			TableRowData:  types.EmptyMap,
-			TableName:     db.tableName,
-			TableSch:      db.sch,
-			Unique:        idx.IsUnique(),
-			CommentStr:    idx.Comment(),
-			GeneratedBool: false,
+		sqlIndexes = append(sqlIndexes, &noopIndex{
+			id: idx.Name(),
+			db: db.Name(),
+			tbl: db.tableName,
+			unique: idx.IsUnique(),
+			generated: false,
+			comment: idx.Comment(),
 		})
 	}
 	return sqlIndexes, nil
@@ -174,4 +167,64 @@ func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
 		panic(err)
 	}
 	return sqlSch
+}
+
+type noopIndex struct {
+	id  string
+	db  string
+	tbl string
+
+	unique    bool
+	generated bool
+	comment   string
+}
+
+// ID implementes sql.Index
+func (idx noopIndex) ID() string {
+	return idx.id
+}
+
+// Database implementes sql.Index
+func (idx noopIndex) Database() string {
+	return idx.db
+}
+
+// Table implementes sql.Index
+func (idx noopIndex) Table() string {
+	return idx.tbl
+}
+
+// Expressions implementes sql.Index
+func (idx noopIndex) Expressions() []string {
+	return nil
+}
+
+// IsUnique implementes sql.Index
+func (idx noopIndex) IsUnique() bool {
+	return idx.unique
+}
+
+// Comment implementes sql.Index
+func (idx noopIndex) Comment() string {
+	return idx.comment
+}
+
+// IndexType implementes sql.Index
+func (idx noopIndex) IndexType() string {
+	return "BTREE"
+}
+
+// IsGenerated implementes sql.Index
+func (idx noopIndex) IsGenerated() bool {
+	return idx.generated
+}
+
+// NewLookup implementes sql.Index
+func (idx noopIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+	panic("unimplemented")
+}
+
+// ColumnExpressionTypes implementes sql.Index
+func (idx noopIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+	panic("unimplemented")
 }
