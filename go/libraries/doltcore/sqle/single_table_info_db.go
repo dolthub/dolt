@@ -74,7 +74,6 @@ func (db *SingleTableInfoDatabase) String() string {
 func (db *SingleTableInfoDatabase) Schema() sql.Schema {
 	sqlSch, err := sqlutil.FromDoltSchema(db.tableName, db.sch)
 	if err != nil {
-		panic(err)
 	}
 	return sqlSch.Schema
 }
@@ -131,10 +130,11 @@ func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, er
 		for i, tag := range idx.IndexedColumnTags() {
 			cols[i], _ = idx.GetColumn(tag)
 		}
-		sqlIndexes = append(sqlIndexes, &noopIndex{
+		sqlIndexes = append(sqlIndexes, &fmtIndex{
 			id:        idx.Name(),
 			db:        db.Name(),
 			tbl:       db.tableName,
+			cols:      cols,
 			unique:    idx.IsUnique(),
 			generated: false,
 			comment:   idx.Comment(),
@@ -164,68 +164,72 @@ func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) 
 func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
 	sqlSch, err := sqlutil.FromDoltSchema(db.tableName, db.sch)
 	if err != nil {
-		panic(err)
 	}
 	return sqlSch
 }
 
-// noopIndex is used for CREATE TABLE statements.
-type noopIndex struct {
+// fmtIndex is used for CREATE TABLE statements only.
+type fmtIndex struct {
 	id  string
 	db  string
 	tbl string
 
+	cols      []schema.Column
 	unique    bool
 	generated bool
 	comment   string
 }
 
 // ID implementes sql.Index
-func (idx noopIndex) ID() string {
+func (idx fmtIndex) ID() string {
 	return idx.id
 }
 
 // Database implementes sql.Index
-func (idx noopIndex) Database() string {
+func (idx fmtIndex) Database() string {
 	return idx.db
 }
 
 // Table implementes sql.Index
-func (idx noopIndex) Table() string {
+func (idx fmtIndex) Table() string {
 	return idx.tbl
 }
 
 // Expressions implementes sql.Index
-func (idx noopIndex) Expressions() []string {
-	return nil
+func (idx fmtIndex) Expressions() []string {
+	strs := make([]string, len(idx.cols))
+	for i, col := range idx.cols {
+		strs[i] = idx.tbl + "." + col.Name
+	}
+	return strs
 }
 
 // IsUnique implementes sql.Index
-func (idx noopIndex) IsUnique() bool {
+func (idx fmtIndex) IsUnique() bool {
 	return idx.unique
 }
 
 // Comment implementes sql.Index
-func (idx noopIndex) Comment() string {
+func (idx fmtIndex) Comment() string {
 	return idx.comment
 }
 
 // IndexType implementes sql.Index
-func (idx noopIndex) IndexType() string {
+func (idx fmtIndex) IndexType() string {
 	return "BTREE"
 }
 
 // IsGenerated implementes sql.Index
-func (idx noopIndex) IsGenerated() bool {
+func (idx fmtIndex) IsGenerated() bool {
 	return idx.generated
 }
 
 // NewLookup implementes sql.Index
-func (idx noopIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+func (idx fmtIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
 	panic("unimplemented")
 }
 
 // ColumnExpressionTypes implementes sql.Index
-func (idx noopIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+func (idx fmtIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
 	panic("unimplemented")
 }
