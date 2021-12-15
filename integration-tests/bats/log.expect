@@ -1,0 +1,7 @@
+#!/usr/bin/expect
+
+spawn dolt log
+expect {
+  "*Initialize data repository*" { exit 1; }
+  "*commit 16* " { send "q\r"; exit 0;}
+}
