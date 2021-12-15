@@ -132,12 +132,12 @@ func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, er
 			cols[i], _ = idx.GetColumn(tag)
 		}
 		sqlIndexes = append(sqlIndexes, &noopIndex{
-			id: idx.Name(),
-			db: db.Name(),
-			tbl: db.tableName,
-			unique: idx.IsUnique(),
+			id:        idx.Name(),
+			db:        db.Name(),
+			tbl:       db.tableName,
+			unique:    idx.IsUnique(),
 			generated: false,
-			comment: idx.Comment(),
+			comment:   idx.Comment(),
 		})
 	}
 	return sqlIndexes, nil

@@ -195,61 +195,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, err
 	}
 
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var sqlIndexes []sql.Index
-	cols := sch.GetPKCols().GetColumns()
-
-	if len(cols) > 0 {
-		sqlIndexes = append(sqlIndexes, &index.DoltIndexImpl{
-			Cols:          cols,
-			Db:            t.db,
-			Id:            "PRIMARY",
-			RowIndexData:  rowData,
-			IndexSch:      sch,
-			TableRowData:  rowData,
-			TableName:     t.Name(),
-			TableSch:      sch,
-			Unique:        true,
-			GeneratedBool: false,
-			Vrw:           tbl.ValueReadWriter(),
-		})
-	}
-
-	for _, idx := range sch.Indexes().AllIndexes() {
-		indexRowData, err := tbl.GetIndexRowData(ctx, idx.Name())
-		if err != nil {
-			return nil, err
-		}
-		cols := make([]schema.Column, idx.Count())
-		for i, tag := range idx.IndexedColumnTags() {
-			cols[i], _ = idx.GetColumn(tag)
-		}
-		sqlIndexes = append(sqlIndexes, &index.DoltIndexImpl{
-			Cols:          cols,
-			Db:            t.db,
-			Id:            idx.Name(),
-			RowIndexData:  indexRowData,
-			IndexSch:      idx.Schema(),
-			TableRowData:  rowData,
-			TableName:     t.Name(),
-			TableSch:      sch,
-			Unique:        idx.IsUnique(),
-			CommentStr:    idx.Comment(),
-			GeneratedBool: false,
-			Vrw:           tbl.ValueReadWriter(),
-		})
-	}
-
-	return sqlIndexes, nil
+	return index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
 }
 
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
