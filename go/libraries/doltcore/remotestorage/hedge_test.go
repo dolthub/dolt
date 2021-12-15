@@ -16,7 +16,6 @@ package remotestorage
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -89,12 +88,33 @@ func TestHedgerHedgesWork(t *testing.T) {
 	assert.Equal(t, 0, <-ch)
 }
 
+// Behaves a bit like a WaitGroup but allows Done() to be called more than its
+// configured count and after Wait() has already returned.
+type sloppyWG struct {
+	cnt int32
+	ch  chan struct{}
+}
+
+func newSloppyWG(i int32) *sloppyWG {
+	return &sloppyWG{i, make(chan struct{})}
+}
+
+func (w *sloppyWG) Done() {
+	cur := atomic.AddInt32(&w.cnt, -1)
+	if cur == 0 {
+		close(w.ch)
+	}
+}
+
+func (w *sloppyWG) Wait() {
+	<-w.ch
+}
+
 func TestHedgerObeysMaxHedges(t *testing.T) {
 	try := func(max int) {
 		h := NewHedger(int64(max), NewMinStrategy(1*time.Millisecond, nil))
 		cnt := int32(0)
-		wg := &sync.WaitGroup{}
-		wg.Add(max + 4)
+		wg := newSloppyWG(int32(max + 4))
 		h.after = func(d time.Duration) <-chan time.Time {
 			wg.Done()
 			return time.After(d)
@@ -131,8 +151,7 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 	MaxHedgesPerRequest = 0
 	h := NewHedger(int64(32), NewMinStrategy(1*time.Millisecond, nil))
 	cnt := int32(0)
-	wg := &sync.WaitGroup{}
-	wg.Add(4)
+	wg := newSloppyWG(4)
 	h.after = func(d time.Duration) <-chan time.Time {
 		wg.Done()
 		return time.After(d)
@@ -153,8 +172,7 @@ func TestMaxHedgesPerRequestObeyed(t *testing.T) {
 
 	MaxHedgesPerRequest = 1
 	cnt = int32(0)
-	wg = &sync.WaitGroup{}
-	wg.Add(7)
+	wg = newSloppyWG(7)
 	h.after = func(d time.Duration) <-chan time.Time {
 		wg.Done()
 		return time.After(d)
