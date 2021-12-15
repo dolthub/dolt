@@ -51,7 +51,7 @@ import (
 )
 
 const (
-	Version = "0.34.8"
+	Version = "0.34.9"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -252,12 +252,6 @@ func runMain() int {
 
 	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
-
-	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {
-		if commands.MigrationNeeded(ctx, dEnv, args) {
-			return 1
-		}
-	}
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {

@@ -310,3 +310,26 @@ teardown() {
     regex='commit .* .*\n'
     [[ "$output" =~ $regex ]] || false
 }
+
+@test "log: check pager" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    dolt commit --allow-empty -m "commit 1"
+    dolt commit	--allow-empty -m "commit 2"
+    dolt commit	--allow-empty -m "commit 3"
+    dolt commit --allow-empty -m "commit 4"
+    dolt commit	--allow-empty -m "commit 5"
+    dolt commit	--allow-empty -m "commit 6"
+    dolt commit --allow-empty -m "commit 7"
+    dolt commit	--allow-empty -m "commit 8"
+    dolt commit	--allow-empty -m "commit 9"
+    dolt commit --allow-empty -m "commit 10"
+    dolt commit	--allow-empty -m "commit 11"
+    dolt commit	--allow-empty -m "commit 12"
+    dolt commit	--allow-empty -m "commit 13"
+    dolt commit --allow-empty -m "commit 14"
+    dolt commit	--allow-empty -m "commit 15"
+    dolt commit	--allow-empty -m "commit 16"
+
+    run expect $BATS_TEST_DIRNAME/log.expect
+    [ "$status" -eq 0 ]
+}

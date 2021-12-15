@@ -193,7 +193,7 @@ var systemTableDeleteTests = []DeleteTest{
 	{
 		Name: "delete dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.Schema,
+			doltdocs.DocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		DeleteQuery: "delete from dolt_docs",
 		ExpectedErr: "cannot delete from table",

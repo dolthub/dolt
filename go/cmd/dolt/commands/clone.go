@@ -162,6 +162,19 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		}
 	}
 
+	err = dEnv.RepoStateWriter().UpdateBranch(dEnv.RepoState.CWBHeadRef().GetPath(), env.BranchConfig{
+		Merge:  dEnv.RepoState.Head,
+		Remote: remoteName,
+	})
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	err = dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
 	return nil
 }
 

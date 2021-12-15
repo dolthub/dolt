@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -99,19 +98,22 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 
 	ctx := context.Background()
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(ctx, vrw, sch)
 
-	_, _, err := table.PipeRows(ctx, rd, wr, false)
+	rowMap, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	err = rd.Close(ctx)
-	require.NoError(t, err)
-	err = wr.Close(ctx)
+	me := rowMap.Edit()
+	for i := 0; i < imt.NumRows(); i++ {
+		r, err := imt.GetRow(i)
+		require.NoError(t, err)
+		k, v := r.NomsMapKey(sch), r.NomsMapValue(sch)
+		me.Set(k, v)
+	}
+	rowMap, err = me.Map(ctx)
 	require.NoError(t, err)
 
 	empty, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	tbl, err := doltdb.NewTable(ctx, vrw, sch, wr.GetMap(), empty, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, empty, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)

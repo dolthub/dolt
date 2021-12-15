@@ -10,14 +10,14 @@ git](https://en.wikipedia.org/wiki/Git#Naming):
 > bastard, and I name all my projects after myself. First 'Linux',
 > now 'git'."
 
-We wanted a word meaning "idiot", starting with D for Data, 
+We wanted a word meaning "idiot", starting with D for Data,
 short enough to type on the command line, and
 not taken in the standard command line lexicon. So,
 `dolt`.
 
 ## The MySQL shell gives me an error: `Can't connect to local MySQL server through socket '/tmp/mysql.sock'`
 
-The MySQL shell will try to connect through a socket file on many OSes. 
+The MySQL shell will try to connect through a socket file on many OSes.
 To force it to use TCP instead, give it the loopback address like this:
 
 ```bash
@@ -51,6 +51,7 @@ new dolt commit on the current branch. It's the same as if you run
 `dolt commit` from the command line.
 
 ## I want each of my connected SQL users to get their own branch to make changes on, then merge them back into `main` when they'\
+
 re done making edits. How do I do that?
 
 We are glad you asked! This is a common use case, and giving each user
@@ -70,7 +71,7 @@ branches](https://docs.dolthub.com/reference/sql/branches) for details.
 ## What SQL features / syntax are supported?
 
 Most of them! Check out [the docs for the full list of supported
-features](https://docs.dolthub.com/interfaces/sql/sql-support).
+features](https://docs.dolthub.com/reference/sql/support).
 
 You can check out what we're working on next on our
 [roadmap](roadmap.md). Paying customers get their feature requests

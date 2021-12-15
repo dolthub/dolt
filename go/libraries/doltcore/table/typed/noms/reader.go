@@ -23,6 +23,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type StatsCB func(stats types.AppliedEditStats)
+
 // NomsMapReader is a TableReader that reads rows from a noms table which is stored in a types.Map where the key is
 // a types.Value and the value is a types.Tuple of field values.
 type NomsMapReader struct {
