@@ -1083,7 +1083,11 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
-	return t.updateFromRoot(ctx, newRoot)
+	return nil
+	// TODO: we can't make this update right now because renames happen in two passes if you rename a column mentioned in
+	//  a default value, and one of those two passes will have the old name for the column. Fix this by not analyzing
+	//  column defaults in NewDoltTable.
+	// return t.updateFromRoot(ctx, newRoot)
 }
 
 func increment(val types.Value) types.Value {
