@@ -85,6 +85,10 @@ const (
 	NoFFParam        = "no-ff"
 	SquashParam      = "squash"
 	AbortParam       = "abort"
+	CopyFlag		 = "copy"
+	MoveFlag		 = "move"
+	DeleteFlag		 = "delete"
+	DeleteForceFlag	 = "D"
 )
 
 var mergeAbortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
@@ -161,6 +165,17 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(SquashParam, "", "Merges changes to the working set without updating the commit history")
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
+
+	return ap
+}
+
+func CreateBranchArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
+	ap.SupportsFlag(CopyFlag, "c", "Create a copy of a branch.")
+	ap.SupportsFlag(MoveFlag, "m", "Move/rename a branch")
+	ap.SupportsFlag(DeleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
+	ap.SupportsFlag(DeleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
 
 	return ap
 }
