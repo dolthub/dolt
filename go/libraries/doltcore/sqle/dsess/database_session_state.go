@@ -46,7 +46,7 @@ type DatabaseSessionState struct {
 	headRoot             *doltdb.RootValue
 	WorkingSet           *doltdb.WorkingSet
 	dbData               env.DbData
-	editSession          *editor.TableEditSession
+	EditSession          *editor.TableEditSession
 	detachedHead         bool
 	readOnly             bool
 	dirty                bool
@@ -77,5 +77,5 @@ func (d DatabaseSessionState) GetRoots() doltdb.Roots {
 }
 
 func (d DatabaseSessionState) EditOpts() editor.Options {
-	return d.editSession.Opts
+	return d.EditSession.Opts
 }
