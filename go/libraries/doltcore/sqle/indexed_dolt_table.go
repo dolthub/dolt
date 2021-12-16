@@ -106,7 +106,7 @@ func (itr *rangePartitionIter) Close(*sql.Context) error {
 }
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
-func (itr *rangePartitionIter) Next() (sql.Partition, error) {
+func (itr *rangePartitionIter) Next(ctx *sql.Context) (sql.Partition, error) {
 	itr.mu.Lock()
 	defer itr.mu.Unlock()
 

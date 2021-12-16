@@ -228,12 +228,13 @@ func BenchmarkMapItr(b *testing.B) {
 		closeFunc = cl.Close
 	}
 
-	dmItr := sqle.NewDoltMapIter(ctx, itr.NextTuple, closeFunc, sqle.NewKVToSqlRowConverterForCols(m.Format(), testDataCols))
+	dmItr := sqle.NewDoltMapIter(itr.NextTuple, closeFunc, sqle.NewKVToSqlRowConverterForCols(m.Format(), testDataCols))
+	sqlCtx := sql.NewContext(ctx)
 
 	b.ResetTimer()
 	for {
 		var r sql.Row
-		r, err = dmItr.Next()
+		r, err = dmItr.Next(sqlCtx)
 
 		if r == nil || err != nil {
 			break
@@ -244,6 +245,7 @@ func BenchmarkMapItr(b *testing.B) {
 	if err != io.EOF {
 		require.NoError(b, err)
 	}
+	dmItr.Close(sqlCtx)
 }
 
 /*func BenchmarkFullScan(b *testing.B) {

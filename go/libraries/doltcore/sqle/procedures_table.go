@@ -176,7 +176,7 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 		return sql.StoredProcedureDetails{}, false, err
 	}
 	defer rowIter.Close(ctx)
-	sqlRow, err := rowIter.Next()
+	sqlRow, err := rowIter.Next(ctx)
 	if err == nil {
 		if len(sqlRow) != 4 {
 			return sql.StoredProcedureDetails{}, false, fmt.Errorf("unexpected row in dolt_procedures:\n%v", sqlRow)

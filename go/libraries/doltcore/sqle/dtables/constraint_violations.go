@@ -96,7 +96,7 @@ func (cvt *ConstraintViolationsTable) PartitionRows(ctx *sql.Context, part sql.P
 	if err != nil {
 		return nil, err
 	}
-	return &constraintViolationsIter{ctx, cvt.cvSch, iter}, nil
+	return &constraintViolationsIter{cvt.cvSch, iter}, nil
 }
 
 // Deleter implements the interface sql.DeletableTable.
@@ -110,7 +110,6 @@ func (cvt *ConstraintViolationsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 
 // constraintViolationsIter is the iterator for ConstraintViolationsTable.
 type constraintViolationsIter struct {
-	ctx  *sql.Context
 	dSch schema.Schema
 	iter types.MapIterator
 }
@@ -118,8 +117,8 @@ type constraintViolationsIter struct {
 var _ sql.RowIter = (*constraintViolationsIter)(nil)
 
 // Next implements the interface sql.RowIter.
-func (cvi *constraintViolationsIter) Next() (sql.Row, error) {
-	k, v, err := cvi.iter.NextTuple(cvi.ctx)
+func (cvi *constraintViolationsIter) Next(ctx *sql.Context) (sql.Row, error) {
+	k, v, err := cvi.iter.NextTuple(ctx)
 	if err != nil {
 		return nil, err
 	}

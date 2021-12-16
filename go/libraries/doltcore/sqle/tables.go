@@ -407,7 +407,7 @@ func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 
 type emptyRowIterator struct{}
 
-func (itr emptyRowIterator) Next() (sql.Row, error) {
+func (itr emptyRowIterator) Next(*sql.Context) (sql.Row, error) {
 	return nil, io.EOF
 }
 
@@ -734,7 +734,7 @@ func (itr *doltTablePartitionIter) Close(*sql.Context) error {
 }
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
-func (itr *doltTablePartitionIter) Next() (sql.Partition, error) {
+func (itr *doltTablePartitionIter) Next(*sql.Context) (sql.Partition, error) {
 	itr.mu.Lock()
 	defer itr.mu.Unlock()
 
@@ -1043,7 +1043,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 
 		for {
-			r, err := rowIter.Next()
+			r, err := rowIter.Next(ctx)
 			if err == io.EOF {
 				break
 			} else if err != nil {

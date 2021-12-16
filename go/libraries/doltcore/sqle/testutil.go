@@ -173,7 +173,7 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 		rowErr error
 		row    sql.Row
 	)
-	for row, rowErr = rowIter.Next(); rowErr == nil; row, rowErr = rowIter.Next() {
+	for row, rowErr = rowIter.Next(ctx); rowErr == nil; row, rowErr = rowIter.Next(ctx) {
 		rows = append(rows, row)
 	}
 
@@ -186,7 +186,7 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 
 func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {

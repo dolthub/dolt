@@ -198,7 +198,7 @@ func NewSliceOfPartitionsItr(partitions []sql.Partition) *SliceOfPartitionsItr {
 	}
 }
 
-func (itr *SliceOfPartitionsItr) Next() (sql.Partition, error) {
+func (itr *SliceOfPartitionsItr) Next(*sql.Context) (sql.Partition, error) {
 	itr.mu.Lock()
 	defer itr.mu.Unlock()
 
