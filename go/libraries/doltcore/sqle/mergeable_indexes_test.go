@@ -19,7 +19,10 @@ import (
 	"fmt"
 	"testing"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -32,7 +35,7 @@ import (
 // they're converted into a format that Noms understands to verify that they were handled correctly. Lastly, we ensure
 // that the final output is as expected.
 func TestMergeableIndexes(t *testing.T) {
-	engine, denv, db, indexTuples, initialRoot := setupIndexes(t, "test", `INSERT INTO test VALUES
+	engine, denv, root, db, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
 		(-3, NULL, NULL),
 		(-2, NULL, NULL),
 		(-1, NULL, NULL),
@@ -1306,27 +1309,26 @@ func TestMergeableIndexes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.whereStmt, func(t *testing.T) {
-			var finalRanges []*noms.ReadRange
-			db.t = t
-			db.finalRanges = func(ranges []*noms.ReadRange) {
-				finalRanges = ranges
-			}
-
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
 			session := dsess.DSessFromSess(sqlCtx.Session)
 			dbState := getDbState(t, db, denv)
 			err := session.AddDB(sqlCtx, dbState)
-
 			require.NoError(t, err)
 			sqlCtx.SetCurrentDatabase(db.Name())
-			err = session.SetRoot(sqlCtx, db.Name(), initialRoot)
+			err = session.SetRoot(sqlCtx, db.Name(), root)
 			require.NoError(t, err)
 
-			_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt))
+			query := fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt)
+
+			finalRanges, err := ReadRangesFromQuery(sqlCtx, engine, query)
+			require.NoError(t, err)
+
+			_, iter, err := engine.Query(sqlCtx, query)
 			require.NoError(t, err)
 			res, err := sql.RowIterToRows(sqlCtx, iter)
 			require.NoError(t, err)
+
 			if assert.Equal(t, len(test.pks), len(res)) {
 				for i, pk := range test.pks {
 					if assert.Equal(t, 1, len(res[i])) {
@@ -1367,7 +1369,7 @@ func TestMergeableIndexes(t *testing.T) {
 // ranges may be incorrect.
 // TODO: disassociate NULL ranges from value ranges and fix the intermediate ranges (finalRanges).
 func TestMergeableIndexesNulls(t *testing.T) {
-	engine, denv, db, indexTuples, initialRoot := setupIndexes(t, "test", `INSERT INTO test VALUES
+	engine, denv, root, db, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
 		(0, 10, 20),
 		(1, 11, 21),
 		(2, NULL, NULL),
@@ -1522,12 +1524,6 @@ func TestMergeableIndexesNulls(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.whereStmt, func(t *testing.T) {
-			var finalRanges []*noms.ReadRange
-			db.t = t
-			db.finalRanges = func(ranges []*noms.ReadRange) {
-				finalRanges = ranges
-			}
-
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
 			session := dsess.DSessFromSess(sqlCtx.Session)
@@ -1535,11 +1531,17 @@ func TestMergeableIndexesNulls(t *testing.T) {
 			err := session.AddDB(sqlCtx, dbState)
 			require.NoError(t, err)
 			sqlCtx.SetCurrentDatabase(db.Name())
-			err = session.SetRoot(sqlCtx, db.Name(), initialRoot)
+			err = session.SetRoot(sqlCtx, db.Name(), root)
 			require.NoError(t, err)
 
-			_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt))
+			query := fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt)
+
+			finalRanges, err := ReadRangesFromQuery(sqlCtx, engine, query)
 			require.NoError(t, err)
+
+			_, iter, err := engine.Query(sqlCtx, query)
+			require.NoError(t, err)
+
 			res, err := sql.RowIterToRows(sqlCtx, iter)
 			require.NoError(t, err)
 			if assert.Equal(t, len(test.pks), len(res)) {
@@ -1571,4 +1573,27 @@ func TestMergeableIndexesNulls(t *testing.T) {
 			}
 		})
 	}
+}
+
+func ReadRangesFromQuery(ctx *sql.Context, eng *sqle.Engine, query string) ([]*noms.ReadRange, error) {
+	parsed, err := parse.Parse(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	analyzed, err := eng.Analyzer.Analyze(ctx, parsed, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var lookup sql.IndexLookup
+	plan.Inspect(analyzed, func(n sql.Node) bool {
+		switch node := n.(type) {
+		case *plan.IndexedTableAccess:
+			lookup = plan.GetIndexLookup(node)
+		}
+		return true
+	})
+
+	return lookup.(*doltIndexLookup).ranges, nil
 }
