@@ -198,7 +198,7 @@ func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Ro
 			s.statsCB(s.stats)
 		}
 
-		row, err := iter.Next()
+		row, err := iter.Next(s.sqlCtx)
 
 		// All other errors are handled by the errorHandler
 		if err == nil {
@@ -280,7 +280,7 @@ func (s *sqlEngineMover) createTable() error {
 	}
 
 	for {
-		_, err = ri.Next()
+		_, err = ri.Next(s.sqlCtx)
 		if err != nil {
 			return ri.Close(s.sqlCtx)
 		}

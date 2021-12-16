@@ -1062,7 +1062,7 @@ func TestDoltIndexBetween(t *testing.T) {
 
 			var readRows []sql.Row
 			var nextRow sql.Row
-			for nextRow, err = indexIter.Next(); err == nil; nextRow, err = indexIter.Next() {
+			for nextRow, err = indexIter.Next(ctx); err == nil; nextRow, err = indexIter.Next(ctx) {
 				readRows = append(readRows, nextRow)
 			}
 			require.Equal(t, io.EOF, err)
@@ -1282,7 +1282,7 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, ind
 
 	var readRows []sql.Row
 	var nextRow sql.Row
-	for nextRow, err = indexIter.Next(); err == nil; nextRow, err = indexIter.Next() {
+	for nextRow, err = indexIter.Next(ctx); err == nil; nextRow, err = indexIter.Next(ctx) {
 		readRows = append(readRows, nextRow)
 	}
 	require.Equal(t, io.EOF, err)

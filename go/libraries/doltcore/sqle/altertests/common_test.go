@@ -129,7 +129,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	}
 	var vals []interface{}
 	var r sql.Row
-	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
+	for r, err = iter.Next(sqlCtx); err == nil; r, err = iter.Next(sqlCtx) {
 		if len(r) == 1 {
 			// widen the values since we're testing values rather than types
 			vals = append(vals, widenValue(r[0]))
@@ -157,7 +157,7 @@ func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 		return nil, err
 	}
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(sqlCtx)
 		if err == io.EOF {
 			break
 		}

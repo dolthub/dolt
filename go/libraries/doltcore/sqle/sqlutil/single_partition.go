@@ -52,7 +52,7 @@ func (itr SinglePartitionIter) Close(*sql.Context) error {
 }
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
-func (itr SinglePartitionIter) Next() (sql.Partition, error) {
+func (itr SinglePartitionIter) Next(*sql.Context) (sql.Partition, error) {
 	first := false
 	itr.once.Do(func() {
 		first = true

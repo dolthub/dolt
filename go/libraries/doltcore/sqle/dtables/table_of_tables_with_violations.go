@@ -98,7 +98,7 @@ type tableOfTablesPartitionIter struct {
 var _ sql.PartitionIter = (*tableOfTablesPartitionIter)(nil)
 
 // Next implements the interface sql.PartitionIter.
-func (t *tableOfTablesPartitionIter) Next() (sql.Partition, error) {
+func (t *tableOfTablesPartitionIter) Next(*sql.Context) (sql.Partition, error) {
 	if t.idx >= len(t.tblNames) {
 		return nil, io.EOF
 	}
