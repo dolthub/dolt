@@ -32,6 +32,16 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type TableEditor interface {
+	sql.RowReplacer
+	sql.RowUpdater
+	sql.RowInserter
+	sql.RowDeleter
+	sql.AutoIncrementSetter
+
+	NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error)
+}
+
 // sqlTableEditor is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
 //
 // The sqlTableEditor has two levels of batching: one supported at the SQL engine layer where a single UPDATE, DELETE or
@@ -56,12 +66,9 @@ type sqlTableEditor struct {
 	aiTracker         globalstate.AutoIncrementTracker
 }
 
-var _ sql.RowReplacer = (*sqlTableEditor)(nil)
-var _ sql.RowUpdater = (*sqlTableEditor)(nil)
-var _ sql.RowInserter = (*sqlTableEditor)(nil)
-var _ sql.RowDeleter = (*sqlTableEditor)(nil)
+var _ TableEditor = &sqlTableEditor{}
 
-func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
+func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (TableEditor, error) {
 	sess, err := t.db.TableEditSession(ctx, t.IsTemporary())
 	if err != nil {
 		return nil, err
@@ -182,6 +189,10 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 		return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
 	}
 	return err
+}
+
+func (te *sqlTableEditor) NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error) {
+	return te.aiTracker.Next(te.tableName, potentialVal, tableVal)
 }
 
 func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
