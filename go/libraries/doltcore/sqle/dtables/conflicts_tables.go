@@ -102,7 +102,7 @@ func (ct ConflictsTable) Deleter(*sql.Context) sql.RowDeleter {
 }
 
 type conflictRowIter struct {
-	rd  *merge.ConflictReader
+	rd *merge.ConflictReader
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
