@@ -34,9 +34,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	editor2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -387,7 +387,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partiti
 type WritableDoltTable struct {
 	*DoltTable
 	db Database
-	ed editor2.TableEditor
+	ed writer.TableWriter
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -434,7 +434,7 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed editor2.TableEditor, err error) {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWriter, err error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
@@ -446,7 +446,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed editor2.TableEd
 
 	vrw := t.db.ddb.ValueReadWriter()
 
-	ed, err = editor2.NewSqlTableEditor(ctx, sess, t, t.db, t.db.gs, t.sch, vrw)
+	ed, err = writer.NewSqlTableEditor(ctx, sess, t, t.db, t.db.gs, t.sch, vrw)
 	if err != nil {
 		return nil, err
 	}
