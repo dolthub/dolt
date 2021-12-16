@@ -141,11 +141,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 					return nil, nil, err
 				}
 			}
-			// force load the table editor since this counts as a change
-			_, err := sess.GetTableEditor(ctx, tblName, nil)
-			if err != nil {
-				return nil, nil, err
-			}
 			return mergeTbl, &ms, nil
 		}
 	}
