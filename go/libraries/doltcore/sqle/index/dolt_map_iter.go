@@ -82,7 +82,9 @@ func getValLocations(tagToSqlColIdx map[uint64]int, cols []schema.Column) (int, 
 }
 
 // NewKVToSqlRowConverterForCols returns a KVToSqlConverter instance based on the list of columns passed in
-func NewKVToSqlRowConverterForCols(nbf *types.NomsBinFormat, cols []schema.Column) *KVToSqlRowConverter {
+func NewKVToSqlRowConverterForCols(nbf *types.NomsBinFormat, sch schema.Schema) *KVToSqlRowConverter {
+	cols := sch.GetAllCols().GetColumns()
+
 	tagToSqlColIdx := make(map[uint64]int)
 	for i, col := range cols {
 		tagToSqlColIdx[col.Tag] = i
