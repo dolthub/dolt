@@ -50,9 +50,7 @@ session ends.
 new dolt commit on the current branch. It's the same as if you run
 `dolt commit` from the command line.
 
-## I want each of my connected SQL users to get their own branch to make changes on, then merge them back into `main` when they'\
-
-re done making edits. How do I do that?
+## I want each of my connected SQL users to get their own branch to make changes on, then merge them back into `main` when they're done making edits. How do I do that?
 
 We are glad you asked! This is a common use case, and giving each user
 their own branch is something we've spent a lot of time getting
