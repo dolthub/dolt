@@ -318,6 +318,10 @@ func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
 }
 
+func TestAlterTable(t *testing.T) {
+	enginetest.TestAlterTable(t, newDoltHarness(t))
+}
+
 func TestVariables(t *testing.T) {
 	enginetest.TestVariables(t, newDoltHarness(t))
 }
