@@ -32,25 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-const (
-	HeadKeySuffix    = "_head"
-	HeadRefKeySuffix = "_head_ref"
-	WorkingKeySuffix = "_working"
-	StagedKeySuffix  = "_staged"
-)
-
-const (
-	TransactionMergeStompEnvKey   = "DOLT_TRANSACTION_MERGE_STOMP"
-	DoltCommitOnTransactionCommit = "dolt_transaction_commit"
-	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
-	ForceTransactionCommit        = "dolt_force_transaction_commit"
-	CurrentBatchModeKey           = "batch_mode"
-)
-
-const NonpersistableSessionCode = 1105 // default
-
-var transactionMergeStomp = false
-
 type batchMode int8
 
 const (
@@ -58,87 +39,16 @@ const (
 	Batched
 )
 
-func HeadKey(dbName string) string {
-	return dbName + HeadKeySuffix
-}
-
-func HeadRefKey(dbName string) string {
-	return dbName + HeadRefKeySuffix
-}
-
-func WorkingKey(dbName string) string {
-	return dbName + WorkingKeySuffix
-}
-
-func StagedKey(dbName string) string {
-	return dbName + StagedKeySuffix
-}
-
 func init() {
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{ // If true, causes a Dolt commit to occur when you commit a transaction.
-			Name:              DoltCommitOnTransactionCommit,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(DoltCommitOnTransactionCommit),
-			Default:           int8(0),
-		},
-		{
-			Name:              TransactionsDisabledSysVar,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(TransactionsDisabledSysVar),
-			Default:           int8(0),
-		},
-		{ // If true, disables the conflict and constraint violation check when you commit a transaction.
-			Name:              ForceTransactionCommit,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(ForceTransactionCommit),
-			Default:           int8(0),
-		},
-		{
-			Name:              CurrentBatchModeKey,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemIntType(CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
-			Default:           int64(0),
-		},
-	})
-
 	_, ok := os.LookupEnv(TransactionMergeStompEnvKey)
 	if ok {
 		transactionMergeStomp = true
 	}
 }
 
-func IsHeadKey(key string) (bool, string) {
-	if strings.HasSuffix(key, HeadKeySuffix) {
-		return true, key[:len(key)-len(HeadKeySuffix)]
-	}
+const TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"
 
-	return false, ""
-}
-
-func IsHeadRefKey(key string) (bool, string) {
-	if strings.HasSuffix(key, HeadRefKeySuffix) {
-		return true, key[:len(key)-len(HeadRefKeySuffix)]
-	}
-
-	return false, ""
-}
-
-func IsWorkingKey(key string) (bool, string) {
-	if strings.HasSuffix(key, WorkingKeySuffix) {
-		return true, key[:len(key)-len(WorkingKeySuffix)]
-	}
-
-	return false, ""
-}
+var transactionMergeStomp = false
 
 // Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type Session struct {
@@ -148,46 +58,6 @@ type Session struct {
 	email     string
 	dbStates  map[string]*DatabaseSessionState
 	provider  RevisionDatabaseProvider
-}
-
-type DatabaseSessionState struct {
-	dbName               string
-	headCommit           *doltdb.Commit
-	headRoot             *doltdb.RootValue
-	WorkingSet           *doltdb.WorkingSet
-	dbData               env.DbData
-	editSession          *editor.TableEditSession
-	detachedHead         bool
-	readOnly             bool
-	dirty                bool
-	readReplica          *env.Remote
-	TempTableRoot        *doltdb.RootValue
-	TempTableEditSession *editor.TableEditSession
-	tmpTablesDir         string
-
-	// Same as InitialDbState.Err, this signifies that this
-	// DatabaseSessionState is invalid. LookupDbState returning a
-	// DatabaseSessionState with Err != nil will return that err.
-	Err error
-}
-
-func (d DatabaseSessionState) GetRoots() doltdb.Roots {
-	if d.WorkingSet == nil {
-		return doltdb.Roots{
-			Head:    d.headRoot,
-			Working: d.headRoot,
-			Staged:  d.headRoot,
-		}
-	}
-	return doltdb.Roots{
-		Head:    d.headRoot,
-		Working: d.WorkingSet.WorkingRoot(),
-		Staged:  d.WorkingSet.StagedRoot(),
-	}
-}
-
-func (d DatabaseSessionState) EditOpts() editor.Options {
-	return d.editSession.Opts
 }
 
 var _ sql.Session = &Session{}
@@ -202,24 +72,6 @@ func DefaultSession() *Session {
 		provider: emptyRevisionDatabaseProvider{},
 	}
 	return sess
-}
-
-type InitialDbState struct {
-	Db           sql.Database
-	HeadCommit   *doltdb.Commit
-	DetachedHead bool
-	ReadOnly     bool
-	WorkingSet   *doltdb.WorkingSet
-	DbData       env.DbData
-	ReadReplica  *env.Remote
-	Remotes      map[string]env.Remote
-	Branches     map[string]env.BranchConfig
-
-	// If err is set, this InitialDbState is partially invalid, but may be
-	// usable to initialize a database at a revision specifier, for
-	// example. Adding this InitialDbState to a session will return this
-	// error.
-	Err error
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
@@ -1241,44 +1093,4 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 // NewDoltSession creates a persistable DoltSession with the given config arg
 func (sess *Session) NewDoltSession(conf config.ReadWriteConfig) *DoltSession {
 	return &DoltSession{Session: sess, globalsConf: conf, mu: &sync.Mutex{}}
-}
-
-// defineSystemVariables defines dolt-session variables in the engine as necessary
-func defineSystemVariables(name string) {
-	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-			{
-				Name:              HeadRefKey(name),
-				Scope:             sql.SystemVariableScope_Session,
-				Dynamic:           true,
-				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(HeadRefKey(name)),
-				Default:           "",
-			},
-			{
-				Name:              HeadKey(name),
-				Scope:             sql.SystemVariableScope_Session,
-				Dynamic:           true,
-				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(HeadKey(name)),
-				Default:           "",
-			},
-			{
-				Name:              WorkingKey(name),
-				Scope:             sql.SystemVariableScope_Session,
-				Dynamic:           true,
-				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(WorkingKey(name)),
-				Default:           "",
-			},
-			{
-				Name:              StagedKey(name),
-				Scope:             sql.SystemVariableScope_Session,
-				Dynamic:           true,
-				SetVarHintApplies: false,
-				Type:              sql.NewSystemStringType(StagedKey(name)),
-				Default:           "",
-			},
-		})
-	}
 }
