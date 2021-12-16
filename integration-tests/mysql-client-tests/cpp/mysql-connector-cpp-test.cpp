@@ -44,7 +44,7 @@ std::string queries[QUERIES_SIZE] =
    "select COUNT(*) FROM dolt_log",
   };
 
-int is_update[QUERIES_SIZE] = {0,0,0,1,0,0,0,0,0,1,0,0,0,0};
+int is_update[QUERIES_SIZE] = {1,0,0,1,0,0,0,0,0,1,0,0,0,0};
 
 int main(int argc, char **argv) {
   std::string user = argv[1];
