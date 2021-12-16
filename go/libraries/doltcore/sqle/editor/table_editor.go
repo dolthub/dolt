@@ -89,7 +89,7 @@ func NewSqlTableEditor(
 		temp = tt.IsTemporary()
 	}
 
-	editSess := state.EditSession
+	editSess := state.editSession
 	if temp {
 		editSess = state.TempTableEditSession
 	}

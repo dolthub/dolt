@@ -859,7 +859,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	editSession := dbState.EditSession
+	editSession := dbState.editSession
 
 	newRoot, err := editSession.Flush(ctx)
 	if err != nil {
@@ -1186,7 +1186,7 @@ func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (*editor
 	if isTemporary {
 		return dbState.TempTableEditSession, nil
 	}
-	return dbState.EditSession, nil
+	return dbState.editSession, nil
 }
 
 // GetAllTemporaryTables returns all temporary tables
