@@ -19,13 +19,13 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -39,60 +39,76 @@ func Theirs(key types.Value, cnf conflict.Conflict) (types.Value, error) {
 	return cnf.MergeValue, nil
 }
 
-func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string, tbl *doltdb.Table, autoResFunc AutoResolver, sess *editor.TableEditSession) error {
+func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string, root *doltdb.RootValue, autoResFunc AutoResolver, opts editor.Options) (*doltdb.RootValue, error) {
+	tbl, ok, err := root.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, doltdb.ErrTableNotFound
+	}
+
 	if has, err := tbl.HasConflicts(ctx); err != nil {
-		return err
+		return nil, err
 	} else if !has {
-		return nil
+		return root, nil
 	}
 
 	tblSch, err := tbl.GetSchema(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if schema.IsKeyless(tblSch) {
 		tbl, err = resolveKeylessTable(ctx, tbl, autoResFunc)
 	} else {
-		tbl, err = resolvePkTable(ctx, sess, tbl, tblName, autoResFunc)
+		tbl, err = resolvePkTable(ctx, tbl, tblName, opts, autoResFunc)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	schemas, _, err := tbl.GetConflicts(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-		m, err := types.NewMap(ctx, vrw)
+	m, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err = tbl.SetConflicts(ctx, schemas, m)
+	if err != nil {
+		return nil, err
+	}
+
+	numRowsInConflict, err := tbl.NumRowsInConflict(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if numRowsInConflict == 0 {
+		tbl, err = tbl.ClearConflicts(ctx)
 		if err != nil {
 			return nil, err
 		}
+	}
 
-		tbl, err = tbl.SetConflicts(ctx, schemas, m)
-		if err != nil {
-			return nil, err
-		}
+	newRoot, err := root.PutTable(ctx, tblName, tbl)
+	if err != nil {
+		return nil, err
+	}
 
-		numRowsInConflict, err := tbl.NumRowsInConflict(ctx)
-		if err != nil {
-			return nil, err
-		}
+	err = validateConstraintViolations(ctx, root, newRoot, tblName)
+	if err != nil {
+		return nil, err
+	}
 
-		if numRowsInConflict == 0 {
-			tbl, err = tbl.ClearConflicts(ctx)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return root.PutTable(ctx, tblName, tbl)
-	})
+	return newRoot, nil
 }
 
-func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *doltdb.Table, tblName string, auto AutoResolver) (*doltdb.Table, error) {
+func resolvePkTable(ctx context.Context, tbl *doltdb.Table, tblName string, opts editor.Options, auto AutoResolver) (*doltdb.Table, error) {
 	tblSch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -103,7 +119,7 @@ func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *dol
 		return nil, err
 	}
 
-	tableEditor, err := sess.GetTableEditor(ctx, tblName, tblSch)
+	tableEditor, err := editor.NewTableEditor(ctx, tbl, tblSch, tblName, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -164,20 +180,7 @@ func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *dol
 		return nil, err
 	}
 
-	root, err := sess.Flush(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	newTbl, ok, err := root.GetTable(ctx, tblName)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("resolved table `%s` cannot be found", tblName)
-	}
-
-	return newTbl, nil
+	return tableEditor.Table(ctx)
 }
 
 func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolver) (*doltdb.Table, error) {
@@ -224,6 +227,23 @@ func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolv
 	return tbl.UpdateRows(ctx, rowData)
 }
 
+func validateConstraintViolations(ctx context.Context, before, after *doltdb.RootValue, table string) error {
+	tables, err := after.GetTableNames(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, violators, err := AddConstraintViolations(ctx, after, before, set.NewStrSet(tables))
+	if err != nil {
+		return err
+	}
+	if violators.Size() > 0 {
+		return fmt.Errorf("resolving conflicts for table %s created foreign key violations", table)
+	}
+
+	return nil
+}
+
 type AutoResolveStats struct {
 }
 
@@ -254,31 +274,14 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver Auto
 }
 
 func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver AutoResolver, tbls []string) error {
+	var err error
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	tableEditSession := editor.CreateTableEditSession(root, opts)
-
 	for _, tblName := range tbls {
-		tbl, ok, err := root.GetTable(ctx, tblName)
-
-		if err != nil {
-			return err
-		}
-
-		if !ok {
-			return doltdb.ErrTableNotFound
-		}
-
-		err = ResolveTable(ctx, root.VRW(), tblName, tbl, autoResolver, tableEditSession)
-
+		root, err = ResolveTable(ctx, root.VRW(), tblName, root, autoResolver, opts)
 		if err != nil {
 			return err
 		}
 	}
 
-	newRoot, err := tableEditSession.Flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	return dEnv.UpdateWorkingRoot(ctx, newRoot)
+	return dEnv.UpdateWorkingRoot(ctx, root)
 }

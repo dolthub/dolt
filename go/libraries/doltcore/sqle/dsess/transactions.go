@@ -15,7 +15,6 @@
 package dsess
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -280,41 +279,19 @@ func (tx *DoltTransaction) doCommit(
 // updated root value
 func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.RootValue, tablesWithConflicts []string) (*doltdb.RootValue, error) {
 	start := time.Now()
-	tableEditSession := editor.CreateTableEditSession(mergedRoot, tx.mergeEditOpts)
-
-	for _, tblName := range tablesWithConflicts {
-		tbl, _, err := mergedRoot.GetTable(ctx, tblName)
-		if err != nil {
-			return nil, err
-		}
-
-		err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, tbl, merge.Theirs, tableEditSession)
-		if err != nil {
-			return nil, err
-		}
-
-		err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-			tbl, err = tbl.ClearConflicts(ctx)
-			if err != nil {
-				return nil, err
-			}
-
-			return root.PutTable(ctx, tblName, tbl)
-		})
-
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	var err error
-	mergedRoot, err = tableEditSession.Flush(ctx)
-	if err != nil {
-		return nil, err
+	root := mergedRoot
+	for _, tblName := range tablesWithConflicts {
+		root, err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, root, merge.Theirs, tx.mergeEditOpts)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	logrus.Tracef("resolving conflicts took %s", time.Since(start))
 
-	return mergedRoot, nil
+	return root, nil
 }
 
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given
