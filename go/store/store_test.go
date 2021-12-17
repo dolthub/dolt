@@ -228,7 +228,10 @@ func BenchmarkMapItr(b *testing.B) {
 		closeFunc = cl.Close
 	}
 
-	dmItr := index.NewDoltMapIter(itr.NextTuple, closeFunc, index.NewKVToSqlRowConverterForCols(m.Format(), testDataCols))
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(testDataCols...))
+	require.NoError(b, err)
+
+	dmItr := index.NewDoltMapIter(itr.NextTuple, closeFunc, index.NewKVToSqlRowConverterForCols(m.Format(), sch))
 	sqlCtx := sql.NewContext(ctx)
 
 	b.ResetTimer()

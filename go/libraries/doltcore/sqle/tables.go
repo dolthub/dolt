@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	editor2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -386,7 +387,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partiti
 type WritableDoltTable struct {
 	*DoltTable
 	db Database
-	ed *sqlTableEditor
+	ed editor2.TableEditor
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -433,7 +434,7 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, error) {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed editor2.TableEditor, err error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
@@ -441,20 +442,20 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, e
 		if t.ed != nil {
 			return t.ed, nil
 		}
-		var err error
-		t.ed, err = newSqlTableEditor(ctx, t)
-		return t.ed, err
 	}
-	return newSqlTableEditor(ctx, t)
-}
 
-func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
-	if t.ed != nil {
-		err := t.ed.flush(ctx)
-		t.ed = nil
-		return err
+	vrw := t.db.ddb.ValueReadWriter()
+
+	ed, err = editor2.NewSqlTableEditor(ctx, sess, t, t.db, t.db.gs, t.sch, vrw)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+
+	if sess.BatchMode() == dsess.Batched {
+		t.ed = ed
+	}
+
+	return ed, nil
 }
 
 // Deleter implements sql.DeletableTable
@@ -560,13 +561,10 @@ func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentia
 		return nil, err
 	}
 
-	return ed.aiTracker.Next(t.tableName, potentialVal, tableVal)
+	return ed.NextAutoIncrementValue(potentialVal, tableVal)
 }
 
 func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	if t.ed != nil {
-		return t.ed.GetAutoIncrementValue()
-	}
 	return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
