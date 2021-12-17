@@ -158,7 +158,7 @@ func (it *indexTuple) nilTuple() types.Tuple {
 
 func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
