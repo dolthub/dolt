@@ -350,7 +350,7 @@ func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 
 type emptyRowIterator struct{}
 
-func (itr emptyRowIterator) Next() (sql.Row, error) {
+func (itr emptyRowIterator) Next(*sql.Context) (sql.Row, error) {
 	return nil, io.EOF
 }
 
@@ -670,7 +670,7 @@ func (itr *doltTablePartitionIter) Close(*sql.Context) error {
 }
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
-func (itr *doltTablePartitionIter) Next() (sql.Partition, error) {
+func (itr *doltTablePartitionIter) Next(*sql.Context) (sql.Partition, error) {
 	itr.mu.Lock()
 	defer itr.mu.Unlock()
 
@@ -806,7 +806,12 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	return t.setRoot(ctx, newRoot)
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }
 
 func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
@@ -868,13 +873,17 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 		return err
 	}
 
-	return t.setRoot(ctx, newRoot)
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }
 
 // ModifyColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	root, err := t.getRoot(ctx)
-
 	if err != nil {
 		return err
 	}
@@ -943,12 +952,91 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
+	// For auto columns modified to be auto increment, we have more work to do
+	if !existingCol.AutoIncrement && col.AutoIncrement {
+		updatedSch, err := updatedTable.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		initialValue := column.Type.Zero()
+
+		colIdx, err := updatedSch.GetAllCols().IndexOf(columnName)
+		if err != nil {
+			return err
+		}
+
+		rowData, err := updatedTable.GetRowData(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
+		// root, which hasn't been updated yet
+		rowIter, err := partitionRows(ctx, updatedTable, t.projectedCols, index.SinglePartition{RowData: rowData})
+		if err != nil {
+			return err
+		}
+
+		for {
+			r, err := rowIter.Next(ctx)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+
+			cmp, err := column.Type.Compare(initialValue, r[colIdx])
+			if err != nil {
+				return err
+			}
+
+			if cmp < 0 {
+				initialValue = r[colIdx]
+			}
+		}
+
+		initialValNoms, err := col.TypeInfo.ConvertValueToNomsValue(ctx, root.VRW(), initialValue)
+		if err != nil {
+			return err
+		}
+
+		initialValNoms = increment(initialValNoms)
+
+		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, initialValNoms)
+		if err != nil {
+			return err
+		}
+	}
+
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
 	if err != nil {
 		return err
 	}
 
-	return t.setRoot(ctx, newRoot)
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return nil
+	// TODO: we can't make this update right now because renames happen in two passes if you rename a column mentioned in
+	//  a default value, and one of those two passes will have the old name for the column. Fix this by not analyzing
+	//  column defaults in NewDoltTable.
+	// return t.updateFromRoot(ctx, newRoot)
+}
+
+func increment(val types.Value) types.Value {
+	switch val := val.(type) {
+	case types.Int:
+		return val + 1
+	case types.Float:
+		return val + 1
+	case types.Uint:
+		return val + 1
+	default:
+		panic(fmt.Sprintf("unexpected auto inc column type %T", val))
+	}
 }
 
 // CreateIndex implements sql.IndexAlterableTable
@@ -1443,7 +1531,20 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 }
 
 func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) error {
-	sch := t.sch
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	if err != nil {
+		return err
+	}
+
+	sch, err := updatedTable.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
 
 	check = &(*check)
 	if check.Name == "" {
@@ -1454,7 +1555,7 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		}
 	}
 
-	_, err := sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
+	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
 	if err != nil {
 		return err
 	}
@@ -1465,11 +1566,6 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 	}
 
 	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
@@ -1488,9 +1584,22 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 }
 
 func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
-	sch := t.sch
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
 
-	err := sch.Checks().DropCheck(chName)
+	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	if err != nil {
+		return err
+	}
+
+	sch, err := updatedTable.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = sch.Checks().DropCheck(chName)
 	if err != nil {
 		return err
 	}
@@ -1501,11 +1610,6 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 	}
 
 	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}

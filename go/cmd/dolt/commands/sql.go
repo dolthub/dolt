@@ -1139,7 +1139,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query stri
 	}
 
 	if rowIter != nil {
-		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
+		err = mergeResultIntoStats(ctx, sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return err
 		}
@@ -1181,7 +1181,7 @@ func processBatchableEditQuery(ctx *sql.Context, se *engine.SqlEngine, query str
 				returnErr = err
 			}
 		}()
-		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
+		err = mergeResultIntoStats(ctx, sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return err
 		}
@@ -1325,7 +1325,7 @@ func updateBatchEditOutput() {
 }
 
 // Updates the batch insert stats with the results of an INSERT, UPDATE, or DELETE statement.
-func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
+func mergeResultIntoStats(ctx *sql.Context, statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
 	switch statement.(type) {
 	case *sqlparser.Insert, *sqlparser.Delete, *sqlparser.Update, *sqlparser.Load:
 		break
@@ -1334,7 +1334,7 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 	}
 
 	for {
-		row, err := rowIter.Next()
+		row, err := rowIter.Next(ctx)
 		if err == io.EOF {
 			return nil
 		} else if err != nil {

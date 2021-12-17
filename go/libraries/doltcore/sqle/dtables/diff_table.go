@@ -247,7 +247,7 @@ type commitInfo struct {
 }
 
 // Next returns the next row
-func (itr *diffRowItr) Next() (sql.Row, error) {
+func (itr *diffRowItr) Next(*sql.Context) (sql.Row, error) {
 	r, _, err := itr.diffSrc.NextDiff()
 
 	if err != nil {
@@ -456,8 +456,6 @@ var _ sql.PartitionIter = &diffPartitions{}
 
 // collection of partitions. Implements PartitionItr
 type diffPartitions struct {
-	// TODO change the sql.PartitionIterator interface so that Next receives the context rather than caching it.
-	ctx             *sql.Context
 	tblName         string
 	cmItr           doltdb.CommitItr
 	cmHashToTblInfo map[hash.Hash]tblInfoAtCommit
@@ -497,7 +495,6 @@ func newDiffPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.Root
 	}
 
 	return &diffPartitions{
-		ctx:             ctx,
 		tblName:         tblName,
 		cmItr:           cmItr,
 		cmHashToTblInfo: cmHashToTblInfo,
@@ -552,9 +549,9 @@ func (dp *diffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *
 	return nextPartition, nil
 }
 
-func (dp *diffPartitions) Next() (sql.Partition, error) {
+func (dp *diffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 	for {
-		cmHash, cm, err := dp.cmItr.Next(dp.ctx)
+		cmHash, cm, err := dp.cmItr.Next(ctx)
 
 		if err != nil {
 			return nil, err
@@ -566,13 +563,13 @@ func (dp *diffPartitions) Next() (sql.Partition, error) {
 			return nil, err
 		}
 
-		tbl, _, _, err := root.GetTableInsensitive(dp.ctx, dp.tblName)
+		tbl, _, _, err := root.GetTableInsensitive(ctx, dp.tblName)
 
 		if err != nil {
 			return nil, err
 		}
 
-		next, err := dp.processCommit(dp.ctx, cmHash, cm, root, tbl)
+		next, err := dp.processCommit(ctx, cmHash, cm, root, tbl)
 
 		if err != nil {
 			return nil, err
@@ -580,13 +577,13 @@ func (dp *diffPartitions) Next() (sql.Partition, error) {
 
 		if next != nil {
 			// If we can't diff this commit with its parent, don't traverse any lower
-			canDiff, err := next.isDiffablePartition(dp.ctx)
+			canDiff, err := next.isDiffablePartition(ctx)
 			if err != nil {
 				return nil, err
 			}
 
 			if !canDiff {
-				dp.ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
+				ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
 				return nil, io.EOF
 			}
 

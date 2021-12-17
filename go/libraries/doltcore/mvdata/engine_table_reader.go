@@ -92,7 +92,7 @@ func (s *sqlEngineTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 }
 
 func (s *sqlEngineTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
-	next, err := s.iter.Next()
+	next, err := s.iter.Next(s.sqlCtx)
 	if err != nil {
 		return nil, err
 	}

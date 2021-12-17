@@ -55,7 +55,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 
 	sqlRows := make([]sql.Row, 0)
 	var r sql.Row
-	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
+	for r, err = iter.Next(sqlCtx); err == nil; r, err = iter.Next(sqlCtx) {
 		sqlRows = append(sqlRows, r)
 	}
 
@@ -82,7 +82,7 @@ func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	}
 
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(sqlCtx)
 		if err == io.EOF {
 			break
 		}

@@ -39,9 +39,9 @@ type keylessRowIter struct {
 	lastCard uint64
 }
 
-func (k *keylessRowIter) Next() (sql.Row, error) {
+func (k *keylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if k.lastCard == 0 {
-		r, err := k.keyedIter.Next()
+		r, err := k.keyedIter.Next(ctx)
 
 		if err != nil {
 			return nil, err
@@ -101,7 +101,7 @@ func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []
 	colsCopy = append(colsCopy, schema.NewColumn("__cardinality__", schema.KeylessRowCardinalityTag, types.UintKind, false))
 
 	conv := index.NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, colsCopy, len(colsCopy))
-	keyedItr, err := index.NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
+	keyedItr, err := index.NewDoltMapIter(mapIter.NextTuple, nil, conv), nil
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []str
 	}
 
 	conv := index.NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, cols, len(cols))
-	return index.NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
+	return index.NewDoltMapIter(mapIter.NextTuple, nil, conv), nil
 }
 
 func iterForPartition(ctx context.Context, partition *doltTablePartition) (types.MapTupleIterator, error) {
