@@ -295,7 +295,8 @@ func (te *sqlTableEditor) resolveFks(ctx *sql.Context) error {
 	})
 }
 
-func autoIncrementColFromSchema(sch schema.Schema) (autoCol schema.Column) {
+func autoIncrementColFromSchema(sch schema.Schema) schema.Column {
+	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
 			autoCol = col
@@ -303,5 +304,5 @@ func autoIncrementColFromSchema(sch schema.Schema) (autoCol schema.Column) {
 		}
 		return
 	})
-	return
+	return autoCol
 }
