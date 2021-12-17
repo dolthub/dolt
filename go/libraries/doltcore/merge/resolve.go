@@ -39,60 +39,58 @@ func Theirs(key types.Value, cnf conflict.Conflict) (types.Value, error) {
 	return cnf.MergeValue, nil
 }
 
-func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string, tbl *doltdb.Table, autoResFunc AutoResolver, sess *editor.TableEditSession) error {
+func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string, tbl *doltdb.Table, autoResFunc AutoResolver, opts editor.Options) (*doltdb.Table, error) {
 	if has, err := tbl.HasConflicts(ctx); err != nil {
-		return err
+		return nil, err
 	} else if !has {
-		return nil
+		return tbl, nil
 	}
 
 	tblSch, err := tbl.GetSchema(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if schema.IsKeyless(tblSch) {
 		tbl, err = resolveKeylessTable(ctx, tbl, autoResFunc)
 	} else {
-		tbl, err = resolvePkTable(ctx, sess, tbl, tblName, autoResFunc)
+		tbl, err = resolvePkTable(ctx, tbl, tblName, opts, autoResFunc)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	schemas, _, err := tbl.GetConflicts(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-		m, err := types.NewMap(ctx, vrw)
+	m, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err = tbl.SetConflicts(ctx, schemas, m)
+	if err != nil {
+		return nil, err
+	}
+
+	numRowsInConflict, err := tbl.NumRowsInConflict(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if numRowsInConflict == 0 {
+		tbl, err = tbl.ClearConflicts(ctx)
 		if err != nil {
 			return nil, err
 		}
+	}
 
-		tbl, err = tbl.SetConflicts(ctx, schemas, m)
-		if err != nil {
-			return nil, err
-		}
-
-		numRowsInConflict, err := tbl.NumRowsInConflict(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		if numRowsInConflict == 0 {
-			tbl, err = tbl.ClearConflicts(ctx)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return root.PutTable(ctx, tblName, tbl)
-	})
+	return tbl, nil
 }
 
-func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *doltdb.Table, tblName string, auto AutoResolver) (*doltdb.Table, error) {
+func resolvePkTable(ctx context.Context, tbl *doltdb.Table, tblName string, opts editor.Options, auto AutoResolver) (*doltdb.Table, error) {
 	tblSch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -103,7 +101,7 @@ func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *dol
 		return nil, err
 	}
 
-	tableEditor, err := sess.GetTableEditor(ctx, tblName, tblSch)
+	tableEditor, err := editor.NewTableEditor(ctx, tbl, tblSch, tblName, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -164,20 +162,7 @@ func resolvePkTable(ctx context.Context, sess *editor.TableEditSession, tbl *dol
 		return nil, err
 	}
 
-	root, err := sess.Flush(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	newTbl, ok, err := root.GetTable(ctx, tblName)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("resolved table `%s` cannot be found", tblName)
-	}
-
-	return newTbl, nil
+	return tableEditor.Table(ctx)
 }
 
 func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolver) (*doltdb.Table, error) {
@@ -255,8 +240,6 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver Auto
 
 func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver AutoResolver, tbls []string) error {
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-	tableEditSession := editor.CreateTableEditSession(root, opts)
-
 	for _, tblName := range tbls {
 		tbl, ok, err := root.GetTable(ctx, tblName)
 
@@ -268,17 +251,17 @@ func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue,
 			return doltdb.ErrTableNotFound
 		}
 
-		err = ResolveTable(ctx, root.VRW(), tblName, tbl, autoResolver, tableEditSession)
+		tbl, err = ResolveTable(ctx, root.VRW(), tblName, tbl, autoResolver, opts)
 
+		if err != nil {
+			return err
+		}
+
+		root, err = root.PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return err
 		}
 	}
 
-	newRoot, err := tableEditSession.Flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	return dEnv.UpdateWorkingRoot(ctx, newRoot)
+	return dEnv.UpdateWorkingRoot(ctx, root)
 }
