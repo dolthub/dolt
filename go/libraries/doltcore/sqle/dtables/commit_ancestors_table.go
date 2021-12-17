@@ -15,8 +15,6 @@
 package dtables
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -70,7 +68,6 @@ func (dt *CommitAncestorsTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partiti
 // CommitAncestorsRowItr is a sql.RowItr which iterates over each
 // (commit, parent_commit) pair as if it's a row in the table.
 type CommitAncestorsRowItr struct {
-	ctx   context.Context
 	itr   doltdb.CommitItr
 	ddb   *doltdb.DoltDB
 	cache []sql.Row
@@ -84,7 +81,6 @@ func NewCommitAncestorsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*CommitA
 	}
 
 	return &CommitAncestorsRowItr{
-		ctx: sqlCtx,
 		itr: itr,
 		ddb: ddb,
 	}, nil
@@ -92,15 +88,15 @@ func NewCommitAncestorsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*CommitA
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *CommitAncestorsRowItr) Next() (sql.Row, error) {
+func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if len(itr.cache) == 0 {
-		ch, cm, err := itr.itr.Next(itr.ctx)
+		ch, cm, err := itr.itr.Next(ctx)
 		if err != nil {
 			// When complete itr.Next will return io.EOF
 			return nil, err
 		}
 
-		parents, err := itr.ddb.ResolveAllParents(itr.ctx, cm)
+		parents, err := itr.ddb.ResolveAllParents(ctx, cm)
 		if err != nil {
 			return nil, err
 		}

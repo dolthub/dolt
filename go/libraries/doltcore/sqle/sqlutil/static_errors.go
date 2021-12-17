@@ -43,7 +43,7 @@ func NewStaticErrorRowIter(err error) sql.RowIter {
 	return &StaticErrorRowIter{err}
 }
 
-func (i *StaticErrorRowIter) Next() (sql.Row, error) {
+func (i *StaticErrorRowIter) Next(*sql.Context) (sql.Row, error) {
 	return nil, i.err
 }
 

@@ -58,7 +58,6 @@ func (c *ChannelRowSource) Children() []sql.Node {
 func (c *ChannelRowSource) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 	return &channelRowIter{
 		rowChannel: c.rowChannel,
-		ctx:        ctx,
 	}, nil
 }
 
@@ -74,16 +73,15 @@ func (c *ChannelRowSource) WithChildren(children ...sql.Node) (sql.Node, error) 
 // channelRowIter wraps the channel under the sql.RowIter interface
 type channelRowIter struct {
 	rowChannel chan sql.Row
-	ctx        *sql.Context
 }
 
 var _ sql.RowIter = (*channelRowIter)(nil)
 
 // Next implements the sql.RowIter interface.
-func (c *channelRowIter) Next() (sql.Row, error) {
+func (c *channelRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	for r := range c.rowChannel {
 		select {
-		case <-c.ctx.Done():
+		case <-ctx.Done():
 			return nil, io.EOF
 		default:
 			return r, nil

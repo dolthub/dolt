@@ -1000,8 +1000,8 @@ func TestRenameColumn(t *testing.T) {
 		},
 		{
 			name:        "column name collision",
-			query:       "alter table people rename column id to age",
-			expectedErr: "A column with the name age already exists",
+			query:       "alter table people rename column id to AGE",
+			expectedErr: "Column \"AGE\" already exists",
 		},
 	}
 

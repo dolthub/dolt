@@ -72,8 +72,8 @@ func (bt *RemotesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (bt *RemotesTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewRemoteItr(sqlCtx, bt.ddb)
+func (bt *RemotesTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	return NewRemoteItr(ctx, bt.ddb)
 }
 
 // RemoteItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -112,7 +112,7 @@ func NewRemoteItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *RemoteItr) Next() (sql.Row, error) {
+func (itr *RemoteItr) Next(*sql.Context) (sql.Row, error) {
 	if itr.idx >= len(itr.remotes) {
 		return nil, io.EOF
 	}

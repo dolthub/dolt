@@ -67,8 +67,8 @@ func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (dt *LogTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewLogItr(sqlCtx, dt.ddb, dt.head)
+func (dt *LogTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return NewLogItr(ctx, dt.ddb, dt.head)
 }
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -78,8 +78,8 @@ type LogItr struct {
 }
 
 // NewLogItr creates a LogItr from the current environment.
-func NewLogItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
-	commits, err := actions.TimeSortedCommits(sqlCtx, ddb, head, -1)
+func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
+	commits, err := actions.TimeSortedCommits(ctx, ddb, head, -1)
 
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func NewLogItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*L
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *LogItr) Next() (sql.Row, error) {
+func (itr *LogItr) Next(*sql.Context) (sql.Row, error) {
 	if itr.idx >= len(itr.commits) {
 		return nil, io.EOF
 	}

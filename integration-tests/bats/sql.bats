@@ -969,6 +969,17 @@ SQL
     [[ "$output" =~ "0,1999-11-02 17:39:38" ]] || false
     [[ "$output" =~ "1,2021-01-08 02:59:27" ]] || false
     [[ "${#lines[@]}" = "3" ]] || false
+
+    dolt sql <<SQL
+CREATE TABLE t4(pk int unsigned primary key, v1 INT, INDEX(v1));
+insert into t4 values (1, 1);
+ALTER TABLE t4 MODIFY COLUMN pk float;
+SQL
+
+    run dolt sql -q "SELECT * FROM t4 ORDER BY pk" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
 }
 
 @test "sql: alter table modify column type failure" {

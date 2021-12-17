@@ -93,7 +93,7 @@ func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error)
 
 // PartitionRows returns a RowIter for the given partition
 func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return conflictRowIter{ctx, ct.rd}, nil
+	return conflictRowIter{ct.rd}, nil
 }
 
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
@@ -103,14 +103,13 @@ func (ct ConflictsTable) Deleter(*sql.Context) sql.RowDeleter {
 }
 
 type conflictRowIter struct {
-	ctx *sql.Context
-	rd  *merge.ConflictReader
+	rd *merge.ConflictReader
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr conflictRowIter) Next() (sql.Row, error) {
-	cnf, _, err := itr.rd.NextConflict(itr.ctx)
+func (itr conflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
+	cnf, _, err := itr.rd.NextConflict(ctx)
 
 	if err != nil {
 		return nil, err
