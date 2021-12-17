@@ -60,7 +60,7 @@ type sqlTableWriter struct {
 	autoIncrementType typeinfo.TypeInfo
 	kvToSQLRow        *index.KVToSqlRowConverter
 	tableEditor       editor.TableEditor
-	sess              *editor.TableEditSession
+	sess              editor.WriteSession
 	temporary         bool
 	aiTracker         globalstate.AutoIncrementTracker
 }
@@ -286,7 +286,7 @@ func (te *sqlTableWriter) resolveFks(ctx *sql.Context) error {
 			return nil, err
 		}
 		for _, foreignKey := range fkc.UnresolvedForeignKeys() {
-			newRoot, _, err := creation.ResolveForeignKey(ctx, root, tbl, foreignKey, te.sess.Opts)
+			newRoot, _, err := creation.ResolveForeignKey(ctx, root, tbl, foreignKey, te.sess.GetOptions())
 			if err == nil {
 				root = newRoot
 			}

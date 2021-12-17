@@ -205,7 +205,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, tCharacteristic), nil
+	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.GetOptions(), tCharacteristic), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -736,7 +736,7 @@ func (sess *Session) SwitchWorkingSet(
 			tCharacteristic = sql.ReadOnly
 		}
 	}
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, tCharacteristic))
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.GetOptions(), tCharacteristic))
 
 	return nil
 }
@@ -853,11 +853,15 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 	}
 	if intVal == 0 {
 		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Opts.ForeignKeyChecksDisabled = true
+			opts := dbState.EditSession.GetOptions()
+			opts.ForeignKeyChecksDisabled = true
+			dbState.EditSession.SetOptions(opts)
 		}
 	} else if intVal == 1 {
 		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Opts.ForeignKeyChecksDisabled = false
+			opts := dbState.EditSession.GetOptions()
+			opts.ForeignKeyChecksDisabled = false
+			dbState.EditSession.SetOptions(opts)
 		}
 	} else {
 		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
@@ -1013,7 +1017,7 @@ func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, 
 	if err != nil {
 		return err
 	}
-	dbState.TempTableEditSession = editor.CreateTableEditSession(newRoot, dbState.EditSession.Opts)
+	dbState.TempTableEditSession = editor.CreateTableEditSession(newRoot, dbState.EditSession.GetOptions())
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }

@@ -1176,7 +1176,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 }
 
 // TableEditSession returns the TableEditSession for this database from the given context.
-func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (*editor.TableEditSession, error) {
+func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (editor.WriteSession, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := sess.LookupDbState(ctx, db.Name())
 	if err != nil {

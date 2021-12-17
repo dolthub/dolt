@@ -28,10 +28,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// sessionedTableEditor represents a table editor obtained from a TableEditSession. This table editor may be shared
+// sessionedTableEditor represents a table editor obtained from a tableEditSession. This table editor may be shared
 // by multiple callers. It is thread safe.
 type sessionedTableEditor struct {
-	tableEditSession  *TableEditSession
+	tableEditSession  *tableEditSession
 	tableEditor       TableEditor
 	referencedTables  []doltdb.ForeignKey // The tables that we reference to ensure an insert or update is valid
 	referencingTables []doltdb.ForeignKey // The tables that reference us to ensure their inserts and updates are valid
@@ -58,7 +58,7 @@ func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tupl
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
-	if !ste.tableEditSession.Opts.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
+	if !ste.tableEditSession.opts.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
 		err := ste.onDeleteHandleRowsReferencingValues(ctx, key, tagToVal)
 		if err != nil {
 			return err
@@ -92,7 +92,7 @@ func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, r row.Row) error
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
-	if !ste.tableEditSession.Opts.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
+	if !ste.tableEditSession.opts.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
 		err := ste.handleReferencingRowsOnDelete(ctx, r)
 		if err != nil {
 			return err
@@ -209,7 +209,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 
 func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context.Context, key types.Tuple, dRowTaggedVals row.TaggedValues) error {
 	//TODO: all self referential logic assumes non-composite keys
-	if ste.tableEditSession.Opts.ForeignKeyChecksDisabled {
+	if ste.tableEditSession.opts.ForeignKeyChecksDisabled {
 		return nil
 	}
 
@@ -321,7 +321,7 @@ func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context
 
 func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
 	//TODO: all self referential logic assumes non-composite keys
-	if ste.tableEditSession.Opts.ForeignKeyChecksDisabled {
+	if ste.tableEditSession.opts.ForeignKeyChecksDisabled {
 		return nil
 	}
 	dOldRowTaggedVals, err := dOldRow.TaggedValues()
@@ -525,7 +525,7 @@ func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row,
 
 // validateForInsert returns whether the given row is able to be inserted into the target table.
 func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVals row.TaggedValues) error {
-	if ste.tableEditSession.Opts.ForeignKeyChecksDisabled {
+	if ste.tableEditSession.opts.ForeignKeyChecksDisabled {
 		return nil
 	}
 

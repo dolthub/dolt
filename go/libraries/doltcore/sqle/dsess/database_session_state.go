@@ -46,13 +46,13 @@ type DatabaseSessionState struct {
 	headRoot             *doltdb.RootValue
 	WorkingSet           *doltdb.WorkingSet
 	dbData               env.DbData
-	EditSession          *editor.TableEditSession
+	EditSession          editor.WriteSession
 	detachedHead         bool
 	readOnly             bool
 	dirty                bool
 	readReplica          *env.Remote
 	TempTableRoot        *doltdb.RootValue
-	TempTableEditSession *editor.TableEditSession
+	TempTableEditSession editor.WriteSession
 	tmpTablesDir         string
 
 	// Same as InitialDbState.Err, this signifies that this
@@ -77,5 +77,5 @@ func (d DatabaseSessionState) GetRoots() doltdb.Roots {
 }
 
 func (d DatabaseSessionState) EditOpts() editor.Options {
-	return d.EditSession.Opts
+	return d.EditSession.GetOptions()
 }
