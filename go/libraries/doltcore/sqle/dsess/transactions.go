@@ -279,18 +279,11 @@ func (tx *DoltTransaction) doCommit(
 // updated root value
 func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.RootValue, tablesWithConflicts []string) (*doltdb.RootValue, error) {
 	start := time.Now()
+
+	var err error
+	root := mergedRoot
 	for _, tblName := range tablesWithConflicts {
-		tbl, _, err := mergedRoot.GetTable(ctx, tblName)
-		if err != nil {
-			return nil, err
-		}
-
-		tbl, err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, tbl, merge.Theirs, tx.mergeEditOpts)
-		if err != nil {
-			return nil, err
-		}
-
-		mergedRoot, err = mergedRoot.PutTable(ctx, tblName, tbl)
+		root, err = merge.ResolveTable(ctx, mergedRoot.VRW(), tblName, root, merge.Theirs, tx.mergeEditOpts)
 		if err != nil {
 			return nil, err
 		}
@@ -298,7 +291,7 @@ func (tx *DoltTransaction) stompConflicts(ctx *sql.Context, mergedRoot *doltdb.R
 
 	logrus.Tracef("resolving conflicts took %s", time.Since(start))
 
-	return mergedRoot, nil
+	return root, nil
 }
 
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given

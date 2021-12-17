@@ -872,7 +872,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 			continue
 		}
 
-		newRootHasTable, err := newRoot.HasTable(ctx, tblName);
+		newRootHasTable, err := newRoot.HasTable(ctx, tblName)
 		if err != nil {
 			return nil, nil, err
 		}
