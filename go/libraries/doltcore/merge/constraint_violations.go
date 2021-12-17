@@ -259,7 +259,7 @@ func parentFkConstraintViolationsProcess(
 	postChildIndexPartialKey types.Tuple,
 	postChildCVMapEditor *types.MapEditor,
 ) (bool, error) {
-	foundViolation := false
+	foundViolation := true
 	mapIter := noms.NewNomsRangeReader(postChild.IndexSchema, postChild.IndexData,
 		[]*noms.ReadRange{{Start: postChildIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postChildIndexPartialKey)}})
 	defer mapIter.Close(ctx)
@@ -290,7 +290,7 @@ func parentFkConstraintViolationsProcess(
 			return false, err
 		}
 		postChildCVMapEditor.Set(cvKey, cvVal)
-		foundViolation = true
+		foundViolation = false
 	}
 	if err != io.EOF {
 		return false, err
