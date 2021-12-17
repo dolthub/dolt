@@ -17,6 +17,8 @@ package dtables
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -83,7 +85,7 @@ func (cvt *ConstraintViolationsTable) Schema() sql.Schema {
 
 // Partitions implements the interface sql.Table.
 func (cvt *ConstraintViolationsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.EmptyMap), nil
+	return index.SinglePartitionIterFromNomsMap(types.EmptyMap), nil
 }
 
 // PartitionRows implements the interface sql.Table.

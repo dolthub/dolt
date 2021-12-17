@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
@@ -29,7 +30,7 @@ import (
 var _ sql.RowIter = (*keylessRowIter)(nil)
 
 type keylessRowIter struct {
-	keyedIter *DoltMapIter
+	keyedIter *index.DoltMapIter
 
 	cardIdx     int
 	nonCardCols int
@@ -99,8 +100,8 @@ func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []
 	copy(colsCopy, cols)
 	colsCopy = append(colsCopy, schema.NewColumn("__cardinality__", schema.KeylessRowCardinalityTag, types.UintKind, false))
 
-	conv := NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, colsCopy, len(colsCopy))
-	keyedItr, err := NewDoltMapIter(mapIter.NextTuple, nil, conv), nil
+	conv := index.NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, colsCopy, len(colsCopy))
+	keyedItr, err := index.NewDoltMapIter(mapIter.NextTuple, nil, conv), nil
 	if err != nil {
 		return nil, err
 	}
@@ -123,8 +124,8 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []str
 		return nil, err
 	}
 
-	conv := NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, cols, len(cols))
-	return NewDoltMapIter(mapIter.NextTuple, nil, conv), nil
+	conv := index.NewKVToSqlRowConverter(tbl.Format(), tagToSqlColIdx, cols, len(cols))
+	return index.NewDoltMapIter(mapIter.NextTuple, nil, conv), nil
 }
 
 func iterForPartition(ctx context.Context, partition *doltTablePartition) (types.MapTupleIterator, error) {

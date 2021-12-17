@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -53,7 +53,7 @@ func (s StatusTable) Schema() sql.Schema {
 }
 
 func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
+	return index.SinglePartitionIterFromNomsMap(types.Map{}), nil
 }
 
 func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.RowIter, error) {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -87,7 +88,7 @@ func (ct ConflictsTable) Schema() sql.Schema {
 
 // Partitions returns a PartitionIter which can be used to get all the data partitions
 func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
+	return index.SinglePartitionIterFromNomsMap(types.Map{}), nil
 }
 
 // PartitionRows returns a RowIter for the given partition

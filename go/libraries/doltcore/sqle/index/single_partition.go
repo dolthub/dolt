@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqlutil
+package index
 
 import (
 	"io"
@@ -42,7 +42,7 @@ type SinglePartitionIter struct {
 	RowData types.Map
 }
 
-func NewSinglePartitionIter(rowData types.Map) SinglePartitionIter {
+func SinglePartitionIterFromNomsMap(rowData types.Map) SinglePartitionIter {
 	return SinglePartitionIter{&sync.Once{}, rowData}
 }
 

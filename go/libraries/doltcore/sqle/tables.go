@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
@@ -144,14 +145,9 @@ var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 
 // WithIndexLookup implements sql.IndexedTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	dil, ok := lookup.(*doltIndexLookup)
-	if !ok {
-		return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
-	}
-
 	return &IndexedDoltTable{
 		table:       t,
-		indexLookup: dil,
+		indexLookup: lookup,
 	}
 }
 
@@ -199,61 +195,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, err
 	}
 
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var sqlIndexes []sql.Index
-	cols := sch.GetPKCols().GetColumns()
-
-	if len(cols) > 0 {
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           t.db,
-			id:           "PRIMARY",
-			indexRowData: rowData,
-			indexSch:     sch,
-			table:        tbl,
-			tableData:    rowData,
-			tableName:    t.Name(),
-			tableSch:     sch,
-			unique:       true,
-			generated:    false,
-		})
-	}
-
-	for _, index := range sch.Indexes().AllIndexes() {
-		indexRowData, err := tbl.GetIndexRowData(ctx, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		cols := make([]schema.Column, index.Count())
-		for i, tag := range index.IndexedColumnTags() {
-			cols[i], _ = index.GetColumn(tag)
-		}
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           t.db,
-			id:           index.Name(),
-			indexRowData: indexRowData,
-			indexSch:     index.Schema(),
-			table:        tbl,
-			tableData:    rowData,
-			tableName:    t.Name(),
-			tableSch:     sch,
-			unique:       index.IsUnique(),
-			comment:      index.Comment(),
-			generated:    false,
-		})
-	}
-
-	return sqlIndexes, nil
+	return index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
 }
 
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
@@ -433,7 +375,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partiti
 		}
 
 		return newRowIterator(ctx, t, projCols, &typedPartition)
-	case sqlutil.SinglePartition:
+	case index.SinglePartition:
 		return newRowIterator(ctx, t, projCols, &doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
 	}
 
@@ -468,13 +410,9 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 }
 
 func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	dil, ok := lookup.(*doltIndexLookup)
-	if !ok {
-		return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
-	}
 	return &WritableIndexedDoltTable{
 		WritableDoltTable: t,
-		indexLookup:       dil,
+		indexLookup:       lookup,
 	}
 }
 
@@ -1037,7 +975,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 		// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
 		// root, which hasn't been updated yet
-		rowIter, err := partitionRows(ctx, updatedTable, t.projectedCols, sqlutil.SinglePartition{RowData: rowData})
+		rowIter, err := partitionRows(ctx, updatedTable, t.projectedCols, index.SinglePartition{RowData: rowData})
 		if err != nil {
 			return err
 		}

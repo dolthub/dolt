@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package index
 
 import (
+	"context"
 	"errors"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,37 +26,110 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type DoltIndex interface {
-	sql.Index
-	Schema() schema.Schema
-	IndexSchema() schema.Schema
-	TableData() types.Map
-	IndexRowData() types.Map
+func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !schema.IsKeyless(sch) {
+		idx, err := getPrimaryKeyIndex(ctx, db, tbl, t, sch)
+		if err != nil {
+			return nil, err
+		}
+		indexes = append(indexes, idx)
+	}
+
+	for _, definition := range sch.Indexes().AllIndexes() {
+		idx, err := getSecondaryIndex(ctx, db, tbl, t, sch, definition)
+		if err != nil {
+			return nil, err
+		}
+		indexes = append(indexes, idx)
+	}
+
+	return indexes, nil
+}
+
+func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema) (sql.Index, error) {
+	tableRows, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cols := sch.GetPKCols().GetColumns()
+
+	return doltIndex{
+		id:        "PRIMARY",
+		tblName:   tbl,
+		dbName:    db,
+		columns:   cols,
+		indexSch:  sch,
+		tableSch:  sch,
+		unique:    true,
+		comment:   "",
+		indexRows: tableRows,
+		tableRows: tableRows,
+		vrw:       t.ValueReadWriter(),
+	}, nil
+}
+
+func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema, idx schema.Index) (sql.Index, error) {
+	indexRows, err := t.GetIndexRowData(ctx, idx.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	tableRows, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cols := make([]schema.Column, idx.Count())
+	for i, tag := range idx.IndexedColumnTags() {
+		cols[i], _ = idx.GetColumn(tag)
+	}
+
+	return doltIndex{
+		id:        idx.Name(),
+		tblName:   tbl,
+		dbName:    db,
+		columns:   cols,
+		indexSch:  idx.Schema(),
+		tableSch:  sch,
+		unique:    idx.IsUnique(),
+		comment:   idx.Comment(),
+		indexRows: indexRows,
+		tableRows: tableRows,
+		vrw:       t.ValueReadWriter(),
+	}, nil
 }
 
 type doltIndex struct {
-	cols         []schema.Column
-	db           sql.Database
-	id           string
-	indexRowData types.Map
-	indexSch     schema.Schema
-	table        *doltdb.Table
-	tableData    types.Map
-	tableName    string
-	tableSch     schema.Schema
-	unique       bool
-	comment      string
-	generated    bool
+	id      string
+	tblName string
+	dbName  string
+
+	columns []schema.Column
+
+	indexSch  schema.Schema
+	tableSch  schema.Schema
+	indexRows types.Map
+	tableRows types.Map
+	unique    bool
+	comment   string
+
+	vrw types.ValueReadWriter
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
 
 // ColumnExpressionTypes implements the interface sql.Index.
-func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
-	cets := make([]sql.ColumnExpressionType, len(di.cols))
-	for i, col := range di.cols {
+func (di doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+	cets := make([]sql.ColumnExpressionType, len(di.columns))
+	for i, col := range di.columns {
 		cets[i] = sql.ColumnExpressionType{
-			Expression: di.tableName + "." + col.Name,
+			Expression: di.tblName + "." + col.Name,
 			Type:       col.TypeInfo.ToSqlType(),
 		}
 	}
@@ -63,7 +137,7 @@ func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpress
 }
 
 // NewLookup implements the interface sql.Index.
-func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+func (di doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
 	if len(ranges) == 0 {
 		return nil, nil
 	}
@@ -73,7 +147,7 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 	var readRanges []*noms.ReadRange
 RangeLoop:
 	for _, rang := range ranges {
-		if len(rang) > len(di.cols) {
+		if len(rang) > len(di.columns) {
 			return nil, nil
 		}
 
@@ -102,10 +176,10 @@ RangeLoop:
 
 			cb := columnBounds{}
 			// We promote each type as the value has already been validated against the type
-			promotedType := di.cols[i].TypeInfo.Promote()
+			promotedType := di.columns[i].TypeInfo.Promote()
 			if rangeColumnExpr.HasLowerBound() {
 				key := sql.GetRangeCutKey(rangeColumnExpr.LowerBound)
-				val, err := promotedType.ConvertValueToNomsValue(ctx, di.table.ValueReadWriter(), key)
+				val, err := promotedType.ConvertValueToNomsValue(ctx, di.vrw, key)
 				if err != nil {
 					return nil, err
 				}
@@ -122,7 +196,7 @@ RangeLoop:
 			}
 			if rangeColumnExpr.HasUpperBound() {
 				key := sql.GetRangeCutKey(rangeColumnExpr.UpperBound)
-				val, err := promotedType.ConvertValueToNomsValue(ctx, di.table.ValueReadWriter(), key)
+				val, err := promotedType.ConvertValueToNomsValue(ctx, di.vrw, key)
 				if err != nil {
 					return nil, err
 				}
@@ -164,83 +238,83 @@ RangeLoop:
 }
 
 // Database implement sql.Index
-func (di *doltIndex) Database() string {
-	return di.db.Name()
+func (di doltIndex) Database() string {
+	return di.dbName
 }
 
 // Expressions implements sql.Index
-func (di *doltIndex) Expressions() []string {
-	strs := make([]string, len(di.cols))
-	for i, col := range di.cols {
-		strs[i] = di.tableName + "." + col.Name
+func (di doltIndex) Expressions() []string {
+	strs := make([]string, len(di.columns))
+	for i, col := range di.columns {
+		strs[i] = di.tblName + "." + col.Name
 	}
 	return strs
 }
 
 // ID implements sql.Index
-func (di *doltIndex) ID() string {
+func (di doltIndex) ID() string {
 	return di.id
 }
 
 // IsUnique implements sql.Index
-func (di *doltIndex) IsUnique() bool {
+func (di doltIndex) IsUnique() bool {
 	return di.unique
 }
 
 // Comment implements sql.Index
-func (di *doltIndex) Comment() string {
+func (di doltIndex) Comment() string {
 	return di.comment
 }
 
 // IndexType implements sql.Index
-func (di *doltIndex) IndexType() string {
+func (di doltIndex) IndexType() string {
 	return "BTREE"
 }
 
 // IsGenerated implements sql.Index
-func (di *doltIndex) IsGenerated() bool {
-	return di.generated
+func (di doltIndex) IsGenerated() bool {
+	return false
 }
 
-// Schema returns the dolt table schema of this index.
-func (di *doltIndex) Schema() schema.Schema {
+// Schema returns the dolt Table schema of this index.
+func (di doltIndex) Schema() schema.Schema {
 	return di.tableSch
 }
 
 // IndexSchema returns the dolt index schema.
-func (di *doltIndex) IndexSchema() schema.Schema {
+func (di doltIndex) IndexSchema() schema.Schema {
 	return di.indexSch
 }
 
 // Table implements sql.Index
-func (di *doltIndex) Table() string {
-	return di.tableName
+func (di doltIndex) Table() string {
+	return di.tblName
 }
 
-// TableData returns the map of table data for this index (the map of the target table, not the index storage table)
-func (di *doltIndex) TableData() types.Map {
-	return di.tableData
+// TableData returns the map of Table data for this index (the map of the target Table, not the index storage Table)
+func (di doltIndex) TableData() types.Map {
+	return di.tableRows
 }
 
 // IndexRowData returns the map of index row data.
-func (di *doltIndex) IndexRowData() types.Map {
-	return di.indexRowData
+func (di doltIndex) IndexRowData() types.Map {
+	return di.indexRows
 }
 
 // keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to
 // start at the very beginning.
-func (di *doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tuple, error) {
-	nbf := di.indexRowData.Format()
-	if len(keys) > len(di.cols) {
+func (di doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tuple, error) {
+	nbf := di.indexRows.Format()
+	if len(keys) > len(di.columns) {
 		return types.EmptyTuple(nbf), errors.New("too many keys for the column count")
 	}
 
 	vals := make([]types.Value, len(keys)*2)
 	for i := range keys {
-		col := di.cols[i]
+		col := di.columns[i]
 		// As an example, if our TypeInfo is Int8, we should not fail to create a tuple if we are returning all keys
 		// that have a value of less than 9001, thus we promote the TypeInfo to the widest type.
-		val, err := col.TypeInfo.Promote().ConvertValueToNomsValue(ctx, di.table.ValueReadWriter(), keys[i])
+		val, err := col.TypeInfo.Promote().ConvertValueToNomsValue(ctx, di.vrw, keys[i])
 		if err != nil {
 			return types.EmptyTuple(nbf), err
 		}
