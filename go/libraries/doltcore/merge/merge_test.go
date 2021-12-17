@@ -420,8 +420,7 @@ func TestMergeCommits(t *testing.T) {
 
 	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
 	opts := editor.TestEditorOptions(vrw)
-	tableEditSession := editor.CreateTableEditSession(root, opts)
-	merged, stats, err := merger.MergeTable(context.Background(), tableName, tableEditSession)
+	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts)
 
 	if err != nil {
 		t.Fatal(err)
