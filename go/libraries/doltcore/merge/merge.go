@@ -853,8 +853,6 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	optsWithFKChecks := opts
 	optsWithFKChecks.ForeignKeyChecksDisabled = true
 
-	tableEditSession := editor.CreateTableEditSession(ourRoot, optsWithFKChecks)
-
 	// Merge tables one at a time. This is done based on name, so will work badly for things like table renames.
 	// TODO: merge based on a more durable table identity that persists across renames
 	merger := NewMerger(ctx, ourRoot, theirRoot, ancRoot, ourRoot.VRW())
@@ -867,31 +865,27 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
 
-			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-				return root.PutTable(ctx, tblName, mergedTable)
-			})
+			newRoot, err = newRoot.PutTable(ctx, tblName, mergedTable)
 			if err != nil {
 				return nil, nil, err
 			}
-			newRoot, err = tableEditSession.Flush(ctx)
-			if err != nil {
-				return nil, nil, err
-			}
-		} else if newRootHasTable, err := newRoot.HasTable(ctx, tblName); err != nil {
+			continue
+		}
+
+		newRootHasTable, err := newRoot.HasTable(ctx, tblName);
+		if err != nil {
 			return nil, nil, err
-		} else if newRootHasTable {
+		}
+
+		if newRootHasTable {
 			// Merge root deleted this table
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
-			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-				return root.RemoveTables(ctx, false, tblName)
-			})
+
+			newRoot, err = newRoot.RemoveTables(ctx, false, tblName)
 			if err != nil {
 				return nil, nil, err
 			}
-			newRoot, err = tableEditSession.Flush(ctx)
-			if err != nil {
-				return nil, nil, err
-			}
+
 		} else {
 			// This is a deleted table that the merge root still has
 			if stats.Operation != TableRemoved {
@@ -901,27 +895,20 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		}
 	}
 
-	err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (value *doltdb.RootValue, err error) {
-		mergedFKColl, conflicts, err := ForeignKeysMerge(ctx, root, ourRoot, theirRoot, ancRoot)
-		if err != nil {
-			return nil, err
-		}
-		if len(conflicts) > 0 {
-			return nil, fmt.Errorf("foreign key conflicts")
-		}
+	mergedFKColl, conflicts, err := ForeignKeysMerge(ctx, newRoot, ourRoot, theirRoot, ancRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(conflicts) > 0 {
+		return nil, nil, fmt.Errorf("foreign key conflicts")
+	}
 
-		root, err = root.PutForeignKeyCollection(ctx, mergedFKColl)
-		if err != nil {
-			return nil, err
-		}
-
-		return root.UpdateSuperSchemasFromOther(ctx, tblNames, theirRoot)
-	})
+	newRoot, err = newRoot.PutForeignKeyCollection(ctx, mergedFKColl)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newRoot, err = tableEditSession.Flush(ctx)
+	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, tblNames, theirRoot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -930,21 +917,31 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	if err != nil {
 		return nil, nil, err
 	}
+
+	err = calculateViolationStats(ctx, newRoot, tblToStats)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return newRoot, tblToStats, nil
+}
+
+func calculateViolationStats(ctx context.Context, root *doltdb.RootValue, tblToStats map[string]*MergeStats) error {
+
 	for tblName, stats := range tblToStats {
-		tbl, ok, err := newRoot.GetTable(ctx, tblName)
+		tbl, ok, err := root.GetTable(ctx, tblName)
 		if err != nil {
-			return nil, nil, err
+			return err
 		}
 		if ok {
 			cvMap, err := tbl.GetConstraintViolations(ctx)
 			if err != nil {
-				return nil, nil, err
+				return err
 			}
 			stats.ConstraintViolations = int(cvMap.Len())
 		}
 	}
-
-	return newRoot, tblToStats, nil
+	return nil
 }
 
 // MayHaveConstraintViolations returns whether the given roots may have constraint violations. For example, a fast
