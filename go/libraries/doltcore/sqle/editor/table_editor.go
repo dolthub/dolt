@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package editor
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -25,11 +24,22 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+type TableEditor interface {
+	sql.RowReplacer
+	sql.RowUpdater
+	sql.RowInserter
+	sql.RowDeleter
+	sql.AutoIncrementSetter
+
+	NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error)
+}
 
 // sqlTableEditor is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
 //
@@ -48,48 +58,62 @@ type sqlTableEditor struct {
 	autoIncCol        schema.Column
 	vrw               types.ValueReadWriter
 	autoIncrementType typeinfo.TypeInfo
-	kvToSQLRow        *KVToSqlRowConverter
+	kvToSQLRow        *index.KVToSqlRowConverter
 	tableEditor       editor.TableEditor
 	sess              *editor.TableEditSession
 	temporary         bool
 	aiTracker         globalstate.AutoIncrementTracker
 }
 
-var _ sql.RowReplacer = (*sqlTableEditor)(nil)
-var _ sql.RowUpdater = (*sqlTableEditor)(nil)
-var _ sql.RowInserter = (*sqlTableEditor)(nil)
-var _ sql.RowDeleter = (*sqlTableEditor)(nil)
+var _ TableEditor = &sqlTableEditor{}
 
-func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	sess, err := t.db.TableEditSession(ctx, t.IsTemporary())
+func NewSqlTableEditor(
+	ctx *sql.Context,
+	sess *dsess.DoltSession,
+	t sql.Table,
+	db sql.Database,
+	gs globalstate.GlobalState,
+	sch schema.Schema,
+	vrw types.ValueReadWriter,
+) (TableEditor, error) {
+	state, ok, err := sess.LookupDbState(ctx, db.Name())
+	if !ok {
+		err = sql.ErrDatabaseNotFound.New(db.Name())
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	tableEditor, err := sess.GetTableEditor(ctx, t.tableName, t.sch)
+	var temp bool
+	if tt, ok := t.(sql.TemporaryTable); ok {
+		temp = tt.IsTemporary()
+	}
+
+	editSess := state.EditSession
+	if temp {
+		editSess = state.TempTableEditSession
+	}
+
+	tableEditor, err := editSess.GetTableEditor(ctx, t.Name(), sch)
 	if err != nil {
 		return nil, err
 	}
 
-	err = fmt.Errorf("could not create auto_increment tracker for table %s", t.tableName)
-	ds := dsess.DSessFromSess(ctx.Session)
-	ws, err := ds.WorkingSet(ctx, t.db.name)
-	if err != nil {
-		return nil, err
-	}
-	ait := t.db.gs.GetAutoIncrementTracker(ws.Ref())
+	ws := state.WorkingSet
+	ait := gs.GetAutoIncrementTracker(ws.Ref())
+	conv := index.NewKVToSqlRowConverterForCols(vrw.Format(), sch)
+	ac := autoIncrementColFromSchema(sch)
 
-	conv := NewKVToSqlRowConverterForCols(t.nbf, t.sch.GetAllCols().GetColumns())
 	return &sqlTableEditor{
 		tableName:   t.Name(),
-		dbName:      t.db.Name(),
-		sch:         t.sch,
-		autoIncCol:  t.autoIncCol,
-		vrw:         t.db.ddb.ValueReadWriter(),
+		dbName:      db.Name(),
+		sch:         sch,
+		autoIncCol:  ac,
+		vrw:         vrw,
 		kvToSQLRow:  conv,
 		tableEditor: tableEditor,
-		sess:        sess,
-		temporary:   t.IsTemporary(),
+		sess:        editSess,
+		temporary:   temp,
 		aiTracker:   ait,
 	}, nil
 }
@@ -183,6 +207,10 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 	return err
 }
 
+func (te *sqlTableEditor) NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error) {
+	return te.aiTracker.Next(te.tableName, potentialVal, tableVal)
+}
+
 func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
 	val := te.tableEditor.GetAutoIncrementValue()
 	return te.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
@@ -265,4 +293,16 @@ func (te *sqlTableEditor) resolveFks(ctx *sql.Context) error {
 		}
 		return root, nil
 	})
+}
+
+func autoIncrementColFromSchema(sch schema.Schema) schema.Column {
+	var autoCol schema.Column
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			autoCol = col
+			stop = true
+		}
+		return
+	})
+	return autoCol
 }

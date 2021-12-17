@@ -281,7 +281,7 @@ func (s *MysqlRowWrapper) Schema() sql.Schema {
 	return s.schema
 }
 
-func (s *MysqlRowWrapper) Next() (sql.Row, error) {
+func (s *MysqlRowWrapper) Next(*sql.Context) (sql.Row, error) {
 	if s.finished {
 		return nil, io.EOF
 	}

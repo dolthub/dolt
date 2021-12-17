@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package index
 
 import (
 	"context"
@@ -82,7 +82,9 @@ func getValLocations(tagToSqlColIdx map[uint64]int, cols []schema.Column) (int, 
 }
 
 // NewKVToSqlRowConverterForCols returns a KVToSqlConverter instance based on the list of columns passed in
-func NewKVToSqlRowConverterForCols(nbf *types.NomsBinFormat, cols []schema.Column) *KVToSqlRowConverter {
+func NewKVToSqlRowConverterForCols(nbf *types.NomsBinFormat, sch schema.Schema) *KVToSqlRowConverter {
+	cols := sch.GetAllCols().GetColumns()
+
 	tagToSqlColIdx := make(map[uint64]int)
 	for i, col := range cols {
 		tagToSqlColIdx[col.Tag] = i
@@ -212,16 +214,14 @@ func GetGetFuncForMapIter(nbf *types.NomsBinFormat, mapItr types.MapIterator) fu
 // DoltMapIter uses a types.MapIterator to iterate over a types.Map and returns sql.Row instances that it reads and
 // converts
 type DoltMapIter struct {
-	ctx           context.Context
 	kvGet         KVGetFunc
 	closeKVGetter func() error
 	conv          *KVToSqlRowConverter
 }
 
 // NewDoltMapIter returns a new DoltMapIter
-func NewDoltMapIter(ctx context.Context, keyValGet KVGetFunc, closeKVGetter func() error, conv *KVToSqlRowConverter) *DoltMapIter {
+func NewDoltMapIter(keyValGet KVGetFunc, closeKVGetter func() error, conv *KVToSqlRowConverter) *DoltMapIter {
 	return &DoltMapIter{
-		ctx:           ctx,
 		kvGet:         keyValGet,
 		closeKVGetter: closeKVGetter,
 		conv:          conv,
@@ -229,8 +229,8 @@ func NewDoltMapIter(ctx context.Context, keyValGet KVGetFunc, closeKVGetter func
 }
 
 // Next returns the next sql.Row until all rows are returned at which point (nil, io.EOF) is returned.
-func (dmi *DoltMapIter) Next() (sql.Row, error) {
-	k, v, err := dmi.kvGet(dmi.ctx)
+func (dmi *DoltMapIter) Next(ctx *sql.Context) (sql.Row, error) {
+	k, v, err := dmi.kvGet(ctx)
 
 	if err != nil {
 		return nil, err

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package index
 
 import (
 	"context"
@@ -35,9 +35,10 @@ type lookupResult struct {
 type toLookup struct {
 	idx        uint64
 	t          types.Tuple
-	tupleToRow func(types.Tuple) (sql.Row, error)
+	tupleToRow func(context.Context, types.Tuple) (sql.Row, error)
 	resBuf     *async.RingBuffer
 	epoch      int
+	ctx        context.Context
 }
 
 // asyncLookups is a pool of worker routines reading from a channel doing table lookups
@@ -91,7 +92,7 @@ func (art *asyncLookups) workerFunc() {
 				break
 			}
 
-			r, err := curr.tupleToRow(curr.t)
+			r, err := curr.tupleToRow(curr.ctx, curr.t)
 			_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: r, err: err}, curr.epoch)
 		}
 	}

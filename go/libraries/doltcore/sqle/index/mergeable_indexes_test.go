@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package index_test
 
 import (
 	"context"
@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 )
 
@@ -59,15 +60,15 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
 			},
 			[]int64{1},
 		},
 		{
 			"v1 = 11 OR v1 = 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(15), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(15)),
 			},
 			[]int64{1, 5},
 		},
@@ -79,16 +80,16 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11 OR v1 = 15 OR v1 = 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(15), idxv1.tuple(15)),
-				closedRange(idxv1.tuple(19), idxv1.tuple(19)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(19), idxv1.tuple(19)),
 			},
 			[]int64{1, 5, 9},
 		},
 		{
 			"v1 = 11 OR v1 = 15 AND v1 = 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
 			},
 			[]int64{1},
 		},
@@ -100,46 +101,46 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11 OR v1 != 11",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 = 11 OR v1 != 15",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(15)),
-				lessThanRange(idxv1.tuple(15)),
+				index.GreaterThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 2, 3, 4, 6, 7, 8, 9},
 		},
 		{
 			"v1 = 11 AND v1 != 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
 			},
 			[]int64{1},
 		},
 		{
 			"v1 = 11 OR v1 = 15 OR v1 != 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(19)),
-				greaterThanRange(idxv1.tuple(19)),
+				index.LessThanRange(idxv1.tuple(19)),
+				index.GreaterThanRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8},
 		},
 		{
 			"v1 = 11 OR v1 = 15 AND v1 != 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(15), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(15)),
 			},
 			[]int64{1, 5},
 		},
 		{
 			"v1 = 11 AND v1 = 15 OR v1 != 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(19)),
-				greaterThanRange(idxv1.tuple(19)),
+				index.LessThanRange(idxv1.tuple(19)),
+				index.GreaterThanRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8},
 		},
@@ -151,8 +152,8 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11 OR v1 > 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				greaterThanRange(idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{1, 6, 7, 8, 9},
 		},
@@ -164,23 +165,23 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11 OR v1 = 15 OR v1 > 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(15), idxv1.tuple(15)),
-				greaterThanRange(idxv1.tuple(19)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(15)),
+				index.GreaterThanRange(idxv1.tuple(19)),
 			},
 			[]int64{1, 5},
 		},
 		{
 			"v1 = 11 OR v1 = 15 AND v1 > 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
 			},
 			[]int64{1},
 		},
 		{
 			"v1 = 11 AND v1 = 15 OR v1 > 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(19)),
+				index.GreaterThanRange(idxv1.tuple(19)),
 			},
 			[]int64{},
 		},
@@ -192,8 +193,8 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11 OR v1 >= 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				greaterOrEqualRange(idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.GreaterOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{1, 5, 6, 7, 8, 9},
 		},
@@ -205,23 +206,23 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11 OR v1 = 15 OR v1 >= 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(15), idxv1.tuple(15)),
-				greaterOrEqualRange(idxv1.tuple(19)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(15)),
+				index.GreaterOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{1, 5, 9},
 		},
 		{
 			"v1 = 11 OR v1 = 15 AND v1 >= 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
 			},
 			[]int64{1},
 		},
 		{
 			"v1 = 11 AND v1 = 15 OR v1 >= 19",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(19)),
+				index.GreaterOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{9},
 		},
@@ -233,36 +234,36 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11 OR v1 < 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 2, 3, 4},
 		},
 		{
 			"v1 = 11 AND v1 < 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
 			},
 			[]int64{1},
 		},
 		{
 			"v1 = 11 OR v1 = 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(19)),
+				index.LessThanRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8},
 		},
 		{
 			"v1 = 11 OR v1 = 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(15), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(15)),
 			},
 			[]int64{1, 5},
 		},
 		{
 			"v1 = 11 AND v1 = 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(19)),
+				index.LessThanRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8},
 		},
@@ -274,36 +275,36 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 = 11 OR v1 <= 15",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(15)),
+				index.LessOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5},
 		},
 		{
 			"v1 = 11 AND v1 <= 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
 			},
 			[]int64{1},
 		},
 		{
 			"v1 = 11 OR v1 = 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(19)),
+				index.LessOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 = 11 OR v1 = 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(15), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(15)),
 			},
 			[]int64{1, 5},
 		},
 		{
 			"v1 = 11 AND v1 = 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(19)),
+				index.LessOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -315,645 +316,645 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 != 11",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				greaterThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 <> 11",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				greaterThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 <> 11 OR v1 <> 15",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
-				greaterThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 2, 3, 4, 6, 7, 8, 9},
 		},
 		{
 			"v1 <> 11 AND v1 <> 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
-				greaterThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 2, 3, 4, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 OR v1 != 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 <> 11 OR v1 <> 15 OR v1 <> 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 AND v1 != 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 <> 11 OR v1 <> 15 AND v1 <> 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 AND v1 != 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
-				openRange(idxv1.tuple(15), idxv1.tuple(19)),
-				greaterThanRange(idxv1.tuple(19)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.OpenRange(idxv1.tuple(15), idxv1.tuple(19)),
+				index.GreaterThanRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 2, 3, 4, 6, 7, 8},
 		},
 		{
 			"v1 <> 11 AND v1 <> 15 AND v1 <> 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
-				openRange(idxv1.tuple(15), idxv1.tuple(19)),
-				greaterThanRange(idxv1.tuple(19)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.OpenRange(idxv1.tuple(15), idxv1.tuple(19)),
+				index.GreaterThanRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 2, 3, 4, 6, 7, 8},
 		},
 		{
 			"v1 != 11 OR v1 > 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				greaterThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 > 15",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(15)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 OR v1 > 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 AND v1 > 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				greaterThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 OR v1 > 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
-				greaterThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 2, 3, 4, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 AND v1 > 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(19)),
+				index.GreaterThanRange(idxv1.tuple(19)),
 			},
 			[]int64{},
 		},
 		{
 			"v1 != 11 OR v1 >= 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				greaterThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 >= 15",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(15)),
+				index.GreaterOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 OR v1 >= 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 AND v1 >= 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				greaterThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 OR v1 >= 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
-				greaterThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 2, 3, 4, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 AND v1 >= 19",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(19)),
+				index.GreaterOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{9},
 		},
 		{
 			"v1 != 11 OR v1 < 15",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 < 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
 			},
 			[]int64{0, 2, 3, 4},
 		},
 		{
 			"v1 != 11 OR v1 != 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
-				openRange(idxv1.tuple(15), idxv1.tuple(19)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.OpenRange(idxv1.tuple(15), idxv1.tuple(19)),
 			},
 			[]int64{0, 2, 3, 4, 6, 7, 8},
 		},
 		{
 			"v1 != 11 OR v1 <= 15",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 <= 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				customRange(idxv1.tuple(11), idxv1.tuple(15), sql.Open, sql.Closed),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.CustomRange(idxv1.tuple(11), idxv1.tuple(15), sql.Open, sql.Closed),
 			},
 			[]int64{0, 2, 3, 4, 5},
 		},
 		{
 			"v1 != 11 OR v1 != 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 OR v1 != 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 != 11 AND v1 != 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
-				customRange(idxv1.tuple(15), idxv1.tuple(19), sql.Open, sql.Closed),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Open, sql.Closed),
 			},
 			[]int64{0, 2, 3, 4, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 OR v1 > 15",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(15)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 OR v1 > 15 OR v1 > 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 OR v1 > 15 AND v1 > 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15 AND v1 > 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(19)),
+				index.GreaterThanRange(idxv1.tuple(19)),
 			},
 			[]int64{},
 		},
 		{
 			"v1 > 11 OR v1 >= 15",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 >= 15",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(15)),
+				index.GreaterOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 OR v1 > 15 OR v1 >= 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 OR v1 > 15 AND v1 >= 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15 OR v1 >= 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(15)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15 AND v1 >= 19",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(19)),
+				index.GreaterOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{9},
 		},
 		{
 			"v1 > 11 OR v1 < 15",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 < 15",
 			[]*noms.ReadRange{
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
 			},
 			[]int64{2, 3, 4},
 		},
 		{
 			"v1 > 11 OR v1 > 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 OR v1 > 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				openRange(idxv1.tuple(15), idxv1.tuple(19)),
+				index.OpenRange(idxv1.tuple(15), idxv1.tuple(19)),
 			},
 			[]int64{6, 7, 8},
 		},
 		{
 			"v1 > 11 OR v1 <= 15",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 <= 15",
 			[]*noms.ReadRange{
-				customRange(idxv1.tuple(11), idxv1.tuple(15), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(11), idxv1.tuple(15), sql.Open, sql.Closed),
 			},
 			[]int64{2, 3, 4, 5},
 		},
 		{
 			"v1 > 11 OR v1 > 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 OR v1 > 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(11)),
 			},
 			[]int64{2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				customRange(idxv1.tuple(15), idxv1.tuple(19), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Open, sql.Closed),
 			},
 			[]int64{6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 > 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				customRange(idxv1.tuple(15), idxv1.tuple(19), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Open, sql.Closed),
 			},
 			[]int64{6, 7, 8, 9},
 		},
 		{
 			"v1 > 11 AND v1 < 15 OR v1 > 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				openRange(idxv1.tuple(11), idxv1.tuple(15)),
-				openRange(idxv1.tuple(15), idxv1.tuple(19)),
+				index.OpenRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.OpenRange(idxv1.tuple(15), idxv1.tuple(19)),
 			},
 			[]int64{2, 3, 4, 6, 7, 8},
 		},
 		{
 			"v1 >= 11",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(11)),
+				index.GreaterOrEqualRange(idxv1.tuple(11)),
 			},
 			[]int64{1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 OR v1 >= 15",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(11)),
+				index.GreaterOrEqualRange(idxv1.tuple(11)),
 			},
 			[]int64{1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 AND v1 >= 15",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(15)),
+				index.GreaterOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 OR v1 >= 15 OR v1 >= 19",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(11)),
+				index.GreaterOrEqualRange(idxv1.tuple(11)),
 			},
 			[]int64{1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 OR v1 >= 15 AND v1 >= 19",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(11)),
+				index.GreaterOrEqualRange(idxv1.tuple(11)),
 			},
 			[]int64{1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 AND v1 >= 15 AND v1 >= 19",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(19)),
+				index.GreaterOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{9},
 		},
 		{
 			"v1 >= 11 OR v1 < 15",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 AND v1 < 15",
 			[]*noms.ReadRange{
-				customRange(idxv1.tuple(11), idxv1.tuple(15), sql.Closed, sql.Open),
+				index.CustomRange(idxv1.tuple(11), idxv1.tuple(15), sql.Closed, sql.Open),
 			},
 			[]int64{1, 2, 3, 4},
 		},
 		{
 			"v1 >= 11 OR v1 >= 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 OR v1 >= 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(11)),
+				index.GreaterOrEqualRange(idxv1.tuple(11)),
 			},
 			[]int64{1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 AND v1 >= 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 AND v1 >= 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				customRange(idxv1.tuple(15), idxv1.tuple(19), sql.Closed, sql.Open),
+				index.CustomRange(idxv1.tuple(15), idxv1.tuple(19), sql.Closed, sql.Open),
 			},
 			[]int64{5, 6, 7, 8},
 		},
 		{
 			"v1 >= 11 OR v1 <= 15",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 AND v1 <= 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(15)),
 			},
 			[]int64{1, 2, 3, 4, 5},
 		},
 		{
 			"v1 >= 11 OR v1 >= 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 OR v1 >= 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				greaterOrEqualRange(idxv1.tuple(11)),
+				index.GreaterOrEqualRange(idxv1.tuple(11)),
 			},
 			[]int64{1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 AND v1 >= 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 AND v1 >= 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(15), idxv1.tuple(19)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(19)),
 			},
 			[]int64{5, 6, 7, 8, 9},
 		},
 		{
 			"v1 >= 11 AND v1 <= 14 OR v1 >= 16 AND v1 <= 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(14)),
-				closedRange(idxv1.tuple(16), idxv1.tuple(19)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(14)),
+				index.ClosedRange(idxv1.tuple(16), idxv1.tuple(19)),
 			},
 			[]int64{1, 2, 3, 4, 6, 7, 8, 9},
 		},
 		{
 			"v1 < 11",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0},
 		},
 		{
 			"v1 < 11 OR v1 < 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 2, 3, 4},
 		},
 		{
 			"v1 < 11 AND v1 < 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0},
 		},
 		{
 			"v1 < 11 OR v1 < 15 OR v1 < 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(19)),
+				index.LessThanRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8},
 		},
 		{
 			"v1 < 11 OR v1 < 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 2, 3, 4},
 		},
 		{
 			"v1 < 11 AND v1 < 15 AND v1 < 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0},
 		},
 		{
 			"v1 < 11 OR v1 > 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				greaterThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 6, 7, 8, 9},
 		},
@@ -965,50 +966,50 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 < 11 OR v1 <= 15",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(15)),
+				index.LessOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5},
 		},
 		{
 			"v1 < 11 AND v1 <= 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0},
 		},
 		{
 			"v1 < 11 OR v1 < 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(19)),
+				index.LessOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 < 11 OR v1 < 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 2, 3, 4},
 		},
 		{
 			"v1 < 11 AND v1 < 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(19)),
+				index.LessOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 < 11 AND v1 < 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
+				index.LessThanRange(idxv1.tuple(11)),
 			},
 			[]int64{0},
 		},
 		{
 			"v1 < 11 OR v1 >= 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(11)),
-				greaterOrEqualRange(idxv1.tuple(15)),
+				index.LessThanRange(idxv1.tuple(11)),
+				index.GreaterOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 5, 6, 7, 8, 9},
 		},
@@ -1020,58 +1021,58 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"(v1 < 13 OR v1 > 16) AND (v1 > 10 OR v1 < 19)",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(13)),
-				greaterThanRange(idxv1.tuple(16)),
+				index.LessThanRange(idxv1.tuple(13)),
+				index.GreaterThanRange(idxv1.tuple(16)),
 			},
 			[]int64{0, 1, 2, 7, 8, 9},
 		},
 		{
 			"v1 <= 11",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(11)),
+				index.LessOrEqualRange(idxv1.tuple(11)),
 			},
 			[]int64{0, 1},
 		},
 		{
 			"v1 <= 11 OR v1 <= 15",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(15)),
+				index.LessOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5},
 		},
 		{
 			"v1 <= 11 AND v1 <= 15",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(11)),
+				index.LessOrEqualRange(idxv1.tuple(11)),
 			},
 			[]int64{0, 1},
 		},
 		{
 			"v1 <= 11 OR v1 <= 15 OR v1 <= 19",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(19)),
+				index.LessOrEqualRange(idxv1.tuple(19)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 <= 11 OR v1 <= 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(15)),
+				index.LessOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5},
 		},
 		{
 			"v1 <= 11 AND v1 <= 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(11)),
+				index.LessOrEqualRange(idxv1.tuple(11)),
 			},
 			[]int64{0, 1},
 		},
 		{
 			"v1 <= 11 OR v1 > 15",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(11)),
-				greaterThanRange(idxv1.tuple(15)),
+				index.LessOrEqualRange(idxv1.tuple(11)),
+				index.GreaterThanRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 6, 7, 8, 9},
 		},
@@ -1083,8 +1084,8 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 <= 11 OR v1 >= 15",
 			[]*noms.ReadRange{
-				lessOrEqualRange(idxv1.tuple(11)),
-				greaterOrEqualRange(idxv1.tuple(15)),
+				index.LessOrEqualRange(idxv1.tuple(11)),
+				index.GreaterOrEqualRange(idxv1.tuple(15)),
 			},
 			[]int64{0, 1, 5, 6, 7, 8, 9},
 		},
@@ -1096,135 +1097,135 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v1 BETWEEN 11 AND 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(15)),
 			},
 			[]int64{1, 2, 3, 4, 5},
 		},
 		{
 			"v1 BETWEEN 11 AND 15 OR v1 BETWEEN 15 AND 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(19)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(19)),
 			},
 			[]int64{1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 BETWEEN 11 AND 15 AND v1 BETWEEN 15 AND 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(15), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(15)),
 			},
 			[]int64{5},
 		},
 		{
 			"v1 BETWEEN 11 AND 15 OR v1 = 13",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(15)),
 			},
 			[]int64{1, 2, 3, 4, 5},
 		},
 		{
 			"v1 BETWEEN 11 AND 15 OR v1 != 13",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 BETWEEN 11 AND 15 AND v1 != 13",
 			[]*noms.ReadRange{
-				customRange(idxv1.tuple(11), idxv1.tuple(13), sql.Closed, sql.Open),
-				customRange(idxv1.tuple(13), idxv1.tuple(15), sql.Open, sql.Closed),
+				index.CustomRange(idxv1.tuple(11), idxv1.tuple(13), sql.Closed, sql.Open),
+				index.CustomRange(idxv1.tuple(13), idxv1.tuple(15), sql.Open, sql.Closed),
 			},
 			[]int64{1, 2, 4, 5},
 		},
 		{
 			"v1 BETWEEN 11 AND 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(15)),
 			},
 			[]int64{1, 2, 3, 4, 5},
 		},
 		{
 			"v1 BETWEEN 11 AND 15 AND v1 <= 19",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(15)),
 			},
 			[]int64{1, 2, 3, 4, 5},
 		},
 		{
 			"v1 IN (11, 12, 13)",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(12), idxv1.tuple(12)),
-				closedRange(idxv1.tuple(13), idxv1.tuple(13)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(12), idxv1.tuple(12)),
+				index.ClosedRange(idxv1.tuple(13), idxv1.tuple(13)),
 			},
 			[]int64{1, 2, 3},
 		},
 		{
 			"v1 IN (11, 12, 13) OR v1 BETWEEN 11 and 13",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(13)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(13)),
 			},
 			[]int64{1, 2, 3},
 		},
 		{
 			"v1 IN (11, 12, 13) AND v1 > 11",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(12), idxv1.tuple(12)),
-				closedRange(idxv1.tuple(13), idxv1.tuple(13)),
+				index.ClosedRange(idxv1.tuple(12), idxv1.tuple(12)),
+				index.ClosedRange(idxv1.tuple(13), idxv1.tuple(13)),
 			},
 			[]int64{2, 3},
 		},
 		{
 			"v1 IN (11, 12, 13) OR v1 != 12",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v1 IN (11, 12, 13) AND v1 != 12",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(13), idxv1.tuple(13)),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(13), idxv1.tuple(13)),
 			},
 			[]int64{1, 3},
 		},
 		{
 			"v1 IN (11, 12, 13) OR v1 >= 13 AND v1 < 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.tuple(12), idxv1.tuple(12)),
-				customRange(idxv1.tuple(13), idxv1.tuple(15), sql.Closed, sql.Open),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.tuple(12), idxv1.tuple(12)),
+				index.CustomRange(idxv1.tuple(13), idxv1.tuple(15), sql.Closed, sql.Open),
 			},
 			[]int64{1, 2, 3, 4},
 		},
 		{
 			"v2 = 21 AND v1 = 11 OR v2 > 25 AND v1 > 11",
 			[]*noms.ReadRange{
-				closedRange(idxv2v1.tuple(21, 11), idxv2v1.tuple(21, 11)),
-				greaterThanRange(idxv2v1.tuple(25, 11)),
+				index.ClosedRange(idxv2v1.tuple(21, 11), idxv2v1.tuple(21, 11)),
+				index.GreaterThanRange(idxv2v1.tuple(25, 11)),
 			},
 			[]int64{1, 6, 7, 8, 9},
 		},
 		{
 			"v2 > 21 AND v1 > 11 AND v2 < 25 AND v1 < 15",
 			[]*noms.ReadRange{
-				openRange(idxv2v1.tuple(21, 11), idxv2v1.tuple(25, 15)),
+				index.OpenRange(idxv2v1.tuple(21, 11), idxv2v1.tuple(25, 15)),
 			},
 			[]int64{2, 3, 4},
 		},
 		{
 			"v2 = 21",
 			[]*noms.ReadRange{
-				closedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+				index.ClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
 			},
 			[]int64{1},
 		},
 		{
 			"v2 = 21 OR v2 = 25",
 			[]*noms.ReadRange{
-				closedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
-				closedRange(idxv2v1Gen.tuple(25), idxv2v1Gen.tuple(25)),
+				index.ClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+				index.ClosedRange(idxv2v1Gen.tuple(25), idxv2v1Gen.tuple(25)),
 			},
 			[]int64{1, 5},
 		},
@@ -1236,16 +1237,16 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v2 = 21 OR v2 = 25 OR v2 = 29",
 			[]*noms.ReadRange{
-				closedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
-				closedRange(idxv2v1Gen.tuple(25), idxv2v1Gen.tuple(25)),
-				closedRange(idxv2v1Gen.tuple(29), idxv2v1Gen.tuple(29)),
+				index.ClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+				index.ClosedRange(idxv2v1Gen.tuple(25), idxv2v1Gen.tuple(25)),
+				index.ClosedRange(idxv2v1Gen.tuple(29), idxv2v1Gen.tuple(29)),
 			},
 			[]int64{1, 5, 9},
 		},
 		{
 			"v2 = 21 OR v2 = 25 AND v2 = 29",
 			[]*noms.ReadRange{
-				closedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+				index.ClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
 			},
 			[]int64{1},
 		},
@@ -1257,46 +1258,46 @@ func TestMergeableIndexes(t *testing.T) {
 		{
 			"v2 = 21 OR v2 != 21",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
 			"v2 = 21 OR v2 != 25",
 			[]*noms.ReadRange{
-				lessThanRange(idxv2v1Gen.tuple(25)),
-				greaterThanRange(idxv2v1Gen.tuple(25)),
+				index.LessThanRange(idxv2v1Gen.tuple(25)),
+				index.GreaterThanRange(idxv2v1Gen.tuple(25)),
 			},
 			[]int64{0, 1, 2, 3, 4, 6, 7, 8, 9},
 		},
 		{
 			"v2 = 21 AND v2 != 25",
 			[]*noms.ReadRange{
-				closedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+				index.ClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
 			},
 			[]int64{1},
 		},
 		{
 			"v2 = 21 OR v2 = 25 OR v2 != 29",
 			[]*noms.ReadRange{
-				lessThanRange(idxv2v1Gen.tuple(29)),
-				greaterThanRange(idxv2v1Gen.tuple(29)),
+				index.LessThanRange(idxv2v1Gen.tuple(29)),
+				index.GreaterThanRange(idxv2v1Gen.tuple(29)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8},
 		},
 		{
 			"v2 = 21 OR v2 = 25 AND v2 != 29",
 			[]*noms.ReadRange{
-				closedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
-				closedRange(idxv2v1Gen.tuple(25), idxv2v1Gen.tuple(25)),
+				index.ClosedRange(idxv2v1Gen.tuple(21), idxv2v1Gen.tuple(21)),
+				index.ClosedRange(idxv2v1Gen.tuple(25), idxv2v1Gen.tuple(25)),
 			},
 			[]int64{1, 5},
 		},
 		{
 			"v2 = 21 AND v2 = 25 OR v2 != 29",
 			[]*noms.ReadRange{
-				lessThanRange(idxv2v1Gen.tuple(29)),
-				greaterThanRange(idxv2v1Gen.tuple(29)),
+				index.LessThanRange(idxv2v1Gen.tuple(29)),
+				index.GreaterThanRange(idxv2v1Gen.tuple(29)),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8},
 		},
@@ -1341,7 +1342,7 @@ func TestMergeableIndexes(t *testing.T) {
 				finalRangeMatches := make([]bool, len(finalRanges))
 				for i, testFinalRange := range test.finalRanges {
 					for _, finalRange := range finalRanges {
-						if readRangesEqual(finalRange, testFinalRange) {
+						if index.ReadRangesEqual(finalRange, testFinalRange) {
 							if finalRangeMatches[i] {
 								require.FailNow(t, fmt.Sprintf("Duplicate ReadRange: `%v`", finalRange))
 							} else {
@@ -1390,44 +1391,44 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NULL",
 			[]*noms.ReadRange{
-				closedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
 			},
 			[]int64{2, 4, 6},
 		},
 		{
 			"v1 IS NULL OR v1 IS NULL",
 			[]*noms.ReadRange{
-				closedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
 			},
 			[]int64{2, 4, 6},
 		},
 		{
 			"v1 IS NULL AND v1 IS NULL",
 			[]*noms.ReadRange{
-				closedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
 			},
 			[]int64{2, 4, 6},
 		},
 		{
 			"v1 IS NULL OR v1 = 11",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				closedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
+				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
 			},
 			[]int64{1, 2, 4, 6},
 		},
 		{
 			"v1 IS NULL OR v1 < 16",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(16)),
-				closedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.LessThanRange(idxv1.tuple(16)),
+				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6},
 		},
 		{
 			"v1 IS NULL OR v1 > 16",
 			[]*noms.ReadRange{
-				greaterThanRange(idxv1.tuple(16)),
+				index.GreaterThanRange(idxv1.tuple(16)),
 			},
 			[]int64{2, 4, 6, 7, 8, 9},
 		},
@@ -1439,14 +1440,14 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NULL AND v1 > 16",
 			[]*noms.ReadRange{
-				closedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
 			},
 			[]int64{},
 		},
 		{
 			"v1 IS NULL OR v1 IS NOT NULL",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -1458,15 +1459,15 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NOT NULL",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.nilTuple()),
-				greaterThanRange(idxv1.nilTuple()),
+				index.LessThanRange(idxv1.nilTuple()),
+				index.GreaterThanRange(idxv1.nilTuple()),
 			},
 			[]int64{0, 1, 3, 5, 7, 8, 9},
 		},
 		{
 			"v1 IS NOT NULL OR v1 IS NULL",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -1478,45 +1479,45 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NOT NULL OR v1 = 15",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.nilTuple()),
-				greaterThanRange(idxv1.nilTuple()),
+				index.LessThanRange(idxv1.nilTuple()),
+				index.GreaterThanRange(idxv1.nilTuple()),
 			},
 			[]int64{0, 1, 3, 5, 7, 8, 9},
 		},
 		{
 			"v1 IS NOT NULL OR v1 > 16",
 			[]*noms.ReadRange{
-				allRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 3, 5, 7, 8, 9},
 		},
 		{
 			"v1 IS NOT NULL OR v1 < 16",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.nilTuple()),
-				greaterThanRange(idxv1.nilTuple()),
+				index.LessThanRange(idxv1.nilTuple()),
+				index.GreaterThanRange(idxv1.nilTuple()),
 			},
 			[]int64{0, 1, 3, 5, 7, 8, 9},
 		},
 		{
 			"v1 IS NOT NULL AND v1 = 15",
 			[]*noms.ReadRange{
-				closedRange(idxv1.tuple(15), idxv1.tuple(15)),
+				index.ClosedRange(idxv1.tuple(15), idxv1.tuple(15)),
 			},
 			[]int64{5},
 		},
 		{
 			"v1 IS NOT NULL AND v1 > 16",
 			[]*noms.ReadRange{
-				openRange(idxv1.tuple(16), idxv1.nilTuple()),
-				greaterThanRange(idxv1.nilTuple()),
+				index.OpenRange(idxv1.tuple(16), idxv1.nilTuple()),
+				index.GreaterThanRange(idxv1.nilTuple()),
 			},
 			[]int64{7, 8, 9},
 		},
 		{
 			"v1 IS NOT NULL AND v1 < 16",
 			[]*noms.ReadRange{
-				lessThanRange(idxv1.tuple(16)),
+				index.LessThanRange(idxv1.tuple(16)),
 			},
 			[]int64{0, 1, 3, 5},
 		},
@@ -1556,7 +1557,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 				finalRangeMatches := make([]bool, len(finalRanges))
 				for _, finalRange := range finalRanges {
 					for i, testFinalRange := range test.finalRanges {
-						if readRangesEqual(finalRange, testFinalRange) {
+						if index.ReadRangesEqual(finalRange, testFinalRange) {
 							if finalRangeMatches[i] {
 								require.FailNow(t, fmt.Sprintf("Duplicate ReadRange: `%v`", finalRange))
 							} else {
@@ -1595,5 +1596,5 @@ func ReadRangesFromQuery(ctx *sql.Context, eng *sqle.Engine, query string) ([]*n
 		return true
 	})
 
-	return lookup.(*doltIndexLookup).ranges, nil
+	return index.ReadRangesFromIndexLookup(lookup), nil
 }

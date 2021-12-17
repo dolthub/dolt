@@ -198,7 +198,7 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	}
 
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(sqlCtx)
 		if err == io.EOF {
 			break
 		}

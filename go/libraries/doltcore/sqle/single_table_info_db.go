@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SingleTableInfoDatabase is intended to allow a sole schema to make use of any display functionality in `go-mysql-server`.
@@ -75,7 +74,6 @@ func (db *SingleTableInfoDatabase) String() string {
 func (db *SingleTableInfoDatabase) Schema() sql.Schema {
 	sqlSch, err := sqlutil.FromDoltSchema(db.tableName, db.sch)
 	if err != nil {
-		panic(err)
 	}
 	return sqlSch.Schema
 }
@@ -127,24 +125,19 @@ func (db *SingleTableInfoDatabase) WithIndexLookup(sql.IndexLookup) sql.Table {
 // GetIndexes implements sql.IndexedTable.
 func (db *SingleTableInfoDatabase) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	var sqlIndexes []sql.Index
-	for _, index := range db.sch.Indexes().AllIndexes() {
-		cols := make([]schema.Column, index.Count())
-		for i, tag := range index.IndexedColumnTags() {
-			cols[i], _ = index.GetColumn(tag)
+	for _, idx := range db.sch.Indexes().AllIndexes() {
+		cols := make([]schema.Column, idx.Count())
+		for i, tag := range idx.IndexedColumnTags() {
+			cols[i], _ = idx.GetColumn(tag)
 		}
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           db,
-			id:           index.Name(),
-			indexRowData: types.EmptyMap,
-			indexSch:     index.Schema(),
-			table:        nil,
-			tableData:    types.EmptyMap,
-			tableName:    db.tableName,
-			tableSch:     db.sch,
-			unique:       index.IsUnique(),
-			comment:      index.Comment(),
-			generated:    false,
+		sqlIndexes = append(sqlIndexes, &fmtIndex{
+			id:        idx.Name(),
+			db:        db.Name(),
+			tbl:       db.tableName,
+			cols:      cols,
+			unique:    idx.IsUnique(),
+			generated: false,
+			comment:   idx.Comment(),
 		})
 	}
 	return sqlIndexes, nil
@@ -171,7 +164,72 @@ func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) 
 func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
 	sqlSch, err := sqlutil.FromDoltSchema(db.tableName, db.sch)
 	if err != nil {
-		panic(err)
 	}
 	return sqlSch
+}
+
+// fmtIndex is used for CREATE TABLE statements only.
+type fmtIndex struct {
+	id  string
+	db  string
+	tbl string
+
+	cols      []schema.Column
+	unique    bool
+	generated bool
+	comment   string
+}
+
+// ID implementes sql.Index
+func (idx fmtIndex) ID() string {
+	return idx.id
+}
+
+// Database implementes sql.Index
+func (idx fmtIndex) Database() string {
+	return idx.db
+}
+
+// Table implementes sql.Index
+func (idx fmtIndex) Table() string {
+	return idx.tbl
+}
+
+// Expressions implementes sql.Index
+func (idx fmtIndex) Expressions() []string {
+	strs := make([]string, len(idx.cols))
+	for i, col := range idx.cols {
+		strs[i] = idx.tbl + "." + col.Name
+	}
+	return strs
+}
+
+// IsUnique implementes sql.Index
+func (idx fmtIndex) IsUnique() bool {
+	return idx.unique
+}
+
+// Comment implementes sql.Index
+func (idx fmtIndex) Comment() string {
+	return idx.comment
+}
+
+// IndexType implementes sql.Index
+func (idx fmtIndex) IndexType() string {
+	return "BTREE"
+}
+
+// IsGenerated implementes sql.Index
+func (idx fmtIndex) IsGenerated() bool {
+	return idx.generated
+}
+
+// NewLookup implementes sql.Index
+func (idx fmtIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+	panic("unimplemented")
+}
+
+// ColumnExpressionTypes implementes sql.Index
+func (idx fmtIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+	panic("unimplemented")
 }

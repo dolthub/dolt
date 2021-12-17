@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package index
 
 import (
 	"context"
@@ -25,9 +25,48 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []string) (sql.RowIter, error) {
+	lookup := ilu.(*doltIndexLookup)
+	idx := lookup.idx
+
+	return RowIterForRanges(ctx, idx, lookup.ranges, lookup.IndexRowData(), columns)
+}
+
+func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData types.Map, columns []string) (sql.RowIter, error) {
+	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), rowData, ranges)
+
+	covers := indexCoversCols(idx, columns)
+	if covers {
+		return NewCoveringIndexRowIterAdapter(ctx, idx, nrr, columns), nil
+	} else {
+		return NewIndexLookupRowIterAdapter(ctx, idx, nrr), nil
+	}
+}
+
+func indexCoversCols(idx DoltIndex, cols []string) bool {
+	if cols == nil {
+		return false
+	}
+
+	idxCols := idx.IndexSchema().GetPKCols()
+	covers := true
+	for _, colName := range cols {
+		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
+			covers = false
+			break
+		}
+	}
+
+	return covers
+}
+
 type IndexLookupKeyIterator interface {
 	// NextKey returns the next key if it exists, and io.EOF if it does not.
 	NextKey(ctx *sql.Context) (row.TaggedValues, error)
+}
+
+func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
+	return lookup.(*doltIndexLookup).idx
 }
 
 type doltIndexLookup struct {
@@ -85,11 +124,6 @@ func (il *doltIndexLookup) Ranges() sql.RangeCollection {
 	return il.sqlRanges
 }
 
-// RowIter returns a row iterator for this index lookup. The iterator will return the single matching row for the index.
-func (il *doltIndexLookup) RowIter(ctx *sql.Context, rowData types.Map, columns []string) (sql.RowIter, error) {
-	return il.RowIterForRanges(ctx, rowData, il.ranges, columns)
-}
-
 func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
 	if cols == nil {
 		return false
@@ -105,17 +139,6 @@ func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
 	}
 
 	return covers
-}
-
-func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, rowData types.Map, ranges []*noms.ReadRange, columns []string) (sql.RowIter, error) {
-	nrr := noms.NewNomsRangeReader(il.idx.IndexSchema(), rowData, ranges)
-
-	covers := il.indexCoversCols(columns)
-	if covers {
-		return NewCoveringIndexRowIterAdapter(ctx, il.idx, nrr, columns), nil
-	} else {
-		return NewIndexLookupRowIterAdapter(ctx, il.idx, nrr), nil
-	}
 }
 
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside

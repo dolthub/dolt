@@ -17,6 +17,8 @@ package dtables
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -83,7 +85,7 @@ func (cvt *ConstraintViolationsTable) Schema() sql.Schema {
 
 // Partitions implements the interface sql.Table.
 func (cvt *ConstraintViolationsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.EmptyMap), nil
+	return index.SinglePartitionIterFromNomsMap(types.EmptyMap), nil
 }
 
 // PartitionRows implements the interface sql.Table.
@@ -96,7 +98,7 @@ func (cvt *ConstraintViolationsTable) PartitionRows(ctx *sql.Context, part sql.P
 	if err != nil {
 		return nil, err
 	}
-	return &constraintViolationsIter{ctx, cvt.cvSch, iter}, nil
+	return &constraintViolationsIter{cvt.cvSch, iter}, nil
 }
 
 // Deleter implements the interface sql.DeletableTable.
@@ -110,7 +112,6 @@ func (cvt *ConstraintViolationsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 
 // constraintViolationsIter is the iterator for ConstraintViolationsTable.
 type constraintViolationsIter struct {
-	ctx  *sql.Context
 	dSch schema.Schema
 	iter types.MapIterator
 }
@@ -118,8 +119,8 @@ type constraintViolationsIter struct {
 var _ sql.RowIter = (*constraintViolationsIter)(nil)
 
 // Next implements the interface sql.RowIter.
-func (cvi *constraintViolationsIter) Next() (sql.Row, error) {
-	k, v, err := cvi.iter.NextTuple(cvi.ctx)
+func (cvi *constraintViolationsIter) Next(ctx *sql.Context) (sql.Row, error) {
+	k, v, err := cvi.iter.NextTuple(ctx)
 	if err != nil {
 		return nil, err
 	}

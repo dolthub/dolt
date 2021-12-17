@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package index
 
 import (
 	"context"
@@ -42,7 +42,6 @@ type indexLookupRowIterAdapter struct {
 	keyIter    nomsKeyIter
 	lookupTags map[uint64]int
 	conv       *KVToSqlRowConverter
-	ctx        *sql.Context
 	cancelF    func()
 
 	read  uint64
@@ -63,8 +62,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 		lookupTags[schema.KeylessRowIdTag] = 0
 	}
 
-	cols := idx.Schema().GetAllCols().GetColumns()
-	conv := NewKVToSqlRowConverterForCols(idx.IndexRowData().Format(), cols)
+	conv := NewKVToSqlRowConverterForCols(idx.IndexRowData().Format(), idx.Schema())
 	resBuf := resultBufferPool.Get().(*async.RingBuffer)
 	epoch := resBuf.Reset()
 
@@ -75,7 +73,6 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 		keyIter:    keyIter,
 		conv:       conv,
 		lookupTags: lookupTags,
-		ctx:        ctx,
 		cancelF:    cancelF,
 		resultBuf:  resBuf,
 	}
@@ -85,7 +82,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 }
 
 // Next returns the next row from the iterator.
-func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
+func (i *indexLookupRowIterAdapter) Next(ctx *sql.Context) (sql.Row, error) {
 	for i.count == 0 || i.read < i.count {
 		item, err := i.resultBuf.Pop()
 
@@ -121,7 +118,7 @@ func (i *indexLookupRowIterAdapter) Close(*sql.Context) error {
 // routines which will process the requests in parallel.
 func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context, epoch int) {
 	for idx := uint64(1); ; idx++ {
-		indexKey, err := i.keyIter.ReadKey(i.ctx)
+		indexKey, err := i.keyIter.ReadKey(ctx)
 
 		if err != nil {
 			i.resultBuf.Push(lookupResult{
@@ -139,6 +136,7 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context, epoch int) {
 			tupleToRow: i.processKey,
 			resBuf:     i.resultBuf,
 			epoch:      epoch,
+			ctx:        ctx,
 		}
 
 		select {
@@ -198,7 +196,7 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 }
 
 // processKey is called within queueRows and processes each key, sending the resulting row to the row channel.
-func (i *indexLookupRowIterAdapter) processKey(indexKey types.Tuple) (sql.Row, error) {
+func (i *indexLookupRowIterAdapter) processKey(ctx context.Context, indexKey types.Tuple) (sql.Row, error) {
 	tableData := i.idx.TableData()
 
 	pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), indexKey)
@@ -206,7 +204,7 @@ func (i *indexLookupRowIterAdapter) processKey(indexKey types.Tuple) (sql.Row, e
 		return nil, err
 	}
 
-	fieldsVal, ok, err := tableData.MaybeGetTuple(i.ctx, pkTupleVal)
+	fieldsVal, ok, err := tableData.MaybeGetTuple(ctx, pkTupleVal)
 	if err != nil {
 		return nil, err
 	}
@@ -268,8 +266,8 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nom
 }
 
 // Next returns the next row from the iterator.
-func (ci *coveringIndexRowIterAdapter) Next() (sql.Row, error) {
-	key, err := ci.keyIter.ReadKey(ci.ctx)
+func (ci *coveringIndexRowIterAdapter) Next(ctx *sql.Context) (sql.Row, error) {
+	key, err := ci.keyIter.ReadKey(ctx)
 
 	if err != nil {
 		return nil, err
