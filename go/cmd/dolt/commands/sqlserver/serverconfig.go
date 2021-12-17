@@ -47,6 +47,8 @@ const (
 	defaultQueryParallelism    = 2
 	defaultPersistenceBahavior = loadPerisistentGlobals
 	defaultDataDir             = "."
+	defaultMetricsHost         = ""
+	defaultMetricsPort         = -1
 )
 
 const (
@@ -116,6 +118,10 @@ type ServerConfig interface {
 	// process incoming ComQuery packets as if they had multiple queries in
 	// them, even if the client advertises support for MULTI_STATEMENTS.
 	DisableClientMultiStatements() bool
+	// MetricsLabels returns labels that are applied to all prometheus metrics
+	MetricsLabels() map[string]string
+	MetricsHost() string
+	MetricsPort() int
 }
 
 type commandLineServerConfig struct {
@@ -213,6 +219,18 @@ func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 
 func (cfg *commandLineServerConfig) DisableClientMultiStatements() bool {
 	return false
+}
+
+func (cfg *commandLineServerConfig) MetricsLabels() map[string]string {
+	return nil
+}
+
+func (cfg *commandLineServerConfig) MetricsHost() string {
+	return defaultMetricsHost
+}
+
+func (cfg *commandLineServerConfig) MetricsPort() int {
+	return defaultMetricsPort
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
