@@ -17,8 +17,10 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
