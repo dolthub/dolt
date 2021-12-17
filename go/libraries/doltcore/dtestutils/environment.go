@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -83,7 +84,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 
 	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, empty, nil)
 	require.NoError(t, err)
-	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
+	tbl, err = editor.RebuildAllIndexes(ctx, tbl, writer.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
 	sch, err = tbl.GetSchema(ctx)

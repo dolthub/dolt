@@ -17,9 +17,11 @@ package dsess
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type InitialDbState struct {
@@ -46,13 +48,13 @@ type DatabaseSessionState struct {
 	headRoot             *doltdb.RootValue
 	WorkingSet           *doltdb.WorkingSet
 	dbData               env.DbData
-	EditSession          editor.WriteSession
+	WriteSession         writer.WriteSession
 	detachedHead         bool
 	readOnly             bool
 	dirty                bool
 	readReplica          *env.Remote
 	TempTableRoot        *doltdb.RootValue
-	TempTableEditSession editor.WriteSession
+	TempTableEditSession writer.WriteSession
 	tmpTablesDir         string
 
 	// Same as InitialDbState.Err, this signifies that this
@@ -77,5 +79,5 @@ func (d DatabaseSessionState) GetRoots() doltdb.Roots {
 }
 
 func (d DatabaseSessionState) EditOpts() editor.Options {
-	return d.EditSession.GetOptions()
+	return d.WriteSession.GetOptions()
 }

@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package editor
+package writer
 
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -26,19 +27,19 @@ import (
 )
 
 type WriteSession interface {
-	GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (TableEditor, error)
+	GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (editor.TableEditor, error)
 	SetRoot(ctx context.Context, root *doltdb.RootValue) error
 	UpdateRoot(ctx context.Context, updatingFunc func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error)) error
 	Flush(ctx context.Context) (*doltdb.RootValue, error)
 
-	GetOptions() Options
-	SetOptions(opts Options)
+	GetOptions() editor.Options
+	SetOptions(opts editor.Options)
 }
 
 // tableEditSession handles all edit operations on a table that may also update other tables. Serves as coordination
 // for SessionedTableEditors.
 type tableEditSession struct {
-	opts Options
+	opts editor.Options
 
 	root       *doltdb.RootValue
 	tables     map[string]*sessionedTableEditor
@@ -47,26 +48,17 @@ type tableEditSession struct {
 
 var _ WriteSession = &tableEditSession{}
 
-// Options are properties that define different functionality for the tableEditSession.
-type Options struct {
-	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
-	Deaf                     DbEaFactory
-}
-
-func TestEditorOptions(vrw types.ValueReadWriter) Options {
-	return Options{
+func TestEditorOptions(vrw types.ValueReadWriter) editor.Options {
+	return editor.Options{
 		ForeignKeyChecksDisabled: false,
-		Deaf: &dbEaFactory{
-			directory: os.TempDir(),
-			vrw:       vrw,
-		},
+		Deaf:                     editor.NewInMemDeaf(vrw.Format()),
 	}
 }
 
 // CreateTableEditSession creates and returns a tableEditSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
-func CreateTableEditSession(root *doltdb.RootValue, opts Options) WriteSession {
+func CreateTableEditSession(root *doltdb.RootValue, opts editor.Options) WriteSession {
 	return &tableEditSession{
 		opts:       opts,
 		root:       root,
@@ -77,7 +69,7 @@ func CreateTableEditSession(root *doltdb.RootValue, opts Options) WriteSession {
 
 // GetTableEditor returns a TableEditor for the given table. If a schema is provided and it does not match the one
 // that is used for currently open editors (if any), then those editors will reload the table from the root.
-func (tes *tableEditSession) GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (TableEditor, error) {
+func (tes *tableEditSession) GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (editor.TableEditor, error) {
 	tes.writeMutex.Lock()
 	defer tes.writeMutex.Unlock()
 
@@ -122,11 +114,11 @@ func (tes *tableEditSession) UpdateRoot(ctx context.Context, updatingFunc func(c
 	return tes.setRoot(ctx, newRoot)
 }
 
-func (tes *tableEditSession) GetOptions() Options {
+func (tes *tableEditSession) GetOptions() editor.Options {
 	return tes.opts
 }
 
-func (tes *tableEditSession) SetOptions(opts Options) {
+func (tes *tableEditSession) SetOptions(opts editor.Options) {
 	tes.opts = opts
 }
 
@@ -140,7 +132,7 @@ func (tes *tableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 	var tableErr error
 	var rootErr error
 	for tableName, ste := range tes.tables {
-		if !ste.hasEdits() {
+		if !ste.HasEdits() {
 			wg.Done()
 			continue
 		}
@@ -218,7 +210,7 @@ func (tes *tableEditSession) getTableEditor(ctx context.Context, tableName strin
 		}
 	}
 
-	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName, tes.opts)
+	tableEditor, err := editor.NewTableEditor(ctx, t, tableSch, tableName, tes.opts)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +287,7 @@ func (tes *tableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		if err != nil {
 			return err
 		}
-		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName, tes.opts)
+		newTableEditor, err := editor.NewTableEditor(ctx, t, tSch, tableName, tes.opts)
 		if err != nil {
 			return err
 		}

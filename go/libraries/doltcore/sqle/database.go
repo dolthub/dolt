@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -859,7 +860,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	editSession := dbState.EditSession
+	editSession := dbState.WriteSession
 
 	newRoot, err := editSession.Flush(ctx)
 	if err != nil {
@@ -1176,7 +1177,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 }
 
 // TableEditSession returns the TableEditSession for this database from the given context.
-func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (editor.WriteSession, error) {
+func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (writer.WriteSession, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := sess.LookupDbState(ctx, db.Name())
 	if err != nil {
@@ -1186,7 +1187,7 @@ func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (editor.
 	if isTemporary {
 		return dbState.TempTableEditSession, nil
 	}
-	return dbState.EditSession, nil
+	return dbState.WriteSession, nil
 }
 
 // GetAllTemporaryTables returns all temporary tables

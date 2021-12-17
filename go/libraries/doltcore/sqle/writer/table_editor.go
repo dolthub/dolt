@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -40,6 +39,8 @@ type TableWriter interface {
 
 	NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error)
 }
+
+type SessionRootSetter func(ctx *sql.Context, dbName string, root *doltdb.RootValue) error
 
 // sqlTableWriter is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
 //
@@ -60,46 +61,65 @@ type sqlTableWriter struct {
 	autoIncrementType typeinfo.TypeInfo
 	kvToSQLRow        *index.KVToSqlRowConverter
 	tableEditor       editor.TableEditor
-	sess              editor.WriteSession
-	temporary         bool
+	sess              WriteSession
 	aiTracker         globalstate.AutoIncrementTracker
+	temporary         bool
+	batched           bool
+
+	setter SessionRootSetter
 }
 
 var _ TableWriter = &sqlTableWriter{}
 
 func NewSqlTableEditor(
 	ctx *sql.Context,
-	sess *dsess.DoltSession,
+	sess WriteSession,
+	ws *doltdb.WorkingSet,
 	t sql.Table,
 	db sql.Database,
 	gs globalstate.GlobalState,
 	sch schema.Schema,
 	vrw types.ValueReadWriter,
+	setter SessionRootSetter,
+	batched bool,
 ) (TableWriter, error) {
-	state, ok, err := sess.LookupDbState(ctx, db.Name())
-	if !ok {
-		err = sql.ErrDatabaseNotFound.New(db.Name())
-	}
+	return newSqlTableEditor(ctx, sess, ws, t, sch, db, gs, vrw, false, batched, setter)
+}
+
+func NewSqlTempTableEditor(
+	ctx *sql.Context,
+	sess WriteSession,
+	ws *doltdb.WorkingSet,
+	t sql.Table,
+	db sql.Database,
+	gs globalstate.GlobalState,
+	sch schema.Schema,
+	vrw types.ValueReadWriter,
+	setter SessionRootSetter,
+	batched bool,
+) (TableWriter, error) {
+	return newSqlTableEditor(ctx, sess, ws, t, sch, db, gs, vrw, true, batched, setter)
+}
+
+func newSqlTableEditor(
+	ctx *sql.Context,
+	sess WriteSession,
+	ws *doltdb.WorkingSet,
+	t sql.Table,
+	sch schema.Schema,
+	db sql.Database,
+	gs globalstate.GlobalState,
+	vrw types.ValueReadWriter,
+	temporary bool,
+	batched bool,
+	setter SessionRootSetter,
+) (TableWriter, error) {
+
+	tableEditor, err := sess.GetTableEditor(ctx, t.Name(), sch)
 	if err != nil {
 		return nil, err
 	}
 
-	var temp bool
-	if tt, ok := t.(sql.TemporaryTable); ok {
-		temp = tt.IsTemporary()
-	}
-
-	editSess := state.EditSession
-	if temp {
-		editSess = state.TempTableEditSession
-	}
-
-	tableEditor, err := editSess.GetTableEditor(ctx, t.Name(), sch)
-	if err != nil {
-		return nil, err
-	}
-
-	ws := state.WorkingSet
 	ait := gs.GetAutoIncrementTracker(ws.Ref())
 	conv := index.NewKVToSqlRowConverterForCols(vrw.Format(), sch)
 	ac := autoIncrementColFromSchema(sch)
@@ -112,9 +132,11 @@ func NewSqlTableEditor(
 		vrw:         vrw,
 		kvToSQLRow:  conv,
 		tableEditor: tableEditor,
-		sess:        editSess,
-		temporary:   temp,
+		sess:        sess,
+		temporary:   temporary,
+		batched:     batched,
 		aiTracker:   ait,
+		setter:      setter,
 	}, nil
 }
 
@@ -232,12 +254,11 @@ func (te *sqlTableWriter) SetAutoIncrementValue(ctx *sql.Context, val interface{
 
 // Close implements Closer
 func (te *sqlTableWriter) Close(ctx *sql.Context) error {
-	sess := dsess.DSessFromSess(ctx.Session)
-
 	// If we're running in batched mode, don't flush the edits until explicitly told to do so
-	if sess.BatchMode() == dsess.Batched {
+	if te.batched {
 		return nil
 	}
+
 	return te.flush(ctx)
 }
 
@@ -262,17 +283,7 @@ func (te *sqlTableWriter) flush(ctx *sql.Context) error {
 		return err
 	}
 
-	return te.setRoot(ctx, newRoot)
-}
-
-func (te *sqlTableWriter) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	sess := dsess.DSessFromSess(ctx.Session)
-
-	if te.temporary {
-		return sess.SetTempTableRoot(ctx, te.dbName, newRoot)
-	}
-
-	return sess.SetRoot(ctx, te.dbName, newRoot)
+	return te.setter(ctx, te.dbName, newRoot)
 }
 
 func (te *sqlTableWriter) resolveFks(ctx *sql.Context) error {

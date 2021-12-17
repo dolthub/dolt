@@ -435,23 +435,42 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 }
 
 func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWriter, err error) {
-	sess := dsess.DSessFromSess(ctx.Session)
+	ds := dsess.DSessFromSess(ctx.Session)
+
+	var batched = ds.BatchMode() == dsess.Batched
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
-	if sess.BatchMode() == dsess.Batched {
+	if batched {
 		if t.ed != nil {
 			return t.ed, nil
 		}
 	}
 
-	vrw := t.db.ddb.ValueReadWriter()
-
-	ed, err = writer.NewSqlTableEditor(ctx, sess, t, t.db, t.db.gs, t.sch, vrw)
+	ws, err := ds.WorkingSet(ctx, t.db.name)
 	if err != nil {
 		return nil, err
 	}
 
-	if sess.BatchMode() == dsess.Batched {
+	state, _, err := ds.LookupDbState(ctx, t.db.name)
+	if err != nil {
+		return nil, err
+	}
+
+	var setter writer.SessionRootSetter = ds.SetRoot
+	var vrw = t.db.ddb.ValueReadWriter()
+
+	if t.temporary {
+		sess := state.TempTableEditSession
+		ed, err = writer.NewSqlTableEditor(ctx, sess, ws, t, t.db, t.db.gs, t.sch, vrw, setter, batched)
+	} else {
+		sess := state.WriteSession
+		ed, err = writer.NewSqlTempTableEditor(ctx, sess, ws, t, t.db, t.db.gs, t.sch, vrw, setter, batched)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if batched {
 		t.ed = ed
 	}
 

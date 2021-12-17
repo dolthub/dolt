@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -157,7 +158,7 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	newRoot, err := dbState.EditSession.Flush(ctx)
+	newRoot, err := dbState.WriteSession.Flush(ctx)
 	if err != nil {
 		return err
 	}
@@ -205,7 +206,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.GetOptions(), tCharacteristic), nil
+	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -577,7 +578,7 @@ func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	err = sessionState.EditSession.SetRoot(ctx, newRoot)
+	err = sessionState.WriteSession.SetRoot(ctx, newRoot)
 	if err != nil {
 		return err
 	}
@@ -736,7 +737,7 @@ func (sess *Session) SwitchWorkingSet(
 			tCharacteristic = sql.ReadOnly
 		}
 	}
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.GetOptions(), tCharacteristic))
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic))
 
 	return nil
 }
@@ -853,15 +854,15 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 	}
 	if intVal == 0 {
 		for _, dbState := range sess.dbStates {
-			opts := dbState.EditSession.GetOptions()
+			opts := dbState.WriteSession.GetOptions()
 			opts.ForeignKeyChecksDisabled = true
-			dbState.EditSession.SetOptions(opts)
+			dbState.WriteSession.SetOptions(opts)
 		}
 	} else if intVal == 1 {
 		for _, dbState := range sess.dbStates {
-			opts := dbState.EditSession.GetOptions()
+			opts := dbState.WriteSession.GetOptions()
 			opts.ForeignKeyChecksDisabled = false
-			dbState.EditSession.SetOptions(opts)
+			dbState.WriteSession.SetOptions(opts)
 		}
 	} else {
 		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
@@ -968,7 +969,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
+	sessionState.WriteSession = writer.CreateTableEditSession(nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
@@ -1017,7 +1018,7 @@ func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, 
 	if err != nil {
 		return err
 	}
-	dbState.TempTableEditSession = editor.CreateTableEditSession(newRoot, dbState.EditSession.GetOptions())
+	dbState.TempTableEditSession = writer.CreateTableEditSession(newRoot, dbState.WriteSession.GetOptions())
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }

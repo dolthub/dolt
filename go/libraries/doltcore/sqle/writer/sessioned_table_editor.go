@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package editor
+package writer
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -32,16 +33,16 @@ import (
 // by multiple callers. It is thread safe.
 type sessionedTableEditor struct {
 	tableEditSession  *tableEditSession
-	tableEditor       TableEditor
+	tableEditor       editor.TableEditor
 	referencedTables  []doltdb.ForeignKey // The tables that we reference to ensure an insert or update is valid
 	referencingTables []doltdb.ForeignKey // The tables that reference us to ensure their inserts and updates are valid
 	indexSchemaCache  map[string]schema.Schema
 	dirty             bool
 }
 
-var _ TableEditor = &sessionedTableEditor{}
+var _ editor.TableEditor = &sessionedTableEditor{}
 
-func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
+func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc editor.PKDuplicateErrFunc) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
@@ -70,7 +71,7 @@ func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tupl
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
-func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
+func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc editor.PKDuplicateErrFunc) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
@@ -105,7 +106,7 @@ func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, r row.Row) error
 
 // UpdateRow takes the current row and new row, and updates it accordingly. Any applicable rows from tables that have a
 // foreign key referencing this table will also be updated.
-func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc PKDuplicateErrFunc) error {
+func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc editor.PKDuplicateErrFunc) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
@@ -115,11 +116,11 @@ func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row,
 // hasEdits returns whether the table editor has had any write operations, whether they were successful or unsuccessful
 // (on the underlying table editor). This makes it possible for this to return true when the table editor does not
 // actually contain any new edits, which is preferable to potentially returning false when there are edits.
-func (ste *sessionedTableEditor) hasEdits() bool {
+func (ste *sessionedTableEditor) HasEdits() bool {
 	if ste.dirty {
 		return true
 	}
-	return ste.tableEditor.hasEdits()
+	return ste.tableEditor.HasEdits()
 }
 
 // GetAutoIncrementValue implements TableEditor.
@@ -248,7 +249,7 @@ func (ste *sessionedTableEditor) onDeleteHandleRowsReferencingValues(ctx context
 			ste.indexSchemaCache[cacheKey] = idxSch
 		}
 
-		referencingRowKVPs, err := GetIndexedRowKVPs(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
+		referencingRowKVPs, err := editor.GetIndexedRowKVPs(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
 			return err
 		}
@@ -361,7 +362,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
 			ste.indexSchemaCache[cacheKey] = idxSch
 		}
-		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
+		referencingRows, err := editor.GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
 			return err
 		}
@@ -502,7 +503,7 @@ func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, o
 	return tpl, false, nil
 }
 
-func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, checkReferences bool, errFunc PKDuplicateErrFunc) error {
+func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, checkReferences bool, errFunc editor.PKDuplicateErrFunc) error {
 	if checkReferences {
 		dNewRowTaggedVals, err := dNewRow.TaggedValues()
 		if err != nil {
@@ -563,7 +564,7 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVa
 			ste.indexSchemaCache[cacheKey] = idxSch
 		}
 
-		exists, err := ContainsIndexedKey(ctx, referencingSte.tableEditor, indexKey, foreignKey.ReferencedTableIndex, idxSch)
+		exists, err := editor.ContainsIndexedKey(ctx, referencingSte.tableEditor, indexKey, foreignKey.ReferencedTableIndex, idxSch)
 		if err != nil {
 			return err
 		}
@@ -587,4 +588,34 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVa
 		}
 	}
 	return nil
+}
+
+// formatKey returns a comma-separated string representation of the key given.
+func formatKey(ctx context.Context, key types.Value) (string, error) {
+	tuple, ok := key.(types.Tuple)
+	if !ok {
+		return "", fmt.Errorf("Expected types.Tuple but got %T", key)
+	}
+
+	var vals []string
+	iter, err := tuple.Iterator()
+	if err != nil {
+		return "", err
+	}
+
+	for iter.HasMore() {
+		i, val, err := iter.Next()
+		if err != nil {
+			return "", err
+		}
+		if i%2 == 1 {
+			str, err := types.EncodedValue(ctx, val)
+			if err != nil {
+				return "", err
+			}
+			vals = append(vals, str)
+		}
+	}
+
+	return fmt.Sprintf("[%s]", strings.Join(vals, ",")), nil
 }
