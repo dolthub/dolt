@@ -302,8 +302,16 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			}
 		case time.Time:
 			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
+		case sql.GeometryValue:
+			return "encountered a geometry value somehow!"
 		case sql.PointValue:
-			s, err := typedCol.ToString() // TODO: do I need sql.NewContext()
+			s, err := typedCol.ToString()
+			if err != nil {
+				s = err.Error()
+			}
+			return s
+		case sql.LineStringValue:
+			s, err := typedCol.ToString()
 			if err != nil {
 				s = err.Error()
 			}

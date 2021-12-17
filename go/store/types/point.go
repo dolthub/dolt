@@ -29,6 +29,7 @@ import (
 )
 
 // Point is a Noms Value wrapper around the primitive string type (for now).
+//TODO: type Point sql.PointValue
 type Point string
 
 // Value interface
