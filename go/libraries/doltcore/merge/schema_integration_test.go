@@ -30,7 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type testCommand struct {
@@ -586,7 +586,7 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	otherRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
-	opts := writer.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
+	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
 	mergedRoot, _, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, opts)
 	assert.NoError(t, err)
 

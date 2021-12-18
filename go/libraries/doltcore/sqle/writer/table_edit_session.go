@@ -23,7 +23,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type WriteSession interface {
@@ -47,13 +46,6 @@ type tableEditSession struct {
 }
 
 var _ WriteSession = &tableEditSession{}
-
-func TestEditorOptions(vrw types.ValueReadWriter) editor.Options {
-	return editor.Options{
-		ForeignKeyChecksDisabled: false,
-		Deaf:                     editor.NewInMemDeaf(vrw.Format()),
-	}
-}
 
 // CreateTableEditSession creates and returns a tableEditSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
