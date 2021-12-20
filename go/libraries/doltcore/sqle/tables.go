@@ -450,6 +450,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 	if err != nil {
 		return nil, err
 	}
+	ait := t.db.gs.GetAutoIncrementTracker(ws.Ref())
 
 	state, _, err := ds.LookupDbState(ctx, t.db.name)
 	if err != nil {
@@ -457,14 +458,11 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 	}
 
 	var setter writer.SessionRootSetter = ds.SetRoot
-	var vrw = t.db.ddb.ValueReadWriter()
 
 	if t.temporary {
-		sess := state.TempTableEditSession
-		ed, err = writer.NewSqlTableEditor(ctx, sess, ws, t, t.db, t.db.gs, t.sch, vrw, setter, batched)
+		ed, err = state.TempTableEditSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
 	} else {
-		sess := state.WriteSession
-		ed, err = writer.NewSqlTempTableEditor(ctx, sess, ws, t, t.db, t.db.gs, t.sch, vrw, setter, batched)
+		ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
 	}
 	if err != nil {
 		return nil, err

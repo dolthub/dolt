@@ -19,14 +19,19 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type WriteSession interface {
+	// todo: this could/should return a SQL table editor
 	GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (editor.TableEditor, error)
+
+	GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error)
+
 	SetRoot(ctx context.Context, root *doltdb.RootValue) error
 	UpdateRoot(ctx context.Context, updatingFunc func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error)) error
 	Flush(ctx context.Context) (*doltdb.RootValue, error)
@@ -66,6 +71,44 @@ func (tes *tableEditSession) GetTableEditor(ctx context.Context, tableName strin
 	defer tes.writeMutex.Unlock()
 
 	return tes.getTableEditor(ctx, tableName, tableSch)
+}
+
+func (tes *tableEditSession) GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error) {
+
+	t, ok, err := tes.root.GetTable(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, doltdb.ErrTableNotFound
+	}
+
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	te, err := tes.getTableEditor(ctx, table, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	conv := index.NewKVToSqlRowConverterForCols(t.Format(), sch)
+	ac := autoIncrementColFromSchema(sch)
+
+	return &sqlTableWriter{
+		tableName:   table,
+		dbName:      database,
+		sch:         sch,
+		autoIncCol:  ac,
+		vrw:         tes.root.VRW(),
+		kvToSQLRow:  conv,
+		tableEditor: te,
+		sess:        tes,
+		batched:     batched,
+		aiTracker:   ait,
+		setter:      setter,
+	}, nil
 }
 
 // Flush returns an updated root with all of the changed tables.

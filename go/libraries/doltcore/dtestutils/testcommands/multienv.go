@@ -20,8 +20,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -340,7 +338,7 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema, err
 	if err != nil {
 		errhand(err)
 	}
-	tbl, err = editor.RebuildAllIndexes(ctx, tbl, writer.TestEditorOptions(vrw))
+	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	if err != nil {
 		errhand(err)
 	}

@@ -63,82 +63,12 @@ type sqlTableWriter struct {
 	tableEditor       editor.TableEditor
 	sess              WriteSession
 	aiTracker         globalstate.AutoIncrementTracker
-	temporary         bool
 	batched           bool
 
 	setter SessionRootSetter
 }
 
 var _ TableWriter = &sqlTableWriter{}
-
-func NewSqlTableEditor(
-	ctx *sql.Context,
-	sess WriteSession,
-	ws *doltdb.WorkingSet,
-	t sql.Table,
-	db sql.Database,
-	gs globalstate.GlobalState,
-	sch schema.Schema,
-	vrw types.ValueReadWriter,
-	setter SessionRootSetter,
-	batched bool,
-) (TableWriter, error) {
-	return newSqlTableEditor(ctx, sess, ws, t, sch, db, gs, vrw, false, batched, setter)
-}
-
-func NewSqlTempTableEditor(
-	ctx *sql.Context,
-	sess WriteSession,
-	ws *doltdb.WorkingSet,
-	t sql.Table,
-	db sql.Database,
-	gs globalstate.GlobalState,
-	sch schema.Schema,
-	vrw types.ValueReadWriter,
-	setter SessionRootSetter,
-	batched bool,
-) (TableWriter, error) {
-	return newSqlTableEditor(ctx, sess, ws, t, sch, db, gs, vrw, true, batched, setter)
-}
-
-func newSqlTableEditor(
-	ctx *sql.Context,
-	sess WriteSession,
-	ws *doltdb.WorkingSet,
-	t sql.Table,
-	sch schema.Schema,
-	db sql.Database,
-	gs globalstate.GlobalState,
-	vrw types.ValueReadWriter,
-	temporary bool,
-	batched bool,
-	setter SessionRootSetter,
-) (TableWriter, error) {
-
-	tableEditor, err := sess.GetTableEditor(ctx, t.Name(), sch)
-	if err != nil {
-		return nil, err
-	}
-
-	ait := gs.GetAutoIncrementTracker(ws.Ref())
-	conv := index.NewKVToSqlRowConverterForCols(vrw.Format(), sch)
-	ac := autoIncrementColFromSchema(sch)
-
-	return &sqlTableWriter{
-		tableName:   t.Name(),
-		dbName:      db.Name(),
-		sch:         sch,
-		autoIncCol:  ac,
-		vrw:         vrw,
-		kvToSQLRow:  conv,
-		tableEditor: tableEditor,
-		sess:        sess,
-		temporary:   temporary,
-		batched:     batched,
-		aiTracker:   ait,
-		setter:      setter,
-	}, nil
-}
 
 func (te *sqlTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
 	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
