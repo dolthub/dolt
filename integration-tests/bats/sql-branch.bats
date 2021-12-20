@@ -37,17 +37,17 @@ teardown() {
     [[ "$output" =~ "new-branch" ]] || false
 }
 
-@test "sql-branch: DOLT_BRANCH throws error on branches that already exist" {
+@test "sql-branch: DOLT_BRANCH throws error" {
+    # branches that already exist
     dolt branch existing_branch
     run dolt sql -q "SELECT DOLT_BRANCH('existing_branch')"
     [ $status -eq 1 ]
     [ "$output" = "fatal: A branch named 'existing_branch' already exists." ]
-}
 
-@test "sql-branch: DOLT_BRANCH throws error on empty branch" {
+    # empty branch
     run dolt sql -q "SELECT DOLT_BRANCH('')"
     [ $status -eq 1 ]
-    [ "$output" = "error: cannot checkout empty string" ]
+    [ "$output" = "error: cannot branch empty string" ]
 }
 
 @test "sql-branch: DOLT_BRANCH -c copies not current branch and stays on current branch" {
@@ -63,7 +63,7 @@ teardown() {
     dolt checkout main
 
     # Current branch should be still main with test table without entry 4
-    dolt sql << SQL
+    run dolt sql << SQL
 SELECT DOLT_BRANCH('-c', 'original', 'copy');
 SELECT * FROM test WHERE pk > 3;
 SQL
@@ -88,12 +88,12 @@ SQL
     # branch copying from is empty
     run dolt sql -q "SELECT DOLT_BRANCH('-c','','copy')"
     [ $status -eq 1 ]
-    [ "$output" = "error: cannot checkout empty string" ]
+    [ "$output" = "error: cannot branch empty string" ]
 
     # branch copying to is empty
     run dolt sql -q "SELECT DOLT_BRANCH('-c','main','')"
     [ $status -eq 1 ]
-    [ "$output" = "error: cannot checkout empty string" ]
+    [ "$output" = "error: cannot branch empty string" ]
 
     dolt branch 'existing_branch'
     run dolt branch
@@ -110,4 +110,17 @@ SQL
     run dolt sql -q "SELECT DOLT_BRANCH('-c', 'main', 'existing_branch');"
     [ $status -eq 1 ]
     [ "$output" = "fatal: A branch named 'existing_branch' already exists." ]
+}
+
+@test "sql-branch: DOLT_BRANCH works as insert into dolt_branches table" {
+    dolt add . && dolt commit -m "1, 2, and 3 in test table"
+
+    run dolt sql -q "SELECT hash FROM dolt_branches WHERE name='main';"
+    [ $status -eq 0 ]
+    mainhash=$output
+
+    dolt sql -q "SELECT DOLT_BRANCH('feature-branch');"
+    run dolt sql -q "SELECT hash FROM dolt_branches WHERE name='feature-branch';"
+    [ $status -eq 0 ]
+    [ "$output" = "$mainhash" ]
 }

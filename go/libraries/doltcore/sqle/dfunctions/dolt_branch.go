@@ -31,6 +31,7 @@ import (
 const DoltBranchFuncName = "dolt_branch"
 
 var EmptyBranchNameErr = errors.New("error: cannot branch empty string")
+var InvalidArgErr = errors.New("error: invalid usage")
 
 type DoltBranchFunc struct {
 	expression.NaryExpression
@@ -77,31 +78,41 @@ func (d DoltBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return 1, err
 	}
 
-	force := apr.Contains(cli.ForceFlag)
-
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	if apr.Contains(cli.CopyFlag) {
-		if aErr := validateArgs(apr, 2); aErr != nil {
-			return 1, aErr
-		}
-
-		srcBranch := apr.Arg(0)
-		destBranch := apr.Arg(1)
-
-		err = makeACopyOfBranch(ctx, dbData, srcBranch, destBranch, force)
+	switch {
+	case apr.Contains(cli.CopyFlag):
+		err = makeACopyOfBranch(ctx, dbData, apr)
 		if err != nil { return 1, err }
-		return 0, nil
-	} else {
-		if aErr := validateArgs(apr, 1); aErr != nil {
-			return 1, aErr
+	case apr.Contains(cli.MoveFlag):
+		//err = renameBranch(ctx, dbData, apr)
+		if err != nil {
+			return 1, errors.New("Renaming a branch is not supported.")
+		}
+	case apr.Contains(cli.DeleteFlag):
+		//err = deleteBranches(ctx, dbData, apr, apr.Contains(cli.ForceFlag))
+		if err != nil {
+			return 1, errors.New("Deleting branches is not supported.")
+		}
+	case apr.Contains(cli.DeleteForceFlag):
+		//err = deleteBranches(ctx, dbData, apr, true)
+		if err != nil {
+			return 1, errors.New("Deleting branches is not supported.")
+		}
+	default:
+		// regular branch - create new branch
+		if apr.NArg() != 1 {
+			return 1, InvalidArgErr
 		}
 
 		branchName := apr.Arg(0)
+		if len(branchName) == 0 {
+			return 1, EmptyBranchNameErr
+		}
 
 		err = createNewBranch(ctx, dbData, branchName)
 		if err != nil {
@@ -125,31 +136,36 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData, branchName string) err
 	return actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, false)
 }
 
-func makeACopyOfBranch(ctx *sql.Context, dbData env.DbData, srcBranch string, destBranch string, force bool) error {
-	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBranch, destBranch, force)
-
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			return errors.New(fmt.Sprintf("fatal: A branch named '%s' not found", srcBranch))
-		} else if err == actions.ErrAlreadyExists {
-			return errors.New(fmt.Sprintf("fatal: A branch named '%s' already exists.", destBranch))
-		} else if err == doltdb.ErrInvBranchName {
-			return errors.New(fmt.Sprintf("fatal: '%s' is not a valid branch name.", destBranch))
-		} else {
-			return errors.New(fmt.Sprintf("fatal: Unexpected error copying branch from '%s' to '%s'", srcBranch, destBranch))
-		}
+func makeACopyOfBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
+	if apr.NArg() != 2 {
+		return InvalidArgErr
 	}
-	return nil
+
+	srcBr := apr.Args[0]
+	if len(srcBr) == 0 {
+		return EmptyBranchNameErr
+	}
+
+	destBr := apr.Args[1]
+	if len(destBr) == 0 {
+		return EmptyBranchNameErr
+	}
+
+	force := apr.Contains(cli.ForceFlag)
+	return copyABranch(ctx, dbData, srcBr, destBr, force)
 }
 
-func validateArgs(apr *argparser.ArgParseResults, numArg int) error {
-	if apr.NArg() != numArg {
-		return errors.New("Invalid usage.")
-	}
-
-	for _, arg := range apr.Args {
-		if len(arg) == 0 {
-			return ErrEmptyBranchName
+func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr string, force bool) error {
+	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force)
+	if err != nil {
+		if err == doltdb.ErrBranchNotFound {
+			return errors.New(fmt.Sprintf("fatal: A branch named '%s' not found", srcBr))
+		} else if err == actions.ErrAlreadyExists {
+			return errors.New(fmt.Sprintf("fatal: A branch named '%s' already exists.", destBr))
+		} else if err == doltdb.ErrInvBranchName {
+			return errors.New(fmt.Sprintf("fatal: '%s' is not a valid branch name.", destBr))
+		} else {
+			return errors.New(fmt.Sprintf("fatal: Unexpected error copying branch from '%s' to '%s'", srcBr, destBr))
 		}
 	}
 
