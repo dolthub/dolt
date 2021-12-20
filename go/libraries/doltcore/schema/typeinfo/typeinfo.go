@@ -47,7 +47,9 @@ const (
 	VarBinaryTypeIdentifier  Identifier = "varbinary"
 	VarStringTypeIdentifier  Identifier = "varstring"
 	YearTypeIdentifier       Identifier = "year"
-	GeometryTypeIdentifier   Identifier = "geometry"
+	PointTypeIdentifier      Identifier = "point"
+	LinestringTypeIdentifier Identifier = "linestring"
+	PolygonTypeIdentifier    Identifier = "polygon"
 )
 
 var Identifiers = map[Identifier]struct{}{
@@ -70,7 +72,9 @@ var Identifiers = map[Identifier]struct{}{
 	VarBinaryTypeIdentifier:  {},
 	VarStringTypeIdentifier:  {},
 	YearTypeIdentifier:       {},
-	GeometryTypeIdentifier:   {},
+	PointTypeIdentifier:      {},
+	LinestringTypeIdentifier: {},
+	PolygonTypeIdentifier:    {},
 }
 
 // TypeInfo is an interface used for encoding type information.
@@ -161,11 +165,17 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Year:
 		return YearType, nil
 	case sqltypes.Geometry:
-		pointSQLType, ok := sqlType.(sql.PointType)
-		if !ok {
+		// TODO: bad, but working way to determine which specific geometry type
+		switch sqlType.String() {
+		case sql.Polygon.String():
+			return &polygonType{sqlType.(sql.PolygonType)}, nil
+		case sql.Linestring.String():
+			return &linestringType{sqlType.(sql.LinestringType)}, nil
+		case sql.Point.String():
+			return &pointType{sqlType.(sql.PointType)}, nil
+		default:
 			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Point"`)
 		}
-		return &pointType{pointSQLType}, nil
 	case sqltypes.Decimal:
 		decimalSQLType, ok := sqlType.(sql.DecimalType)
 		if !ok {
@@ -276,8 +286,12 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreateVarStringTypeFromParams(params)
 	case YearTypeIdentifier:
 		return YearType, nil
-	case GeometryTypeIdentifier:
+	case PointTypeIdentifier:
 		return PointType, nil
+	case LinestringTypeIdentifier:
+		return LinestringType, nil
+	case PolygonTypeIdentifier:
+		return PolygonType, nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot be made from an identifier and params`, id)
 	}
@@ -298,8 +312,14 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return Int64Type
 	case types.JSONKind:
 		return JSONType
+	case types.LinestringKind:
+		return LinestringType
 	case types.NullKind:
 		return UnknownType
+	case types.PointKind:
+		return PointType
+	case types.PolygonKind:
+		return PolygonType
 	case types.StringKind:
 		return StringDefaultType
 	case types.TimestampKind:

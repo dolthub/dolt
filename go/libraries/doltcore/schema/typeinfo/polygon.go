@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -25,18 +26,22 @@ import (
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type pointType struct {
-	sqlPointType sql.PointType
+type polygonType struct {
+	sqlPolygonType sql.PolygonType
 }
 
-var _ TypeInfo = (*pointType)(nil)
+var _ TypeInfo = (*polygonType)(nil)
 
-var PointType = &pointType{sql.Point}
+var PolygonType = &polygonType{sql.Polygon}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.Point); ok {
-		return val, nil
+func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	if val, ok := v.(types.Linestring); ok {
+		var res []string
+		for _, l := range val {
+			res = append(res, string(l))
+		}
+		return strings.Join(res, ","), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -45,10 +50,10 @@ func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error)
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+func (ti *polygonType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.PointKind:
+	case types.PolygonKind:
 		s := reader.ReadString()
 		return s, nil
 	case types.NullKind:
@@ -59,37 +64,39 @@ func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *pointType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+func (ti *polygonType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	if v == nil {
 		return types.NullValue, nil
 	}
 
-	strVal, err := ti.sqlPointType.Convert(v)
+	strVal, err := ti.sqlPolygonType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	if val, ok := strVal.(string); ok {
-		return types.Point(val), nil
+	//val, ok := strVal.(string)
+	_, ok := strVal.(string)
+	if !ok {
+		return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	// TODO: figure out string constructor
+	return types.Polygon([]types.Linestring{}), nil
 }
 
 // Equals implements TypeInfo interface.
-func (ti *pointType) Equals(other TypeInfo) bool {
+func (ti *polygonType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*pointType); ok {
-		return ti.sqlPointType.Type() == ti2.sqlPointType.Type()
+	if ti2, ok := other.(*linestringType); ok {
+		return ti.sqlPolygonType.Type() == ti2.sqlLinestringType.Type()
 	}
 	return false
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *pointType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Point); ok {
+func (ti *polygonType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.Linestring); ok {
 		res, err := ti.ConvertNomsValueToValue(val)
 		if err != nil {
 			return nil, err
@@ -107,21 +114,27 @@ func (ti *pointType) FormatValue(v types.Value) (*string, error) {
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *pointType) GetTypeIdentifier() Identifier {
-	return PointTypeIdentifier
+func (ti *polygonType) GetTypeIdentifier() Identifier {
+	return PolygonTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *pointType) GetTypeParams() map[string]string {
+func (ti *polygonType) GetTypeParams() map[string]string {
 	return map[string]string{}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *pointType) IsValid(v types.Value) bool {
-	if val, ok := v.(types.Point); ok {
-		_, err := ti.sqlPointType.Convert(string(val))
-		if err != nil {
-			return false
+func (ti *polygonType) IsValid(v types.Value) bool {
+	if val, ok := v.(types.Polygon); ok {
+		// Polygon is valid if every linestring in it is valid
+		// TODO: figure out how to call linetype.isvalid
+		for _, l := range val {
+			for _, p := range l {
+				_, err := ti.sqlPolygonType.Convert(string(p))
+				if err != nil {
+					return false
+				}
+			}
 		}
 		return true
 	}
@@ -132,12 +145,12 @@ func (ti *pointType) IsValid(v types.Value) bool {
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *pointType) NomsKind() types.NomsKind {
-	return types.PointKind
+func (ti *polygonType) NomsKind() types.NomsKind {
+	return types.PolygonKind
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *pointType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
+func (ti *polygonType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
@@ -145,16 +158,16 @@ func (ti *pointType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, 
 }
 
 // Promote implements TypeInfo interface.
-func (ti *pointType) Promote() TypeInfo {
-	return &pointType{ti.sqlPointType.Promote().(sql.PointType)}
+func (ti *polygonType) Promote() TypeInfo {
+	return &polygonType{ti.sqlPolygonType.Promote().(sql.PolygonType)}
 }
 
 // String implements TypeInfo interface.
-func (ti *pointType) String() string {
-	return "Point()"
+func (ti *polygonType) String() string {
+	return "Polygon()"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *pointType) ToSqlType() sql.Type {
-	return ti.sqlPointType
+func (ti *polygonType) ToSqlType() sql.Type {
+	return ti.sqlPolygonType
 }

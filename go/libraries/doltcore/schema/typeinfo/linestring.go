@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -25,17 +24,17 @@ import (
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type pointType struct {
-	sqlPointType sql.PointType
+type linestringType struct {
+	sqlLinestringType sql.LinestringType
 }
 
-var _ TypeInfo = (*pointType)(nil)
+var _ TypeInfo = (*linestringType)(nil)
 
-var PointType = &pointType{sql.Point}
+var LinestringType = &linestringType{sql.Linestring}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.Point); ok {
+func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	if val, ok := v.(types.Linestring); ok {
 		return val, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -45,10 +44,10 @@ func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error)
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+func (ti *linestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.PointKind:
+	case types.LinestringKind:
 		s := reader.ReadString()
 		return s, nil
 	case types.NullKind:
@@ -59,37 +58,43 @@ func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *pointType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	if v == nil {
 		return types.NullValue, nil
 	}
 
-	strVal, err := ti.sqlPointType.Convert(v)
+	strVal, err := ti.sqlLinestringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	if val, ok := strVal.(string); ok {
-		return types.Point(val), nil
+	var res []types.Point
+	for _, pv := range strVal.(sql.LinestringValue).Points {
+		p, err := PointType.ConvertValueToNomsValue(ctx, vrw, pv)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, p.(types.Point))
 	}
 
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	return types.Linestring(res), nil
+	//return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *pointType) Equals(other TypeInfo) bool {
+func (ti *linestringType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*pointType); ok {
-		return ti.sqlPointType.Type() == ti2.sqlPointType.Type()
+	if ti2, ok := other.(*linestringType); ok {
+		return ti.sqlLinestringType.Type() == ti2.sqlLinestringType.Type()
 	}
 	return false
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *pointType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Point); ok {
+func (ti *linestringType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.Linestring); ok {
 		res, err := ti.ConvertNomsValueToValue(val)
 		if err != nil {
 			return nil, err
@@ -107,21 +112,23 @@ func (ti *pointType) FormatValue(v types.Value) (*string, error) {
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *pointType) GetTypeIdentifier() Identifier {
-	return PointTypeIdentifier
+func (ti *linestringType) GetTypeIdentifier() Identifier {
+	return LinestringTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *pointType) GetTypeParams() map[string]string {
+func (ti *linestringType) GetTypeParams() map[string]string {
 	return map[string]string{}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *pointType) IsValid(v types.Value) bool {
-	if val, ok := v.(types.Point); ok {
-		_, err := ti.sqlPointType.Convert(string(val))
-		if err != nil {
-			return false
+func (ti *linestringType) IsValid(v types.Value) bool {
+	if val, ok := v.(types.Linestring); ok {
+		// LineString is valid if every point in it is valid
+		for _, p := range val {
+			if !PointType.IsValid(p) {
+				return false
+			}
 		}
 		return true
 	}
@@ -132,12 +139,12 @@ func (ti *pointType) IsValid(v types.Value) bool {
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *pointType) NomsKind() types.NomsKind {
-	return types.PointKind
+func (ti *linestringType) NomsKind() types.NomsKind {
+	return types.LinestringKind
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *pointType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
+func (ti *linestringType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
@@ -145,16 +152,16 @@ func (ti *pointType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, 
 }
 
 // Promote implements TypeInfo interface.
-func (ti *pointType) Promote() TypeInfo {
-	return &pointType{ti.sqlPointType.Promote().(sql.PointType)}
+func (ti *linestringType) Promote() TypeInfo {
+	return &linestringType{ti.sqlLinestringType.Promote().(sql.LinestringType)}
 }
 
 // String implements TypeInfo interface.
-func (ti *pointType) String() string {
-	return "Point()"
+func (ti *linestringType) String() string {
+	return "Linestring()"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *pointType) ToSqlType() sql.Type {
-	return ti.sqlPointType
+func (ti *linestringType) ToSqlType() sql.Type {
+	return ti.sqlLinestringType
 }

@@ -45,7 +45,7 @@ func (v Point) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Point); ok {
 		return v < v2, nil
 	}
-	return GeometryKind < other.Kind(), nil
+	return PointKind < other.Kind(), nil
 }
 
 func (v Point) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
@@ -65,11 +65,11 @@ func (v Point) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (v Point) typeOf() (*Type, error) {
-	return PrimitiveTypeMap[GeometryKind], nil
+	return PrimitiveTypeMap[PointKind], nil
 }
 
 func (v Point) Kind() NomsKind {
-	return GeometryKind
+	return PointKind
 }
 
 func (v Point) valueReadWriter() ValueReadWriter {
@@ -77,7 +77,7 @@ func (v Point) valueReadWriter() ValueReadWriter {
 }
 
 func (v Point) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
-	err := GeometryKind.writeTo(w, nbf)
+	err := PointKind.writeTo(w, nbf)
 
 	if err != nil {
 		return err

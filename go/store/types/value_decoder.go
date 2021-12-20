@@ -48,7 +48,6 @@ type CodecReader interface {
 	ReadDecimal() (decimal.Decimal, error)
 	ReadBlob() (Blob, error)
 	ReadJSON() (JSON, error)
-	ReadGeometry() (Point, error)
 }
 
 var _ CodecReader = (*valueDecoder)(nil)
@@ -83,10 +82,6 @@ func (r *valueDecoder) ReadBlob() (Blob, error) {
 
 func (r *valueDecoder) ReadJSON() (JSON, error) {
 	return readJSON(r.vrw.Format(), r)
-}
-
-func (r *valueDecoder) ReadGeometry() (Point, error) {
-	return Point(1), nil
 }
 
 func (r *valueDecoder) readRef(nbf *NomsBinFormat) (Ref, error) {
@@ -361,8 +356,15 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return r.readTuple(nbf)
 	case JSONKind:
 		return r.ReadJSON()
-	case GeometryKind:
-		return r.ReadGeometry()
+	case PointKind:
+		r.skipKind()
+		return Point(r.ReadString()), nil
+	case LinestringKind:
+		r.skipKind()
+		return Linestring([]Point{Point(r.ReadString())}), nil
+	case PolygonKind:
+		r.skipKind()
+		return Polygon([]Linestring{[]Point{Point(r.ReadString())}}), nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()
@@ -410,6 +412,15 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 		r.skipKind()
 		r.skipUint()
 	case StringKind:
+		r.skipKind()
+		r.skipString()
+	case PointKind:
+		r.skipKind()
+		r.skipString()
+	case LinestringKind:
+		r.skipKind()
+		r.skipString()
+	case PolygonKind:
 		r.skipKind()
 		r.skipString()
 	case ListKind:
