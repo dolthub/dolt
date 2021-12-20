@@ -1161,7 +1161,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 
 func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, error) {
 	tbl, _, err := root.GetTable(ctx, doltdb.SchemasTableName)
-	if err != nil  {
+	if err != nil {
 		return 0, err
 	}
 
