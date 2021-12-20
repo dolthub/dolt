@@ -1106,37 +1106,20 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 		return existingErr
 	}
 
-	// If rows exist, then grab the highest id and add 1 to get the new id
-	indexToUse := int64(1)
 	ts, err := db.TableEditSession(ctx, tbl.IsTemporary())
 	if err != nil {
 		return err
 	}
 
-	te, err := ts.GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
+	root, err := ts.Flush(ctx)
 	if err != nil {
 		return err
 	}
-	dTable, err := te.Table(ctx)
+
+	// If rows exist, then grab the highest id and add 1 to get the new id
+	idx, err := nextSchemasTableIndex(ctx, root)
 	if err != nil {
 		return err
-	}
-	rowData, err := dTable.GetRowData(ctx)
-	if err != nil {
-		return err
-	}
-	if rowData.Len() > 0 {
-		keyTpl, _, err := rowData.Last(ctx)
-		if err != nil {
-			return err
-		}
-		if keyTpl != nil {
-			key, err := keyTpl.(types.Tuple).Get(1)
-			if err != nil {
-				return err
-			}
-			indexToUse = int64(key.(types.Int)) + 1
-		}
 	}
 
 	// Insert the new row into the db
@@ -1147,7 +1130,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 			retErr = err
 		}
 	}()
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, indexToUse})
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
@@ -1174,6 +1157,34 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 	}
 
 	return deleter.Close(ctx)
+}
+
+func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, error) {
+	tbl, _, err := root.GetTable(ctx, doltdb.SchemasTableName)
+	if err != nil  {
+		return 0, err
+	}
+
+	rows, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	idx := int64(1)
+	if rows.Len() > 0 {
+		keyTpl, _, err := rows.Last(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if keyTpl != nil {
+			key, err := keyTpl.(types.Tuple).Get(1)
+			if err != nil {
+				return 0, err
+			}
+			idx = int64(key.(types.Int)) + 1
+		}
+	}
+	return idx, nil
 }
 
 // TableEditSession returns the TableEditSession for this database from the given context.

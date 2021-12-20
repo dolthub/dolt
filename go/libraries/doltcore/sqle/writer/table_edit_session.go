@@ -27,10 +27,7 @@ import (
 )
 
 type WriteSession interface {
-	// todo: this could/should return a SQL table editor
-	GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (editor.TableEditor, error)
-
-	GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error)
+	GetTableWriter(ctx context.Context, tbl string, db string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error)
 
 	SetRoot(ctx context.Context, root *doltdb.RootValue) error
 	UpdateRoot(ctx context.Context, updatingFunc func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error)) error
