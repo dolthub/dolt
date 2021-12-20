@@ -17,15 +17,17 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"strings"
 )
 
 const DoltBranchFuncName = "dolt_branch"
@@ -87,7 +89,9 @@ func (d DoltBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	switch {
 	case apr.Contains(cli.CopyFlag):
 		err = makeACopyOfBranch(ctx, dbData, apr)
-		if err != nil { return 1, err }
+		if err != nil {
+			return 1, err
+		}
 	case apr.Contains(cli.MoveFlag):
 		//err = renameBranch(ctx, dbData, apr)
 		if err != nil {

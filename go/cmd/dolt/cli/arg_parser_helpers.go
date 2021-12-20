@@ -85,10 +85,10 @@ const (
 	NoFFParam        = "no-ff"
 	SquashParam      = "squash"
 	AbortParam       = "abort"
-	CopyFlag		 = "copy"
-	MoveFlag		 = "move"
-	DeleteFlag		 = "delete"
-	DeleteForceFlag	 = "D"
+	CopyFlag         = "copy"
+	MoveFlag         = "move"
+	DeleteFlag       = "delete"
+	DeleteForceFlag  = "D"
 )
 
 var mergeAbortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
