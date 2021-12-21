@@ -221,6 +221,7 @@ func (te *sqlTableWriter) resolveFks(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
+
 	return te.sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 		fkc, err := root.GetForeignKeyCollection(ctx)
 		if err != nil {

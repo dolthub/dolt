@@ -43,19 +43,19 @@ type InitialDbState struct {
 }
 
 type DatabaseSessionState struct {
-	dbName               string
-	headCommit           *doltdb.Commit
-	headRoot             *doltdb.RootValue
-	WorkingSet           *doltdb.WorkingSet
-	dbData               env.DbData
-	WriteSession         writer.WriteSession
-	detachedHead         bool
-	readOnly             bool
-	dirty                bool
-	readReplica          *env.Remote
-	TempTableRoot        *doltdb.RootValue
-	TempTableEditSession writer.WriteSession
-	tmpTablesDir         string
+	dbName                string
+	headCommit            *doltdb.Commit
+	headRoot              *doltdb.RootValue
+	WorkingSet            *doltdb.WorkingSet
+	dbData                env.DbData
+	WriteSession          writer.WriteSession
+	detachedHead          bool
+	readOnly              bool
+	dirty                 bool
+	readReplica           *env.Remote
+	TempTableRoot         *doltdb.RootValue
+	TempTableWriteSession writer.WriteSession
+	tmpTablesDir          string
 
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a

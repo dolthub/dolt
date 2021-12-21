@@ -460,7 +460,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 	var setter writer.SessionRootSetter = ds.SetRoot
 
 	if t.temporary {
-		ed, err = state.TempTableEditSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
+		ed, err = state.TempTableWriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
 	} else {
 		ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
 	}

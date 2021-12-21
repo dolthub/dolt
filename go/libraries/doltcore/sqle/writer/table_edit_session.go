@@ -27,10 +27,8 @@ import (
 )
 
 type WriteSession interface {
-	GetTableWriter(ctx context.Context, tbl string, db string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error)
-
-	SetRoot(ctx context.Context, root *doltdb.RootValue) error
-	UpdateRoot(ctx context.Context, updatingFunc func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error)) error
+	GetTableWriter(ctx context.Context, table, db string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error)
+	UpdateRoot(ctx context.Context, cb func(ctx context.Context, current *doltdb.RootValue) (*doltdb.RootValue, error)) error
 	Flush(ctx context.Context) (*doltdb.RootValue, error)
 
 	GetOptions() editor.Options
@@ -61,16 +59,9 @@ func CreateTableEditSession(root *doltdb.RootValue, opts editor.Options) WriteSe
 	}
 }
 
-// GetTableEditor returns a TableEditor for the given table. If a schema is provided and it does not match the one
-// that is used for currently open editors (if any), then those editors will reload the table from the root.
-func (tes *tableEditSession) GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (editor.TableEditor, error) {
+func (tes *tableEditSession) GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error) {
 	tes.writeMutex.Lock()
 	defer tes.writeMutex.Unlock()
-
-	return tes.getTableEditor(ctx, tableName, tableSch)
-}
-
-func (tes *tableEditSession) GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error) {
 
 	t, ok, err := tes.root.GetTable(ctx, table)
 	if err != nil {
@@ -131,19 +122,21 @@ func (tes *tableEditSession) SetRoot(ctx context.Context, root *doltdb.RootValue
 // UpdateRoot takes in a function meant to update the root (whether that be updating a table's schema, adding a foreign
 // key, etc.) and passes in the flushed root. The function may then safely modify the root, and return the modified root
 // (assuming no errors). The tableEditSession will update itself in accordance with the newly returned root.
-func (tes *tableEditSession) UpdateRoot(ctx context.Context, updatingFunc func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error)) error {
+func (tes *tableEditSession) UpdateRoot(ctx context.Context, cb func(ctx context.Context, current *doltdb.RootValue) (*doltdb.RootValue, error)) error {
 	tes.writeMutex.Lock()
 	defer tes.writeMutex.Unlock()
 
-	root, err := tes.flush(ctx)
+	current, err := tes.flush(ctx)
 	if err != nil {
 		return err
 	}
-	newRoot, err := updatingFunc(ctx, root)
+
+	mutated, err := cb(ctx, current)
 	if err != nil {
 		return err
 	}
-	return tes.setRoot(ctx, newRoot)
+
+	return tes.setRoot(ctx, mutated)
 }
 
 func (tes *tableEditSession) GetOptions() editor.Options {

@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -578,7 +579,9 @@ func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	err = sessionState.WriteSession.SetRoot(ctx, newRoot)
+	err = sessionState.WriteSession.UpdateRoot(ctx, func(ctx context.Context, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
+		return newRoot, nil
+	})
 	if err != nil {
 		return err
 	}
@@ -772,7 +775,12 @@ func (sess *Session) SetTempTableRoot(ctx *sql.Context, dbName string, newRoot *
 		return err
 	}
 	dbState.TempTableRoot = newRoot
-	return dbState.TempTableEditSession.SetRoot(ctx, newRoot)
+
+	err = dbState.TempTableWriteSession.UpdateRoot(ctx, func(ctx context.Context, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
+		return newRoot, nil
+	})
+
+	return err
 }
 
 // GetHeadCommit returns the parent commit of the current session.
@@ -1018,7 +1026,7 @@ func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, 
 	if err != nil {
 		return err
 	}
-	dbState.TempTableEditSession = writer.CreateTableEditSession(newRoot, dbState.WriteSession.GetOptions())
+	dbState.TempTableWriteSession = writer.CreateTableEditSession(newRoot, dbState.WriteSession.GetOptions())
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }

@@ -874,7 +874,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 
 	// Flush any changes made to temporary tables
 	// TODO: Shouldn't always be updating both roots. Needs to update either both roots or neither of them, atomically
-	tempTableEditSession := dbState.TempTableEditSession
+	tempTableEditSession := dbState.TempTableWriteSession
 	if tempTableEditSession != nil {
 		newTempTableRoot, err := tempTableEditSession.Flush(ctx)
 		if err != nil {
@@ -1161,7 +1161,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 
 func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, error) {
 	tbl, _, err := root.GetTable(ctx, doltdb.SchemasTableName)
-	if err != nil  {
+	if err != nil {
 		return 0, err
 	}
 
@@ -1196,7 +1196,7 @@ func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (writer.
 	}
 
 	if isTemporary {
-		return dbState.TempTableEditSession, nil
+		return dbState.TempTableWriteSession, nil
 	}
 	return dbState.WriteSession, nil
 }
