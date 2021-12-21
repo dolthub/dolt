@@ -69,7 +69,7 @@ func (v Linestring) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 }
 
 func (v Linestring) isPrimitive() bool {
-	return false
+	return true
 }
 
 func (v Linestring) WalkValues(ctx context.Context, cb ValueCallback) error {

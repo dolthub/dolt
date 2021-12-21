@@ -29,8 +29,7 @@ import (
 )
 
 // Point is a Noms Value wrapper around the primitive string type (for now).
-//TODO: type Point sql.PointValue
-type Point string
+type Point string // TODO: 16 bytes to fit 2 float64
 
 // Value interface
 func (v Point) Value(ctx context.Context) (Value, error) {
