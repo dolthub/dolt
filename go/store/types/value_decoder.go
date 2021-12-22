@@ -361,10 +361,10 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return Point(r.ReadString()), nil
 	case LinestringKind:
 		r.skipKind()
-		return Linestring([]Point{Point(r.ReadString())}), nil
+		return Linestring(r.ReadString()), nil
 	case PolygonKind:
 		r.skipKind()
-		return Polygon([]Linestring{[]Point{Point(r.ReadString())}}), nil
+		return Polygon([]Linestring{Linestring(r.ReadString())}), nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()

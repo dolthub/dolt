@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -69,17 +68,11 @@ func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types
 		return nil, err
 	}
 
-	var res []types.Point
-	for _, pv := range strVal.(sql.LinestringValue).Points {
-		p, err := PointType.ConvertValueToNomsValue(ctx, vrw, pv)
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, p.(types.Point))
+	if val, ok := strVal.(string); ok {
+		return types.Linestring(val), nil
 	}
 
-	return types.Linestring(res), nil
-	//return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
 
 // Equals implements TypeInfo interface.
@@ -125,11 +118,9 @@ func (ti *linestringType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *linestringType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Linestring); ok {
-		// LineString is valid if every point in it is valid
-		for _, p := range val {
-			if !PointType.IsValid(p) {
-				return false
-			}
+		_, err := ti.sqlLinestringType.Convert(string(val))
+		if err != nil {
+			return false
 		}
 		return true
 	}

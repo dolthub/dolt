@@ -23,14 +23,12 @@ package types
 
 import (
 	"context"
-	"strconv"
-	"strings"
-
 	"github.com/dolthub/dolt/go/store/hash"
+	"strconv"
 )
 
 // Linestring is a Noms Value wrapper around an array of Point.
-type Linestring []Point
+type Linestring string
 
 // Value interface
 func (v Linestring) Value(ctx context.Context) (Value, error) {
@@ -38,28 +36,12 @@ func (v Linestring) Value(ctx context.Context) (Value, error) {
 }
 
 func (v Linestring) Equals(other Value) bool {
-	// Cast other to LineString
-	_other, ok := other.(Linestring)
-	if !ok {
-		return false
-	}
-	// Check that they have same length
-	if len(v) != len(_other) {
-		return false
-	}
-
-	// Check that every point is equal
-	for i := 0; i < len(v); i++ {
-		if !v[i].Equals(_other[i]) {
-			return false
-		}
-	}
-	return true
+	return v == other
 }
 
 func (v Linestring) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Linestring); ok {
-		return v[0].Less(nbf, v2[0])
+		return v < v2, nil
 	}
 	return LinestringKind < other.Kind(), nil
 }
@@ -94,31 +76,17 @@ func (v Linestring) valueReadWriter() ValueReadWriter {
 
 func (v Linestring) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	err := LinestringKind.writeTo(w, nbf)
+
 	if err != nil {
 		return err
 	}
 
-	// TODO: might have to combine and comma separate
-	for _, p := range v {
-		p.writeTo(w, nbf)
-	}
-
+	w.writeString(string(v))
 	return nil
 }
 
 func (v Linestring) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	val := b.ReadString()
-	val = val[len("linestring")+1 : len(val)-1]
-	pStrings := strings.Split(val, "),")
-	var points []Point
-	for i, p := range pStrings {
-		if i != len(pStrings)-1 {
-			p = p + ")"
-		}
-		points = append(points, Point(p))
-	}
-
-	return Linestring(points), nil
+	return Point(b.ReadString()), nil
 }
 
 func (v Linestring) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
@@ -126,9 +94,5 @@ func (v Linestring) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 }
 
 func (v Linestring) HumanReadableString() string {
-	var res []string
-	for _, p := range v {
-		res = append(res, p.HumanReadableString())
-	}
-	return strconv.Quote(strings.Join(res, ","))
+	return strconv.Quote(string(v))
 }

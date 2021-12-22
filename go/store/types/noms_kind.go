@@ -87,7 +87,7 @@ func init() {
 	KindToType[DecimalKind] = Decimal{}
 	KindToType[JSONKind] = JSON{}
 	KindToType[PointKind] = Point("")
-	KindToType[LinestringKind] = Linestring([]Point{})
+	KindToType[LinestringKind] = Linestring("")
 	KindToType[PolygonKind] = Polygon([]Linestring{})
 
 	SupportedKinds[BlobKind] = true
