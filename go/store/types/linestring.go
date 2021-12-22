@@ -108,11 +108,11 @@ func (v Linestring) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 
 func (v Linestring) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	val := b.ReadString()
-	val = val[len("linestring")+1:len(val)-1]
+	val = val[len("linestring")+1 : len(val)-1]
 	pStrings := strings.Split(val, "),")
 	var points []Point
 	for i, p := range pStrings {
-		if i != len(pStrings) - 1 {
+		if i != len(pStrings)-1 {
 			p = p + ")"
 		}
 		points = append(points, Point(p))
