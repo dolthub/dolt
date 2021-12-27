@@ -23,8 +23,9 @@ package types
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/hash"
 	"strconv"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // Polygon is a Noms Value wrapper around a string.
