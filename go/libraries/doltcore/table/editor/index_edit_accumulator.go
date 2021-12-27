@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types/edits"
 )
 
-
 // var for testing
 var indexFlushThreshold int64 = 256 * 1024
 
