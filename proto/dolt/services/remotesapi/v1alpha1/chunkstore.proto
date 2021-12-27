@@ -101,9 +101,16 @@ message UploadLoc {
   }
 }
 
+enum ClientRequestType {
+  CLIENT_REQUEST_TYPE_UNSPECIFIED = 0;
+  CLIENT_REQUEST_TYPE_EXTERNAL = 1;
+  CLIENT_REQUEST_TYPE_INTERNAL = 2;
+}
+
 message GetDownloadLocsRequest {
   RepoId repo_id = 1;
   repeated bytes chunk_hashes = 2;
+  ClientRequestType client_request_type = 3;
 }
 
 message GetDownloadLocsResponse {
@@ -120,6 +127,7 @@ message GetUploadLocsRequest {
   RepoId repo_id = 1;
   repeated bytes table_file_hashes = 2 [deprecated = true];
   repeated TableFileDetails table_file_details = 3;
+  ClientRequestType client_request_type = 4;
 }
 
 message GetUploadLocsResponse {
