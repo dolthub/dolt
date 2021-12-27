@@ -1192,7 +1192,7 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 		TableFileDetails: []*remotesapi.TableFileDetails{tfd},
 
 		// redundant and deprecated.  Still setting for compatibility, but will remove "promptly".
-		TableFileHashes: [][]byte{fileIdBytes[:]},
+		TableFileHashes:   [][]byte{fileIdBytes[:]},
 		ClientRequestType: remotesapi.ClientRequestType_CLIENT_REQUEST_TYPE_EXTERNAL,
 	}
 	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
