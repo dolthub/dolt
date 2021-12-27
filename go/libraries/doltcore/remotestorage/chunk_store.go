@@ -555,7 +555,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 		hashesBytes := HashesToSlices(hashes)
 		batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool) {
 			batch := hashesBytes[st:end]
-			req := &remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), ChunkHashes: batch}
+			req := &remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), ChunkHashes: batch, ClientRequestType: remotesapi.ClientRequestType_CLIENT_REQUEST_TYPE_EXTERNAL}
 			reqs = append(reqs, req)
 			return false
 		})
@@ -1193,6 +1193,7 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 
 		// redundant and deprecated.  Still setting for compatibility, but will remove "promptly".
 		TableFileHashes: [][]byte{fileIdBytes[:]},
+		ClientRequestType: remotesapi.ClientRequestType_CLIENT_REQUEST_TYPE_EXTERNAL,
 	}
 	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
 
