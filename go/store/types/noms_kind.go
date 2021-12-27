@@ -88,7 +88,7 @@ func init() {
 	KindToType[JSONKind] = JSON{}
 	KindToType[PointKind] = Point("")
 	KindToType[LinestringKind] = Linestring("")
-	KindToType[PolygonKind] = Polygon([]Linestring{})
+	KindToType[PolygonKind] = Polygon("")
 
 	SupportedKinds[BlobKind] = true
 	SupportedKinds[BoolKind] = true

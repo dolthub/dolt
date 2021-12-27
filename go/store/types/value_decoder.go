@@ -364,7 +364,7 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return Linestring(r.ReadString()), nil
 	case PolygonKind:
 		r.skipKind()
-		return Polygon([]Linestring{Linestring(r.ReadString())}), nil
+		return Polygon(r.ReadString()), nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()

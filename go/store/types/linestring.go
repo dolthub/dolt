@@ -27,7 +27,7 @@ import (
 	"strconv"
 )
 
-// Linestring is a Noms Value wrapper around an array of Point.
+// Linestring is a Noms Value wrapper around a string.
 type Linestring string
 
 // Value interface
@@ -76,7 +76,6 @@ func (v Linestring) valueReadWriter() ValueReadWriter {
 
 func (v Linestring) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	err := LinestringKind.writeTo(w, nbf)
-
 	if err != nil {
 		return err
 	}

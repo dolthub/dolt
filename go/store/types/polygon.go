@@ -23,14 +23,12 @@ package types
 
 import (
 	"context"
-	"strconv"
-	"strings"
-
 	"github.com/dolthub/dolt/go/store/hash"
+	"strconv"
 )
 
-// Polygon is a Noms Value wrapper around an array of Point.
-type Polygon []Linestring
+// Polygon is a Noms Value wrapper around a string.
+type Polygon string
 
 // Value interface
 func (v Polygon) Value(ctx context.Context) (Value, error) {
@@ -38,28 +36,12 @@ func (v Polygon) Value(ctx context.Context) (Value, error) {
 }
 
 func (v Polygon) Equals(other Value) bool {
-	// Cast other to LineString
-	_other, ok := other.(Polygon)
-	if !ok {
-		return false
-	}
-	// Check that they have same length
-	if len(v) != len(_other) {
-		return false
-	}
-
-	// Check that every point is equal
-	for i := 0; i < len(v); i++ {
-		if !v[i].Equals(_other[i]) {
-			return false
-		}
-	}
-	return true
+	return v == other
 }
 
 func (v Polygon) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Polygon); ok {
-		return v[0].Less(nbf, v2[0])
+		return v < v2, nil
 	}
 	return PolygonKind < other.Kind(), nil
 }
@@ -69,7 +51,7 @@ func (v Polygon) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 }
 
 func (v Polygon) isPrimitive() bool {
-	return false
+	return true
 }
 
 func (v Polygon) WalkValues(ctx context.Context, cb ValueCallback) error {
@@ -98,18 +80,12 @@ func (v Polygon) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 		return err
 	}
 
-	// TODO: might have to combine and comma separate
-	for _, l := range v {
-		l.writeTo(w, nbf)
-	}
-
+	w.writeString(string(v))
 	return nil
 }
 
 func (v Polygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	// TODO: convert b.ReadString to []Point somehow
-	//return Linestring(b.ReadString()), nil
-	return Polygon([]Linestring{}), nil
+	return Polygon(b.ReadString()), nil
 }
 
 func (v Polygon) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
@@ -117,9 +93,5 @@ func (v Polygon) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 }
 
 func (v Polygon) HumanReadableString() string {
-	var res []string
-	for _, l := range v {
-		res = append(res, l.HumanReadableString())
-	}
-	return strconv.Quote(strings.Join(res, ","))
+	return strconv.Quote(string(v))
 }

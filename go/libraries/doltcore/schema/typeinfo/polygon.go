@@ -17,8 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -37,11 +35,7 @@ var PolygonType = &polygonType{sql.Polygon}
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Linestring); ok {
-		var res []string
-		for _, l := range val {
-			res = append(res, string(l))
-		}
-		return strings.Join(res, ","), nil
+		return val, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -74,13 +68,11 @@ func (ti *polygonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Va
 		return nil, err
 	}
 
-	//val, ok := strVal.(string)
-	_, ok := strVal.(string)
-	if !ok {
-		return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	if val, ok := strVal.(string); ok {
+		return types.Polygon(val), nil
 	}
-	// TODO: figure out string constructor
-	return types.Polygon([]types.Linestring{}), nil
+
+	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
 
 // Equals implements TypeInfo interface.
@@ -88,8 +80,8 @@ func (ti *polygonType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*linestringType); ok {
-		return ti.sqlPolygonType.Type() == ti2.sqlLinestringType.Type()
+	if ti2, ok := other.(*polygonType); ok {
+		return ti.sqlPolygonType.Type() == ti2.sqlPolygonType.Type()
 	}
 	return false
 }
@@ -125,16 +117,10 @@ func (ti *polygonType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *polygonType) IsValid(v types.Value) bool {
-	if val, ok := v.(types.Polygon); ok {
-		// Polygon is valid if every linestring in it is valid
-		// TODO: figure out how to call linetype.isvalid
-		for _, l := range val {
-			for _, p := range l {
-				_, err := ti.sqlPolygonType.Convert(string(p))
-				if err != nil {
-					return false
-				}
-			}
+	if val, ok := v.(types.Linestring); ok {
+		_, err := ti.sqlPolygonType.Convert(string(val))
+		if err != nil {
+			return false
 		}
 		return true
 	}
