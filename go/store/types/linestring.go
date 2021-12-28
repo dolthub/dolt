@@ -86,7 +86,8 @@ func (v Linestring) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 }
 
 func (v Linestring) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	return Point(b.ReadString()), nil
+	return Linestring(b.ReadString()), nil
+
 }
 
 func (v Linestring) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
