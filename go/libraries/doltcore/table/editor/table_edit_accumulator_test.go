@@ -65,6 +65,50 @@ func requireGet(ctx context.Context, t *testing.T, tea TableEditAccumulator, key
 	require.Equal(t, expected, has)
 }
 
+func TestIndexEditAccumulatorStableOrder(t *testing.T) {
+	origFlushThreshold := flushThreshold
+	defer func() {
+		indexFlushThreshold = origFlushThreshold
+	}()
+	indexFlushThreshold = 1
+
+	ctx := context.Background()
+	nbf := types.Format_Default
+	teaf := newTestTEAF()
+	m, err := types.NewMap(ctx, teaf.vrw)
+	require.NoError(t, err)
+	iea := teaf.NewIndexEA(ctx, m).(*indexEditAccumulatorImpl)
+
+	h := func(k types.Tuple) hash.Hash {
+		h, err := k.Hash(nbf)
+		require.NoError(t, err)
+		return h
+	}
+
+	k1 := newTuple(t, types.Int(0))
+	k2 := newTuple(t, types.Int(1))
+
+	err = iea.Insert(ctx, h(k1), h(k1), k1, emptyTpl)
+	require.NoError(t, err)
+	err = iea.Insert(ctx, h(k2), h(k1), k2, emptyTpl)
+	require.NoError(t, err)
+
+	err = iea.Delete(ctx, h(k1), h(k1), k1, k1)
+	require.NoError(t, err)
+	err = iea.Delete(ctx, h(k2), h(k2), k2, k2)
+	require.NoError(t, err)
+
+	err = iea.Insert(ctx, h(k1), h(k1), k1, k1)
+	require.NoError(t, err)
+
+	err = iea.Commit(ctx, nbf)
+	require.NoError(t, err)
+
+	m, err = iea.MaterializeEdits(ctx, nbf)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), m.Len())
+}
+
 func TestTableEditAccumulatorStableOrder(t *testing.T) {
 	origFlushThreshold := flushThreshold
 	defer func() {
