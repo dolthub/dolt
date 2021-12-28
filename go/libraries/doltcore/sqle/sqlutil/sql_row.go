@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -302,24 +303,21 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			}
 		case time.Time:
 			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
-		case sql.PointValue:
-			s, err := typedCol.ToString()
-			if err != nil {
-				s = err.Error()
+		case sql.Point:
+			// TODO: Convert to byte array to match MySQL; leave for readability
+			return fmt.Sprintf("POINT(%s, %s)",strconv.FormatFloat(typedCol.X, 'g', -1, 64), strconv.FormatFloat(typedCol.Y, 'g', -1, 64))
+		case sql.Linestring:
+			var s = make([]string, len(typedCol.Points))
+			for i, p := range typedCol.Points {
+				s[i] = SqlColToStr(ctx, p)
 			}
-			return s
-		case sql.LinestringValue:
-			s, err := typedCol.ToString()
-			if err != nil {
-				s = err.Error()
+			return fmt.Sprintf("LINESTRING(%s)", strings.Join(s, ","))
+		case sql.Polygon:
+			var s = make([]string, len(typedCol.Lines))
+			for i, l := range typedCol.Lines {
+				s[i] = SqlColToStr(ctx, l)
 			}
-			return s
-		case sql.PolygonValue:
-			s, err := typedCol.ToString()
-			if err != nil {
-				s = err.Error()
-			}
-			return s
+			return fmt.Sprintf("POLYGON(%s)", strings.Join(s, ","))
 		case sql.JSONValue:
 			s, err := typedCol.ToString(sql.NewContext(ctx))
 			if err != nil {

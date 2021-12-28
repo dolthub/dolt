@@ -17,6 +17,8 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -31,13 +33,30 @@ type pointType struct {
 
 var _ TypeInfo = (*pointType)(nil)
 
-var PointType = &pointType{sql.Point}
+var PointType = &pointType{sql.PointType{}}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	// Expect a types.Point, return a sql.Point
 	if val, ok := v.(types.Point); ok {
-		return val, nil
+		// Get everything between parentheses
+		val = val[len("point("):len(val)-1]
+		// Split into x and y strings; maybe should length check
+		vals := strings.Split(string(val), ",")
+		// Parse x as float64
+		x, err := strconv.ParseFloat(vals[0], 64)
+		if err != nil {
+			return nil, err
+		}
+		// Parse y as float64
+		y, err := strconv.ParseFloat(vals[1], 64)
+		if err != nil {
+			return nil, err
+		}
+		// Create sql.Point object
+		return sql.Point{X: x, Y: y}, nil
 	}
+	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
@@ -53,27 +72,30 @@ func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader
 		return s, nil
 	case types.NullKind:
 		return nil, nil
+	default:
+		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *pointType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+	// Check for null
 	if v == nil {
 		return types.NullValue, nil
 	}
 
-	strVal, err := ti.sqlPointType.Convert(v)
+	// Convert to sql.PointType
+	point, err := ti.sqlPointType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
+	p := point.(sql.Point)
 
-	if val, ok := strVal.(string); ok {
-		return types.Point(val), nil
-	}
+	// Convert point to string / types.Point
+	pointStr := fmt.Sprintf("POINT(%s, %s)",strconv.FormatFloat(p.X, 'g', -1, 64), strconv.FormatFloat(p.Y, 'g', -1, 64))
 
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	// Create types.Point
+	return types.Point(pointStr), nil
 }
 
 // Equals implements TypeInfo interface.
