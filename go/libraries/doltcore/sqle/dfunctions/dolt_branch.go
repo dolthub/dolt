@@ -93,20 +93,11 @@ func (d DoltBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 			return 1, err
 		}
 	case apr.Contains(cli.MoveFlag):
-		//err = renameBranch(ctx, dbData, apr)
-		if err != nil {
-			return 1, errors.New("Renaming a branch is not supported.")
-		}
+		return 1, errors.New("Renaming a branch is not supported.")
 	case apr.Contains(cli.DeleteFlag):
-		//err = deleteBranches(ctx, dbData, apr, apr.Contains(cli.ForceFlag))
-		if err != nil {
-			return 1, errors.New("Deleting branches is not supported.")
-		}
+		return 1, errors.New("Deleting branches is not supported.")
 	case apr.Contains(cli.DeleteForceFlag):
-		//err = deleteBranches(ctx, dbData, apr, true)
-		if err != nil {
-			return 1, errors.New("Deleting branches is not supported.")
-		}
+		return 1, errors.New("Deleting branches is not supported.")
 	default:
 		// regular branch - create new branch
 		if apr.NArg() != 1 {

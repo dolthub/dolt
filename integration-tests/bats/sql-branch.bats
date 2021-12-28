@@ -25,8 +25,7 @@ teardown() {
     run dolt sql -q "SELECT DOLT_BRANCH('new-branch')"
     [ $status -eq 0 ]
 
-    # It changes the branch for that session which ends after the SQL
-    # statements are executed.
+    # should create new branch and should not checkout the new branch
     run dolt status
     [ $status -eq 0 ]
     [[ "$output" =~ "main" ]] || false
@@ -122,4 +121,21 @@ SQL
     run dolt sql -q "SELECT hash FROM dolt_branches WHERE name='feature-branch';"
     [ $status -eq 0 ]
     [ "$output" = "$mainhash" ]
+}
+
+@test "sql-branch: asserts unsupported -m, -d, -D flags" {
+    dolt add . && dolt commit -m "1, 2, and 3 in test table"
+    dolt branch new_branch
+
+    run dolt sql -q "SELECT DOLT_BRANCH('-m', 'new_branch', 'changed');"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Renaming a branch is not supported." ]] || false
+
+    run dolt sql -q "SELECT DOLT_BRANCH('-d', 'new_branch');"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Deleting branches is not supported." ]] || false
+
+    run dolt sql -q "SELECT DOLT_BRANCH('-D', 'new_branch');"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Deleting branches is not supported." ]] || false
 }
