@@ -1416,3 +1416,27 @@ databases:
 
     server_query repo1 1 "select dolt_fetch() as f" "f\n1"
 }
+
+@test "sql-server: run mysql from shell" {
+    skip "test mysql client from shell fails after v0.34.9"
+
+    cd repo1
+    dolt sql -q "create table r1t_one (id1 int primary key, col1 varchar(20));"
+    dolt sql -q "insert into r1t_one values (1,'aaaa'), (2,'bbbb'), (3,'cccc');"
+    dolt sql -q "create table r1t_two (id2 int primary key, col2 varchar(20));"
+    dolt commit -am "create two tables"
+
+    cd ../repo2
+    dolt sql -q "create table r2t_one (id1 int primary key, col1 varchar(20));"
+    dolt sql -q "create table r2t_two (id2 int primary key, col2 varchar(20));"
+    dolt sql -q "create table r2t_three (id3 int primary key, col3 varchar(20));"
+    dolt sql -q "insert into r2t_three values (4,'dddd'), (3,'gggg'), (2,'eeee'), (1,'ffff');"
+    dolt commit -am "create three tables"
+
+    cd ..
+    start_sql_server
+    # server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\nrepo2"
+
+    run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
+    [ "$status" -eq 0 ]
+}
