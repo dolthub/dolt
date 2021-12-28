@@ -25,7 +25,6 @@ teardown() {
     run dolt sql -q "SELECT DOLT_BRANCH('new-branch')"
     [ $status -eq 0 ]
 
-    # dolt sql -q "select dolt_branch() should not change the branch
     # It changes the branch for that session which ends after the SQL
     # statements are executed.
     run dolt status
