@@ -84,7 +84,7 @@ func ConvertSQLPointToString(p sql.Point) (types.Point, error) {
 	// Convert point to string / types.Point
 	x := strconv.FormatFloat(p.X, 'g', -1, 64)
 	y := strconv.FormatFloat(p.Y, 'g', -1, 64)
-	pointStr := fmt.Sprintf("POINT(%s, %s)", x, y)
+	pointStr := fmt.Sprintf("POINT(%s,%s)", x, y)
 
 	// Create types.Point
 	return types.Point(pointStr), nil

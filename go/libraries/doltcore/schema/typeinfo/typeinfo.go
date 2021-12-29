@@ -167,11 +167,11 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Geometry:
 		// TODO: bad, but working way to determine which specific geometry type
 		switch sqlType.String() {
-		case sql.Polygon.String():
+		case sql.PolygonType{}.String():
 			return &polygonType{sqlType.(sql.PolygonType)}, nil
-		case sql.Linestring.String():
+		case sql.LinestringType{}.String():
 			return &linestringType{sqlType.(sql.LinestringType)}, nil
-		case sql.Point.String():
+		case sql.PointType{}.String():
 			return &pointType{sqlType.(sql.PointType)}, nil
 		default:
 			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Point"`)
