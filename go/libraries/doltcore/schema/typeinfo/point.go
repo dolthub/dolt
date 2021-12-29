@@ -35,26 +35,30 @@ var _ TypeInfo = (*pointType)(nil)
 
 var PointType = &pointType{sql.PointType{}}
 
+func ConvertStringToSQLPoint(s string) (interface{}, error) {
+	// Get everything between parentheses
+	s = s[len("POINT("):len(s)-1]
+	// Split into x and y strings; maybe should length check
+	vals := strings.Split(s, ",")
+	// Parse x as float64
+	x, err := strconv.ParseFloat(vals[0], 64)
+	if err != nil {
+		return nil, err
+	}
+	// Parse y as float64
+	y, err := strconv.ParseFloat(vals[1], 64)
+	if err != nil {
+		return nil, err
+	}
+	// Create sql.Point object
+	return sql.Point{X: x, Y: y}, nil
+}
+
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	// Expect a types.Point, return a sql.Point
 	if val, ok := v.(types.Point); ok {
-		// Get everything between parentheses
-		val = val[len("point("):len(val)-1]
-		// Split into x and y strings; maybe should length check
-		vals := strings.Split(string(val), ",")
-		// Parse x as float64
-		x, err := strconv.ParseFloat(vals[0], 64)
-		if err != nil {
-			return nil, err
-		}
-		// Parse y as float64
-		y, err := strconv.ParseFloat(vals[1], 64)
-		if err != nil {
-			return nil, err
-		}
-		// Create sql.Point object
-		return sql.Point{X: x, Y: y}, nil
+		return ConvertStringToSQLPoint(string(val))
 	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -68,13 +72,22 @@ func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader
 	k := reader.ReadKind()
 	switch k {
 	case types.PointKind:
-		s := reader.ReadString()
-		return s, nil
+		return reader.ReadString(), nil
 	case types.NullKind:
 		return nil, nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 	}
+}
+
+func ConvertSQLPointToString(p sql.Point) (types.Point, error) {
+	// Convert point to string / types.Point
+	x := strconv.FormatFloat(p.X, 'g', -1, 64)
+	y := strconv.FormatFloat(p.Y, 'g', -1, 64)
+	pointStr := fmt.Sprintf("POINT(%s, %s)", x, y)
+
+	// Create types.Point
+	return types.Point(pointStr), nil
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
@@ -89,13 +102,8 @@ func (ti *pointType) ConvertValueToNomsValue(ctx context.Context, vrw types.Valu
 	if err != nil {
 		return nil, err
 	}
-	p := point.(sql.Point)
 
-	// Convert point to string / types.Point
-	pointStr := fmt.Sprintf("POINT(%s, %s)",strconv.FormatFloat(p.X, 'g', -1, 64), strconv.FormatFloat(p.Y, 'g', -1, 64))
-
-	// Create types.Point
-	return types.Point(pointStr), nil
+	return ConvertSQLPointToString(point.(sql.Point))
 }
 
 // Equals implements TypeInfo interface.

@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -31,13 +32,43 @@ type linestringType struct {
 
 var _ TypeInfo = (*linestringType)(nil)
 
-var LinestringType = &linestringType{sql.Linestring}
+var LinestringType = &linestringType{sql.LinestringType{}}
+
+func ConvertStringToSQLLinestring(s string) (interface{}, error) {
+	// Get everything between parentheses
+	s = s[len("LINESTRING("):len(s)-1]
+	// Split into points
+	vals := strings.Split(s, ",POINT")
+	// Parse points
+	var points = make([]sql.Point, len(vals))
+	for i, s := range vals {
+		// Re-add delimiter
+		if i != 0 {
+			s = "POINT" + s
+		}
+		// Convert to Point type
+		point, err := ConvertStringToSQLPoint(s)
+		// TODO: This is never true
+		if err != nil {
+			return nil, err
+		}
+		// TODO: necessary? should throw error
+		if point == nil {
+			return nil, nil
+		}
+		points[i] = point.(sql.Point)
+	}
+	// Create sql.Linestring object
+	return sql.Linestring{Points: points}, nil
+}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	// Expect a types.Linestring, return a sql.Linestring
 	if val, ok := v.(types.Linestring); ok {
-		return val, nil
+		return ConvertStringToSQLLinestring(string(val))
 	}
+	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
@@ -49,8 +80,7 @@ func (ti *linestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecR
 	k := reader.ReadKind()
 	switch k {
 	case types.LinestringKind:
-		s := reader.ReadString()
-		return s, nil
+		return reader.ReadString(), nil
 	case types.NullKind:
 		return nil, nil
 	}
@@ -58,22 +88,34 @@ func (ti *linestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecR
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
+func ConvertSQLLinestringToString(l sql.Linestring) (types.Linestring, error) {
+	// Convert each sql.Point into types.Point
+	var pointStrs = make([]string, len(l.Points))
+	for i, p := range l.Points {
+		pointStr, err := ConvertSQLPointToString(p)
+		if err != nil {
+			return "", err
+		}
+		pointStrs[i] = string(pointStr)
+	}
+	lineStr := fmt.Sprintf("LINESTRING(%s)", strings.Join(pointStrs, ","))
+	return types.Linestring(lineStr), nil
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+	// Check for null
 	if v == nil {
 		return types.NullValue, nil
 	}
 
-	strVal, err := ti.sqlLinestringType.Convert(v)
+	// Convert to sql.LinestringType
+	line, err := ti.sqlLinestringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	if val, ok := strVal.(string); ok {
-		return types.Linestring(val), nil
-	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	return ConvertSQLLinestringToString(line.(sql.Linestring))
 }
 
 // Equals implements TypeInfo interface.

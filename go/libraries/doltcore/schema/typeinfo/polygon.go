@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -31,13 +32,43 @@ type polygonType struct {
 
 var _ TypeInfo = (*polygonType)(nil)
 
-var PolygonType = &polygonType{sql.Polygon}
+var PolygonType = &polygonType{sql.PolygonType{}}
+
+func ConvertStringToSQLPolygon(s string) (interface{}, error) {
+	// Get everything between parentheses
+	s = s[len("POLYGON("):len(s)-1]
+	// Split into lines
+	vals := strings.Split(s, ",LINESTRING")
+	// Parse points
+	var lines = make([]sql.Linestring, len(vals))
+	for i, s := range vals {
+		// Re-add delimiter
+		if i != 0 {
+			s = "LINESTRING" + s
+		}
+		// Convert to Linestring type
+		line, err := ConvertStringToSQLLinestring(s)
+		// TODO: This is never true
+		if err != nil {
+			return nil, err
+		}
+		// TODO: necessary? should throw error
+		if line == nil {
+			return nil, nil
+		}
+		lines[i] = line.(sql.Linestring)
+	}
+	// Create sql.Polygon object
+	return sql.Polygon{Lines: lines}, nil
+}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.Linestring); ok {
-		return val, nil
+	// Expect a types.Polygon, return a sql.Polygon
+	if val, ok := v.(types.Polygon); ok {
+		return ConvertStringToSQLPolygon(string(val))
 	}
+	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
@@ -49,8 +80,7 @@ func (ti *polygonType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRead
 	k := reader.ReadKind()
 	switch k {
 	case types.PolygonKind:
-		s := reader.ReadString()
-		return s, nil
+		return reader.ReadString(), nil
 	case types.NullKind:
 		return nil, nil
 	}
@@ -58,22 +88,34 @@ func (ti *polygonType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRead
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
+func ConvertSQLPolygonToString(p sql.Polygon) (types.Polygon, error) {
+	// Convert each sql.Point into types.Point
+	var lineStrs = make([]string, len(p.Lines))
+	for i, l := range p.Lines {
+		lineStr, err := ConvertSQLLinestringToString(l)
+		if err != nil {
+			return "", err
+		}
+		lineStrs[i] = string(lineStr)
+	}
+	polygonStr := fmt.Sprintf("POLYGON(%s)", strings.Join(lineStrs, ","))
+	return types.Polygon(polygonStr), nil
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *polygonType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+	// Check for null
 	if v == nil {
 		return types.NullValue, nil
 	}
 
-	strVal, err := ti.sqlPolygonType.Convert(v)
+	// Convert to sql.PolygonType
+	polygon, err := ti.sqlPolygonType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	if val, ok := strVal.(string); ok {
-		return types.Polygon(val), nil
-	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	return ConvertSQLPolygonToString(polygon.(sql.Polygon))
 }
 
 // Equals implements TypeInfo interface.
