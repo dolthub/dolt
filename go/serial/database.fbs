@@ -7,8 +7,8 @@ include "schema.fbs";
 
 namespace serial;
 
-table Root {
-    datasets:ProllyNode (required);
+table StoreRoot {
+    branches:ProllyNode (required);
 }
 
 table DatabaseRoot {
@@ -18,4 +18,34 @@ table DatabaseRoot {
 
 table Table {
   filler:bool;
+}
+
+table Commit {
+  root:Ref;
+  parent_list:RefArray;
+  parent_closure:Ref;
+  meta:CommitMeta;
+}
+
+table CommitMeta {
+  name:string;
+  email:string;
+  desc:string;
+  timestamp:Timestamp;
+  user_timestamp:Timestamp;
+  metaversion:uint16;
+}
+
+table Tag {
+  commit:Ref;
+  meta:TagMeta;
+}
+
+table TagMeta {
+  name:string;
+  email:string;
+  desc:string;
+  timestamp:Timestamp;
+  user_timestamp:Timestamp;
+  metaversion:uint16;
 }

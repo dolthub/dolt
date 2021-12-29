@@ -6,5 +6,4 @@ flatc -o "../gen/fb/serial/" --gen-onefile --filename-suffix "" --gen-mutable --
   common.fbs \
   database.fbs \
   prolly.fbs \
-  schema.fbs \
-  transaction.fbs
+  schema.fbs
