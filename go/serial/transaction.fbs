@@ -1,0 +1,39 @@
+// serialization format prototype using flatbuffers
+
+include "common.fbs";
+
+namespace serial;
+
+table Commit {
+  root:Ref;
+  parent_list:[Ref];
+  parent_closure:Ref;
+  meta:CommitMeta;
+}
+
+table CommitMeta {
+  name:string;
+  email:string;
+  desc:string;
+  timestamp:Timestamp;
+  user_timestamp:Timestamp;
+  metaversion:uint16;
+}
+
+table Tag {
+  commit:Ref;
+  meta:TagMeta;
+}
+
+table TagMeta {
+  name:string;
+  email:string;
+  desc:string;
+  timestamp:Timestamp;
+  user_timestamp:Timestamp;
+  metaversion:uint16;
+}
+
+struct Timestamp {
+  time:uint64;
+}

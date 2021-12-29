@@ -1,0 +1,30 @@
+// serialization format prototype using flatbuffers
+
+include "common.fbs";
+
+namespace serial;
+
+table LeafNode {
+  // todo(andy): 1 or 2 TupleArrays?
+  keys:TupleArray (required);
+  values:TupleArray (required);
+  refs:[Ref] (required);
+  footer:NodeFooter (required);
+}
+
+table InternalNode {
+  keys:TupleArray (required);
+  refs:[Ref] (required);
+  footer:NodeFooter (required);
+}
+
+struct NodeFooter {
+  node_count:uint16;
+  tree_count:uint64;
+  tree_level:uint8;
+}
+
+table TupleArray {
+  tuples:[byte] (required);
+  offsets:[uint16] (required);
+}

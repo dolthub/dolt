@@ -1,0 +1,18 @@
+// serialization format prototype using flatbuffers
+
+include "common.fbs";
+
+namespace serial;
+
+table Root {
+  tables:[TableRef];
+}
+
+table TableRef {
+  name:string;
+  ref:Ref;
+}
+
+table Table {
+  filler:bool;
+}

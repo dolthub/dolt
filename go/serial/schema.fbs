@@ -1,0 +1,34 @@
+// serialization format prototype using flatbuffers
+
+include "common.fbs";
+
+namespace serial;
+
+table Column {
+  name:string;
+  primary_key:bool;
+  auto_increment:bool;
+  default:ColumnDefault;
+  constraints:[ColumnConstraint];
+  comment:string;
+}
+
+table ColumnDefault {
+  expression:string;
+}
+
+table ColumnConstraint {
+  expression:string;
+}
+
+table TableSchema {
+  columns:[Column];
+}
+
+table IndexSchema {
+  filler:bool;
+}
+
+table ForeignKey {
+  filler:bool;
+}
