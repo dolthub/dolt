@@ -51,12 +51,14 @@ var _ WriteSession = &tableEditSession{}
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
 func CreateTableEditSession(root *doltdb.RootValue, opts editor.Options) WriteSession {
-	return &tableEditSession{
-		opts:       opts,
-		root:       root,
-		tables:     make(map[string]*sessionedTableEditor),
-		writeMutex: &sync.RWMutex{},
-	}
+	//return &tableEditSession{
+	//	opts:       opts,
+	//	root:       root,
+	//	tables:     make(map[string]*sessionedTableEditor),
+	//	writeMutex: &sync.RWMutex{},
+	//}
+
+	return CreateWriteSession(root, opts)
 }
 
 func (tes *tableEditSession) GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error) {

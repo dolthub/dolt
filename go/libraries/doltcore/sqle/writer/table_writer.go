@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,6 +64,8 @@ type sqlTableWriter struct {
 	sess              WriteSession
 	aiTracker         globalstate.AutoIncrementTracker
 	batched           bool
+
+	deps []writeDependency
 
 	setter SessionRootSetter
 }
@@ -205,6 +207,10 @@ func (te *sqlTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered erro
 // StatementComplete implements the interface sql.TableEditor.
 func (te *sqlTableWriter) StatementComplete(ctx *sql.Context) error {
 	return te.tableEditor.StatementFinished(ctx, false)
+}
+
+func (te *sqlTableWriter) table(ctx context.Context) (*doltdb.Table, error) {
+	return te.tableEditor.Table(ctx)
 }
 
 func (te *sqlTableWriter) flush(ctx *sql.Context) error {
