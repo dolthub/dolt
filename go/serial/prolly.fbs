@@ -8,13 +8,13 @@ table LeafNode {
   // todo(andy): 1 or 2 TupleArrays?
   keys:TupleArray (required);
   values:TupleArray (required);
-  refs:[Ref] (required);
+  refs:RefArray (required);
   footer:NodeFooter (required);
 }
 
 table InternalNode {
   keys:TupleArray (required);
-  refs:[Ref] (required);
+  refs:RefArray (required);
   footer:NodeFooter (required);
 }
 

@@ -2,15 +2,21 @@
 
 namespace serial;
 
-// 20 bytes
-struct Hash {
-  u0:uint32;
-  u1:uint32;
-  u2:uint32;
-  u3:uint32;
-  u4:uint32;
+struct Timestamp {
+  time:uint64;
 }
 
-struct Ref {
-    hash:Hash;
+table Ref {
+  // 20 bytes
+  hash:[byte];
+}
+
+table RefArray {
+  // multiple of 20 bytes
+  hashes:[byte];
+}
+
+table RefMap {
+  keys:[string] (required);
+  refs:RefArray (required);
 }

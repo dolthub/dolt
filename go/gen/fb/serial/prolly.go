@@ -59,23 +59,17 @@ func (rcv *LeafNode) Values(obj *TupleArray) *TupleArray {
 	return nil
 }
 
-func (rcv *LeafNode) Refs(obj *Ref, j int) bool {
+func (rcv *LeafNode) Refs(obj *RefArray) *RefArray {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 20
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RefArray)
+		}
 		obj.Init(rcv._tab.Bytes, x)
-		return true
+		return obj
 	}
-	return false
-}
-
-func (rcv *LeafNode) RefsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
+	return nil
 }
 
 func (rcv *LeafNode) Footer(obj *NodeFooter) *NodeFooter {
@@ -102,9 +96,6 @@ func LeafNodeAddValues(builder *flatbuffers.Builder, values flatbuffers.UOffsetT
 }
 func LeafNodeAddRefs(builder *flatbuffers.Builder, refs flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(refs), 0)
-}
-func LeafNodeStartRefsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(20, numElems, 4)
 }
 func LeafNodeAddFooter(builder *flatbuffers.Builder, footer flatbuffers.UOffsetT) {
 	builder.PrependStructSlot(3, flatbuffers.UOffsetT(footer), 0)
@@ -152,23 +143,17 @@ func (rcv *InternalNode) Keys(obj *TupleArray) *TupleArray {
 	return nil
 }
 
-func (rcv *InternalNode) Refs(obj *Ref, j int) bool {
+func (rcv *InternalNode) Refs(obj *RefArray) *RefArray {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 20
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RefArray)
+		}
 		obj.Init(rcv._tab.Bytes, x)
-		return true
+		return obj
 	}
-	return false
-}
-
-func (rcv *InternalNode) RefsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
+	return nil
 }
 
 func (rcv *InternalNode) Footer(obj *NodeFooter) *NodeFooter {
@@ -192,9 +177,6 @@ func InternalNodeAddKeys(builder *flatbuffers.Builder, keys flatbuffers.UOffsetT
 }
 func InternalNodeAddRefs(builder *flatbuffers.Builder, refs flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(refs), 0)
-}
-func InternalNodeStartRefsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(20, numElems, 4)
 }
 func InternalNodeAddFooter(builder *flatbuffers.Builder, footer flatbuffers.UOffsetT) {
 	builder.PrependStructSlot(2, flatbuffers.UOffsetT(footer), 0)

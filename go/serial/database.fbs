@@ -5,12 +5,17 @@ include "common.fbs";
 namespace serial;
 
 table Root {
-  tables:[TableRef];
+    // todo(andy): can datasets be inline, or
+    //  do we need a prolly tree?
+    datasets:RefMap (required);
 }
 
-table TableRef {
-  name:string;
-  ref:Ref;
+table Database {
+  // todo(andy): can tables be inline, or
+  //  do we need a prolly tree?
+  tables:RefMap (required);
+
+  // todo(andy): foreign keys
 }
 
 table Table {

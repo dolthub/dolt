@@ -33,79 +33,12 @@ func (rcv *Root) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *Root) Tables(obj *TableRef, j int) bool {
+func (rcv *Root) Datasets(obj *RefMap) *RefMap {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
-}
-
-func (rcv *Root) TablesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func RootStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
-}
-func RootAddTables(builder *flatbuffers.Builder, tables flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(tables), 0)
-}
-func RootStartTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
-}
-func RootEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	return builder.EndObject()
-}
-type TableRef struct {
-	_tab flatbuffers.Table
-}
-
-func GetRootAsTableRef(buf []byte, offset flatbuffers.UOffsetT) *TableRef {
-	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &TableRef{}
-	x.Init(buf, n+offset)
-	return x
-}
-
-func GetSizePrefixedRootAsTableRef(buf []byte, offset flatbuffers.UOffsetT) *TableRef {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &TableRef{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *TableRef) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *TableRef) Table() flatbuffers.Table {
-	return rcv._tab
-}
-
-func (rcv *TableRef) Name() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *TableRef) Ref(obj *Ref) *Ref {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		x := o + rcv._tab.Pos
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
-			obj = new(Ref)
+			obj = new(RefMap)
 		}
 		obj.Init(rcv._tab.Bytes, x)
 		return obj
@@ -113,16 +46,62 @@ func (rcv *TableRef) Ref(obj *Ref) *Ref {
 	return nil
 }
 
-func TableRefStart(builder *flatbuffers.Builder) {
-	builder.StartObject(2)
+func RootStart(builder *flatbuffers.Builder) {
+	builder.StartObject(1)
 }
-func TableRefAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
+func RootAddDatasets(builder *flatbuffers.Builder, datasets flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(datasets), 0)
 }
-func TableRefAddRef(builder *flatbuffers.Builder, ref flatbuffers.UOffsetT) {
-	builder.PrependStructSlot(1, flatbuffers.UOffsetT(ref), 0)
+func RootEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
 }
-func TableRefEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+type Database struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsDatabase(buf []byte, offset flatbuffers.UOffsetT) *Database {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &Database{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsDatabase(buf []byte, offset flatbuffers.UOffsetT) *Database {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &Database{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *Database) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *Database) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *Database) Tables(obj *RefMap) *RefMap {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RefMap)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func DatabaseStart(builder *flatbuffers.Builder) {
+	builder.StartObject(1)
+}
+func DatabaseAddTables(builder *flatbuffers.Builder, tables flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(tables), 0)
+}
+func DatabaseEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 type Table struct {

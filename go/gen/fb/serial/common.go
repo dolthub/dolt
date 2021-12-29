@@ -6,65 +6,47 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
-type Hash struct {
+type Timestamp struct {
 	_tab flatbuffers.Struct
 }
 
-func (rcv *Hash) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *Timestamp) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
 }
 
-func (rcv *Hash) Table() flatbuffers.Table {
+func (rcv *Timestamp) Table() flatbuffers.Table {
 	return rcv._tab.Table
 }
 
-func (rcv *Hash) U0() uint32 {
-	return rcv._tab.GetUint32(rcv._tab.Pos + flatbuffers.UOffsetT(0))
+func (rcv *Timestamp) Time() uint64 {
+	return rcv._tab.GetUint64(rcv._tab.Pos + flatbuffers.UOffsetT(0))
 }
-func (rcv *Hash) MutateU0(n uint32) bool {
-	return rcv._tab.MutateUint32(rcv._tab.Pos+flatbuffers.UOffsetT(0), n)
-}
-
-func (rcv *Hash) U1() uint32 {
-	return rcv._tab.GetUint32(rcv._tab.Pos + flatbuffers.UOffsetT(4))
-}
-func (rcv *Hash) MutateU1(n uint32) bool {
-	return rcv._tab.MutateUint32(rcv._tab.Pos+flatbuffers.UOffsetT(4), n)
+func (rcv *Timestamp) MutateTime(n uint64) bool {
+	return rcv._tab.MutateUint64(rcv._tab.Pos+flatbuffers.UOffsetT(0), n)
 }
 
-func (rcv *Hash) U2() uint32 {
-	return rcv._tab.GetUint32(rcv._tab.Pos + flatbuffers.UOffsetT(8))
-}
-func (rcv *Hash) MutateU2(n uint32) bool {
-	return rcv._tab.MutateUint32(rcv._tab.Pos+flatbuffers.UOffsetT(8), n)
-}
-
-func (rcv *Hash) U3() uint32 {
-	return rcv._tab.GetUint32(rcv._tab.Pos + flatbuffers.UOffsetT(12))
-}
-func (rcv *Hash) MutateU3(n uint32) bool {
-	return rcv._tab.MutateUint32(rcv._tab.Pos+flatbuffers.UOffsetT(12), n)
-}
-
-func (rcv *Hash) U4() uint32 {
-	return rcv._tab.GetUint32(rcv._tab.Pos + flatbuffers.UOffsetT(16))
-}
-func (rcv *Hash) MutateU4(n uint32) bool {
-	return rcv._tab.MutateUint32(rcv._tab.Pos+flatbuffers.UOffsetT(16), n)
-}
-
-func CreateHash(builder *flatbuffers.Builder, u0 uint32, u1 uint32, u2 uint32, u3 uint32, u4 uint32) flatbuffers.UOffsetT {
-	builder.Prep(4, 20)
-	builder.PrependUint32(u4)
-	builder.PrependUint32(u3)
-	builder.PrependUint32(u2)
-	builder.PrependUint32(u1)
-	builder.PrependUint32(u0)
+func CreateTimestamp(builder *flatbuffers.Builder, time uint64) flatbuffers.UOffsetT {
+	builder.Prep(8, 8)
+	builder.PrependUint64(time)
 	return builder.Offset()
 }
 type Ref struct {
-	_tab flatbuffers.Struct
+	_tab flatbuffers.Table
+}
+
+func GetRootAsRef(buf []byte, offset flatbuffers.UOffsetT) *Ref {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &Ref{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsRef(buf []byte, offset flatbuffers.UOffsetT) *Ref {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &Ref{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
 }
 
 func (rcv *Ref) Init(buf []byte, i flatbuffers.UOffsetT) {
@@ -73,24 +55,181 @@ func (rcv *Ref) Init(buf []byte, i flatbuffers.UOffsetT) {
 }
 
 func (rcv *Ref) Table() flatbuffers.Table {
-	return rcv._tab.Table
+	return rcv._tab
 }
 
-func (rcv *Ref) Hash(obj *Hash) *Hash {
-	if obj == nil {
-		obj = new(Hash)
+func (rcv *Ref) Hash(j int) int8 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetInt8(a + flatbuffers.UOffsetT(j*1))
 	}
-	obj.Init(rcv._tab.Bytes, rcv._tab.Pos+0)
-	return obj
+	return 0
 }
 
-func CreateRef(builder *flatbuffers.Builder, hash_u0 uint32, hash_u1 uint32, hash_u2 uint32, hash_u3 uint32, hash_u4 uint32) flatbuffers.UOffsetT {
-	builder.Prep(4, 20)
-	builder.Prep(4, 20)
-	builder.PrependUint32(hash_u4)
-	builder.PrependUint32(hash_u3)
-	builder.PrependUint32(hash_u2)
-	builder.PrependUint32(hash_u1)
-	builder.PrependUint32(hash_u0)
-	return builder.Offset()
+func (rcv *Ref) HashLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Ref) MutateHash(j int, n int8) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateInt8(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func RefStart(builder *flatbuffers.Builder) {
+	builder.StartObject(1)
+}
+func RefAddHash(builder *flatbuffers.Builder, hash flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(hash), 0)
+}
+func RefStartHashVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func RefEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+type RefArray struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsRefArray(buf []byte, offset flatbuffers.UOffsetT) *RefArray {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &RefArray{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsRefArray(buf []byte, offset flatbuffers.UOffsetT) *RefArray {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &RefArray{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *RefArray) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *RefArray) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *RefArray) Hashes(j int) int8 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetInt8(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *RefArray) HashesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *RefArray) MutateHashes(j int, n int8) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateInt8(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func RefArrayStart(builder *flatbuffers.Builder) {
+	builder.StartObject(1)
+}
+func RefArrayAddHashes(builder *flatbuffers.Builder, hashes flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(hashes), 0)
+}
+func RefArrayStartHashesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func RefArrayEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+type RefMap struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsRefMap(buf []byte, offset flatbuffers.UOffsetT) *RefMap {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &RefMap{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsRefMap(buf []byte, offset flatbuffers.UOffsetT) *RefMap {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &RefMap{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *RefMap) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *RefMap) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *RefMap) Keys(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *RefMap) KeysLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *RefMap) Refs(obj *RefArray) *RefArray {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RefArray)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func RefMapStart(builder *flatbuffers.Builder) {
+	builder.StartObject(2)
+}
+func RefMapAddKeys(builder *flatbuffers.Builder, keys flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keys), 0)
+}
+func RefMapStartKeysVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func RefMapAddRefs(builder *flatbuffers.Builder, refs flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(refs), 0)
+}
+func RefMapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
 }

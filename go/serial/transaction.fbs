@@ -33,7 +33,3 @@ table TagMeta {
   user_timestamp:Timestamp;
   metaversion:uint16;
 }
-
-struct Timestamp {
-  time:uint64;
-}

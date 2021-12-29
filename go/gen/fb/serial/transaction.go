@@ -36,7 +36,7 @@ func (rcv *Commit) Table() flatbuffers.Table {
 func (rcv *Commit) Root(obj *Ref) *Ref {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
-		x := o + rcv._tab.Pos
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
 			obj = new(Ref)
 		}
@@ -50,7 +50,8 @@ func (rcv *Commit) ParentList(obj *Ref, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 20
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
 		obj.Init(rcv._tab.Bytes, x)
 		return true
 	}
@@ -68,7 +69,7 @@ func (rcv *Commit) ParentListLength() int {
 func (rcv *Commit) ParentClosure(obj *Ref) *Ref {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
-		x := o + rcv._tab.Pos
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
 			obj = new(Ref)
 		}
@@ -95,16 +96,16 @@ func CommitStart(builder *flatbuffers.Builder) {
 	builder.StartObject(4)
 }
 func CommitAddRoot(builder *flatbuffers.Builder, root flatbuffers.UOffsetT) {
-	builder.PrependStructSlot(0, flatbuffers.UOffsetT(root), 0)
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(root), 0)
 }
 func CommitAddParentList(builder *flatbuffers.Builder, parentList flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(parentList), 0)
 }
 func CommitStartParentListVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(20, numElems, 4)
+	return builder.StartVector(4, numElems, 4)
 }
 func CommitAddParentClosure(builder *flatbuffers.Builder, parentClosure flatbuffers.UOffsetT) {
-	builder.PrependStructSlot(2, flatbuffers.UOffsetT(parentClosure), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(parentClosure), 0)
 }
 func CommitAddMeta(builder *flatbuffers.Builder, meta flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(meta), 0)
@@ -255,7 +256,7 @@ func (rcv *Tag) Table() flatbuffers.Table {
 func (rcv *Tag) Commit(obj *Ref) *Ref {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
-		x := o + rcv._tab.Pos
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
 			obj = new(Ref)
 		}
@@ -282,7 +283,7 @@ func TagStart(builder *flatbuffers.Builder) {
 	builder.StartObject(2)
 }
 func TagAddCommit(builder *flatbuffers.Builder, commit flatbuffers.UOffsetT) {
-	builder.PrependStructSlot(0, flatbuffers.UOffsetT(commit), 0)
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(commit), 0)
 }
 func TagAddMeta(builder *flatbuffers.Builder, meta flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(meta), 0)
@@ -402,29 +403,4 @@ func TagMetaAddMetaversion(builder *flatbuffers.Builder, metaversion uint16) {
 }
 func TagMetaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
-}
-type Timestamp struct {
-	_tab flatbuffers.Struct
-}
-
-func (rcv *Timestamp) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *Timestamp) Table() flatbuffers.Table {
-	return rcv._tab.Table
-}
-
-func (rcv *Timestamp) Time() uint64 {
-	return rcv._tab.GetUint64(rcv._tab.Pos + flatbuffers.UOffsetT(0))
-}
-func (rcv *Timestamp) MutateTime(n uint64) bool {
-	return rcv._tab.MutateUint64(rcv._tab.Pos+flatbuffers.UOffsetT(0), n)
-}
-
-func CreateTimestamp(builder *flatbuffers.Builder, time uint64) flatbuffers.UOffsetT {
-	builder.Prep(8, 8)
-	builder.PrependUint64(time)
-	return builder.Offset()
 }
