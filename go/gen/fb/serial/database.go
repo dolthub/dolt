@@ -33,12 +33,12 @@ func (rcv *Root) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *Root) Datasets(obj *RefMap) *RefMap {
+func (rcv *Root) Datasets(obj *ProllyNode) *ProllyNode {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
-			obj = new(RefMap)
+			obj = new(ProllyNode)
 		}
 		obj.Init(rcv._tab.Bytes, x)
 		return obj
@@ -55,39 +55,39 @@ func RootAddDatasets(builder *flatbuffers.Builder, datasets flatbuffers.UOffsetT
 func RootEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
-type Database struct {
+type DatabaseRoot struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsDatabase(buf []byte, offset flatbuffers.UOffsetT) *Database {
+func GetRootAsDatabaseRoot(buf []byte, offset flatbuffers.UOffsetT) *DatabaseRoot {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &Database{}
+	x := &DatabaseRoot{}
 	x.Init(buf, n+offset)
 	return x
 }
 
-func GetSizePrefixedRootAsDatabase(buf []byte, offset flatbuffers.UOffsetT) *Database {
+func GetSizePrefixedRootAsDatabaseRoot(buf []byte, offset flatbuffers.UOffsetT) *DatabaseRoot {
 	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &Database{}
+	x := &DatabaseRoot{}
 	x.Init(buf, n+offset+flatbuffers.SizeUint32)
 	return x
 }
 
-func (rcv *Database) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *DatabaseRoot) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
 }
 
-func (rcv *Database) Table() flatbuffers.Table {
+func (rcv *DatabaseRoot) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *Database) Tables(obj *RefMap) *RefMap {
+func (rcv *DatabaseRoot) Tables(obj *ProllyNode) *ProllyNode {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
-			obj = new(RefMap)
+			obj = new(ProllyNode)
 		}
 		obj.Init(rcv._tab.Bytes, x)
 		return obj
@@ -95,13 +95,39 @@ func (rcv *Database) Tables(obj *RefMap) *RefMap {
 	return nil
 }
 
-func DatabaseStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
+func (rcv *DatabaseRoot) ForeignKeys(obj *ForeignKey, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		return true
+	}
+	return false
 }
-func DatabaseAddTables(builder *flatbuffers.Builder, tables flatbuffers.UOffsetT) {
+
+func (rcv *DatabaseRoot) ForeignKeysLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func DatabaseRootStart(builder *flatbuffers.Builder) {
+	builder.StartObject(2)
+}
+func DatabaseRootAddTables(builder *flatbuffers.Builder, tables flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(tables), 0)
 }
-func DatabaseEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+func DatabaseRootAddForeignKeys(builder *flatbuffers.Builder, foreignKeys flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(foreignKeys), 0)
+}
+func DatabaseRootStartForeignKeysVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func DatabaseRootEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 type Table struct {

@@ -6,7 +6,7 @@ namespace serial;
 
 table Commit {
   root:Ref;
-  parent_list:[Ref];
+  parent_list:RefArray;
   parent_closure:Ref;
   meta:CommitMeta;
 }

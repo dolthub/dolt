@@ -1,21 +1,19 @@
 // serialization format prototype using flatbuffers
 
 include "common.fbs";
+include "prolly.fbs";
+include "schema.fbs";
+
 
 namespace serial;
 
 table Root {
-    // todo(andy): can datasets be inline, or
-    //  do we need a prolly tree?
-    datasets:RefMap (required);
+    datasets:ProllyNode (required);
 }
 
-table Database {
-  // todo(andy): can tables be inline, or
-  //  do we need a prolly tree?
-  tables:RefMap (required);
-
-  // todo(andy): foreign keys
+table DatabaseRoot {
+  tables:ProllyNode (required);
+  foreign_keys:[ForeignKey] (required);
 }
 
 table Table {

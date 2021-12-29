@@ -15,8 +15,3 @@ table RefArray {
   // multiple of 20 bytes
   hashes:[byte];
 }
-
-table RefMap {
-  keys:[string] (required);
-  refs:RefArray (required);
-}
