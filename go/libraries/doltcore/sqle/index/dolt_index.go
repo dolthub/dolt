@@ -33,7 +33,7 @@ func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) 
 	}
 
 	if !schema.IsKeyless(sch) {
-		idx, err := getPrimaryKeyIndex(ctx, db, tbl, t, sch)
+		idx, err := GetPrimaryKeyIndex(ctx, db, tbl, t, sch)
 		if err != nil {
 			return nil, err
 		}
@@ -41,7 +41,7 @@ func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) 
 	}
 
 	for _, definition := range sch.Indexes().AllIndexes() {
-		idx, err := getSecondaryIndex(ctx, db, tbl, t, sch, definition)
+		idx, err := GetSecondaryIndex(ctx, db, tbl, t, sch, definition)
 		if err != nil {
 			return nil, err
 		}
@@ -51,7 +51,7 @@ func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) 
 	return indexes, nil
 }
 
-func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema) (sql.Index, error) {
+func GetPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema) (DoltIndex, error) {
 	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 	}, nil
 }
 
-func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema, idx schema.Index) (sql.Index, error) {
+func GetSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema, idx schema.Index) (DoltIndex, error) {
 	indexRows, err := t.GetIndexRowData(ctx, idx.Name())
 	if err != nil {
 		return nil, err

@@ -25,11 +25,11 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []string) (sql.RowIter, error) {
+func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup) (sql.RowIter, error) {
 	lookup := ilu.(*doltIndexLookup)
 	idx := lookup.idx
 
-	return RowIterForRanges(ctx, idx, lookup.ranges, lookup.IndexRowData(), columns)
+	return RowIterForRanges(ctx, idx, lookup.ranges, lookup.IndexRowData(), nil)
 }
 
 func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData types.Map, columns []string) (sql.RowIter, error) {
